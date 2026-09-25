@@ -280,6 +280,7 @@ export const SAM_INFO: Record<SamType, { name: string; nato: string; rwrSymbol: 
 };
 
 export const THEATER_INFO: Record<TheaterId, { name: string; region: string }> = {
+  auckland: { name: 'Operation Southern Cross', region: 'Auckland, New Zealand' },
   desert: { name: 'Operation Sandstorm', region: 'Persian Gulf' },
   arctic: { name: 'Operation Northern Watch', region: 'Kola Peninsula' },
   islands: { name: 'Operation Pacific Shield', region: 'South China Sea' },

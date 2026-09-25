@@ -26,7 +26,8 @@ export type Team = 'blue' | 'red';
 
 export type Difficulty = 'recruit' | 'pilot' | 'veteran' | 'ace';
 export type QualityLevel = 'low' | 'medium' | 'high';
-export type TheaterId = 'desert' | 'arctic' | 'islands' | 'mountains';
+/** 'auckland' is the primary theatre (campaign + training): Auckland CBD, Waitematā Harbour & Hauraki Gulf, NZ. */
+export type TheaterId = 'auckland' | 'desert' | 'arctic' | 'islands' | 'mountains';
 export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
 export type Weather = 'clear' | 'scattered' | 'overcast';
 

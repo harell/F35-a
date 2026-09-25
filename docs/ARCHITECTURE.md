@@ -8,6 +8,33 @@ multiple camera views, and an arcade-leaning but believable flight model.
 **Engine choice:** Unreal Engine 5 can't target mobile browsers (HTML5 export was removed in UE 4.24).
 The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, packaged as a PWA.
 
+> ## ⚠️ ORCHESTRATOR UPDATE — SETTING IS AUCKLAND, NEW ZEALAND (supersedes older task text)
+>
+> The user has asked for the game's scenery to be **Auckland CBD, New Zealand**. A new `TheaterId` **`'auckland'`**
+> exists (see `src/core/types.ts`) and is the **primary theatre**:
+>
+> * **All campaign and training missions use `theater: 'auckland'`** (vary time of day and weather for variety).
+>   This replaces the desert → islands → mountains → arctic campaign. The other theatres stay available **only as
+>   optional Instant Action choices**, and Instant Action defaults to Auckland.
+> * Geography reference with world coordinates is in **`src/core/auckland.ts`**. The Sky Tower is the origin; use
+>   `AKL.<id>` for landmark positions, for example `AKL.rangitoto`, `AKL.whenuapai`, `AKL.port`, `AKL.bridge_s`, `AKL.waiheke`.
+>   The CBD sits on the south shore of the Waitematā Harbour, the Hauraki Gulf and its islands lie to the east/north-east,
+>   the Manukau Harbour and the airport to the south-west/south, and the Waitākere Ranges (≤474 m) plus the Tasman coast to the west.
+> * **Campaign fiction, "Operation Southern Cross":** a fictional hostile expeditionary force has seized the Hauraki
+>   Gulf islands (Rangitoto, Motutapu, Waiheke, Motuihe) and set up SAM belts (SA-10 on Motutapu, SA-6/SA-8/SA-15/ZSU on
+>   Rangitoto and Waiheke), with warships in the Gulf, fighter CAPs over the Gulf and bomber raids aimed at the city.
+>   F-35As fly from **RNZAF Base Auckland (Whenuapai)** to defend Auckland. Enemy targets are always **military**
+>   (SAM sites, radars, ships, landing craft, an enemy-held airstrip on Waiheke, fuel depots, a command bunker on Motutapu).
+>   Never target civilian landmarks. The CBD, Sky Tower and Harbour Bridge are things you **protect** (for example,
+>   intercept cruise-missile carriers and bombers before they reach the CBD).
+> * Mission hooks: a CAP over the Waitematā, an intercept of Tu-22M3 raids from the north-east, SEAD on Rangitoto, a ship
+>   strike in the Tāmaki Strait, an AWACS hunt beyond Tiritiri Matangi, a low-level strike under the Motutapu SA-10
+>   (terrain masking behind Rangitoto), an escort of a friendly strike package to Waiheke, a night defence of the CBD, and
+>   a Su-57 finale over the Gulf. Optional bonus: flying under the Harbour Bridge (43 m clearance) earns a score bonus and
+>   a HUD message.
+> * Terrain heights: sea level 0, isthmus 20–80 m, volcanic cones up to 196 m (Mt Eden), Rangitoto 260 m, Waitākere
+>   ≤474 m, Hunua ≤688 m at the SE edge. Aircraft spawn altitudes can be low: a 1,000–3,000 m CAP is fine.
+
 ## Design pillars
 
 1. **Mobile-first.** Landscape, two thumbs. Throttle on the left, side-stick on the right (like the real
