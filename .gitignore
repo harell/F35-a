@@ -1,0 +1,5 @@
+node_modules
+dist
+*.log
+e2e/screenshots
+.DS_Store
