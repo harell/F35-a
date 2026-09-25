@@ -237,6 +237,8 @@ export class AircraftEntity implements Entity {
   hits = 0;
 
   // EXTENSION (sim-core / combat agents may append optional fields below this line)
+  /** (combat) Radar cross-section multiplier from external stores (LOADOUTS.rcsMultiplier); 1 = clean. */
+  rcsMultiplier?: number;
 
   constructor(
     readonly id: number,
@@ -421,6 +423,10 @@ export class SamSiteEntity implements Entity {
   /** Mission group for objectives. */
   groupId = '';
   // EXTENSION (combat agent may append optional fields)
+  /** (combat) Current max engagement range (m, difficulty-scaled) — TSD threat ring radius. */
+  engageRange?: number;
+  /** (combat) Search/acquisition range vs a 5 m² fighter (m, difficulty-scaled). */
+  detectRange?: number;
 
   constructor(
     readonly id: number,
