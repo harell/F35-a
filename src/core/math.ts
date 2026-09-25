@@ -95,7 +95,7 @@ export function hprFromQuat(q: Quaternion): { heading: number; pitch: number; ro
   if (right.lengthSq() < 1e-8) return { heading, pitch, roll: 0 };
   right.normalize();
   const levelUp = new Vector3().crossVectors(right, f).normalize();
-  let roll = Math.atan2(-u.dot(right), u.dot(levelUp));
+  let roll = Math.atan2(u.dot(right), u.dot(levelUp));
   roll = wrapPi(roll);
   return { heading, pitch, roll };
 }
