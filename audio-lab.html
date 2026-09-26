@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>F35-A audio lab (dev only)</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; background: #0b0f14; color: #cfe3d8; font: 13px system-ui, sans-serif; }
+      header { position: sticky; top: 0; z-index: 2; background: #0b0f14ee; padding: 6px 10px; border-bottom: 1px solid #234; }
+      header h1 { margin: 0 0 4px; font-size: 15px; color: #7fe0a8; }
+      #status { font: 11px monospace; color: #9bb; }
+      #meterBox { height: 6px; background: #122; margin-top: 4px; border-radius: 3px; overflow: hidden; }
+      #meter { height: 100%; width: 0; background: #5c5; transition: width 60ms linear; }
+      #lab { padding: 6px 10px 40px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+      section { background: #111a22; border: 1px solid #1f3140; border-radius: 8px; padding: 6px 8px 8px; }
+      section h2 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #8ab; }
+      button { margin: 2px; padding: 8px 10px; min-height: 36px; border-radius: 6px; border: 1px solid #2d4a5e; background: #173041; color: #e6fff2; font: 12px system-ui, sans-serif; touch-action: manipulation; }
+      button:active { background: #24506b; }
+      label { display: flex; align-items: center; gap: 8px; margin: 3px 2px; }
+      label span { min-width: 120px; font-variant-numeric: tabular-nums; }
+      label input[type=range] { flex: 1; }
+      label.chk { display: inline-flex; min-width: 140px; }
+      select { background: #173041; color: #e6fff2; border: 1px solid #2d4a5e; border-radius: 4px; padding: 4px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>F35-A audio lab</h1>
+      <div id="status">loading…</div>
+      <div id="meterBox"><div id="meter"></div></div>
+    </header>
+    <main id="lab"></main>
+    <script type="module" src="/src/audio/dev/audioLab.ts"></script>
+  </body>
+</html>

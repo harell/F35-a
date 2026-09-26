@@ -84,7 +84,7 @@ export function drawLadder(f: HudFrame): void {
   const gap = 20 * u;
   const len = 46 * u;
   const tick = 7 * u;
-  const window = 21;
+  const window = 16;
   const margin = -40;
 
   // horizon line across the view (conformal, around the camera heading)
@@ -106,7 +106,8 @@ export function drawLadder(f: HudFrame): void {
         gx = a.x;
         gy = a.y;
       }
-      const ext = L.W;
+      // long horizon line, but kept inside the band between the speed / altitude columns
+      const ext = Math.max(120 * u, Math.min(L.W * 0.3, (L.altLeft - L.spdRight) * 0.62));
       pen.setDash('solid');
       pen.begin();
       if (Number.isFinite(gx)) {
@@ -114,7 +115,11 @@ export function drawLadder(f: HudFrame): void {
         pen.line(gx - dx * ext, gy - dy * ext, gx - dx * hg, gy - dy * hg);
         pen.line(gx + dx * hg, gy + dy * hg, gx + dx * ext, gy + dy * ext);
       } else {
-        pen.line(b.x - dx * ext * 1.5, b.y - dy * ext * 1.5, b.x + dx * ext, b.y + dy * ext);
+        // flight path off-screen: horizon through the point nearest the screen centre
+        const t = (L.cx - b.x) * dx + (L.cy - b.y) * dy;
+        const mx = b.x + dx * t;
+        const my = b.y + dy * t;
+        pen.line(mx - dx * ext, my - dy * ext, mx + dx * ext, my + dy * ext);
       }
       pen.strokeGlow(pal.main, 1.5);
     }
@@ -200,6 +205,7 @@ export function drawBankScale(f: HudFrame): void {
   const R = Math.max(60 * u, Math.min(L.H * 0.25, L.cockpitTop - cy - 16 * u));
   pen.setDash('solid');
   pen.begin();
+  pen.arc(cx, cy, R, Math.PI / 2 - 60 * DEG, Math.PI / 2 + 60 * DEG);
   for (const t of BANK_TICKS) {
     const ang = Math.PI / 2 + t * DEG;
     const major = t % 30 === 0;

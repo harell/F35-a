@@ -28,9 +28,9 @@ export function worldConfig(q: QualitySettings): WorldConfig {
     case 0:
       return { hfResolution: 1024, patchQuads: 6, lodRange: 2.4, anisotropy: 2, treeRadius: 1600, treeMax: Math.round(1500 * (d / 0.35)), houseRadius: 1100, houseMax: 900 };
     case 1:
-      return { hfResolution: 1024, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2400, treeMax: Math.round(3000 * (d / 0.7)), houseRadius: 1700, houseMax: 2200 };
+      return { hfResolution: 1024, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 1500, houseMax: 1800 };
     default:
-      return { hfResolution: 2048, patchQuads: 16, lodRange: 2.6, anisotropy: 8, treeRadius: 3500, treeMax: Math.round(6000 * d), houseRadius: 2800, houseMax: 5000 };
+      return { hfResolution: 2048, patchQuads: 16, lodRange: 2.6, anisotropy: 8, treeRadius: 3000, treeMax: Math.round(4500 * d), houseRadius: 2300, houseMax: 3500 };
   }
 }
 

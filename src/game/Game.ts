@@ -245,7 +245,10 @@ export class Game {
     for (;;) {
       const end = await this.runSession(def, loadout);
       if (end === 'restart') continue;
-      if (end === 'quit') return 'menu';
+      if (end === 'quit') {
+        this.teardownSession();
+        return 'menu';
+      }
       const result = this.finishSession();
       if (!result) return 'menu';
       const hasNext = result.success && def.kind === 'campaign' && !!nextMissionAfter(def.id);

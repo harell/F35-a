@@ -3,8 +3,7 @@
  * ragged coast cut by deep U-shaped fjords, a snowy plateau with rolling fells, isolated alpine
  * peaks, frozen lakes, and tundra patches along the low coast.
  */
-import { mulberry32 } from '../../../core/math';
-import { Noise2D, sstep, mixf } from '../noise';
+import { Noise2D, mulberry32, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
 import { MAT_ICE, MAT_NONE, MAT_ROCKY, MAT_TUNDRA, MAT_BEACH, type SampleOut, type TheaterGenerator } from '../types';
 

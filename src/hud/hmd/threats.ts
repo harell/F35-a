@@ -30,50 +30,58 @@ export function drawIncoming(f: HudFrame): boolean {
     cx = f.fpm.x;
     cy = f.fpm.y;
   }
-  const R = 54 * u;
+  const R = 62 * u;
   let nearest = Infinity;
+  for (let i = 0; i < inc.length; i++) nearest = Math.min(nearest, inc[i].timeToImpact);
+  const urgentAll = nearest < 5;
+  // threat ring (dashed) around the flight path marker
+  pen.setDash('dash');
+  pen.begin();
+  pen.circle(cx, cy, R);
+  pen.strokeGlow(withAlpha(pal.danger, urgentAll && !blink(f, 5) ? 0.35 : 0.8), 1.4);
   pen.setDash('solid');
   const n = Math.min(inc.length, ttiTxt.length);
   for (let i = 0; i < n; i++) {
     const m = inc[i];
-    nearest = Math.min(nearest, m.timeToImpact);
     const sx = Math.sin(m.bearing);
     const sy = -Math.cos(m.bearing);
     const col = m.guidance === 'ir' ? pal.ir : pal.danger;
     const urgent = m.timeToImpact < 5;
-    const bx = cx + sx * R;
-    const by = cy + sy * R;
-    // chevrons: more = closer
+    // arrow on the ring pointing out toward the missile
+    const tipX = cx + sx * (R + 20 * u);
+    const tipY = cy + sy * (R + 20 * u);
+    pen.begin();
+    pen.arrow(tipX, tipY, sx, sy, 20 * u, 10 * u);
+    if (!(urgent && !blink(f, 5))) {
+      pen.strokeGlow(col, 2);
+      pen.fillPlain(col);
+    }
+    // distance ticks outside the arrow: more chevrons = closer
     const chev = m.timeToImpact < 4 ? 3 : m.timeToImpact < 9 ? 2 : 1;
     pen.begin();
     for (let k = 0; k < chev; k++) {
-      const d = R + 6 * u + k * 6 * u;
+      const d = R + 26 * u + k * 7 * u;
       const px = cx + sx * d;
       const py = cy + sy * d;
-      pen.g.moveTo(px - sy * 7 * u - sx * 4 * u, py + sx * 7 * u - sy * 4 * u);
+      pen.g.moveTo(px - sy * 8 * u - sx * 5 * u, py + sx * 8 * u - sy * 5 * u);
       pen.g.lineTo(px, py);
-      pen.g.lineTo(px + sy * 7 * u - sx * 4 * u, py - sx * 7 * u - sy * 4 * u);
+      pen.g.lineTo(px + sy * 8 * u - sx * 5 * u, py - sx * 8 * u - sy * 5 * u);
     }
-    pen.strokeGlow(col, 2);
-    pen.begin();
-    pen.arrow(bx + sx * (R * 0 + 4 * u), by + sy * 4 * u, sx, sy, 12 * u, 6.5 * u);
-    if (!(urgent && !blink(f, 5))) {
-      pen.strokeGlow(col, 1.6);
-      pen.fillPlain(col);
-    }
-    pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), bx - sx * 13 * u, by - sy * 13 * u, col, 11);
+    pen.strokeGlow(col, 2.2);
+    // time to impact inside the ring
+    pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), cx + sx * (R - 14 * u), cy + sy * (R - 14 * u), col, 13);
     // conformal marker when the missile is in view (DAS)
     const e = world.getEntity(m.missileId);
     if (e && e.alive && proj.point(e.position, f.sp) && f.sp.onScreen) {
       const x = f.sp.x;
       const y = f.sp.y;
-      const r = 11 * u;
+      const r = 12 * u;
       pen.begin();
       pen.g.moveTo(x, y - r);
       pen.g.lineTo(x + r, y + r * 0.7);
       pen.g.lineTo(x - r, y + r * 0.7);
       pen.g.closePath();
-      if (blink(f, 4)) pen.strokeGlow(col, 2);
+      if (blink(f, 4)) pen.strokeGlow(col, 2.2);
     }
   }
   // banner
@@ -127,6 +135,11 @@ export function drawWarnings(f: HudFrame, y: number): number {
   const { p, pen, pal, L } = f;
   const u = L.u;
   const w = p.warnings;
+  // high AoA caution (before the stall warning triggers)
+  if (p.flight.alpha > 0.42 && !w.has('stall') && !p.flight.stalled) {
+    if (blink(f, 3)) pen.text('AOA', L.cx, y, pal.warn, 16);
+    y += 20 * u;
+  }
   if (w.size === 0) return y;
   if (w.has('pull_up')) {
     const on = blink(f, 3.5, 0.7);
@@ -145,33 +158,52 @@ export function drawWarnings(f: HudFrame, y: number): number {
   if (w.has('stall') && !w.has('pull_up')) {
     if (blink(f, 3)) pen.text('STALL', L.cx, L.cy - 44 * u, pal.danger, 24);
   }
-  // stack row: boxed labels, red warnings / amber cautions
-  let total = 0;
-  let count = 0;
+  if (w.has('speed_low') && !w.has('pull_up') && !w.has('stall') && blink(f, 2)) pen.text('SPEED', L.cx, L.cy - 44 * u, pal.warn, 18);
+  // stack rows: boxed labels (red warnings / amber cautions), wrapped to the band between the columns
   const size = 12.5;
-  for (const id of WARN_ORDER) {
-    if (!w.has(id) || SPECIAL[id]) continue;
-    if (count >= 4) break;
-    total += pen.textWidth(WARNING_INFO[id].label, size) + 14 * u;
-    count++;
-  }
-  if (count === 0) return y;
+  const maxW = Math.max(160 * u, L.altLeft - L.spdRight - 24 * u);
   const flash = f.st.warnAge < 2.5 && !blink(f, 4, 0.6);
-  let x = L.cx - total / 2 + 3 * u;
-  let k = 0;
-  for (const id of WARN_ORDER) {
-    if (!w.has(id) || SPECIAL[id]) continue;
-    if (k++ >= 4) break;
-    const info = WARNING_INFO[id];
-    const tw = pen.textWidth(info.label, size) + 8 * u;
-    const col = info.level === 2 ? pal.danger : info.level === 1 ? pal.warn : pal.dim;
-    if (!flash) {
-      pen.box(x, y - 9 * u, tw, 18 * u, col, 1.5, withAlpha('#000000', 0.45));
-      pen.text(info.label, x + tw / 2, y + 0.5, col, size);
+  let rowStart = 0; // index into WARN_ORDER of the first label of the row
+  let shown = 0;
+  let rows = 0;
+  while (rows < 2) {
+    // measure the row
+    let total = 0;
+    let end = rowStart;
+    let cnt = 0;
+    for (let i = rowStart; i < WARN_ORDER.length; i++) {
+      const id = WARN_ORDER[i];
+      end = i + 1;
+      if (!w.has(id) || SPECIAL[id]) continue;
+      const tw = pen.textWidth(WARNING_INFO[id].label, size) + 14 * u;
+      if (cnt > 0 && total + tw > maxW) {
+        end = i;
+        break;
+      }
+      total += tw;
+      cnt++;
     }
-    x += tw + 6 * u;
+    if (cnt === 0) break;
+    let x = L.cx - total / 2 + 3 * u;
+    for (let i = rowStart; i < end; i++) {
+      const id = WARN_ORDER[i];
+      if (!w.has(id) || SPECIAL[id]) continue;
+      const info = WARNING_INFO[id];
+      const tw = pen.textWidth(info.label, size) + 8 * u;
+      const col = info.level === 2 ? pal.danger : info.level === 1 ? pal.warn : pal.dim;
+      if (!flash) {
+        pen.box(x, y - 9 * u, tw, 18 * u, col, 1.5, 'rgba(0,0,0,0.45)');
+        pen.text(info.label, x + tw / 2, y + 0.5, col, size);
+      }
+      x += tw + 6 * u;
+      shown++;
+    }
+    rowStart = end;
+    rows++;
+    y += 22 * u;
+    if (rowStart >= WARN_ORDER.length) break;
   }
-  return y + 24 * u;
+  return shown > 0 ? y + 2 * u : y;
 }
 
 /* ───────────────────────── Damage ───────────────────────── */
@@ -214,4 +246,26 @@ export function drawDamage(f: HudFrame, x: number, y: number): number {
   if (d.fire && blink(f, 3)) pen.text('FIRE', sx, y, pal.danger, 11, 'left');
   if (sx !== x || d.fire) y += 14 * u;
   return y;
+}
+
+/* ───────────────────────── Auto-GCAS ───────────────────────── */
+
+/** Auto-GCAS fly-up: two chevrons converging on the flight path marker. */
+export function drawGcas(f: HudFrame): void {
+  if (!f.p.gcasActive || f.mode !== 'hmd') return;
+  const { pen, pal, L } = f;
+  const u = L.u;
+  const x = f.fpm.front && f.fpm.onScreen ? f.fpm.x : L.cx;
+  const y = f.fpm.front && f.fpm.onScreen ? Math.min(f.fpm.y, L.cockpitTop - 20 * u) : L.cy;
+  const gap = (18 + 10 * (Math.sin(f.st.clock * 6) * 0.5 + 0.5)) * u;
+  pen.setDash('solid');
+  pen.begin();
+  for (let s = -1; s <= 1; s += 2) {
+    const cx = x + s * gap;
+    pen.g.moveTo(cx + s * 14 * u, y - 10 * u);
+    pen.g.lineTo(cx, y);
+    pen.g.lineTo(cx + s * 14 * u, y + 10 * u);
+  }
+  pen.strokeGlow(pal.warn, 2.4);
+  pen.text('AUTO GCAS', L.cx, L.stackY - 20 * u, pal.warn, 14);
 }

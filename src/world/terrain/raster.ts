@@ -114,22 +114,35 @@ export function squaredDistance(mask: Uint8Array, n: number): Float64Array {
 
 /**
  * Signed distance (m) to the land/water boundary: positive on land, negative in water.
- * `isLand(label)` decides which labels are land.
+ * One exact EDT to the boundary pixels (land pixels touching water), signed by the label.
  */
 export function signedDistance(labels: Uint8Array, g: GridSpec, isLand: (label: number) => boolean): Float32Array {
   const n = g.n;
   const cell = g.extent / n;
   const land = new Uint8Array(n * n);
-  const water = new Uint8Array(n * n);
-  for (let k = 0; k < n * n; k++) {
-    if (isLand(labels[k])) land[k] = 1;
-    else water[k] = 1;
+  for (let k = 0; k < n * n; k++) land[k] = isLand(labels[k]) ? 1 : 0;
+  const boundary = new Uint8Array(n * n);
+  let any = false;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      if (!land[k]) continue;
+      if ((i > 0 && !land[k - 1]) || (i < n - 1 && !land[k + 1]) || (j > 0 && !land[k - n]) || (j < n - 1 && !land[k + n])) {
+        boundary[k] = 1;
+        any = true;
+      }
+    }
   }
-  const dToWater = squaredDistance(water, n);
-  const dToLand = squaredDistance(land, n);
   const out = new Float32Array(n * n);
+  if (!any) {
+    const v = land[0] ? n * cell : -n * cell;
+    out.fill(v);
+    return out;
+  }
+  const d2 = squaredDistance(boundary, n);
   for (let k = 0; k < n * n; k++) {
-    out[k] = land[k] ? (Math.sqrt(dToWater[k]) - 0.5) * cell : -(Math.sqrt(dToLand[k]) - 0.5) * cell;
+    const d = Math.sqrt(d2[k]);
+    out[k] = land[k] ? (d + 0.5) * cell : -(d - 0.5) * cell;
   }
   return out;
 }

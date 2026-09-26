@@ -216,11 +216,11 @@ export class Scenery {
   /** Stream scatter tiles; hide them when the camera is too high for them to matter. */
   update(camPos: Vector3, agl: number): void {
     if (this.trees) {
-      this.trees.visible = agl < 4000;
+      this.trees.visible = agl < 2200;
       if (this.trees.visible) this.trees.update(camPos);
     }
     if (this.houses) {
-      this.houses.visible = agl < 3000;
+      this.houses.visible = agl < 1500;
       if (this.houses.visible) this.houses.update(camPos);
     }
   }

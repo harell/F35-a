@@ -174,6 +174,14 @@ requestAnimationFrame(frame);
 
 (window as unknown as { __lab: unknown }).__lab = {
   scene,
+  /** Dispose the environment and report what is left on the GPU (leak check). */
+  disposeCheck() {
+    const before = { ...renderer.info.memory };
+    env?.dispose();
+    env = null;
+    renderer.render(scene, camera);
+    return { before, after: { ...renderer.info.memory }, children: scene.children.map((c) => c.name || c.type) };
+  },
   get ready() {
     return state.ready;
   },

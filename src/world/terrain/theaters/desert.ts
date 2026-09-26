@@ -3,8 +3,7 @@
  * sabkha salt flats along the coast, gravel plains rising westward, a sand sea of linear dunes,
  * mesas with terraced cliffs, dry wadis, and a rugged Hajar-like range in the west.
  */
-import { mulberry32 } from '../../../core/math';
-import { Noise2D, sstep, mixf } from '../noise';
+import { Noise2D, mulberry32, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
 import { MAT_DUNE, MAT_MESA, MAT_NONE, MAT_ROCKY, MAT_SALT, MAT_WADI, MAT_BEACH, type SampleOut, type TheaterGenerator } from '../types';
 

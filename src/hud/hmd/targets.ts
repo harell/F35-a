@@ -29,9 +29,29 @@ export function rangeLabel(m: number): string {
   return nm < 10 ? rangeTxt.get(nm) : rangeTxtInt.get(nm);
 }
 
+const rangeNmTxt = new NumText(1, '', ' NM');
+const rangeNmTxtInt = new NumText(0, '', ' NM');
+/** "12.4 NM" / "18 NM" (cached strings). */
+export function rangeLabelNm(m: number): string {
+  const nm = toNm(m);
+  return nm < 10 ? rangeNmTxt.get(nm) : rangeNmTxtInt.get(nm);
+}
+
 /** Screen position of an entity (uses the live entity position when the track is fresh). */
 function project(f: HudFrame, e: AnyEntity): boolean {
   return f.proj.point(e.position, f.sp);
+}
+
+/**
+ * Is the last projected point (f.sp) drawable for a conformal symbol? Keeps symbols off the cockpit
+ * panel (cockpit view) and out of the heading-tape band (HMD).
+ */
+function drawable(f: HudFrame): boolean {
+  const sp = f.sp;
+  if (!sp.front || !sp.onScreen) return false;
+  if (f.mode !== 'hmd') return true;
+  if (f.cockpit && sp.y > f.L.cockpitTop + 4) return false;
+  return sp.y > f.L.tapeY + 44 * f.L.u;
 }
 
 /** Apparent half-size (px) of an entity for its box (never smaller than `min`). */
@@ -57,8 +77,7 @@ export function drawContacts(f: HudFrame): void {
     if (stale) f.proj.point(c.position, f.sp);
     else project(f, e);
     const sp = f.sp;
-    if (!sp.front || !sp.onScreen) continue;
-    if (f.cockpit && sp.y > L.cockpitTop + 4 && f.mode === 'hmd') continue;
+    if (!drawable(f)) continue;
     const h = boxHalf(f, e, 7 * u);
     pen.setDash(stale ? 'dash' : 'solid');
     pen.begin();
@@ -84,8 +103,8 @@ export function drawGroundAndSams(f: HudFrame): void {
     if (!s.known && !hasContact(f, s.id)) continue;
     const d = Math.hypot(s.position.x - px, s.position.z - pz);
     if (d > SAM_RANGE) continue;
-    if (!project(f, s) || !f.sp.onScreen) continue;
-    if (f.cockpit && f.mode === 'hmd' && f.sp.y > L.cockpitTop + 4) continue;
+    project(f, s);
+    if (!drawable(f)) continue;
     drawSamSymbol(f, s, f.sp.x, f.sp.y, d);
     picks.add(s.id, f.sp.x, f.sp.y, 9 * u);
   }
@@ -96,8 +115,8 @@ export function drawGroundAndSams(f: HudFrame): void {
     if (!g.known && !hasContact(f, g.id)) continue;
     const d = Math.hypot(g.position.x - px, g.position.z - pz);
     if (d > GROUND_RANGE) continue;
-    if (!project(f, g) || !f.sp.onScreen) continue;
-    if (f.cockpit && f.mode === 'hmd' && f.sp.y > L.cockpitTop + 4) continue;
+    project(f, g);
+    if (!drawable(f)) continue;
     const r = 6 * u;
     pen.begin();
     pen.diamond(f.sp.x, f.sp.y, r);
@@ -244,8 +263,8 @@ export function drawOwnMissiles(f: HudFrame): void {
   let any = false;
   for (const m of world.missiles) {
     if (!m.alive || m.shooterId !== p.id) continue;
-    if (!f.proj.point(m.position, f.sp) || !f.sp.onScreen) continue;
-    if (f.mode === 'hmd' && f.cockpit && f.sp.y > L.cockpitTop) continue;
+    f.proj.point(m.position, f.sp);
+    if (!drawable(f)) continue;
     pen.circle(f.sp.x, f.sp.y, 3.5 * u);
     any = true;
   }
@@ -262,8 +281,8 @@ export function drawFriendlies(f: HudFrame): void {
     if (!a.alive || a === p || a.team !== p.team) continue;
     const d = a.position.distanceTo(p.position);
     if (d > FRIEND_RANGE) continue;
-    if (!f.proj.point(a.position, f.sp) || !f.sp.onScreen) continue;
-    if (f.mode === 'hmd' && f.cockpit && f.sp.y > L.cockpitTop) continue;
+    f.proj.point(a.position, f.sp);
+    if (!drawable(f)) continue;
     const r = Math.max(5 * u, Math.min(14 * u, (a.radius / Math.max(1, f.sp.depth)) * f.proj.pxPerRad));
     pen.begin();
     pen.arc(f.sp.x, f.sp.y, r, Math.PI, Math.PI * 2);
@@ -280,8 +299,8 @@ export function drawWaypoint(f: HudFrame): void {
   if (!wp) return;
   const { p, pen, pal, L } = f;
   const u = L.u;
-  if (!f.proj.point(wp.position, f.sp) || !f.sp.onScreen) return;
-  if (f.mode === 'hmd' && f.cockpit && f.sp.y > L.cockpitTop) return;
+  f.proj.point(wp.position, f.sp);
+  if (!drawable(f)) return;
   const x = f.sp.x;
   const y = f.sp.y;
   const r = 7 * u;

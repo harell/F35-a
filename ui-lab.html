@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>F35-A UI lab (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #05080c; }
+      body { position: fixed; inset: 0; touch-action: none; -webkit-user-select: none; user-select: none; font-family: system-ui, sans-serif; color: #d8e6f0; }
+      #app { position: absolute; inset: 0; overflow: hidden; }
+      #game { position: absolute; inset: 0; background: center / cover no-repeat; }
+      #controls { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+      #ui { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
+      #log { position: fixed; left: 4px; bottom: 2px; z-index: 99; font: 10px monospace; color: #9f9; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="game"></div>
+      <div id="controls"></div>
+      <div id="ui"></div>
+    </div>
+    <div id="log"></div>
+    <script type="module" src="/src/ui/dev/uiLab.ts"></script>
+  </body>
+</html>

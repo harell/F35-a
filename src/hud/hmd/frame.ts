@@ -97,6 +97,20 @@ export class HudState {
     }
   }
 
+  /** Per-player state reset (new mission / respawn). Keeps the text feeds queued during mission setup. */
+  resetPlayer(): void {
+    this.lockAge = 99;
+    this.deniedAge = 99;
+    this.weaponAge = 99;
+    this.brevityAge = 99;
+    this.warnAge = 99;
+    this.objShow = 8;
+    this.dlzScale = 0;
+    this.g.grey = this.g.red = this.g.flash = 0;
+    for (const h of this.hits) h.active = false;
+  }
+
+  /** Full reset (session teardown): also clears radio, messages and the kill feed. */
   reset(): void {
     this.lockAge = 99;
     this.deniedAge = 99;

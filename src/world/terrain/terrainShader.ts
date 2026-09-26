@@ -186,7 +186,6 @@ vec3 fieldPattern(vec3 base, vec2 wp, float mpp) {
   float h = hash12(id + dist.z * 37.0);
   vec3 tint = h < 0.1 ? vec3(1.12, 1.02, 0.78) : h < 0.2 ? vec3(0.86, 0.92, 0.82) : vec3(0.88 + 0.18 * h, 0.9 + 0.12 * fract(h * 3.7), 0.9);
   float hedge = 1.0 - smoothstep(2.5 - mpp * 0.5, 2.5 + mpp * 0.5, edgeDist(p, sz));
-  hedge = max(hedge, 1.0 - smoothstep(4.0 - mpp * 0.5, 4.0 + mpp * 0.5, dist.w));
   vec3 col = base * tint;
   col = mix(col, base * vec3(0.42, 0.55, 0.4), hedge * step(0.3, fract(h * 11.0)) * (1.0 - smoothstep(4.0, 16.0, mpp)));
   return mix(col, base, smoothstep(25.0, 70.0, mpp));
@@ -245,7 +244,7 @@ void main() {
   float bump = (0.3 + 0.6 * rockW + 0.5 * forest) * nearB * natural;
   N = normalize(N + vec3(dn.x, 0.0, dn.y) * bump + vec3(dn2.x, 0.0, dn2.y) * 0.35 * nearC * natural);
 
-  vec3 col = atmoDiffuse(albedo, N, s.a);
+  vec3 col = atmoNight(atmoDiffuse(albedo, N, s.a));
   col = atmoApplyFog(col, vWorld);
   // Night lights pierce the haze more than lit surfaces do
   col += emissive * (1.0 - atmoFogFactor(dist * 0.5, uCamPos.y, vWorld.y));

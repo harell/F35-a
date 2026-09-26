@@ -226,6 +226,11 @@ const script: [number, () => void][] = [
 
 let last = performance.now();
 let t = 0;
+// ?bench=1: measure HUD / cockpit CPU cost per frame
+const bench = params.get('bench') === '1';
+let hudMs = 0;
+let ckMs = 0;
+let frames = 0;
 const preroll = Number(params.get('t') ?? 0);
 function frame(): void {
   const now = performance.now();
@@ -240,11 +245,20 @@ function frame(): void {
   ctx.dt = dt;
   ctx.time = t;
   placeCamera();
+  const t0 = performance.now();
   cockpit.update(ctx, headLocal);
+  const t1 = performance.now();
   renderer.render(scene3, camera);
   if (cockpit.visible) cockpit.render(renderer);
+  const dc = renderer.info.render.calls;
+  const t2 = performance.now();
   hud.update(ctx);
-  info.textContent = `scene=${scene} view=${view} dc=${renderer.info.render.calls} tri=${renderer.info.render.triangles}`;
+  const t3 = performance.now();
+  frames++;
+  ckMs += t1 - t0;
+  hudMs += t3 - t2;
+  const extra = bench ? ` hud=${(hudMs / frames).toFixed(2)}ms ckpt=${(ckMs / frames).toFixed(2)}ms n=${frames}` : '';
+  info.textContent = `scene=${scene} view=${view} dc=${dc} tri=${renderer.info.render.triangles}${extra}`;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

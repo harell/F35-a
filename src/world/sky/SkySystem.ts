@@ -320,7 +320,7 @@ export class SkySystem {
     const light = new PointLight(0xffffff, 0, 1);
     const lf = new Lensflare();
     const c = p.sunDisk.clone();
-    lf.addElement(new LensflareElement(t0, 380, 0, c));
+    lf.addElement(new LensflareElement(t0, 300, 0, c));
     lf.addElement(new LensflareElement(t3, 60, 0.6));
     lf.addElement(new LensflareElement(t3, 70, 0.7));
     lf.addElement(new LensflareElement(t3, 120, 0.9));
@@ -338,6 +338,13 @@ export class SkySystem {
     void camera;
   }
 
+  private sunIntensity = -1;
+
+  /** Override the directional light intensity (e.g. above an overcast deck). */
+  setSunIntensity(i: number): void {
+    this.sunIntensity = i;
+  }
+
   /** Keep the light (and its shadow frustum) around the focus point; adjust fog for altitude/clouds. */
   update(focus: Vector3 | null, camY: number, inCloud: number, extraDim: number): void {
     const p = this.preset;
@@ -349,7 +356,7 @@ export class SkySystem {
     const dens = p.fogDensity * Math.exp(-Math.max(0, camY) / (2 * p.hazeHeight));
     this.fog.density = dens + inCloud * 0.004;
     this.fog.color.copy(this.baseFogColor).lerp(this.o.preset.cloudShade, inCloud * 0.6).multiplyScalar(1 - extraDim * 0.3);
-    this.sun.intensity = p.sunIntensity * (1 - extraDim);
+    this.sun.intensity = (this.sunIntensity >= 0 ? this.sunIntensity : p.sunIntensity) * (1 - extraDim);
   }
 
   dispose(): void {

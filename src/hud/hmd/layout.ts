@@ -90,7 +90,7 @@ export const BUTTON_COLUMN = 70;
 export const THUMB_W = 0.24;
 export const THUMB_H = 0.4;
 /** Angle (rad) of the glare-shield lip below the boresight at the default head pose (see cockpit geometry). */
-export const GLARE_LIP_ANGLE = 0.29;
+export const GLARE_LIP_ANGLE = 0.25;
 
 /**
  * @param tanHalfFov  tan(vertical FOV / 2) of the main camera (for the cockpit top line)
@@ -117,8 +117,9 @@ export function computeLayout(out: HudLayout, W: number, H: number, safe: Safe, 
   out.line = 15 * u;
   out.tapeY = out.top + 2;
   out.tapeHalfW = Math.min(W * 0.17, 150 * u);
-  out.hintY = out.tapeY + 52 * u;
-  out.msgY = Math.max(out.hintY + 26 * u, H * 0.3);
+  out.hintY = out.tapeY + 60 * u;
+  // centre messages sit between the RWR band top and the flight path marker
+  out.msgY = Math.max(out.hintY + 44 * u, cy - 58 * u);
 
   // columns: keep them clear of the thumb zones horizontally
   const colOff = Math.min(150 * u, W * 0.2);
@@ -134,7 +135,8 @@ export function computeLayout(out: HudLayout, W: number, H: number, safe: Safe, 
 
   out.stackY = cy + 50 * u;
   const floor = Math.min(out.cockpitTop, out.bottom);
-  out.radioY = cockpit ? Math.min(out.cockpitTop - 14 * u, H - 30 * u) : out.bottom - 14 * u;
+  // radio subtitles: bottom centre, between the thumb zones (over the PCD in cockpit view)
+  out.radioY = out.bottom - 14 * u;
   if (out.stackY > floor - 40 * u) out.stackY = floor - 40 * u;
 
   out.killX = out.right;
@@ -142,10 +144,13 @@ export function computeLayout(out: HudLayout, W: number, H: number, safe: Safe, 
   out.objX = out.left + 4;
   out.objY = out.top + 8 * u;
 
+  // RWR / off-screen cue ellipse: below the heading tape + hint band, above the cockpit panel / radio
+  const eTop = out.tapeY + 104 * u;
+  const eBottom = Math.min(out.cockpitTop - 16 * u, out.bottom - 42 * u);
   out.edgeCx = cx;
-  out.edgeCy = cy - H * 0.02;
-  out.edgeRx = Math.min(W * 0.38, Math.min(cx - out.left, out.right - cx) - 22 * u);
-  out.edgeRy = H * 0.4;
+  out.edgeCy = (eTop + eBottom) / 2;
+  out.edgeRy = Math.max(40 * u, (eBottom - eTop) / 2);
+  out.edgeRx = Math.min(W * 0.37, Math.min(cx - out.left, out.right - cx) - 24 * u);
 
   out.insetR = Math.max(44, H * 0.13);
   out.insetCx = out.right - out.insetR - 2;

@@ -4,8 +4,7 @@
  * turquoise shallows. Every mission feature / pad cluster gets an island under it so airfields and
  * SAM sites always stand on dry land.
  */
-import { mulberry32 } from '../../../core/math';
-import { Noise2D, sstep, mixf } from '../noise';
+import { Noise2D, mulberry32, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
 import {
   MAT_BEACH,

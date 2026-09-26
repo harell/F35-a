@@ -172,5 +172,12 @@ export const AKL_PARKS: [number, number, number][] = [
   [0.6, 5.0, 0.35], // Alexandra Park
 ];
 
+/** Non-urban zones inside the urban footprint (km, radius km): airport, Ihumātao, Waitākere foothills. */
+export const AKL_RURAL: [number, number, number][] = [
+  [2.66, 17.7, 2.6], // Auckland Airport (Māngere)
+  [0.2, 14.8, 1.1], // Ihumātao / Ōtuataua stonefields
+  [-12.5, 7.0, 1.6], // Waitākere foothills
+];
+
 /** Built-up density boost: CBD high-rise core (km, radius km). */
 export const AKL_CBD = { x: 0.25, z: -0.2, r: 0.95 };

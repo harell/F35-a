@@ -27,19 +27,10 @@ export class Vignettes {
     const diag = Math.hypot(W, H);
     if (s.grey > 0.01 && this.dark) {
       const v = vignetteParams(s, this.vp);
-      const D = diag * v.scale;
+      // the image's opaque surround (beyond the gradient) always covers the whole screen: no seams
+      const D = diag * v.scale * RADIAL_K;
       g.globalAlpha = v.alpha;
       g.drawImage(this.dark, cx - D / 2, cy - D / 2, D, D);
-      if (D < diag) {
-        // outside the gradient image: solid black
-        f.pen.setFill('#000');
-        const x0 = cx - D / 2;
-        const y0 = cy - D / 2;
-        g.fillRect(0, 0, W, Math.max(0, y0));
-        g.fillRect(0, y0 + D, W, Math.max(0, H - y0 - D));
-        g.fillRect(0, 0, Math.max(0, x0), H);
-        g.fillRect(x0 + D, 0, Math.max(0, W - x0 - D), H);
-      }
       g.globalAlpha = 1;
       if (v.greyAlpha > 0.01) {
         f.pen.setFill(withAlpha('#5a5a5a', v.greyAlpha));
@@ -51,33 +42,41 @@ export class Vignettes {
       g.fillRect(0, 0, W, H);
       if (this.red) {
         g.globalAlpha = Math.min(1, s.red * 1.2);
-        const D = diag * (1.3 - 0.5 * s.red);
+        const D = diag * (1.3 - 0.5 * s.red) * RADIAL_K;
         g.drawImage(this.red, cx - D / 2, cy - D / 2, D, D);
         g.globalAlpha = 1;
       }
     }
     if (s.flash > 0.01 && this.red) {
       g.globalAlpha = Math.min(1, s.flash);
-      g.drawImage(this.red, cx - diag * 0.6, cy - diag * 0.6, diag * 1.2, diag * 1.2);
+      const D = diag * 1.2 * RADIAL_K;
+      g.drawImage(this.red, cx - D / 2, cy - D / 2, D, D);
       g.globalAlpha = 1;
     }
   }
 }
 
+/** Radial image: SIZE px square, gradient out to RADIUS px, fully opaque beyond (covers the screen). */
+const RADIAL_SIZE = 512;
+const RADIAL_RADIUS = 96;
+/** Image size / gradient diameter. */
+const RADIAL_K = RADIAL_SIZE / (2 * RADIAL_RADIUS);
+
 function makeRadial(rgb: [number, number, number], inner: number): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = c.height = RADIAL_SIZE;
   const g = c.getContext('2d');
   if (!g) return null;
-  const grad = g.createRadialGradient(128, 128, 128 * inner, 128, 128, 128);
+  const m = RADIAL_SIZE / 2;
+  const grad = g.createRadialGradient(m, m, RADIAL_RADIUS * inner, m, m, RADIAL_RADIUS);
   const [r, gg, b] = rgb;
   grad.addColorStop(0, `rgba(${r},${gg},${b},0)`);
   grad.addColorStop(0.55, `rgba(${r},${gg},${b},0.55)`);
   grad.addColorStop(0.85, `rgba(${r},${gg},${b},0.92)`);
   grad.addColorStop(1, `rgba(${r},${gg},${b},1)`);
   g.fillStyle = grad;
-  g.fillRect(0, 0, 256, 256);
+  g.fillRect(0, 0, RADIAL_SIZE, RADIAL_SIZE);
   return c;
 }
 
@@ -87,11 +86,12 @@ export function toneColor(pal: Palette, tone: MessageTone): string {
   return tone === 'good' ? pal.good : tone === 'bad' ? pal.danger : tone === 'warn' ? pal.warn : pal.main;
 }
 
-/** Word-wrap cache: the same string always returns the same array (no per-frame allocation). */
-const wrapCache = new Map<string, string[]>();
+/** Word-wrap cache: the same (text, width) always returns the same array (no per-frame allocation). */
+const wrapCache = new Map<number, Map<string, string[]>>();
 export function wrap(text: string, maxChars: number): string[] {
-  const key = maxChars + '|' + text;
-  let lines = wrapCache.get(key);
+  let byText = wrapCache.get(maxChars);
+  if (!byText) wrapCache.set(maxChars, (byText = new Map()));
+  let lines = byText.get(text);
   if (lines) return lines;
   lines = [];
   let cur = '';
@@ -105,8 +105,8 @@ export function wrap(text: string, maxChars: number): string[] {
     }
   }
   if (cur) lines.push(cur);
-  if (wrapCache.size > 200) wrapCache.clear();
-  wrapCache.set(key, lines);
+  if (byText.size > 100) byText.clear();
+  byText.set(text, lines);
   return lines;
 }
 
@@ -120,11 +120,13 @@ export function drawMessages(f: HudFrame, y: number): void {
     const a = MessageQueue.alpha(m);
     if (a <= 0.02) continue;
     const size = m.tone === 'bad' || m.tone === 'warn' ? 20 : 19;
-    const col = withAlpha(toneColor(pal, m.tone), a);
+    const col = toneColor(pal, m.tone);
+    pen.g.globalAlpha = a;
     for (const line of wrap(m.text, maxChars)) {
       pen.text(line, L.cx, y, col, size);
       y += 22 * u;
     }
+    pen.g.globalAlpha = 1;
   }
 }
 
@@ -144,7 +146,7 @@ export function drawRadio(f: HudFrame): void {
   const u = L.u;
   const size = 13;
   const cw = pen.charWidth(size);
-  const maxW = Math.min(L.W * 0.66, L.right - L.left - 30 * u);
+  const maxW = Math.min(L.W * 0.66, L.thumbRX - L.thumbLX - 16 * u);
   const maxChars = Math.max(16, Math.floor(maxW / cw) - 2);
   if (s !== subRef) {
     subRef = s;
@@ -193,28 +195,40 @@ export function drawKillFeed(f: HudFrame, x: number, y: number): void {
   for (const e of st.kills.items) {
     const a = st.kills.alpha(e);
     if (a <= 0.02) continue;
-    pen.text(e.text, x, y, withAlpha(toneColor(pal, e.tone), a), 13, 'right');
+    pen.g.globalAlpha = a;
+    pen.text(e.text, x, y, toneColor(pal, e.tone), 13, 'right');
+    pen.g.globalAlpha = 1;
     y += 17 * u;
   }
 }
 
 /* ───────────────────────── Objectives / hint ───────────────────────── */
 
-const objLineCache = new Map<string, string>();
+interface ObjLineEntry {
+  label: string;
+  state: string;
+  done: number;
+  total: number;
+  maxChars: number;
+  text: string;
+}
+/** Per-objective cached line (objective status objects are long-lived). */
+const objLineCache = new WeakMap<object, ObjLineEntry>();
 
-function objLine(label: string, state: string, done: number, total: number, maxChars: number): string {
-  const key = label + '|' + state + '|' + done + '|' + total + '|' + maxChars;
-  let s = objLineCache.get(key);
-  if (s) return s;
-  const mark = state === 'complete' ? '+ ' : state === 'failed' ? 'x ' : state === 'active' ? '> ' : '- ';
+function objLine(o: { label: string; state: string; progress?: { done: number; total: number } }, maxChars: number): string {
+  const done = o.progress?.done ?? 0;
+  const total = o.progress?.total ?? 0;
+  let e = objLineCache.get(o);
+  if (e && e.label === o.label && e.state === o.state && e.done === done && e.total === total && e.maxChars === maxChars) return e.text;
+  const mark = o.state === 'complete' ? '+ ' : o.state === 'failed' ? 'x ' : o.state === 'active' ? '> ' : '- ';
   const prog = total > 1 ? ' ' + done + '/' + total : '';
-  let body = label.toUpperCase();
+  let body = o.label.toUpperCase();
   const room = maxChars - mark.length - prog.length;
   if (body.length > room) body = body.slice(0, Math.max(4, room - 1)) + '.';
-  s = mark + body + prog;
-  if (objLineCache.size > 300) objLineCache.clear();
-  objLineCache.set(key, s);
-  return s;
+  const text = mark + body + prog;
+  if (!e) objLineCache.set(o, (e = { label: o.label, state: o.state, done, total, maxChars, text }));
+  else Object.assign(e, { label: o.label, state: o.state, done, total, maxChars, text });
+  return text;
 }
 
 /** Compact objective summary (top-left). Returns the next free y. */
@@ -225,32 +239,37 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false)
   const show = force ? 1 : Math.min(1, st.objShow / 0.6);
   if (show <= 0.02) return y;
   const u = L.u;
-  const size = 11.5;
-  const maxChars = Math.max(14, Math.floor((L.cx - 60 * u - x) / pen.charWidth(size)));
-  pen.text('OBJECTIVES', x, y, withAlpha(pal.main, 0.7 * show), 10, 'left');
+  const size = 11;
+  const maxChars = Math.max(14, Math.floor(Math.min(L.W * 0.28, 250 * u) / pen.charWidth(size)));
+  pen.g.globalAlpha = show;
+  pen.text('OBJECTIVES', x, y, pal.dim, 10, 'left');
   y += 14 * u;
   let n = 0;
   for (const o of objs) {
     if (n >= 5) break;
     if (o.state === 'pending' && !o.primary) continue;
     const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? pal.danger : o.state === 'active' ? pal.main : pal.dim;
-    pen.text(objLine(o.label, o.state, o.progress?.done ?? 0, o.progress?.total ?? 0, maxChars), x, y, withAlpha(col, show), size, 'left');
+    pen.text(objLine(o, maxChars), x, y, col, size, 'left');
     y += 14 * u;
     n++;
   }
+  pen.g.globalAlpha = 1;
   return y + 4 * u;
 }
 
 export function drawHint(f: HudFrame, y: number): void {
   const hint = f.ctx.mission?.hint;
   if (!hint || !f.ctx.settings.hints) return;
-  const { pen, pal, L } = f;
+  const { pen, pal, L, st } = f;
   const u = L.u;
   const size = 12.5;
-  const maxChars = Math.max(20, Math.floor((Math.min(L.W * 0.6, L.right - L.left - 60)) / pen.charWidth(size)));
+  // centred; narrower while the objective summary (top-left) is showing
+  const side = st.objShow > 0 ? Math.min(L.W * 0.28, 250 * u) : Math.max(0, L.cx - L.tapeHalfW - L.left) * 0.4;
+  const maxW = Math.min(L.W * 0.6, 520 * u, L.right - L.left - 2 * side - 20 * u);
+  const maxChars = Math.max(20, Math.floor(maxW / pen.charWidth(size)) - 2);
   const lines = wrap(hint, maxChars);
-  for (let i = 0; i < Math.min(2, lines.length); i++) {
-    pen.pillText(lines[i], L.cx, y + i * 20 * u, pal.main, size, 'rgba(0,12,6,0.5)', 'center', 9 * u, 4 * u);
+  for (let i = 0; i < Math.min(3, lines.length); i++) {
+    pen.pillText(lines[i], L.cx, y + i * 20 * u, pal.main, size, 'rgba(0,12,6,0.55)', 'center', 9 * u, 4 * u);
   }
 }
 
@@ -274,7 +293,7 @@ export function drawHitMarkers(f: HudFrame): void {
     const a = Math.max(0, 1 - h.age / life);
     const gap = (h.kill ? 9 : 6) * u + h.age * 20 * u;
     const len = (h.kill ? 11 : 8) * u;
-    const col = withAlpha(h.kill ? pal.danger : pal.white, a);
+    const col = h.kill ? pal.danger : pal.white;
     pen.setDash('solid');
     pen.begin();
     for (let sx = -1; sx <= 1; sx += 2) {
@@ -282,7 +301,9 @@ export function drawHitMarkers(f: HudFrame): void {
         pen.line(h.x + sx * gap, h.y + sy * gap, h.x + sx * (gap + len), h.y + sy * (gap + len));
       }
     }
+    pen.g.globalAlpha = a;
     pen.strokeGlow(col, h.kill ? 2.6 : 2);
+    pen.g.globalAlpha = 1;
   }
 }
 

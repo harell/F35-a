@@ -1,0 +1,101 @@
+/* F35-A menus — overlays: loading, rotate hint, toasts. */
+
+.ui-overlays { position: absolute; inset: 0; pointer-events: none; }
+
+/* ───────── loading ───────── */
+.ui-loading {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  padding: var(--pad-t) var(--pad-r) var(--pad-b) var(--pad-l);
+}
+.ui-loading.is-on { display: flex; animation: fade-in 250ms ease both; }
+.ui-loading.is-out { animation: ld-out 400ms ease both; pointer-events: none; }
+@keyframes ld-out { to { opacity: 0; transform: scale(1.04); } }
+.ld-center { width: min(480px, 84vw); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.ld-emblem { width: clamp(70px, 24vh, 110px); aspect-ratio: 1; filter: drop-shadow(0 0 16px rgba(var(--acc-rgb), 0.35)); }
+.ld-emblem .logo-ring,
+.ld-emblem .logo-jet,
+.ld-emblem .logo-brackets { animation: none; }
+.ld-label { font: 800 12px/1.2 var(--sans); letter-spacing: 0.3em; text-transform: uppercase; color: var(--acc); text-align: center; min-height: 1.2em; }
+.ld-bar { position: relative; width: 100%; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); }
+.ld-bar i {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.18) 0 6px, transparent 6px 12px), linear-gradient(90deg, #1b9ec2, #7ff0ff);
+  background-size: 34px 34px, 100% 100%;
+  box-shadow: 0 0 14px rgba(var(--acc-rgb), 0.55);
+  transition: transform 260ms var(--ease);
+  animation: stripes 900ms linear infinite;
+}
+@keyframes stripes { to { background-position: 34px 0, 0 0; } }
+.ld-pct { position: absolute; right: 0; top: 14px; font-size: 11px; color: var(--dim); }
+.ld-tip { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-height: 58px; }
+.ld-tip-k { display: inline-flex; align-items: center; gap: 5px; font: 800 9.5px/1 var(--sans); letter-spacing: 0.28em; color: var(--amber); }
+.ld-tip-k .ico { width: 14px; height: 14px; }
+.ld-tip-t { font: 400 13px/1.45 var(--sans); color: #d6e6ef; max-width: 460px; }
+.ld-tip-t.is-in { animation: tip-in 420ms var(--ease) both; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ───────── rotate hint ───────── */
+.ui-rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 40%, #0a1822, #03070b 70%);
+  pointer-events: auto;
+}
+.ui-rotate.is-on { display: flex; animation: fade-in 250ms ease both; }
+.rt-phone { width: 46px; height: 80px; border: 3px solid var(--acc); border-radius: 10px; position: relative; animation: rot 2.4s var(--ease) infinite; box-shadow: 0 0 20px rgba(var(--acc-rgb), 0.35); }
+.rt-screen { position: absolute; inset: 7px 4px 12px; border-radius: 3px; background: linear-gradient(180deg, rgba(var(--acc-rgb), 0.35), rgba(var(--acc-rgb), 0.08)); }
+.rt-phone::after { content: ''; position: absolute; left: 50%; bottom: 4px; width: 10px; height: 2px; margin-left: -5px; border-radius: 1px; background: var(--acc); }
+@keyframes rot {
+  0%, 18% { transform: rotate(0deg); }
+  45%, 78% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+.rt-t { margin-top: 18px; font: 800 18px/1.2 var(--sans); letter-spacing: 0.16em; text-transform: uppercase; color: #fff; }
+.rt-s { font: 400 13px/1.45 var(--sans); color: var(--dim); max-width: 300px; }
+
+/* ───────── toasts ───────── */
+.ui-toasts {
+  position: absolute;
+  top: calc(var(--pad-t) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  width: min(92vw, 520px);
+}
+.ui-toast {
+  max-width: 100%;
+  padding: 9px 16px;
+  border-radius: 20px;
+  background: rgba(6, 16, 22, 0.94);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 14px rgba(var(--acc-rgb), 0.12);
+  font: 600 13px/1.3 var(--sans);
+  color: var(--text);
+  text-align: center;
+  animation: toast-in 260ms var(--ease) both;
+}
+.ui-toast.is-out { animation: toast-out 300ms ease both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-10px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(-8px); } }

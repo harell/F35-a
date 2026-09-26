@@ -24,12 +24,16 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { CreateEnvironment, EnvironmentApi, FrameContext } from '../core/contracts';
-import { generateTerrain } from './terrain/generate';
+import { BASE_MAX, finishTerrain, generateTerrain } from './terrain/generate';
+import { TerrainWorkerPool } from './terrain/parallel';
+import { anchorsFor } from './terrain/features';
+import { Heightfield as HeightfieldClass } from './terrain/Heightfield';
+import { HF_EXTENT } from './terrain/types';
 import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
 import { TerrainRenderer } from './terrain/TerrainRenderer';
 import { bakeColorRows, bakeSunVisibility, bakeSurface } from './terrain/bake';
 import { skyPreset } from './sky/presets';
-import { createAtmosphereUniforms } from './sky/atmosphere';
+import { blendAtmosphere, createAtmosphereUniforms } from './sky/atmosphere';
 import { SkySystem } from './sky/SkySystem';
 import { Water } from './water/Water';
 import { createCloudAtlas, createCloudLayerTexture, createDetailTextures } from './textures/procedural';
@@ -43,7 +47,7 @@ import type { EnvironmentOptions } from '../core/contracts';
 /** Extra (non-contract) surface for dev tools / other world code. */
 export interface EnvironmentInternals extends EnvironmentApi {
   readonly heightfield: Heightfield;
-  readonly stats: () => { patches: number; genMs: number; instances: number; meshes: number; lights: number; idle: boolean };
+  readonly stats: () => { patches: number; genMs: number; bakeMs: number; workers: number; timings: Record<string, number>; instances: number; meshes: number; lights: number; idle: boolean };
 }
 
 export const createEnvironment: CreateEnvironment = async (scene, renderer, opts) => {
@@ -53,18 +57,44 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const report = (f: number, label: string) => opts.onProgress?.(Math.min(1, Math.max(0, f)), label);
   const preset = skyPreset(opts.theater, opts.timeOfDay, opts.weather, q.drawDistance);
   const features = allFeatures(opts.theater, opts.features);
+  // Above an overcast deck the sky is clear and sunny.
+  const abovePreset = opts.weather === 'overcast' ? skyPreset(opts.theater, opts.timeOfDay, 'clear', q.drawDistance) : null;
+  let lastAbove = -1;
 
-  // ── 1. Heightfield ──
+  // ── 1. Heightfield (worker pool when available, else time-sliced on the main thread) ──
   report(0, 'Generating terrain');
   await yieldToEventLoop();
-  const hf = await runSliced(
-    generateTerrain({ theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads }),
-    (f) => report(f * 0.55, 'Generating terrain'),
-  );
+  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads };
+  const pool = TerrainWorkerPool.create();
+  const workerCount = pool?.size ?? 0;
+  let hf: Heightfield | null = null;
+  if (pool) {
+    try {
+      const anchors = anchorsFor(features, opts.pads);
+      const baseN = Math.min(BASE_MAX, cfg.hfResolution);
+      const res = await pool.generateBase(opts.theater, opts.seed, anchors, baseN, (f) => report(f * 0.45, 'Generating terrain'));
+      const base = new HeightfieldClass(baseN, HF_EXTENT);
+      base.data.set(res.data);
+      base.mat.set(res.mat);
+      base.aux.set(res.aux);
+      hf = await runSliced(finishTerrain(base, spec, anchors, 0), (f) => report(0.45 + f * 0.1, 'Shaping terrain'));
+    } catch (err) {
+      console.warn('[world] terrain workers failed, falling back to main thread', err);
+      hf = null;
+    }
+  }
+  if (!hf) hf = await runSliced(generateTerrain(spec), (f) => report(f * 0.55, 'Generating terrain'));
   const terrainQuery = new TerrainQueryImpl(hf);
   const genMs = performance.now() - t0;
 
   // ── 2. Bakes ──
+  const timings: Record<string, number> = { generate: Math.round(genMs) };
+  let mark = performance.now();
+  const lap = (name: string) => {
+    const now = performance.now();
+    timings[name] = Math.round(now - mark);
+    mark = now;
+  };
   report(0.57, 'Baking light & shadows');
   await yieldToEventLoop();
   const n = hf.n;
@@ -72,22 +102,38 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   bakeSunVisibility(hf, preset.sunDir, vis, 22 + hf.cell * 0.15);
   const surfaceData = new Uint8Array(n * n * 4);
   bakeSurface(hf, vis, surfaceData);
+  lap('light');
   report(0.62, 'Painting terrain');
   await yieldToEventLoop();
   const colorSize = Math.min(1024, n);
-  const colorData = new Uint8Array(colorSize * colorSize * 4);
-  const bakeOpts = { theater: opts.theater, seed: opts.seed, features };
-  await runSliced(
-    (function* () {
-      const rows = 32;
-      for (let j = 0; j < colorSize; j += rows) {
-        const j1 = Math.min(colorSize, j + rows);
-        bakeColorRows(hf, bakeOpts, colorSize, j, j1, colorData.subarray(j * colorSize * 4, j1 * colorSize * 4));
-        yield j1 / colorSize;
-      }
-    })(),
-    (f) => report(0.62 + f * 0.2, 'Painting terrain'),
-  );
+  let colorData: Uint8Array | null = null;
+  if (pool) {
+    try {
+      colorData = await pool.bakeColor(hf, opts.theater, opts.seed, features, colorSize, (f) => report(0.62 + f * 0.2, 'Painting terrain'));
+    } catch (err) {
+      console.warn('[world] colour bake workers failed, falling back to main thread', err);
+    }
+    pool.dispose();
+  }
+  if (!colorData) {
+    const cd = new Uint8Array(colorSize * colorSize * 4);
+    const bakeOpts = { theater: opts.theater, seed: opts.seed, features };
+    const hfv = hf;
+    await runSliced(
+      (function* () {
+        const rows = 32;
+        for (let j = 0; j < colorSize; j += rows) {
+          const j1 = Math.min(colorSize, j + rows);
+          bakeColorRows(hfv, bakeOpts, colorSize, j, j1, cd.subarray(j * colorSize * 4, j1 * colorSize * 4));
+          yield j1 / colorSize;
+        }
+      })(),
+      (f) => report(0.62 + f * 0.2, 'Painting terrain'),
+    );
+    colorData = cd;
+  }
+  const bakeMs = performance.now() - t0;
+  lap('colour');
 
   // ── 3. GPU objects ──
   report(0.84, 'Building world');
@@ -148,6 +194,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const clouds = new Clouds({ weather: opts.weather, quality: q, preset, atmo, atlas: cloudAtlas, layer: cloudLayer, seed: opts.seed });
   for (const m of clouds.meshes) scene.add(m);
 
+  lap('gpu');
   report(0.92, 'Placing scenery');
   await yieldToEventLoop();
   const scenery = new Scenery({
@@ -165,6 +212,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   });
   scene.add(scenery.group);
 
+  lap('scenery');
+  timings.total = Math.round(performance.now() - t0);
   report(1, 'World ready');
 
   // ── Per-frame ──
@@ -176,8 +225,9 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const preRender = (camera: Camera) => {
     camera.getWorldPosition(camPos);
     atmo.uCamPos.value.copy(camPos);
+    // The fog must reach the horizon colour exactly at the far plane (tactical view sets a longer far).
     const far = (camera as Camera & { far?: number }).far ?? q.drawDistance;
-    atmo.uFogFar.value = Math.min(far, q.drawDistance);
+    atmo.uFogFar.value = far;
     terrain.update(camera);
     water.preRender(camPos);
     sky.preRender(camera, camPos, pixelRatio());
@@ -199,7 +249,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     isNight: preset.isNight,
     fogColor: preset.fogColor.getHex(),
     heightfield: hf,
-    stats: () => ({ patches: terrain.lastPatchCount, genMs, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle }),
+    stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle }),
 
     update(ctx: FrameContext) {
       if (!ctx.paused) {
@@ -214,6 +264,15 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       // Inside a cloud: white-out (much denser fog for everything)
       const inCloud = cam ? clouds.inCloud(cam.position) : 0;
       atmo.uFogDensity.value = preset.fogDensity * (1 + 300 * inCloud * inCloud);
+      const deckY = clouds.deckAltitude;
+      if (abovePreset && deckY !== null) {
+        const t = Math.min(1, Math.max(0, (camY - deckY - 120) / 600));
+        if (Math.abs(t - lastAbove) > 0.002) {
+          lastAbove = t;
+          blendAtmosphere(atmo, preset, abovePreset, t);
+          sky.setSunIntensity(preset.sunIntensity + (abovePreset.sunIntensity - preset.sunIntensity) * t);
+        }
+      }
       sky.update(f ? focus : null, camY, inCloud, 0);
       if (cam) {
         const agl = cam.position.y - terrainQuery.surfaceHeightAt(cam.position.x, cam.position.z);

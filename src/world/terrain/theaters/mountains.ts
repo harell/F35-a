@@ -3,8 +3,7 @@
  * divide, spurs separated by deep, winding gorges (terrain masking!), a lesser range to the south,
  * eroded foothills, and a broad lowland plain with meandering river valleys and low hills.
  */
-import { mulberry32 } from '../../../core/math';
-import { Noise2D, sstep, mixf } from '../noise';
+import { Noise2D, mulberry32, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
 import { MAT_NONE, MAT_RIVER, MAT_ROCKY, type SampleOut, type TheaterGenerator } from '../types';
 

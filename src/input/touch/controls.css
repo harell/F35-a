@@ -1,0 +1,303 @@
+/* F35-A — on-screen flight controls (stick, throttle, thumb buttons). Tinted to the HMD colour. */
+
+.f35-ctl {
+  --acc: 120, 240, 170;
+  --fire: 255, 96, 72;
+  --gun: 255, 190, 80;
+  --cms: 190, 225, 255;
+  position: absolute;
+  inset: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: rgb(var(--acc));
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.f35-ctl[data-hud='amber'] { --acc: 255, 204, 96; }
+.f35-ctl[data-hud='cyan'] { --acc: 110, 226, 255; }
+.f35-ctl.is-disabled { display: none; }
+
+.ctl-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* ───────── buttons ───────── */
+.ctl-btn {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+  touch-action: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1.5px solid rgba(var(--acc), 0.5);
+  background: radial-gradient(120% 120% at 50% 20%, rgba(var(--acc), 0.1), rgba(4, 12, 10, 0.34) 60%);
+  color: rgba(var(--acc), 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  transition: transform 90ms ease-out, background-color 90ms, border-color 90ms, opacity 150ms, box-shadow 120ms;
+  line-height: 1.05;
+  cursor: pointer;
+}
+.ctl-round { border-radius: 50%; }
+.ctl-rect { border-radius: 12px; }
+.ctl-label { font-weight: 800; letter-spacing: 0.06em; }
+.ctl-sub {
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ctl-btn.is-down {
+  transform: scale(0.93);
+  background: rgba(var(--acc), 0.34);
+  border-color: rgba(var(--acc), 1);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(var(--acc), 0.45), inset 0 0 12px rgba(var(--acc), 0.35);
+}
+.ctl-btn.is-long { box-shadow: 0 0 0 3px rgba(var(--acc), 0.6), 0 0 18px rgba(var(--acc), 0.5); }
+.ctl-btn.is-empty { opacity: 0.4; filter: grayscale(0.8); }
+.ctl-btn.is-active { border-color: rgba(var(--acc), 0.9); box-shadow: 0 0 10px rgba(var(--acc), 0.35); }
+
+/* weapon buttons get their own accent so they read at a glance */
+.b-fire {
+  border-color: rgba(var(--fire), 0.75);
+  color: rgb(255, 220, 212);
+  background: radial-gradient(120% 120% at 50% 20%, rgba(var(--fire), 0.2), rgba(20, 4, 2, 0.4) 62%);
+  border-width: 2px;
+}
+.b-fire .ctl-label { letter-spacing: 0.08em; }
+.b-fire.is-down { background: rgba(var(--fire), 0.5); border-color: rgb(var(--fire)); box-shadow: 0 0 22px rgba(var(--fire), 0.6); }
+.b-gun { border-color: rgba(var(--gun), 0.7); color: rgb(255, 232, 190); background: radial-gradient(120% 120% at 50% 20%, rgba(var(--gun), 0.16), rgba(20, 12, 2, 0.38) 62%); }
+.b-gun.is-down { background: rgba(var(--gun), 0.45); border-color: rgb(var(--gun)); box-shadow: 0 0 18px rgba(var(--gun), 0.55); }
+.b-cms { border-color: rgba(var(--cms), 0.6); color: rgb(225, 240, 255); background: radial-gradient(120% 120% at 50% 20%, rgba(var(--cms), 0.14), rgba(4, 8, 16, 0.38) 62%); }
+.b-cms.is-down { background: rgba(var(--cms), 0.42); border-color: rgb(var(--cms)); box-shadow: 0 0 18px rgba(var(--cms), 0.55); }
+.b-pause { border-radius: 10px; font-size: 13px !important; letter-spacing: -0.1em; opacity: 0.85; }
+.b-radar { border-style: dashed; }
+.b-radar.is-active { border-style: solid; }
+.b-radar.is-emcon { color: rgb(255, 200, 90); border-color: rgba(255, 200, 90, 0.8); }
+.b-recenter { border-radius: 21px; }
+
+/* ───────── throttle ───────── */
+.ctl-throttle {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+  touch-action: none;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--acc), 0.32);
+  background: linear-gradient(to right, rgba(4, 12, 10, 0.42), rgba(4, 12, 10, 0.22));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  cursor: ns-resize;
+}
+.thr-track { position: absolute; left: 5px; right: 5px; }
+.thr-track::before {
+  /* the rail */
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.thr-fill {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 6px;
+  height: 100%;
+  margin-left: -3px;
+  border-radius: 3px;
+  transform-origin: 50% 100%;
+  background: linear-gradient(to top, rgba(var(--acc), 0.35), rgba(var(--acc), 0.85));
+}
+.is-ab .thr-fill { background: linear-gradient(to top, rgba(var(--acc), 0.35) 0%, rgba(var(--acc), 0.8) 70%, rgb(255, 150, 60) 78%, rgb(255, 90, 40) 100%); }
+.thr-ab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-radius: 8px 8px 3px 3px;
+  background: repeating-linear-gradient(135deg, rgba(255, 128, 48, 0.32) 0 5px, rgba(255, 80, 30, 0.14) 5px 10px);
+  border: 1px solid rgba(255, 140, 60, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.thr-ab span {
+  margin-top: 2px;
+  font: 800 10px/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  color: rgb(255, 170, 90);
+  text-shadow: 0 1px 2px #000;
+}
+.thr-gate {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  border-top: 2px solid rgba(var(--acc), 0.85);
+  border-bottom: 1px dashed rgba(255, 140, 60, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+}
+.thr-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 700 8px/1 system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  color: rgba(var(--acc), 0.75);
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+.thr-mil { transform: translateY(12px); }
+.thr-idle { bottom: 2px; }
+.thr-handle {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 0;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1.5px solid rgba(var(--acc), 0.9);
+  background:
+    repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 0 2px, transparent 2px 5px),
+    linear-gradient(to bottom, rgba(40, 58, 54, 0.95), rgba(14, 24, 22, 0.95));
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55), 0 0 10px rgba(var(--acc), 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+.ctl-throttle.is-snap .thr-handle { transition: transform 200ms cubic-bezier(0.3, 1.4, 0.5, 1); }
+.thr-val {
+  font: 800 12px/1 system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #eafff4;
+  text-shadow: 0 1px 2px #000;
+}
+.ctl-throttle.is-down { border-color: rgba(var(--acc), 0.7); }
+.ctl-throttle.is-down .thr-handle { box-shadow: 0 3px 12px rgba(0, 0, 0, 0.6), 0 0 16px rgba(var(--acc), 0.5); }
+.ctl-throttle.is-ab .thr-handle {
+  border-color: rgb(255, 140, 60);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55), 0 0 18px rgba(255, 120, 40, 0.65);
+}
+.ctl-throttle.is-ab .thr-val { color: rgb(255, 196, 120); }
+.ctl-throttle.is-idle .thr-val { color: rgb(170, 200, 190); }
+
+/* ───────── floating stick ───────── */
+.ctl-stick {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1.5px solid rgba(var(--acc), 0.28);
+  background: radial-gradient(circle, rgba(var(--acc), 0.08) 0%, rgba(var(--acc), 0.03) 55%, rgba(0, 0, 0, 0.12) 70%);
+  opacity: 0.5;
+  transition: opacity 160ms;
+  will-change: transform;
+}
+.ctl-stick::before,
+.ctl-stick::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(var(--acc), 0.28);
+}
+.ctl-stick::before { width: 60%; height: 1px; transform: translate(-50%, -0.5px); }
+.ctl-stick::after { width: 1px; height: 60%; transform: translate(-0.5px, -50%); }
+.ctl-stick.is-active { opacity: 1; transition: none; }
+.ctl-stick-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(var(--acc), 0.55);
+  opacity: 0.35;
+}
+.ctl-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--acc), 0.9);
+  background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.4), rgba(var(--acc), 0.32) 42%, rgba(2, 16, 10, 0.62) 100%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 12px rgba(var(--acc), 0.3);
+  transition: transform 170ms cubic-bezier(0.25, 1.7, 0.5, 1);
+  will-change: transform;
+  z-index: 1;
+}
+.ctl-stick-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  font: 800 10px/1 system-ui, sans-serif;
+  letter-spacing: 0.2em;
+  color: rgba(var(--acc), 0.7);
+  text-shadow: 0 1px 2px #000;
+  margin: 46px 0 0 -22px;
+  transition: opacity 400ms;
+}
+.ctl-stick-hint.is-hidden { opacity: 0; }
+.f35-ctl[data-scheme='tilt'] .ctl-stick-hint { display: none; }
+
+/* desktop (no touch yet): hide the thumb controls, keep pause */
+.f35-ctl[data-touch='0'] .ctl-btn:not(.b-pause),
+.f35-ctl[data-touch='0'] .ctl-throttle,
+.f35-ctl[data-touch='0'] .ctl-stick,
+.f35-ctl[data-touch='0'] .ctl-stick-hint { display: none !important; }
+
+/* player dead / no player: dim the weapons */
+.f35-ctl.is-dead .ctl-btn:not(.b-pause):not(.b-cam),
+.f35-ctl.is-dead .ctl-throttle,
+.f35-ctl.is-dead .ctl-stick { opacity: 0.25; }
+
+/* keyboard legend (desktop) */
+.ctl-keys {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  pointer-events: none;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(4, 10, 12, 0.72);
+  border: 1px solid rgba(var(--acc), 0.3);
+  color: #d8e8e2;
+  font: 500 11.5px/1.55 system-ui, sans-serif;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 12px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 300ms, transform 300ms;
+}
+.ctl-keys.is-shown { opacity: 1; transform: none; }
+.ctl-keys b {
+  color: rgb(var(--acc));
+  font-weight: 700;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  text-align: right;
+}
+.ctl-keys .k-title {
+  grid-column: 1 / span 2;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  color: rgba(var(--acc), 0.85);
+  margin-bottom: 4px;
+}

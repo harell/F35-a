@@ -39,6 +39,19 @@ export function remainingOf(f: HudFrame, w: WeaponId): number {
 
 /* ───────────────────────── Weapon status block ───────────────────────── */
 
+/** Master mode: A-G with an air-to-ground store selected, A-A with a target or hostile air track, else NAV. */
+export function masterMode(f: HudFrame): 'A-A' | 'A-G' | 'NAV' {
+  const p = f.p;
+  if (WEAPON_IS_AG[p.selectedWeapon]) return 'A-G';
+  if (f.target) return 'A-A';
+  for (const c of p.radar.contacts) {
+    if (c.team === p.team) continue;
+    const e = f.world.getEntity(c.id);
+    if (e && e.alive && e.kind === 'aircraft') return 'A-A';
+  }
+  return 'NAV';
+}
+
 export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = false): number {
   const { pen, pal, L, p, st } = f;
   const u = L.u;
@@ -46,7 +59,7 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
   const ag = WEAPON_IS_AG[w];
   const n = remainingOf(f, w);
   if (!compact) {
-    pen.text(ag ? 'A-G' : 'A-A', x, y, pal.main, 13, 'left');
+    pen.text(masterMode(f), x, y, pal.main, 13, 'left');
     y += L.line;
   }
   // selected weapon (flashes briefly after a change; amber when empty)
@@ -170,7 +183,7 @@ export function drawAim9x(f: HudFrame): void {
     pen.circle(x, y, r);
     pen.strokeGlow(pal.main, 1.6);
     pen.setDash('solid');
-    pen.text('9X', x, y + r + 10 * u, pal.dim, 10.5);
+    pen.text('GROWL', x, y + r + 10 * u, pal.dim, 10.5);
   }
 }
 
@@ -361,7 +374,9 @@ export function drawBrevity(f: HudFrame, y: number): number {
   const { st, pen, pal, L } = f;
   if (st.brevityAge > 1.3 || !st.brevity) return y;
   const a = Math.max(0, Math.min(1, (1.3 - st.brevityAge) / 0.4));
-  pen.text(st.brevity, L.cx, y, withAlpha(pal.white, a), 15);
+  pen.g.globalAlpha = a;
+  pen.text(st.brevity, L.cx, y, pal.white, 15);
+  pen.g.globalAlpha = 1;
   return y + 18 * L.u;
 }
 

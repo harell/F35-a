@@ -48,6 +48,21 @@ export function createAtmosphereUniforms(p: SkyPreset, drawDistance: number): At
   };
 }
 
+/**
+ * Write a blend of two presets into the shared uniforms (e.g. overcast below the deck → clear sky
+ * above it). t = 0 → a, 1 → b.
+ */
+export function blendAtmosphere(u: AtmosphereUniforms, a: SkyPreset, b: SkyPreset, t: number): void {
+  u.uZenith.value.lerpColors(a.zenith, b.zenith, t);
+  u.uHorizon.value.lerpColors(a.horizon, b.horizon, t);
+  u.uHorizonSun.value.lerpColors(a.horizonSun, b.horizonSun, t);
+  const ia = a.sunIntensity + (b.sunIntensity - a.sunIntensity) * t;
+  u.uSunColor.value.lerpColors(a.sunColor, b.sunColor, t).multiplyScalar(ia);
+  const ha = a.hemiIntensity + (b.hemiIntensity - a.hemiIntensity) * t;
+  u.uHemiSky.value.lerpColors(a.hemiSky, b.hemiSky, t).multiplyScalar(ha);
+  u.uSunGlow.value = a.sunGlow + (b.sunGlow - a.sunGlow) * t;
+}
+
 /** GLSL declarations + helpers. Include in both vertex and fragment shaders that need them. */
 export const ATMOSPHERE_GLSL = /* glsl */ `
 uniform vec3 uSunDir;
@@ -86,7 +101,8 @@ vec3 atmoHaze(vec3 dir) {
 // Sky radiance (no sun disk) in a direction.
 vec3 atmoSky(vec3 dir) {
   float y = dir.y;
-  float t = pow(clamp(y, 0.0, 1.0), 0.42);
+  // exponential gradient: finite slope at the horizon (pow(y, k<1) leaves a visible seam)
+  float t = 1.0 - exp(-3.6 * max(y, 0.0));
   // Below the horizon the sky IS the haze colour, so fogged terrain at the far plane blends in.
   vec3 col = mix(atmoHaze(dir), uZenith, t);
   float s = max(dot(dir, uSunDir), 0.0);
@@ -111,6 +127,12 @@ vec3 atmoApplyFog(vec3 col, vec3 worldPos) {
   float dist = length(d);
   float f = atmoFogFactor(dist, uCamPos.y, worldPos.y);
   return mix(col, atmoHaze(d / max(dist, 1e-3)), f);
+}
+
+// Scotopic (night) vision: moonlit colours desaturate towards a cool grey.
+vec3 atmoNight(vec3 c) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  return mix(c, vec3(l) * vec3(0.85, 0.95, 1.15), step(0.95, uNight) * 0.65);
 }
 
 // Diffuse lighting (matches three.js physically-correct Lambert: albedo/π · irradiance).

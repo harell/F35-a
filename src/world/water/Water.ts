@@ -74,7 +74,9 @@ void main() {
   float gh = groundHeight(wp);
   if (gh > 0.0) discard;
   float depth = -gh;
-  float shore = 1.0 - smoothstep(0.0, 1.2, depth);
+  // Surf only where the sea floor shelves quickly (beaches, rocks) — not over flat mudflats.
+  float grad = length(vec2(dFdx(depth), dFdy(depth))) / max(1e-3, length(vec2(length(dFdx(wp)), length(dFdy(wp)))));
+  float shore = (1.0 - smoothstep(0.0, 0.9, depth)) * smoothstep(0.004, 0.03, grad);
 
   float ndv = max(dot(N, V), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
@@ -99,7 +101,7 @@ void main() {
   if (shore > 0.0 && fade > 0.0) {
     float fn = texture2D(uDetail, wp / 19.0 + vec2(t * 0.013, t * 0.007)).r;
     float wave = 0.5 + 0.5 * sin(t * 1.4 - depth * 3.5 + fn * 4.0);
-    float foam = shore * smoothstep(0.55, 0.85, fn * 0.7 + wave * 0.5) * 0.7 + (1.0 - smoothstep(0.0, 0.25, depth)) * 0.45;
+    float foam = shore * (smoothstep(0.55, 0.85, fn * 0.7 + wave * 0.5) * 0.7 + (1.0 - smoothstep(0.0, 0.25, depth)) * 0.45);
     col = mix(col, (uHemiSky * 0.6 + uSunColor * 0.3) * 0.9, clamp(foam, 0.0, 1.0) * 0.6 * fade);
   }
 
@@ -111,6 +113,7 @@ void main() {
     col = mix(col, iceCol, m);
   }
 
+  col = atmoNight(col);
   col = atmoApplyFog(col, vWorld);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>

@@ -9,6 +9,7 @@
  *
  * Draw modules live in ./hmd/* and share one HudFrame object (no per-frame allocation).
  */
+import { Quaternion, Vector3 } from 'three';
 import type { CreateHud, FrameContext, HudApi } from '../core/contracts';
 import type { WeaponId } from '../core/types';
 import { loadHudFont } from './font';
@@ -24,8 +25,14 @@ import { Pen } from './hmd/pen';
 import { PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
 import { drawContacts, drawDesignated, drawFriendlies, drawGroundAndSams, drawOwnMissiles, drawWaypoint, waypointBearing } from './hmd/targets';
-import { drawDamage, drawIncoming, drawRwrEdge, drawWarnings } from './hmd/threats';
+import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarnings } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawBrevity, drawDlz, drawGun, drawShootCue, drawWeaponBlock } from './hmd/weapons';
+
+const _q = new Quaternion();
+const _fwd = new Vector3();
+/** Head pitch (rad) below which the HMD declutters to keep the PCD readable (cockpit view). */
+const DECLUTTER_START = 0.2;
+const DECLUTTER_SPAN = 0.14;
 
 export const createHud: CreateHud = (canvas, events) => {
   const g2 = canvas.getContext('2d', { alpha: true });
@@ -141,12 +148,17 @@ export const createHud: CreateHud = (canvas, events) => {
       dirty = false;
       st.step(ctx.dt, ctx.paused);
       if (!ctx.world || !ctx.camera) {
+        // no session (teardown): forget everything from the previous mission
+        if (st.playerId !== null) {
+          st.reset();
+          st.playerId = null;
+        }
         picks.begin();
         return;
       }
       const p = ctx.player;
       if (p && p.id !== st.playerId) {
-        st.reset();
+        st.resetPlayer();
         st.playerId = p.id;
       }
       playerTeam = p?.team ?? null;
@@ -204,6 +216,16 @@ export const createHud: CreateHud = (canvas, events) => {
       // vision effects under the symbology (so the HMD stays readable)
       vignettes.draw(f);
 
+      // looking down into the cockpit: fade the flight/target symbology so the PCD stays readable
+      let declutter = 1;
+      if (cockpit) {
+        _q.copy(p.quaternion).invert();
+        _fwd.copy(proj.forward).applyQuaternion(_q);
+        const headPitch = Math.asin(Math.max(-1, Math.min(1, _fwd.y)));
+        declutter = Math.max(0.12, Math.min(1, 1 - (-headPitch - DECLUTTER_START) / DECLUTTER_SPAN));
+      }
+      g2.globalAlpha = declutter;
+
       drawFpm(f);
       if (hmd) {
         drawLadder(f);
@@ -220,16 +242,20 @@ export const createHud: CreateHud = (canvas, events) => {
         drawAim9x(f);
         drawGun(f);
       }
+      g2.globalAlpha = 1;
+      drawGcas(f);
       const missileBanner = drawIncoming(f);
       drawRwrEdge(f);
 
       let leftY: number;
       if (hmd) {
+        g2.globalAlpha = declutter;
         drawHeadingTape(f, waypointBearing(f));
         drawSpeedColumn(f);
         drawAltColumn(f);
         drawDlz(f, L.dlzX, L.dlzTop, L.dlzBottom);
         drawWeaponBlock(f, L.wpnX, L.wpnY);
+        g2.globalAlpha = 1;
         leftY = drawObjectives(f, L.objX, L.objY);
         drawHint(f, L.hintY);
       } else {
@@ -248,7 +274,8 @@ export const createHud: CreateHud = (canvas, events) => {
       y = drawBrevity(f, y);
       drawWarnings(f, y);
 
-      drawMessages(f, L.msgY + (missileBanner ? 30 * L.u : 0));
+      // PULL UP owns the centre of the screen: hold other centre messages back
+      if (!p.warnings.has('pull_up')) drawMessages(f, L.msgY + (missileBanner ? 30 * L.u : 0));
       drawKillFeed(f, hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u, L.killY);
       drawHitMarkers(f);
       drawRadio(f);

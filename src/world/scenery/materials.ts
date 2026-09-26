@@ -91,7 +91,7 @@ void main() {
   } else if (vWin > 3.5) {
     emissive += base * uNight * 1.6;
   }
-  vec3 col = atmoDiffuse(base, N, 1.0) + emissive;
+  vec3 col = atmoNight(atmoDiffuse(base, N, 1.0)) + emissive;
   col = atmoApplyFog(col, vWorld);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -127,7 +127,7 @@ varying vec3 vWorld;
 varying vec2 vUv;
 void main() {
   vec4 t = texture2D(uMap, vUv);
-  vec3 col = atmoDiffuse(t.rgb, vec3(0.0, 1.0, 0.0), 1.0);
+  vec3 col = atmoNight(atmoDiffuse(t.rgb, vec3(0.0, 1.0, 0.0), 1.0));
   col = atmoApplyFog(col, vWorld);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -169,7 +169,7 @@ void main() {
   // wrap lighting keeps crowns from going black on the shadow side
   float ndl = dot(N, uSunDir) * 0.6 + 0.4;
   vec3 hemi = mix(uHemiGround, uHemiSky, N.y * 0.5 + 0.5);
-  vec3 col = vColor * (uSunColor * max(ndl, 0.0) + hemi) * 0.3183099;
+  vec3 col = atmoNight(vColor * (uSunColor * max(ndl, 0.0) + hemi) * 0.3183099);
   col = atmoApplyFog(col, vWorld);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>

@@ -28,6 +28,7 @@ import {
   AKL_PARKS,
   AKL_RANGITOTO,
   AKL_RELIEF,
+  AKL_RURAL,
   AKL_URBAN,
   AKL_WATER,
 } from './aucklandMap';
@@ -61,20 +62,43 @@ export function aucklandMapData(): AucklandMapData {
   for (const [cx, cz, r] of AKL_LAKES) fillEllipse(labels, g, cx * KM, cz * KM, r * KM, r * KM, 0, AKL_LABEL.lake);
   const coast = new GridSampler(signedDistance(labels, g, (l) => l === AKL_LABEL.land), MAP_N, HF_EXTENT);
 
-  const urbanLabels = new Uint8Array(MAP_N * MAP_N);
-  for (const poly of AKL_URBAN) fillPolygon(urbanLabels, g, km(poly), 1);
-  const urban = new GridSampler(signedDistance(urbanLabels, g, (l) => l === 1), MAP_N, HF_EXTENT);
+  // Urban footprint only needs ~350 m accuracy: a 256² field is plenty.
+  const UN = 256;
+  const ug: GridSpec = { n: UN, extent: HF_EXTENT };
+  const urbanLabels = new Uint8Array(UN * UN);
+  for (const poly of AKL_URBAN) fillPolygon(urbanLabels, ug, km(poly), 1);
+  const urban = new GridSampler(signedDistance(urbanLabels, ug, (l) => l === 1), UN, HF_EXTENT);
   cached = { labels, coast, urban, n: MAP_N };
   return cached;
 }
 
-function ellipseDist(e: [number, number, number, number, number], x: number, z: number): number {
-  const dx = x - e[0] * KM;
-  const dz = z - e[1] * KM;
-  const c = Math.cos(e[4]);
-  const s = Math.sin(e[4]);
-  const u = (dx * c + dz * s) / (e[2] * KM);
-  const v = (-dx * s + dz * c) / (e[3] * KM);
+interface Relief {
+  cx: number;
+  cz: number;
+  c: number;
+  s: number;
+  irx: number;
+  irz: number;
+  h: number;
+  rough: number;
+}
+
+const RELIEF: Relief[] = AKL_RELIEF.map((r) => ({
+  cx: r.e[0] * KM,
+  cz: r.e[1] * KM,
+  c: Math.cos(r.e[4]),
+  s: Math.sin(r.e[4]),
+  irx: 1 / (r.e[2] * KM),
+  irz: 1 / (r.e[3] * KM),
+  h: r.h,
+  rough: r.rough,
+}));
+
+function ellipseDist(e: Relief, x: number, z: number): number {
+  const dx = x - e.cx;
+  const dz = z - e.cz;
+  const u = (dx * e.c + dz * e.s) * e.irx;
+  const v = (-dx * e.s + dz * e.c) * e.irz;
   return Math.sqrt(u * u + v * v);
 }
 
@@ -92,14 +116,14 @@ export function createAuckland(seed: number): TheaterGenerator {
     const wx = x + warpX.at(x, z);
     const wz = z + warpZ.at(x, z);
     let r = 14;
-    for (const reg of AKL_RELIEF) r = Math.max(r, reg.h * (1 - sstep(0.5, 1.3, ellipseDist(reg.e, wx, wz))));
+    for (const reg of RELIEF) r = Math.max(r, reg.h * (1 - sstep(0.5, 1.3, ellipseDist(reg, wx, wz))));
     return r;
   });
   const regionK = new CoarseField((x, z) => {
     const wx = x + warpX.at(x, z);
     const wz = z + warpZ.at(x, z);
     let k = 0.08;
-    for (const reg of AKL_RELIEF) k = Math.max(k, reg.rough * (1 - sstep(0.5, 1.3, ellipseDist(reg.e, wx, wz))));
+    for (const reg of RELIEF) k = Math.max(k, reg.rough * (1 - sstep(0.5, 1.3, ellipseDist(reg, wx, wz))));
     return k;
   });
   const coastNoise = new CoarseField((x, z) => 110 * nA.fbm(x / 2200, z / 2200, 3));
@@ -107,6 +131,7 @@ export function createAuckland(seed: number): TheaterGenerator {
   const cones = AKL_CONES.map((c) => ({ ...c, x: c.x * KM, z: c.z * KM }));
   const rg = { ...AKL_RANGITOTO, x: AKL_RANGITOTO.x * KM, z: AKL_RANGITOTO.z * KM };
   const parks = AKL_PARKS.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
+  const rural = AKL_RURAL.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const cbd = { x: AKL_CBD.x * KM, z: AKL_CBD.z * KM, r: AKL_CBD.r * KM };
 
   /** Water depth by water body (all negative). */
@@ -174,6 +199,10 @@ export function createAuckland(seed: number): TheaterGenerator {
         for (const p of parks) {
           const pd = Math.hypot(x - p.x, z - p.z);
           if (pd < p.r) dens *= sstep(p.r * 0.7, p.r, pd);
+        }
+        for (const p of rural) {
+          const pd = Math.hypot(x - p.x, z - p.z);
+          if (pd < p.r + 700) dens *= sstep(p.r, p.r + 700, pd);
         }
         const cd = Math.hypot(x - cbd.x, z - cbd.z);
         if (cd < cbd.r * 1.5) dens = Math.max(dens, 1 - sstep(cbd.r * 0.8, cbd.r * 1.5, cd));

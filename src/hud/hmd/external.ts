@@ -4,10 +4,10 @@
  */
 import { RAD, toFeet, toKnots, toNm } from '../../core/math';
 import { dlzLayout, makeDlzGeometry } from './dlz';
-import { HDG3_STR, NumText, entityLabel, SAM_LABEL, AIRCRAFT_SHORT } from './format';
+import { HDG3_STR, INT_STR, NumText, entityLabel, SAM_LABEL, AIRCRAFT_SHORT } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
-import { rangeLabel } from './targets';
+import { rangeLabel, rangeLabelNm } from './targets';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from './tsd';
 import { drawWeaponBlock } from './weapons';
 
@@ -44,6 +44,13 @@ function tsdColors(f: HudFrame): TsdColors {
 }
 
 /* ───────────────────────── Compact block ───────────────────────── */
+
+let miniX = 0;
+let miniW = 1;
+/** Mini horizontal DLZ: map the vertical-scale coordinate (0 = far, w = near) to x. */
+function xs(v: number): number {
+  return miniX + (miniW - v);
+}
 
 export function drawExternalBlock(f: HudFrame): number {
   const { pen, pal, L, p } = f;
@@ -84,7 +91,7 @@ export function drawExternalBlock(f: HudFrame): number {
     const d = t.position.distanceTo(p.position);
     const lbl = entityLabel(t);
     pen.text(lbl, x, y, f.locked ? pal.bright : pal.main, 12, 'left');
-    pen.text(rangeLabel(d) + ' NM', x + pen.textWidth(lbl, 12) + 8 * u, y, pal.main, 12, 'left');
+    pen.text(rangeLabelNm(d), x + pen.textWidth(lbl, 12) + 8 * u, y, pal.main, 12, 'left');
     y += 14 * u;
     // mini horizontal DLZ
     const z = f.zone;
@@ -93,7 +100,8 @@ export function drawExternalBlock(f: HudFrame): number {
       // map left (0) → right (scale) using the vertical helper on a horizontal axis
       const g = dlzLayout(z, 0, w, dlzG, f.st.dlzScale);
       f.st.dlzScale = g.scaleMax;
-      const xs = (v: number) => x + (w - v);
+      miniX = x;
+      miniW = w;
       const col = z.shoot ? pal.bright : pal.main;
       pen.begin();
       pen.line(xs(g.yMin), y, xs(g.yMax), y);
@@ -106,7 +114,6 @@ export function drawExternalBlock(f: HudFrame): number {
       pen.arrow(xs(g.yRange), y - 3 * u, 0, 1, 7 * u, 4.5 * u);
       pen.strokeGlow(col, 1.3);
       pen.fillPlain(col);
-      if (z.shoot && blink(f, 4, 0.7)) pen.text('SHOOT', x + w + 8 * u, y, pal.bright, 13, 'left');
       y += 14 * u;
     }
   }
@@ -144,7 +151,7 @@ export function drawInset(f: HudFrame): void {
   s.bullseye = false;
   s.lw = 1;
   drawTsd(pen, ctx, p, s, tsdColors(f), blink(f, 3));
-  pen.text(String(Math.round(toNm(insetRange))), cx + r * 0.72, cy + r * 0.8, pal.dim, 9.5);
+  pen.text(INT_STR[Math.min(399, Math.round(toNm(insetRange)))], cx + r * 0.72, cy + r * 0.8, pal.dim, 9.5);
 }
 
 /* ───────────────────────── Missile cam ───────────────────────── */

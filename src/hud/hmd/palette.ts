@@ -69,30 +69,32 @@ export function paletteFor(color: Settings['hudColor']): Palette {
   return p;
 }
 
-const alphaCache = new Map<string, string>();
+/** color → 21 quantised alpha variants (index = round(a * 20)). No per-call string building. */
+const alphaCache = new Map<string, string[]>();
 
 /** `color` (#rrggbb or rgba(...)) with a quantised alpha (cached string). */
 export function withAlpha(color: string, a: number): string {
   const q = Math.max(0, Math.min(20, Math.round(a * 20)));
-  const key = color + '|' + q;
-  let s = alphaCache.get(key);
-  if (s) return s;
-  let r = 255;
-  let g = 255;
-  let b = 255;
-  if (color.startsWith('#') && color.length === 7) {
-    r = parseInt(color.slice(1, 3), 16);
-    g = parseInt(color.slice(3, 5), 16);
-    b = parseInt(color.slice(5, 7), 16);
-  } else {
-    const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-    if (m) {
-      r = +m[1];
-      g = +m[2];
-      b = +m[3];
+  let arr = alphaCache.get(color);
+  if (!arr) {
+    let r = 255;
+    let g = 255;
+    let b = 255;
+    if (color.startsWith('#') && color.length === 7) {
+      r = parseInt(color.slice(1, 3), 16);
+      g = parseInt(color.slice(3, 5), 16);
+      b = parseInt(color.slice(5, 7), 16);
+    } else {
+      const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) {
+        r = +m[1];
+        g = +m[2];
+        b = +m[3];
+      }
     }
+    arr = [];
+    for (let i = 0; i <= 20; i++) arr.push(`rgba(${r},${g},${b},${i / 20})`);
+    alphaCache.set(color, arr);
   }
-  s = `rgba(${r},${g},${b},${q / 20})`;
-  alphaCache.set(key, s);
-  return s;
+  return arr[q];
 }

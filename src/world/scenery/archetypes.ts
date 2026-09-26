@@ -25,7 +25,7 @@ export function broadleafGeometry(): BufferGeometry {
   const b = new GeometryBuilder();
   b.cylinder(F0, 0, 0, 0, 0.06, 0.045, 0.4, 4, 0x5c4630, 0, false);
   const trunk = b.build()!;
-  const crown = new IcosahedronGeometry(0.42, 0).toNonIndexed();
+  const crown = new IcosahedronGeometry(0.42, 0); // already non-indexed
   const p = crown.getAttribute('position') as BufferAttribute;
   const cols = new Float32Array(p.count * 3);
   const c = new Color();

@@ -459,6 +459,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
 
       /* ── features: urban ground, airfields, farmland belts ── */
       let clear = 0;
+      let airfield = 0;
       if (h > 0) {
         for (let t = 0; t < tints.length; t++) {
           const ft = tints[t];
@@ -472,6 +473,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
             if (w > 0) {
               blendInto(col, pal.airfield, Math.min(1, w * 1.3) * (0.75 + 0.25 * n2));
               clear = Math.max(clear, w);
+              airfield = Math.max(airfield, Math.min(1, w * 1.8));
             }
             continue;
           }
@@ -504,6 +506,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
       /* ── forest tint; A packs forest density (0..127) or urban density (128..255) ── */
       let forest = h > 0 ? veg.density(x, z, h, slope, mat, hf.aux[k]) : 0;
       if (clear > 0) forest *= 1 - clear;
+      urban *= 1 - airfield; // no suburbs on the airfield
       if (urban > 0.05) forest = 0;
       if (forest > 0.02) {
         const pal = P[theater] as Record<string, RGB>;

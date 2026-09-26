@@ -19,10 +19,10 @@ export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
 
 /** Short type codes for crowded places (TSD, RWR). */
 export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
-  f35a: '35',
+  f35a: 'F35',
   mig29: '29',
   su27: '27',
-  su35: '35E',
+  su35: '35',
   su57: '57',
   tu22m: '22M',
   a50: 'A50',
@@ -180,6 +180,14 @@ export function mmss(seconds: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return m + ':' + (r < 10 ? '0' : '') + r;
+}
+
+/** "1:05" style hours:minutes (endurance). */
+export function hmm(seconds: number): string {
+  const m = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h + ':' + (r < 10 ? '0' : '') + r;
 }
 
 /** Pre-built strings for small integers (ladder / tape labels, counts). */
