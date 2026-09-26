@@ -295,6 +295,12 @@ export interface MissionResult {
   accuracy: number;
   damageTaken: number;
   objectives: ObjectiveStatus[];
+  /** Debrief advice (why you failed / how to do better). */
+  tips?: string[];
+  /** Awards earned this sortie (e.g. 'Distinguished Flying Cross', 'Bridge Runner'). */
+  medals?: { id: string; name: string; description: string }[];
+  /** Final campaign mission completed (show the campaign ending). */
+  campaignComplete?: boolean;
 }
 
 export interface MissionRunnerApi {
