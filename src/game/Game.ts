@@ -739,6 +739,25 @@ export class Game {
         this.autopilot = on;
         if (p) p.ai = on ? createAiBrain(role, { skill: 0.9 }) : null;
       },
+      /**
+       * Fast-forward the simulation by `seconds` without rendering (fixed 60 Hz steps, player
+       * controls from autopilot/override/current input). For automated playtests on slow GPUs.
+       */
+      simulate: (seconds: number) => {
+        const s = this.session;
+        if (!s) return null;
+        const steps = Math.round(seconds / FIXED_DT);
+        for (let i = 0; i < steps && s.runner.state === 'running'; i++) {
+          const p = s.world.player;
+          if (p?.alive && !this.autopilot) {
+            Object.assign(p.input, this.input.controls);
+            if (this.controlOverride) Object.assign(p.input, this.controlOverride);
+          }
+          s.world.step(FIXED_DT);
+          s.runner.update(s.world, FIXED_DT);
+        }
+        return (window as unknown as { __f35: { state: () => unknown } }).__f35.state();
+      },
       /** Override (merge) player controls, e.g. {pitch: 1, throttle: 1}; null clears. */
       controls: (c: Partial<ControlInput> | null) => {
         this.controlOverride = c;
