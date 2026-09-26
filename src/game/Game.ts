@@ -204,6 +204,8 @@ export class Game {
   private async mainMenu(): Promise<never> {
     for (;;) {
       const choice = await this.ui.showMainMenu();
+      // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
+      this.progress = loadProgress();
       if (choice === 'campaign') {
         const def = await this.ui.showCampaign(CAMPAIGN, this.progress);
         if (def) await this.missionFlow(def);

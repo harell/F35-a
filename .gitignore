@@ -4,3 +4,4 @@ dist
 e2e/screenshots
 .DS_Store
 e2e/review
+dist-artifact

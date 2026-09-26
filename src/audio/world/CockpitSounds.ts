@@ -58,7 +58,9 @@ export class CockpitSounds {
       gsuitDeflate(this.env, now + 0.01, Math.min(1, (this.gPeak - 3) / 5));
       this.gPeak = g;
     } else if (g < 2) this.gPeak = Math.min(this.gPeak, 2);
-    const b = this.breathing.update(this.clock, g, this.stress);
+    // approaching G-LOC (Ace): the pilot strains hard (anti-G straining grunts) as a warning
+    const gEff = (p.gloc ?? 0) > 0.7 ? Math.max(g, 9.5) : g;
+    const b = this.breathing.update(this.clock, gEff, this.stress);
     if (b) breath(this.env, now + 0.01, b, b === 'strain' ? 0.5 : 0.28 + 0.12 * this.stress);
   }
 
