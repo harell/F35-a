@@ -23,6 +23,8 @@ robotic CMU Flite voices. The Flite and eSpeak NG paths remain in `tools/gen-voi
 | "Betty", the female ICAWS voice | `b_*` | Piper `en-us-kathleen-low` | **CC0** (public domain, github.com/rhasspy/dataset-voice-kathleen) |
 | Pilot and wingmen | `p_*` | Piper `en-us-libritts-high`, speaker id 19 (male) | **CC BY 4.0** (LibriTTS, openslr.org/60, derived from LibriVox public-domain readings) |
 | AWACS "Darkstar" | `a_*` | Piper `en-us-libritts-high`, speaker id 5 (a different male) | **CC BY 4.0** (as above) |
+| AWACS word segments (iteration 2) | `s_*` | same AWACS speaker (id 5); 67 short words / numbers + a squelch-tail clip | **CC BY 4.0** (as above) |
+| "Hammer 1" flight lead (iteration 2) | `h_*` | Piper `en-us-libritts-high`, speaker id 3 (male, median F0 ≈ 109 Hz, lower than the pilot and AWACS) | **CC BY 4.0** (as above) |
 | Fallbacks | all | CMU Flite slt / awb / rms, then eSpeak NG | BSD-style / GPL (output unrestricted) |
 
 Setup: `bash tools/voice-piper-setup.sh` (piper-tts 1.8.0 wheel + onnxruntime from PyPI into
@@ -88,3 +90,15 @@ The generated clips are original works of this project.
   * retarded-time propagation of a moving source (flyby lag, and the Mach cone that produces sonic booms)
   * inverse-distance attenuation
   * a speed of sound of 343 m/s
+
+## Iteration 2: spoken radio matches the subtitles
+
+Dynamic AWACS calls (BRAA / bullseye pictures, pop-up groups, threat calls, "last bandit", "wave N destroyed",
+"the raid is turning back") used to be voiced with a generic clip ("Bandits, bandits."). `src/audio/voice/radioSpeech.ts`
+now voices a radio event from its subtitle: the fixed clip if its words appear verbatim in the subtitle, else a
+whole-call clip by another speaker (Hammer 1), else — for AWACS — the subtitle spoken word by word from the `s_*`
+segments (bearings digit by digit, ranges and angels as numbers, a pause at each comma, one squelch tail at the end).
+Words without a segment are left out, never replaced, so what is heard is always the subtitle or an in-order subset of
+it; calls that cannot be voiced that way become text-only (key-up click + static). `tools/gen-voices.sh --segments`
+renders just the segments (≈ 245 KB in total, 48 kbit/s mono MP3; fetched after the fixed clips). Regression test: `tests/audio-radiospeech.test.ts`
+(scans every `text:`/`voice:` radio push in src/missions and src/sim).

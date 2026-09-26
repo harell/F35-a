@@ -66,7 +66,7 @@ export function isAssisted(ac: AircraftEntity, env: FlightEnv): boolean {
 }
 
 const LAW_ASSISTED: ControlLaw = { pathHold: true, buffetGain: 1 };
-const LAW_NO_ASSIST: ControlLaw = { pathHold: false, buffetGain: 1.6 };
+const LAW_NO_ASSIST: ControlLaw = { pathHold: false, buffetGain: 1.6, highAoa: true };
 /** Control-law options for this aircraft. */
 export function controlLawFor(ac: AircraftEntity, env: FlightEnv): ControlLaw {
   return isAssisted(ac, env) ? LAW_ASSISTED : LAW_NO_ASSIST;

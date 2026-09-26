@@ -27,6 +27,24 @@ export class TacMapState {
   auto = true;
   /** Map was on screen last frame (entering the view re-fits the range). */
   active = false;
+  /** Legend: shown for a few seconds on entry, then collapsed behind the 'i' chip (tap to toggle). */
+  legendPinned: boolean | null = null;
+  legendUntil = 0;
+  /** Legend / chip rectangle (CSS px) for tap hit-testing. */
+  readonly legendRect = { x: 0, y: 0, w: 0, h: 0 };
+
+  /** Is the full legend showing at animation time `clock`? */
+  legendOpen(clock: number): boolean {
+    return this.legendPinned ?? clock < this.legendUntil;
+  }
+
+  /** Tap on the legend / 'i' chip: toggle it (true = the tap was consumed). */
+  tapLegend(x: number, y: number, clock: number): boolean {
+    const r = this.legendRect;
+    if (r.w <= 0 || x < r.x - 6 || x > r.x + r.w + 6 || y < r.y - 6 || y > r.y + r.h + 6) return false;
+    this.legendPinned = !this.legendOpen(clock);
+    return true;
+  }
 
   get rangeKm(): number {
     return TAC_SCALES_KM[this.scaleIdx];
@@ -71,7 +89,7 @@ export function tacProject(v: TacProjection, x: number, z: number, out: { x: num
 
 /* ───────────────────────── Auckland chart geometry (Path2D in km) ───────────────────────── */
 
-interface Chart {
+export interface Chart {
   water: Path2D;
   islands: Path2D;
   lakes: Path2D;
@@ -86,7 +104,8 @@ function polyInto(p: Path2D, pts: number[]): void {
   p.closePath();
 }
 
-function chartPaths(): Chart | null {
+/** Auckland chart paths (km, +z south), built once and shared with the TSD. */
+export function chartPaths(): Chart | null {
   if (chart !== undefined) return chart;
   chart = null;
   try {
@@ -195,6 +214,20 @@ const titleCache = new Map<number, string>();
 /* ───────────────────────── draw ───────────────────────── */
 
 /** The whole tactical map. Returns the bottom of the legend panel (top-left). */
+/** Seconds the full legend shows on entering the map. */
+export const LEGEND_SHOW = 5;
+
+/**
+ * Keep map labels off the live touch controls (bottom clusters, right button column), the radio pill
+ * and kill feed: seeded into the occupancy registry before any symbol label.
+ */
+function reserveControls(f: HudFrame): void {
+  const { L, occ } = f;
+  occ.add(0, L.ctlTop - 4, L.ctlLeft + 4, L.H);
+  occ.add(L.ctlRight - 4, L.ctlTop - 4, L.W, L.H);
+  occ.add(L.right + 2, 0, L.W, L.H);
+}
+
 export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   const { pen, pal, L, p, world, ctx, picks, occ } = f;
   const g = pen.g;
@@ -217,7 +250,12 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     }
     if (!tm.active || tm.auto) tm.fit(need);
   }
+  if (!tm.active) {
+    // entering the map: legend up for 5 s (unless the player pinned it open / shut)
+    tm.legendUntil = f.st.clock + LEGEND_SHOW;
+  }
   tm.active = true;
+  const legendOpen = tm.legendOpen(f.st.clock);
 
   const R = Math.max(80, Math.min(L.H / 2 - 22 * u, (L.right - L.left) / 2 - 10 * u));
   const rangeM = tm.rangeKm * 1000;
@@ -228,6 +266,12 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   proj.k = R / rangeM;
   proj.R = R;
   const k = proj.k;
+
+  // labels never land under the touch controls or the legend / 'i' chip
+  reserveControls(f);
+  const lr = tm.legendRect;
+  legendSize(f, legendOpen, lr);
+  occ.add(lr.x, lr.y, lr.x + lr.w, lr.y + lr.h);
 
   /* background + chart */
   pen.setFill(C.sea);
@@ -299,6 +343,10 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   pen.text('W', proj.cx - R - 9 * u, proj.cy, C.ringText, 10.5);
   pen.text(kmLabel(tm.rangeKm), proj.cx + R * 0.72 + 4 * u, proj.cy - R * 0.72 - 6 * u, C.ringText, 10.5, 'left');
   pen.text(kmLabel(tm.rangeKm / 2), proj.cx + R * 0.36 + 3 * u, proj.cy - R * 0.36 - 5 * u, C.ringText, 10, 'left');
+  // ring labels + ownship velocity leader: symbol labels keep off them
+  occ.add(proj.cx + R * 0.72 + 2 * u, proj.cy - R * 0.72 - 13 * u, proj.cx + R * 0.72 + 50 * u, proj.cy - R * 0.72 + 1 * u);
+  occ.add(proj.cx + R * 0.36 + 1 * u, proj.cy - R * 0.36 - 12 * u, proj.cx + R * 0.36 + 46 * u, proj.cy - R * 0.36 + 2 * u);
+  occLine(f, proj.cx, proj.cy, proj.cx + p.velocity.x * 45 * k, proj.cy + p.velocity.z * 45 * k);
 
   /* SAM threat rings (known) */
   for (const s of world.sams) {
@@ -407,6 +455,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     pen.line(pt.x, pt.y - r, pt.x + a.velocity.x * lead * k, pt.y - r + a.velocity.z * lead * k);
     pen.strokeGlow(pal.friend, 1.6);
     occ.addBox(pt.x, pt.y, r + 2, r + 2);
+    occLine(f, pt.x, pt.y - r, pt.x + a.velocity.x * lead * k, pt.y - r + a.velocity.z * lead * k);
     labelNear(f, airLabel((a.callsign || a.name).toUpperCase(), a.position.y), pt.x, pt.y, pal.friend);
   }
 
@@ -463,6 +512,8 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     }
     if (des || lock) highlight(f, pt.x, pt.y - 2 * u, 11 * u, lock);
     occ.addBox(pt.x, pt.y, s + 3 * u, s + 3 * u);
+    // (the label goes on the side away from its own velocity leader)
+    occLine(f, pt.x, pt.y - s, pt.x + vel.x * lead * k, pt.y - s + vel.z * lead * k);
     labelNear(f, airLabel(AIRCRAFT_LABEL[e.type] ?? 'BANDIT', pos.y), pt.x, pt.y, pal.danger);
     picks.add(e.id, pt.x, pt.y, 10 * u);
   }
@@ -514,7 +565,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   pen.line(proj.cx + sh * 9 * u, proj.cy - chh * 9 * u, proj.cx + p.velocity.x * lead * k, proj.cy + p.velocity.z * lead * k);
   pen.strokePlain(C.own, 1.3);
   occ.addBox(proj.cx, proj.cy, 12 * u, 12 * u);
-  const legendBottom = drawLegend(f, tm);
+  const legendBottom = drawLegend(f, tm, legendOpen);
 
   /* landmark names last, only where they don't collide with a symbol or label */
   if (auckland) {
@@ -551,6 +602,16 @@ function highlight(f: HudFrame, x: number, y: number, r: number, locked: boolean
   pen.strokeGlow(pal.bright, 1.8);
 }
 
+/** Register a leader line as 3 small boxes along it (labels keep off it without blocking its whole bbox). */
+function occLine(f: HudFrame, x0: number, y0: number, x1: number, y1: number): void {
+  const occ = f.occ;
+  for (let i = 0; i < 3; i++) {
+    const a0 = i / 3;
+    const a1 = (i + 1) / 3;
+    occ.add(x0 + (x1 - x0) * a0 - 2, y0 + (y1 - y0) * a0 - 2, x0 + (x1 - x0) * a1 + 2, y0 + (y1 - y0) * a1 + 2);
+  }
+}
+
 /** Label beside a symbol: right, else left, else below — skipped if every spot is taken. */
 function labelNear(f: HudFrame, text: string, x: number, y: number, col: string): void {
   const { pen, L, occ } = f;
@@ -570,17 +631,42 @@ function labelNear(f: HudFrame, text: string, x: number, y: number, col: string)
   }
 }
 
-/** Legend + scale bar + tap hint (top-left panel). Returns the panel bottom. */
-function drawLegend(f: HudFrame, tm: TacMapState): number {
-  const { pen, pal, L, occ } = f;
+/** Legend panel size (full or collapsed chip) — reserved before the symbols are labelled. */
+function legendSize(f: HudFrame, open: boolean, out: { x: number; y: number; w: number; h: number }): void {
+  const L = f.L;
+  const u = L.u;
+  out.x = L.colX - 4 * u;
+  out.y = L.colY - 4 * u;
+  out.w = open ? Math.min(L.colW, 196 * u) : 118 * u;
+  out.h = open ? 18 * u + 6 * 13 * u + 34 * u : 22 * u;
+}
+
+/** Legend + scale bar + tap hint (top-left panel), or the collapsed 'i' chip. Returns the panel bottom. */
+function drawLegend(f: HudFrame, tm: TacMapState, open: boolean): number {
+  const { pen, pal, L } = f;
   const g = pen.g;
   const u = L.u;
   const x = L.colX;
   let y = L.colY;
-  const w = Math.min(L.colW, 196 * u);
+  const r = tm.legendRect;
+  legendSize(f, open, r);
+  const w = r.w;
+  const h = r.h;
   const lh = 13 * u;
-  const rows = 6;
-  const h = 18 * u + rows * lh + 34 * u;
+  if (!open) {
+    // collapsed: [i] + range, one line (tap to open the legend)
+    pen.setFill(C.panel);
+    pen.roundRect(r.x, r.y, w, h, 6 * u);
+    g.fill();
+    pen.begin();
+    pen.circle(r.x + 11 * u, r.y + h / 2, 7 * u);
+    pen.strokeGlow(pal.bright, 1.3);
+    pen.text('i', r.x + 11 * u, r.y + h / 2 + 0.5, pal.bright, 10.5);
+    let t = chipCache.get(tm.rangeKm);
+    if (!t) chipCache.set(tm.rangeKm, (t = 'MAP ' + tm.rangeKm + ' KM'));
+    pen.text(t, r.x + 23 * u, r.y + h / 2 + 0.5, pal.white, 10.5, 'left');
+    return r.y + h;
+  }
   pen.setFill(C.panel);
   pen.roundRect(x - 4 * u, y - 4 * u, w, h, 6 * u);
   g.fill();
@@ -641,10 +727,10 @@ function drawLegend(f: HudFrame, tm: TacMapState): number {
   pen.strokeGlow(pal.white, 1.4);
   pen.text(kmLabel(barKm), x + 8 * u + barPx, y, pal.white, 9.5, 'left');
   y += 13 * u;
-  pen.text('TAP MAP: ZOOM   TAP SYMBOL: TARGET', x + 2 * u, y, pal.dim, 8.5, 'left');
-  occ.add(x - 4 * u, L.colY - 4 * u, x - 4 * u + w, L.colY - 4 * u + h);
+  pen.text('TAP MAP: ZOOM  TAP i: LEGEND', x + 2 * u, y, pal.dim, 8.5, 'left');
   return L.colY - 4 * u + h;
 }
+const chipCache = new Map<number, string>();
 
 /** Distance (m) used by tests: how far the map shows (outer ring). */
 export function tacRangeMeters(tm: TacMapState): number {

@@ -11,6 +11,7 @@ import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '..
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
 import { AIRCRAFT_SHORT, NumText, entityLabel, mmss } from './format';
+import { zoneExt } from './zones';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
@@ -463,6 +464,8 @@ export function drawWaypoint(f: HudFrame): void {
   const x = f.sp.x;
   const y = f.sp.y;
   const r = 7 * u;
+  // behind a fixed text block (external info block, columns, radio): not drawn at all
+  if (occ.hits(x - r, y - r, x + r, y + r, 0, 0) && zoneBlocked(f, x, y)) return;
   pen.setDash('solid');
   pen.begin();
   pen.diamond(x, y, r);
@@ -497,6 +500,13 @@ export function drawWaypoint(f: HudFrame): void {
     pen.text(mmss(d / gs), dx2, belowY + 12 * u, pal.dim, 10.5);
     occ.add(dx2 - dw, belowY - 6 * u, dx2 + dw, belowY + 18 * u);
   }
+}
+
+/** Is (x, y) inside one of the fixed text blocks (external info block / top-left column)? */
+function zoneBlocked(f: HudFrame, x: number, y: number): boolean {
+  const L = f.L;
+  if (f.mode === 'external' && Number.isFinite(zoneExt.extBottom) && x < zoneExt.extRight && y < zoneExt.extBottom) return true;
+  return Number.isFinite(zoneExt.colBottom) && x > L.colX - 6 && x < L.colX + L.colW && y < zoneExt.colBottom && y > L.colY - 10;
 }
 
 /** Bearing (rad, true) to the current waypoint, or null. */

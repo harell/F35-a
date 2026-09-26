@@ -5,11 +5,11 @@
  * needed, so it can run before the first tap. Decoding happens as soon as a context exists.
  * Missing / undecodable clips are skipped silently (the game just stays quiet for them).
  */
-import type { VoiceId } from '../../core/types';
+import { SEGMENT_IDS, type ClipId } from './radioSpeech';
 import { VOICE_IDS, voiceUrl } from './voiceIds';
 
 export interface VoiceLoadReport {
-  id: VoiceId;
+  id: ClipId;
   status: number | 'error';
   bytes: number;
   decoded: boolean;
@@ -24,15 +24,15 @@ function baseUrl(): string {
 }
 
 export class VoiceBank {
-  private readonly bytes = new Map<VoiceId, ArrayBuffer>();
-  private readonly buffers = new Map<VoiceId, AudioBuffer>();
-  private readonly decoding = new Set<VoiceId>();
+  private readonly bytes = new Map<ClipId, ArrayBuffer>();
+  private readonly buffers = new Map<ClipId, AudioBuffer>();
+  private readonly decoding = new Set<ClipId>();
   private ctx: BaseAudioContext | null = null;
   private loading: Promise<void> | null = null;
-  readonly report = new Map<VoiceId, VoiceLoadReport>();
+  readonly report = new Map<ClipId, VoiceLoadReport>();
 
   /** Clip for playback (null if missing or not decoded yet). */
-  get(id: VoiceId): AudioBuffer | null {
+  get(id: ClipId): AudioBuffer | null {
     return this.buffers.get(id) ?? null;
   }
 
@@ -49,7 +49,8 @@ export class VoiceBank {
   /** Fetch every clip. Never rejects; resolves when all fetches (and decodes, if possible) settle. */
   load(onProgress?: (fraction: number) => void): Promise<void> {
     if (this.loading) return this.loading;
-    const ids = [...VOICE_IDS];
+    // the fixed clips first (Betty first), then the radio segments for composed AWACS calls
+    const ids: ClipId[] = [...VOICE_IDS, ...SEGMENT_IDS];
     const total = ids.length;
     let done = 0;
     const base = baseUrl();
@@ -86,7 +87,7 @@ export class VoiceBank {
     return this.loading;
   }
 
-  private async decode(id: VoiceId): Promise<void> {
+  private async decode(id: ClipId): Promise<void> {
     const ctx = this.ctx;
     const bytes = this.bytes.get(id);
     if (!ctx || !bytes || this.buffers.has(id) || this.decoding.has(id)) return;

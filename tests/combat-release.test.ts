@@ -151,7 +151,7 @@ describe('combat: weapon release', () => {
     const wing = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 5000, 0), heading: 0, speed: 250 });
     const muns = (ac: typeof mig) => ac.stores.flatMap((s, i) => Array(s.count).fill(stationMunition(ac, i))).sort();
     expect(muns(mig)).toEqual(['r27', 'r27', 'r73', 'r73', 'r73', 'r73']);
-    expect(muns(su27)).toEqual(['r27', 'r27', 'r73', 'r73', 'r73', 'r73', 'r77', 'r77']);
+    expect(muns(su27)).toEqual(['r27', 'r27', 'r27', 'r27', 'r73', 'r73', 'r73', 'r73']); // i2: baseline Su-27 has no R-77
     expect(su57.stores.every((s) => s.internal)).toBe(true);
     expect(muns(su57)).toEqual(['r73', 'r73', 'r77', 'r77', 'r77', 'r77']);
     expect(tu.stores.length).toBe(0);

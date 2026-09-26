@@ -344,6 +344,18 @@ export function drawGun(f: HudFrame): void {
     g.moveTo(funnelR[0], funnelR[1]);
     for (let i = 1; i < n; i++) g.lineTo(funnelR[i * 2], funnelR[i * 2 + 1]);
     pen.strokeGlow(pal.dim, 1.4);
+    // protected: text never lands on the funnel (one box per funnel segment)
+    for (let i = 1; i < n; i++) {
+      const a = i * 2;
+      const b = a - 2;
+      f.occ.add(
+        Math.min(funnelL[a], funnelL[b], funnelR[a], funnelR[b]) - 3,
+        Math.min(funnelL[a + 1], funnelL[b + 1], funnelR[a + 1], funnelR[b + 1]) - 3,
+        Math.max(funnelL[a], funnelL[b], funnelR[a], funnelR[b]) + 3,
+        Math.max(funnelL[a + 1], funnelL[b + 1], funnelR[a + 1], funnelR[b + 1]) + 3,
+        1,
+      );
+    }
   }
   // gun cross at the gun line
   forwardOf(p.quaternion, f.v1);

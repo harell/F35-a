@@ -44,10 +44,10 @@ const ENEMY_LOADOUTS: Partial<Record<AircraftType, DefaultLoadout>> = {
     flares: 30,
     chaff: 30,
   },
+  // baseline Su-27S: semi-active R-27R/ER + R-73 (the active R-77 is for the Su-35 / Su-57)
   su27: {
     stores: [
-      { weapon: 'aim120', munition: 'r77', count: 2, internal: false },
-      { weapon: 'aim120', munition: 'r27', count: 2, internal: false },
+      { weapon: 'aim120', munition: 'r27', count: 4, internal: false },
       { weapon: 'aim9x', munition: 'r73', count: 4, internal: false },
     ],
     gunAmmo: 150,

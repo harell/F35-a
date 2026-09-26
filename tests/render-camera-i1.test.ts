@@ -75,14 +75,14 @@ describe('missile camera (reviewer: camera sat ~80-90 m behind a 900 m/s missile
     expect(Math.hypot(nose.x - tl.x, nose.y - tl.y)).toBeGreaterThan(0.3);
   });
 
-  it('impact linger pose is behind/above/right of the impact, 80-120 m away', () => {
+  it('impact linger pose is behind/above/right of the impact, ~230 m away (i2: 100 m put the lens inside the ~100 m fireball)', () => {
     const out = impactPose(new Vector3(0, 2000, 0), new Vector3(0, 0, -1), new Vector3(1, 0, 0), new Vector3());
     expect(out.z).toBeGreaterThan(50);
     expect(out.x).toBeGreaterThan(20);
     expect(out.y).toBeGreaterThan(2010);
     const d = out.distanceTo(new Vector3(0, 2000, 0));
-    expect(d).toBeGreaterThan(80);
-    expect(d).toBeLessThan(120);
+    expect(d).toBeGreaterThan(180);
+    expect(d).toBeLessThan(280);
   });
 });
 

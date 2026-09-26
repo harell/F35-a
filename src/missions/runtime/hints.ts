@@ -15,6 +15,7 @@ import { WEAPON_INFO } from '../../core/data';
 import type { WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { evalCondition } from './conditions';
+import { currentControlPrefs, formatControls } from './controlsText';
 import { aircraftHudName } from './names';
 import type { MissionState } from './state';
 import type { RearmController } from './rearm';
@@ -256,6 +257,9 @@ export class HintSystem {
   private zoneCache: ZoneLike | null = null;
   private zoneAt = -1;
 
+  /** Control scheme / handedness for {controls}-style tokens (read once per mission). */
+  private readonly prefs = currentControlPrefs();
+
   constructor(
     private readonly s: MissionState,
     /** Winchester / rearm state (always-on hints). */
@@ -273,7 +277,7 @@ export class HintSystem {
 
   /** Trigger action: show a hint now. */
   force(text: string, duration = 8): void {
-    this.forced = { text, until: this.s.time + duration };
+    this.forced = { text: formatControls(text, this.prefs), until: this.s.time + duration };
   }
 
   clear(): void {
@@ -362,7 +366,7 @@ export class HintSystem {
   }
 
   private show(id: string, text: string, duration: number): void {
-    this.current = text;
+    this.current = formatControls(text, this.prefs);
     this.currentId = id;
     this.shownAt = this.s.time;
     this.currentDuration = duration;

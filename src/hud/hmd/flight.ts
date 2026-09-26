@@ -125,14 +125,14 @@ export function drawLadder(f: HudFrame): void {
       pen.begin();
       if (Number.isFinite(gx)) {
         const hg = 34 * u;
-        pen.line(gx - dx * ext, gy - dy * ext, gx - dx * hg, gy - dy * hg);
-        pen.line(gx + dx * hg, gy + dy * hg, gx + dx * ext, gy + dy * ext);
+        knockLine(f, gx - dx * ext, gy - dy * ext, gx - dx * hg, gy - dy * hg);
+        knockLine(f, gx + dx * hg, gy + dy * hg, gx + dx * ext, gy + dy * ext);
       } else {
         // flight path off-screen: horizon through the point nearest the screen centre
         const t = (L.cx - b.x) * dx + (L.cy - b.y) * dy;
         const mx = b.x + dx * t;
         const my = b.y + dy * t;
-        pen.line(mx - dx * ext, my - dy * ext, mx + dx * ext, my + dy * ext);
+        knockLine(f, mx - dx * ext, my - dy * ext, mx + dx * ext, my + dy * ext);
       }
       pen.strokeGlow(pal.main, 1.5);
     }
@@ -188,6 +188,19 @@ export function drawLadder(f: HudFrame): void {
   pen.baseTransform();
 }
 
+/** Add a line to the current path in 8 pieces, leaving out the pieces under text / the target box. */
+function knockLine(f: HudFrame, x0: number, y0: number, x1: number, y1: number): void {
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const ax = x0 + ((x1 - x0) * i) / n;
+    const ay = y0 + ((y1 - y0) * i) / n;
+    const bx = x0 + ((x1 - x0) * (i + 1)) / n;
+    const by = y0 + ((y1 - y0) * (i + 1)) / n;
+    if (f.occ.hits(ax, ay - 1, bx, by + 1, 0, 1)) continue;
+    f.pen.line(ax, ay, bx, by);
+  }
+}
+
 /**
  * Projects the rung at pitch `th` (deg) centred on the flight-path heading into `a` and writes the
  * rung's unit screen tangent into b.x / b.y. Returns false if not drawable.
@@ -213,6 +226,33 @@ function rung(f: HudFrame, th: number, a: HudFrame['sp'], b: HudFrame['sp'], mar
 /* ───────────────────────── Bank scale + waterline ───────────────────────── */
 
 const BANK_TICKS = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+
+/** Bank scale radius, or 0 when it is not drawn this frame. */
+function bankRadius(f: HudFrame): number {
+  if (f.mode !== 'hmd') return 0;
+  forwardOf(f.p.quaternion, f.v1);
+  if (f.proj.forward.dot(f.v1) < Math.cos(28 * DEG)) return 0;
+  const L = f.L;
+  return Math.max(60 * L.u, Math.min(L.H * 0.25, L.cockpitTop - L.cy - 16 * L.u));
+}
+
+/**
+ * Reserve the bank-scale arc (three boxes along it, not its empty inside) so the cue line and centre
+ * message sit inside the arc instead of on it ("FIGHTS ON" over the arc).
+ */
+export function reserveBankScale(f: HudFrame): void {
+  const R = bankRadius(f);
+  if (R <= 0) return;
+  const { L, occ } = f;
+  const u = L.u;
+  const cx = L.cx;
+  const cy = L.cy;
+  const t = 9 * u;
+  // bottom (±30° around the nadir), then the two flanks (30°..60° from it)
+  occ.add(cx - R * 0.5 - t, cy + R * 0.866 - 3 * u, cx + R * 0.5 + t, cy + R + t);
+  occ.add(cx - R * 0.866 - t, cy + R * 0.5 - t, cx - R * 0.5, cy + R * 0.866 + t);
+  occ.add(cx + R * 0.5, cy + R * 0.5 - t, cx + R * 0.866 + t, cy + R * 0.866 + t);
+}
 
 export function drawBankScale(f: HudFrame): void {
   if (f.mode !== 'hmd') return;

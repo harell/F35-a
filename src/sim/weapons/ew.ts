@@ -24,6 +24,8 @@ import type { AircraftEntity, AnyEntity } from '../entities';
 import type { CombatCtx } from './context';
 import { playerTeam } from './context';
 
+/** Air-to-air active seekers: cap on the "processing not fooled by the notch" roll (Ace ≈ 15%). */
+export const AAM_IMMUNE_CAP = 0.15;
 /** Doppler notch half-width (m/s radial velocity). */
 export const NOTCH_WIDTH = 45;
 /** Notch accumulator decay outside the notch (per second). */
@@ -108,9 +110,9 @@ export function cmFactor(ctx: CombatCtx, attackerTeam: Team, target: AnyEntity):
 }
 
 /** Seconds of sustained notch a radar with `notchResistance` needs before losing the track. */
-export function rollNotchNeed(ctx: CombatCtx, notchResistance: number, k: number): number {
+export function rollNotchNeed(ctx: CombatCtx, notchResistance: number, k: number, immuneCap = 0.85): number {
   const kk = Math.max(0.2, k);
-  if (ctx.rng() < clamp((0.55 * notchResistance) / kk, 0, 0.85)) return Infinity;
+  if (ctx.rng() < clamp((0.55 * notchResistance) / kk, 0, immuneCap)) return Infinity;
   return ((0.8 + 2.6 * notchResistance) * (0.8 + 0.45 * ctx.rng())) / kk;
 }
 

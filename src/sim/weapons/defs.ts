@@ -125,11 +125,13 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     guidance: 'ir',
     launch: 'rail',
     mass: 85,
+    // i2: longer-burning Mk 139-class motor + lower parasite drag — the tail-chase reach at
+    // medium altitude (250 m/s shooter and target, 5 km) is now rMax ≈ 5–6 km / rNe ≈ 2.5 km
     boostTime: 2,
     boostAccel: 330,
-    sustainTime: 0,
-    sustainAccel: 0,
-    drag: 3.2e-4,
+    sustainTime: 3,
+    sustainAccel: 50,
+    drag: 1.9e-4,
     maxG: 50,
     seekerFov: 4 * DEG,
     gimbalLimit: 90 * DEG,
@@ -141,7 +143,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     damage: 115,
     blastRadius: 16,
     maxFlightTime: 25,
-    flareResistance: 0.9, // imaging IR seeker: rejects most flares
+    flareResistance: 0.86, // imaging IR seeker: rejects most flares (i2: 0.9 → 0.86, a flaring + breaking ace defeats ~40-50%)
     smoke: 0.25,
     length: 3.02,
     diameter: 0.127,
@@ -291,7 +293,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     damage: 100,
     blastRadius: 14,
     maxFlightTime: 22,
-    flareResistance: 0.45,
+    flareResistance: 0.56, // i2: 0.45 → 0.56 (R-73 vs a flaring player on Pilot: Pk ≈ 25-35 %, not ≈ 0)
     smoke: 0.6,
     length: 2.9,
     diameter: 0.17,
@@ -316,7 +318,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     boostAccel: 250,
     sustainTime: 5,
     sustainAccel: 45,
-    drag: 2.1e-4,
+    drag: 1.9e-4,
     maxG: 30,
     seekerFov: 15 * DEG,
     gimbalLimit: 50 * DEG,

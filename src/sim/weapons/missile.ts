@@ -2,6 +2,7 @@
  * F35-A — CombatMissile (MissileEntity + guidance state) and munition launch.
  */
 import { Quaternion, Vector3 } from 'three';
+import { clamp } from '../../core/math';
 import type { MunitionId, Team } from '../../core/types';
 import type { AircraftEntity, AnyEntity, SamSiteEntity } from '../entities';
 import { MissileEntity } from '../entities';
@@ -63,6 +64,14 @@ export class CombatMissile extends MissileEntity {
   /** Sustained-notch accumulator of the missile's own seeker (s·depth) and its break threshold (−1 = not rolled). */
   notchAccum = 0;
   notchNeed = -1;
+  /**
+   * Midcourse (datalink) degradation: seconds·depth the LAUNCHER's radar has seen the target in its
+   * Doppler notch (or been walked off by chaff), and the error direction it drags the uplinked track.
+   */
+  dlNotch = 0;
+  readonly dlErrDir = new Vector3();
+  /** Flight time (s) at which this missile's guidance fails (Recruit "rookie shot"), −1 = never. */
+  dudAt = -1;
   /** Active seeker has been locked at least once (post-pitbull). */
   everLocked = false;
   /** Still able to hit its (original) target — MAWS / RWR / AI defence only list threatening missiles. */
@@ -167,6 +176,12 @@ export function launchMunition(
     m.quaternion.copy(ac.quaternion);
     // SARH / command are illuminated by the launcher; datalink comes from the launcher's tracks
     m.guiderId = ac.id;
+    // "forgiving enemies" (Recruit): a rookie's hurried air-to-air shot at the human player can
+    // go stupid in flight (poor launch solution / seeker never settles)
+    if (target && target.kind === 'aircraft' && target.isPlayer && ac.team !== target.team) {
+      const pDud = clamp((0.8 - ctx.world.difficulty.enemyMissileSkill) * 1.8, 0, 0.45); // Recruit 45 %, Pilot+ 0
+      if (pDud > 0 && ctx.rng() < pDud) m.dudAt = 1.2 + 2.5 * ctx.rng();
+    }
   } else {
     const site = shooter;
     m.position.copy(site.position);

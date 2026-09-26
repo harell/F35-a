@@ -11,6 +11,11 @@
  * completion, share of spawned enemies killed, time, accuracy, damage, friendly losses) so an
  * 'S' is equally hard in a small training sortie and the finale. Failure caps the grade at
  * D (some primary objective done) or F.
+ *
+ * Player contribution: objectives completed mostly by the player's own flight (Viper 2…) earn
+ * less. The player's kill share = player kills / (player kills + flight kills); below 50 % the
+ * objective term is scaled down, and the grade is capped at B (share < 50 %) or C (< 25 %), so
+ * S and A mean "you won this fight", not "your wingman did".
  */
 import type { MissionResult } from '../../core/contracts';
 
@@ -53,6 +58,8 @@ export interface ScoreInput {
   /** Extra stunt points (flying under the Harbour Bridge…). */
   bonus: number;
   scoreMultiplier: number;
+  /** Hostiles killed by the player's own flight (AI wingmen); 0/undefined = the player fought alone. */
+  flightKills?: number;
   /** Survival mode: waves cleared (switches to wave-based grading). */
   waves?: number;
 }
@@ -63,6 +70,8 @@ export interface ScoreOutput {
   /** 0..1 performance rating behind the grade. */
   rating: number;
   accuracy: number;
+  /** Player kills / (player kills + flight kills), 1 when nobody else scored. */
+  playerShare: number;
   breakdown: { kills: number; objectives: number; time: number; accuracy: number; damage: number; friendly: number; bonus: number; waves: number };
 }
 
@@ -98,6 +107,13 @@ export function gradeRank(g: Grade): number {
   return GRADE_ORDER.indexOf(g);
 }
 
+/** Best grade reachable with this share of the flight's kills (S/A need ≥ 50 %). */
+export function contributionCap(playerShare: number): Grade {
+  if (playerShare < 0.25) return 'C';
+  if (playerShare < 0.5) return 'B';
+  return 'S';
+}
+
 export function computeScore(i: ScoreInput): ScoreOutput {
   const accuracy = i.shotsFired > 0 ? clamp01(i.hits / i.shotsFired) : 0;
   const killPts = i.kills.air * POINTS.air + i.kills.sam * POINTS.sam + i.kills.ground * POINTS.ground;
@@ -113,7 +129,10 @@ export function computeScore(i: ScoreInput): ScoreOutput {
 
   // Size-independent performance rating.
   const totalKills = i.kills.air + i.kills.sam + i.kills.ground;
-  const primaryShare = i.primaryTotal > 0 ? i.primaryDone / i.primaryTotal : 1;
+  const flightKills = Math.max(0, i.flightKills ?? 0);
+  const playerShare = totalKills + flightKills > 0 ? totalKills / (totalKills + flightKills) : 1;
+  const contrib = clamp01(playerShare / 0.5);
+  const primaryShare = (i.primaryTotal > 0 ? i.primaryDone / i.primaryTotal : 1) * (0.55 + 0.45 * contrib);
   const secondaryShare = i.secondaryTotal > 0 ? i.secondaryDone / i.secondaryTotal : 1;
   const killShare = i.enemiesSpawned > 0 ? clamp01(totalKills / Math.max(1, i.enemiesSpawned * 0.6)) : 1;
   const accShare = i.shotsFired > 0 ? clamp01(accuracy / 0.7) : 1;
@@ -133,12 +152,17 @@ export function computeScore(i: ScoreInput): ScoreOutput {
   else {
     grade = gradeForRating(rating);
     if (!i.success) grade = i.primaryDone > 0 && gradeRank(grade) >= gradeRank('D') ? 'D' : 'F';
+    else {
+      const cap = contributionCap(playerShare);
+      if (gradeRank(grade) > gradeRank(cap)) grade = cap;
+    }
   }
   return {
     score,
     grade,
     rating,
     accuracy,
+    playerShare,
     breakdown: { kills: killPts, objectives: i.objectiveBonus, time: timePts, accuracy: accPts, damage: dmgPts, friendly: friendlyPts, bonus: i.bonus, waves: wavePts },
   };
 }

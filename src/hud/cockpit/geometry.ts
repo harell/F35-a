@@ -222,8 +222,6 @@ export function buildCockpit(controlMat: Material, gripMat: Material): CockpitMe
   parts.push(colorize(place(new BoxGeometry(PCD.width + 0.036, PCD.height + 0.03, 0.03), fr.center.clone().addScaledVector(back, 0.018).addScaledVector(up, -0.008), fr.quat), C.bezel));
   // instrument panel body behind the PCD (its top edge just above the PCD's)
   parts.push(colorize(place(new BoxGeometry(1.25, 0.7, 0.02), fr.center.clone().addScaledVector(back, 0.045).addScaledVector(up, -(0.35 - PCD.height / 2 - 0.012)), fr.quat), C.panel));
-  // UFD housing set into the hood face, under the lip
-  parts.push(colorize(place(new BoxGeometry(UFD.width + 0.018, UFD.height + 0.01, 0.012), UFD_POS.clone().add(new Vector3(0, 0, -0.008))), C.bezel));
 
   // canopy sills (rails along the canopy edge) + side consoles
   for (const s of [-1, 1]) {

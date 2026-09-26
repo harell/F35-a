@@ -55,7 +55,7 @@ function setup() {
   const created = { n: 0 };
   const vp = new VoicePlayer(fakeEnv(clock, created), bank);
   const log: { id: VoiceId; ch: string; t: number }[] = [];
-  vp.onClipStart = (id, ch, t) => log.push({ id, ch, t: Math.round(t * 100) / 100 });
+  vp.onClipStart = (id, ch, t) => log.push({ id: id as VoiceId, ch, t: Math.round(t * 100) / 100 });
   const step = (dt: number, active: WarningId[]) => {
     clock.t += dt;
     vp.update(dt, new Set(active));
@@ -64,22 +64,27 @@ function setup() {
 }
 
 describe('VoicePlayer prioritisation (reviewer: SAM call masked by Betty, Betty ran on after defeat)', () => {
-  it('the DARKSTAR SAM call waits for Betty, then Betty reminders wait for the call', () => {
+  it('Betty MISSILE speaks first; the DARKSTAR "SAM launch" is dropped once MISSILE is up (i2 reviewer)', () => {
     const { vp, log, step } = setup();
     // same sim step: missile warning starts + SAM launch radio call
     vp.onRadio('a_sam_launch', 3);
     for (let i = 0; i < 160; i++) step(0.05, ['missile']);
     const betty = log.filter((l) => l.ch === 'betty');
-    const sam = log.find((l) => l.id === 'a_sam_launch')!;
     expect(betty[0].t).toBeLessThan(0.1);
-    // SAM call starts only after the first Betty clip ended
-    expect(sam.t).toBeGreaterThanOrEqual(betty[0].t + DUR.b_missile!);
-    expect(sam.t).toBeLessThan(betty[0].t + DUR.b_missile! + 0.4);
-    // no Betty clip starts while the SAM call is on the air
-    const samEnd = sam.t + 0.075 + DUR.a_sam_launch!;
-    for (const b of betty) expect(b.t < sam.t || b.t >= samEnd - 0.01).toBe(true);
-    // Betty keeps reminding afterwards
-    expect(betty.filter((b) => b.t >= samEnd).length).toBeGreaterThanOrEqual(1);
+    // Betty is the more timely cue: the AWACS call adds nothing while MISSILE is being called
+    expect(log.find((l) => l.id === 'a_sam_launch')).toBeUndefined();
+    // MISSILE keeps repeating every ~2.5 s
+    expect(betty.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('an urgent call queued without a missile warning still plays and holds lesser Betty clips', () => {
+    const { vp, log, step } = setup();
+    vp.onRadio('a_sam_launch', 3);
+    for (let i = 0; i < 80; i++) step(0.05, i > 4 ? ['fuel_low'] : []);
+    const sam = log.find((l) => l.id === 'a_sam_launch')!;
+    const fuel = log.find((l) => l.id === 'b_fuel_low')!;
+    expect(sam.t).toBeLessThan(0.1);
+    expect(fuel.t).toBeGreaterThanOrEqual(sam.t + 0.075 + DUR.a_sam_launch! - 0.01);
   });
 
   it('PULL UP is never held back by a radio call', () => {
@@ -149,16 +154,27 @@ describe('procedural music', () => {
 });
 
 describe('SAM call and Betty interleave when the call keys up first (browser log order)', () => {
-  it('Betty MISSILE waits for an urgent radio call already on the air, then speaks right after', () => {
+  it('Betty MISSILE is never delayed by an urgent radio call already on the air (i2 reviewer: 2 s delay)', () => {
     const { vp, log, step } = setup();
     vp.onRadio('a_sam_launch', 3);
-    step(0.05, []); // radio keys up
+    step(0.05, []); // radio keys up (browser log: munition:launch → RADIO a_sam_launch)
     for (let i = 0; i < 100; i++) step(0.05, ['missile']); // warning 0.1 s later
-    const sam = log.find((l) => l.id === 'a_sam_launch')!;
     const firstMissile = log.find((l) => l.id === 'b_missile')!;
-    const samEnd = sam.t + 0.075 + DUR.a_sam_launch!;
-    expect(firstMissile.t).toBeGreaterThanOrEqual(samEnd - 0.01);
-    expect(firstMissile.t).toBeLessThan(samEnd + 0.3);
+    expect(firstMissile.t).toBeLessThan(0.16); // was 2.1 s (after the whole AWACS call)
+    // the call was cut and, MISSILE being up, not repeated afterwards
+    expect(log.filter((l) => l.id === 'a_sam_launch').length).toBe(1);
+  });
+
+  it('a routine call cut by MISSILE is re-queued and heard after Betty', () => {
+    const { vp, log, step } = setup();
+    vp.onRadio('a_good_kill', 2);
+    step(0.05, []);
+    for (let i = 0; i < 20; i++) step(0.05, ['missile']);
+    for (let i = 0; i < 60; i++) step(0.05, []);
+    const kills = log.filter((l) => l.id === 'a_good_kill');
+    expect(kills.length).toBe(2);
+    const m = log.find((l) => l.id === 'b_missile')!;
+    expect(kills[1].t).toBeGreaterThanOrEqual(m.t + DUR.b_missile!);
   });
 
   it('routine chatter (priority 1) does not hold Betty back', () => {
@@ -168,5 +184,84 @@ describe('SAM call and Betty interleave when the call keys up first (browser log
     for (let i = 0; i < 10; i++) step(0.05, ['missile']);
     const m = log.find((l) => l.id === 'b_missile')!;
     expect(m.t).toBeLessThan(0.2);
+  });
+});
+
+describe('no MISSILE call after the missile hit (i2 reviewer: b_missile 0.1 s after player:hit)', () => {
+  it('cuts a MISSILE clip at impact and does not start a new one during the warning off-delay', () => {
+    const { vp, log, step } = setup();
+    const ids = new Int32Array([42]);
+    vp.noteIncoming(ids, 1);
+    for (let i = 0; i < 40; i++) step(0.05, ['missile']); // 2 s: first clip played
+    const before = log.filter((l) => l.id === 'b_missile').length;
+    vp.onMissileImpact(ids, 1); // m_igla (id 42) hits
+    expect(vp.speaking).toBe(false);
+    for (let i = 0; i < 6; i++) {
+      vp.noteIncoming(ids, 0); // incoming list empty after the hit
+      step(0.05, ['missile']); // Warnings off-delay keeps 'missile' for ~0.3 s
+    }
+    step(0.05, []);
+    expect(log.filter((l) => l.id === 'b_missile').length).toBe(before);
+  });
+
+  it('a second missile still inbound keeps MISSILE going (t03 SA-6 salvo)', () => {
+    const { vp, log, step } = setup();
+    vp.noteIncoming(new Int32Array([7, 8]), 2);
+    for (let i = 0; i < 10; i++) step(0.05, ['missile']);
+    vp.onMissileImpact(new Int32Array([7]), 1); // missile 7 hits, 8 is still inbound
+    step(0.05, ['missile']);
+    expect(vp.speaking).toBe(true); // the clip was not cut
+    const inbound = new Int32Array([8]);
+    for (let i = 0; i < 60; i++) {
+      vp.noteIncoming(inbound, 1);
+      step(0.05, ['missile']);
+    }
+    const all = log.filter((l) => l.id === 'b_missile');
+    expect(all.length).toBe(2);
+    expect(all[1].t).toBeLessThan(all[0].t + 2.5 + 0.1); // normal cadence, no mute
+  });
+});
+
+describe('Betty does not nag for a whole recovery (i2 reviewer)', () => {
+  it('engine fire: announced + 2 reminders, then quiet while it stays active', () => {
+    const { log, step } = setup();
+    for (let i = 0; i < 20 * 45; i++) step(0.05, ['engine_fire']); // 45 s
+    const n = log.filter((l) => l.id === 'b_engine_fire').length;
+    expect(n).toBe(3); // was 7 (every 6 s)
+  });
+
+  it('acknowledge silences reminders (and the clip playing) until the warning clears; MISSILE keeps repeating', () => {
+    const { vp, log, step } = setup();
+    for (let i = 0; i < 4; i++) step(0.05, ['engine_fire', 'damage']);
+    expect(vp.acknowledge()).toBe(2);
+    step(0.05, ['engine_fire', 'damage']);
+    expect(vp.speaking).toBe(false);
+    for (let i = 0; i < 20 * 30; i++) step(0.05, ['engine_fire', 'damage']);
+    expect(log.filter((l) => l.id === 'b_engine_fire').length).toBe(1);
+    // clears and comes back → announced again
+    for (let i = 0; i < 20 * 5; i++) step(0.05, []);
+    for (let i = 0; i < 20; i++) step(0.05, ['engine_fire']);
+    expect(log.filter((l) => l.id === 'b_engine_fire').length).toBe(2);
+    // MISSILE cannot be acknowledged
+    for (let i = 0; i < 4; i++) step(0.05, ['missile']);
+    expect(vp.acknowledge()).toBe(0);
+    const m0 = log.filter((l) => l.id === 'b_missile').length;
+    for (let i = 0; i < 20 * 6; i++) step(0.05, ['missile']);
+    expect(log.filter((l) => l.id === 'b_missile').length).toBeGreaterThanOrEqual(m0 + 2);
+  });
+});
+
+describe('long radio calls during a missile warning (no cut/replay loop)', () => {
+  it('MISSILE reminders wait for a call on the air; a cut call is replayed at most once', () => {
+    const { vp, log, step } = setup();
+    for (let i = 0; i < 4; i++) step(0.05, ['missile']); // first MISSILE
+    vp.onRadio('a_good_kill', 2); // queued, plays after Betty
+    for (let i = 0; i < 20 * 20; i++) step(0.05, ['missile']);
+    const kills = log.filter((l) => l.id === 'a_good_kill');
+    expect(kills.length).toBe(1); // played once, never cut by the 2.5 s reminders
+    const m = log.filter((l) => l.id === 'b_missile');
+    expect(m.length).toBeGreaterThanOrEqual(6); // reminders continue around it
+    const end = kills[0].t + 0.075 + 1;
+    for (const b of m) expect(b.t < kills[0].t || b.t >= end - 0.01).toBe(true);
   });
 });

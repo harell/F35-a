@@ -645,3 +645,17 @@
   .cr-dl dd { font-size: 14px; }
   .ld-tip-t { font-size: 15px; }
 }
+
+/* i2: campaign cards fit a 375–390 px tall phone (the time / weather row was clipped) */
+@media (max-height: 400px) {
+  .mc-art { flex-basis: 30%; }
+  .mc-body { padding: 7px 11px 4px; gap: 3px; }
+  .mc-sub { -webkit-line-clamp: 2; font-size: 11.5px; }
+  .mc-foot { min-height: 34px; }
+}
+@media (max-height: 400px) {
+  /* the training nudge sits above the cards on a first run: compact it and shrink the cards to fit */
+  .ml-nudge { padding: 4px 10px; margin: 0 0 6px; }
+  .ml-nudge .ui-btn { min-height: 44px; }
+  .ml-body:has(.ml-nudge) .mcard { height: max(190px, calc(100vh - 170px)); }
+}

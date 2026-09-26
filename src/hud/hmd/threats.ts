@@ -159,9 +159,10 @@ export function drawRwrEdge(f: HudFrame): void {
     y = Math.max(y, L.row2Y + 18 * u);
     // declutter: slide along the edge ellipse off text / other RWR symbols (co-bearing emitters
     // never merge into "2910"), then register the symbol
-    const rr = 13 * f.L.u;
+    const rr = 15 * f.L.u;
     if (f.occ.hits(x - rr, y - rr, x + rr, y + rr)) {
-      for (let k = 1; k <= 8; k++) {
+      let moved = false;
+      for (let k = 1; k <= 16; k++) {
         const da = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * 0.09;
         const b2 = c.bearing + da;
         edgeOfEllipse(L.edgeCx, L.edgeCy, L.edgeRx, Math.cos(b2) < 0 ? L.edgeRy * 0.85 : L.edgeRy, Math.sin(b2), -Math.cos(b2), edge);
@@ -170,7 +171,18 @@ export function drawRwrEdge(f: HudFrame): void {
         if (!f.occ.hits(edge.x - rr, y2 - rr, edge.x + rr, y2 + rr)) {
           x = edge.x;
           y = y2;
+          moved = true;
           break;
+        }
+      }
+      // crowded edge: step inward toward the centre instead (bearing kept)
+      for (let k = 1; k <= 3 && !moved; k++) {
+        const xi = x - sx * rr * 2 * k;
+        const yi = y - sy * rr * 2 * k;
+        if (!f.occ.hits(xi - rr, yi - rr, xi + rr, yi + rr)) {
+          x = xi;
+          y = yi;
+          moved = true;
         }
       }
     }
@@ -227,11 +239,14 @@ export function chipPlace(f: HudFrame, total: number, h: number): { x: number; y
   const xc = L.cx - total / 2;
   const xl = Math.min(xc, L.spdRight + 4 * u);
   const xr = Math.max(xc, L.altLeft - 4 * u - total);
+  // (further out: beside a target box sitting right under the band)
+  const xfl = Math.max(L.left, xc - total / 2 - 40 * u);
+  const xfr = Math.min(L.right - total, xc + total / 2 + 40 * u);
   const dy = h + 5 * u;
   for (let r = 0; r < 3; r++) {
     const y = L.row2Y + r * dy;
-    for (let k = 0; k < 3; k++) {
-      const x = k === 0 ? xc : k === 1 ? xl : xr;
+    for (let k = 0; k < 5; k++) {
+      const x = k === 0 ? xc : k === 1 ? xl : k === 2 ? xr : k === 3 ? xfl : xfr;
       if (!occ.hits(x, y - h / 2, x + total, y + h / 2, 1)) {
         chipPos.x = x;
         chipPos.y = y;

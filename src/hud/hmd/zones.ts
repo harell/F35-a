@@ -10,6 +10,7 @@
  * Blocks whose height depends on their content (column, kill feed, external block) use the extent they
  * had on the previous frame (one frame of lag, no allocation, no double layout).
  */
+import { reserveBankScale } from './flight';
 import type { HudFrame } from './frame';
 
 /** Extents measured while drawing (previous frame). NaN = nothing drawn. */
@@ -63,6 +64,7 @@ export function reserveFixedZones(f: HudFrame): void {
     if (z && z.rMax > 0 && z.weapon !== 'gun' && z.weapon !== 'gbu31' && z.weapon !== 'gbu39') {
       occ.add(L.dlzX - 10 * u, L.dlzTop - 18 * u, L.dlzX + 62 * u, L.dlzBottom + 18 * u);
     }
+    reserveBankScale(f);
     if (Number.isFinite(zoneExt.wpnTop)) occ.add(L.wpnX - 4 * u, zoneExt.wpnTop - 8 * u, zoneExt.wpnRight + 4 * u, zoneExt.wpnBottom);
   } else if (f.mode === 'external') {
     if (Number.isFinite(zoneExt.extBottom)) occ.add(L.extX - 4 * u, L.extY - 2, zoneExt.extRight + 6 * u, zoneExt.extBottom);

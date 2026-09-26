@@ -78,7 +78,7 @@ interface TodBase {
 
 const TOD: Record<TimeOfDay, TodBase> = {
   dawn: {
-    az: 96, el: 7, sun: 0xffb27a, sunI: 2.3, hemiSky: 0x8f9cc8, hemiGround: 0x5a4a44, hemiI: 0.95,
+    az: 96, el: 7, sun: 0xffb27a, sunI: 2.3, hemiSky: 0x8f9cc8, hemiGround: 0x6e6052, hemiI: 1.1,
     zenith: 0x35568f, horizon: 0xc2b4c0, horizonSun: 0xffa060, disk: 0xffc890, glow: 1.3, stars: 0.12,
     cloudLit: 0xffc8a0, cloudShade: 0x6a6886, lights: 0.55,
   },
@@ -111,6 +111,16 @@ const THEATER: Record<
   mountains: { dayEl: 50, azShift: -10, haze: 0xb4cae2, fogK: 1.25, hazeH: 3600, deep: 0x123a58, shallow: 0x3a8c96, ice: 0, tint: 0 },
   arctic: { dayEl: 22, azShift: -25, haze: 0xcad8e6, fogK: 1.35, hazeH: 3000, deep: 0x0e2a3a, shallow: 0x3c7a86, ice: 0.3, tint: 0 },
 };
+
+/**
+ * City / street-light intensity from the sun's elevation (degrees): street lights and the urban
+ * light carpet are off with the sun above +7°, fade in through sunset and are fully on from -3°
+ * (civil twilight). Dawn (sun 7° up) therefore shows no light carpet under a sunrise sky; dusk
+ * (5°) shows the first lamps coming on. Night presets (moon as the key light) are always 1.
+ */
+export function lightsForSun(elDeg: number): number {
+  return Math.min(1, Math.max(0, (7 - elDeg) / 10));
+}
 
 export function skyPreset(theater: TheaterId, tod: TimeOfDay, weather: Weather, drawDistance: number): SkyPreset {
   const b = TOD[tod];
@@ -188,6 +198,6 @@ export function skyPreset(theater: TheaterId, tod: TimeOfDay, weather: Weather, 
     waterShallow: c(t.shallow).lerp(c(0x3a4644), 1 - waterK).multiplyScalar(waterK),
     seaIce: t.ice,
     shallowDepth: theater === 'islands' ? 14 : theater === 'desert' ? 9 : theater === 'auckland' ? 5 : 4,
-    lights: b.lights,
+    lights: tod === 'night' ? b.lights : Math.min(b.lights, lightsForSun(el)),
   };
 }

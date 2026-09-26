@@ -326,7 +326,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, out vec3 emissive) 
   if (uNight > 0.0) {
     // street lamps every ~32 m along roads (arterials brighter); lit windows glow on the lots
     vec2 lq = fract(p / 36.0) - 0.5;
-    float lampDot = exp(-dot(lq, lq) * 36.0 * 36.0 / max(6.0, mpp * mpp * 2.0));
+    // widened with the pixel footprint (no aliasing) but dimmed as it widens, so lamps do not merge
+    // into solid glowing street lines at mid range
+    float lampDot = exp(-dot(lq, lq) * 36.0 * 36.0 / max(6.0, mpp * mpp * 2.0)) * min(1.0, 4.0 / max(mpp, 1.0));
     float nearLamps = road * 0.8 * lampDot * (1.0 - smoothstep(6.0, 18.0, mpp));
     float glowLots = built * step(lh, 0.45) * (1.0 - smoothstep(4.0, 12.0, mpp)) * 0.05;
     float avgLamps = 0.06 * (0.6 + 0.8 * bh) * (0.6 + 0.5 * dens);
@@ -393,6 +395,10 @@ vec3 coneDetail(vec2 wp, float mpp, inout vec3 albedo) {
     float r2 = dot(d, d);
     if (r2 > cb.x * cb.x) continue;
     float r = sqrt(r2);
+    // soften the grassy dome: a little darker / less lime overall, and feathered into the
+    // surrounding suburbs' grey-green over the outer 45 % of the radius (no hard disc edge)
+    float coneEdge = smoothstep(cb.x * 0.55, cb.x, r);
+    albedo = mix(albedo * vec3(0.8, 0.84, 0.86), uSuburbLeafy, coneEdge * 0.75);
     if (ca.z > 0.0) {
       float u = r / ca.z;
       float inside = 1.0 - smoothstep(0.9, 1.04, u);

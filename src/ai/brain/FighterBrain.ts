@@ -111,6 +111,8 @@ export class FighterBrain extends Brain {
   private jinkUntil = -1;
   private jinkLegEnd = -1;
   private jinkSide = 1;
+  private jinkStart = -1;
+  private jinkRestUntil = -1;
   private readonly jinkPerp = new Vector3();
 
   constructor(role: AiRole, opts: BrainOptions, cfg: FighterConfig) {
@@ -528,10 +530,26 @@ export class FighterBrain extends Brain {
     }
     if (!threat) {
       this.gunThreatSince = -1;
-      if (this.now >= this.jinkUntil) return false;
+      if (this.now >= this.jinkUntil) {
+        this.jinkStart = -1;
+        return false;
+      }
     } else {
+      if (this.now < this.jinkRestUntil) return false; // a rookie "freezes" between jinks
       if (this.gunThreatSince < 0) this.gunThreatSince = this.now;
       if (this.now - this.gunThreatSince < 0.2 + 0.9 * (1 - def)) return false;
+      if (this.jinkStart < 0) this.jinkStart = this.now;
+      // a gunner already behind us (tracking, same direction) wins in the end: jinks buy time
+      // but each one ends in a predictable stretch; head-on, a good pilot jinks until the pass
+      const tracking = ac.velocity.dot(e.velocity) > 0;
+      const budget = tracking ? 1.2 + 0.8 * def : 1 + 5 * def * def;
+      if (this.now - this.jinkStart > budget) {
+        // out of ideas (rookie) / reversing: a predictable straight stretch before the next jink
+        this.jinkStart = -1;
+        this.jinkRestUntil = this.now + (tracking ? 1.5 + 1.5 * (1 - def) : 3.5 * (1 - def));
+        this.jinkUntil = -1;
+        return false;
+      }
       this.jinkUntil = this.now + 0.6 + 0.6 * def; // keep jinking a moment after the nose leaves us
     }
     if (this.now >= this.jinkLegEnd) {
@@ -549,7 +567,7 @@ export class FighterBrain extends Brain {
       this.jinkLegEnd = this.now + 0.45 + 0.45 * this.rng();
     }
     it.dir.copy(ac.velocity).normalize().addScaledVector(this.jinkPerp, 0.7 + 0.5 * def).normalize();
-    it.gMax = Math.min(3 + 3.5 * def, this.skill.maxG);
+    it.gMax = Math.min(2 + 4.5 * def, this.skill.maxG);
     it.gain = 2;
     it.track = false;
     it.throttle = 1;

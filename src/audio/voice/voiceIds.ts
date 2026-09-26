@@ -50,11 +50,11 @@ export const VOICE_IDS: readonly VoiceId[] = Object.keys(ALL) as VoiceId[];
 export type VoiceChannel = 'betty' | 'radio';
 
 /** Betty clips play on the ICAWS channel, pilot/AWACS clips on the radio channel. */
-export function voiceChannel(id: VoiceId): VoiceChannel {
+export function voiceChannel(id: string): VoiceChannel {
   return id.startsWith('b_') ? 'betty' : 'radio';
 }
 
 /** URL of a clip relative to the page (Vite `base: './'`). */
-export function voiceUrl(id: VoiceId, base = './'): string {
+export function voiceUrl(id: string, base = './'): string {
   return `${base}audio/voice/${id}.mp3`;
 }

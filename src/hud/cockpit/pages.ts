@@ -68,14 +68,35 @@ const TSD_COLORS: TsdColors = {
   highlight: PC.green,
 };
 
+/** TSD range steps (NM): 5 / 10 NM when the fight is close, up to 80 NM for a far waypoint. */
+export const TSD_STEPS_NM = [5, 10, 20, 40, 80] as const;
+
+/**
+ * Distance (m) the TSD must show: the designated / locked target, else the nearest hostile air
+ * contact, else the steering waypoint (capped at 75 km) — never less than ~4 NM. The 20 NM floor of
+ * iteration 1 packed WP, contacts, ground squares and SAM rings within ~40 px of ownship.
+ */
+export function tsdNeed(p: AircraftEntity, ctx: FrameContext): number {
+  let need = 8_000;
+  const t = ctx.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
+  if (t && t.alive) return Math.max(need, t.position.distanceTo(p.position) * 1.1);
+  let nearest = Infinity;
+  for (const c of p.radar.contacts) {
+    if (c.team === p.team) continue;
+    const e = ctx.world.getEntity(c.id);
+    if (!e || !e.alive || e.kind !== 'aircraft') continue;
+    nearest = Math.min(nearest, Math.hypot(c.position.x - p.position.x, c.position.z - p.position.z));
+  }
+  if (Number.isFinite(nearest)) return Math.max(need, nearest * 1.15);
+  const wp = ctx.mission?.currentWaypoint;
+  if (wp) need = Math.max(need, Math.min(75_000, Math.hypot(wp.position.x - p.position.x, wp.position.z - p.position.z) * 1.05));
+  return need;
+}
+
 export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   const { p, ctx } = d;
-  let need = 30_000;
   const t = ctx.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
-  if (t && t.alive) need = Math.max(need, t.position.distanceTo(p.position) * 1.1);
-  const wp = ctx.mission?.currentWaypoint;
-  if (wp) need = Math.max(need, Math.min(80_000, Math.hypot(wp.position.x - p.position.x, wp.position.z - p.position.z) * 1.05));
-  tsdRange = autoTsdRange(tsdRange, need, [10, 20, 40, 80]);
+  tsdRange = autoTsdRange(tsdRange, tsdNeed(p, ctx), TSD_STEPS_NM);
   const s = tsdStyle;
   s.cx = x + w / 2;
   // ownship high in the portal: at the default head pose only the upper part of the PCD is in view
@@ -84,6 +105,7 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   s.range = tsdRange;
   s.clipRect = [x, y, w, h];
   s.clipCircle = 0;
+  s.coast = true;
   s.rings = 2;
   s.labels = d.zoom ? true : 'key';
   s.font = d.zoom ? 21 : 24;
@@ -391,6 +413,49 @@ export const drawIcawsPage: PageFn = (pen, x, y, w, h, d) => {
 
 /* ───────────────────────── RWR / EW ───────────────────────── */
 
+const RWR_MAX = 24;
+const rwrB = new Float32Array(RWR_MAX);
+const rwrR = new Float32Array(RWR_MAX);
+/** Minimum radial separation between co-bearing RWR symbols (texels; symbols are ~40 texels wide). */
+const RWR_SEP = 36;
+
+/**
+ * RWR declutter (pure): radius for a symbol at `bearing` so its centre keeps RWR_SEP from every symbol
+ * already placed (co-bearing emitters are offset radially: the preferred radius, then inward / outward
+ * steps inside [0.2R, 0.95R]).
+ */
+export function rwrDeclutter(bearing: number, r: number, R: number, n: number, bs: ArrayLike<number> = rwrB, rs: ArrayLike<number> = rwrR): number {
+  const sb = Math.sin(bearing);
+  const cb = Math.cos(bearing);
+  // nearest placed symbol (squared distance) for a candidate radius
+  const nearest = (rr: number): number => {
+    let m = Infinity;
+    for (let i = 0; i < n; i++) {
+      const dx = sb * rr - Math.sin(bs[i]) * rs[i];
+      const dy = cb * rr - Math.cos(bs[i]) * rs[i];
+      m = Math.min(m, dx * dx + dy * dy);
+    }
+    return m;
+  };
+  const sep2 = RWR_SEP * RWR_SEP;
+  let best = r;
+  let bestD = nearest(r);
+  if (bestD >= sep2) return r;
+  // symbols closer than RWR_SEP clash: try radial offsets; a crowded scope keeps the least-bad one
+  const step = RWR_SEP / 4;
+  for (let k = 1; k <= 24; k++) {
+    const rr = r + (k % 2 === 1 ? -1 : 1) * Math.ceil(k / 2) * step;
+    if (rr < R * 0.15 || rr > R * 0.98) continue;
+    const d = nearest(rr);
+    if (d >= sep2) return rr;
+    if (d > bestD) {
+      bestD = d;
+      best = rr;
+    }
+  }
+  return best;
+}
+
 export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
   const p = d.p;
   const g = pen.g;
@@ -417,8 +482,16 @@ export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
   g.closePath();
   pen.fillPlain(PC.value);
   let launch = false;
+  let placed = 0;
   for (const c of p.rwr) {
-    const r = R * (0.95 - 0.7 * Math.max(0, Math.min(1, c.strength)));
+    let r = R * (0.95 - 0.7 * Math.max(0, Math.min(1, c.strength)));
+    // standard RWR declutter: emitters within 8° of an already placed one are offset radially
+    r = rwrDeclutter(c.bearing, r, R, placed);
+    if (placed < RWR_MAX) {
+      rwrB[placed] = c.bearing;
+      rwrR[placed] = r;
+      placed++;
+    }
     const sx = cx + Math.sin(c.bearing) * r;
     const sy = cy - Math.cos(c.bearing) * r;
     const col = c.state === 'launch' ? PC.red : c.state === 'track' ? PC.amber : PC.green;

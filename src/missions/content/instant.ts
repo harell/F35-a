@@ -130,8 +130,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
   const ground: GroundTargetDef[] = [];
   const objectives: ObjectiveDef[] = [];
   const features = [...lay.features];
-  let loadout: LoadoutId = 'a2a_beast';
-  let allowed: LoadoutId[] = ['a2a_beast', 'a2a_stealth'];
+  // Air-to-air defaults to the stealth loadout (internal AIM-120s, low RCS): beast mode's
+  // external pylons multiply the RCS ~40× and let Flanker radars find the jet at ~17 km.
+  let loadout: LoadoutId = 'a2a_stealth';
+  let allowed: LoadoutId[] = ['a2a_stealth', 'a2a_beast'];
   let briefing: string[] = [];
   const script: Partial<MissionScript> = {};
 
@@ -145,6 +147,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, more on Ace). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s — Su-35s and Su-57s join on Veteran and Ace.' : '',
         n >= 3 ? 'Viper 2 is on your wing.' : 'You are on your own.',
+        'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
       script.parTime = 180 + n * 45;

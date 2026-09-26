@@ -186,6 +186,8 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
       page.appendChild(settingRow('Master', null, slider({ min: 0, max: 1, step: 0.05, value: s.masterVolume, label: 'Master volume', format: pct, onInput: (v) => (s.masterVolume = v) })));
       page.appendChild(settingRow('Effects', 'Engine, weapons, explosions, RWR tones', slider({ min: 0, max: 1, step: 0.05, value: s.sfxVolume, label: 'Effects volume', format: pct, onInput: (v) => (s.sfxVolume = v) })));
       page.appendChild(settingRow('Voice', 'Betty warnings, radio and AWACS calls', slider({ min: 0, max: 1, step: 0.05, value: s.voiceVolume, label: 'Voice volume', format: pct, onInput: (v) => (s.voiceVolume = v) })));
+      // music has its own bus: silence it without losing the RWR / missile tones (Effects)
+      page.appendChild(settingRow('Music', 'Menu theme and mission score — 0 turns it off', slider({ min: 0, max: 1, step: 0.05, value: s.musicVolume ?? 0.6, label: 'Music volume', format: (v) => (v <= 0 ? 'Off' : pct(v)), onInput: (v) => (s.musicVolume = v) })));
       page.appendChild(h('div', { class: 'set-note', html: `${icon('headphones')}<span>Headphones recommended — threat tones and missile warnings are directional.</span>` }));
       return page;
     }

@@ -201,7 +201,7 @@ export function makeFrame(pen: Pen, proj: Projector, picks: PickRegistry, st: Hu
     p: null as unknown as AircraftEntity,
     mode: 'hmd',
     cockpit: false,
-    occ: new Occupancy(),
+    occ: new Occupancy(192),
     declutter: 1,
     target: null,
     locked: false,

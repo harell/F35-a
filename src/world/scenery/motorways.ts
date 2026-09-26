@@ -89,6 +89,24 @@ const MOTORWAYS: MotorwayDef[] = [
   },
 ];
 
+/**
+ * Main arterial roads (4-lane urban roads with street lights). They give the suburbs a real road
+ * network from altitude instead of lines painted along every procedural district border.
+ * Hand-traced from memory (~100-200 m accuracy), all on land.
+ */
+const ARTERIALS: MotorwayDef[] = [
+  { name: 'Dominion Rd', width: 15, ll: [[-36.8655, 174.7572], [-36.8760, 174.7532], [-36.8860, 174.7488], [-36.8960, 174.7448], [-36.9060, 174.7415], [-36.9150, 174.7390]] },
+  { name: 'Mt Eden Rd', width: 14, ll: [[-36.8660, 174.7625], [-36.8760, 174.7612], [-36.8860, 174.7600], [-36.8960, 174.7605], [-36.9040, 174.7615]] },
+  { name: 'Manukau Rd', width: 15, ll: [[-36.8705, 174.7775], [-36.8800, 174.7768], [-36.8900, 174.7760], [-36.9000, 174.7752], [-36.9095, 174.7742]] },
+  { name: 'Remuera Rd', width: 14, ll: [[-36.8705, 174.7795], [-36.8740, 174.7880], [-36.8770, 174.7970], [-36.8790, 174.8060], [-36.8800, 174.8150]] },
+  { name: 'Sandringham Rd', width: 13, ll: [[-36.8690, 174.7440], [-36.8780, 174.7405], [-36.8870, 174.7370], [-36.8960, 174.7330]] },
+  { name: 'New North Rd', width: 14, ll: [[-36.8650, 174.7520], [-36.8710, 174.7430], [-36.8770, 174.7320], [-36.8830, 174.7210], [-36.8880, 174.7100], [-36.8920, 174.7000]] },
+  { name: 'Great North Rd', width: 15, ll: [[-36.8590, 174.7505], [-36.8625, 174.7420], [-36.8650, 174.7330], [-36.8670, 174.7240], [-36.8690, 174.7150], [-36.8745, 174.7060], [-36.8810, 174.6980], [-36.8870, 174.6910]] },
+  { name: 'Lake Rd', width: 14, ll: [[-36.8285, 174.7962], [-36.8200, 174.7962], [-36.8110, 174.7905], [-36.8020, 174.7845], [-36.7940, 174.7788], [-36.7880, 174.7740]] },
+  { name: 'Onewa Rd', width: 14, ll: [[-36.8098, 174.7462], [-36.8104, 174.7390], [-36.8110, 174.7315], [-36.8106, 174.7240]] },
+  { name: 'East Coast Rd', width: 13, ll: [[-36.7860, 174.7738], [-36.7770, 174.7728], [-36.7680, 174.7650], [-36.7580, 174.7530], [-36.7480, 174.7450]] },
+];
+
 export interface RoadPath {
   name: string;
   width: number;
@@ -132,8 +150,9 @@ export function resamplePath(pts: { x: number; z: number }[], tunnels: number[] 
   return { x: xs, z: zs, tunnel: tn };
 }
 
-export function aucklandRoadPaths(): RoadPath[] {
-  return MOTORWAYS.map((m) => {
+/** Motorways plus (by default) the main arterial roads. */
+export function aucklandRoadPaths(arterials = true): RoadPath[] {
+  return (arterials ? MOTORWAYS.concat(ARTERIALS) : MOTORWAYS).map((m) => {
     const r = resamplePath(
       m.ll.map(([lat, lon]) => geoToWorld(lat, lon)),
       m.tunnels,
@@ -275,7 +294,8 @@ export class RoadNetwork {
           }
         }
         // Lamp posts (alternating sides, every 60 m)
-        if (lamps && i % 2 === 0) {
+        // (arterials: every 120 m)
+        if (lamps && i % (p.width < 20 ? 4 : 2) === 0) {
           const side = (i >> 1) % 2 === 0 ? 1 : -1;
           const x = p.x[i] + nx * (hw + 1) * side;
           const z = p.z[i] + nz * (hw + 1) * side;

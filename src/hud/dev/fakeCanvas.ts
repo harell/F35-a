@@ -62,6 +62,10 @@ export class FakeContext2D {
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void {
     this.tf = [a, b, c, d, e, f];
   }
+  transform(a: number, b: number, c: number, d: number, e: number, f: number): void {
+    const [A, B, C, D, E, F] = this.tf;
+    this.tf = [A * a + C * b, B * a + D * b, A * c + C * d, B * c + D * d, A * e + C * f + E, B * e + D * f + F];
+  }
   getTransform() {
     return { a: this.tf[0], b: this.tf[1], c: this.tf[2], d: this.tf[3], e: this.tf[4], f: this.tf[5] };
   }

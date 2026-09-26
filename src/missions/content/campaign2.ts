@@ -41,8 +41,10 @@ export const C07: MissionDef = mission({
         fixedCount: true,
         task: { kind: 'patrol', x: 8000, z: -29000, radius: 5000, altitude: 9000 },
       }),
-      flight('guard', 'su35', 2, { x: 10500, z: -28000 }, 9500, 0, 230, 'escort', { skillOffset: -0.1, maxCount: 2, task: { kind: 'escort_group', group: 'mainstay' } }),
-      flight('cap', 'su35', 2, { x: 22000, z: -20000 }, 7500, 250, 240, 'cap', { skillOffset: -0.1, maxCount: 2, task: { kind: 'patrol', x: 16000, z: -19000, radius: 7000, altitude: 7500 } }),
+      flight('guard', 'su35', 2, { x: 10500, z: -30000 }, 9500, 0, 230, 'escort', { skillOffset: -0.25, maxCount: 2, task: { kind: 'escort_group', group: 'mainstay' } }),
+      // the CAP starts well east of the Mainstay (beyond first-shot range of the player's start) and only
+      // turns in when Darkstar has called it — the i2 review found an unavoidable R-77 kill at 55 s here
+      flight('cap', 'su35', 2, { x: 34000, z: -26000 }, 7500, 90, 230, 'cap', { skillOffset: -0.15, maxCount: 2, task: { kind: 'patrol', x: 30000, z: -24000, radius: 6000, altitude: 7500 } }),
     ],
     sams: [site('sa8', 'tiri_sa8', 'sa8', off(P.tiritiri, 400, 200), { minDifficulty: 'veteran' })],
     ground: [target('ewr', 'tiri_ewr', 'ewr', P.tiritiri, { name: 'EW Radar' })],
@@ -62,6 +64,7 @@ export const C07: MissionDef = mission({
           { kind: 'retask', group: 'mainstay', task: { kind: 'rtb', x: 4000, z: -35500, altitude: 10000 } },
         ],
       },
+      { id: 't_cap', when: { kind: 'time', t: 20 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Su-35 CAP east of Tiritiri, 40 miles, cold. Stay low and west of them.', priority: 1 }] },
       { id: 't_relief', when: { kind: 'time', t: 600 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two minutes until their relief orbit arrives.', priority: 2 }] },
     ],
     opening: [
@@ -365,7 +368,7 @@ export const C10: MissionDef = mission({
   weather: 'clear',
   briefing: [
     'Intelligence intercepts point to a maximum-effort raid on Auckland tonight. Several Backfire groups will come at the city from different directions, each carrying cruise missiles meant for the port, the CBD and the Harbour Bridge.',
-    'You and Viper 2 are the only fighters on alert. DARKSTAR will call each raid as it forms: kill the bombers before they get within 6 km of the Sky Tower — lose half a raid and the rest turn for home. A Fulcrum escort and a Flanker sweep will try to keep you busy.',
+    'You and Viper 2 are the only fighters on alert. DARKSTAR will call each raid as it forms: kill the bombers before they get within 6 km of the Sky Tower — lose half a raid and the rest turn for home. A Fulcrum escort will try to keep you busy — and from Veteran up, a Flanker sweep follows once the first raid is dealt with.',
     'It will be dark out there. Trust the HMD and the TSD, and fight the picture DARKSTAR gives you. The city lights behind you are what you are defending.',
   ],
   recommendedLoadout: 'a2a_beast',
@@ -383,14 +386,18 @@ export const C10: MissionDef = mission({
       }),
       flight('escortN', 'mig29', 2, { x: 7500, z: -34000 }, 9000, 185, 240, 'escort', { skillOffset: 0.05, maxCount: 2, task: { kind: 'escort_group', group: 'raidN' } }),
       flight('sweep', 'su27', 2, { x: 32000, z: -26000 }, 7500, 235, 250, 'fighter', {
-        skillOffset: 0.1,
+        skillOffset: 0,
         maxCount: 2,
-        spawn: { kind: 'time', t: 45 },
+        // Veteran and up only: on Pilot the Fulcrum escort is the fighter threat (the sweep's R-27/R-77s
+        // killed the Pilot bot in every run of the i2 sweep). The sweep arrives once the first raid is handled (or at 2:30), not in the middle of it (i2 review:
+        // the Pilot bot died to its R-27s at 137/159 s while still on the northern raid)
+        minDifficulty: 'veteran',
+        spawn: { kind: 'any', of: [{ kind: 'group_defeated', group: 'raidN' }, { kind: 'time', t: 150 }] },
         task: { kind: 'patrol', x: 6000, z: -12000, radius: 7000, altitude: 7000 },
       }),
       flight('raidE', 'tu22m', 2, { x: 35000, z: -22000 }, 8000, 240, 220, 'bomber', {
         maxCount: 3,
-        spawn: { kind: 'time', t: 100 },
+        spawn: { kind: 'time', t: 150 },
         formation: 'wall',
         spacing: 700,
         task: { kind: 'route', points: [{ x: 20000, z: -10000, altitude: 7500 }, { x: 0, z: 0, altitude: 7000 }] },
@@ -432,14 +439,16 @@ export const C10: MissionDef = mission({
         minDifficulty: 'veteran',
         activeAt: { kind: 'group_spawned', group: 'raidW' },
       },
-      { id: 'o_fighters', kind: 'destroy', groups: ['escortN', 'sweep'], label: 'Splash the escorts and the sweep', primary: false },
+      { id: 'o_fighters', kind: 'destroy', groups: ['escortN'], label: 'Splash the Fulcrum escort', primary: false },
+      { id: 'o_sweep', kind: 'destroy', groups: ['sweep'], label: 'Splash the Flanker sweep', primary: false, minDifficulty: 'veteran', activeAt: { kind: 'group_spawned', group: 'sweep' } },
     ],
     waypoints: [
       { id: 'wp_n', label: 'North raid', kind: 'cap', x: 2000, z: -20000, altitude: 8000, objective: 'o_north' },
       { id: 'wp_e', label: 'East raid', kind: 'cap', x: 18000, z: -10000, altitude: 7500, objective: 'o_east' },
     ],
     triggers: [
-      { id: 't_east', when: { kind: 'time', t: 98 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Second raid forming east of Waiheke!', priority: 2 }] },
+      { id: 't_east', when: { kind: 'time', t: 146 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Second raid forming east of Waiheke! Commit east.', priority: 2 }] },
+      { id: 't_sweep', when: { kind: 'group_spawned', group: 'sweep' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Flanker pair inbound from the east, 30 miles. Watch for R-27s.', priority: 2 }] },
       { id: 't_west', when: { kind: 'group_spawned', group: 'raidW' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar! Pop-up group low over the Waitākeres — they came in off the Tasman!', priority: 3 }] },
     ],
     opening: [

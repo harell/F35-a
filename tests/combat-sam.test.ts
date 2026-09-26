@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { FakeWorld, FlatTerrain, v3 } from './combat-helpers';
 import type { SamState } from '../src/sim/entities';
 import type { CombatMissile } from '../src/sim/weapons/missile';
+import { SAM_LAUNCH_PRIORITY, launchRangeFraction } from '../src/sim/sam/SamSystem';
+
+/** Simulation-heavy tests get an explicit timeout (a loaded CI runner can take > 5 s). */
+const SIM = { timeout: 30_000 };
 
 describe('combat: SAM sites', () => {
-  it('SA-6 runs search → track → launch → guiding and fires a salvo at an approaching fighter', () => {
+  it('SA-6 runs search → track → launch → guiding and fires a salvo at an approaching fighter', SIM, () => {
     const w = new FakeWorld({ difficulty: 'veteran' });
     const site = w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, 0) });
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 5000, -45000), heading: Math.PI, speed: 250, loadout: 'a2a_beast', callsign: 'Viper 1' });
@@ -23,6 +27,10 @@ describe('combat: SAM sites', () => {
     expect(site.guidedMissiles.length).toBe(2);
     expect(radio.filter((r) => r.voice === 'a_sam_launch').length).toBe(1); // rate-limited per salvo
     expect(radio[0].from).toBe('DARKSTAR');
+    // not an urgent call: VoicePlayer only holds Betty behind radio calls of priority ≥ 3, so the
+    // on-board MISSILE warning is never delayed by the AWACS call (i2 critique)
+    expect(radio[0].priority).toBe(SAM_LAUNCH_PRIORITY);
+    expect(radio[0].priority).toBeLessThan(3);
     w.run(1);
     expect(site.state).toBe('guiding');
     expect(site.known).toBe(true);
@@ -33,7 +41,7 @@ describe('combat: SAM sites', () => {
     expect(site.launcherElevation).toBeGreaterThan(0.25);
   });
 
-  it('a clean F-35 is detected at ~25 % of the range of a fighter; beast mode much earlier', () => {
+  it('a clean F-35 is detected at ~25 % of the range of a fighter; beast mode much earlier', SIM, () => {
     const trackRange = (type: 'mig29' | 'f35a', loadout?: 'a2a_stealth' | 'a2a_beast') => {
       const w = new FakeWorld({ difficulty: 'veteran' });
       const site = w.spawnSam({ type: 'sa10', team: 'red', position: v3(0, 0, 0) });
@@ -54,7 +62,7 @@ describe('combat: SAM sites', () => {
     expect(beast).toBeGreaterThan(1.5 * clean);
   });
 
-  it('terrain masking and the SA-6 minimum altitude: low flight under the radar is not engaged', () => {
+  it('terrain masking and the SA-6 minimum altitude: low flight under the radar is not engaged', SIM, () => {
     const w = new FakeWorld();
     const site = w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, 0) });
     const ac = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(3000, 50, -25000), heading: Math.PI, speed: 250 });
@@ -71,7 +79,7 @@ describe('combat: SAM sites', () => {
     expect(s2.trackedTargetId).toBeNull();
   });
 
-  it('pop-up ambush: an EMCON site stays silent until the target is inside ~60 % of its range', () => {
+  it('pop-up ambush: an EMCON site stays silent until the target is inside ~60 % of its range', SIM, () => {
     const w = new FakeWorld();
     const site = w.spawnSam({ type: 'sa15', team: 'red', position: v3(0, 0, 0), emcon: true });
     const ac = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(0, 3000, -20000), heading: Math.PI, speed: 250 });
@@ -85,7 +93,7 @@ describe('combat: SAM sites', () => {
     expect(wokeAt).toBeGreaterThan(0.5 * site.engageRange!);
   });
 
-  it('defensive EMCON: radar shuts down against an inbound AARGM, then comes back on', () => {
+  it('defensive EMCON: radar shuts down against an inbound AARGM, then comes back on', SIM, () => {
     let shutdowns = 0;
     let recovered = 0;
     for (let seed = 1; seed <= 6; seed++) {
@@ -110,7 +118,7 @@ describe('combat: SAM sites', () => {
     expect(recovered).toBeGreaterThan(0);
   });
 
-  it('ZSU-23-4 fires radar-directed bursts at a low jet inside 2.5 km', () => {
+  it('ZSU-23-4 fires radar-directed bursts at a low jet inside 2.5 km', SIM, () => {
     const w = new FakeWorld();
     const zsu = w.spawnSam({ type: 'zsu23', team: 'red', position: v3(0, 0, 0) });
     const ac = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(800, 400, -6000), heading: Math.PI, speed: 220 });
@@ -136,12 +144,13 @@ describe('combat: SAM sites', () => {
     expect(g2.length).toBe(0);
   });
 
-  it('MANPADS: silent on the RWR but the F-35 DAS warns and the site is revealed', () => {
+  it('MANPADS: silent on the RWR but the F-35 DAS warns and the site is revealed; DARKSTAR does not call it', SIM, () => {
     const w = new FakeWorld();
     const team = w.spawnSam({ type: 'sa18', team: 'red', position: v3(0, 0, 0) });
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(300, 700, -7000), heading: Math.PI, speed: 230, loadout: 'a2a_stealth' });
     f35.flight.afterburner = 1;
     const launches = w.record('munition:launch');
+    const radio = w.record('radio');
     let warned = false;
     w.run(40, () => {
       if (f35.incoming.length) warned = true;
@@ -152,5 +161,15 @@ describe('combat: SAM sites', () => {
     expect(warned).toBe(true);
     expect(f35.rwr.some((r) => r.sourceId === team.id)).toBe(false);
     expect(team.known).toBe(true);
+    // an AWACS can't see a shoulder-fired, passive IR launch: no 'SAM launch' call (i2 critique)
+    w.run(3);
+    expect(radio.filter((r) => r.voice === 'a_sam_launch').length).toBe(0);
+  });
+
+  it('crews launch inside a skill-dependent fraction of the kinematic range (monotonic with difficulty)', () => {
+    const f = [0.25, 0.5, 0.75, 0.95].map(launchRangeFraction);
+    for (let i = 1; i < f.length; i++) expect(f[i]).toBeLessThan(f[i - 1]);
+    expect(f[0]).toBeLessThanOrEqual(0.95);
+    expect(f[3]).toBeGreaterThan(0.6);
   });
 });

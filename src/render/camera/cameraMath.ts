@@ -114,10 +114,11 @@ export function sideOf(dir: Vector3, fallback: Vector3, out: Vector3): Vector3 {
  * and the bottom-right stick zone documented in src/input/touch/layout.ts), and the far target lands
  * in the upper-right third (≈71 % x, ≈29 % y). NDC: x right, y up, -1..1.
  */
-export const PADLOCK = { backMin: 24, backMax: 34, jetX: -0.1, jetY: -0.18, tgtX: 0.42, tgtY: 0.42 };
+export const PADLOCK = { distMin: 30, distMax: 44, jetX: -0.1, jetY: -0.18, tgtX: 0.42, tgtY: 0.42 };
 
 const _ray = new Vector3();
 const _eul = new Euler(0, 0, 0, 'YXZ');
+const _qPad = new Quaternion();
 
 /**
  * Camera orientation with no roll (world up) that puts the world direction `dir` (camera → point,
@@ -143,24 +144,18 @@ export function aimAtNdc(dir: Vector3, nx: number, ny: number, fovDeg: number, a
 }
 
 /**
- * Over-the-shoulder padlock camera position: behind the jet on the (smoothed) jet→target line, offset
- * right and up (in the plane perpendicular to the line of sight) by exactly the angles that separate
- * the jet's and the target's screen spots for this FOV/aspect. Returns the world position in `outPos`.
+ * Over-the-shoulder padlock camera position, solved exactly for this FOV/aspect: the roll-free
+ * orientation that puts the (smoothed) line of sight's vanishing point at (tgtX, tgtY) is found first,
+ * then the camera backs off the jet along the ray of the jet's spot (jetX, jetY), `dist` metres. From
+ * there the jet projects at its spot and a far target at its spot, whatever the LOS. World position
+ * in `outPos`.
  */
 export function padlockOffset(jet: Vector3, tgtDir: Vector3, chaseDist: number, fovDeg: number, aspect: number, outPos: Vector3): Vector3 {
-  const back = Math.max(PADLOCK.backMin, Math.min(PADLOCK.backMax, chaseDist * 1.35));
+  const dist = Math.max(PADLOCK.distMin, Math.min(PADLOCK.distMax, chaseDist * 1.75));
+  aimAtNdc(tgtDir, PADLOCK.tgtX, PADLOCK.tgtY, fovDeg, aspect, _qPad);
   const tv = Math.tan((fovDeg * DEG) / 2);
-  const th = tv * aspect;
-  const ah = Math.atan(PADLOCK.tgtX * th) - Math.atan(PADLOCK.jetX * th);
-  const av = Math.atan(PADLOCK.tgtY * tv) - Math.atan(PADLOCK.jetY * tv);
-  sideOf(tgtDir, X, _s1);
-  _s2.crossVectors(_s1, tgtDir).normalize(); // 'up' perpendicular to the LOS
-  if (_s2.y < 0) _s2.negate();
-  return outPos
-    .copy(jet)
-    .addScaledVector(tgtDir, -back)
-    .addScaledVector(_s1, back * Math.tan(ah))
-    .addScaledVector(_s2, back * Math.tan(av));
+  _s1.set(PADLOCK.jetX * tv * aspect, PADLOCK.jetY * tv, -1).normalize().applyQuaternion(_qPad);
+  return outPos.copy(jet).addScaledVector(_s1, -dist);
 }
 
 /**
@@ -292,12 +287,30 @@ export function pickFollowMissile(
   return out;
 }
 
+/** Impact-linger framing (m): lateral / up / back-along-the-wreck's-motion offsets. */
+export const IMPACT_CAM = { side: 190, up: 60, back: 110, wreckMin: 30 };
+
+const _d = new Vector3();
+const _sd = new Vector3();
+
 /**
- * Impact-linger pose: after the missile ends the camera freezes a spot behind/above/right of the
- * impact (along the final track) far enough to frame the fireball and falling wreck.
+ * Impact-linger pose: after the missile ends the camera freezes a spot to the side of, above and
+ * behind the WRECK's motion (a fighter kill throws a ~100 m fireball forward with the wreck's
+ * momentum, so a spot behind the missile — in front of a head-on target — had the wreck and fireball
+ * fly into the lens and white out the frame: i2 review). ~230 m out, the burst fills about half the
+ * 45-50° lens. `wreckVel` is the target's velocity at impact (null / slow: the missile's track is
+ * used). `side` is the camera's current lateral side (keeps the cut on the same side of the action).
  */
-export function impactPose(impact: Vector3, fwd: Vector3, side: Vector3, outPos: Vector3): Vector3 {
-  return outPos.copy(impact).addScaledVector(fwd, -90).addScaledVector(side, 45).add(_s1.set(0, 28, 0));
+export function impactPose(impact: Vector3, fwd: Vector3, side: Vector3, outPos: Vector3, wreckVel: Vector3 | null = null): Vector3 {
+  if (wreckVel && wreckVel.lengthSq() > IMPACT_CAM.wreckMin * IMPACT_CAM.wreckMin) _d.copy(wreckVel).normalize();
+  else _d.copy(fwd);
+  sideOf(_d, side, _sd);
+  if (_sd.dot(side) < 0) _sd.negate();
+  outPos.copy(impact).addScaledVector(_sd, IMPACT_CAM.side).addScaledVector(_d, -IMPACT_CAM.back);
+  outPos.y += IMPACT_CAM.up;
+  // never below the impact (a steep dive / climb along _d must not put the lens under it)
+  if (outPos.y < impact.y + IMPACT_CAM.up * 0.5) outPos.y = impact.y + IMPACT_CAM.up * 0.5;
+  return outPos;
 }
 
 /**

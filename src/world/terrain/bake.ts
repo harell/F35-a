@@ -161,7 +161,7 @@ const PAL = {
     blackSand: hex(0x3e3c3a),
     lava: hex(0x45413a),
     lavaBush: hex(0x33492b),
-    cone: hex(0x4c6e34),
+    cone: hex(0x4a643a),
     clearing: hex(0x5e5646),
     rock: hex(0x6a655e),
     seabed: hex(0x8a8468),
@@ -355,9 +355,17 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
               // Rangitoto: black basalt lava fields under pōhutukawa bush — no pasture underneath
               mix(col, p.lava, p.lavaBush, sstep(0.35, 0.75, aux + 0.12 * n2));
               break;
-            case MAT_CONE:
-              blendInto(col, p.cone, 0.8);
+            case MAT_CONE: {
+              // Grazed grass on the steeper upper slopes, trees / scrub and the suburbs' grey-green
+              // on the gentler foot, broken up by a ~170 m noise: blended by slope instead of one
+              // categorical colour, so a cone no longer ends in a hard bright-green disc edge.
+              const nf = noise.noise(x / 170 + 3.3, z / 170 - 1.7);
+              const steep = sstep(0.05, 0.28, slope + 0.07 * nf);
+              mix(tmp, p.urbanGreen, p.bushLight, sstep(-0.35, 0.45, nf));
+              mix(tmp, tmp, p.cone, steep);
+              blendInto(col, tmp, 0.85 + 0.1 * steep);
               break;
+            }
             case MAT_CLEARING:
               // levelled military pad: dry grass and gravel
               mix(tmp, p.clearing, p.pastureDry, sstep(-0.4, 0.6, n2));

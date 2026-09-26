@@ -25,7 +25,7 @@ import { Vector3 } from 'three';
 import { clamp, smoothstep, wrapPi } from '../../core/math';
 import type { AircraftEntity, MissileEntity, SamSiteEntity } from '../entities';
 import type { CombatCtx } from '../weapons/context';
-import { radio } from '../weapons/context';
+import { gaussian, radio } from '../weapons/context';
 import { kinematicZone, type ZoneGeometry } from '../weapons/dlz';
 import { cmFactor, notchDepth, rollNotchNeed, stepNotch } from '../weapons/ew';
 import { isCombatMissile, launchMunition } from '../weapons/missile';
@@ -35,6 +35,7 @@ import { lineOfSight } from '../sensors/los';
 import { DAS_LAUNCH_RANGE } from '../sensors/Sensors';
 import { SAM_DATA, VISUAL_RANGE, type SamTypeData } from './samData';
 import { updateAaa, type AaaState } from './aaa';
+import { registerRound, updateEndgame } from './endgame';
 
 /** Seconds between detection scans. */
 export const SCAN_PERIOD = 0.2;
@@ -80,6 +81,8 @@ interface SamInternal extends AaaState {
   lastChaffRoll: number;
   /** Point-defence tracks on incoming munitions (id → track). */
   pdTracks: Map<number, PdTrack>;
+  /** Shared (correlated) end-game error sample of the current salvo (endgame.ts). */
+  salvoZ: number;
 }
 
 const internals = new WeakMap<SamSiteEntity, SamInternal>();
@@ -114,6 +117,7 @@ function internal(ctx: CombatCtx, s: SamSiteEntity): SamInternal {
       chaffExposure: 0,
       lastChaffRoll: -999,
       pdTracks: new Map(),
+      salvoZ: 0,
       burstOn: false,
       burstTimer: 0,
       gunAccum: 0,
@@ -161,12 +165,37 @@ export function siteTracks(s: SamSiteEntity, targetId: number): boolean {
 }
 
 /**
- * Chaff / notch broke the site's track on `targetId`: drop it and force a full re-acquisition
- * (search → track over the reaction time), during which guided missiles get no uplink.
+ * Chaff walked the fire-control radar's range/Doppler gate off `targetId` (weapons/
+ * countermeasures.ts, after a successful roll — the round that rolled is already defeated).
+ * Not every salvo is lost with it: a skilled crew may catch the gate walk-off within one scan
+ * (manual re-lock) — then the track only blinks (< 1 scan, shorter than the rounds' uplink
+ * memory) and the other rounds of the salvo keep guiding, each still facing its own end-game
+ * roll with chaff in the gate. Otherwise (and always while the target sits in the notch) the
+ * track is dropped and must be re-acquired from scratch.
  */
 export function breakSiteTrack(ctx: CombatCtx, s: SamSiteEntity, targetId: number): void {
   if (s.trackedTargetId !== targetId) return;
   const si = internal(ctx, s);
+  const t = ctx.world.getEntity(targetId);
+  if (t && t.kind === 'aircraft' && s.radarOn && s.trackProgress >= 1 && liveGuided(ctx, s) > 0) {
+    _eye.copy(s.position);
+    _eye.y += SAM_DATA[s.type].mastHeight;
+    if (ctx.rng() < quickRelockChance(ctx.world.difficulty.aiSkill, notchDepth(ctx, _eye, t))) {
+      si.lostTimer = 1e-3; // uplink blinks until the next scan re-confirms the track
+      return;
+    }
+  }
+  loseSiteTrack(s, si);
+}
+
+/** Chance that the crew re-locks within one scan after a chaff gate walk-off (0 in the notch). */
+export function quickRelockChance(aiSkill: number, notch: number): number {
+  const k = clamp(aiSkill, 0, 1);
+  return 0.6 * k * k * (1 - clamp(notch * 1.5, 0, 1));
+}
+
+/** Drop the fire-control track and force a full re-acquisition (search → track over the reaction time). */
+function loseSiteTrack(s: SamSiteEntity, si: SamInternal): void {
   s.trackedTargetId = null;
   s.trackProgress = 0;
   si.lostTimer = 0;
@@ -231,7 +260,17 @@ function canEngage(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircr
   _geom.targetPos.copy(t.position);
   _geom.targetVel.copy(t.velocity);
   kinematicZone(def, _geom, _zone);
-  return d <= Math.min(data.engageMax * scale, _zone.rMax * 0.95);
+  return d <= Math.min(data.engageMax * scale, _zone.rMax * launchRangeFraction(ctx.world.difficulty.aiSkill));
+}
+
+/**
+ * Fraction of the missile's kinematic max range (vs the target's current track) at which the
+ * crew launches: a green crew fires at max range (a target that turns away outruns the round),
+ * a disciplined one waits for a shot the target can't simply out-run — so difficulty maps to
+ * lethality monotonically instead of harder sites wasting long shots.
+ */
+export function launchRangeFraction(aiSkill: number): number {
+  return 0.95 - 0.25 * clamp(aiSkill, 0, 1);
 }
 
 /** Pick the best target the site can see (closest, engageable first). */
@@ -323,7 +362,7 @@ function slewLauncher(s: SamSiteEntity, data: SamTypeData, t: AircraftEntity | n
   return Math.abs(wrapPi(az - s.launcherAzimuth)) < 0.12 && Math.abs(el - s.launcherElevation) < 0.12;
 }
 
-function fireMissile(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: AircraftEntity): void {
+function fireMissile(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: SamInternal, t: AircraftEntity): void {
   if (!data.missile) return;
   const def = ctx.defs[data.missile];
   if (def.launch !== 'vertical') {
@@ -334,12 +373,19 @@ function fireMissile(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Air
   s.missilesReady--;
   s.guidedMissiles.push(m.id);
   s.lastLaunchTime = ctx.time;
+  registerRound(ctx, m, si.salvoZ);
   revealLaunch(ctx, s);
-  if (t.isPlayer && ctx.time - ctx.chatter.sam > 8) {
+  // AWACS / EW only call launches they can see: a radiating fire-control radar (a passive
+  // MANPADS shot is invisible to them — the DAS/MAWS warns instead). Priority 2 = not an urgent
+  // call: Betty's MISSILE warning is never held behind it (VoicePlayer defers Betty only ≥ 3).
+  if (t.isPlayer && data.radar && s.radarOn && def.guidance !== 'ir' && ctx.time - ctx.chatter.sam > 8) {
     ctx.chatter.sam = ctx.time;
-    radio(ctx, 'DARKSTAR', 'SAM launch, SAM launch!', 'a_sam_launch', t.team, 3);
+    radio(ctx, 'DARKSTAR', 'SAM launch, SAM launch!', 'a_sam_launch', t.team, SAM_LAUNCH_PRIORITY);
   }
 }
+
+/** Radio priority of the DARKSTAR SAM-launch call (below VoicePlayer's urgent threshold of 3). */
+export const SAM_LAUNCH_PRIORITY = 2;
 
 /** DAS sees the launch plume → the site is revealed on the TSD. */
 function revealLaunch(ctx: CombatCtx, s: SamSiteEntity): void {
@@ -452,6 +498,8 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
   }
 
   // ── missile sites ──
+  // per-round end-game miss distance (before weapons/flight.ts moves the missiles this step)
+  if (s.guidedMissiles.length > 0) updateEndgame(ctx, s, si, dt);
   switch (s.state) {
     case 'track': {
       if (!tgt) break;
@@ -460,6 +508,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
         s.state = 'launch';
         si.salvoLeft = Math.min(data.salvo, s.missilesReady, data.channels - liveGuided(ctx, s));
         si.salvoTimer = 0;
+        si.salvoZ = gaussian(ctx.rng);
       }
       break;
     }
@@ -470,7 +519,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
       }
       si.salvoTimer -= dt;
       if (si.salvoTimer <= 0 && aligned && si.salvoLeft > 0 && s.missilesReady > 0) {
-        fireMissile(ctx, s, data, tgt);
+        fireMissile(ctx, s, data, si, tgt);
         si.salvoLeft--;
         si.salvoTimer = data.salvoInterval;
       }
@@ -515,7 +564,7 @@ function maintainAgainstNotch(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeDat
   const def = ctx.defs[data.missile];
   if (si.notchNeed < 0) si.notchNeed = rollNotchNeed(ctx, def.notchResistance, cmFactor(ctx, s.team, t));
   si.notchAccum = stepNotch(si.notchAccum, notchDepth(ctx, _eye, t), SCAN_PERIOD);
-  if (si.notchAccum >= si.notchNeed) breakSiteTrack(ctx, s, t.id);
+  if (si.notchAccum >= si.notchNeed) loseSiteTrack(s, si);
 }
 
 /* ───────────────────────── EMCON vs anti-radiation missiles ───────────────────────── */

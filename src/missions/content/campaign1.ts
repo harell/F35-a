@@ -67,8 +67,9 @@ export const C01: MissionDef = mission({
         ],
       },
     ],
-    hints: [{ id: 'h_start', text: 'Left thumb THROTTLE, right thumb STICK. Climb toward the CAP and follow the steering cue', when: { kind: 'time', t: 2 }, duration: 8 }],
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Good morning. Hostile fighters airborne over the Gulf. You are cleared to engage.', priority: 2 }],
+    // after the title banner (0–2.5 s) and the short opening call — one text block at a time
+    hints: [{ id: 'h_start', text: '{controls}. Climb toward the CAP and follow the steering cue', when: { kind: 'time', t: 9 }, duration: 8 }],
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Fulcrums over the Gulf. Cleared to engage.', priority: 2 }],
     successText: 'Harbour is clear. Nice shooting, Viper.',
   },
 });
@@ -269,7 +270,8 @@ export const C04: MissionDef = mission({
       site('sa6', 'wai_sa6', 'sa6', P.waiW, { heading: 250 }),
       site('zsuW', 'wai_aaa', 'zsu23', rw(-700, 150), { minDifficulty: 'pilot' }),
       site('zsuE', 'wai_aaa', 'zsu23', rw(700, 150)),
-      site('sa15', 'wai_sa15', 'sa15', P.waiC, { minDifficulty: 'pilot' }),
+      // Recruit / Pilot: no Tor — its point defence shot the JDAMs down and made sortie 4 a wall (i2 review)
+      site('sa15', 'wai_sa15', 'sa15', P.waiC, { minDifficulty: 'veteran' }),
       site('manpads', 'wai_manpads', 'sa18', { x: 27300, z: -6900 }, { minDifficulty: 'veteran' }),
       // Recruit / Pilot: the Motutapu Osa is gone (a dogfight with the CAP drifts right into it)
       site('sa8', 'motu_sa8', 'sa8', P.motuN, { minDifficulty: 'veteran' }),
@@ -454,7 +456,7 @@ export const C06: MissionDef = mission({
   script: {
     parTime: 480,
     groups: [
-      flight('flankers', 'su27', 2, { x: 26000, z: -1000 }, 5500, 250, 240, 'cap', { skillOffset: 0.05, task: { kind: 'patrol', x: 21000, z: -2500, radius: 7000, altitude: 5000 } }),
+      flight('flankers', 'su27', 2, { x: 26000, z: -1000 }, 5500, 250, 240, 'cap', { skillOffset: -0.05, task: { kind: 'patrol', x: 21000, z: -2500, radius: 7000, altitude: 5000 } }),
       // Viper 2 takes on the Flankers: a sweep ahead of the player, straight at the CAP
       fighterSweep(1, { x: 5500, z: 5000 }, 6500, 70, 'flankers'),
     ],

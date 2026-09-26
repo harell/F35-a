@@ -16,7 +16,7 @@
  * plus the manifest; tests/ui-pwa.test.ts recomputes it and fails (printing the new value) whenever an
  * asset changes without the version changing, so every asset change also reinstalls this worker.
  */
-const VERSION = '1.1.0-__ASSET_HASH__';
+const VERSION = '1.1.0-cce6704f';
 const PREFIX = 'f35a-';
 const PRECACHE = `${PREFIX}precache-${VERSION}`;
 const RUNTIME = `${PREFIX}runtime-${VERSION}`;

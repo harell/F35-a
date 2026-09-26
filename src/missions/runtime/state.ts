@@ -143,6 +143,12 @@ export class MissionState {
   readonly kills = { air: 0, sam: 0, ground: 0 };
   /** Friendly (blue, non-player) aircraft lost. */
   friendlyLosses = 0;
+  /** 0 = first start of this mission in the session, 1.. = retries (variation.ts). */
+  attempt = 0;
+  /** Hostiles killed by friendly AI aircraft while running, by callsign ("Viper 2" → 3). */
+  readonly teamKills = new Map<string, number>();
+  /** Hostiles killed by the player's own flight (Viper 2…) — the grade weighs the player's share against these. */
+  flightKills = 0;
   /** Hostile entities spawned so far (for the grade's kill share). */
   enemiesSpawned = 0;
   /** A SAM / AAA site has shot at the player. */

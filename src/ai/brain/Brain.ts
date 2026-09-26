@@ -72,8 +72,13 @@ export abstract class Brain implements AiBrain {
     this.role = role;
     this.spawnSkill = opts.skill;
     this.task = opts.task ?? null;
-    this.rng = mulberry32(opts.seed ?? (seedCounter++ * 7919 + 17));
+    this.baseSeed = (opts.seed ?? seedCounter++ * 7919 + 17) >>> 0;
+    this.rngImpl = mulberry32(this.baseSeed);
+    this.rng = () => this.rngImpl();
   }
+
+  private readonly baseSeed: number;
+  private rngImpl: () => number;
 
   /**
    * The pilot's derived skill (reaction, g, aim, defence…). Public and stable: the combat model
@@ -119,6 +124,11 @@ export abstract class Brain implements AiBrain {
 
   private init(ac: AircraftEntity, world: SimWorld): void {
     this.initialised = true;
+    // per-sortie variation: the combat system's salt (random per in-game sortie, derived from the
+    // seed in seeded tests / replays) re-seeds the doctrine RNG, so a retried mission's enemies
+    // roll different shot ranges, trigger delays, beam errors and jinks
+    const salt = (world.combat as unknown as { aiSalt?: unknown }).aiSalt;
+    if (typeof salt === 'number' && salt !== 0) this.rngImpl = mulberry32((this.baseSeed ^ salt) >>> 0);
     this.derivedSkill = deriveSkill(world.difficulty, this.spawnSkill, ac.team, ac.type);
     this.home.copy(ac.position);
     this.homeHeading = ac.flight.heading;

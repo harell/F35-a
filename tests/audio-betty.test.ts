@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BETTY_RULES, BettyScheduler, voiceForWarning } from '../src/audio/voice/betty';
+import { BETTY_RULES, BettyScheduler, MAX_REMINDERS, voiceForWarning } from '../src/audio/voice/betty';
 import type { WarningId } from '../src/core/types';
 
 /** Drive the scheduler like VoicePlayer does, with fixed clip durations; returns the log of clip starts. */
@@ -141,5 +141,57 @@ describe('Betty scheduling', () => {
     const s = new BettyScheduler();
     s.hold(0.45);
     expect(s.update(0, new Set<WarningId>(['fuel_low', 'pull_up']))?.voice).toBe('b_pull_up');
+  });
+});
+
+describe('BettyScheduler iteration-2 rules', () => {
+  const run = (b: BettyScheduler, from: number, to: number, active: Set<WarningId>, dur = 1) => {
+    const said: [number, WarningId][] = [];
+    for (let t = from; t < to; t += 0.05) {
+      const d = b.update(t, active);
+      if (d) {
+        b.started(d.warning, t, dur);
+        said.push([Math.round(t * 100) / 100, d.warning]);
+      }
+    }
+    return said;
+  };
+
+  it('an urgent radio call (deferAll) never holds MISSILE back, but still holds cautions', () => {
+    const b = new BettyScheduler();
+    b.deferAll(3);
+    const said = run(b, 0, 2.9, new Set<WarningId>(['missile', 'fuel_low']));
+    expect(said[0]).toEqual([0, 'missile']);
+    expect(said.some(([, w]) => w === 'fuel_low')).toBe(false);
+  });
+
+  it('non-urgent warnings: first call + MAX_REMINDERS reminders, then quiet until they clear', () => {
+    const b = new BettyScheduler();
+    const on = new Set<WarningId>(['engine_fire']);
+    expect(run(b, 0, 60, on).length).toBe(1 + MAX_REMINDERS);
+    run(b, 60, 70, new Set()); // clears
+    expect(run(b, 70, 71, on).length).toBe(1); // comes back → announced again
+  });
+
+  it('acknowledge() silences active warnings below MISSILE, not MISSILE / PULL UP', () => {
+    const b = new BettyScheduler();
+    const on = new Set<WarningId>(['damage', 'missile']);
+    run(b, 0, 0.5, on);
+    expect(b.acknowledge()).toBe(1); // damage only
+    const said = run(b, 0.5, 40, on);
+    expect(said.every(([, w]) => w === 'missile')).toBe(true);
+    expect(said.length).toBeGreaterThan(10);
+  });
+
+  it('mute() keeps a warning quiet until it expires or unmute()', () => {
+    const b = new BettyScheduler();
+    b.mute('missile', 1.2);
+    const on = new Set<WarningId>(['missile']);
+    expect(run(b, 0, 1.1, on).length).toBe(0);
+    expect(run(b, 1.2, 1.3, on).length).toBe(1);
+    const c = new BettyScheduler();
+    c.mute('missile', 5);
+    c.unmute('missile');
+    expect(run(c, 0, 0.1, on).length).toBe(1);
   });
 });

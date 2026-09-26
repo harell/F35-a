@@ -47,6 +47,12 @@ export interface ControlLaw {
   pathHold: boolean;
   /** Buffet severity at high AoA (1 = normal; Ace 1.6: rougher ride, less precise tracking). */
   buffetGain: number;
+  /**
+   * High-AoA regime (player without flight assist, i.e. Ace): below ~250 KIAS, full aft stick
+   * opens the limiter from the normal 28° to just under the stall AoA (F-35A ≈ 33°) — more nose
+   * authority for a snapshot, paid for with heavy induced-drag energy bleed and buffet.
+   */
+  highAoa?: boolean;
 }
 
 /**
@@ -197,6 +203,12 @@ export function updateControlLaws(
   st.nzCmd += dn > maxStep ? maxStep : dn < -maxStep ? -maxStep : dn;
 
   const al = alphaLimits(perf, _al);
+  if (law.highAoa && sp > 0.8) {
+    // high-AoA regime: blend in below ~250 KIAS (q̄ ≈ 10 kPa), stay 1.5° under the stall
+    const w = (1 - sstep(ad.qbar, 8_000, 12_000)) * sstep(sp, 0.8, 0.95);
+    const hi = perf.alphaStall - 1.5 * DEG;
+    if (hi > al.max) al.max += (hi - al.max) * w;
+  }
   const kA = Math.min(6, 0.6 / tauQ);
   // α̇ ≈ body pitch rate − flight-path rotation rate at the current α (limiter lead term)
   const qss = pitchRateFor(perf, ad, ad.alpha, 0);

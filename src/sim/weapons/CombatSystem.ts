@@ -51,7 +51,31 @@ function emptyZone(weapon: WeaponId, targetId: number | null): LaunchZone {
   return z;
 }
 
-export const createCombatSystem: CreateCombatSystem = () => createCombatSystemSeeded(0xf35a);
+/**
+ * In-game combat system: a fresh random seed per sortie, so every attempt at a mission rolls
+ * different countermeasure / seeker / fuze outcomes AND (via `aiSalt`, mixed into every AI
+ * brain's seed on its first tick) different enemy doctrine rolls — retries are never identical.
+ * Tests and replays use createCombatSystemSeeded(seed) and stay deterministic.
+ */
+export const createCombatSystem: CreateCombatSystem = () => createCombatSystemSeeded(sessionSeed());
+
+function sessionSeed(): number {
+  try {
+    const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint32Array) => Uint32Array } }).crypto;
+    if (c?.getRandomValues) return c.getRandomValues(new Uint32Array(1))[0] >>> 0;
+  } catch {
+    /* fall through */
+  }
+  return (Math.random() * 0x1_0000_0000) >>> 0;
+}
+
+/** Per-combat-system salt the AI mixes into its brain seeds (duck-typed: not part of the contract). */
+export function aiSaltFor(seed: number): number {
+  let h = (seed ^ 0x9e3779b9) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
 
 /** Same as createCombatSystem with an explicit RNG seed (tests / replays). */
 export function createCombatSystemSeeded(seed: number): CombatSystemApi {
@@ -89,7 +113,8 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
 
   const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0 };
 
-  const api: CombatSystemApi = {
+  const api: CombatSystemApi & { aiSalt: number } = {
+    aiSalt: aiSaltFor(seed),
     munitions: MUNITIONS as Record<MunitionId, MunitionDef>,
 
     update(world, dt) {

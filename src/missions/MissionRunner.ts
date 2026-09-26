@@ -21,7 +21,8 @@ import type { LoadoutId } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import type { Action } from './schema';
 import { AwacsController } from './runtime/awacs';
-import { Callouts, type DownReason } from './runtime/callouts';
+import { Callouts, sameFlight, type DownReason } from './runtime/callouts';
+import type { MissionResultExt, TeamKill } from './runtime/resultExt';
 import { evalCondition } from './runtime/conditions';
 import { HintSystem } from './runtime/hints';
 import { activateObjective, createObjectives, failOpenObjectives, objectiveSummary, updateObjectives } from './runtime/objectives';
@@ -31,6 +32,7 @@ import { computeScore } from './runtime/scoring';
 import { awardMedals, buildTips, deathReason } from './runtime/debrief';
 import { RearmController } from './runtime/rearm';
 import { WithdrawalMonitor } from './runtime/withdrawal';
+import { attemptSeed, nextAttempt } from './runtime/variation';
 import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { SurvivalDirector } from './runtime/survival';
@@ -47,12 +49,17 @@ const DEFAULT_COMMIT = 150;
 /** Harbour Bridge navigation span (fraction along the south → north abutment line) and clearance. */
 const BRIDGE_SPAN = { t0: 0.55, t1: 0.74, maxAlt: 41, minAlt: 2, bonus: 250 };
 
+/** Seconds the mission-title banner shows on its own before the opening radio call. */
+export const OPENING_DELAY = 2.5;
+
 class MissionRunnerImpl implements MissionRunnerApi {
   readonly def: MissionDef;
   readonly objectives: ObjectiveStatus[] = [];
   readonly waypoints: Waypoint[] = [];
 
   private readonly s: MissionState;
+  /** World time at which the opening actions run (-1 = done). */
+  private openingAt = -1;
   private readonly awacs: AwacsController;
   private readonly hints: HintSystem;
   private readonly callouts: Callouts;
@@ -72,7 +79,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
 
   constructor(def: MissionDef, deps: RunnerDeps) {
     this.def = def;
-    this.s = new MissionState(def, deps);
+    // retries vary: salted AI seed + jittered hostile spawns (attempt 0 = the designed mission)
+    const attempt = nextAttempt(def.id);
+    this.s = new MissionState(attempt > 0 ? { ...def, seed: attemptSeed(def.seed, attempt) } : def, deps);
+    this.s.attempt = attempt;
     createObjectives(this.s);
     for (const o of this.s.objectives) this.objectives.push(o.status);
     for (const w of def.script.waypoints) {
@@ -149,14 +159,20 @@ class MissionRunnerImpl implements MissionRunnerApi {
     for (const w of s.waypoints) {
       if (w.def.altitude === undefined && w.def.kind === 'target') w.wp.position.y = world.terrain.surfaceHeightAt(w.def.x, w.def.z);
     }
-    s.hud(this.def.title.toUpperCase(), 'info', 4);
-    for (const a of s.script.opening ?? []) this.runAction(a);
+    // sequenced opening (i2 review: title, radio, objectives and hint all landed in the first second
+    // and buried the HMD): the title banner shows alone, then the opening radio follows
+    s.hud(this.def.title.toUpperCase(), 'info', OPENING_DELAY);
+    this.openingAt = world.time + OPENING_DELAY;
     this.isSetup = true;
   }
 
   update(world: SimWorld, dt: number): void {
     const s = this.s;
     if (!this.isSetup || s.disposed || world !== s.world) return;
+    if (this.openingAt >= 0 && world.time >= this.openingAt) {
+      this.openingAt = -1;
+      for (const a of s.script.opening ?? []) this.runAction(a);
+    }
     s.radio.update(world.time);
     this.evalAcc += dt;
     if (this.evalAcc < EVAL_PERIOD - 1e-6) return;
@@ -214,6 +230,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       friendlyLosses: s.friendlyLosses,
       bonus: s.bonus,
       scoreMultiplier: s.difficulty.scoreMultiplier,
+      flightKills: s.flightKills,
       waves: this.survival ? s.waves : undefined,
     });
     const finale = success && this.def.kind === 'campaign' && !!s.script.campaignFinale;
@@ -234,6 +251,12 @@ class MissionRunnerImpl implements MissionRunnerApi {
       damageTaken: Math.round(damageTaken),
       objectives: this.objectives.map((o) => ({ ...o, progress: o.progress ? { ...o.progress } : undefined })),
     };
+    // EXTENSION (not yet in the MissionResult contract): who else scored, for the debrief
+    const team: TeamKill[] = [];
+    for (const [callsign, n] of s.teamKills) team.push({ callsign, kills: n, flight: sameFlight(callsign, s.callsign) });
+    team.sort((a, b) => b.kills - a.kills);
+    (r as MissionResultExt).teamKills = team;
+    (r as MissionResultExt).playerShare = sc.playerShare;
     r.tips = buildTips(s, r);
     r.medals = awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;

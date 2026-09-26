@@ -153,7 +153,11 @@ export function reserveMessage(f: HudFrame, yPref: number, yMin = yPref - 8 * f.
   const a = MessageQueue.alpha(m) * f.declutter;
   if (a <= 0.02) return;
   const u = L.u;
-  const band = f.mode === 'hmd' ? Math.max(200 * u, L.altLeft - L.spdRight - 16 * u) : Math.min(L.W * 0.6, 460 * u);
+  // (external views: centred between the top-left column and the radar inset / kill feed)
+  const band =
+    f.mode === 'hmd'
+      ? Math.max(200 * u, L.altLeft - L.spdRight - 16 * u)
+      : Math.max(220 * u, Math.min(L.W * 0.6, 460 * u, 2 * (L.cx - (L.colX + L.colW) - 10 * u), 2 * (L.insetCx - L.insetR - L.cx - 10 * u)));
   let size = m.tone === 'bad' || m.tone === 'warn' ? 18 : 17;
   let lines = wrap(m.text, Math.max(10, Math.floor(band / pen.charWidth(size))));
   if (lines.length > 2) {
@@ -171,7 +175,7 @@ export function reserveMessage(f: HudFrame, yPref: number, yMin = yPref - 8 * f.
   // slot band jammed (target box / pipper right under it): search the whole centre column between the
   // warning band and the floor; with no free spot at all the message waits (never printed over the
   // target box, never see-through)
-  if (!Number.isFinite(top)) top = occ.freeY(L.cx - hw, L.cx + hw, h, top0, L.row2Y + 16 * u, Math.max(L.msgFloor, L.row2Y + 16 * u + h), 'down');
+  if (!Number.isFinite(top)) top = occ.freeY(L.cx - hw, L.cx + hw, h, top0, L.top + 24 * u, Math.max(L.msgFloor, L.top + 24 * u + h), 'up');
   if (!Number.isFinite(top)) return;
   occ.add(L.cx - hw, top, L.cx + hw, top + h);
   msgPlan.active = true;
@@ -430,7 +434,8 @@ export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMa
   const u = L.u;
   const size = 11.5;
   const cw = pen.charWidth(size);
-  const maxChars = Math.max(16, Math.floor((maxW - 16 * u) / cw));
+  // (room at the right end for the "1/2" page counter: it never sits on the last word)
+  const maxChars = Math.max(16, Math.floor((maxW - 16 * u - 24 * u) / cw));
   const lines = wrap(hint, maxChars);
   if (hint !== hintRef) {
     hintRef = hint;
@@ -438,13 +443,16 @@ export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMa
   }
   const lh = 15 * u;
   const room = Math.max(1, Math.min(3, Math.floor((yMax - y - 8 * u) / lh)));
+  // squeezed to one line (cockpit view with the radio pill + objectives in the column): wait for room
+  // instead of paging a long hint one line at a time
+  if (room < 2 && lines.length > 1) return y;
   const pages = Math.ceil(lines.length / room);
   const page = pages > 1 ? Math.floor((st.clock - hintStart) / HINT_PAGE) % pages : 0;
   const first = page * room;
   const n = Math.min(room, lines.length - first);
   let widest = 0;
   for (let i = 0; i < lines.length; i++) widest = Math.max(widest, lines[i].length);
-  const w = Math.min(maxW, widest * cw + 16 * u);
+  const w = Math.min(maxW, widest * cw + (pages > 1 ? 40 : 16) * u);
   const h = n * lh + 8 * u;
   // never over the target box / pipper / jet (the hint is the least important text on screen)
   if (f.occ.hits(x - 4 * u, y, x - 4 * u + w, y + h, 1)) return y;

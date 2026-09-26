@@ -22,7 +22,7 @@ export const MEDALS = {
   ace_in_a_day: { id: 'ace_in_a_day', name: 'Ace in a Day', description: 'Five air-to-air kills in one sortie.' },
   iron_hand: { id: 'iron_hand', name: 'Iron Hand', description: 'Destroyed two or more SAM / AAA sites in one sortie.' },
   bridge_runner: { id: 'bridge_runner', name: 'Bridge Runner', description: 'Flew under the Auckland Harbour Bridge.' },
-  no_hits: { id: 'no_hits', name: 'Untouchable', description: 'Completed the mission without taking a hit.' },
+  no_hits: { id: 'no_hits', name: 'Untouchable', description: 'Completed the mission without a hit and without losing a friendly.' },
   sharpshooter: { id: 'sharpshooter', name: 'Sharpshooter', description: 'Four or more shots with 80 % or better accuracy.' },
   gunslinger: { id: 'gunslinger', name: 'Gunslinger', description: 'Shot down an enemy aircraft with the GAU-22 gun.' },
   shepherd: { id: 'shepherd', name: 'Good Shepherd', description: 'Brought every friendly aircraft home.' },
@@ -117,6 +117,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     if (r.damageTaken > 40) add('You took heavy damage: defend every missile warning at once — chaff and a hard beam turn beat a missile at range.');
     if (r.friendlyLosses > 0) add('Friendlies went down: stay between the bandits and the package, and shoot the closest threat first.');
     if (r.grade !== 'S' && r.accuracy < 0.5 && r.shotsFired >= 3) add('Tighten your shots: fire inside the SHOOT cue for a much better hit rate.');
+    if (s.flightKills > 0 && s.flightKills >= r.kills.air + r.kills.sam + r.kills.ground)
+      add(`Your wingman scored ${s.flightKills} of the flight's kills: S and A grades need at least half of them to be yours — lead the fight.`);
     if (r.grade === 'S' && r.difficulty !== 'ace') add('Perfect sortie — try it on a harder difficulty.');
   }
   if (tips.length === 0) add(r.success ? 'Faster missions score higher: fly the steering cue and use the AMRAAM’s reach.' : 'Fly Training first: T02 teaches the lock and SHOOT cue, T03 how to survive SAMs.');
@@ -135,7 +137,8 @@ export function awardMedals(s: MissionState, r: MissionResult, finale: boolean):
   if (r.success) {
     if (campaign && (r.grade === 'S' || r.grade === 'A')) give(MEDALS.air_medal);
     if (campaign && r.grade === 'S' && (r.difficulty === 'veteran' || r.difficulty === 'ace')) give(MEDALS.dfc);
-    if (r.damageTaken <= 0) give(MEDALS.no_hits);
+    // the whole flight came home untouched (i2 review: awarded while Viper 2 was lost)
+    if (r.damageTaken <= 0 && r.friendlyLosses === 0) give(MEDALS.no_hits);
     if (r.shotsFired >= 4 && r.accuracy >= 0.8) give(MEDALS.sharpshooter);
     let friendlies = 0;
     for (const g of s.groups.values()) if (g.team === 'blue' && g.air && g.air.role !== 'wingman') friendlies += g.expected;

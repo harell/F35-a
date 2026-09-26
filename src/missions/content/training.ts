@@ -31,7 +31,7 @@ export const T01: MissionDef = mission({
   weather: 'clear',
   briefing: [
     'Welcome to the F-35A Lightning II. Before the shooting starts, get a feel for the jet over the city you are here to defend.',
-    'Right thumb is the side-stick: pull to climb, push to dive, sideways to roll. Left thumb is the throttle: slide it up for power and past the detent for afterburner. The fly-by-wire keeps you inside the 9 g limit — mostly.',
+    'The side-stick sits under your stick thumb (right by default; left in the left-handed layout; Tilt steering replaces it): pull to climb, push to dive, sideways to roll. The throttle is under the other thumb: slide it up for power and past the detent for afterburner. The fly-by-wire keeps you inside the 9 g limit — mostly.',
     'Fly through six rings over the Waitematā and the isthmus — the Harbour Bridge, North Head, Mission Bay, Mt Wellington and Mt Eden — then bring the jet home to Whenuapai. Bonus points if you fly under the bridge.',
   ],
   recommendedLoadout: 'a2a_stealth',

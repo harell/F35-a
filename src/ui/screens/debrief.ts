@@ -4,6 +4,7 @@
  * tips; NEXT (if available) / RETRY / MENU, "Retry on Recruit" after repeated failures, and the
  * campaign ending (result.campaignComplete) before returning to the menu.
  */
+import type { MissionResultExt } from '../../missions/runtime/resultExt';
 import type { MissionResult } from '../../core/contracts';
 import type { Settings } from '../../core/types';
 import { recordMedals, setDifficulty } from '../career';
@@ -85,6 +86,10 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
       ['shield', 'Damage taken', `${Math.round(r.damageTaken)}%`],
       ['skull', 'Friendly losses', String(r.friendlyLosses)],
     ];
+    // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
+    const ext = r as MissionResultExt;
+    for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
+    if (ext.playerShare !== undefined && (ext.teamKills ?? []).some((t) => t.flight && t.kills > 0)) stats.push(['star', 'Your share', formatPercent(ext.playerShare)]);
     const grid = h('div', { class: 'db-stats' });
     stats.forEach(([ic, k, v], i) => {
       const cell = h('div', { class: 'db-stat', html: `<span class="db-si">${icon(ic)}</span><span class="db-sk">${k}</span><span class="db-sv mono">${v}</span>` });

@@ -96,6 +96,8 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   let holdStart = -1;
   const holdPos = new Vector3();
   const holdCam = new Vector3();
+  /** Fireball drift during the linger (the burst is carried forward with the wreck's momentum). */
+  const holdVel = new Vector3();
   const mFwd = new Vector3(0, 0, -1);
   const mSide = new Vector3(1, 0, 0);
   let mSideValid = false;
@@ -144,25 +146,30 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     mSideValid = false;
   }
   /** Kill-cam cut: freeze a spot behind/above/right of the impact along the final track, linger. */
-  function startHold(m: MissileEntity, position: Vector3): void {
+  function startHold(m: MissileEntity, position: Vector3, targetId: number | null): void {
     mFwd.set(0, 0, -1).applyQuaternion(m.quaternion);
     if (m.id !== followMissile || !mSideValid) sideOf(mFwd, _right.set(1, 0, 0).applyQuaternion(m.quaternion), mSide);
     followMissile = m.id;
     holdPos.copy(position);
-    impactPose(holdPos, mFwd, mSide, holdCam);
+    const t = getTarget(targetId ?? m.targetId);
+    const wv = t && t.kind === 'aircraft' ? t.velocity : null;
+    // the look point drifts like the fuel fireball (≈0.55 × wreck velocity, drag ≈ 2.2/s)
+    if (wv) holdVel.copy(wv).multiplyScalar(0.55);
+    else holdVel.set(0, 0, 0);
+    impactPose(holdPos, mFwd, mSide, holdCam, wv);
     clampAboveGround(holdCam, groundY(holdCam.x, holdCam.z), 5);
     camera.position.copy(holdCam);
     holdStart = time;
     holdUntil = time + 3.2;
     holding = true;
   }
-  const offEnd = world.events.on('munition:end', ({ missile, position, reason }) => {
+  const offEnd = world.events.on('munition:end', ({ missile, position, reason, targetId }) => {
     const p = world.player;
     if (mode !== 'missile' || !p || missile.shooterId !== p.id) return;
     const hit = reason === 'hit' || reason === 'proximity';
     if (holding) {
       // a later impact of the salvo, once the first one has had its moment: cut to it
-      if (hit && missile.id !== followMissile && time - holdStart >= 1) startHold(missile, position);
+      if (hit && missile.id !== followMissile && time - holdStart >= 1) startHold(missile, position, targetId);
       return;
     }
     if (missile.id === followMissile) {
@@ -174,13 +181,13 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
           return;
         }
       }
-      startHold(missile, position);
+      startHold(missile, position, targetId);
       return;
     }
     if (hit) {
       // another missile of the salvo scored while the ridden one is still > 2 s out: show that kill
       const f = liveMissile(followMissile);
-      if (!f || guidingTti(f) > 2) startHold(missile, position);
+      if (!f || guidingTti(f) > 2) startHold(missile, position, targetId);
     }
   });
 
@@ -352,11 +359,14 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   function missileCam(dt: number, ctx: FrameContext, fovOut: { v: number }): boolean {
     if (holding) {
       if (time <= holdUntil) {
-        // linger on the impact: fixed camera, slow push-in, narrower lens on the fireball/wreck
+        // linger on the impact: fixed camera, slow push-in, narrower lens on the fireball/wreck; the
+        // look point drifts with the fireball
+        holdPos.addScaledVector(holdVel, dt);
+        holdVel.multiplyScalar(Math.exp(-2.2 * dt));
         camera.position.lerp(holdPos, smoothK(0.08, dt));
         camera.up.set(0, 1, 0);
         camera.lookAt(holdPos);
-        fovOut.v = Math.min(fovOut.v, 45);
+        fovOut.v = Math.min(fovOut.v, 50);
         setPlanes(1, ctx.quality.drawDistance);
         return true;
       }

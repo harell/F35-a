@@ -6,14 +6,13 @@
  * (left-handed layout: the RWR portal moves to the left, away from the right-hand throttle cluster.)
  * Tapping a portal opens it in the large 2D zoom overlay (zoom.ts, drawn by the HUD) where tabs switch
  * its page. The canvas is redrawn at a throttled rate (8–10 Hz, 5 Hz on low quality) and uploaded only
- * then. The UFD (small up-front strip under the glare shield) shares the redraw cadence.
+ * then. (The UFD strip was removed in iteration 2: at ~6 CSS px on a phone it was unreadable and only
+ * duplicated the HMD.)
  */
 import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace } from 'three';
 import type { FrameContext } from '../../core/contracts';
 import type { QualitySettings } from '../../core/types';
-import { RAD, toNm } from '../../core/math';
 import { Pen } from '../hmd/pen';
-import { WEAPON_HUD, WEAPON_IS_AG, mmss } from '../hmd/format';
 import { PAGE_FNS, PC, type PageId, type PcdData } from './pages';
 import { PCD } from './geometry';
 import { pcdZoom } from './zoom';
@@ -36,10 +35,7 @@ const RWR_PAGES: PageId[] = ['RWR', 'ICAWS', 'FUEL', 'ENG'];
 export class PcdDisplay {
   readonly canvas: HTMLCanvasElement;
   readonly texture: CanvasTexture;
-  readonly ufdCanvas: HTMLCanvasElement;
-  readonly ufdTexture: CanvasTexture;
   private readonly pen: Pen;
-  private readonly ufdPen: Pen;
   private readonly portals: Portal[] = [
     { x: 0, w: 256, pages: SMS_PAGES, index: 0 },
     { x: 256, w: 512, pages: ['TSD', 'RDR'], index: 0 },
@@ -68,15 +64,6 @@ export class PcdDisplay {
     this.texture.anisotropy = quality.level === 'high' ? 4 : 1;
     this.period = quality.level === 'low' ? 0.2 : quality.level === 'medium' ? 0.125 : 0.1;
 
-    this.ufdCanvas = document.createElement('canvas');
-    this.ufdCanvas.width = 512;
-    this.ufdCanvas.height = 72;
-    this.ufdPen = new Pen(this.ufdCanvas.getContext('2d')!);
-    this.ufdPen.outlineExtra = 0;
-    this.ufdTexture = new CanvasTexture(this.ufdCanvas);
-    this.ufdTexture.colorSpace = SRGBColorSpace;
-    this.ufdTexture.generateMipmaps = false;
-    this.ufdTexture.minFilter = LinearFilter;
     this.clear();
   }
 
@@ -88,7 +75,6 @@ export class PcdDisplay {
   /** Font finished loading: glyph metrics changed. */
   fontsChanged(): void {
     this.pen.fontsChanged();
-    this.ufdPen.fontsChanged();
     this.dirty = true;
   }
 
@@ -176,9 +162,7 @@ export class PcdDisplay {
     this.data.p = p;
     this.data.flash = Math.floor(performance.now() / 400) % 2 === 0;
     this.drawAll();
-    this.drawUfd(ctx);
     this.texture.needsUpdate = true;
-    this.ufdTexture.needsUpdate = true;
   }
 
   private clear(): void {
@@ -186,10 +170,6 @@ export class PcdDisplay {
     g.fillStyle = PC.bg;
     g.fillRect(0, 0, PCD_W, PCD_H);
     this.pen.reset();
-    const u = this.ufdPen.g;
-    u.fillStyle = '#020405';
-    u.fillRect(0, 0, 512, 72);
-    this.ufdPen.reset();
   }
 
   private drawAll(): void {
@@ -243,35 +223,7 @@ export class PcdDisplay {
     }
   }
 
-  private drawUfd(ctx: FrameContext): void {
-    const pen = this.ufdPen;
-    const g = pen.g;
-    const p = ctx.player!;
-    pen.setFill('#020405');
-    g.fillRect(0, 0, 512, 72);
-    const w = p.selectedWeapon;
-    const mode = WEAPON_IS_AG[w] ? 'A-G' : 'A-A';
-    pen.text(mode, 12, 37, PC.green, 32, 'left');
-    const wp = ctx.mission?.currentWaypoint;
-    if (wp) {
-      const dx = wp.position.x - p.position.x;
-      const dz = wp.position.z - p.position.z;
-      let b = Math.atan2(dx, -dz) * RAD;
-      if (b < 0) b += 360;
-      const name = (wp.label || wp.id || 'WP').toUpperCase().slice(0, 8).trim();
-      const s = name + ' ' + String(Math.round(b) % 360).padStart(3, '0') + '/' + toNm(Math.hypot(dx, dz)).toFixed(0);
-      pen.text(s, 96, 37, PC.cyan, 28, 'left');
-    } else {
-      pen.text(WEAPON_HUD[w], 96, 37, PC.value, 28, 'left');
-    }
-    // separator + mission clock
-    pen.setFill(PC.frame);
-    g.fillRect(398, 14, 3, 44);
-    pen.text(mmss(ctx.time), 500, 37, PC.value, 30, 'right');
-  }
-
   dispose(): void {
     this.texture.dispose();
-    this.ufdTexture.dispose();
   }
 }

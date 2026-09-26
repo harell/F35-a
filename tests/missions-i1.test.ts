@@ -10,7 +10,10 @@
  *  - Instant Action honours difficulty (count scaling, 'mixed' types)
  */
 import { Vector3 } from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// multi-minute real-sim runs: under a parallel full-suite run they exceed the 5 s default on a loaded box
+vi.setConfig({ testTimeout: 60_000 });
 import { AKL } from '../src/core/auckland';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';

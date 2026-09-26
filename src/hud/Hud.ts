@@ -303,7 +303,8 @@ export const createHud: CreateHud = (canvas, events) => {
       if (mode === 'tactical') {
         reserveRadio(f);
         const legendBottom = drawTacticalMap(f, tac);
-        drawObjectives(f, L.colX, legendBottom + 10 * L.u, true, Math.min(L.colW, 200 * L.u), 7);
+        // objectives only with the legend open (tap 'i'): the map itself stays clear
+        if (tac.legendOpen(st.clock)) drawObjectives(f, L.colX, legendBottom + 10 * L.u, true, Math.min(L.colW, 200 * L.u), 7);
         const critical = drawWarningBand(f);
         const cur = st.messages.current;
         if (!critical || (cur && cur.priority >= 4)) {
@@ -347,13 +348,13 @@ export const createHud: CreateHud = (canvas, events) => {
       // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
       const zoomed = cockpit && pcdZoom.open;
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
+      reserveWarningBand(f);
       if (!zoomed) {
         const below = planCues(f);
         const cur = st.messages.current;
         if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));
         else clearMessagePlan();
       } else clearMessagePlan();
-      reserveWarningBand(f);
       reserveRadio(f);
       // 3) everything else: secondary labels make way for the reserved text
       g2.globalAlpha = declutter;
@@ -412,7 +413,9 @@ export const createHud: CreateHud = (canvas, events) => {
       if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') {
         colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
         colY = drawDamage(f, L.colX, colY);
-        colY = drawHint(f, L.colX, colY + 2 * L.u, L.colW, L.colBottom);
+        // (never down onto the weapon block, which rises above the throttle cluster on short screens)
+        const hintMax = hmd && Number.isFinite(zoneExt.wpnTop) ? Math.min(L.colBottom, zoneExt.wpnTop - 10 * L.u) : L.colBottom;
+        colY = drawHint(f, L.colX, colY + 2 * L.u, L.colW, hintMax);
       } else colY = drawDamage(f, L.colX, colY);
       zoneExt.colBottom = colY > colTop + 1 ? colY : NaN;
 
@@ -452,6 +455,7 @@ export const createHud: CreateHud = (canvas, events) => {
     pick(x, y) {
       if (lastMode === 'tactical') {
         // tap a symbol = designate it; tap the map = next range (10 / 20 / 40 km)
+        if (tac.tapLegend(x, y, st.clock)) return null;
         const id = picks.pick(x, y, TAC_PICK_RADIUS);
         if (id == null) tac.cycle();
         return id;

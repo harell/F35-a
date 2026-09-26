@@ -7,6 +7,10 @@
  *  - others speak once on activation plus an occasional reminder
  *  - PULL UP / MISSILE may cut a lower-priority clip short (like the real ICAWS)
  *  - anti-chatter: a warning that flickers off/on is not re-announced within its re-arm time
+ *  - no nagging: below MISSILE, a warning is reminded at most MAX_REMINDERS times per activation,
+ *    and acknowledge() silences the reminders of everything active now (PULL UP / MISSILE never)
+ *  - an urgent radio call (deferAll) never holds PULL UP or MISSILE back
+ *  - mute(): a warning can be silenced for a moment (MISSILE right after the missile hit)
  */
 import type { VoiceId, WarningId } from '../../core/types';
 
@@ -49,12 +53,19 @@ export function voiceForWarning(id: WarningId): VoiceId | undefined {
 
 const RULE_IDS = Object.keys(BETTY_RULES) as WarningId[];
 
+/** Warnings at or above this priority (MISSILE, PULL UP) always repeat and are never held by radio. */
+export const URGENT_BETTY = 90;
+/** Reminders per activation for warnings below URGENT_BETTY (then quiet until it clears). */
+export const MAX_REMINDERS = 2;
+
 export interface BettyDecision {
   warning: WarningId;
   voice: VoiceId;
   priority: number;
   /** Stop the clip that is playing now before starting this one. */
   preempt: boolean;
+  /** A reminder (the warning was already announced during this activation). */
+  repeat: boolean;
 }
 
 interface WarnState {
@@ -62,6 +73,12 @@ interface WarnState {
   /** Announced at least once during the current activation. */
   announced: boolean;
   lastStart: number;
+  /** Reminders spoken during the current activation. */
+  reminders: number;
+  /** Pilot acknowledged this activation: no more reminders until it clears. */
+  acked: boolean;
+  /** Not announced before this time (e.g. MISSILE right after an impact). */
+  mutedUntil: number;
 }
 
 export class BettyScheduler {
@@ -76,14 +93,14 @@ export class BettyScheduler {
   private allHoldUntil = -Infinity;
   /** Master-caution chime ringing: non-urgent clips wait for it, PULL UP / MISSILE don't. */
   private chimeUntil = -Infinity;
-  private readonly decision: BettyDecision = { warning: 'pull_up', voice: 'b_pull_up', priority: 0, preempt: false };
+  private readonly decision: BettyDecision = { warning: 'pull_up', voice: 'b_pull_up', priority: 0, preempt: false, repeat: false };
 
   constructor() {
     this.reset();
   }
 
   reset(): void {
-    for (const id of RULE_IDS) this.st.set(id, { active: false, announced: false, lastStart: -Infinity });
+    for (const id of RULE_IDS) this.st.set(id, { active: false, announced: false, lastStart: -Infinity, reminders: 0, acked: false, mutedUntil: -Infinity });
     this.playing = null;
     this.holdUntil = -Infinity;
     this.repeatHoldUntil = -Infinity;
@@ -100,11 +117,46 @@ export class BettyScheduler {
   }
 
   /**
-   * An urgent threat call (e.g. DARKSTAR "SAM launch") is on the air: every Betty clip except
-   * PULL UP waits until `until`, then speaks right after it (the MAWS tone is already sounding).
+   * An urgent threat call (e.g. DARKSTAR "SAM launch") is on the air: every Betty clip below
+   * MISSILE waits until `until`, then speaks right after it. MISSILE and PULL UP never wait —
+   * the on-board warning is the more timely cue (the radio yields to them instead).
    */
   deferAll(until: number): void {
     if (until > this.allHoldUntil) this.allHoldUntil = until;
+  }
+
+  /**
+   * ICAWS acknowledge: every warning below MISSILE that is active now stops reminding until it
+   * clears and comes back. Returns how many warnings were acknowledged.
+   */
+  acknowledge(): number {
+    let n = 0;
+    for (let i = 0; i < RULE_IDS.length; i++) {
+      const id = RULE_IDS[i];
+      const s = this.st.get(id)!;
+      if (s.active && !s.acked && BETTY_RULES[id]!.priority < URGENT_BETTY) {
+        s.acked = true;
+        s.announced = true; // seen on the ICAWS page: not even a first call
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** Do not announce `warning` before `until` (unmute() lifts it early). */
+  mute(warning: WarningId, until: number): void {
+    const s = this.st.get(warning);
+    if (s && until > s.mutedUntil) s.mutedUntil = until;
+  }
+
+  unmute(warning: WarningId): void {
+    const s = this.st.get(warning);
+    if (s) s.mutedUntil = -Infinity;
+  }
+
+  isMuted(warning: WarningId, now: number): boolean {
+    const s = this.st.get(warning);
+    return !!s && now < s.mutedUntil;
   }
 
   /** Warning whose clip is playing at `now` (null = silent). */
@@ -137,14 +189,19 @@ export class BettyScheduler {
       if (on && !s.active) {
         s.active = true;
         s.announced = false;
+        s.reminders = 0;
+        s.acked = false;
       } else if (!on && s.active) {
         s.active = false;
       }
       if (!s.active) continue;
+      if (now < s.mutedUntil) continue;
+      const urgent = rule.priority >= URGENT_BETTY;
+      if (s.announced && !urgent && (s.acked || s.reminders >= MAX_REMINDERS)) continue;
       const since = now - s.lastStart;
       const due = s.announced ? since >= rule.repeat && (rule.priority >= 100 || now >= this.repeatHoldUntil) : since >= rule.rearm;
       if (!due) continue;
-      if (rule.priority < 100 && now < this.allHoldUntil) continue;
+      if (!urgent && now < this.allHoldUntil) continue;
       if (!bestRule || rule.priority > bestRule.priority) {
         best = id;
         bestRule = rule;
@@ -157,6 +214,7 @@ export class BettyScheduler {
     d.voice = bestRule.voice;
     d.priority = bestRule.priority;
     d.preempt = false;
+    d.repeat = this.st.get(best)!.announced;
     if (this.playing && now < this.playing.until) {
       if (bestRule.preempt && bestRule.priority > this.playing.priority) {
         d.preempt = true;
@@ -174,6 +232,7 @@ export class BettyScheduler {
     const s = this.st.get(warning);
     const rule = BETTY_RULES[warning];
     if (!s || !rule) return;
+    if (s.announced) s.reminders++;
     s.lastStart = now;
     s.announced = true;
     this.playing = { warning, priority: rule.priority, until: now + duration };

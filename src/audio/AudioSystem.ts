@@ -55,6 +55,8 @@ export class AudioSystem implements AudioApi {
   private apiPaused = false;
   private muted = false;
   private volumes = { master: 0.9, sfx: 0.9, voice: 1 };
+  /** Soundtrack volume (Settings.musicVolume; 0 = music off: no notes are scheduled). */
+  private musicVolume = 0.6;
   private readonly unsubs: (() => void)[] = [];
   /** Consecutive failing frames; audio disables itself after too many (never breaks the game). */
   private errors = 0;
@@ -64,6 +66,7 @@ export class AudioSystem implements AudioApi {
   private readonly callouts = new CalloutTracker();
   private readonly defeats = new DefeatTracker();
   private readonly incomingIds = new Int32Array(16);
+  private readonly impactIds = new Int32Array(1);
   /** performance.now() of the last live (unpaused) mission frame. */
   private lastMissionWall = -1e9;
 
@@ -142,6 +145,7 @@ export class AudioSystem implements AudioApi {
       n = Math.min(p.incoming.length, this.incomingIds.length);
       for (let i = 0; i < n; i++) this.incomingIds[i] = p.incoming[i].missileId;
     }
+    voice.noteIncoming(this.incomingIds, n);
     const call = this.callouts.update(voice.clock, air, ground);
     if (call && voice.radio.push(call, 1, voice.clock)) this.stats.callouts++;
     if (this.defeats.update(voice.clock, this.incomingIds, n, alive)) {
@@ -158,7 +162,7 @@ export class AudioSystem implements AudioApi {
   }
 
   private musicMode(): MusicMode {
-    if (this.failed) return 'off';
+    if (this.failed || this.musicVolume <= 0) return 'off';
     if (this.apiPaused || performance.now() - this.lastMissionWall > MENU_AFTER_MS) return 'menu';
     return 'mission';
   }
@@ -166,6 +170,24 @@ export class AudioSystem implements AudioApi {
   setVolumes(master: number, sfx: number, voice: number): void {
     this.volumes = { master, sfx, voice };
     this.core?.env.mixer.setVolumes(master, sfx, voice);
+  }
+
+  setMusicVolume(volume: number): void {
+    const v = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 0.6;
+    this.musicVolume = v;
+    this.core?.env.mixer.setMusicVolume(v);
+  }
+
+  /**
+   * ICAWS acknowledge (not in AudioApi yet — HUD/input can call it via a tap on the warning band):
+   * active cautions/warnings below MISSILE stop reminding until they clear.
+   */
+  acknowledgeWarnings(): number {
+    try {
+      return this.core?.voice.acknowledge() ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   setPaused(paused: boolean): void {
@@ -227,6 +249,7 @@ export class AudioSystem implements AudioApi {
   private initCore(ctx: AudioContext): void {
     const mixer = new Mixer(ctx);
     mixer.setVolumes(this.volumes.master, this.volumes.sfx, this.volumes.voice);
+    mixer.setMusicVolume(this.musicVolume);
     const buffers = createSynthBuffers(ctx);
     const pool = new OneShotPool(ctx, POOL_SIZE.medium, () => mixer.reverbSend);
     const env: SynthEnv = { ctx, mixer, buffers, pool };
@@ -346,6 +369,11 @@ export class AudioSystem implements AudioApi {
     this.on('munition:end', (e) => {
       const l = this.live();
       if (!l || !this.core || e.targetId == null || e.targetId !== pid(l.ctx)) return;
+      if (e.reason === 'hit' || e.reason === 'proximity') {
+        // no "Missile, missile" after the explosion (unless another missile is still inbound)
+        this.impactIds[0] = e.missile.id;
+        this.core.voice.onMissileImpact(this.impactIds, 1);
+      }
       if (this.defeats.onEnd(e.missile.id, e.reason)) {
         missileDefeated(this.core.env, this.core.env.ctx.currentTime + 0.02);
         this.stats.defeated++;
@@ -357,20 +385,20 @@ export class AudioSystem implements AudioApi {
       if (!l || !this.core) return;
       const p = l.ctx.player;
       if (!p || e.attackerId !== p.id || e.entity.team === p.team) return;
-      this.core.music.stinger('kill', 0.35);
+      if (this.musicVolume > 0) this.core.music.stinger('kill', 0.35);
       this.stats.kills++;
     });
     this.on('mission:end', (e) => {
       const core = this.core;
       if (!core || this.failed) return;
-      core.music.stinger(e.success ? 'win' : 'fail', 0.3);
+      if (this.musicVolume > 0) core.music.stinger(e.success ? 'win' : 'fail', 0.3);
       this.stats.stingers++;
       if (e.success) core.voice.radio.push('p_copy', 1, core.voice.clock);
     });
     this.on('radio', (e) => {
       const l = this.live();
       if (!l || !this.core || e.team === 'red') return;
-      this.core.voice.onRadio(e.voice, e.priority ?? 1);
+      this.core.voice.onRadio(e.voice, e.priority ?? 1, e.text, e.from);
     });
   }
 }

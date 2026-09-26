@@ -14,12 +14,12 @@
 import { Vector3 } from 'three';
 import { G, clamp } from '../../core/math';
 import { airDensity } from '../../core/atmosphere';
-import type { AnyEntity, SamSiteEntity } from '../entities';
+import type { AircraftEntity as AircraftEnt, AnyEntity, SamSiteEntity } from '../entities';
 import type { CombatCtx } from './context';
 import { acState, gaussian, SENSOR_DIV } from './context';
 import type { CombatMissile } from './missile';
 import { aircraftRcs, irIntensity, rcsRangeFactor } from '../sensors/signatures';
-import { cmFactor, notchDepth, rollNotchNeed, stepNotch } from './ew';
+import { AAM_IMMUNE_CAP, cmFactor, notchDepth, rollNotchNeed, stepNotch } from './ew';
 import { breakSiteTrack, siteTracks } from '../sam/SamSystem';
 
 export { notchDepth } from './ew';
@@ -110,6 +110,26 @@ export function armTerminalChance(ctx: CombatCtx, errorM: number): number {
 }
 
 /**
+ * Midcourse datalink error (m) from the launcher's track quality. While the launcher's radar sees
+ * the target in its Doppler notch the error grows (~(0.5 + 0.5·k)·150 m per s·depth, squared ramp);
+ * it recovers slowly (0.7/s) once the target leaves the notch. An F-35 launcher's fused track (DAS /
+ * EOTS / MADL) does not notch. A seeker immune to the notch (notchNeed ∞) is fed a clean track.
+ */
+export function midcourseError(ctx: CombatCtx, m: CombatMissile, launcher: AircraftEnt, target: AircraftEnt, dt: number): number {
+  if (launcher.type === 'f35a' || m.notchNeed === Infinity) return 0;
+  const depth = notchDepth(ctx, launcher.position, target);
+  m.dlNotch = stepNotch(m.dlNotch, depth, dt);
+  if (m.dlNotch <= 0) return 0;
+  if (m.dlErrDir.lengthSq() < 0.5) {
+    m.dlErrDir.set(gaussian(ctx.rng), gaussian(ctx.rng) * 0.4, gaussian(ctx.rng));
+    if (m.dlErrDir.lengthSq() < 1e-6) m.dlErrDir.set(1, 0, 0);
+    m.dlErrDir.normalize();
+  }
+  const k = cmFactor(ctx, m.team, target);
+  return 150 * (0.5 + 0.5 * k) * m.dlNotch * (1 + 0.5 * m.dlNotch);
+}
+
+/**
  * TWS midcourse: re-roll the launcher's track error at each TWS revisit. The error grows with the
  * range to the target (≈ 0.6 km at 10 km, 1.35 km at 20 km, 2.3 km at 30 km, 1σ per horizontal axis).
  */
@@ -127,6 +147,10 @@ function rollTwsError(ctx: CombatCtx, m: CombatMissile, range: number): void {
  */
 export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number): void {
   const def = m.cdef;
+  if (m.dudAt >= 0 && ctx.time - m.launchTime >= m.dudAt && !m.trackBroken) {
+    m.trackBroken = true; // rookie shot went stupid (Recruit forgiveness, see launchMissile)
+    memoryError(ctx, m);
+  }
   if (!m.guided || m.trackBroken) {
     m.seekerLocked = false;
     return;
@@ -200,9 +224,12 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
     if (target.kind !== 'aircraft') return;
     if (m.notchBlank > 0) m.notchBlank -= dt;
     // this seeker's susceptibility to the Doppler notch (∞ = its processing is not fooled)
-    if (m.notchNeed < 0) m.notchNeed = rollNotchNeed(ctx, def.notchResistance, cmFactor(ctx, m.team, target));
+    if (m.notchNeed < 0) m.notchNeed = rollNotchNeed(ctx, def.notchResistance, cmFactor(ctx, m.team, target), AAM_IMMUNE_CAP);
     const seekRange = def.seekerRange * rcsRangeFactor(aircraftRcs(target, m.position));
     const dist = m.position.distanceTo(target.position);
+    // the seeker's Doppler filter starts working on the target from its search basket (before it
+    // can lock): a beam held while the missile closes counts toward the notch break
+    if (!m.seekerLocked && !m.everLocked && dist < seekRange * 1.5) m.notchAccum = stepNotch(m.notchAccum, notchDepth(ctx, m.position, target), dt);
     if (m.seekerLocked) {
       if (dist <= seekRange * 1.3 && inGimbal(m, target.position, def.gimbalLimit)) {
         setEstimate(ctx, m, target.position, target.velocity);
@@ -236,17 +263,21 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
         const fresh = c && (launcher.type === 'f35a' ? c.lastSeen >= ctx.time - 0.6 : c.radarTime >= ctx.time - 0.6);
         if (c && fresh) {
           const stt = launcher.radar.lockedId === target.id && launcher.radar.emitting;
+          // the uplink is only as good as the launcher's track: a target beaming the LAUNCHER's
+          // radar (its Doppler notch, clutter behind) or chaff walking its gates off drags the
+          // uplinked position / velocity away — the seeker then searches the wrong basket
+          const dlErr = midcourseError(ctx, m, launcher, target, dt);
           if (stt || !m.tws) {
-            m.estPos.copy(c.position);
-            m.estVel.copy(c.velocity);
+            m.estPos.copy(c.position).addScaledVector(m.dlErrDir, dlErr);
+            m.estVel.copy(c.velocity).addScaledVector(m.dlErrDir, dlErr * 0.12);
             m.estTime = c.lastSeen;
             m.lostTimer = 0;
           } else if (ctx.time >= m.twsNext) {
             // TWS: coarse, noisy updates at the scan revisit rate (error grows with range)
             m.twsNext = ctx.time + TWS_REVISIT;
             rollTwsError(ctx, m, launcher.position.distanceTo(c.position));
-            m.estPos.copy(c.position).add(m.twsPosErr);
-            m.estVel.copy(c.velocity).add(m.twsVelErr);
+            m.estPos.copy(c.position).add(m.twsPosErr).addScaledVector(m.dlErrDir, dlErr);
+            m.estVel.copy(c.velocity).add(m.twsVelErr).addScaledVector(m.dlErrDir, dlErr * 0.12);
             m.estTime = c.lastSeen;
             m.lostTimer = 0;
           }
@@ -266,7 +297,9 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
         // a target sitting in the Doppler notch is very hard to (re)acquire — unless this seeker's
         // processing isn't fooled by it (immune roll)
         const depth = m.notchNeed === Infinity ? 0 : notchDepth(ctx, m.position, target);
-        const pAcq = depth > 0.5 ? 0.02 : 1 - depth * (1 - def.notchResistance);
+        // a beam already held long enough from the basket: the Doppler filter never finds it
+        const beaten = m.notchNeed !== Infinity && m.notchAccum >= m.notchNeed;
+        const pAcq = beaten || depth > 0.5 ? 0.02 : 1 - depth * (1 - def.notchResistance);
         if (ctx.rng() < pAcq) {
           m.seekerLocked = true;
           m.everLocked = true;

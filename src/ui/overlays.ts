@@ -2,6 +2,7 @@
  * F35-A UI — overlays that live above the screens: loading (progress + rotating tips), rotate-your-
  * phone hint, and toasts.
  */
+import { currentControlPrefs, formatControls } from '../missions/runtime/controlsText';
 import { icon } from './art/icons';
 import { logoMark } from './art/logo';
 import { h } from './dom';
@@ -80,6 +81,11 @@ export class LoadingOverlay {
   }
 }
 
+/** Rotate-overlay sub-line for the saved control scheme and handedness. */
+export function rotateText(): string {
+  return `F35-A flies in landscape — ${formatControls('{controls}', currentControlPrefs()).replace(/^./, (c) => c.toLowerCase())}.`;
+}
+
 export class RotateOverlay {
   readonly el: HTMLDivElement;
   private on = false;
@@ -89,14 +95,20 @@ export class RotateOverlay {
     el.innerHTML =
       `<div class="rt-phone"><div class="rt-screen"></div></div>` +
       `<div class="rt-t">Rotate your phone</div>` +
-      `<div class="rt-s">F35-A flies in landscape — throttle under your left thumb, stick under your right.</div>`;
+      `<div class="rt-s"></div>`;
     host.root.appendChild(el);
     this.el = el;
+    this.sub = el.querySelector('.rt-s') as HTMLDivElement;
+    this.sub.textContent = rotateText();
   }
+
+  private readonly sub: HTMLDivElement;
 
   set(visible: boolean): void {
     if (visible === this.on) return;
     this.on = visible;
+    // follows the current handedness / scheme (the player may have changed it since load)
+    if (visible) this.sub.textContent = rotateText();
     this.el.classList.toggle('is-on', visible);
   }
 }

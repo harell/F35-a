@@ -5,13 +5,20 @@
  * clip → squelch tail → gap). The queue is short: urgent calls jump ahead, stale chatter
  * expires, identical clips are not stacked.
  */
-import type { VoiceId } from '../../core/types';
+import type { ClipId, SpeechToken } from './radioSpeech';
 
 export interface RadioItem {
-  voice: VoiceId;
+  /** The call's voice clip (a composed call: its VoiceId hint — for logs / de-duplication). */
+  voice: ClipId;
   priority: number;
   /** Time the message was queued (s). */
   time: number;
+  /** What to say, in order (null = just `voice`). */
+  clips: readonly SpeechToken[] | null;
+  /** De-duplication key (the voice id, or the subtitle of a composed call). */
+  key: string;
+  /** Times this call was cut off by Betty (re-queued once at most). */
+  cuts?: number;
 }
 
 export class RadioQueue {
@@ -30,9 +37,9 @@ export class RadioQueue {
   }
 
   /** Queue a message. Returns false if it was dropped (duplicate, or queue full of more important calls). */
-  push(voice: VoiceId, priority: number, time: number): boolean {
+  push(voice: ClipId, priority: number, time: number, clips: readonly SpeechToken[] | null = null, key: string = voice): boolean {
     for (const it of this.items) {
-      if (it.voice === voice) {
+      if (it.key === key) {
         // same clip already waiting: keep one, upgrade its priority/freshness
         it.priority = Math.max(it.priority, priority);
         it.time = time;
@@ -50,8 +57,16 @@ export class RadioQueue {
       if (this.items[worst].priority >= priority) return false;
       this.items.splice(worst, 1);
     }
-    this.items.push({ voice, priority, time });
+    this.items.push({ voice, priority, time, clips, key });
     return true;
+  }
+
+  /** Put a call that was cut off back in the queue (it plays again after what cut it). */
+  requeue(item: RadioItem, time: number): void {
+    item.time = time;
+    item.cuts = (item.cuts ?? 0) + 1;
+    for (const it of this.items) if (it.key === item.key) return;
+    this.items.push(item);
   }
 
   /** Remove and return the next message to play (highest priority, then oldest); drops expired ones. */

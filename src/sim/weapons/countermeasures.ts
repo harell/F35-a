@@ -34,15 +34,49 @@ const REPEAT = 0.6;
 const _v = new Vector3();
 const _w = new Vector3();
 
+/** Auto-CMDS (Recruit): bit 1 = flares (enemy IR missile inside this range, m), bit 2 = chaff. */
+export const AUTO_FLARE_RANGE = 4_000;
+/** Auto-CMDS: chaff when an enemy radar missile's time to impact drops below this (s). */
+export const AUTO_CHAFF_TTI = 8;
+
+/**
+ * Automatic countermeasure dispenser program for the human player on Recruit (the F-35's CMDS
+ * can run automatic programs cued by the MAWS / RWR): a new pilot who does not defend yet still
+ * gets flares against IR missiles inside 4 km and chaff against radar missiles in the last ~8 s.
+ * Air-to-air missiles only (defeating SAMs stays a skill to learn). Returns bit 1 for flares, bit 2
+ * for chaff.
+ */
+export function autoCms(ctx: CombatCtx, ac: AircraftEntity): number {
+  if (!ac.isPlayer || ctx.world.difficulty.id !== 'recruit') return 0;
+  let out = 0;
+  for (const m of ctx.world.missiles) {
+    if (!m.alive || m.targetId !== ac.id || m.team === ac.team || !isCombatMissile(m) || m.trackBroken || m.cdef.category !== 'aam') continue;
+    const dx = m.position.x - ac.position.x;
+    const dy = m.position.y - ac.position.y;
+    const dz = m.position.z - ac.position.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (m.cdef.guidance === 'ir') {
+      if (d < AUTO_FLARE_RANGE) out |= 1;
+    } else if (m.cdef.guidance === 'active_radar' || m.cdef.guidance === 'semi_active' || m.cdef.guidance === 'command') {
+      const vc = d > 1 ? -((m.velocity.x - ac.velocity.x) * dx + (m.velocity.y - ac.velocity.y) * dy + (m.velocity.z - ac.velocity.z) * dz) / d : 0;
+      if (vc > 50 && d / vc < AUTO_CHAFF_TTI) out |= 2;
+    }
+  }
+  return out;
+}
+
 /** Run an aircraft's flare/chaff programs for this step. */
 export function updateCountermeasurePrograms(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, dt: number): void {
   const inp = ac.input;
+  const auto = ac.isPlayer ? autoCms(ctx, ac) : 0;
+  const flareIn = inp.flare || (auto & 1) !== 0;
+  const chaffIn = inp.chaff || (auto & 2) !== 0;
   // ── flares ──
-  if (inp.flare && !st.prevFlare) {
+  if (flareIn && !st.prevFlare) {
     st.flareLeft = SALVO;
     st.flareTimer = 0;
     st.flareRepeat = REPEAT;
-  } else if (inp.flare) {
+  } else if (flareIn) {
     st.flareRepeat -= dt;
     if (st.flareRepeat <= 0 && st.flareLeft === 0) {
       st.flareLeft = SALVO;
@@ -59,11 +93,11 @@ export function updateCountermeasurePrograms(ctx: CombatCtx, ac: AircraftEntity,
     }
   }
   // ── chaff ──
-  if (inp.chaff && !st.prevChaff) {
+  if (chaffIn && !st.prevChaff) {
     st.chaffLeft = SALVO;
     st.chaffTimer = 0;
     st.chaffRepeat = REPEAT;
-  } else if (inp.chaff) {
+  } else if (chaffIn) {
     st.chaffRepeat -= dt;
     if (st.chaffRepeat <= 0 && st.chaffLeft === 0) {
       st.chaffLeft = SALVO;
@@ -79,8 +113,8 @@ export function updateCountermeasurePrograms(ctx: CombatCtx, ac: AircraftEntity,
       if (ac.chaff > 0) dispense(ctx, ac, 'chaff', st.chaffLeft === SALVO - 1);
     }
   }
-  st.prevFlare = inp.flare;
-  st.prevChaff = inp.chaff;
+  st.prevFlare = flareIn;
+  st.prevChaff = chaffIn;
 }
 
 /** Release one decoy. `firstOfSalvo` triggers the seduction rolls. */
@@ -153,12 +187,19 @@ function rollChaff(ctx: CombatCtx, ac: AircraftEntity, chaff: DecoyEntity): void
   for (const m of world.missiles) {
     if (!m.alive || !isCombatMissile(m) || m.targetId !== ac.id || m.trackBroken) continue;
     const g = m.cdef.guidance;
-    // only radars that are tracking the target right now can be seduced
-    const tracking = (g === 'active_radar' && m.seekerLocked) || g === 'semi_active' || g === 'command';
+    // only radars that are tracking the target right now can be seduced: the active seeker once
+    // locked or searching its basket, and — in the datalink midcourse — the LAUNCHER's radar
+    let midcourse: AircraftEntity | null = null;
+    if (g === 'active_radar' && !m.seekerLocked && !m.everLocked && m.cdef.datalink) {
+      const l = world.getEntity(m.shooterId);
+      if (l && l.kind === 'aircraft' && l.alive && l.type !== 'f35a') midcourse = l;
+    }
+    const tracking = (g === 'active_radar' && (m.seekerLocked || midcourse !== null || inBasket(m, ac))) || g === 'semi_active' || g === 'command';
     if (!tracking) continue;
     let radarPos = m.position;
     let ew: { chaffExposure: number; lastChaffRoll: number } = m;
-    if (g !== 'active_radar') {
+    if (midcourse) radarPos = midcourse.position;
+    else if (g !== 'active_radar') {
       const guider = world.getEntity(m.guiderId);
       if (!guider || !guider.alive) continue;
       radarPos = guider.position;
@@ -189,7 +230,11 @@ function rollChaff(ctx: CombatCtx, ac: AircraftEntity, chaff: DecoyEntity): void
     const p = clamp(CHAFF_BASE * f * (1 - m.cdef.chaffResistance) * k * Math.pow(CHAFF_DIMINISH, ew.chaffExposure), 0, 0.9);
     ew.chaffExposure += timing * timing;
     if (ctx.rng() < p) {
-      if (g === 'active_radar') seduce(m, chaff);
+      if (midcourse) {
+        // the launcher's range/Doppler gates walk off onto the chaff: the uplinked track drifts
+        // (seeker basket in the wrong place) — the missile flies on, but blind to the real target
+        m.dlNotch = Math.max(m.dlNotch, 3);
+      } else if (g === 'active_radar') seduce(m, chaff);
       else {
         // the fire-control radar's range/Doppler gate walked off onto the chaff: its track is
         // gone (every missile it guides loses the uplink) and this missile is defeated
@@ -199,6 +244,11 @@ function rollChaff(ctx: CombatCtx, ac: AircraftEntity, chaff: DecoyEntity): void
       }
     }
   }
+}
+
+/** Active seeker (not yet locked) already searching its basket around the target (pitbull range). */
+function inBasket(m: CombatMissile, ac: AircraftEntity): boolean {
+  return m.position.distanceTo(ac.position) < m.cdef.activeRange && m.position.distanceTo(ac.position) < m.cdef.seekerRange * 0.5;
 }
 
 function seduce(m: CombatMissile, decoy: DecoyEntity): void {

@@ -2,7 +2,7 @@
   "name": "f35-a",
   "private": true,
   "version": "1.0.0",
-  "description": "F35-A — mobile browser combat flight simulator",
+  "description": "F35-A \u2014 mobile browser combat flight simulator",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -10,8 +10,10 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "node e2e/smoke.mjs",
-    "voices": "bash tools/gen-voices.sh"
+    "e2e": "node e2e/missions.mjs",
+    "voices": "bash tools/gen-voices.sh",
+    "build:artifact": "vite build && node tools/build-artifact.mjs",
+    "icons": "node tools/gen-icons.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

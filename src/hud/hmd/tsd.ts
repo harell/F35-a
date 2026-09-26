@@ -10,6 +10,7 @@ import type { AircraftEntity } from '../../sim/entities';
 import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
 import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
+import { chartPaths } from './tacmap';
 
 /** Label de-collision inside one TSD draw. */
 const lblOcc = new Occupancy(64);
@@ -35,6 +36,8 @@ export interface TsdColors {
   ground: string;
   route: string;
   highlight: string;
+  /** Coastline stroke (optional). */
+  coast?: string;
 }
 
 export interface TsdStyle {
@@ -59,6 +62,8 @@ export interface TsdStyle {
   bullseye: boolean;
   /** Line width scale. */
   lw: number;
+  /** Faint Auckland coastline / islands under the symbols (heading-up). */
+  coast?: boolean;
 }
 
 export function makeTsdStyle(): TsdStyle {
@@ -114,6 +119,26 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   lblOcc.addBox(st.cx, st.cy, 9 * st.sym, 9 * st.sym);
   const all = st.labels === true;
   const key = st.labels === 'key' || all;
+
+  // faint coastline + islands (Auckland theatre): the cached tactical-map Path2D, transformed heading-up
+  if (st.coast && (ctx.mission?.def?.theater ?? 'auckland') === 'auckland') {
+    const ch = chartPaths();
+    if (ch) {
+      const k = 1000 * scale;
+      g.save();
+      g.transform(cosH * k, -sinH * k, sinH * k, cosH * k, ocx - (cosH * ox + sinH * oz) * scale, ocy + (sinH * ox - cosH * oz) * scale);
+      g.globalAlpha *= 0.55;
+      g.lineJoin = 'round';
+      g.fillStyle = 'rgba(40,110,150,0.16)';
+      g.fill(ch.water);
+      g.strokeStyle = c.coast ?? 'rgba(120,180,200,0.7)';
+      g.lineWidth = (1.6 * lw) / k;
+      g.stroke(ch.water);
+      g.stroke(ch.islands);
+      g.restore();
+      pen.reset();
+    }
+  }
 
   // range rings
   pen.setDash('dash');

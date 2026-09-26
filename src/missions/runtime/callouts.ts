@@ -16,6 +16,12 @@ import { AircraftEntity, type AnyEntity } from '../../sim/entities';
 import { aircraftHudName, killHudText } from './names';
 import type { MissionState } from './state';
 
+/** "Viper 2" and "Viper 1" fly in the same flight (same callsign stem). */
+export function sameFlight(a: string, b: string): boolean {
+  const stem = (c: string) => c.replace(/\s*\d+$/, '').trim().toLowerCase();
+  return stem(a) === stem(b);
+}
+
 export type DownReason = GameEventMap['player:down']['reason'];
 
 export class Callouts {
@@ -129,6 +135,10 @@ export class Callouts {
         // scripted package strike: the trigger's own radio call covers it
       } else if (attacker instanceof AircraftEntity && attacker.team === p.team) {
         // wingman / friendly package kill: HUD line only — AI pilots make their own "Splash one!" call
+        if (running) {
+          s.teamKills.set(attacker.callsign, (s.teamKills.get(attacker.callsign) ?? 0) + 1);
+          if (sameFlight(attacker.callsign, s.callsign)) s.flightKills++;
+        }
         const who = attacker.callsign.toUpperCase();
         s.hud(`${who}: ${entity.kind === 'aircraft' ? `SPLASH ${aircraftHudName(entity.type)}` : killHudText(entity)}`, 'info', 2.5);
       } else if (entity.kind === 'aircraft' && p.alive && entity.position.distanceTo(p.position) < 40_000) {

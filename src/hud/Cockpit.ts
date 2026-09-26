@@ -3,7 +3,7 @@
  *
  * Own Scene + near-plane camera (0.02–20 m) at the pilot's eye, oriented like the main camera relative
  * to the airframe (head look, shake and buffet included) so the cockpit is rock-solid against the
- * world. Geometry: glare shield with lip, hood face with the up-front display (UFD), the 20x8 in
+ * world. Geometry: glare shield with lip, hood face (the up-front display strip was dropped: unreadable on a phone), the 20x8 in
  * panoramic cockpit display (PCD, one wide CanvasTexture split into tappable portals), instrument
  * panel body, canopy rails / rear bow, side consoles, and a side-stick + throttle that follow the
  * pilot's inputs. Lighting follows the mission's time of day (sun direction in the body frame), with a
@@ -36,7 +36,7 @@ import type { CockpitApi, CreateCockpit, FrameContext } from '../core/contracts'
 import type { TimeOfDay, Weather } from '../core/types';
 import { DEG } from '../core/math';
 import { loadHudFont } from './font';
-import { PCD, UFD, UFD_POS, buildCockpit, pcdFrame } from './cockpit/geometry';
+import { PCD, buildCockpit, pcdFrame } from './cockpit/geometry';
 import { PcdDisplay } from './cockpit/pcd';
 import { pcdZoom } from './cockpit/zoom';
 
@@ -89,11 +89,6 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   screen.quaternion.copy(fr.quat);
   screen.name = 'pcd';
   scene.add(screen);
-  const ufdMat = new MeshBasicMaterial({ map: pcd.ufdTexture, toneMapped: false });
-  const ufd = new Mesh(new PlaneGeometry(UFD.width, UFD.height), ufdMat);
-  ufd.position.copy(UFD_POS);
-  ufd.rotation.x = 0.12;
-  scene.add(ufd);
 
   void loadHudFont(() => pcd.fontsChanged());
 
@@ -126,7 +121,6 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     // displays a touch dimmer at night so they don't glare
     const dim = tod === 'night' ? 0.82 : 1;
     screenMat.color.setScalar(dim);
-    ufdMat.color.setScalar(dim);
   }
 
   const api: CockpitApi = {
@@ -228,7 +222,6 @@ export const createCockpit: CreateCockpit = (events, quality) => {
       controlMat.dispose();
       gripMat.dispose();
       screenMat.dispose();
-      ufdMat.dispose();
       pcd.dispose();
       scene.clear();
     },

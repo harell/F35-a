@@ -206,7 +206,8 @@ describe('flight model — Ace keeps the F-35 carefree handling (regression i1)'
       stalled ||= ac.flight.stalled;
       depMax = Math.max(depMax, ac.sim!.departure);
     });
-    expect(aMax / DEG).toBeLessThan(29);
+    // i2: Ace opens the high-AoA regime at low speed (up to 1.5° under the 35° stall), still carefree
+    expect(aMax / DEG).toBeLessThan(34);
     expect(stalled).toBe(false);
     expect(depMax).toBeLessThan(0.01);
   });

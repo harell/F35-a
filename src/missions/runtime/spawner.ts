@@ -10,6 +10,7 @@ import type { AiTask } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
 import { difficultyAtLeast, firstAlive, type GroupRt, type MissionState } from './state';
+import { JITTER_HDG, JITTER_POS, jitter } from './variation';
 
 /** Everything stays inside this half-extent (m). */
 export const SPAWN_LIMIT = 37_000;
@@ -60,7 +61,11 @@ export function scaleTotal(counts: number[], scale: number, maxEach = 4): number
 /** AI skill for a group member. */
 export function groupSkill(def: AircraftGroupDef, aiSkill: number): number {
   if (def.skill !== undefined) return clamp(def.skill, 0, 1);
-  const base = def.team === 'blue' ? 0.65 + 0.3 * aiSkill : aiSkill;
+  // The player's fighting-wing wingman (Viper 2…) is a generous shooter only on Recruit; from Pilot up
+  // it is a steady but average wingman so the player's missiles decide the fight (i2 review: Viper 2 did most
+  // of the killing and the player got an A with one kill). Other friendlies stay competent.
+  const ownFlight = def.team === 'blue' && def.role === 'wingman';
+  const base = ownFlight ? (aiSkill < 0.4 ? 0.75 : 0.6) : def.team === 'blue' ? 0.65 + 0.3 * aiSkill : aiSkill;
   return clamp(base + (def.skillOffset ?? 0), 0, 1);
 }
 
@@ -189,7 +194,12 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
   const def = g.air!;
   const world = s.world;
   const n = g.expected;
-  const heading = def.heading * DEG;
+  // retries: hostile flights appear up to ±1.5 km / ±10° from the designed point (variation.ts)
+  const jk = s.attempt > 0 && def.team === 'red' ? s.enemiesSpawned + g.id.length * 17 : -1;
+  const hdgDeg = jk >= 0 ? def.heading + jitter(s.def.seed, jk) * JITTER_HDG : def.heading;
+  const ox = jk >= 0 ? jitter(s.def.seed, jk + 1) * JITTER_POS : 0;
+  const oz = jk >= 0 ? jitter(s.def.seed, jk + 2) * JITTER_POS : 0;
+  const heading = hdgDeg * DEG;
   const fx = Math.sin(heading);
   const fz = -Math.cos(heading);
   const rx = Math.cos(heading);
@@ -208,9 +218,9 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
   for (let i = 0; i < n; i++) {
     formationOffset(formation, i, n, spacing, _slot);
     const pos = new Vector3(
-      def.x + rx * _slot.right - fx * _slot.aft,
+      def.x + ox + rx * _slot.right - fx * _slot.aft,
       def.altitude + (i % 2 === 1 ? 40 : 0),
-      def.z + rz * _slot.right - fz * _slot.aft,
+      def.z + oz + rz * _slot.right - fz * _slot.aft,
     );
     clampXZ(pos);
     const aiTask = resolveTask(task, s, def.team);

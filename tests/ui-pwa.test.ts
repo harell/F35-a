@@ -63,7 +63,55 @@ describe('PWA manifest', () => {
   });
 });
 
+/** Every un-hashed public asset whose change must reinstall the service worker (and so bump VERSION). */
+const publicAssets = import.meta.glob(['../public/audio/**/*', '../public/textures/**/*', '../public/icons/**/*'], {
+  query: '?inline',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+/** FNV-1a (32-bit) over the sorted asset paths and their bytes (base64 data URLs) plus the manifest. */
+export function publicAssetHash(): string {
+  let h = 0x811c9dc5;
+  const feed = (str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+  };
+  for (const k of Object.keys(publicAssets).sort()) {
+    feed(k);
+    feed(publicAssets[k]);
+  }
+  feed('manifest.webmanifest');
+  feed(manifestRaw);
+  return h.toString(16).padStart(8, '0');
+}
+
 describe('service worker', () => {
+  it('VERSION carries the content hash of the public assets (asset change => new SW => fresh caches)', () => {
+    const v = /const VERSION = '([^']+)'/.exec(sw)?.[1] ?? '';
+    const hash = publicAssetHash();
+    expect(Object.keys(publicAssets).some((k) => k.includes('/audio/voice/'))).toBe(true);
+    expect(Object.keys(publicAssets).some((k) => k.includes('/textures/'))).toBe(true);
+    expect(v, `public assets changed: set VERSION in public/sw.js to end with '-${hash}'`).toMatch(new RegExp(`-${hash}$`));
+    expect(v).not.toBe('1.0.0-1');
+  });
+
+  it('un-hashed public files (voices, textures, icons) are stale-while-revalidate, hashed bundles cache-first', () => {
+    const helpers = new Function('self', `${sw.slice(0, sw.indexOf("self.addEventListener('install'"))}; ${sw.slice(sw.indexOf('function isUnhashed'), sw.indexOf('async function staleWhileRevalidate'))}; return { isUnhashed };`)({
+      registration: { scope: 'https://example.com/game/' },
+      location: { origin: 'https://example.com' },
+    }) as { isUnhashed: (u: URL) => boolean };
+    expect(helpers.isUnhashed(new URL('https://example.com/game/audio/voice/b_missile.mp3'))).toBe(true);
+    expect(helpers.isUnhashed(new URL('https://example.com/game/textures/waternormals.jpg'))).toBe(true);
+    expect(helpers.isUnhashed(new URL('https://example.com/game/icons/icon-192.png'))).toBe(true);
+    expect(helpers.isUnhashed(new URL('https://example.com/game/manifest.webmanifest'))).toBe(true);
+    expect(helpers.isUnhashed(new URL('https://example.com/game/assets/index-abc123.js'))).toBe(false);
+    expect(sw).toContain('event.respondWith(staleWhileRevalidate(event))');
+    expect(sw).toContain('event.waitUntil(refresh)');
+  });
+
   it('precaches every VoiceId clip listed in core/types.ts', () => {
     const block = typesSrc.slice(typesSrc.indexOf('export type VoiceId'), typesSrc.indexOf('export type ExplosionSize'));
     const voiceIds = [...block.matchAll(/\|\s*'([a-z0-9_]+)'/g)].map((x) => x[1]).sort();

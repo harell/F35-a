@@ -89,7 +89,10 @@ export function computeTouchLayout(width: number, height: number, safe: Insets, 
   const colW = 58 * s;
   const colX = W - safe.right - 8 * s - colW;
   const gap = 6 * s;
-  const pause = r(colX + colW - 46 * s, T, 46 * s, 38 * s);
+  // every button ≥ 44×44 CSS px (Apple HIG / WCAG 2.5.5) even on 375-px-tall phones (i2 review)
+  const MIN = 44;
+  const pauseW = Math.max(MIN, 48 * s);
+  const pause = r(colX + colW - pauseW, T, pauseW, Math.max(MIN, 42 * s));
   let y = pause.y + pause.h + 8 * s;
   const bh = 54 * s;
   const cam = r(colX, y, colW, bh);
@@ -98,7 +101,7 @@ export function computeTouchLayout(width: number, height: number, safe: Insets, 
   y += bh + gap;
   const wpn = r(colX, y, colW, bh);
   y += bh + gap;
-  const radar = r(colX, y, colW, 38 * s);
+  const radar = r(colX, y, colW, Math.max(MIN, 44 * s));
 
   // ── throttle cluster ──
   const thrW = 52 * s;
@@ -142,7 +145,8 @@ export function computeTouchLayout(width: number, height: number, safe: Insets, 
   const homeX = opts.leftHanded ? L + radius + 18 * s : Math.min(colX - radius - 12 * s, R - radius - 60 * s);
   const homeY = B - radius - 6 * s;
 
-  const recenter = r(opts.leftHanded ? L + 8 * s : colX - 96 * s, B - 44 * s, 96 * s, 42 * s);
+  const recH = Math.max(MIN, 44 * s);
+  const recenter = r(opts.leftHanded ? L + 8 * s : colX - 96 * s, B - recH, 96 * s, recH);
 
   return {
     width: W,

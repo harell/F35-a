@@ -152,3 +152,18 @@
   .dsheet-opt .dc-desc { font-size: 11px; line-height: 1.3; }
   .dsheet-opt .dc-facts li { font-size: 10px; }
 }
+
+/* ───────── i2: short phones (≤ 400 px tall) — nothing clipped without a cue ───────── */
+/* both service-record panels scroll, with a bottom fade that says "more below" */
+.sr-left, .sr-right { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 22px; -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 20px), transparent); }
+@media (max-height: 400px) {
+  .sr-left { gap: 5px; padding: 8px 12px 20px; }
+  .sr-stats { gap: 4px; }
+  .sr-stat { padding: 4px 8px; }
+  .sr-h { margin: 4px 0 4px; }
+  .sr-grades { gap: 3px; }
+  .sr-g { padding: 2px 0; gap: 1px; }
+  .sr-g b { font-size: 13px; }
+}
+/* first-run card: opaque, over a dimmed backdrop (the Theatre text showed through it) */
+.mm-onboard { background: linear-gradient(180deg, #0a221a, #08141c); box-shadow: 0 0 0 100vmax rgba(2, 6, 10, 0.62), 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 26px rgba(var(--green-rgb), 0.15); }
