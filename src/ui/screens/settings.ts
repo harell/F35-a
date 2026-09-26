@@ -12,16 +12,11 @@ import { DEFAULT_TILT_NEUTRAL, tiltAngles, tiltToAxes, type TiltAngles, type Til
 import { icon } from '../art/icons';
 import { escapeHtml, h } from '../dom';
 import type { UiHost } from '../host';
+import { difficultyFacts } from '../career';
 import { screenHeader, segmented, settingRow, slider, toggle } from '../widgets';
 
 type Tab = 'flight' | 'controls' | 'audio' | 'display';
 
-const DIFF_FACTS: Record<Difficulty, string[]> = {
-  recruit: ['Flight assists on', 'No G-effects', 'Survive 3 missile hits', 'Fewer enemies'],
-  pilot: ['Flight assists on', 'G-effects', 'Survive 2 missile hits', 'Standard enemies'],
-  veteran: ['Flight assists on', 'Aggressive AI', 'One hit can kill', '+25% enemies'],
-  ace: ['No flight assists', 'Lethal SAMs', 'One hit kills', '+50% enemies · 2× score'],
-};
 
 export function showSettings(host: UiHost, input: Settings, toast: (t: string) => void, opts: { overlay: boolean }): Promise<Settings> {
   return new Promise((resolve) => {
@@ -75,6 +70,7 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
     function buildFlight(): HTMLElement {
       const page = h('div', { class: 'set-page' });
       page.appendChild(h('div', { class: 'set-h', text: 'Difficulty' }));
+      if (opts.overlay) page.appendChild(h('div', { class: 'set-note', html: `${icon('info')}<span>A new difficulty applies from the next sortie (or RESTART).</span>` }));
       const grid = h('div', { class: 'diff-grid' });
       const cards: HTMLButtonElement[] = [];
       for (const id of Object.keys(DIFFICULTIES) as Difficulty[]) {
@@ -86,7 +82,7 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
           html:
             `<div class="dc-head"><span class="dc-name">${escapeHtml(d.label)}</span><span class="dc-mult mono">×${d.scoreMultiplier}</span></div>` +
             `<div class="dc-desc">${escapeHtml(d.description)}</div>` +
-            `<ul class="dc-facts">${DIFF_FACTS[id].map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`,
+            `<ul class="dc-facts">${difficultyFacts(d).map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`,
         });
         c.addEventListener('click', () => {
           s.difficulty = id;

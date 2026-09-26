@@ -1,7 +1,7 @@
 /**
  * F35-A UI — mission briefing: intel map (left) + tabs BRIEFING / OBJECTIVES / HANGAR (right),
  * loadout picker limited to allowedLoadouts (default recommendedLoadout) with store diagrams and a
- * stealth rating bar, difficulty label, FLY / BACK.
+ * stealth rating bar, difficulty picker (4 levels, saved to settings), FLY / BACK.
  */
 import type { MissionDef } from '../../core/contracts';
 import { DIFFICULTIES, LOADOUTS, THEATER_INFO, TIME_OF_DAY_INFO, WEAPON_INFO } from '../../core/data';
@@ -12,6 +12,7 @@ import { escapeHtml, h } from '../dom';
 import { formatTime, pad2, stealthRating, storeLines } from '../format';
 import type { UiHost } from '../host';
 import { screenHeader } from '../widgets';
+import { openDifficultySheet } from './difficultySheet';
 import { drawIntelMap } from './intelMap';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered cloud', overcast: 'Overcast' } as const;
@@ -166,11 +167,22 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     el.appendChild(body);
 
     // ── footer ──
-    const diff = DIFFICULTIES[settings.difficulty];
-    const diffEl = h('div', {
-      class: 'br-diff',
-      attrs: { title: diff?.description ?? '' },
-      html: `<span class="br-diff-k">DIFFICULTY</span><span class="badge diff-${settings.difficulty}">${diff?.label ?? settings.difficulty}</span>`,
+    // difficulty: tap to change right here (writes the Game's live settings object + saves it)
+    const diffEl = h('button', { class: 'ui-btn ghost br-diff', attrs: { type: 'button', 'aria-haspopup': 'dialog' } });
+    const syncDiff = () => {
+      const d = DIFFICULTIES[settings.difficulty];
+      diffEl.title = d?.description ?? '';
+      diffEl.setAttribute('aria-label', `Difficulty: ${d?.label ?? settings.difficulty}. Tap to change`);
+      diffEl.innerHTML = `<span class="br-diff-k">DIFFICULTY</span><span class="badge diff-${settings.difficulty}">${escapeHtml(d?.label ?? settings.difficulty)}</span><span class="br-diff-chg">${icon('next')}</span>`;
+    };
+    syncDiff();
+    let closeSheet: (() => boolean) | null = null;
+    diffEl.addEventListener('click', () => {
+      closeSheet = openDifficultySheet(el, settings, () => {
+        closeSheet = null;
+        syncDiff();
+        diffEl.focus();
+      });
     });
     const loSummary = h('button', { class: 'ui-btn ghost br-lo-sum', attrs: { type: 'button', 'aria-label': 'Change loadout' } });
     loSummary.addEventListener('click', () => setTab('hangar'));
@@ -191,7 +203,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       drawIntelMap(canvas, m, w, hh, Math.min(2, window.devicePixelRatio || 1));
     };
     window.addEventListener('resize', redraw);
-    host.present(el, { bg: true, back: () => finish(null), focus: fly });
+    host.present(el, { bg: true, back: () => (closeSheet?.() ? undefined : finish(null)), focus: fly });
     requestAnimationFrame(() => requestAnimationFrame(redraw));
   });
 }

@@ -6,17 +6,19 @@
  *   reverb ─┘                               ├─ mission (muted while paused) ─┐
  *   warn (RWR / MAWS / growl / chimes) ─────┤                                 ├─ master → compressor → limiter → out
  *   voice (Betty + radio) ──────────────────┘                                 │
- *   ui (menu clicks) ──────────────────────────────────────────────────────────┘
+ *   ui (menu clicks) ──────────────────────────────────────────────────────────┤
+ *   music (procedural score; plays in menus too, ducked under voice/warnings) ─┘
  *
- * Settings: master volume → master gain, sfx volume → engine/sfx/warn/ui, voice volume → voice.
+ * Settings: master volume → master gain, sfx volume → engine/sfx/warn/ui, voice volume → voice,
+ * music volume → music (defaults to the sfx volume until Settings carries a musicVolume).
  * Volumes use a squared taper (perceptually more even slider).
  */
 import { makeRng } from '../dsp/generators';
 
-export type BusId = 'engine' | 'sfx' | 'warn' | 'voice' | 'ui';
+export type BusId = 'engine' | 'sfx' | 'warn' | 'voice' | 'ui' | 'music';
 
 /** Relative bus levels (the mix). */
-const BUS_LEVEL: Record<BusId, number> = { engine: 0.45, sfx: 1, warn: 0.5, voice: 1.05, ui: 0.45 };
+const BUS_LEVEL: Record<BusId, number> = { engine: 0.45, sfx: 1, warn: 0.5, voice: 1.05, ui: 0.45, music: 0.5 };
 
 export class Mixer {
   readonly bus: Record<BusId, GainNode>;
@@ -30,6 +32,11 @@ export class Mixer {
   private convolver: ConvolverNode | null = null;
   private reverbReturn: GainNode | null = null;
   private vol = { master: 0.9, sfx: 0.9, voice: 1 };
+  /** Music volume 0..1 (null = follow the sfx volume). */
+  private musicVol: number | null = null;
+  /** Music duck factor (voice / warnings), applied on a separate gain. */
+  private readonly musicDuck: GainNode;
+  private musicDuckLevel = 1;
   private muted = false;
 
   constructor(private readonly ctx: AudioContext) {
@@ -54,7 +61,10 @@ export class Mixer {
     this.limiter.attack.value = 0.001;
     this.limiter.release.value = 0.08;
 
-    this.bus = { engine: g(), sfx: g(), warn: g(), voice: g(), ui: g() };
+    this.bus = { engine: g(), sfx: g(), warn: g(), voice: g(), ui: g(), music: g() };
+    this.musicDuck = g(1);
+    this.bus.music.connect(this.musicDuck);
+    this.musicDuck.connect(this.master);
     this.bus.engine.connect(this.world);
     this.bus.sfx.connect(this.world);
     this.world.connect(this.mission);
@@ -86,6 +96,20 @@ export class Mixer {
     this.master.gain.setTargetAtTime(taper(this.vol.master), now, 0.03);
     for (const id of ['engine', 'sfx', 'warn', 'ui'] as const) this.bus[id].gain.setTargetAtTime(BUS_LEVEL[id] * sfx, now, 0.03);
     this.bus.voice.gain.setTargetAtTime(BUS_LEVEL.voice * taper(this.vol.voice), now, 0.03);
+    this.bus.music.gain.setTargetAtTime(BUS_LEVEL.music * taper(this.musicVol ?? this.vol.sfx), now, 0.03);
+  }
+
+  /** Dedicated music volume (0..1); null = follow the sfx volume. */
+  setMusicVolume(v: number | null): void {
+    this.musicVol = v == null || !Number.isFinite(v) ? null : Math.min(1, Math.max(0, v));
+    this.applyVolumes();
+  }
+
+  /** Duck the music (1 = full) — under voice calls and missile warnings. */
+  setMusicDuck(level: number): void {
+    if (Math.abs(level - this.musicDuckLevel) < 0.01) return;
+    this.musicDuckLevel = level;
+    this.musicDuck.gain.setTargetAtTime(level, this.ctx.currentTime, level < 1 ? 0.08 : 0.6);
   }
 
   /** Pause: fade every mission bus out (UI clicks keep working). */

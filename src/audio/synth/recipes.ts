@@ -323,3 +323,12 @@ export function radioStatic(env: SynthEnv, when: number): void {
   burst(env, shot, when, { buf: 'crackle', type: 'bandpass', f: 1600, q: 0.8, gain: 0.18, attack: 0.02, tau: 0.08, delay: 0.05 });
   burst(env, shot, when, { buf: 'white', type: 'bandpass', f: 1700, q: 0.8, gain: 0.12, attack: 0.005, tau: 0.04, delay: 0.3 });
 }
+
+/** Missile defeated (notched / decoyed / guidance lost): quick rising major arpeggio — relief, not alarm. */
+export function missileDefeated(env: SynthEnv, when: number): void {
+  const shot = env.pool.begin(bus(env, 'warn'), when, 0.8, 2);
+  [880, 1109, 1319, 1760].forEach((f, i) => {
+    tone(env, shot, when, { type: 'sine', f, gain: 0.26, attack: 0.004, tau: i === 3 ? 0.22 : 0.07, delay: i * 0.065 });
+    tone(env, shot, when, { type: 'triangle', f: f * 2, gain: 0.04, attack: 0.002, tau: 0.04, delay: i * 0.065 });
+  });
+}

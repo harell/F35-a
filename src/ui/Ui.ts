@@ -9,6 +9,9 @@
  *   styles/*.css         the look (dark glass, cyan accent, military avionics)
  */
 import type { CreateUi, UiApi } from '../core/contracts';
+import { DIFFICULTIES } from '../core/data';
+import { loadSettings } from '../core/settings';
+import type { Settings } from '../core/types';
 import { UiHost } from './host';
 import { LoadingOverlay, RotateOverlay, Toasts } from './overlays';
 import { showBriefing } from './screens/briefing';
@@ -39,6 +42,23 @@ export const createUi: CreateUi = (root, deps) => {
   host.onPresent = () => toasts.clearStale();
   /** Settings opened from the pause menu are drawn translucent over the game. */
   let fromPause = false;
+  /**
+   * The Game's live Settings object (seen through showBriefing / returned by showSettings — Game
+   * assigns that return value). Menus that change the difficulty mutate it and save it.
+   */
+  let live: Settings | null = null;
+  const liveSettings = (): Settings => {
+    if (!live) {
+      live = loadSettings();
+      try {
+        const pd = new URLSearchParams(location.search).get('difficulty');
+        if (pd && pd in DIFFICULTIES) live.difficulty = pd as Settings['difficulty'];
+      } catch {
+        /* no location */
+      }
+    }
+    return live;
+  };
 
   const ui: UiApi = {
     showSplash: () => showSplash(host, deps.version),
@@ -48,11 +68,19 @@ export const createUi: CreateUi = (root, deps) => {
     showCampaign: (missions, progress) => showCampaign(host, missions, progress, toast),
     showTraining: (missions, progress) => showTraining(host, missions, progress, toast),
     showInstantAction: () => showInstantAction(host),
-    showBriefing: (mission, settings) => showBriefing(host, mission, settings),
+    showBriefing: (mission, settings) => {
+      live = settings;
+      return showBriefing(host, mission, settings);
+    },
     showSettings: async (settings) => {
       const overlay = fromPause;
       fromPause = false;
-      return showSettings(host, settings, toast, { overlay });
+      const before = settings.difficulty;
+      const out = await showSettings(host, settings, toast, { overlay });
+      // mid-sortie the running mission keeps the difficulty it was built with (Game.runSession)
+      if (overlay && out.difficulty !== before) toast(`Difficulty: ${DIFFICULTIES[out.difficulty]?.label ?? out.difficulty} — applies from the next sortie`);
+      live = out;
+      return out;
     },
     showPause: async (mission) => {
       const choice = await showPause(host, mission);

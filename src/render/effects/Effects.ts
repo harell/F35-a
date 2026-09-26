@@ -44,7 +44,7 @@ const ribbon = (hex: number, width: number, growth: number, life: number, alpha:
 const CONTRAIL = ribbon(0xf4f6f8, 1.3, 1.0, 16, 0.5, 0.35, 70, 0.25);
 const VORTEX = ribbon(0xffffff, 0.4, 0.55, 0.9, 0.5, 0, 14, 0.05);
 const DAMAGE_SMOKE = ribbon(0x4d4a47, 1.6, 2.4, 7, 0.6, 0, 22, 0.08);
-const WRECK_SMOKE = ribbon(0x1f1d1b, 3.2, 3.4, 22, 0.85, 0, 20, 0.08);
+const WRECK_SMOKE = ribbon(0x1f1d1b, 5.5, 5.0, 26, 0.9, 0, 18, 0.07);
 const FLARE_SMOKE = ribbon(0xe2e2e0, 1.2, 2.0, 5, 0.7, 0, 5, 0.06);
 
 const SIZE_M: Record<ExplosionSize, number> = { tiny: 3, small: 9, medium: 16, large: 30, huge: 55 };
@@ -411,7 +411,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     smoke.spawn(P, now());
   }
 
-  function fireLick(x: number, y: number, z: number, vx: number, vy: number, vz: number, s: number, life: number, k = 1): void {
+  function fireLick(x: number, y: number, z: number, vx: number, vy: number, vz: number, s: number, life: number, k = 1, minPx = 0): void {
     resetSpawn(P);
     P.x = x;
     P.y = y;
@@ -431,6 +431,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     col0(P, [1, 0.55, 0.18], 1, 1.8 * k);
     col1(P, [0.9, 0.18, 0.03], 0, 1);
     P.fadeIn = 0.1;
+    P.minPx = minPx;
     fire.spawn(P, now());
   }
 
@@ -469,6 +470,174 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     slot.dur = dur;
     slot.size = size;
     slot.fAcc = slot.sAcc = 0;
+  }
+
+  /**
+   * Air kill: a readable, dramatic payoff from 1–5 km. Big distance-compensated flash (never smaller
+   * than ~48 px for 0.35 s), a fuel fireball carried along the flight path (min pixel size so it
+   * reads at BVR ranges), a dark smoke cloud, 3 secondary explosions along the falling wreck's
+   * path, and burning debris with smoke trails. The burning, tumbling wreck itself is drawn by the
+   * aircraft scan (thick smoke ribbon + fire licks).
+   */
+  function airKill(p: Vector3, vel: Vector3, length: number): void {
+    const t = now();
+    const d = distCam(p.x, p.y, p.z);
+    const S = Math.max(26, length * 2.1); // fireball radius scale (m): ~34 m for a fighter
+    // flash + lingering glow
+    resetSpawn(P);
+    P.x = p.x;
+    P.y = p.y;
+    P.z = p.z;
+    P.life = 0.35;
+    P.size0 = S * 2.6;
+    P.size1 = S * 4;
+    col0(P, [1, 0.92, 0.75], 1, 4);
+    col1(P, [1, 0.5, 0.15], 0, 2);
+    P.minPx = 48;
+    fire.spawn(P, t);
+    resetSpawn(P);
+    P.x = p.x;
+    P.y = p.y;
+    P.z = p.z;
+    P.vx = vel.x * 0.5;
+    P.vy = vel.y * 0.5;
+    P.vz = vel.z * 0.5;
+    P.drag = 1.2;
+    P.life = 1.1;
+    P.size0 = S * 1.6;
+    P.size1 = S * 2.2;
+    col0(P, [1, 0.6, 0.22], 0.9, 2.2);
+    col1(P, [0.9, 0.25, 0.05], 0, 1);
+    P.minPx = 26;
+    fire.spawn(P, t);
+    // fuel fireball, carried forward with the wreck's momentum
+    const nf = Math.max(8, count(22, d));
+    for (let i = 0; i < nf; i++) {
+      resetSpawn(P);
+      randDir(0.1);
+      const rr = S * 0.35 * rnd();
+      P.x = p.x + _w.x * rr;
+      P.y = p.y + _w.y * rr;
+      P.z = p.z + _w.z * rr;
+      const sp = S * (0.5 + rnd() * 0.8);
+      P.vx = vel.x * 0.55 + _w.x * sp;
+      P.vy = vel.y * 0.55 + _w.y * sp;
+      P.vz = vel.z * 0.55 + _w.z * sp;
+      P.drag = 2.2;
+      P.grav = 2;
+      P.size0 = S * 0.5;
+      P.size1 = S * (1.1 + rnd() * 0.7);
+      P.sizeCurve = 3;
+      P.life = 1.3 + rnd() * 1.0;
+      P.rot = rnd() * 6.28;
+      P.rotSpeed = (rnd() - 0.5) * 2;
+      P.variant = 2 + (rnd() < 0.5 ? 1 : 0);
+      col0(P, [1, 0.6, 0.22], 0.95, 1.6);
+      col1(P, [0.85, 0.2, 0.04], 0, 1.0);
+      P.fadeIn = 0.03;
+      P.minPx = 7;
+      fire.spawn(P, t);
+    }
+    // dark smoke cloud left hanging where the jet died
+    const ns = Math.max(6, count(18, d));
+    for (let i = 0; i < ns; i++) {
+      resetSpawn(P);
+      randDir(0.2);
+      const rr = S * 0.4 * rnd();
+      P.x = p.x + _w.x * rr;
+      P.y = p.y + _w.y * rr;
+      P.z = p.z + _w.z * rr;
+      const sp = S * (0.3 + rnd() * 0.4);
+      P.vx = vel.x * 0.3 + _w.x * sp;
+      P.vy = vel.y * 0.3 + _w.y * sp;
+      P.vz = vel.z * 0.3 + _w.z * sp;
+      P.drag = 1.4;
+      P.grav = 1.5;
+      P.size0 = S * 0.6;
+      P.size1 = S * (2.2 + rnd() * 1.4);
+      P.sizeCurve = 2.2;
+      P.life = 7 + rnd() * 5;
+      P.rot = rnd() * 6.28;
+      P.rotSpeed = (rnd() - 0.5) * 0.3;
+      P.variant = (rnd() * 4) | 0;
+      col0(P, C.smokeDark, 0.95);
+      col1(P, C.smokeMid, 0);
+      P.fadeIn = 0.15;
+      P.minPx = 5;
+      smoke.spawn(P, t);
+    }
+    sparks(p.x, p.y, p.z, count(30, d), 55);
+    // secondaries along the falling wreck's (ballistic) path
+    for (let i = 0; i < 3; i++) {
+      const dl = 0.3 + i * 0.45 + rnd() * 0.25;
+      schedule(
+        dl,
+        p.x + vel.x * dl * 0.85 + (rnd() - 0.5) * 12,
+        p.y + vel.y * dl * 0.85 - 4.9 * dl * dl + (rnd() - 0.5) * 8,
+        p.z + vel.z * dl * 0.85 + (rnd() - 0.5) * 12,
+        i === 0 ? 'large' : 'medium',
+        'air',
+      );
+    }
+    // burning debris with smoke trails
+    const nd = Math.max(4, Math.round(12 * ps));
+    for (let i = 0; i < nd; i++) {
+      randDir(0.35);
+      const sp = 25 + rnd() * 45;
+      debris.spawn(p.x, p.y, p.z, vel.x * 0.6 + _w.x * sp, vel.y * 0.6 + _w.y * sp, vel.z * 0.6 + _w.z * sp, 0.6 + rnd() * 1.1, 7 + rnd() * 4, 2.5 + rnd() * 2.5);
+    }
+  }
+
+  /** SAM / ground kill: a rising fire pillar that seeds the tall smoke column. */
+  function groundPillar(x: number, gy: number, z: number, k: number): void {
+    const t = now();
+    const d = distCam(x, gy, z);
+    const n = Math.max(6, count(Math.round(18 * k), d));
+    for (let i = 0; i < n; i++) {
+      resetSpawn(P);
+      P.x = x + (rnd() - 0.5) * 8 * k;
+      P.y = gy + 2 + rnd() * 6;
+      P.z = z + (rnd() - 0.5) * 8 * k;
+      P.vx = (rnd() - 0.5) * 6;
+      P.vy = (35 + rnd() * 45) * k;
+      P.vz = (rnd() - 0.5) * 6;
+      P.drag = 1.1;
+      P.grav = 3;
+      P.size0 = 9 * k;
+      P.size1 = (20 + rnd() * 14) * k;
+      P.sizeCurve = 2;
+      P.life = 1.4 + rnd() * 1.2;
+      P.rot = rnd() * 6.28;
+      P.rotSpeed = (rnd() - 0.5) * 2;
+      P.variant = 2 + (rnd() < 0.5 ? 1 : 0);
+      col0(P, [1, 0.6, 0.22], 0.95, 1.6);
+      col1(P, [0.8, 0.2, 0.04], 0, 1);
+      P.fadeIn = 0.05;
+      P.minPx = 5;
+      fire.spawn(P, t);
+    }
+    for (let i = 0; i < Math.max(4, count(Math.round(12 * k), d)); i++) {
+      resetSpawn(P);
+      P.x = x + (rnd() - 0.5) * 10 * k;
+      P.y = gy + 6 + rnd() * 10;
+      P.z = z + (rnd() - 0.5) * 10 * k;
+      P.vx = (rnd() - 0.5) * 4;
+      P.vy = (25 + rnd() * 30) * k;
+      P.vz = (rnd() - 0.5) * 4;
+      P.drag = 0.6;
+      P.grav = 2;
+      P.size0 = 12 * k;
+      P.size1 = (50 + rnd() * 40) * k;
+      P.sizeCurve = 1.8;
+      P.life = 14 + rnd() * 8;
+      P.rot = rnd() * 6.28;
+      P.variant = (rnd() * 4) | 0;
+      col0(P, C.smokeDark, 0.9);
+      col1(P, C.smokeMid, 0);
+      P.fadeIn = 0.08;
+      P.minPx = 4;
+      smoke.spawn(P, t);
+    }
   }
 
   function schedule(delay: number, x: number, y: number, z: number, size: ExplosionSize, surface: 'air' | 'ground' | 'water'): void {
@@ -551,24 +720,21 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     }),
     events.on('destroyed', ({ entity }) => {
       const p = entity.position;
-      const t = now();
       if (entity.kind === 'aircraft') {
-        sparks(p.x, p.y, p.z, count(20, distCam(p.x, p.y, p.z)), 40);
-        for (let i = 0; i < Math.round(6 * ps); i++) {
-          randDir(0.3);
-          debris.spawn(p.x, p.y, p.z, entity.velocity.x * 0.6 + _w.x * 30, entity.velocity.y * 0.6 + _w.y * 30, entity.velocity.z * 0.6 + _w.z * 30, 0.5 + rnd() * 0.6, 6, 3);
-        }
+        const spec = AIRCRAFT_SPECS[(entity as AircraftEntity).type];
+        airKill(p, entity.velocity, spec ? spec.length : 17);
       } else if (entity.kind === 'sam' || entity.kind === 'ground') {
         const type = (entity as { type: string }).type;
         const bigFire = type === 'fuel' || type === 'ship' || type === 'factory' || type === 'sa10';
         const water = world.terrain.isWater(p.x, p.z) && type === 'ship';
         const gy = water ? 0 : groundAt(p.x, p.z);
-        startFire(p.x, gy, p.z, bigFire ? 2.2 : 1, bigFire ? 150 : 100);
-        const n = bigFire ? 3 : 2;
+        // tall, long-lived fire + smoke column readable from several km
+        startFire(p.x, gy, p.z, bigFire ? 2.8 : 1.7, bigFire ? 170 : 120);
+        if (!water) groundPillar(p.x, gy, p.z, bigFire ? 1.6 : 1);
+        const n = bigFire ? 4 : 3;
         for (let i = 0; i < n; i++)
-          schedule(0.6 + rnd() * 3.5 * (i + 1), p.x + (rnd() - 0.5) * 20, gy + 2, p.z + (rnd() - 0.5) * 20, i === 0 && bigFire ? 'large' : 'small', water ? 'water' : 'ground');
+          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', water ? 'water' : 'ground');
       }
-      void t;
     }),
     events.on('damage', ({ target, weapon }) => {
       if (target.kind !== 'aircraft' || weapon === 'gun') return;
@@ -864,11 +1030,14 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
             // falling, burning wreck: thick smoke trail + fire
             if (fx.wreck < 0 || !ribbons.isActive(fx.wreck)) fx.wreck = ribbons.alloc(WRECK_SMOKE);
             ribbons.emit(fx.wreck, pos.x, pos.y, pos.z, t);
-            const n = d < 2000 ? 3 : 1;
+            // burning, tumbling wreck: big fire licks (min 4 px so the fire reads at BVR range),
+            // puffs of dark smoke and the occasional secondary pop
+            const n = d < 2000 ? 4 : 2;
             for (let i = 0; i < n; i++) {
-              if (rnd() > ps + 0.2) continue;
-              fireLick(pos.x + (rnd() - 0.5) * 3, pos.y + (rnd() - 0.5) * 2, pos.z + (rnd() - 0.5) * 3, ac.velocity.x * 0.8, ac.velocity.y * 0.8, ac.velocity.z * 0.8, 3.5, 0.35 + rnd() * 0.3, 1.2);
+              if (rnd() > ps + 0.3) continue;
+              fireLick(pos.x + (rnd() - 0.5) * 4, pos.y + (rnd() - 0.5) * 3, pos.z + (rnd() - 0.5) * 4, ac.velocity.x * 0.8, ac.velocity.y * 0.8, ac.velocity.z * 0.8, 5.5, 0.45 + rnd() * 0.35, 1.4, 4);
             }
+            if (rnd() < 0.3) smallPuff(pos.x, pos.y, pos.z, ac.velocity.x * 0.2, ac.velocity.y * 0.2, ac.velocity.z * 0.2, C.smokeDark, 0.8, 4, 16, 6);
             if (rnd() < 0.15) sparks(pos.x, pos.y, pos.z, 2, 15);
           }
         }
@@ -1051,9 +1220,9 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   };
 
   function debrisTrail(p: Vector3, burning: number): void {
-    if (distCam(p.x, p.y, p.z) > 4000) return;
-    if (burning > 0.05) fireLick(p.x, p.y, p.z, 0, 0, 0, 1.2 + burning * 1.5, 0.3 + burning * 0.3, burning);
-    smallPuff(p.x, p.y, p.z, 0, 0, 0, burning > 0.3 ? C.smokeDark : C.smokeMid, 0.55, 0.8, 3.5, 2.2);
+    if (distCam(p.x, p.y, p.z) > 6000) return;
+    if (burning > 0.05) fireLick(p.x, p.y, p.z, 0, 0, 0, 1.6 + burning * 2.2, 0.3 + burning * 0.35, burning, burning > 0.3 ? 2 : 0);
+    smallPuff(p.x, p.y, p.z, 0, 0, 0, burning > 0.3 ? C.smokeDark : C.smokeMid, 0.6, 1.2, 5.5, 2.8);
   }
 
   const api: EffectsApi & { stats(): string } = {
