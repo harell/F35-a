@@ -35,10 +35,15 @@ function walk(dir) {
       const rel = path.relative(dist, p).split(path.sep).join('/');
       if (rel === 'index.html' || rel === 'sw.js' || rel.endsWith('.ttf')) continue;
       let src = p;
-      if (fontData && rel.endsWith('.js')) {
+      if (rel.endsWith('.js')) {
         const js = fs.readFileSync(p, 'utf8');
-        if (js.includes(fontFile)) {
-          const patched = js.replace(new RegExp(`(["'\`])[^"'\`]*${fontFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`, 'g'), JSON.stringify(fontData));
+        let patched = js;
+        if (fontData && js.includes(fontFile)) {
+          patched = patched.replace(new RegExp(`(["'\`])[^"'\`]*${fontFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`, 'g'), JSON.stringify(fontData));
+        }
+        // Service workers can't run in an artifact frame: drop the registration entirely.
+        patched = patched.replace(/[`'"]serviceWorker[`'"]\s*in\s*navigator/g, 'false');
+        if (patched !== js) {
           src = path.join(out, 'patched', rel);
           fs.mkdirSync(path.dirname(src), { recursive: true });
           fs.writeFileSync(src, patched);
