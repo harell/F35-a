@@ -10,7 +10,9 @@
  *            one-shot recipes (explosions, launches, impacts, clicks, chimes, breathing…)
  *  world/    game-facing managers: which aircraft/missiles/guns are heard, speed-of-sound
  *            delays, event → sound mapping
- *  voice/    clip loading, Betty scheduling, radio queue, playback with ducking
+ *  voice/    clip loading, Betty scheduling, radio queue, playback with ducking, situational
+ *            pilot callouts (spike / mud spike / bingo) and "missile defeated" detection
+ *  music/    procedural soundtrack: menu theme, adaptive mission layer, stingers
  *
  * Game contract: unlock() on the first tap (we also self-unlock on any later gesture — e.g.
  * ?autostart=1), load() in the background, update(ctx) every frame, setPaused / stopAll /
@@ -25,7 +27,9 @@ import { Listener } from './core/Listener';
 import { Mixer } from './core/Mixer';
 import { OneShotPool } from './core/OneShots';
 import type { SynthEnv } from './synth/build';
-import { uiClick } from './synth/recipes';
+import { Music, type MusicMode } from './music/Music';
+import { missileDefeated, uiClick } from './synth/recipes';
+import { CalloutTracker, DefeatTracker } from './voice/callouts';
 import { VoiceBank } from './voice/VoiceBank';
 import { VoicePlayer } from './voice/VoicePlayer';
 import { SessionSounds } from './world/SessionSounds';
@@ -35,7 +39,11 @@ const POOL_SIZE = { low: 10, medium: 16, high: 22 } as const;
 interface Core {
   env: SynthEnv;
   voice: VoicePlayer;
+  music: Music;
 }
+
+/** Wall-clock ms without a live mission frame after which the music returns to the menu theme. */
+const MENU_AFTER_MS = 3000;
 
 export class AudioSystem implements AudioApi {
   readonly engine = new AudioEngine();
@@ -51,6 +59,13 @@ export class AudioSystem implements AudioApi {
   /** Consecutive failing frames; audio disables itself after too many (never breaks the game). */
   private errors = 0;
   private failed = false;
+  /** Diagnostics for tests / harnesses (counts of feedback cues played). */
+  readonly stats = { defeated: 0, kills: 0, stingers: 0, callouts: 0 };
+  private readonly callouts = new CalloutTracker();
+  private readonly defeats = new DefeatTracker();
+  private readonly incomingIds = new Int32Array(16);
+  /** performance.now() of the last live (unpaused) mission frame. */
+  private lastMissionWall = -1e9;
 
   constructor(private readonly events: EventBus) {
     this.engine.onReady((ctx) => this.initCore(ctx));
@@ -87,7 +102,10 @@ export class AudioSystem implements AudioApi {
       this.listener.update(ctx);
       this.session.update(now, ctx.dt, ctx, this.listener);
       const p = ctx.player;
-      core.voice.update(ctx.dt, p && p.alive ? p.warnings : null);
+      const voice = core.voice;
+      voice.update(ctx.dt, p && p.alive ? p.warnings : null);
+      this.lastMissionWall = performance.now();
+      this.updateCombatCues(core, now, ctx);
       env.pool.prune(now);
       this.errors = 0;
     } catch (err) {
@@ -99,6 +117,50 @@ export class AudioSystem implements AudioApi {
         this.stopAll();
       }
     }
+  }
+
+  /**
+   * Situational feedback that needs the player state: spike / mud-spike calls, the
+   * "missile defeated" cue, music tension and music ducking. No allocations.
+   */
+  private updateCombatCues(core: Core, now: number, ctx: FrameContext): void {
+    const p = ctx.player;
+    const voice = core.voice;
+    const alive = !!p && p.alive;
+    let air = false;
+    let ground = false;
+    let launch = false;
+    let n = 0;
+    if (p && alive) {
+      for (let i = 0; i < p.rwr.length; i++) {
+        const c = p.rwr[i];
+        if (c.state === 'launch') launch = true;
+        if (c.state !== 'track' && c.state !== 'launch') continue;
+        if (c.kind === 'sam' || c.kind === 'aaa') ground = true;
+        else if (c.kind !== 'ewr' && c.kind !== 'awacs') air = true;
+      }
+      n = Math.min(p.incoming.length, this.incomingIds.length);
+      for (let i = 0; i < n; i++) this.incomingIds[i] = p.incoming[i].missileId;
+    }
+    const call = this.callouts.update(voice.clock, air, ground);
+    if (call && voice.radio.push(call, 1, voice.clock)) this.stats.callouts++;
+    if (this.defeats.update(voice.clock, this.incomingIds, n, alive)) {
+      missileDefeated(core.env, now + 0.02);
+      this.stats.defeated++;
+    }
+
+    // music: tension from the threat picture
+    let target = 0;
+    if (n > 0 || launch) target = 1;
+    else if (ground || air || (p && p.radar.lockedId != null)) target = 0.5;
+    core.music.tension.update(voice.clock, target);
+    core.env.mixer.setMusicDuck(voice.speaking ? 0.4 : n > 0 ? 0.6 : 1);
+  }
+
+  private musicMode(): MusicMode {
+    if (this.failed) return 'off';
+    if (this.apiPaused || performance.now() - this.lastMissionWall > MENU_AFTER_MS) return 'menu';
+    return 'mission';
   }
 
   setVolumes(master: number, sfx: number, voice: number): void {
@@ -142,6 +204,10 @@ export class AudioSystem implements AudioApi {
       this.session = null;
       core.env.pool.stopAll();
       core.voice.stopAll(true);
+      core.env.mixer.setMusicDuck(1);
+      this.callouts.reset();
+      this.defeats.reset();
+      this.lastMissionWall = -1e9;
     } catch (err) {
       console.error('[audio] stopAll', err);
     }
@@ -150,6 +216,7 @@ export class AudioSystem implements AudioApi {
   dispose(): void {
     for (const u of this.unsubs.splice(0)) u();
     this.stopAll();
+    this.core?.music.dispose();
     this.core?.env.mixer.dispose();
     this.core = null;
     this.engine.dispose();
@@ -163,7 +230,14 @@ export class AudioSystem implements AudioApi {
     const buffers = createSynthBuffers(ctx);
     const pool = new OneShotPool(ctx, POOL_SIZE.medium, () => mixer.reverbSend);
     const env: SynthEnv = { ctx, mixer, buffers, pool };
-    this.core = { env, voice: new VoicePlayer(env, this.bank) };
+    const music = new Music(env);
+    this.core = { env, voice: new VoicePlayer(env, this.bank), music };
+    music.resolveMode = () => this.musicMode();
+    try {
+      music.start();
+    } catch (err) {
+      console.error('[audio] music', err);
+    }
     this.bank.attach(ctx);
     this.muted = false;
     this.setMuted(this.apiPaused);
@@ -257,7 +331,41 @@ export class AudioSystem implements AudioApi {
     });
     this.on('warning', (e) => {
       const l = this.live();
-      if (l && this.core) this.core.voice.onWarning(e.id, e.active);
+      if (!l || !this.core) return;
+      const v = this.core.voice;
+      v.onWarning(e.id, e.active);
+      if (e.id === 'bingo' && e.active) {
+        // pilot calls it, DARKSTAR acknowledges
+        const call = this.callouts.onBingo(v.clock);
+        if (call) {
+          v.radio.push(call, 1, v.clock);
+          v.radio.push('a_rtb', 1, v.clock + 0.01);
+        }
+      }
+    });
+    this.on('munition:end', (e) => {
+      const l = this.live();
+      if (!l || !this.core || e.targetId == null || e.targetId !== pid(l.ctx)) return;
+      if (this.defeats.onEnd(e.missile.id, e.reason)) {
+        missileDefeated(this.core.env, this.core.env.ctx.currentTime + 0.02);
+        this.stats.defeated++;
+      }
+    });
+    this.on('player:hit', () => this.defeats.onPlayerHit());
+    this.on('destroyed', (e) => {
+      const l = this.live();
+      if (!l || !this.core) return;
+      const p = l.ctx.player;
+      if (!p || e.attackerId !== p.id || e.entity.team === p.team) return;
+      this.core.music.stinger('kill', 0.35);
+      this.stats.kills++;
+    });
+    this.on('mission:end', (e) => {
+      const core = this.core;
+      if (!core || this.failed) return;
+      core.music.stinger(e.success ? 'win' : 'fail', 0.3);
+      this.stats.stingers++;
+      if (e.success) core.voice.radio.push('p_copy', 1, core.voice.clock);
     });
     this.on('radio', (e) => {
       const l = this.live();

@@ -22,6 +22,8 @@ const KEYUP = 0.075;
 const RADIO_GAP = 0.35;
 /** A radio call waits this long after a Betty clip ends before keying up (so neither masks the other). */
 const AFTER_BETTY = 0.12;
+/** Radio calls at or above this priority (threat calls: SAM launch…) hold Betty — except PULL UP — until they end. */
+const URGENT_RADIO = 3;
 /** Fade (time constant, s) when a Betty clip is cut because its warning cleared. */
 const CLEAR_FADE = 0.03;
 
@@ -31,7 +33,7 @@ export class VoicePlayer {
   /** Voice clock (s). */
   clock = 0;
   private bettySrc: AudioBufferSourceNode | null = null;
-  private bettyUntil = 0;
+  private bettyUntil = -1;
   private radioSrc: AudioBufferSourceNode | null = null;
   private radioUntil = 0;
   private radioNext = 0;
@@ -131,7 +133,9 @@ export class VoicePlayer {
       if (item) {
         const buf = this.bank.get(item.voice);
         if (buf) {
-          this.betty.deferRepeats(now + KEYUP + buf.duration + 0.1);
+          const end = now + KEYUP + buf.duration + 0.1;
+          if (item.priority >= URGENT_RADIO) this.betty.deferAll(end);
+          else this.betty.deferRepeats(end);
           this.onClipStart?.(item.voice, 'radio', now);
           const t = ctx.currentTime + 0.01;
           squelchKey(this.env, t, 1);

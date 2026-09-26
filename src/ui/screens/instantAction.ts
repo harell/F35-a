@@ -3,7 +3,8 @@
  * Remembers the last setup in localStorage (per device convenience).
  */
 import type { InstantActionOptions } from '../../core/contracts';
-import { AIRCRAFT_INFO, THEATER_INFO } from '../../core/data';
+import { AIRCRAFT_INFO, DIFFICULTIES, THEATER_INFO } from '../../core/data';
+import { DIFFICULTY_ORDER } from '../career';
 import type { AircraftType, TheaterId, TimeOfDay, Weather } from '../../core/types';
 import { icon } from '../art/icons';
 import { h } from '../dom';
@@ -173,7 +174,7 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     minus.addEventListener('click', () => setCount(o.enemyCount - 1));
     plus.addEventListener('click', () => setCount(o.enemyCount + 1));
     count.append(minus, val, plus);
-    opts.appendChild(settingRow('Enemy count', 'More bandits on harder difficulties', count));
+    opts.appendChild(settingRow('Enemy count', countNote(), count));
 
     body.append(modes, opts);
     el.appendChild(body);
@@ -191,4 +192,18 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     setCount(o.enemyCount);
     host.present(el, { bg: true, back: () => finish(null), focus: start });
   });
+}
+
+/**
+ * Enemy-count note from the live DIFFICULTIES numbers: dogfight and strike flights scale their
+ * total by enemyCountScale (missions/content/instant.ts script.scaleEnemyTotal); the gauntlet's
+ * number is its SAM sites and survival's is the first wave.
+ */
+export function countNote(): string {
+  const scales = DIFFICULTY_ORDER.map((id) => DIFFICULTIES[id]).filter(Boolean);
+  const lo = scales[0];
+  const hi = scales[scales.length - 1];
+  const scaled = scales.some((d) => d.enemyCountScale !== 1);
+  if (!scaled || !lo || !hi) return 'Exact number of bandits';
+  return `Dogfight/strike: ×${lo.enemyCountScale} on ${lo.label} … ×${hi.enemyCountScale} on ${hi.label} · Gauntlet: SAM sites · Survival: first wave`;
 }

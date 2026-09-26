@@ -11,5 +11,6 @@ no external model, texture or sound files are used or downloaded.
 | Reflection environment | Procedural sky cube (`materials.ts`), auto-PMREM'd by three.js |
 | Smoke / fire / glow particle textures | Procedural value-noise on a canvas (`src/render/effects/textures.ts`) |
 | Afterburner / rocket flames, vapour cones, shockwaves | Custom GLSL shaders |
+| F-35A RNZAF low-visibility markings (kiwi roundel, 'NZ' tail code, NZ serial) | Drawn procedurally on the livery canvas (`liveries.ts`, `kiwi()`); fictional No. 75 Sqn style, no external artwork |
 
 Library: [three.js](https://github.com/mrdoob/three.js) (MIT) — including `BufferGeometryUtils` from `three/examples/jsm`.

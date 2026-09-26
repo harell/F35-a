@@ -189,7 +189,7 @@ void main() {
     #else
       float fogF = smoothstep(fogNear, fogFar, vFogDepth);
     #endif
-    col = mix(col, fogColor, fogF);
+    col = mix(col, fogColor, fogF * 0.8);
   #endif
   gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
@@ -211,7 +211,9 @@ void main() {
     #else
       float fogF = smoothstep(fogNear, fogFar, vFogDepth);
     #endif
-    col *= 1.0 - fogF;
+    // emissive fire punches through haze: only ~half the scene fog applies (i1: kills at 1-5 km
+    // were washed out by the dawn/dusk fog)
+    col *= 1.0 - fogF * 0.5;
   #endif
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>

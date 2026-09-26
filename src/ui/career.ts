@@ -23,10 +23,15 @@ export function difficultyFacts(d: DifficultyParams): string[] {
   return out;
 }
 
-/** One short line per difficulty (the first sentence of the data.ts description). */
+/** One short line per difficulty (the leading sentence(s) of the data.ts description, ≥ 30 chars). */
 export function difficultyShort(d: DifficultyParams): string {
-  const m = /^(.+?[.!])(\s|$)/.exec(d.description);
-  return (m ? m[1] : d.description).trim();
+  const parts = d.description.match(/[^.!]+[.!]?/g) ?? [d.description];
+  let out = '';
+  for (const p of parts) {
+    out += p;
+    if (out.trim().length >= 30) break; // "Balanced." alone says too little — take the next sentence too
+  }
+  return out.trim();
 }
 
 /**

@@ -11,33 +11,39 @@
 #                   mild bit-crush, compression, carrier hiss + squelch tail)
 #   a_*  AWACS    — male voice #2 (different speaker), narrower/noisier radio chain
 #
-# TTS engine: ffmpeg's built-in libflite (CMU Flite clustergen voices slt/rms/awb)
-# is used when available — in an ASR intelligibility test (pocketsphinx word
-# accuracy over all 37 phrases) Flite scored 0.58–0.64 vs ≤ 0.20 for the best
-# espeak-ng variants. espeak-ng is the fallback (VOICE_ENGINE=espeak forces it).
-#
+# TTS engine (VOICE_ENGINE=auto picks the first available):
+#   piper   neural VITS voices (Piper, rhasspy) — natural prosody, by far the most human-sounding
+#           option available offline. Set up with tools/voice-piper-setup.sh (pip wheel from PyPI
+#           + voice models from the rhasspy/piper GitHub release v0.0.2). Voices (see
+#           docs/CREDITS-audio.md for licences): Betty = kathleen (CC0), pilot + AWACS = two
+#           different male LibriTTS speakers (CC BY 4.0).
+#   flite   ffmpeg's built-in libflite (CMU Flite clustergen slt/rms/awb) — the old robotic voices
+#   espeak  espeak-ng (last resort)
 # Loudness: every clip is RMS-normalised on its speech part (Betty −17 dBFS,
 # radio −18 dBFS mean) and peak-limited to −1 dBFS, so the runtime mixer can use
 # a single gain per channel.
 #
 # Options:  --verify   also transcribe every clip with pocketsphinx (ffmpeg asr)
+#           --check    transcribe the existing clips only (no re-render)
 #           --only=ID  regenerate a single clip
-# Env:      VOICE_ENGINE=auto|flite|espeak
+# Env:      VOICE_ENGINE=auto|piper|flite|espeak   PIPER_HOME (default ~/.cache/f35-voices)
 # Re-runnable; output files are overwritten. Requires: ffmpeg (libmp3lame),
 # optionally libflite in ffmpeg, espeak-ng.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-OUT=public/audio/voice
+OUT=${VOICE_OUT:-public/audio/voice}
 RATE=24000
 BITRATE=48k
 ENGINE=${VOICE_ENGINE:-auto}
 VERIFY=0
+NORENDER=0
 ONLY=""
 for a in "$@"; do
   case "$a" in
     --verify) VERIFY=1 ;;
+    --check) VERIFY=1; NORENDER=1 ;;
     --only=*) ONLY="${a#--only=}" ;;
     *) echo "unknown option $a" >&2; exit 2 ;;
   esac
@@ -46,6 +52,10 @@ done
 command -v ffmpeg >/dev/null || { echo "ffmpeg not found" >&2; exit 1; }
 FF=(ffmpeg -nostdin -hide_banner -loglevel error -y)
 
+PIPER_HOME=${PIPER_HOME:-$HOME/.cache/f35-voices}
+PIPER_BIN="$PIPER_HOME/venv/bin/piper"
+if [ "$ENGINE" = auto ] && [ -x "$PIPER_BIN" ]; then ENGINE=piper; fi
+if [ "$ENGINE" = piper ] && [ ! -x "$PIPER_BIN" ]; then echo "piper not set up — run tools/voice-piper-setup.sh" >&2; exit 1; fi
 if [ "$ENGINE" = auto ]; then
   FILTERS=$(ffmpeg -hide_banner -filters 2>/dev/null || true)
   if grep -q " flite " <<< "$FILTERS"; then ENGINE=flite
@@ -59,6 +69,10 @@ fi
 BETTY_FLITE=slt;  BETTY_ESPEAK="en-us+f5:150:55"
 PILOT_FLITE=awb;  PILOT_ESPEAK="en-us+m1:165:40"
 AWACS_FLITE=rms;  AWACS_ESPEAK="en-us+m3:155:30"
+# Piper: model|speaker|length_scale (speech slowed slightly for clarity through the radio chain)
+BETTY_PIPER="${BETTY_PIPER:-en-us-kathleen-low|0|1.08}"
+PILOT_PIPER="${PILOT_PIPER:-en-us-libritts-high|19|1.02}"
+AWACS_PIPER="${AWACS_PIPER:-en-us-libritts-high|5|1.05}"
 # Flite tempo per role (1 = native): all slightly slowed for clarity over the radio.
 BETTY_TEMPO=0.97; PILOT_TEMPO=0.97; AWACS_TEMPO=0.97
 
@@ -122,7 +136,20 @@ duration() { ffprobe -v error -show_entries format=duration -of csv=p=0 "$1"; }
 # tts <role> <text> <out.wav>
 tts() {
   local role=$1 text=$2 out=$3
-  if [ "$ENGINE" = flite ]; then
+  if [ "$role" = betty ] && [ "${BETTY_ENGINE:-}" = hts ]; then
+    # Festival + HTS (CMU ARCTIC SLT) — apt: festival festvox-us-slt-hts
+    printf '%s\n' "$text" > "$TMP/text.txt"
+    text2wave -eval "(voice_cmu_us_slt_arctic_hts)" "$TMP/text.txt" -o "$TMP/hts.wav" >/dev/null 2>&1
+    "${FF[@]}" -i "$TMP/hts.wav" -af "atempo=${HTS_TEMPO:-0.95},aresample=$RATE" -ac 1 "$out"
+  elif [ "$ENGINE" = piper ]; then
+    local spec model spk ls
+    case $role in betty) spec=$BETTY_PIPER ;; pilot) spec=$PILOT_PIPER ;; *) spec=$AWACS_PIPER ;; esac
+    IFS='|' read -r model spk ls <<< "$spec"
+    printf '%s\n' "$text" | "$PIPER_BIN" -m "$PIPER_HOME/$model/$model.onnx" -s "$spk" --length-scale "$ls" \
+      --noise-scale 0.5 --noise-w-scale 0.6 --sentence-silence 0.12 -f "$TMP/pp.wav" >/dev/null 2>&1
+    # Piper peak-normalises to 0 dBFS; bring it to the level the chains were tuned for (≈ Flite, −7 dB peak)
+    "${FF[@]}" -i "$TMP/pp.wav" -af "volume=-8dB,aresample=$RATE" -ac 1 "$out"
+  elif [ "$ENGINE" = flite ]; then
     local v tempo
     case $role in betty) v=$BETTY_FLITE; tempo=$BETTY_TEMPO ;; pilot) v=$PILOT_FLITE; tempo=$PILOT_TEMPO ;; *) v=$AWACS_FLITE; tempo=$AWACS_TEMPO ;; esac
     printf '%s' "$text" > "$TMP/text.txt"
@@ -143,15 +170,15 @@ TRIM="silenceremove=start_periods=1:start_threshold=-48dB:start_silence=0.01,are
 BETTY_FX="$TRIM,highpass=f=300,highpass=f=300,lowpass=f=3400,lowpass=f=3400,equalizer=f=2500:t=q:w=1.1:g=4,equalizer=f=900:t=q:w=1.5:g=-2,aecho=0.9:0.55:2.7|6.1:0.18|0.1,acompressor=threshold=0.09:ratio=4:attack=3:release=70:makeup=2,adelay=25,apad=pad_dur=0.06"
 # Radio chains: band-limit, overdrive, (AWACS: mild bit-crush), compress. Heavier chains were
 # tested and cost too much intelligibility (ASR accuracy halved), so the grit stays moderate.
-PILOT_FX="$TRIM,highpass=f=330,highpass=f=330,lowpass=f=3400,equalizer=f=1800:t=q:w=1:g=4,volume=3dB,asoftclip=type=tanh:threshold=0.85,acompressor=threshold=0.09:ratio=5:attack=2:release=60:makeup=2,adelay=20"
-AWACS_FX="$TRIM,volume=5dB,asoftclip=type=atan:threshold=0.75,acrusher=bits=10:mode=log:mix=0.2:aa=0.7,highpass=f=420,highpass=f=420,lowpass=f=3000,lowpass=f=3000,equalizer=f=1600:t=q:w=1:g=3,acompressor=threshold=0.08:ratio=6:attack=2:release=60:makeup=2,adelay=20"
+PILOT_FX="$TRIM,highpass=f=300,highpass=f=300,lowpass=f=3600,equalizer=f=1800:t=q:w=1:g=3,volume=1dB,asoftclip=type=tanh:threshold=0.9,acompressor=threshold=0.09:ratio=5:attack=2:release=60:makeup=2,adelay=20"
+AWACS_FX="$TRIM,volume=2dB,asoftclip=type=atan:threshold=0.85,acrusher=bits=10:mode=log:mix=0.1:aa=0.7,highpass=f=380,highpass=f=380,lowpass=f=3200,lowpass=f=3200,equalizer=f=1600:t=q:w=1:g=3,acompressor=threshold=0.08:ratio=6:attack=2:release=60:makeup=2,adelay=20"
 
 render() {
   local id=$1 text=$2 role fx target bed tail
   case $id in
     b_*) role=betty; fx=$BETTY_FX; target=-17 ;;
-    p_*) role=pilot; fx=$PILOT_FX; target=-18; bed=0.008; tail=0.16 ;;
-    a_*) role=awacs; fx=$AWACS_FX; target=-18; bed=0.016; tail=0.20 ;;
+    p_*) role=pilot; fx=$PILOT_FX; target=-18; bed=0.005; tail=0.16 ;;
+    a_*) role=awacs; fx=$AWACS_FX; target=-18; bed=0.009; tail=0.20 ;;
     *) echo "bad id $id" >&2; return 1 ;;
   esac
   tts "$role" "$text" "$TMP/raw.wav"
@@ -180,7 +207,7 @@ total=0
 for c in "${CLIPS[@]}"; do
   id=${c%%|*}; text=${c#*|}
   [ -n "$ONLY" ] && [ "$ONLY" != "$id" ] && continue
-  render "$id" "$text"
+  [ $NORENDER = 1 ] || render "$id" "$text"
   f="$OUT/$id.mp3"
   read -r mean mx < <(levels "$f")
   bytes=$(stat -c %s "$f"); total=$((total + bytes))
@@ -191,11 +218,16 @@ echo "total: $total bytes"
 if [ $VERIFY = 1 ]; then
   M=/usr/share/pocketsphinx/model/en-us
   if [ ! -d "$M" ]; then echo "(pocketsphinx model not found — skipping ASR verify)"; exit 0; fi
-  echo; echo "ASR check (pocketsphinx transcript of each clip):"
+  echo; echo "ASR check (pocketsphinx transcript of each clip; word accuracy = spoken words found in the transcript):"
+  hits=0; words=0
   for c in "${CLIPS[@]}"; do
     id=${c%%|*}
     [ -n "$ONLY" ] && [ "$ONLY" != "$id" ] && continue
-    hyp=$(ffmpeg -nostdin -hide_banner -i "$OUT/$id.mp3" -af "aresample=16000,apad=pad_dur=2,asr=hmm=$M/en-us:dict=$M/cmudict-en-us.dict:lm=$M/en-us.lm.bin,ametadata=mode=print:key=lavfi.asr.text" -f null - 2>&1 | grep -o "lavfi.asr.text=.*" | sed 's/lavfi.asr.text=//' | tr '\n' ' ')
+    hyp=$(ffmpeg -nostdin -hide_banner -i "$OUT/$id.mp3" -af "volume=-10dB,adelay=300,aresample=16000,apad=pad_dur=2,asr=hmm=$M/en-us:dict=$M/cmudict-en-us.dict:lm=$M/en-us.lm.bin,ametadata=mode=print:key=lavfi.asr.text" -f null - 2>&1 | grep -o "lavfi.asr.text=.*" | sed 's/lavfi.asr.text=//' | tr '\n' ' ')
+    ref=$(printf '%s' "${c#*|}" | tr 'A-Z' 'a-z' | tr -c 'a-z\n' ' ')
+    h=" $(printf '%s' "$hyp" | tr 'A-Z' 'a-z') "
+    for w in $ref; do words=$((words + 1)); case "$h" in *" $w "*) hits=$((hits + 1)) ;; esac; done
     printf "%-22s %-36s → %s\n" "$id" "\"${c#*|}\"" "$hyp"
   done
+  echo "word accuracy: $hits / $words = $(awk -v a=$hits -v b=$words 'BEGIN{printf "%.2f", b ? a/b : 0}')"
 fi

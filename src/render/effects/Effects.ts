@@ -49,6 +49,20 @@ const FLARE_SMOKE = ribbon(0xe2e2e0, 1.2, 2.0, 5, 0.7, 0, 5, 0.06);
 
 const SIZE_M: Record<ExplosionSize, number> = { tiny: 3, small: 9, medium: 16, large: 30, huge: 55 };
 
+/**
+ * Air-kill payoff tuning (i1 review: kills were 1-3 px at BVR ranges). Minimum on-screen sizes are
+ * in device pixels; `scale` is the fireball size in metres for an aircraft of the given length.
+ */
+export const AIR_KILL = {
+  flashMinPx: 64,
+  glowMinPx: 36,
+  fireballMinPx: 10,
+  coreMinPx: 8,
+  smokeMinPx: 5,
+  secondaries: 3,
+  scale: (length: number) => Math.max(36, length * 2.8),
+};
+
 function trailStyleFor(def: MunitionDef): RibbonStyle | null {
   if (def.category === 'bomb' || def.smoke <= 0.01) return null;
   const sam = def.category === 'sam';
@@ -336,6 +350,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   }
 
   const DUST_COL = new Color(0x9b8a6c);
+  const FIREBALL_CORE: RGB = [1, 0.5, 0.12];
   const SHOCK_COL = new Color(0xfff2d8);
   const FOAM_COL = new Color(0xf0f4f5);
 
@@ -482,7 +497,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   function airKill(p: Vector3, vel: Vector3, length: number): void {
     const t = now();
     const d = distCam(p.x, p.y, p.z);
-    const S = Math.max(26, length * 2.1); // fireball radius scale (m): ~34 m for a fighter
+    const S = AIR_KILL.scale(length); // fireball scale (m): ~45-50 m for a fighter
     // flash + lingering glow
     resetSpawn(P);
     P.x = p.x;
@@ -493,7 +508,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     P.size1 = S * 4;
     col0(P, [1, 0.92, 0.75], 1, 4);
     col1(P, [1, 0.5, 0.15], 0, 2);
-    P.minPx = 48;
+    P.minPx = AIR_KILL.flashMinPx;
     fire.spawn(P, t);
     resetSpawn(P);
     P.x = p.x;
@@ -508,7 +523,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     P.size1 = S * 2.2;
     col0(P, [1, 0.6, 0.22], 0.9, 2.2);
     col1(P, [0.9, 0.25, 0.05], 0, 1);
-    P.minPx = 26;
+    P.minPx = AIR_KILL.glowMinPx;
     fire.spawn(P, t);
     // fuel fireball, carried forward with the wreck's momentum
     const nf = Math.max(8, count(22, d));
@@ -532,11 +547,39 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       P.rot = rnd() * 6.28;
       P.rotSpeed = (rnd() - 0.5) * 2;
       P.variant = 2 + (rnd() < 0.5 ? 1 : 0);
-      col0(P, [1, 0.6, 0.22], 0.95, 1.6);
-      col1(P, [0.85, 0.2, 0.04], 0, 1.0);
+      col0(P, [1, 0.5, 0.14], 0.9, 1.05);
+      col1(P, [0.8, 0.16, 0.03], 0, 0.9);
       P.fadeIn = 0.03;
-      P.minPx = 7;
+      P.minPx = AIR_KILL.fireballMinPx;
       fire.spawn(P, t);
+    }
+    // opaque (normal-blended) fireball core so the burst reads against a bright daytime sky, where
+    // additive fire washes out: orange → dark smoke
+    const nc = Math.max(5, count(12, d));
+    for (let i = 0; i < nc; i++) {
+      resetSpawn(P);
+      randDir(0.1);
+      const rr = S * 0.3 * rnd();
+      P.x = p.x + _w.x * rr;
+      P.y = p.y + _w.y * rr;
+      P.z = p.z + _w.z * rr;
+      const sp = S * (0.4 + rnd() * 0.6);
+      P.vx = vel.x * 0.5 + _w.x * sp;
+      P.vy = vel.y * 0.5 + _w.y * sp;
+      P.vz = vel.z * 0.5 + _w.z * sp;
+      P.drag = 2;
+      P.grav = 1.5;
+      P.size0 = S * 0.6;
+      P.size1 = S * (1.4 + rnd() * 0.6);
+      P.sizeCurve = 2.5;
+      P.life = 1.6 + rnd() * 1.2;
+      P.rot = rnd() * 6.28;
+      P.variant = (rnd() * 4) | 0;
+      col0(P, FIREBALL_CORE, 1, 1.4);
+      col1(P, C.smokeDark, 0.2);
+      P.fadeIn = 0.02;
+      P.minPx = AIR_KILL.coreMinPx;
+      smoke.spawn(P, t);
     }
     // dark smoke cloud left hanging where the jet died
     const ns = Math.max(6, count(18, d));
@@ -563,12 +606,12 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       col0(P, C.smokeDark, 0.95);
       col1(P, C.smokeMid, 0);
       P.fadeIn = 0.15;
-      P.minPx = 5;
+      P.minPx = AIR_KILL.smokeMinPx;
       smoke.spawn(P, t);
     }
     sparks(p.x, p.y, p.z, count(30, d), 55);
     // secondaries along the falling wreck's (ballistic) path
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < AIR_KILL.secondaries; i++) {
       const dl = 0.3 + i * 0.45 + rnd() * 0.25;
       schedule(
         dl,
@@ -886,7 +929,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         P.size1 = 5;
         col0(P, [1, 0.85, 0.6], 1, 5);
         col1(P, [1, 0.5, 0.2], 0, 2);
-        P.minPx = 10;
+        P.minPx = AIR_KILL.fireballMinPx;
         fire.spawn(P, t);
       }
       if (burning && fx.style) {

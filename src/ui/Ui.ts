@@ -2,16 +2,20 @@
  * F35-A — menus & overlays (UI module). Exports `createUi` (see core/contracts.ts UiApi).
  *
  *   host.ts              layers, transitions, back/Escape, spatial focus (keys + gamepad), click sound
- *   screens/*            splash, main menu, campaign/training, instant action, briefing (+ intel map),
- *                        settings, pause, debrief, credits
+ *   screens/*            splash, main menu (+ first-launch Training prompt, pilot card), service record
+ *                        (rank, stats, medals), campaign/training (+ "complete Training" nudge), instant
+ *                        action, briefing (+ intel map, difficulty sheet), settings, pause, debrief (+ tips,
+ *                        medals, Retry on Recruit), campaign ending, credits
+ *   career.ts            pure helpers: difficulty facts from DIFFICULTIES, onboarding flag, rank, medal tally
  *   overlays.ts          loading (progress + tips), rotate-your-phone, toasts
  *   art/*                logo, F-35 planform, icons, Auckland chart, animated menu background
  *   styles/*.css         the look (dark glass, cyan accent, military avionics)
  */
-import type { CreateUi, UiApi } from '../core/contracts';
+import type { CampaignProgress, CreateUi, UiApi } from '../core/contracts';
 import { DIFFICULTIES } from '../core/data';
 import { loadSettings } from '../core/settings';
 import type { Settings } from '../core/types';
+import { failStreak, loadProgress } from '../missions';
 import { UiHost } from './host';
 import { LoadingOverlay, RotateOverlay, Toasts } from './overlays';
 import { showBriefing } from './screens/briefing';
@@ -26,6 +30,7 @@ import { showSplash } from './screens/splash';
 import './styles/base.css';
 import './styles/screens.css';
 import './styles/overlays.css';
+import './styles/career.css';
 
 export const createUi: CreateUi = (root, deps) => {
   const host = new UiHost(root, () => {
@@ -47,6 +52,14 @@ export const createUi: CreateUi = (root, deps) => {
    * assigns that return value). Menus that change the difficulty mutate it and save it.
    */
   let live: Settings | null = null;
+  /** Saved progress (Game records the result before the debrief); null if storage is unreadable. */
+  const readProgress = (): CampaignProgress | null => {
+    try {
+      return loadProgress();
+    } catch {
+      return null;
+    }
+  };
   const liveSettings = (): Settings => {
     if (!live) {
       live = loadSettings();
@@ -64,7 +77,7 @@ export const createUi: CreateUi = (root, deps) => {
     showSplash: () => showSplash(host, deps.version),
     showLoading: (fraction, label) => loading.show(fraction, label),
     hideLoading: () => loading.hide(),
-    showMainMenu: () => showMainMenu(host, deps.version),
+    showMainMenu: () => showMainMenu(host, deps.version, { settings: liveSettings, progress: readProgress }),
     showCampaign: (missions, progress) => showCampaign(host, missions, progress, toast),
     showTraining: (missions, progress) => showTraining(host, missions, progress, toast),
     showInstantAction: () => showInstantAction(host),
@@ -78,7 +91,7 @@ export const createUi: CreateUi = (root, deps) => {
       const before = settings.difficulty;
       const out = await showSettings(host, settings, toast, { overlay });
       // mid-sortie the running mission keeps the difficulty it was built with (Game.runSession)
-      if (overlay && out.difficulty !== before) toast(`Difficulty: ${DIFFICULTIES[out.difficulty]?.label ?? out.difficulty} — applies from the next sortie`);
+      if (overlay && out.difficulty !== before) toast(`Difficulty: ${DIFFICULTIES[out.difficulty]?.label ?? out.difficulty} — applies from the next sortie or a restart`);
       live = out;
       return out;
     },
@@ -87,7 +100,10 @@ export const createUi: CreateUi = (root, deps) => {
       fromPause = choice === 'settings';
       return choice;
     },
-    showDebrief: (result, hasNext) => showDebrief(host, result, hasNext),
+    showDebrief: (result, hasNext) => {
+      const p = readProgress();
+      return showDebrief(host, result, hasNext, { settings: liveSettings, failStreak: p ? failStreak(p, result.missionId) : 0 });
+    },
     showCredits: () => showCredits(host, deps.version),
     setRotateHint: (visible) => rotate.set(visible),
     toast,

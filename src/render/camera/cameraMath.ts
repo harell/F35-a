@@ -118,9 +118,11 @@ export const PADLOCK = { up: 20, side: 15, backMin: 22, backMax: 35 };
  */
 export function padlockPose(jet: Vector3, tgt: Vector3, tgtDir: Vector3, chaseDist: number, outPos: Vector3, outLook: Vector3): void {
   const back = Math.max(PADLOCK.backMin, Math.min(PADLOCK.backMax, chaseDist * 1.2));
+  // offsets in the plane perpendicular to the line of sight (so steep LOS still frames both)
   sideOf(tgtDir, X, _s1);
-  outPos.copy(jet).addScaledVector(tgtDir, -back).addScaledVector(_s1, PADLOCK.side);
-  outPos.y += PADLOCK.up;
+  _s2.crossVectors(_s1, tgtDir).normalize(); // 'up' perpendicular to the LOS
+  if (_s2.y < 0) _s2.negate();
+  outPos.copy(jet).addScaledVector(tgtDir, -back).addScaledVector(_s1, PADLOCK.side).addScaledVector(_s2, PADLOCK.up);
   // bisector of the unit directions camera→jet and camera→target
   _s1.copy(jet).sub(outPos).normalize();
   _s2.copy(tgt).sub(outPos);
@@ -132,7 +134,7 @@ export function padlockPose(jet: Vector3, tgt: Vector3, tgtDir: Vector3, chaseDi
 }
 
 /** Missile camera framing: rigid along-track behind the missile, lifted and to the right. */
-export const MISSILE_CAM = { back: 6, up: 1.2, side: 1.5, aheadLook: 60 };
+export const MISSILE_CAM = { back: 3.5, up: 1.3, side: 2.0, aheadLook: 60 };
 
 /**
  * Missile camera pose (rigid along-track: no lag, so the missile body, motor flame and trail stay

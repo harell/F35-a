@@ -1,7 +1,7 @@
 /**
  * Procedural liveries painted in model space onto the planar-by-facing atlas (see geom/atlas.ts):
  *  - F-35A: low-vis "Have Glass" grey RAM with panel lines, sawtooth doors, tile/RAM edge tones,
- *    low-visibility star-and-bar, tail code.
+ *    RNZAF low-visibility kiwi roundels, 'NZ' tail code and NZ serial (No. 75 Squadron style).
  *  - Russian types: grey-blue Flanker camouflage, two-tone MiG-29 greys, dark Su-57 splinter,
  *    light bombers; red stars and bort numbers.
  */
@@ -122,6 +122,18 @@ function paintF35(p: AtlasPainter): void {
     line(ctx, [[0.3, S(1)], [0.74, S(3.6)], [1.16, S(5.4)], [1.48, S(7.4)]], 'rgba(255,255,255,0.12)', 0.05);
     // dorsal lights / markings: walk-way hint near the spine
     line(ctx, [[0.12, S(9)], [0.12, S(12.5)]], 'rgba(20,22,24,0.25)', 0.02);
+    // RNZAF low-vis kiwi roundel on the upper wing (both wings share this region), beak to the nose
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(3.7, 2.2, 0.42, 0, Math.PI * 2);
+    ctx.strokeStyle = '#3f4448';
+    ctx.lineWidth = 0.045;
+    ctx.stroke();
+    ctx.translate(3.7, 2.2);
+    ctx.rotate(Math.PI / 2);
+    kiwi(ctx, 0, 0, 0.33, '#454b50');
+    ctx.restore();
   });
 
   p.with('bottom', (ctx) => {
@@ -151,29 +163,27 @@ function paintF35(p: AtlasPainter): void {
       // gun port door (left) / avionics bay (right)
       if (!mirror) AtlasPainter.sawRect(ctx, S(7.3), S(8.5), 0.15, 0.4, 3, 0.05, LINE, 0.018);
       else AtlasPainter.sawRect(ctx, S(6.8), S(7.9), 0.1, 0.45, 3, 0.05, LINE, 0.018);
-      // low-visibility star-and-bar on the intake side
+      // RNZAF low-visibility kiwi roundel on the intake side (grey ring + kiwi facing the nose)
       const cx = S(6.35);
       const cy = -0.34;
       ctx.save();
-      ctx.globalAlpha = 0.55;
-      poly(ctx, [
-        [cx - 0.42, cy - 0.07],
-        [cx + 0.42, cy - 0.07],
-        [cx + 0.42, cy + 0.07],
-        [cx - 0.42, cy + 0.07],
-      ], undefined, '#3f4448', 0.025);
+      ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.arc(cx, cy, 0.19, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 0.3, 0, Math.PI * 2);
       ctx.strokeStyle = '#3f4448';
-      ctx.lineWidth = 0.025;
+      ctx.lineWidth = 0.035;
       ctx.stroke();
-      AtlasPainter.star(ctx, cx, cy, 0.17, '#4a5054');
+      kiwi(ctx, cx, cy, 0.24, '#454b50');
       ctx.restore();
-      // "USAF" small below canopy (dark grey)
-      AtlasPainter.text(ctx, 'USAF', S(4.2), -0.3, 0.12, 'rgba(55,60,64,0.8)', mirror);
-      // tail code and serial on the fins (side region covers the canted fins)
-      AtlasPainter.text(ctx, 'HL', mirror ? 4.55 : 4.35, 1.42, 0.36, 'rgba(58,62,66,0.85)', mirror);
-      AtlasPainter.text(ctx, 'AF 13-5071', mirror ? 4.6 : 4.4, 1.05, 0.1, 'rgba(58,62,66,0.8)', mirror);
+      // "RNZAF" small below the canopy (dark grey)
+      AtlasPainter.text(ctx, 'RNZAF', S(4.2), -0.3, 0.12, 'rgba(55,60,64,0.8)', mirror);
+      // No. 75 Squadron style tail marking: 'NZ' tail code, small kiwi, serial on the canted fins
+      AtlasPainter.text(ctx, 'NZ', mirror ? 4.55 : 4.35, 1.42, 0.36, 'rgba(58,62,66,0.85)', mirror);
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      kiwi(ctx, mirror ? 4.95 : 4.8, 1.8, 0.2, '#4a5055');
+      ctx.restore();
+      AtlasPainter.text(ctx, 'NZ3501', mirror ? 4.6 : 4.4, 1.05, 0.1, 'rgba(58,62,66,0.8)', mirror);
       // rudder hinge
       line(ctx, [[4.75, 0.55], [5.05, 2.05]], LINE, 0.02);
       // fin leading edge band
@@ -185,6 +195,41 @@ function paintF35(p: AtlasPainter): void {
     ctx.fillStyle = 'rgba(0,0,0,0.05)';
     ctx.fillRect(0, -1, 5.6, 3.6);
   });
+}
+
+/**
+ * Kiwi silhouette (RNZAF roundel centre) at (a, c), body length ~2r, beak pointing to -a (the nose
+ * in the side regions). Drawn in model units in the current region transform (y up).
+ */
+function kiwi(ctx: Ctx2D, a: number, c: number, r: number, fill: string): void {
+  ctx.fillStyle = fill;
+  // body (pear shaped: big rear, smaller front)
+  ctx.beginPath();
+  ctx.ellipse(a + r * 0.18, c + r * 0.02, r * 0.62, r * 0.46, 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  // head
+  ctx.beginPath();
+  ctx.ellipse(a - r * 0.45, c + r * 0.22, r * 0.2, r * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // long, slightly down-curved beak
+  ctx.beginPath();
+  ctx.moveTo(a - r * 0.6, c + r * 0.27);
+  ctx.quadraticCurveTo(a - r * 0.9, c + r * 0.12, a - r * 1.08, c - r * 0.2);
+  ctx.lineTo(a - r * 1.03, c - r * 0.21);
+  ctx.quadraticCurveTo(a - r * 0.85, c + r * 0.05, a - r * 0.58, c + r * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  // legs
+  ctx.strokeStyle = fill;
+  ctx.lineWidth = r * 0.07;
+  ctx.beginPath();
+  ctx.moveTo(a + r * 0.05, c - r * 0.35);
+  ctx.lineTo(a - r * 0.02, c - r * 0.72);
+  ctx.lineTo(a - r * 0.18, c - r * 0.74);
+  ctx.moveTo(a + r * 0.3, c - r * 0.35);
+  ctx.lineTo(a + r * 0.26, c - r * 0.72);
+  ctx.lineTo(a + r * 0.1, c - r * 0.74);
+  ctx.stroke();
 }
 
 /* ───────────────────────── enemy liveries ───────────────────────── */

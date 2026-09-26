@@ -72,6 +72,8 @@ export class BettyScheduler {
   private holdUntil = -Infinity;
   /** Repeats (not first announcements) of warnings below PULL UP wait until this time (radio call in progress). */
   private repeatHoldUntil = -Infinity;
+  /** Every clip below PULL UP waits until this time (urgent radio call on the air). */
+  private allHoldUntil = -Infinity;
   /** Master-caution chime ringing: non-urgent clips wait for it, PULL UP / MISSILE don't. */
   private chimeUntil = -Infinity;
   private readonly decision: BettyDecision = { warning: 'pull_up', voice: 'b_pull_up', priority: 0, preempt: false };
@@ -85,6 +87,7 @@ export class BettyScheduler {
     this.playing = null;
     this.holdUntil = -Infinity;
     this.repeatHoldUntil = -Infinity;
+    this.allHoldUntil = -Infinity;
     this.chimeUntil = -Infinity;
   }
 
@@ -94,6 +97,14 @@ export class BettyScheduler {
    */
   deferRepeats(until: number): void {
     if (until > this.repeatHoldUntil) this.repeatHoldUntil = until;
+  }
+
+  /**
+   * An urgent threat call (e.g. DARKSTAR "SAM launch") is on the air: every Betty clip except
+   * PULL UP waits until `until`, then speaks right after it (the MAWS tone is already sounding).
+   */
+  deferAll(until: number): void {
+    if (until > this.allHoldUntil) this.allHoldUntil = until;
   }
 
   /** Warning whose clip is playing at `now` (null = silent). */
@@ -133,6 +144,7 @@ export class BettyScheduler {
       const since = now - s.lastStart;
       const due = s.announced ? since >= rule.repeat && (rule.priority >= 100 || now >= this.repeatHoldUntil) : since >= rule.rearm;
       if (!due) continue;
+      if (rule.priority < 100 && now < this.allHoldUntil) continue;
       if (!bestRule || rule.priority > bestRule.priority) {
         best = id;
         bestRule = rule;

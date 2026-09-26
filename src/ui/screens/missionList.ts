@@ -10,6 +10,8 @@ import { silhouetteSvg } from '../art/planform';
 import { escapeHtml, h } from '../dom';
 import { formatScore, gradeTone, missionState, pad2, suggestedMissionIndex } from '../format';
 import type { UiHost } from '../host';
+import { findMission } from '../../missions';
+import { BASIC_TRAINING, basicTrainingDone } from '../career';
 import { screenHeader } from '../widgets';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered', overcast: 'Overcast' } as const;
@@ -49,7 +51,14 @@ function card(m: MissionDef, progress: CampaignProgress, onPick: (m: MissionDef,
   return b;
 }
 
-function listScreen(host: UiHost, kind: 'campaign' | 'training', missions: MissionDef[], progress: CampaignProgress, toast: (t: string) => void): Promise<MissionDef | null> {
+function listScreen(
+  host: UiHost,
+  kind: 'campaign' | 'training',
+  missions: MissionDef[],
+  progress: CampaignProgress,
+  toast: (t: string) => void,
+  trainingPick?: () => MissionDef | null,
+): Promise<MissionDef | null> {
   return new Promise((resolve) => {
     let done = false;
     const el = h('section', { class: `scr-missions kind-${kind}` });
@@ -74,6 +83,21 @@ function listScreen(host: UiHost, kind: 'campaign' | 'training', missions: Missi
     );
 
     const body = h('div', { class: 'scr-body ml-body ui-scroll' });
+    // onboarding nudge: basic training first
+    if (kind === 'campaign' && !basicTrainingDone(progress) && trainingPick) {
+      const left = BASIC_TRAINING.filter((id) => !progress.best[id]);
+      const nudge = h('div', { class: 'ml-nudge ui-panel' });
+      nudge.innerHTML =
+        `<span class="ml-nudge-i">${icon('book')}</span>` +
+        `<span class="ml-nudge-t"><b>Recommended: complete Training first</b><em>${left.map((id) => id.toUpperCase()).join(' · ')} teach flying, locking and SAM defence (~10 min).</em></span>`;
+      const go = h('button', { class: 'ui-btn ghost ml-nudge-b', attrs: { type: 'button' }, html: `<span>Training</span>${icon('next')}` });
+      go.addEventListener('click', () => {
+        const m = trainingPick();
+        if (m) finish(m);
+      });
+      nudge.appendChild(go);
+      body.appendChild(nudge);
+    }
     // group by theatre (campaign is all Auckland today, but keep it generic)
     const groups = new Map<TheaterId, MissionDef[]>();
     for (const m of [...missions].sort((a, b) => a.index - b.index)) {
@@ -126,7 +150,13 @@ function listScreen(host: UiHost, kind: 'campaign' | 'training', missions: Missi
   });
 }
 
+/** First basic-training lesson not yet flown (the campaign nudge's shortcut). */
+function nextTraining(progress: CampaignProgress): MissionDef | null {
+  const id = BASIC_TRAINING.find((t) => !progress.best[t]);
+  return id ? findMission(id) : null;
+}
+
 export const showCampaign = (host: UiHost, missions: MissionDef[], progress: CampaignProgress, toast: (t: string) => void) =>
-  listScreen(host, 'campaign', missions, progress, toast);
+  listScreen(host, 'campaign', missions, progress, toast, () => nextTraining(progress));
 export const showTraining = (host: UiHost, missions: MissionDef[], progress: CampaignProgress, toast: (t: string) => void) =>
   listScreen(host, 'training', missions, progress, toast);
