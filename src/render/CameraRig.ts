@@ -5,11 +5,13 @@
  *  chase        behind/above in a lagged aircraft frame (feels the rolls), looks ahead along the
  *               velocity, FOV kick with afterburner/speed, drag to look around, never below terrain
  *  orbit        drag to orbit, slow auto-rotate when idle
- *  target       over-the-shoulder padlock (20 m up, 15 m right, <=35 m back): jet low-left,
- *               designated/locked target upper-right
- *               (falls back to chase without a target)
- *  missile      rigid along-track behind/right of the player's latest missile (body, flame and trail
- *               in frame, target biased in); lingers ~3 s on the impact, then returns
+ *  target       over-the-shoulder padlock: the jet is pinned left of centre just below the middle
+ *               (clear of the touch clusters and radio band), the designated/locked target in the
+ *               upper-right third (falls back to chase without a target)
+ *  missile      rigid along-track behind/right of the player's missile most likely to hit (guiding
+ *               on a live target, shortest time to go, locked target preferred — not blindly the
+ *               newest); cuts to any salvo kill while the ridden missile is > 2 s out, lingers
+ *               ~3 s on the impact, then rides the next guiding missile of the salvo or returns
  *  flyby        fixed point ahead of the flight path; re-placed after the jet passes
  *  tactical     high top-down, north-up overview (background for the HUD's 2D map; coverage on
  *               camera.userData.tactical)
@@ -19,7 +21,7 @@
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { CameraRigApi, CreateCameraRig, FrameContext } from '../core/contracts';
 import type { CameraMode } from '../core/types';
-import type { AircraftEntity } from '../sim/entities';
+import type { AircraftEntity, AnyEntity, MissileEntity } from '../sim/entities';
 import { AIRCRAFT_SPECS } from './models/specs';
 import {
   chasePosition,
@@ -29,10 +31,16 @@ import {
   fovToFrame,
   headQuaternion,
   impactPose,
+  aimAtNdc,
   missileCamPose,
+  missileFollowScore,
+  missileTimeToGo,
+  NOT_GUIDING,
   orbitOffset,
-  padlockPose,
+  PADLOCK,
+  padlockOffset,
   passedAnchor,
+  pickFollowMissile,
   shakeNoise,
   sideOf,
   smoothK,
@@ -83,8 +91,9 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   let gSag = 0;
   let fov = settings.fov;
   // missile cam
-  let lastMissileId: number | null = null;
   let followMissile: number | null = null;
+  const pick = { id: -1, score: Infinity };
+  let holdStart = -1;
   const holdPos = new Vector3();
   const holdCam = new Vector3();
   const mFwd = new Vector3(0, 0, -1);
@@ -109,18 +118,69 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   let near = 1;
   let far = 60_000;
 
-  const offLaunch = world.events.on('munition:launch', ({ missile, shooter }) => {
-    if (world.player && shooter.id === world.player.id) lastMissileId = missile.id;
-  });
-  const offEnd = world.events.on('munition:end', ({ missile, position }) => {
-    if (mode === 'missile' && followMissile === missile.id) {
-      holdPos.copy(position);
-      // freeze a spot behind/above/right of the impact along the final track and linger on it
-      impactPose(holdPos, mFwd, mSide, holdCam);
-      clampAboveGround(holdCam, groundY(holdCam.x, holdCam.z), 5);
-      camera.position.copy(holdCam); // kill-cam cut
-      holdUntil = time + 3.2;
-      holding = true;
+  const getTarget = (id: number | null): AnyEntity | null => (id == null ? null : world.getEntity(id));
+  const primaryId = (): number | null => {
+    const p = world.player;
+    return p ? (p.radar.lockedId ?? p.radar.designatedId ?? null) : null;
+  };
+  /** Best player missile to ride (see pickFollowMissile); result in `pick` (id -1 = none). */
+  function bestMissile(exclude = -1): { id: number; score: number } {
+    const p = world.player;
+    if (!p) {
+      pick.id = -1;
+      pick.score = Infinity;
+      return pick;
+    }
+    return pickFollowMissile(world.missiles, p.id, primaryId(), getTarget, exclude, pick);
+  }
+  /** Time to go of a missile still guiding on a live target (Infinity otherwise). */
+  function guidingTti(m: MissileEntity): number {
+    const t = getTarget(m.targetId);
+    if (missileFollowScore(m, t, null) >= NOT_GUIDING || !t) return Infinity;
+    return missileTimeToGo(m, t);
+  }
+  function follow(id: number): void {
+    followMissile = id;
+    mSideValid = false;
+  }
+  /** Kill-cam cut: freeze a spot behind/above/right of the impact along the final track, linger. */
+  function startHold(m: MissileEntity, position: Vector3): void {
+    mFwd.set(0, 0, -1).applyQuaternion(m.quaternion);
+    if (m.id !== followMissile || !mSideValid) sideOf(mFwd, _right.set(1, 0, 0).applyQuaternion(m.quaternion), mSide);
+    followMissile = m.id;
+    holdPos.copy(position);
+    impactPose(holdPos, mFwd, mSide, holdCam);
+    clampAboveGround(holdCam, groundY(holdCam.x, holdCam.z), 5);
+    camera.position.copy(holdCam);
+    holdStart = time;
+    holdUntil = time + 3.2;
+    holding = true;
+  }
+  const offEnd = world.events.on('munition:end', ({ missile, position, reason }) => {
+    const p = world.player;
+    if (mode !== 'missile' || !p || missile.shooterId !== p.id) return;
+    const hit = reason === 'hit' || reason === 'proximity';
+    if (holding) {
+      // a later impact of the salvo, once the first one has had its moment: cut to it
+      if (hit && missile.id !== followMissile && time - holdStart >= 1) startHold(missile, position);
+      return;
+    }
+    if (missile.id === followMissile) {
+      if (!hit) {
+        // the ridden missile missed: ride the next one of the salvo that is still guiding
+        const b = bestMissile(missile.id);
+        if (b.id >= 0 && b.score < NOT_GUIDING) {
+          follow(b.id);
+          return;
+        }
+      }
+      startHold(missile, position);
+      return;
+    }
+    if (hit) {
+      // another missile of the salvo scored while the ridden one is still > 2 s out: show that kill
+      const f = liveMissile(followMissile);
+      if (!f || guidingTti(f) > 2) startHold(missile, position);
     }
   });
 
@@ -138,7 +198,7 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   function available(m: CameraMode): boolean {
     const p = world.player;
     if (m === 'target') return !!targetOf(p);
-    if (m === 'missile') return !!liveMissile(lastMissileId);
+    if (m === 'missile') return bestMissile().id >= 0;
     return true;
   }
 
@@ -257,7 +317,10 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     }
     // smooth only the line-of-sight direction; the pose itself is rigid on the jet (no lag/jitter)
     tgtDir.lerp(_v, smoothK(3, dt)).normalize();
-    padlockPose(p.position, tgt.position, tgtDir, spec.chase.dist, _w, _dir);
+    // offsets follow the live lens (FOV/aspect) so the composition is the same on any screen
+    const f = camera.fov;
+    const aspect = camera.aspect;
+    padlockOffset(p.position, tgtDir, spec.chase.dist, f, aspect, _w);
     if (!padValid) {
       padPos.copy(_w).sub(p.position);
       padValid = true;
@@ -265,43 +328,56 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     // offset relative to the jet is smoothed (stable when the LOS swings through the vertical)
     padPos.lerp(_w.sub(p.position), smoothK(6, dt));
     camera.position.copy(p.position).add(padPos);
-    const lifted = clampAboveGround(camera.position, groundY(camera.position.x, camera.position.z), 3);
-    if (lifted) {
-      // re-aim at the bisector from the lifted position
-      _w.copy(p.position).sub(camera.position).normalize();
-      _aim.copy(tgt.position).sub(camera.position).normalize();
-      _dir.copy(_w).add(_aim).normalize();
-    }
-    _aim.copy(camera.position).add(_dir);
+    clampAboveGround(camera.position, groundY(camera.position.x, camera.position.z), 3);
+    // pin the jet at its screen spot (no roll): rigid on the jet, no jitter; a far target lands in
+    // the upper-right third, a closer one between the two
+    _dir.copy(p.position).sub(camera.position);
+    aimAtNdc(_dir, PADLOCK.jetX, PADLOCK.jetY, f, aspect, camera.quaternion);
     camera.up.set(0, 1, 0);
-    camera.lookAt(_aim);
-    // widen the lens when the target is close so both stay in frame
-    if (range < 400) fovOut.v += (1 - range / 400) * 18;
+    // widen the lens a little when the target is close
+    if (range < 400) fovOut.v += (1 - range / 400) * 10;
     setPlanes(1, ctx.quality.drawDistance);
     return true;
   }
 
+  function leaveMissileCam(): false {
+    holding = false;
+    followMissile = null;
+    mSideValid = false;
+    mode = prevMode === 'missile' ? 'chase' : prevMode;
+    sqValid = false;
+    return false;
+  }
+
   function missileCam(dt: number, ctx: FrameContext, fovOut: { v: number }): boolean {
     if (holding) {
-      // linger on the impact: fixed camera, slow push-in, narrower lens on the fireball/wreck
-      camera.position.lerp(holdPos, smoothK(0.08, dt));
-      camera.up.set(0, 1, 0);
-      camera.lookAt(holdPos);
-      fovOut.v = Math.min(fovOut.v, 45);
-      setPlanes(1, ctx.quality.drawDistance);
-      if (time > holdUntil) {
-        holding = false;
-        followMissile = null;
-        mSideValid = false;
-        mode = prevMode === 'missile' ? 'chase' : prevMode;
-        sqValid = false;
-        return false;
+      if (time <= holdUntil) {
+        // linger on the impact: fixed camera, slow push-in, narrower lens on the fireball/wreck
+        camera.position.lerp(holdPos, smoothK(0.08, dt));
+        camera.up.set(0, 1, 0);
+        camera.lookAt(holdPos);
+        fovOut.v = Math.min(fovOut.v, 45);
+        setPlanes(1, ctx.quality.drawDistance);
+        return true;
       }
-      return true;
+      // hold over: ride the next missile of the salvo that is still guiding, else go back
+      holding = false;
+      const b = bestMissile();
+      if (b.id < 0 || b.score >= NOT_GUIDING) return leaveMissileCam();
+      follow(b.id);
     }
-    const m = liveMissile(followMissile ?? lastMissileId);
-    if (!m) return false;
-    followMissile = m.id;
+    let m = liveMissile(followMissile);
+    if (m && missileFollowScore(m, getTarget(m.targetId), null) >= NOT_GUIDING) {
+      // the ridden missile lost its target (decoyed / ballistic / target dead): switch to a guiding one
+      const b = bestMissile();
+      if (b.id >= 0 && b.score < NOT_GUIDING && b.id !== m.id) m = liveMissile(b.id);
+    }
+    if (!m) {
+      const b = bestMissile();
+      m = liveMissile(b.id);
+      if (!m) return leaveMissileCam();
+    }
+    if (m.id !== followMissile) follow(m.id);
     mFwd.set(0, 0, -1).applyQuaternion(m.quaternion);
     // lateral offset direction is smoothed (rotation only); the along-track distance is rigid
     sideOf(mFwd, _right.set(1, 0, 0).applyQuaternion(m.quaternion), _side);
@@ -375,11 +451,12 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     setMode(m: CameraMode) {
       if (m === mode) return;
       if (m === 'missile') {
-        if (!available('missile')) return;
+        // ride the missile most likely to hit (guiding, shortest time to go), not the newest
+        const b = bestMissile();
+        if (b.id < 0) return;
         prevMode = mode;
-        followMissile = lastMissileId;
         holding = false;
-        mSideValid = false;
+        follow(b.id);
       }
       if (m === 'flyby') anchorValid = false;
       if (m === 'target') tgtValid = padValid = false;
@@ -499,7 +576,6 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     },
 
     dispose() {
-      offLaunch();
       offEnd();
       camera.removeFromParent();
     },

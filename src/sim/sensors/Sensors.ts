@@ -399,15 +399,22 @@ function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): Trac
 }
 
 /**
- * TGT button: move the designation to the next candidate (dropping any lock) and command a lock
- * on it. With a single candidate it toggles: locked / locking → break lock (back to a silent TWS
- * track), otherwise command the lock.
+ * TGT button (LOCK / NEXT): with an unlocked, un-commanded TD box (the auto-designated primary
+ * threat) the press commands the lock on THAT contact. A press while locking / locked moves the
+ * designation to the next candidate (dropping the lock) and commands a lock on it. With a single
+ * candidate it toggles: locked / locking → break lock (back to a silent TWS track).
  */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
   const list = candidates(ctx, ac, st);
   if (list.length === 0) return;
   const idx = list.findIndex((c) => c.id === ac.radar.designatedId);
+  // TGT state machine: the first press with an un-commanded TD box (auto-designated primary)
+  // LOCKS the boxed contact; only a press while locking / locked advances to the next one.
+  if (idx >= 0 && ac.radar.lockedId === null && !st.lockCommanded) {
+    st.lockCommanded = true;
+    return;
+  }
   const next = list[(idx + 1) % list.length];
   if (next.id === ac.radar.designatedId) {
     if (ac.radar.lockedId !== null || st.lockCommanded) {

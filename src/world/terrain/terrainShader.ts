@@ -120,6 +120,8 @@ uniform float uFields; // strength of the procedural paddock pattern (0 = none)
 uniform vec3 uRoofs[6];
 uniform vec3 uGarden;
 uniform vec3 uCanopy;
+uniform vec3 uSuburbLeafy; // far-field suburb albedo, leafy / bare neighbourhoods (urbanColor.ts)
+uniform vec3 uSuburbBare;
 uniform vec3 uSand;
 uniform vec3 uBlackSand;
 uniform vec3 uShoreRock;
@@ -225,7 +227,10 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, out vec3 emissive) 
   float roadD = edgeDist(p, BLOCK);
   float aa = max(mpp, 0.05);
   float road = 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, roadD);
-  float arterial = 1.0 - smoothstep(7.5 - aa * 0.6, 7.5 + aa * 0.6, dist.w);
+  // District borders are ordinary streets where two grid orientations meet (no arterial width,
+  // lane marks or extra lamps: painted on every jittered Voronoi border those read as cracked
+  // paving from altitude). Real arterials are road ribbons (motorways.ts ARTERIALS).
+  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w));
 
   vec3 asphalt = vec3(0.085, 0.086, 0.09);
   vec3 paving = vec3(0.28, 0.275, 0.26);
@@ -233,15 +238,18 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, out vec3 emissive) 
   float lawnH = fract(lh * 3.1);
   vec3 grass = uGarden * (0.84 + 0.24 * bh) * mix(vec3(1.0), lawnH < 0.25 ? vec3(1.12, 1.0, 0.72) : vec3(0.86, 0.9, 0.86), step(0.25, abs(lawnH - 0.5) * 2.0));
   // leafy and bare neighbourhoods (≈ 500 m scale)
-  float leafy = texture2D(uDetail, wp * (1.0 / 1730.0)).a;
-  float treeFrac = (0.36 + 0.3 * leafy - 0.26 * dens) * (1.0 - apt * 0.6);
-  vec3 avgRoof = (uRoofs[0] + uRoofs[1] + uRoofs[2] + uRoofs[3] + uRoofs[4] + uRoofs[5]) / 6.0;
+  float leafy = smoothstep(0.2, 0.8, texture2D(uDetail, wp * (1.0 / 1730.0)).a);
+  // Auckland canopy cover ≈ 30-45 % (leafy isthmus suburbs at the top end), less in the densest parts
+  float treeFrac = mix(0.3, 0.46, leafy) * (1.0 - 0.3 * dens) * (1.0 - apt * 0.6);
   vec3 flatAvg = vec3(0.3, 0.29, 0.27);
-  // Far: area-weighted roofs + canopy + grass + paving, a little variation per block.
-  float roofCover = mix(0.38, 0.55, dens);
-  vec3 far = mix(avgRoof, flatAvg, apt) * roofCover + uCanopy * treeFrac + grass * max(0.0, 0.8 - roofCover - treeFrac) + mix(asphalt, paving, 0.5) * 0.2;
-  far *= 0.95 + 0.1 * bh;
-  far = mix(far, uGarden * 0.8 + uCanopy * 0.3, park);
+  // Far: grey-green area average (canopy, NZ roofs, lawns, streets; precomputed on the CPU from the
+  // palette), leafier / barer by neighbourhood, plus a per-block canopy / roof mottle (≈ 100 m) that
+  // keeps a city grain at combat altitude and fades out before it would alias.
+  vec3 far = mix(uSuburbBare, uSuburbLeafy, leafy);
+  far = mix(far, uCanopy * 1.25, (bh - 0.5) * 0.45 * (1.0 - smoothstep(40.0, 160.0, mpp)));
+  vec3 cbdFar = flatAvg * 0.6 + uCanopy * treeFrac + mix(asphalt, paving, 0.5) * 0.25;
+  far = mix(far, cbdFar, apt);
+  far = mix(far, uGarden * 0.75 + uCanopy * 0.35, park);
   // Mid range (≈ 8–40 m/px): one colour per lot on the real lot grid (roof share, lawn and garden
   // trees, random per lot) with the streets as coverage-weighted lines, so the suburbs read as rows
   // of houses along a street grid rather than as a mosaic of square colour cells.
@@ -310,12 +318,8 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, out vec3 emissive) 
     // footpaths, kerbs and streets (lane marks on arterials)
     float foot = 1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD);
     near = mix(near, paving * 1.15, foot * (1.0 - tree));
-    near = mix(near, asphalt, max(road, arterial));
-    float lane = (1.0 - smoothstep(0.12, 0.12 + aa, abs(dist.w))) * step(0.5, fract(p.y / 9.0 + p.x / 9.0)) * arterial;
-    near = mix(near, vec3(0.6), lane * 0.6 * (1.0 - smoothstep(0.5, 1.5, mpp)));
+    near = mix(near, asphalt, road);
     col = mix(near, col, smoothstep(4.5, 8.0, mpp));
-  } else {
-    col = mix(col, asphalt, arterial * 0.5 * (1.0 - smoothstep(8.0, 40.0, mpp)));
   }
 
   emissive = vec3(0.0);
@@ -323,9 +327,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, out vec3 emissive) 
     // street lamps every ~32 m along roads (arterials brighter); lit windows glow on the lots
     vec2 lq = fract(p / 36.0) - 0.5;
     float lampDot = exp(-dot(lq, lq) * 36.0 * 36.0 / max(6.0, mpp * mpp * 2.0));
-    float nearLamps = (road * 0.6 + arterial * 1.3) * lampDot * (1.0 - smoothstep(6.0, 18.0, mpp));
+    float nearLamps = road * 0.8 * lampDot * (1.0 - smoothstep(6.0, 18.0, mpp));
     float glowLots = built * step(lh, 0.45) * (1.0 - smoothstep(4.0, 12.0, mpp)) * 0.05;
-    float avgLamps = (0.05 + 0.25 * arterial * (1.0 - smoothstep(20.0, 90.0, mpp))) * (0.7 + 0.6 * bh) * (0.6 + 0.5 * dens);
+    float avgLamps = 0.06 * (0.6 + 0.8 * bh) * (0.6 + 0.5 * dens);
     float lamps = mix(nearLamps * 1.6, avgLamps, smoothstep(3.0, 18.0, mpp));
     vec3 lampCol = mix(vec3(1.0, 0.58, 0.22), vec3(1.0, 0.86, 0.66), step(0.55, fract(dist.z * 17.0)));
     emissive = (lampCol * lamps + vec3(1.0, 0.72, 0.42) * (glowLots + 0.03 * dens * smoothstep(4.0, 12.0, mpp))) * uNight * clamp(dens * 2.5, 0.0, 1.0);

@@ -158,6 +158,7 @@ export const DEFAULT_SETTINGS: Settings = {
   masterVolume: 0.9,
   sfxVolume: 0.9,
   voiceVolume: 1,
+  musicVolume: 0.6,
   haptics: true,
   hints: true,
   hudColor: 'green',

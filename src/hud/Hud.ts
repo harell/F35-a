@@ -25,7 +25,7 @@ import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, dra
 import { HudState, makeFrame, type HudMode } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
-import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan } from './hmd/overlays';
+import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
 import { Pen } from './hmd/pen';
@@ -46,6 +46,7 @@ import {
 import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
+import { reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
 
 const _q = new Quaternion();
 const _fwd = new Vector3();
@@ -77,6 +78,7 @@ export const createHud: CreateHud = (canvas, events) => {
   let dirty = true;
   let playerTeam: string | null = null;
   let lastMode: HudMode = 'hmd';
+  let lastView: FrameContext['viewMode'] | '' = '';
   // threat tracker lookups (bound once: no per-frame closures)
   let curWorld: FrameContext['world'] | null = null;
   let curPlayer: FrameContext['player'] = null;
@@ -239,6 +241,8 @@ export const createHud: CreateHud = (canvas, events) => {
       curPlayer = p;
       if (p && !ctx.paused) st.threats.update(p.incoming, missileAlive, ctx.dt, missileDist);
       const mode = modeOf(ctx);
+      if (mode !== lastMode || ctx.viewMode !== lastView) resetZoneExtents();
+      lastView = ctx.viewMode;
       lastMode = mode;
       if (mode !== 'tactical') tac.active = false;
       if (!visible && mode !== 'tactical') {
@@ -337,7 +341,10 @@ export const createHud: CreateHud = (canvas, events) => {
       } else protectJet(ctx);
       drawDesignated(f);
       g2.globalAlpha = 1;
-      // 2) reserve the centre cue + message slots (they dodge the protected symbols only)
+      // 1b) fixed text blocks (tape, columns, DLZ, weapon block, objectives / hint, kill feed, external
+      // info block + inset): every label placed after this dodges them, the ladder knocks out under them
+      reserveFixedZones(f);
+      // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
       const zoomed = cockpit && pcdZoom.open;
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
       if (!zoomed) {
@@ -350,24 +357,27 @@ export const createHud: CreateHud = (canvas, events) => {
       reserveRadio(f);
       // 3) everything else: secondary labels make way for the reserved text
       g2.globalAlpha = declutter;
-      if (hmd) {
-        drawLadder(f);
-        drawBankScale(f);
-        drawWaterline(f);
-        drawLockCone(f);
-      }
+      if (hmd) drawLockCone(f);
       g2.globalAlpha = 1;
       drawIncoming(f);
       g2.globalAlpha = declutter;
-      drawFriendlies(f);
-      drawGroundAndSams(f);
       drawContacts(f);
+      drawGroundAndSams(f);
       drawWaypoint(f);
+      drawFriendlies(f);
       drawOwnMissiles(f);
       if (hmd) drawAirToGround(f);
       g2.globalAlpha = 1;
       drawGcas(f);
       drawRwrEdge(f);
+      // the ladder goes last: its rungs and numerals are knocked out under every registered text rect
+      if (hmd) {
+        g2.globalAlpha = declutter;
+        drawLadder(f);
+        drawBankScale(f);
+        drawWaterline(f);
+        g2.globalAlpha = 1;
+      }
       if (cockpit) {
         g2.restore();
         pen.reset();
@@ -384,18 +394,27 @@ export const createHud: CreateHud = (canvas, events) => {
         drawDlz(f, L.dlzX, L.dlzTop, L.dlzBottom);
         // weapon block: never runs down into the throttle cluster
         const wy = Math.min(L.wpnY, L.ctlTop - 6 * L.u - weaponBlockLines(f) * L.line);
-        drawWeaponBlock(f, L.wpnX, wy);
+        zoneExt.wpnTop = wy - 0.6 * L.line;
+        zoneExt.wpnBottom = drawWeaponBlock(f, L.wpnX, wy);
+        zoneExt.wpnRight = L.wpnX + 150 * L.u;
         g2.globalAlpha = 1;
-        colY = L.colY;
+        colY = radioColumnBottom(f);
       } else {
-        colY = drawExternalBlock(f) + 8 * L.u;
+        zoneExt.extBottom = drawExternalBlock(f);
+        zoneExt.extRight = L.extX + 210 * L.u;
+        colY = zoneExt.extBottom + 8 * L.u;
         drawInset(f);
         if (ctx.viewMode === 'missile') drawMissileCam(f);
       }
-      // top-left column: objectives (briefly), damage, mission hint
-      colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
-      colY = drawDamage(f, L.colX, colY);
-      drawHint(f, L.colX, colY + 2 * L.u, L.colW, L.colBottom);
+      // top-left column: objectives (briefly), damage, mission hint — not in the missile / target cams
+      // (the fight fills the frame there)
+      const colTop = colY;
+      if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') {
+        colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
+        colY = drawDamage(f, L.colX, colY);
+        colY = drawHint(f, L.colX, colY + 2 * L.u, L.colW, L.colBottom);
+      } else colY = drawDamage(f, L.colX, colY);
+      zoneExt.colBottom = colY > colTop + 1 ? colY : NaN;
 
       // PCD zoom overlay (cockpit): above the symbology, below the warning band and radio
       if (zoomed) drawPcdZoom(f);
@@ -405,7 +424,10 @@ export const createHud: CreateHud = (canvas, events) => {
         drawCues(f);
         drawMessages(f);
       }
-      drawKillFeed(f, hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u, L.killY);
+      const kx = hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u;
+      const kb = drawKillFeed(f, kx, L.killY);
+      zoneExt.killLeft = kx - 230 * L.u;
+      zoneExt.killBottom = kb > L.killY + 1 ? kb - 8 * L.u : NaN;
       drawHitMarkers(f);
       drawRadio(f);
     },

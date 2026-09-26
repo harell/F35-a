@@ -71,12 +71,26 @@ export function drawContacts(f: HudFrame): void {
   const u = L.u;
   const now = world.time;
   const tid = f.target?.id ?? -1;
+  // text labels only on the two nearest contacts (plus the designated target): the rest keep their box
+  let d1 = Infinity;
+  let d2 = Infinity;
+  for (const c of p.radar.contacts) {
+    if (c.id === tid) continue;
+    const e = world.getEntity(c.id);
+    if (!e || !e.alive || e.team === p.team || e.kind !== 'aircraft') continue;
+    const d = c.position.distanceToSquared(p.position);
+    if (d < d1) {
+      d2 = d1;
+      d1 = d;
+    } else if (d < d2) d2 = d;
+  }
   pen.setDash('solid');
   for (const c of p.radar.contacts) {
     if (c.id === tid) continue;
     const e = world.getEntity(c.id);
     if (!e || !e.alive || e.team === p.team) continue;
     if (e.kind !== 'aircraft') continue; // ground / SAM tracks are drawn by drawGroundAndSams
+    const labelled = c.position.distanceToSquared(p.position) <= d2;
     const stale = now - c.lastSeen > 1.5;
     if (stale) f.proj.point(c.position, f.sp);
     else project(f, e);
@@ -88,7 +102,7 @@ export function drawContacts(f: HudFrame): void {
     pen.rect(sp.x - h, sp.y - h, h * 2, h * 2);
     pen.strokeGlow(stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
-    const lbl = AIRCRAFT_SHORT[e.type] ?? '';
+    const lbl = labelled ? AIRCRAFT_SHORT[e.type] ?? '' : '';
     if (lbl) {
       const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
       const ly = sp.y + h + 8 * u;
@@ -132,9 +146,12 @@ export function drawGroundAndSams(f: HudFrame): void {
     pen.begin();
     pen.diamond(f.sp.x, f.sp.y, r);
     pen.strokeGlow(pal.main, 1.4);
-    if (d < 12_000 && labelled < 6) {
-      labelled++;
-      pen.text(entityLabel(g), f.sp.x, f.sp.y + r + 8 * u, pal.dim, 10);
+    if (d < 12_000 && labelled < 4) {
+      const t = entityLabel(g);
+      if (placeLabel(f, t, 10, f.sp.x, f.sp.y + r + 8 * u, f.sp.y - r - 8 * u)) {
+        labelled++;
+        pen.text(t, lblPos.x, lblPos.y, pal.dim, 10);
+      }
     }
     picks.add(g.id, f.sp.x, f.sp.y, r);
   }
@@ -160,7 +177,33 @@ export function drawSamSymbol(f: HudFrame, s: SamSiteEntity, x: number, y: numbe
   g.lineTo(x + w, y + w * 0.6);
   pen.line(x - w * 0.4, y + w * 0.6, x + w * 0.4, y + w * 0.6);
   pen.strokeGlow(col, 1.6);
-  if (!(tracking && !blink(f, 2.5, 0.7))) pen.text(entityLabel(s), x, y + w + 7 * u, col, 10.5);
+  const t = entityLabel(s);
+  if (!placeLabel(f, t, 10.5, x, y + w + 7 * u, y - w - 7 * u)) return;
+  if (!(tracking && !blink(f, 2.5, 0.7))) pen.text(t, lblPos.x, lblPos.y, col, 10.5);
+}
+
+const lblPos = { x: 0, y: 0 };
+/**
+ * Find a free spot for a centred world label: below its symbol, else above it. Registers the chosen
+ * rect (so later labels never merge into it: "CAPSA-10") and writes it to lblPos. False = no room
+ * (the symbol stays, the label is left out).
+ */
+export function placeLabel(f: HudFrame, text: string, size: number, x: number, yBelow: number, yAbove: number): boolean {
+  const { pen, occ, L } = f;
+  const u = L.u;
+  const hw = pen.textWidth(text, size) / 2 + 2 * u;
+  const hh = (size * 0.5 + 1.5) * u;
+  const lx = Math.max(L.left + hw, Math.min(L.right - hw, x));
+  for (let k = 0; k < 2; k++) {
+    const ly = k === 0 ? yBelow : yAbove;
+    if (!occ.hits(lx - hw, ly - hh, lx + hw, ly + hh)) {
+      occ.add(lx - hw, ly - hh, lx + hw, ly + hh);
+      lblPos.x = lx;
+      lblPos.y = ly;
+      return true;
+    }
+  }
+  return false;
 }
 
 /* ───────────────────────── Designated target ───────────────────────── */
@@ -401,7 +444,10 @@ export function drawFriendlies(f: HudFrame): void {
     pen.arc(f.sp.x, f.sp.y, r, Math.PI, Math.PI * 2);
     pen.line(f.sp.x - r, f.sp.y, f.sp.x + r, f.sp.y);
     pen.strokeGlow(pal.friend, 1.5);
-    if (d < 15_000) pen.text(a.callsign || a.name, f.sp.x, f.sp.y - r - 8 * u, pal.friend, 10);
+    if (d < 15_000) {
+      const t = a.callsign || a.name;
+      if (placeLabel(f, t, 10, f.sp.x, f.sp.y - r - 8 * u, f.sp.y + r + 9 * u)) pen.text(t, lblPos.x, lblPos.y, pal.friend, 10);
+    }
   }
 }
 

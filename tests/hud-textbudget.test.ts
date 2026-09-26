@@ -17,6 +17,10 @@ const noSafe = { top: 0, right: 0, bottom: 0, left: 0 };
 const tan30 = Math.tan(Math.PI / 6);
 
 /** Characters per radio line for a layout (same formula as reserveRadio). */
+function radioLinesOf(W: number, H: number, cockpit: boolean): number {
+  return computeLayout(makeLayout(), W, H, noSafe, tan30, cockpit).radioLines || RADIO_PAGE_LINES;
+}
+
 function radioChars(W: number, H: number, cockpit: boolean): number {
   const L = computeLayout(makeLayout(), W, H, noSafe, tan30, cockpit);
   const cw = RADIO_FONT * L.u * CHAR_W;
@@ -66,7 +70,7 @@ describe('HUD text budget lint (mission content vs the phone layout)', () => {
       const chars = radioChars(W, H, cockpit);
       for (const r of content.radio) {
         const lines = wrap('[' + r.from.toUpperCase() + '] ' + r.text, chars);
-        const pages = Math.ceil(lines.length / RADIO_PAGE_LINES);
+        const pages = Math.ceil(lines.length / radioLinesOf(W, H, cockpit));
         expect(pages, `${r.where} ${W}x${H}${cockpit ? ' cockpit' : ''}: "${r.text}"`).toBeLessThanOrEqual(3);
       }
     }

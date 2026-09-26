@@ -20,6 +20,7 @@
  * player's gun line.
  */
 import { Vector3 } from 'three';
+import { forwardOf } from '../../core/math';
 import type { AiRole, AiTask, SimWorld } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import type { WeaponId } from '../../core/types';
@@ -63,6 +64,8 @@ export const ENGAGED_STATES = new Set(['INTERCEPT', 'BVR', 'CRANK', 'MERGE', 'BF
 const _p = new Vector3();
 const _q = new Vector3();
 const _h = new Vector3();
+const _j = new Vector3();
+const _k = new Vector3();
 
 export class FighterBrain extends Brain {
   private readonly cfg: FighterConfig;
@@ -103,6 +106,12 @@ export class FighterBrain extends Brain {
   private chaseId = -1;
   /** Bandits the pilot gave up chasing (id → sim time until which they are ignored). */
   private readonly ignoreUntil = new Map<number, number>();
+  /** Gun defence: since when a hostile gun has been nose-on, current jink leg and its end time. */
+  private gunThreatSince = -1;
+  private jinkUntil = -1;
+  private jinkLegEnd = -1;
+  private jinkSide = 1;
+  private readonly jinkPerp = new Vector3();
 
   constructor(role: AiRole, opts: BrainOptions, cfg: FighterConfig) {
     super(role, opts);
@@ -409,6 +418,10 @@ export class FighterBrain extends Brain {
       this.keepOutOfPlayersWay(ac, world, it);
       return;
     }
+    if (this.gunDefense(ac, it, b)) {
+      this.setState('DEFENSIVE');
+      return;
+    }
     let label = this.bfm.run(c, b);
     if (R > 2_000 && this.wpn.irLeft(c) === 0) this.wpn.tryBvr(c, b);
     if (label === 'BFM' && this.wpn.gunnery(c, b)) {
@@ -479,6 +492,68 @@ export class FighterBrain extends Brain {
     it.allowAb = ac.flight.ias < this.perfOf(ac).cornerSpeed * 0.95;
     it.gMax = Math.min(3, this.skill.maxG);
     it.gain = 0.9;
+  }
+
+  /**
+   * Gun defence reflex (head-on snapshot / guns tracking): a hostile fighter's nose within a few
+   * degrees of us inside ~1.7 km and closing → an out-of-plane jink (random direction around the
+   * line of sight, re-rolled every 0.45–0.9 s, 2.5–5.5 g by defensive skill). The LCOS solution
+   * assumes a constant target velocity, so each new jink leg walks the stream off. Rookies notice
+   * later (0.2–1.1 s) and jink softer; aces see the threat in a wider cone and jink hard.
+   */
+  private gunDefense(ac: AircraftEntity, it: FlightIntent, b: Bandit): boolean {
+    const e = b.ent;
+    const def = this.skill.defense;
+    const R = b.range;
+    let threat = false;
+    if (b.fighter && e.alive && e.gunAmmo > 0 && R < 1_700 && R > 100) {
+      forwardOf(e.quaternion, _j);
+      _k.subVectors(ac.position, e.position);
+      const cone = (3.5 + 5 * def) * DEG;
+      const closing = _k.dot(e.velocity) - _k.dot(ac.velocity) > 0;
+      // nose on us (snapshot) — or on our lead point (tracking): in the shooter's frame the
+      // rounds fly along its nose while we move with (v_us − v_shooter) for the time of flight
+      threat = (closing || R < 900) && _j.dot(_k) > R * Math.cos(cone);
+      if (!threat) {
+        const tof = R / 1_050;
+        _k.addScaledVector(ac.velocity, tof).addScaledVector(e.velocity, -tof);
+        threat = _j.dot(_k) > _k.length() * Math.cos(cone);
+      }
+    }
+    // mutual nose-on inside our own gun range: a veteran / ace takes the snapshot instead
+    if (threat && this.skill.level >= 0.6 && ac.gunAmmo > 0 && R < this.skill.gunRange * 1.4) {
+      forwardOf(ac.quaternion, _j);
+      _k.subVectors(e.position, ac.position);
+      if (_j.dot(_k) > R * Math.cos(0.12)) return false;
+    }
+    if (!threat) {
+      this.gunThreatSince = -1;
+      if (this.now >= this.jinkUntil) return false;
+    } else {
+      if (this.gunThreatSince < 0) this.gunThreatSince = this.now;
+      if (this.now - this.gunThreatSince < 0.2 + 0.9 * (1 - def)) return false;
+      this.jinkUntil = this.now + 0.6 + 0.6 * def; // keep jinking a moment after the nose leaves us
+    }
+    if (this.now >= this.jinkLegEnd) {
+      // new jink leg: pull along the lift vector rotated ±(15–75)° about the flight path,
+      // alternating sides (a hard, quick out-of-plane "scissors" the gunner cannot predict)
+      _k.copy(ac.velocity).normalize();
+      _j.set(0, 1, 0).applyQuaternion(ac.quaternion).addScaledVector(_k, -_j.dot(_k));
+      if (_j.lengthSq() < 1e-4) _j.set(0, 1, 0);
+      _j.normalize();
+      _h.crossVectors(_k, _j);
+      this.jinkSide = this.jinkSide >= 0 ? -1 : 1;
+      const a = this.jinkSide * (15 + 60 * this.rng()) * DEG;
+      this.jinkPerp.copy(_j).multiplyScalar(Math.cos(a)).addScaledVector(_h, Math.sin(a));
+      if (ac.flight.agl < 900 && this.jinkPerp.y < 0) this.jinkPerp.y = -this.jinkPerp.y * 0.3;
+      this.jinkLegEnd = this.now + 0.45 + 0.45 * this.rng();
+    }
+    it.dir.copy(ac.velocity).normalize().addScaledVector(this.jinkPerp, 0.7 + 0.5 * def).normalize();
+    it.gMax = Math.min(3 + 3.5 * def, this.skill.maxG);
+    it.gain = 2;
+    it.track = false;
+    it.throttle = 1;
+    return true;
   }
 
   /** Head-on merge: aim to pass ~700 m abeam for turning room (lead turn). */

@@ -186,6 +186,26 @@ function impact(ctx: CombatCtx, p: Projectile, surface: 'air' | 'ground' | 'wate
 
 const _rel0 = new Vector3();
 const _rel1 = new Vector3();
+const _rv = new Vector3();
+const _fw = new Vector3();
+
+/**
+ * Presented-area scale of the hit sphere for a round arriving from the target's FRONT hemisphere:
+ * a fighter seen nose-on is a thin cross (fuselage + wing edges), far less area than its
+ * planform/side — 1 for beam/top/rear-quarter shots, down to 0.5 (¼ the area) dead head-on.
+ * This (with the AI's gun-defence jinks) makes the head-on snapshot the low-Pk shot it is in
+ * reality. Damage per hit does not depend on closure (roundEnergyFactor uses the round's own speed).
+ */
+export function presentedScale(p: Projectile, ac: AircraftEntity): number {
+  _rv.subVectors(p.velocity, ac.velocity);
+  const v = _rv.length();
+  if (v < 1) return 1;
+  forwardOf(ac.quaternion, _fw);
+  const c = _rv.dot(_fw) / v; // < 0: round flying against the target's nose (from ahead)
+  if (c >= 0) return 1;
+  const sin = Math.sqrt(Math.max(0, 1 - c * c));
+  return 0.5 + 0.5 * Math.min(1, sin / 0.7);
+}
 
 /** Distance from the origin to the segment a→b. */
 function segDistToOrigin(a: Vector3, b: Vector3): { d: number; s: number } {
@@ -214,7 +234,7 @@ function hitTest(ctx: CombatCtx, p: Projectile, dt: number): boolean {
     _rel0.copy(p.prevPosition).sub(ac.position).addScaledVector(ac.velocity, dt);
     _rel1.copy(p.position).sub(ac.position);
     const r = segDistToOrigin(_rel0, _rel1);
-    if (r.d <= ac.radius * 0.55) {
+    if (r.d <= ac.radius * 0.55 * presentedScale(p, ac)) {
       p.position.lerpVectors(p.prevPosition, p.position, r.s);
       const weapon = p.flak ? 'flak' : 'gun';
       world.applyDamage(ac, p.damage * roundEnergyFactor(p), p.shooterId, weapon, p.position);

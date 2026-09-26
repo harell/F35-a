@@ -54,10 +54,11 @@ export class ColorMapSampler {
 
 const _c = new Color();
 
-/** True on (or within 2 m of) a street or arterial of the urban grid the terrain shader paints. */
+/** True on (or within 2 m of) a street of the urban grid the terrain shader paints (district borders
+ *  are ordinary streets now, not arterials: real arterials are road ribbons, see motorways.ts). */
 export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: District): boolean {
   const d = districtAt(x, z, undefined, scratch, cbd);
-  if (d.border < 9.5) return true;
+  if (d.border < ROAD_HALF + 2) return true;
   const [px, pz] = toLocal(d, x, z);
   const fx = ((px % BLOCK_W) + BLOCK_W) % BLOCK_W;
   const fz = ((pz % BLOCK_D) + BLOCK_D) % BLOCK_D;

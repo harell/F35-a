@@ -261,6 +261,8 @@ export interface Settings {
   masterVolume: number; // 0..1
   sfxVolume: number; // 0..1
   voiceVolume: number; // 0..1
+  /** Adaptive soundtrack volume (0 = music off). */
+  musicVolume: number; // 0..1
   haptics: boolean;
   /** Show on-screen hints/tutorial prompts. */
   hints: boolean;

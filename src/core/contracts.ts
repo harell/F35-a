@@ -171,6 +171,8 @@ export interface AudioApi {
   /** Continuous sounds: engine, afterburner, wind, gun, RWR tones, AIM-9 growl, warnings. */
   update(ctx: FrameContext): void;
   setVolumes(master: number, sfx: number, voice: number): void;
+  /** Soundtrack volume 0..1 (0 = off). */
+  setMusicVolume?(volume: number): void;
   /** Mute/duck in-mission sounds while paused. */
   setPaused(paused: boolean): void;
   playVoice(id: VoiceId): void;

@@ -1,7 +1,7 @@
 /**
  * Pure camera helpers (no DOM / WebGL) — unit tested in tests/render-camera.test.ts.
  */
-import { Quaternion, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 
 export const DEG = Math.PI / 180;
 
@@ -107,30 +107,79 @@ export function sideOf(dir: Vector3, fallback: Vector3, out: Vector3): Vector3 {
   return out.normalize();
 }
 
-/** Padlock framing constants (reviewer: ~20 m up, ~15 m to the side, back distance capped ~35 m). */
-export const PADLOCK = { up: 20, side: 15, backMin: 22, backMax: 35 };
+/**
+ * Padlock framing (i2 review: the jet sat low-left, under the throttle cluster / GUN / CMS buttons and
+ * the radio subtitles). The jet is now pinned at a fixed screen spot left of centre, just below the
+ * middle (≈45 % x, ≈59 % y — clear of the bottom-left throttle cluster, the bottom-centre radio band
+ * and the bottom-right stick zone documented in src/input/touch/layout.ts), and the far target lands
+ * in the upper-right third (≈71 % x, ≈29 % y). NDC: x right, y up, -1..1.
+ */
+export const PADLOCK = { backMin: 24, backMax: 34, jetX: -0.1, jetY: -0.18, tgtX: 0.42, tgtY: 0.42 };
+
+const _ray = new Vector3();
+const _eul = new Euler(0, 0, 0, 'YXZ');
 
 /**
- * Over-the-shoulder padlock pose: the camera sits behind the jet on the (smoothed) jet→target line,
- * lifted `PADLOCK.up` and offset `PADLOCK.side` to the right, so the jet sits low-left and the target
- * upper-right. The look direction bisects the directions to the jet and the target, which keeps both
- * in frame for any range. `back` grows slightly with the jet's chase distance but is capped at 35 m.
+ * Camera orientation with no roll (world up) that puts the world direction `dir` (camera → point,
+ * need not be unit) at the NDC point (nx, ny) for a camera of vertical FOV `fovDeg` and `aspect`.
  */
-export function padlockPose(jet: Vector3, tgt: Vector3, tgtDir: Vector3, chaseDist: number, outPos: Vector3, outLook: Vector3): void {
-  const back = Math.max(PADLOCK.backMin, Math.min(PADLOCK.backMax, chaseDist * 1.2));
-  // offsets in the plane perpendicular to the line of sight (so steep LOS still frames both)
+export function aimAtNdc(dir: Vector3, nx: number, ny: number, fovDeg: number, aspect: number, out: Quaternion): Quaternion {
+  const tv = Math.tan((fovDeg * DEG) / 2);
+  const th = tv * aspect;
+  _ray.set(nx * th, ny * tv, -1).normalize();
+  const l = dir.length() || 1;
+  const dy = dir.y / l;
+  // pitch P: world elevation of the rotated ray = ray.y·cosP − ray.z·sinP = dir.y
+  const R = Math.hypot(_ray.y, _ray.z);
+  const phi = Math.atan2(_ray.y, -_ray.z);
+  const P = Math.asin(Math.max(-1, Math.min(1, dy / R))) - phi;
+  const cp = Math.cos(P);
+  const sp = Math.sin(P);
+  const z2 = _ray.y * sp + _ray.z * cp;
+  // yaw Y: Ry adds Y to atan2(x, z)
+  const Y = Math.atan2(dir.x, dir.z) - Math.atan2(_ray.x, z2);
+  _eul.set(P, Y, 0, 'YXZ');
+  return out.setFromEuler(_eul);
+}
+
+/**
+ * Over-the-shoulder padlock camera position: behind the jet on the (smoothed) jet→target line, offset
+ * right and up (in the plane perpendicular to the line of sight) by exactly the angles that separate
+ * the jet's and the target's screen spots for this FOV/aspect. Returns the world position in `outPos`.
+ */
+export function padlockOffset(jet: Vector3, tgtDir: Vector3, chaseDist: number, fovDeg: number, aspect: number, outPos: Vector3): Vector3 {
+  const back = Math.max(PADLOCK.backMin, Math.min(PADLOCK.backMax, chaseDist * 1.35));
+  const tv = Math.tan((fovDeg * DEG) / 2);
+  const th = tv * aspect;
+  const ah = Math.atan(PADLOCK.tgtX * th) - Math.atan(PADLOCK.jetX * th);
+  const av = Math.atan(PADLOCK.tgtY * tv) - Math.atan(PADLOCK.jetY * tv);
   sideOf(tgtDir, X, _s1);
   _s2.crossVectors(_s1, tgtDir).normalize(); // 'up' perpendicular to the LOS
   if (_s2.y < 0) _s2.negate();
-  outPos.copy(jet).addScaledVector(tgtDir, -back).addScaledVector(_s1, PADLOCK.side).addScaledVector(_s2, PADLOCK.up);
-  // bisector of the unit directions camera→jet and camera→target
-  _s1.copy(jet).sub(outPos).normalize();
-  _s2.copy(tgt).sub(outPos);
-  if (_s2.lengthSq() < 1) _s2.copy(tgtDir);
-  _s2.normalize();
-  outLook.copy(_s1).add(_s2);
-  if (outLook.lengthSq() < 1e-6) outLook.copy(tgtDir);
-  outLook.normalize();
+  return outPos
+    .copy(jet)
+    .addScaledVector(tgtDir, -back)
+    .addScaledVector(_s1, back * Math.tan(ah))
+    .addScaledVector(_s2, back * Math.tan(av));
+}
+
+/**
+ * Full padlock pose: position (see padlockOffset) and a roll-free orientation that pins the jet at
+ * (PADLOCK.jetX, jetY); a far target then sits at ≈(tgtX, tgtY) and a closer one on the screen segment
+ * between the jet and that spot, so both are always in frame.
+ */
+export function padlockPose(
+  jet: Vector3,
+  tgtDir: Vector3,
+  chaseDist: number,
+  fovDeg: number,
+  aspect: number,
+  outPos: Vector3,
+  outQuat: Quaternion,
+): void {
+  padlockOffset(jet, tgtDir, chaseDist, fovDeg, aspect, outPos);
+  _s1.copy(jet).sub(outPos);
+  aimAtNdc(_s1, PADLOCK.jetX, PADLOCK.jetY, fovDeg, aspect, outQuat);
 }
 
 /** Missile camera framing: rigid along-track behind the missile, lifted and to the right. */
@@ -170,6 +219,77 @@ export function missileCamPose(
       }
     }
   }
+}
+
+/* ───────────── missile camera: which missile to ride (i2 review) ───────────── */
+
+/** Minimal views of the sim entities (keeps this module pure / unit-testable). */
+export interface FollowMissile {
+  id: number;
+  alive: boolean;
+  shooterId: number;
+  targetId: number | null;
+  age: number;
+  decoyed: boolean;
+  phase: string;
+  position: Vector3;
+  velocity: Vector3;
+}
+export interface FollowTarget {
+  alive: boolean;
+  position: Vector3;
+  velocity: Vector3;
+}
+
+/** Scores ≥ this mean "not guiding on a live target" (ballistic, decoyed or target gone). */
+export const NOT_GUIDING = 1000;
+
+/** Time to go (s) from missile to target: range / closing speed (closing floored at 50 m/s). */
+export function missileTimeToGo(m: FollowMissile, t: FollowTarget): number {
+  const rx = t.position.x - m.position.x;
+  const ry = t.position.y - m.position.y;
+  const rz = t.position.z - m.position.z;
+  const r = Math.hypot(rx, ry, rz);
+  if (r < 1) return 0;
+  const closing = -((t.velocity.x - m.velocity.x) * rx + (t.velocity.y - m.velocity.y) * ry + (t.velocity.z - m.velocity.z) * rz) / r;
+  return r / Math.max(50, closing);
+}
+
+/**
+ * Follow priority (lower = better): a missile guiding on a live target scores its time to go, minus
+ * 1.5 s when that target is the player's locked/primary one; a missile that is not guiding (target
+ * dead, ballistic, decoyed) scores NOT_GUIDING + (the oldest first).
+ */
+export function missileFollowScore(m: FollowMissile, t: FollowTarget | null, primaryId: number | null): number {
+  const guiding = t && t.alive && !m.decoyed && m.phase !== 'ballistic';
+  if (!guiding) return NOT_GUIDING + (m.decoyed ? 500 : 0) + Math.max(0, 400 - m.age);
+  return missileTimeToGo(m, t) - (primaryId != null && m.targetId === primaryId ? 1.5 : 0);
+}
+
+/**
+ * The live missile of `shooterId` most likely to deliver the payoff (see missileFollowScore), or null.
+ * `exclude` skips one id (e.g. the missile that just ended). No allocations.
+ */
+export function pickFollowMissile(
+  missiles: readonly FollowMissile[],
+  shooterId: number,
+  primaryId: number | null,
+  getTarget: (id: number | null) => FollowTarget | null,
+  exclude = -1,
+  out: { id: number; score: number } = { id: -1, score: Infinity },
+): { id: number; score: number } {
+  out.id = -1;
+  out.score = Infinity;
+  for (let i = 0; i < missiles.length; i++) {
+    const m = missiles[i];
+    if (!m.alive || m.shooterId !== shooterId || m.id === exclude) continue;
+    const sc = missileFollowScore(m, getTarget(m.targetId), primaryId);
+    if (sc < out.score) {
+      out.score = sc;
+      out.id = m.id;
+    }
+  }
+  return out;
 }
 
 /**

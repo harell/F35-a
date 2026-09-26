@@ -7,10 +7,16 @@
  *    hashed bundle files (Vite writes them there) and precache those; voice clips are precached if
  *    present (missing clips are skipped)
  *  - navigation requests: network-first (fresh deploys win), falling back to the cached shell
- *  - same-origin static assets: cache-first, filled on demand
- * Registered from src/main.ts in production builds only. Bump VERSION to force a clean update.
+ *  - hashed bundle files (assets/*-<hash>.*): cache-first, filled on demand (the URL changes with the content)
+ *  - un-hashed public files (audio/…, textures/…, icons/…, the manifest): stale-while-revalidate — served
+ *    from cache instantly, refreshed in the background, so replaced voice clips / textures reach players
+ *    on their next load even if VERSION were forgotten
+ * Registered from src/main.ts in production builds only.
+ * VERSION ends with a content hash of every file under public/audio, public/textures and public/icons
+ * plus the manifest; tests/ui-pwa.test.ts recomputes it and fails (printing the new value) whenever an
+ * asset changes without the version changing, so every asset change also reinstalls this worker.
  */
-const VERSION = '1.0.0-1';
+const VERSION = '1.1.0-__ASSET_HASH__';
 const PREFIX = 'f35a-';
 const PRECACHE = `${PREFIX}precache-${VERSION}`;
 const RUNTIME = `${PREFIX}runtime-${VERSION}`;
@@ -144,6 +150,42 @@ async function networkFirstNavigation(event) {
   return (await caches.match(req)) || (await caches.match(scopeUrl('index.html'))) || (await caches.match(scopeUrl('./'))) || Response.error();
 }
 
+/** True for URLs whose content can change without the URL changing (public/ files copied verbatim). */
+function isUnhashed(url) {
+  const p = url.pathname;
+  return /\/(?:audio|textures|icons)\//.test(p) || p.endsWith('.webmanifest');
+}
+
+/** Serve from cache immediately (if present) and refresh that cache entry from the network. */
+async function staleWhileRevalidate(event) {
+  const req = event.request;
+  let owner = null;
+  let hit;
+  for (const name of [PRECACHE, RUNTIME]) {
+    const c = await caches.open(name);
+    hit = await c.match(req);
+    if (hit) {
+      owner = c;
+      break;
+    }
+  }
+  const refresh = fetch(req, { cache: 'no-cache' })
+    .then(async (res) => {
+      if (res.ok && res.status === 200 && res.type === 'basic') {
+        const c = owner || (await caches.open(RUNTIME));
+        await c.put(req, res.clone());
+        if (!owner) await trimRuntime();
+      }
+      return res;
+    })
+    .catch(() => null);
+  if (hit) {
+    event.waitUntil(refresh);
+    return hit;
+  }
+  return (await refresh) || Response.error();
+}
+
 async function cacheFirst(req) {
   const hit = await caches.match(req);
   if (hit) return hit;
@@ -172,5 +214,9 @@ self.addEventListener('fetch', (event) => {
   }
   // don't cache the service worker itself or dev-server internals
   if (url.pathname.endsWith('/sw.js') || url.pathname.includes('/@vite') || url.pathname.includes('/node_modules/')) return;
+  if (isUnhashed(url)) {
+    event.respondWith(staleWhileRevalidate(event));
+    return;
+  }
   event.respondWith(cacheFirst(req));
 });

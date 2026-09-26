@@ -80,6 +80,8 @@ export interface HudLayout {
   radioX1: number;
   radioY: number;
   radioTop: boolean;
+  /** Radio subtitle lines per page (2; 3 in the narrower cockpit column). */
+  radioLines: number;
   /** Top-left column (objectives, damage, mission hint). */
   colX: number;
   colY: number;
@@ -111,7 +113,7 @@ export function makeLayout(): HudLayout {
   return {
     W: 1, H: 1, cx: 0, cy: 0, u: 1, left: 0, right: 1, top: 0, bottom: 1, thumbY: 1, thumbLX: 0, thumbRX: 1, ctlLeft: 0, ctlRight: 1,
     ctlTop: 1, cockpitTop: 1, tapeY: 0, tapeHalfW: 1, spdRight: 0, altLeft: 0, boxY: 0, line: 15, dlzX: 0, dlzTop: 0, dlzBottom: 0,
-    wpnX: 0, wpnY: 0, warnY: 0, row2Y: 0, cueY: 0, stackY: 0, msgY: 0, msgFloor: 1, radioX0: 0, radioX1: 1, radioY: 0, radioTop: false,
+    wpnX: 0, wpnY: 0, warnY: 0, row2Y: 0, cueY: 0, stackY: 0, msgY: 0, msgFloor: 1, radioX0: 0, radioX1: 1, radioY: 0, radioTop: false, radioLines: 2,
     colX: 0, colY: 0, colW: 1, colBottom: 1, hintY: 0, killX: 0, killY: 0, objX: 0, objY: 0, edgeCx: 0, edgeCy: 0, edgeRx: 1, edgeRy: 1,
     insetCx: 0, insetCy: 0, insetR: 1, extX: 0, extY: 0,
   };
@@ -256,13 +258,14 @@ export function computeLayout(
   // heading tape (never over the panoramic cockpit display)
   out.radioTop = cockpit && !external;
   if (out.radioTop) {
-    // right of the top-left column up to the button column (the kill feed sits above it); the pill
-    // stays centred on the screen when it fits
-    out.radioX0 = out.colX + out.colW + 10 * u;
-    // (left of the DLZ scale, whose top reaches up to this band)
-    out.radioX1 = Math.max(out.radioX0 + 220 * u, Math.min(out.right - 4 * u, out.dlzX - 16 * u));
-    out.radioY = out.tapeY + 62 * u;
+    // top of the left column (objectives / hint move below it): the warning band keeps its slot above
+    // the flight path marker and the top centre stays clear for the fight
+    out.radioX0 = out.colX - 4 * u;
+    out.radioX1 = Math.max(out.colX + out.colW, cx - out.tapeHalfW - 12 * u);
+    out.radioY = out.colY - 6 * u;
+    out.radioLines = 3;
   } else {
+    out.radioLines = 2;
     const x0 = Math.max(out.left, out.ctlLeft + 8 * u);
     const x1 = Math.min(W - safe.right - 6, out.ctlRight - 8 * u);
     // too narrow (odd layouts): fall back to a centred band
@@ -277,9 +280,7 @@ export function computeLayout(
   }
 
   // warning band (top centre, above the flight path marker)
-  const radioBottom = out.radioTop ? out.radioY + 2 * RADIO_LINE * u + 8 * u : 0;
   if (external) out.warnY = out.tapeY + 84 * u;
-  else if (out.radioTop) out.warnY = radioBottom + 16 * u;
   else out.warnY = out.tapeY + 76 * u;
   out.row2Y = out.warnY + 26 * u;
 

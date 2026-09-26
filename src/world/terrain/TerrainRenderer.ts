@@ -32,6 +32,7 @@ import {
 import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
+import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
 
 export interface TerrainStyle {
   rockColor: Color;
@@ -293,6 +294,8 @@ export class TerrainRenderer {
         uRoofs: { value: o.style.roofs },
         uGarden: { value: o.style.garden },
         uCanopy: { value: o.style.canopy },
+        uSuburbLeafy: { value: suburbFarAlbedo(o.style, LEAFY_MIX) },
+        uSuburbBare: { value: suburbFarAlbedo(o.style, BARE_MIX) },
         uSand: { value: o.style.sand },
         uBlackSand: { value: o.style.blackSand },
         uShoreRock: { value: o.style.shoreRock },

@@ -3,10 +3,9 @@
  * coverage (see scratchpad i1-render.md).
  */
 import { describe, expect, it } from 'vitest';
-import { PerspectiveCamera, Vector3 } from 'three';
+import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import {
   MISSILE_CAM,
-  PADLOCK,
   impactPose,
   missileCamPose,
   padlockPose,
@@ -21,6 +20,15 @@ function ndc(pos: Vector3, aim: Vector3, pt: Vector3, fov = 60, aspect = 16 / 9)
   cam.position.copy(pos);
   cam.up.set(0, 1, 0);
   cam.lookAt(aim);
+  cam.updateMatrixWorld();
+  return pt.clone().project(cam);
+}
+
+/** Project a world point with a camera at `pos` with orientation `q`. */
+function ndcQ(pos: Vector3, q: Quaternion, pt: Vector3, fov = 60, aspect = 16 / 9): Vector3 {
+  const cam = new PerspectiveCamera(fov, aspect, 0.5, 1e6);
+  cam.position.copy(pos);
+  cam.quaternion.copy(q);
   cam.updateMatrixWorld();
   return pt.clone().project(cam);
 }
@@ -86,18 +94,16 @@ describe('padlock / target camera (reviewer: jet tiny and hidden under the targe
     ['high', new Vector3(0, 6000, -2000)],
   ];
   for (const [name, tgt] of cases) {
-    it(`keeps the jet low-left and the target upper-right, both on screen (${name})`, () => {
+    it(`keeps the jet left of centre and the target up-right of it, both on screen (${name})`, () => {
       const jet = new Vector3(0, 3000, 0);
       const dir = tgt.clone().sub(jet).normalize();
       const pos = new Vector3();
-      const look = new Vector3();
-      padlockPose(jet, tgt, dir, 20, pos, look);
-      const back = pos.clone().sub(jet);
-      // back distance capped at ~35 m (+ up/side offsets)
-      expect(back.length()).toBeLessThan(Math.hypot(PADLOCK.backMax, PADLOCK.up, PADLOCK.side) + 0.01);
-      const aim = pos.clone().add(look);
-      const pj = ndc(pos, aim, jet);
-      const pt = ndc(pos, aim, tgt);
+      const q = new Quaternion();
+      padlockPose(jet, dir, 20, 60, 16 / 9, pos, q);
+      // camera stays close to the jet (≤ ~45 m) so the jet reads large
+      expect(pos.distanceTo(jet)).toBeLessThan(45);
+      const pj = ndcQ(pos, q, jet);
+      const pt = ndcQ(pos, q, tgt);
       for (const p of [pj, pt]) {
         expect(Math.abs(p.x)).toBeLessThan(0.95);
         expect(Math.abs(p.y)).toBeLessThan(0.95);

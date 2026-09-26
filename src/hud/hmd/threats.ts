@@ -157,6 +157,24 @@ export function drawRwrEdge(f: HudFrame): void {
     if (y > L.ctlTop - 12 * u && (x < L.ctlLeft + 16 * u || x > L.ctlRight - 16 * u)) y = L.ctlTop - 12 * u;
     if (f.mode === 'hmd' && f.cockpit) y = Math.min(y, L.cockpitTop - 16 * u);
     y = Math.max(y, L.row2Y + 18 * u);
+    // declutter: slide along the edge ellipse off text / other RWR symbols (co-bearing emitters
+    // never merge into "2910"), then register the symbol
+    const rr = 13 * f.L.u;
+    if (f.occ.hits(x - rr, y - rr, x + rr, y + rr)) {
+      for (let k = 1; k <= 8; k++) {
+        const da = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * 0.09;
+        const b2 = c.bearing + da;
+        edgeOfEllipse(L.edgeCx, L.edgeCy, L.edgeRx, Math.cos(b2) < 0 ? L.edgeRy * 0.85 : L.edgeRy, Math.sin(b2), -Math.cos(b2), edge);
+        let y2 = Math.max(edge.y, L.row2Y + 18 * u);
+        if (f.mode === 'hmd' && f.cockpit) y2 = Math.min(y2, L.cockpitTop - 16 * u);
+        if (!f.occ.hits(edge.x - rr, y2 - rr, edge.x + rr, y2 + rr)) {
+          x = edge.x;
+          y = y2;
+          break;
+        }
+      }
+    }
+    f.occ.add(x - rr, y - rr, x + rr, y + rr);
     const launch = c.state === 'launch';
     const track = c.state === 'track';
     const col = launch ? pal.danger : track ? pal.warn : pal.dim;
@@ -199,6 +217,31 @@ function spikeText(sam: boolean, sym: string): string {
   let s = spikeCache.get(k);
   if (!s) spikeCache.set(k, (s = (sam ? 'MUD SPIKE ' : 'SPIKE ') + sym));
   return s;
+}
+
+const chipPos = { x: 0, y: 0 };
+/** Row-2 chip placement: centre, left, right, then a row lower / higher (first slot clear of protected symbols). */
+export function chipPlace(f: HudFrame, total: number, h: number): { x: number; y: number } {
+  const { L, occ } = f;
+  const u = L.u;
+  const xc = L.cx - total / 2;
+  const xl = Math.min(xc, L.spdRight + 4 * u);
+  const xr = Math.max(xc, L.altLeft - 4 * u - total);
+  const dy = h + 5 * u;
+  for (let r = 0; r < 3; r++) {
+    const y = L.row2Y + r * dy;
+    for (let k = 0; k < 3; k++) {
+      const x = k === 0 ? xc : k === 1 ? xl : xr;
+      if (!occ.hits(x, y - h / 2, x + total, y + h / 2, 1)) {
+        chipPos.x = x;
+        chipPos.y = y;
+        return chipPos;
+      }
+    }
+  }
+  chipPos.x = xc;
+  chipPos.y = L.row2Y;
+  return chipPos;
 }
 
 /**
@@ -305,8 +348,12 @@ export function drawWarningBand(f: HudFrame): boolean {
     case 'title': {
       const a = Math.max(0, Math.min(1, st.titleAge / 0.25, (st.titleDur - st.titleAge) / 0.5)) * f.declutter;
       const tw = pen.textWidth(st.title, 17);
-      const k = occ.hits(cx - tw / 2 - 30 * u, y1 - 11 * u, cx + tw / 2 + 30 * u, y1 + 11 * u, 1) ? 0.35 : 1;
-      pen.g.globalAlpha = a * k;
+      // (never dimmed: a dark plate keeps it readable over whatever is behind it)
+      pen.g.globalAlpha = a;
+      if (occ.hits(cx - tw / 2 - 30 * u, y1 - 11 * u, cx + tw / 2 + 30 * u, y1 + 11 * u, 1)) {
+        pen.setFill('rgba(0,10,4,0.6)');
+        pen.g.fillRect(cx - tw / 2 - 6 * u, y1 - 10 * u, tw + 12 * u, 20 * u);
+      }
       pen.text(st.title, cx, y1, pal.bright, 17);
       pen.begin();
       pen.line(cx - tw / 2 - 30 * u, y1, cx - tw / 2 - 8 * u, y1);
@@ -381,20 +428,15 @@ export function drawWarningBand(f: HudFrame): boolean {
   const plus = more > 0 ? PLUS[Math.min(PLUS.length - 1, more)] : '';
   const plusW = more > 0 ? pen.textWidth(plus, size) + 10 * u : 0;
   if (more > 0) total += gap + plusW;
-  const y2 = L.row2Y;
   const h = 18 * u;
   const flash = st.warnAge < 2.5 && !blink(f, 4, 0.6);
-  // centred; slid sideways off the target box / FPM if they are in the way, else see-through
-  let x = cx - total / 2;
-  let base = 1;
-  if (occ.hits(x, y2 - h / 2, x + total, y2 + h / 2, 1)) {
-    const xl = L.spdRight + 4 * u;
-    const xr = L.altLeft - 4 * u - total;
-    if (!occ.hits(xl, y2 - h / 2, xl + total, y2 + h / 2, 1)) x = xl;
-    else if (!occ.hits(xr, y2 - h / 2, xr + total, y2 + h / 2, 1)) x = xr;
-    else base = 0.4;
-  }
-  pen.g.globalAlpha = base * f.declutter;
+  // centred; slid sideways, then one row up / down, off the target box / FPM / pipper. The chips are
+  // NEVER dimmed (a SPIKE is most important exactly when a bandit is ahead): if every slot is taken
+  // they stay centred at full strength on their own dark plates.
+  const pos = chipPlace(f, total, h);
+  let x = pos.x;
+  const y2 = pos.y;
+  pen.g.globalAlpha = f.declutter;
   if (f.declutter <= 0.02) {
     pen.g.globalAlpha = 1;
     return critical;

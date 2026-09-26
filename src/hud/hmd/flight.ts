@@ -6,6 +6,7 @@ import { DEG, RAD, dirFromHeadingPitch, elevationOf, forwardOf, headingOf, toFee
 import { AB_DETENT } from '../../core/types';
 import { HDG_STR, HDG3_STR, INT_STR, NumText } from './format';
 import { blink, type HudFrame } from './frame';
+import { tapeBottom } from './zones';
 
 const txt = {
   kcas: new NumText(0),
@@ -63,7 +64,7 @@ export function drawFpm(f: HudFrame): void {
   }
   pen.strokeGlow(pal.main, 1.8);
   // protected: no text ever covers the flight path marker
-  f.occ.addBox(x, y, r + 14 * u, r + 9 * u, 1);
+  f.occ.addBox(x, y, r + 14 * u, r + 9 * u, 2);
   // ghost at the true position when it is still on screen (e.g. under the glare shield)
   if (limited && fp.onScreen) {
     pen.setDash('dot');
@@ -86,8 +87,18 @@ export function drawLadder(f: HudFrame): void {
   const gap = 20 * u;
   const len = 46 * u;
   const tick = 7 * u;
-  const window = 16;
+  // declutter (real F-35 HMD style) while pulling hard or defending a missile: horizon + the two
+  // nearest rungs only
+  const busy = f.p.flight.gLoad > 4 || f.p.incoming.length > 0;
+  const window = busy ? 5 : 16;
   const margin = -40;
+  const occ = f.occ;
+  // never up into the heading tape band
+  const g = pen.g;
+  g.save();
+  g.beginPath();
+  g.rect(0, tapeBottom(f), L.W, L.H);
+  g.clip();
 
   // horizon line across the view (conformal, around the camera heading)
   const ch = headingOf(proj.forward);
@@ -149,6 +160,8 @@ export function drawLadder(f: HudFrame): void {
         const iy = a.y + ty * gap * side;
         const ox = a.x + tx * (gap + len) * side;
         const oy = a.y + ty * (gap + len) * side;
+        // knocked out under any text / target symbology (not the FPM, which sits on the ladder)
+        if (occ.hits(ix, iy - 1, ox, oy + 1, 0, 1)) continue;
         pen.line(ix, iy, ox, oy);
         pen.line(ix, iy, ix + nx * tick * s, iy + ny * tick * s);
       }
@@ -164,9 +177,15 @@ export function drawLadder(f: HudFrame): void {
     const label = INT_STR[Math.abs(th)];
     for (let side = -1; side <= 1; side += 2) {
       const d = gap + len + 13 * u;
-      pen.textRotated(label, a.x + b.x * d * side, a.y + b.y * d * side, ang, pal.main, 11);
+      const nxp = a.x + b.x * d * side;
+      const nyp = a.y + b.y * d * side;
+      if (occ.hits(nxp - 9 * u, nyp - 7 * u, nxp + 9 * u, nyp + 7 * u, 0, 1)) continue;
+      pen.textRotated(label, nxp, nyp, ang, pal.main, 11);
     }
   }
+  g.restore();
+  pen.reset();
+  pen.baseTransform();
 }
 
 /**
@@ -188,7 +207,7 @@ function rung(f: HudFrame, th: number, a: HudFrame['sp'], b: HudFrame['sp'], mar
   b.x = tx;
   b.y = ty;
   // keep rungs out of the cockpit panel area
-  return a.y < f.L.cockpitTop - 6 && a.y > f.L.tapeY + 40 * f.L.u;
+  return a.y < f.L.cockpitTop - 6 && a.y > tapeBottom(f) + 4 * f.L.u;
 }
 
 /* ───────────────────────── Bank scale + waterline ───────────────────────── */

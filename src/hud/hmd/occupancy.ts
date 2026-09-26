@@ -48,14 +48,17 @@ export class Occupancy {
     this.add(cx - hw, cy - hh, cx + hw, cy + hh, level);
   }
 
-  /** Does [ax, bx] × [ay, by] overlap any registered rectangle (of at least `minLevel`)? */
-  hits(ax: number, ay: number, bx: number, by: number, minLevel = 0): boolean {
+  /**
+   * Does [ax, bx] × [ay, by] overlap any registered rectangle of level `minLevel`..`maxLevel`?
+   * (Level 2 = the flight path marker: protected from text, but the pitch ladder runs through it.)
+   */
+  hits(ax: number, ay: number, bx: number, by: number, minLevel = 0, maxLevel = 255): boolean {
     const l = Math.min(ax, bx);
     const r = Math.max(ax, bx);
     const t = Math.min(ay, by);
     const b = Math.max(ay, by);
     for (let i = 0; i < this.n; i++) {
-      if (this.lvl[i] < minLevel) continue;
+      if (this.lvl[i] < minLevel || this.lvl[i] > maxLevel) continue;
       if (l < this.x1[i] && r > this.x0[i] && t < this.y1[i] && b > this.y0[i]) return true;
     }
     return false;

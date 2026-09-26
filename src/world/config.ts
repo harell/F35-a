@@ -84,10 +84,10 @@ export function terrainStyle(theater: TheaterId): TerrainStyle {
     default:
       return {
         rockColor: c(0x5f5a52), snowColor: c(0xf4f6fa), snowLine: 1e6, rockSlope: 0.42, outsideColor: c(0x6f9a46), fields: 1,
-        // Auckland roofs: charcoal & grey corrugated iron, terracotta / dark red tiles, off-white,
-        // a few muted greens
-        roofs: six([0x3a3d40, 0x6e7074, 0x8a4a38, 0x9c9c96, 0xbdb9ae, 0x3f4d3c]),
-        garden: c(0x5a7042), canopy: c(0x283f20),
+        // Auckland roofs: charcoal & grey corrugated iron, terracotta tiles, red-painted iron,
+        // off-white, a few muted greens. Lawns are a fresh NZ green, canopy a dark bush green.
+        roofs: six([0x3a3d40, 0x6e7074, 0x8a4a38, 0x7a2e26, 0xbdb9ae, 0x3f4d3c]),
+        garden: c(0x55803a), canopy: c(0x263f20),
         sand: c(0xd2bf92), blackSand: c(0x2f2d2b), shoreRock: c(0x3e3a35), blackSandX: -18_000,
         // Waiheke vineyards (Oneroa → Onetangi)
         vineyard: [27_500, -5_200, 8_500, 3_000],

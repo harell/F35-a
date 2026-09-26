@@ -167,11 +167,12 @@ export function reserveMessage(f: HudFrame, yPref: number, yMin = yPref - 8 * f.
   const hw = (widest * pen.charWidth(size)) / 2 + 4 * u;
   const top0 = yPref - lh / 2;
   let top = occ.freeY(L.cx - hw, L.cx + hw, h, top0, yMin - lh / 2, Math.max(yMax, top0 + h), 'down');
-  let alpha = a;
-  if (!Number.isFinite(top)) {
-    top = top0;
-    alpha *= 0.35; // no free spot at all: stay see-through
-  }
+  const alpha = a;
+  // slot band jammed (target box / pipper right under it): search the whole centre column between the
+  // warning band and the floor; with no free spot at all the message waits (never printed over the
+  // target box, never see-through)
+  if (!Number.isFinite(top)) top = occ.freeY(L.cx - hw, L.cx + hw, h, top0, L.row2Y + 16 * u, Math.max(L.msgFloor, L.row2Y + 16 * u + h), 'down');
+  if (!Number.isFinite(top)) return;
   occ.add(L.cx - hw, top, L.cx + hw, top + h);
   msgPlan.active = true;
   msgPlan.top = top;
@@ -237,18 +238,20 @@ export function reserveRadio(f: HudFrame): void {
     subWidest = 0;
     for (const l of subLines) subWidest = Math.max(subWidest, l.length);
   }
-  const pages = Math.max(1, Math.ceil(subLines.length / RADIO_PAGE_LINES));
+  const perPage = L.radioLines || RADIO_PAGE_LINES;
+  const pages = Math.max(1, Math.ceil(subLines.length / perPage));
   q.setPages(pages);
   if (q.alpha <= 0.02) return;
   const page = q.page;
-  const first = page * RADIO_PAGE_LINES;
-  const n = Math.min(RADIO_PAGE_LINES, subLines.length - first);
+  const first = page * perPage;
+  const n = Math.min(perPage, subLines.length - first);
   if (n <= 0) return;
-  const rows = Math.min(RADIO_PAGE_LINES, subLines.length);
+  const rows = Math.min(perPage, subLines.length);
   const w = Math.min(maxW, subWidest * cw + (pages > 1 ? 38 : 22) * u);
   const h = rows * RADIO_LINE * u + 8 * u;
   // centred on the screen when it fits the band, else as close to the centre as the band allows
-  const cx = Math.max(L.radioX0 + w / 2, Math.min(L.radioX1 - w / 2, L.cx));
+  // (cockpit view: left-aligned at the top of the left column, clear of the warning band)
+  const cx = L.radioTop ? L.radioX0 + w / 2 : Math.max(L.radioX0 + w / 2, Math.min(L.radioX1 - w / 2, L.cx));
   radioPlan.active = true;
   radioPlan.x = cx - w / 2;
   radioPlan.top = L.radioTop ? L.radioY : L.radioY - h;
@@ -259,6 +262,15 @@ export function reserveRadio(f: HudFrame): void {
   radioPlan.pages = pages;
   radioPlan.page = page;
   occ.add(radioPlan.x, radioPlan.top, radioPlan.x + w, radioPlan.top + h);
+}
+
+/**
+ * Top of the free part of the top-left column: below the radio pill when it lives there (cockpit
+ * view), else the layout's column top.
+ */
+export function radioColumnBottom(f: HudFrame): number {
+  const L = f.L;
+  return radioPlan.active && L.radioTop ? Math.max(L.colY, radioPlan.top + radioPlan.h + 12 * L.u) : L.colY;
 }
 
 /** Draw the reserved radio pill (see reserveRadio). */
@@ -390,7 +402,8 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
       if (used + lines.length > maxLines) continue;
       const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? pal.danger : o.state === 'active' ? pal.main : pal.dim;
       for (const l of lines) {
-        pen.text(l, x, y, col, size, 'left');
+        // (a line that would print over the target box / pipper / jet is left out)
+        if (!f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text(l, x, y, col, size, 'left');
         y += lh;
       }
       used += lines.length;
@@ -433,6 +446,8 @@ export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMa
   for (let i = 0; i < lines.length; i++) widest = Math.max(widest, lines[i].length);
   const w = Math.min(maxW, widest * cw + 16 * u);
   const h = n * lh + 8 * u;
+  // never over the target box / pipper / jet (the hint is the least important text on screen)
+  if (f.occ.hits(x - 4 * u, y, x - 4 * u + w, y + h, 1)) return y;
   const a = 0.35 + 0.65 * f.declutter;
   pen.g.globalAlpha = a;
   pen.setFill('rgba(0,12,6,0.55)');

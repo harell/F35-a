@@ -384,6 +384,7 @@ export class Game {
   private applySettings(): void {
     const s = this.settings;
     this.audio.setVolumes(s.masterVolume, s.sfxVolume, s.voiceVolume);
+    this.audio.setMusicVolume?.(s.musicVolume ?? 0.6);
     this.input.applySettings(s);
     const q = resolveQuality(s, this.renderer?.getContext());
     // Antialias can't change without recreating the context; keep the rest live.
