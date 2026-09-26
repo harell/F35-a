@@ -141,6 +141,7 @@ export class Game {
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = this.quality.shadows;
+    this.renderer.info.autoReset = false; // count world + cockpit passes together
 
     this.safeProbe = document.createElement('div');
     this.safeProbe.style.cssText =
@@ -314,8 +315,18 @@ export class Game {
         resolve,
       };
     });
+    this.paused = true; // hold the sim until the mission is fully ready
     this.applyViewMode(rig.mode);
     this.resize();
+    // Compile every material now instead of hitching mid-flight on first sight.
+    this.ui.showLoading(0.96, 'Compiling shaders');
+    try {
+      entities.update(this.frameContext(0, this.session));
+      env.update(this.frameContext(0, this.session));
+      await this.renderer.compileAsync(scene, rig.camera);
+    } catch {
+      /* compileAsync unsupported — fall back to lazy compilation */
+    }
     this.input.setThrottle(0.68);
     this.input.setEnabled(true);
     this.hud.setVisible(true);
@@ -349,6 +360,7 @@ export class Game {
     this.hud.update(this.frameContext(0, null));
     this.audio.stopAll();
     s.unsubscribers.forEach((u) => u());
+    s.runner.dispose?.();
     s.cockpit.dispose();
     s.rig.dispose();
     s.effects.dispose();
@@ -566,6 +578,7 @@ export class Game {
     s.effects.update(fctx);
     const ctx2 = this.frameContext(dt, s); // camera may have moved/changed mode
     s.cockpit.update(ctx2, s.rig.headLocal);
+    this.renderer.info.reset();
     this.renderer.render(s.scene, s.rig.camera);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
     this.hud.update(ctx2);
@@ -623,7 +636,10 @@ export class Game {
       this.session.cockpit.resize(w, h);
     }
     const touch = matchMedia('(pointer: coarse)').matches;
-    this.ui.setRotateHint(touch && h > w);
+    const portrait = touch && h > w;
+    this.ui.setRotateHint(portrait);
+    // Rotating to portrait mid-mission (or a phone call UI) must not leave the jet flying blind.
+    if (portrait && this.session && !this.paused) this.openPauseMenu();
   }
 
   /** Dynamic resolution: drop pixel ratio when the frame time is consistently high. */

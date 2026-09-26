@@ -311,6 +311,8 @@ export interface MissionRunnerApi {
   /** Objectives, triggers, radio, reinforcements, failure checks. Emits 'objective' and 'mission:end'. */
   update(world: SimWorld, dt: number): void;
   result(world: SimWorld): MissionResult;
+  /** Detach event handlers / free references (called by Game on teardown). */
+  dispose?(): void;
 }
 /** src/missions/MissionRunner.ts → export const createMissionRunner: CreateMissionRunner */
 export type CreateMissionRunner = (
