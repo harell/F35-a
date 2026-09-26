@@ -7,9 +7,11 @@ import { Vector3 } from 'three';
 import type { FrameContext } from '../../core/contracts';
 import type { LaunchZone, SimWorld } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
-import { KillFeed, MessageQueue, RadioQueue } from './feeds';
+import { KillFeed, MessageQueue, RadioQueue, type MessageTone } from './feeds';
 import { makeGEffectState, type GEffectState } from './gEffects';
 import type { HudLayout } from './layout';
+import { Occupancy } from './occupancy';
+import { ThreatTracker } from './threatTracker';
 import type { Palette } from './palette';
 import type { Pen } from './pen';
 import type { PickRegistry } from './picking';
@@ -30,6 +32,8 @@ export interface HitMark {
 export class HudState {
   /** Animation clock (s) — keeps running while paused so flashing stays alive. */
   clock = 0;
+  /** Frame counter (per-frame caches). */
+  frame = 0;
   /** Seconds since the last player lock (large = none). */
   lockAge = 99;
   lockId: number | null = null;
@@ -42,11 +46,21 @@ export class HudState {
   warnAge = 99;
   /** Seconds left to show the objective summary. */
   objShow = 8;
+  /** Objective that changed last (highlighted in the summary) and when. */
+  objChangedId = '';
   /** Sticky DLZ scale (m). */
   dlzScale = 0;
   readonly radio = new RadioQueue();
   readonly messages = new MessageQueue();
-  readonly kills = new KillFeed();
+  readonly kills = new KillFeed(3, 5);
+  /** Missile defeat detection ("MISSILE DEFEATED"). */
+  readonly threats = new ThreatTracker();
+  /** Mission title banner (top band). */
+  title = '';
+  titleAge = 99;
+  titleDur = 3.2;
+  /** 'hud:message' events waiting to be routed (needs the frame context: mission title). */
+  readonly inbox: { text: string; tone: MessageTone; duration: number }[] = [];
   readonly g: GEffectState = makeGEffectState();
   readonly hits: HitMark[] = Array.from({ length: 6 }, () => ({ x: 0, y: 0, id: -1, age: 99, kill: false, active: false }));
   playerId: number | null = null;
@@ -80,12 +94,14 @@ export class HudState {
 
   step(dt: number, paused: boolean): void {
     this.clock += dt;
+    this.frame++;
     if (paused) return;
     this.lockAge += dt;
     this.deniedAge += dt;
     this.weaponAge += dt;
     this.brevityAge += dt;
     this.warnAge += dt;
+    this.titleAge += dt;
     this.objShow = Math.max(0, this.objShow - dt);
     this.radio.update(dt);
     this.messages.update(dt);
@@ -105,7 +121,9 @@ export class HudState {
     this.brevityAge = 99;
     this.warnAge = 99;
     this.objShow = 8;
+    this.objChangedId = '';
     this.dlzScale = 0;
+    this.threats.reset();
     this.g.grey = this.g.red = this.g.flash = 0;
     for (const h of this.hits) h.active = false;
   }
@@ -118,10 +136,15 @@ export class HudState {
     this.brevityAge = 99;
     this.warnAge = 99;
     this.objShow = 8;
+    this.objChangedId = '';
     this.dlzScale = 0;
     this.radio.clear();
     this.messages.clear();
     this.kills.clear();
+    this.threats.reset();
+    this.title = '';
+    this.titleAge = 99;
+    this.inbox.length = 0;
     this.g.grey = this.g.red = this.g.flash = 0;
     for (const h of this.hits) h.active = false;
   }
@@ -141,9 +164,15 @@ export interface HudFrame {
   mode: HudMode;
   /** True in cockpit view (3D cockpit visible below the HMD). */
   cockpit: boolean;
+  /** Text de-collision: symbols that must never be covered register here first. */
+  occ: Occupancy;
+  /** 0..1 — cockpit view looking down into the PCD fades the non-critical HMD text (1 = normal). */
+  declutter: number;
   /** Designated (or locked) hostile target entity, alive, or null. */
   target: AnyEntity | null;
   locked: boolean;
+  /** The player commanded a radar lock on the designated target (it builds inside the ±30° cone). */
+  lockCommanded: boolean;
   /** Current launch zone of the selected weapon (null if n/a). */
   zone: LaunchZone | null;
   /** Flight path marker screen position (valid when fpm.front). */
@@ -172,8 +201,11 @@ export function makeFrame(pen: Pen, proj: Projector, picks: PickRegistry, st: Hu
     p: null as unknown as AircraftEntity,
     mode: 'hmd',
     cockpit: false,
+    occ: new Occupancy(),
+    declutter: 1,
     target: null,
     locked: false,
+    lockCommanded: false,
     zone: null,
     fpm: makeScreenPoint(),
     vHeading: 0,

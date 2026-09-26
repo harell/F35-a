@@ -18,6 +18,8 @@ import type { AircraftEntity, AnyEntity } from '../entities';
 import type { CombatCtx } from './context';
 import { acState } from './context';
 import type { CombatMunitionDef } from './defs';
+import { defenderSkill } from './ew';
+import { gunZone } from './gun';
 import { defaultMunitionFor, pickStation, remaining, stationMunition } from './loadouts';
 
 const MAXN = 600;
@@ -101,6 +103,53 @@ function evaluateProfile(n: number, range: number, vTgtClosing: number, vCross: 
   out.timeOfFlight = tof >= 0 ? tof : tofMax;
 }
 
+/** The profile / geometry of the last kinematicZone() call (for the escape model). */
+const last = { n: 0, vClose: 0, vCross: 0, vNeed: 0, vRun: 0 };
+
+/**
+ * Can the missile of the last profile still intercept a target launched on at range R, if the
+ * target keeps its current motion until `warnRange` to go (+ `delay` s) and then runs directly
+ * away at vRun? (1-D along the line of sight, cross-range motion kept until the escape.)
+ */
+function interceptsEscaping(R: number, warnRange: number, delay: number, runSpeed: number): boolean {
+  const { n, vClose, vCross, vNeed } = last;
+  const vRun = Math.max(last.vRun, runSpeed);
+  let tEsc = Infinity;
+  let dEsc = 0;
+  for (let i = 0; i < n; i++) {
+    const t = PT[i];
+    const sm = PS[i];
+    let dist: number;
+    if (t <= tEsc) {
+      const along = R - vClose * t;
+      const cross = vCross * t;
+      dist = Math.sqrt(along * along + cross * cross);
+      if (tEsc === Infinity && dist - sm <= warnRange) tEsc = t + delay;
+      dEsc = dist;
+    } else {
+      dist = dEsc + vRun * (t - tEsc);
+    }
+    if (sm >= dist && PV[i] >= vNeed) return true;
+  }
+  return false;
+}
+
+/**
+ * Manoeuvre-aware "no-escape" range: the largest launch range from which the missile still
+ * catches a target that only starts running when it is warned (bisection on the escape model).
+ */
+export function escapeRange(warnRange: number, delay: number, hi: number, runSpeed = 0): number {
+  let lo = 0;
+  let top = Math.max(1, hi);
+  if (interceptsEscaping(top, warnRange, delay, runSpeed)) return top;
+  for (let k = 0; k < 14; k++) {
+    const mid = 0.5 * (lo + top);
+    if (interceptsEscaping(mid, warnRange, delay, runSpeed)) lo = mid;
+    else top = mid;
+  }
+  return lo;
+}
+
 /** Raw kinematic zone for a munition against a moving point target. Writes into `out`. */
 export function kinematicZone(def: CombatMunitionDef, g: ZoneGeometry, out: LaunchZone): LaunchZone {
   _rel.subVectors(g.targetPos, g.shooterPos);
@@ -117,10 +166,16 @@ export function kinematicZone(def: CombatMunitionDef, g: ZoneGeometry, out: Laun
   let eff = def.dlzEfficiency;
   let v0 = g.shooterVel.length();
   if (g.shooterFwd) {
-    // missiles launched off-boresight must turn first: energy penalty
+    // missiles launched off-boresight must turn first: energy penalty (thrust-vectoring missiles
+    // turn during the boost at little cost — see flight.ts)
     const c = clamp(g.shooterFwd.dot(_los), -1, 1);
-    eff *= 1 - 0.3 * (1 - c) * 0.5;
-    v0 *= 0.5 + 0.5 * Math.max(0, c);
+    if (def.tvcG > 0) {
+      eff *= 1 - 0.06 * (1 - c);
+      v0 *= 0.85 + 0.15 * Math.max(0, c);
+    } else {
+      eff *= 1 - 0.3 * (1 - c) * 0.5;
+      v0 *= 0.5 + 0.5 * Math.max(0, c);
+    }
   }
   // target velocity split into the LOS component (toward us) and the cross-range component
   const vCross = Math.sqrt(Math.max(0, g.targetVel.lengthSq() - vTgtClosing * vTgtClosing));
@@ -135,6 +190,11 @@ export function kinematicZone(def: CombatMunitionDef, g: ZoneGeometry, out: Laun
     n = buildProfile(def, v0, hMean + 2_000, climbSin, eff);
     evaluateProfile(n, range, vTgtClosing, vCross, vNeed, vRun, out);
   }
+  last.n = n;
+  last.vClose = vTgtClosing;
+  last.vCross = vCross;
+  last.vNeed = vNeed;
+  last.vRun = vRun;
   out.range = range;
   out.closure = closure;
   out.rMin = def.minRange + Math.max(0, closure) * def.armTime * 0.5;
@@ -257,6 +317,77 @@ export interface ZoneHooks {
   irLockedOn(ac: AircraftEntity, targetId: number): boolean;
 }
 
+/**
+ * LaunchZone plus the combat module's extra cue data (the returned zone objects always carry it;
+ * HUD code can read it with a cast).
+ */
+export interface CombatLaunchZone extends LaunchZone {
+  /**
+   * Pk-calibrated SHOOT range (m): SHOOT is shown only inside it (and inside rMin…rMax with the
+   * seeker/lock conditions met). Between rShoot and rMax a HUD may show a steady "IN RNG".
+   */
+  rShoot: number;
+}
+
+/** `ac` knows `other` is there: its RWR hears our STT, or its own sensors hold a fresh track on us. */
+export function awareOf(ctx: CombatCtx, ac: AircraftEntity, other: AircraftEntity): boolean {
+  for (let i = 0; i < ac.rwr.length; i++) {
+    const r = ac.rwr[i];
+    if (r.sourceId === other.id && r.state !== 'search') return true;
+  }
+  const c = acState(ac).contacts.get(other.id);
+  return !!c && c.ownTime >= ctx.time - 2;
+}
+
+/** SHOOT never beyond this multiple of the (instant-turn-cold) no-escape range. */
+const NE_FACTOR = 1.35;
+
+/** Target types that fly straight and don't defend much (bombers, AEW). */
+const NON_MANEUVERING = new Set(['tu22m', 'a50']);
+
+/**
+ * Pk-calibrated shoot range for air-to-air missiles — must be called right after kinematicZone()
+ * for the same shot (it reuses that energy profile). A defending AI keeps its current motion until
+ * it is warned — the seeker going active (AMRAAM "pitbull"), seeing the missile (IR, visual range)
+ * or the launch itself (semi-active illumination) — then reacts (pilot reaction time) and turns
+ * away (turn time from its aspect at its g limit) and runs at full speed:
+ *   rShoot = min(escapeRange(warning, reaction + ½·turn time) · margin(skill), 1.35·rNe) · (0.93 if TWS)
+ * clamped to [rMin, 0.9·rMax]. A bandit with no missiles left (it will bug out as soon as it notices
+ * us) is assumed to run from launch, accelerating in afterburner (+60 m/s). The margin (0.9 − 0.03·skill)
+ * covers notching / chaff and was
+ * calibrated with simulated shots against the real AI at every difficulty (fire exactly on SHOOT:
+ * see tests/combat-shootcue.test.ts). Non-manoeuvring bombers / AEW: 0.8·rMax.
+ */
+export function pkShootRange(ctx: CombatCtx, ac: AircraftEntity, def: CombatMunitionDef, target: AnyEntity, zone: LaunchZone, los: Vector3, stt: boolean): number {
+  const cap = Math.max(zone.rMin, zone.rMax * 0.9);
+  if (target.kind !== 'aircraft') return zone.rMax * 0.8;
+  if (NON_MANEUVERING.has(target.type)) return Math.max(zone.rMin, zone.rMax * 0.8);
+  const d = ctx.world.difficulty;
+  const skill = defenderSkill(ctx, target);
+  const v = Math.max(50, target.velocity.length());
+  // angle the target must turn to run directly away from the shooter
+  const cosAway = clamp(target.velocity.dot(los) / v, -1, 1);
+  const turnAngle = Math.acos(cosAway);
+  const gMax = target.isPlayer ? 8 : d.aiMaxG;
+  const turnTime = turnAngle / ((gMax * G) / v);
+  const reaction = target.isPlayer ? 1 : d.aiReactionTime * (1.3 - 0.6 * skill);
+  let warn = def.guidance === 'active_radar' ? def.activeRange : def.guidance === 'ir' ? 2_000 + 4_000 * skill : Infinity;
+  // a bandit with nothing left to shoot with (or one that already knows we're there and is out of
+  // missiles) bugs out as soon as it notices us — assume it runs from launch, in afterburner
+  let runSpeed = 0;
+  if (!target.isPlayer && remaining(target, 'aim120') + remaining(target, 'aim9x') === 0) {
+    warn = Infinity;
+    runSpeed = clamp(v + 60, 260, 480); // bugging out, accelerating in afterburner (~+60 m/s over a shot)
+  }
+  let r = escapeRange(warn, reaction + 0.5 * turnTime, zone.rMax * 1.5, runSpeed);
+  r *= 0.9 - 0.03 * skill;
+  // the 1-D escape model ignores the energy a long shot burns turning onto a bandit that beams
+  // after pitbull: never beyond ~1.35 × the no-escape range
+  r = Math.min(r, zone.rNe * NE_FACTOR);
+  if (def.guidance === 'active_radar' && !stt) r *= 0.93;
+  return clamp(r, zone.rMin, cap);
+}
+
 /** Launch zone for a weapon vs a target (AI shot decisions + HUD). Writes into `out`. */
 export function launchZoneFor(
   ctx: CombatCtx,
@@ -269,23 +400,16 @@ export function launchZoneFor(
   out.weapon = weapon;
   out.targetId = target.id;
   out.shoot = false;
+  const cz = out as CombatLaunchZone;
+  // generous cues (recruit / pilot) only pad the minimum range — never beyond the calibrated range
   const generous = ac.isPlayer && ctx.world.difficulty.generousShootCues;
   const lo = generous ? 0.9 : 1;
-  const hi = generous ? 1.1 : 1;
   forwardOf(ac.quaternion, _fwd);
   _rel.subVectors(target.position, ac.position);
   const range = _rel.length();
 
   if (weapon === 'gun') {
-    out.range = range;
-    out.rMin = 150;
-    out.rNe = 700;
-    out.rMax = 1_200;
-    out.closure = range > 1 ? (ac.velocity.dot(_rel) - target.velocity.dot(_rel)) / range : 0;
-    out.timeOfFlight = range / 950;
-    const inFront = range > 1 && _fwd.dot(_rel) / range > Math.cos(0.35);
-    out.shoot = ac.gunAmmo > 0 && inFront && range >= out.rMin && range <= out.rMax * hi && target.kind === 'aircraft';
-    return out;
+    return gunZone(ctx, ac, target, range, out);
   }
 
   const st = acState(ac);
@@ -303,7 +427,8 @@ export function launchZoneFor(
     out.rNe = rMax * 0.7;
     out.closure = horiz > 1 ? (ac.velocity.x * _rel.x + ac.velocity.z * _rel.z) / horiz : 0;
     out.timeOfFlight = horiz / Math.max(150, speed * 0.8) + Math.sqrt((2 * Math.max(0, ac.position.y - target.position.y)) / G) * 0.5;
-    out.shoot = remaining(ac, weapon) > 0 && horiz <= rMax * hi && target.kind !== 'aircraft';
+    cz.rShoot = rMax;
+    out.shoot = remaining(ac, weapon) > 0 && horiz <= rMax && target.kind !== 'aircraft';
     return out;
   }
 
@@ -315,8 +440,13 @@ export function launchZoneFor(
   kinematicZone(def, _geom, out);
   out.weapon = weapon;
   out.targetId = target.id;
+  _los.copy(_rel).divideScalar(Math.max(1, range));
+  cz.rShoot = def.category === 'aam' ? pkShootRange(ctx, ac, def, target, out, _los, locked) : out.rMax;
   if (remaining(ac, weapon) <= 0) return out;
-  const inZone = out.range >= out.rMin * lo && out.range <= out.rMax * hi;
+  // the human player's SHOOT cue means "high Pk now" (calibrated range); AI shot doctrine keeps
+  // reading the kinematic zone and picks its own point between rNe and rMax
+  const human = ac.isPlayer && !ac.ai;
+  const inZone = out.range >= out.rMin * lo && out.range <= (human ? cz.rShoot : out.rMax);
   if (!inZone) return out;
   switch (def.guidance) {
     case 'ir':

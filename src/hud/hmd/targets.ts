@@ -1,11 +1,15 @@
 /**
  * Conformal target symbology: sensor tracks (hostile air boxes, ground diamonds, SAM threat symbols),
  * the target designator (TD) box with range / type / missile time-to-impact, lock-on progress ring and
- * lock diamond, the off-screen target cue, friendly markers, the steering waypoint and own missiles.
- * Every tappable symbol is registered for pick().
+ * lock diamond, the ±30° lock cone + LOCKING cue, the off-screen target cue, friendly markers, the
+ * steering waypoint and own missiles. Every tappable symbol is registered for pick(); the TD box and its
+ * labels are registered as protected (text never covers them) and secondary labels (contact types,
+ * waypoint name) are skipped or moved when they would collide.
  */
-import { RAD, toNm } from '../../core/math';
-import type { AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
+import { RAD, forwardOf, toNm, upOf } from '../../core/math';
+import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
+import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
+import { acState } from '../../sim/weapons/context';
 import { AIRCRAFT_SHORT, NumText, entityLabel, mmss } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
@@ -85,7 +89,14 @@ export function drawContacts(f: HudFrame): void {
     pen.strokeGlow(stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
     const lbl = AIRCRAFT_SHORT[e.type] ?? '';
-    if (lbl) pen.text(lbl, sp.x, sp.y + h + 8 * u, pal.dim, 10.5);
+    if (lbl) {
+      const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
+      const ly = sp.y + h + 8 * u;
+      if (!f.occ.hits(sp.x - lw, ly - 6 * u, sp.x + lw, ly + 6 * u)) {
+        pen.text(lbl, sp.x, ly, pal.dim, 10.5);
+        f.occ.add(sp.x - lw, ly - 6 * u, sp.x + lw, ly + 6 * u);
+      }
+    }
     picks.add(e.id, sp.x, sp.y, h);
   }
 }
@@ -157,7 +168,7 @@ export function drawSamSymbol(f: HudFrame, s: SamSiteEntity, x: number, y: numbe
 export function drawDesignated(f: HudFrame): void {
   const t = f.target;
   if (!t) return;
-  const { p, pen, pal, L, picks, st } = f;
+  const { p, pen, pal, L, picks, st, occ } = f;
   const u = L.u;
   const sp = f.sp;
   const visible = project(f, t) && sp.onScreen && !(f.mode === 'hmd' && f.cockpit && sp.y > L.cockpitTop + 4);
@@ -188,15 +199,17 @@ export function drawDesignated(f: HudFrame): void {
     pen.rect(x - h, y - h, h * 2, h * 2);
   }
   pen.strokeGlow(col, 2);
-  // lock-on progress ring
+  // lock-on progress ring + LOCKING
   const lp = p.radar.lockProgress;
-  if (!f.locked && lp > 0.01 && t.kind === 'aircraft') {
+  const building = !f.locked && lp > 0.01 && t.kind === 'aircraft';
+  if (building) {
     pen.begin();
     pen.arc(x, y, h * 1.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, lp));
     pen.strokeGlow(pal.main, 2.2);
   }
   // labels: type above, range below, missile TOF / PITBULL below that
-  pen.text(entityLabel(t), x, y - h - 9 * u, col, 12);
+  const label = entityLabel(t);
+  pen.text(label, x, y - h - 9 * u, col, 12);
   let ly = y + h + 10 * u;
   pen.text(rangeLabel(dist), x, ly, col, 12.5);
   ly += 14 * u;
@@ -209,9 +222,106 @@ export function drawDesignated(f: HudFrame): void {
     } else pen.text(mTxt.get(Math.max(0, Math.ceil(tti))), x, ly, pal.main, 11.5);
     ly += 14 * u;
   }
-  // "LOCK" flash right after the lock event
-  if (f.locked && st.lockAge < 1.4 && blink(f, 5)) pen.text('LOCK', x + h + 8 * u, y, pal.bright, 13, 'left');
+  // right of the box: "LOCK" flash after the lock event, LOCKING while it builds, NOSE ON when the
+  // commanded lock can't build because the target is outside the ±30° lock cone
+  // (right of the box, or left of it when the altitude column / screen edge is in the way)
+  const side = Math.max(h * 1.5, h + 6 * u) + 6 * u;
+  let label2 = '';
+  let size2 = 12;
+  let col2 = pal.main;
+  let show2 = true;
+  if (f.locked && st.lockAge < 1.4) {
+    label2 = 'LOCK';
+    size2 = 13;
+    col2 = pal.bright;
+    show2 = blink(f, 5);
+  } else if (building) {
+    label2 = 'LOCKING';
+    show2 = blink(f, 2.5, 0.75);
+  } else if (!f.locked && t.kind === 'aircraft' && f.lockCommanded && !inLockCone(p, t, f)) {
+    label2 = 'NOSE ON';
+    col2 = pal.warn;
+  }
+  const rw = label2 ? pen.textWidth(label2, size2) : 0;
+  const rightLimit = f.mode === 'hmd' && y > L.boxY - 30 * u && y < L.boxY + 90 * u && x < L.altLeft ? L.altLeft - 12 * u : L.right;
+  const rLeft = rw > 0 && x + side + rw > rightLimit;
+  const rx = rLeft ? x - side : x + side;
+  if (label2 && show2) pen.text(label2, rx, y, col2, size2, rLeft ? 'right' : 'left');
+  // protected: the box, its ring and every label (text zones never cover it)
+  const lw = Math.max(h * 1.5, (pen.textWidth(label, 12) / 2) + 2 * u, pen.textWidth('88.8', 12.5) / 2);
+  occ.add(Math.min(x - lw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity), y - h - 17 * u, Math.max(x + lw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0), ly - 6 * u, 1);
   picks.add(t.id, x, y, h);
+}
+
+/** Target within the player's ±30° radar lock cone (nose). */
+export function inLockCone(p: AircraftEntity, t: AnyEntity, f: HudFrame): boolean {
+  const fwd = forwardOf(p.quaternion, f.v1);
+  const d = f.v2.subVectors(t.position, p.position);
+  const l = d.length();
+  return l > 1 && fwd.dot(d) / l >= COS_CONE;
+}
+const COS_CONE = Math.cos(PLAYER_LOCK_CONE);
+
+/** The human player commanded a lock on the current designation (combat state; defensive read). */
+export function lockCommandedOf(p: AircraftEntity): boolean {
+  try {
+    return !!(acState(p) as { lockCommanded?: boolean }).lockCommanded;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * ±30° radar lock cone around the nose, drawn while an air target is designated but not locked (the
+ * lock only builds inside it). Dim dashed circle; bright + blinking when a commanded lock is waiting
+ * for the target to come inside.
+ */
+export function drawLockCone(f: HudFrame): void {
+  const t = f.target;
+  const p = f.p;
+  if (f.mode !== 'hmd' || !t || f.locked || t.kind !== 'aircraft' || !p.radar.emitting) return;
+  const { pen, pal, L, proj } = f;
+  const u = L.u;
+  const fwd = forwardOf(p.quaternion, f.v1);
+  if (!proj.dir(fwd, f.sp) || !f.sp.front) return;
+  const x = f.sp.x;
+  const y = f.sp.y;
+  // radius: project a direction 30° off the nose (toward the jet's up)
+  const up = upOf(p.quaternion, f.v2);
+  const c = Math.cos(PLAYER_LOCK_CONE);
+  const s = Math.sin(PLAYER_LOCK_CONE);
+  f.v3.set(fwd.x * c + up.x * s, fwd.y * c + up.y * s, fwd.z * c + up.z * s);
+  if (!proj.dir(f.v3, f.sp2)) return;
+  const r = Math.hypot(f.sp2.x - x, f.sp2.y - y);
+  if (!(r > 10)) return;
+  const inside = inLockCone(p, t, f);
+  const waiting = f.lockCommanded && !inside;
+  const a = waiting ? (blink(f, 2.5, 0.7) ? 0.9 : 0.45) : p.radar.lockProgress > 0.01 ? 0.5 : 0.32;
+  const g = pen.g;
+  g.save();
+  g.beginPath();
+  // keep it off the cockpit panel and the heading tape
+  const bottom = f.cockpit ? L.cockpitTop : L.H;
+  g.rect(0, L.tapeY + 44 * u, L.W, Math.max(0, bottom - (L.tapeY + 44 * u)));
+  g.clip();
+  pen.reset();
+  pen.setDash('dash');
+  pen.begin();
+  pen.circle(x, y, r);
+  g.globalAlpha = a;
+  pen.strokeGlow(waiting ? pal.warn : pal.main, waiting ? 1.8 : 1.3);
+  g.globalAlpha = 1;
+  pen.setDash('solid');
+  g.restore();
+  pen.reset();
+  // cone label at its upper-left rim
+  const lx = x - r * 0.707;
+  const lyy = y - r * 0.707;
+  if (lyy > L.row2Y + 16 * u && lyy < bottom - 10 * u && lx > L.left + 30 * u) {
+    pen.g.globalAlpha = a;
+    pen.text('30°', lx - 4 * u, lyy - 4 * u, waiting ? pal.warn : pal.dim, 10.5, 'right');
+    pen.g.globalAlpha = 1;
+  }
 }
 
 /** Arrow on the screen-edge ellipse pointing at an off-screen target, with angle-off and label. */
@@ -220,8 +330,10 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   const u = L.u;
   const sp = f.sp;
   edgeOfEllipse(L.edgeCx, L.edgeCy, L.edgeRx * 0.92, L.edgeRy * 0.8, sp.dirX, sp.dirY, edge);
-  // keep the cue out of the cockpit panel in cockpit view
+  // keep the cue out of the cockpit panel in cockpit view, and off the touch controls
   if (f.cockpit && f.mode === 'hmd') edge.y = Math.min(edge.y, L.cockpitTop - 24 * u);
+  if (edge.y > L.ctlTop - 40 * u && (edge.x < L.ctlLeft + 40 * u || edge.x > L.ctlRight - 40 * u)) edge.y = L.ctlTop - 40 * u;
+  edge.y = Math.max(edge.y, L.row2Y + 20 * u);
   const col = f.locked ? pal.bright : pal.main;
   pen.setDash('solid');
   pen.begin();
@@ -233,6 +345,7 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   pen.text(offTxt.get(sp.offAxis * RAD), tx, ty, col, 12.5);
   pen.text(entityLabel(t), tx, ty + 13 * u, pal.dim, 10.5);
   pen.text(rangeLabel(dist), tx, ty + 25 * u, pal.dim, 10.5);
+  f.occ.add(tx - 30 * u, ty - 8 * u, tx + 30 * u, ty + 31 * u, 1);
 }
 
 /** Newest live player missile guiding on `targetId`. */
@@ -297,7 +410,7 @@ export function drawFriendlies(f: HudFrame): void {
 export function drawWaypoint(f: HudFrame): void {
   const wp = f.ctx.mission?.currentWaypoint;
   if (!wp) return;
-  const { p, pen, pal, L } = f;
+  const { p, pen, pal, L, occ } = f;
   const u = L.u;
   f.proj.point(wp.position, f.sp);
   if (!drawable(f)) return;
@@ -313,9 +426,31 @@ export function drawWaypoint(f: HudFrame): void {
   const dz = wp.position.z - p.position.z;
   const d = Math.hypot(dx, dz);
   const gs = Math.max(30, Math.hypot(p.velocity.x, p.velocity.z));
-  pen.text(wp.label || wp.id, x, y - r - 14 * u, pal.main, 11);
-  pen.text(wpDist.get(toNm(d)), x, y + r + 9 * u, pal.dim, 10.5);
-  pen.text(mmss(d / gs), x, y + r + 21 * u, pal.dim, 10.5);
+  // name above, distance / time below; any label that would collide with the target box, a contact
+  // label or the FPM moves to the other side or is left out
+  const name = wp.label || wp.id;
+  const nw = pen.textWidth(name, 11) / 2 + 2;
+  // labels never run under the button column / off the left edge
+  const lx = Math.max(L.left + nw, Math.min(L.right - nw, x));
+  const dist = wpDist.get(toNm(d));
+  const dw = pen.textWidth(dist, 10.5) / 2 + 2;
+  const aboveY = y - r - 14 * u;
+  let belowY = y + r + 9 * u;
+  const infoFree = !occ.hits(x - dw, belowY - 6 * u, x + dw, belowY + 18 * u);
+  const dx2 = Math.max(L.left + dw, Math.min(L.right - dw, x));
+  if (!occ.hits(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u)) {
+    pen.text(name, lx, aboveY, pal.main, 11);
+    occ.add(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u);
+  } else if (infoFree) {
+    pen.text(name, lx, belowY, pal.main, 11);
+    occ.add(lx - nw, belowY - 7 * u, lx + nw, belowY + 7 * u);
+    belowY += 13 * u;
+  }
+  if (!occ.hits(dx2 - dw, belowY - 6 * u, dx2 + dw, belowY + 18 * u)) {
+    pen.text(dist, dx2, belowY, pal.dim, 10.5);
+    pen.text(mmss(d / gs), dx2, belowY + 12 * u, pal.dim, 10.5);
+    occ.add(dx2 - dw, belowY - 6 * u, dx2 + dw, belowY + 18 * u);
+  }
 }
 
 /** Bearing (rad, true) to the current waypoint, or null. */

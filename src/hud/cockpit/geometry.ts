@@ -28,25 +28,53 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLARE_LIP_ANGLE } from '../hmd/layout';
 
-/** Panoramic cockpit display placement (eye frame). */
+/**
+ * Panoramic cockpit display placement (eye frame). Sized and placed for a phone: at the default head
+ * pose (60° vertical FOV, 844x390) ~60 % of it is in view and it spans the free band between the
+ * throttle cluster and the stick (see pcdScreenRect + tests/hud-cockpit.test.ts).
+ */
 export const PCD = {
-  /** Screen size (m). The real PCD is 20x8 in (0.51 x 0.20 m); scaled up ~1.25x for phone legibility. */
-  width: 0.8,
-  height: 0.32,
+  /** Screen size (m). The real PCD is 20x8 in (0.51 x 0.20 m); a wider, flatter phone-legible panel. */
+  width: 0.7,
+  height: 0.25,
   /** Distance from the eye to the screen centre (m). */
-  dist: 0.66,
+  dist: 0.6,
   /** Angle (rad) of the screen's top edge below the boresight. */
-  topAngle: GLARE_LIP_ANGLE + 0.06,
+  topAngle: GLARE_LIP_ANGLE + 0.05,
 };
 
 /** Up-front display (small strip under the glare-shield lip, above the PCD). */
-export const UFD = { width: 0.26, height: 0.03 };
+export const UFD = { width: 0.24, height: 0.024 };
 
 const LIP_Z = -0.64;
 const LIP_Y = LIP_Z * Math.tan(GLARE_LIP_ANGLE);
 const HALF_W = 0.6;
 /** Up-front display screen centre (in the hood face, just under the lip). */
-export const UFD_POS = new Vector3(0, LIP_Y - 0.026, LIP_Z - 0.012);
+export const UFD_POS = new Vector3(0, LIP_Y - 0.021, LIP_Z - 0.012);
+
+/**
+ * Where the PCD lands on screen at the default head pose (pure; tests + HUD). Screen px for a viewport
+ * W x H with vertical FOV `fovDeg`: x extent of the screen's middle row, top / bottom y (bottom may be
+ * > H = cut off), and the visible fraction of its height.
+ */
+export function pcdScreenRect(fovDeg: number, W: number, H: number): { left: number; right: number; top: number; bottom: number; visible: number } {
+  const t = Math.tan((fovDeg * Math.PI) / 360);
+  const aspect = W / H;
+  const halfAng = Math.atan(PCD.height / 2 / PCD.dist);
+  const ang = PCD.topAngle + halfAng;
+  // centre + edges in the eye frame
+  const cyE = -Math.sin(ang) * PCD.dist;
+  const czE = -Math.cos(ang) * PCD.dist;
+  // plane's local up (+Y rotated by -ang about X): (0, cos, -sin)
+  const upY = Math.cos(ang);
+  const upZ = -Math.sin(ang);
+  const toY = (y: number, z: number) => H / 2 - (y / -z / t) * (H / 2);
+  const topY = toY(cyE + upY * PCD.height / 2, czE + upZ * PCD.height / 2);
+  const botY = toY(cyE - upY * PCD.height / 2, czE - upZ * PCD.height / 2);
+  const halfX = ((PCD.width / 2) / -czE / (t * aspect)) * (W / 2);
+  const visible = Math.max(0, Math.min(1, (H - topY) / Math.max(1, botY - topY)));
+  return { left: W / 2 - halfX, right: W / 2 + halfX, top: topY, bottom: botY, visible };
+}
 
 /** Centre, orientation and size of the PCD screen plane facing the eye. */
 export function pcdFrame(out: { center: Vector3; quat: Quaternion }): { center: Vector3; quat: Quaternion } {
@@ -189,8 +217,11 @@ export function buildCockpit(controlMat: Material, gripMat: Material): CockpitMe
   // PCD bezel + instrument panel body (facing the eye)
   const fr = pcdFrame({ center: new Vector3(), quat: new Quaternion() });
   const back = new Vector3(0, 0, -1).applyQuaternion(fr.quat);
-  parts.push(colorize(place(new BoxGeometry(PCD.width + 0.036, PCD.height + 0.05, 0.03), fr.center.clone().addScaledVector(back, 0.018), fr.quat), C.bezel));
-  parts.push(colorize(place(new BoxGeometry(1.25, 0.7, 0.02), fr.center.clone().addScaledVector(back, 0.045).add(new Vector3(0, -0.12, 0)), fr.quat), C.panel));
+  // bezel: thin at the top so it doesn't hide the up-front display under the glare shield
+  const up = new Vector3(0, 1, 0).applyQuaternion(fr.quat);
+  parts.push(colorize(place(new BoxGeometry(PCD.width + 0.036, PCD.height + 0.03, 0.03), fr.center.clone().addScaledVector(back, 0.018).addScaledVector(up, -0.008), fr.quat), C.bezel));
+  // instrument panel body behind the PCD (its top edge just above the PCD's)
+  parts.push(colorize(place(new BoxGeometry(1.25, 0.7, 0.02), fr.center.clone().addScaledVector(back, 0.045).addScaledVector(up, -(0.35 - PCD.height / 2 - 0.012)), fr.quat), C.panel));
   // UFD housing set into the hood face, under the lip
   parts.push(colorize(place(new BoxGeometry(UFD.width + 0.018, UFD.height + 0.01, 0.012), UFD_POS.clone().add(new Vector3(0, 0, -0.008))), C.bezel));
 

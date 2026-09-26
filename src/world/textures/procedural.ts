@@ -322,3 +322,41 @@ export function createUrbanTexture(): DataTexture {
 export function disposeTextures(list: (Texture | null | undefined)[]): void {
   for (const t of list) t?.dispose();
 }
+
+/**
+ * Motorway surface (64 × 256, tiling along v every 40 m): grey asphalt with wheel-track darkening,
+ * dashed lane lines (3 lanes each way), solid edge lines and a concrete median barrier strip.
+ * u spans the whole carriageway (both directions).
+ */
+export function createMotorwayTexture(): DataTexture {
+  const W = 64;
+  const H = 256;
+  const d = new Uint8Array(W * H * 4);
+  const rnd = mulberry32(31);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const u = (x + 0.5) / W;
+      let v = 78 + (rnd() - 0.5) * 12;
+      // wheel tracks (slightly darker) in each lane
+      const lane = (u < 0.5 ? u : u - 0.5) / 0.5; // 0..1 across one direction
+      const inLane = (lane * 3) % 1;
+      if (Math.abs(inLane - 0.3) < 0.07 || Math.abs(inLane - 0.7) < 0.07) v -= 10;
+      let r = v;
+      let g = v;
+      let b = v + 3;
+      const line = (c: number, w: number) => Math.abs(u - c) < w;
+      const dash = y % 64 < 24;
+      // median barrier and edge lines
+      if (line(0.5, 0.018)) r = g = b = 150;
+      else if (line(0.035, 0.012) || line(0.965, 0.012) || line(0.47, 0.01) || line(0.53, 0.01)) r = g = b = 210;
+      else if (dash && (line(0.5 / 3 * 1 + 0.01, 0.01) || line(0.5 / 3 * 2, 0.01) || line(0.5 + 0.5 / 3, 0.01) || line(0.5 + 1 / 3 - 0.01, 0.01))) r = g = b = 205;
+      const o = (y * W + x) * 4;
+      d[o] = r;
+      d[o + 1] = g;
+      d[o + 2] = b;
+      d[o + 3] = 255;
+    }
+  }
+  const t = dataTexture(d, W, { srgb: true, w: W, h: H });
+  return t;
+}

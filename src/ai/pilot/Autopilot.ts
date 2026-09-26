@@ -27,7 +27,7 @@ import { G } from '../../core/math';
 import { AB_DETENT } from '../../core/types';
 import type { AircraftEntity } from '../../sim/entities';
 import type { SimWorld } from '../../sim/api';
-import { perfOf, stickForG } from '../../sim/flight/performance';
+import { perfOf, rollRateAvailable, stickForG } from '../../sim/flight/performance';
 import { UP, angleBetween, clampN, wrapAngle } from '../geom';
 import { applySafety, type SafetyState } from './safety';
 
@@ -252,10 +252,7 @@ export class Autopilot {
     const auth = clampN(qbar / perf.qFull, 0.06, 1);
     const tauP = Math.min(1.5, perf.rollTau / auth);
     const kPhi = Math.min(5, 0.45 / tauP);
-    const rollAuth = clampN(qbar / (perf.qFull * 1.1), perf.tvc ? 0.3 : 0.15, 1);
-    const aAbs = Math.abs(ac.flight.alpha);
-    const aFade = 1 - 0.55 * clampN((aAbs - 0.21) / 0.35, 0, 1);
-    const pMax = Math.max(0.05, perf.rollRateMax * rollAuth * aFade);
+    const pMax = Math.max(0.05, rollRateAvailable(ac));
     const roll = clampN((kPhi * err) / pMax, -1, 1);
     inp.roll = roll;
     if (Math.abs(roll) > 0.3) this.rollSign = Math.sign(roll);

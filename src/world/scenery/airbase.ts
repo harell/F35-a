@@ -180,3 +180,32 @@ export function buildAirbase(spec: AirbaseSpec, out: AirbaseOutput, height: Heig
 export function airbaseFrame(f: SceneryFeature, y = 0): Frame {
   return frameFromHeading(f.x, y, f.z, ((f.rotation ?? 0) * Math.PI) / 180);
 }
+
+/**
+ * A secondary runway (e.g. Whenuapai 08/26): marked strip decal plus edge / threshold lights.
+ * Centre (x, z), heading (rad), length and width in m.
+ */
+export function buildExtraRunway(
+  r: { x: number; z: number; heading: number; length: number; width: number },
+  runway: DecalBuilder,
+  lights: LightList,
+  height: HeightFn,
+): void {
+  const fr = frameFromHeading(r.x, 0, r.z, r.heading);
+  const W = r.width;
+  const L = r.length;
+  runway.quad(fr, -W / 2, W / 2, -L / 2, L / 2, height, (lx, lz) => [0.5 - lx / W, 0.5 + lz / L], 100, 0.3);
+  const world = (lx: number, lz: number): [number, number] => [fr.ox + lx * fr.c + lz * fr.s, fr.oz - lx * fr.s + lz * fr.c];
+  for (let lz = -L / 2; lz <= L / 2 + 0.1; lz += 60) {
+    for (const side of [-1, 1]) {
+      const [wx, wz] = world(side * (W / 2 + 1.5), lz);
+      lights.add(wx, height(wx, wz) + 0.8, wz, L / 2 - Math.abs(lz) < 400 ? LIGHT_CAUTION : LIGHT_EDGE, 3.2);
+    }
+  }
+  for (const end of [-1, 1]) {
+    for (let lx = -W / 2; lx <= W / 2 + 0.1; lx += W / 8) {
+      const [wx, wz] = world(lx, end * (L / 2 + 1));
+      lights.add(wx, height(wx, wz) + 0.7, wz, LIGHT_GREEN, 3.4);
+    }
+  }
+}

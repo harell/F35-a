@@ -53,6 +53,9 @@ export class TileScatter {
   private lastTz = Number.NaN;
   private pending: { tx: number; tz: number; d: number }[] = [];
   private dirty = false;
+  /** Camera height above ground (m): instances thin out with slant range, not map distance. */
+  private agl = 0;
+  private aglBucket = -1;
   visible = true;
 
   constructor(
@@ -77,8 +80,14 @@ export class TileScatter {
   }
 
   /** Stream tiles around the camera and repack instances when the set changes. */
-  update(cam: Vector3): void {
+  update(cam: Vector3, agl = 0): void {
     this.frame++;
+    const bucket = Math.round(Math.max(0, agl) / 120);
+    if (bucket !== this.aglBucket) {
+      this.aglBucket = bucket;
+      this.agl = bucket * 120;
+      this.dirty = true;
+    }
     const ts = this.tileSize;
     const tx = Math.floor(cam.x / ts);
     const tz = Math.floor(cam.z / ts);
@@ -127,6 +136,8 @@ export class TileScatter {
       if (d <= this.radius + ts * 0.71) list.push({ t, d });
     }
     list.sort((a, b) => a.d - b.d);
+    const R = this.radius;
+    const agl2 = this.agl * this.agl;
     const rec: number[] = new Array(REC);
     for (let si = 0; si < this.specs.length; si++) {
       const spec = this.specs[si];
@@ -135,8 +146,10 @@ export class TileScatter {
       const col = mesh.instanceColor!.array as Float32Array;
       let n = 0;
       for (const { t, d } of list) {
-        // rank-based thinning with distance: keep everything near, ~25 % at the edge
-        const keep = d < this.radius * 0.35 ? 1 : Math.max(0.22, 1 - ((d - this.radius * 0.35) / (this.radius * 0.65)) * 0.78);
+        // rank-based thinning with slant range: keep everything near, ~22 % at the edge, none beyond
+        const ds = Math.sqrt(d * d + agl2);
+        if (ds > R * 1.02) continue;
+        const keep = ds < R * 0.35 ? 1 : Math.max(0.22, 1 - ((ds - R * 0.35) / (R * 0.65)) * 0.78);
         const arr = t.inst.data[spec.kind];
         for (let i = 0; i < arr.length && n < spec.capacity; i += REC) {
           if (arr[i + 10] > keep) continue;

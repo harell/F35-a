@@ -31,7 +31,7 @@ import {
 } from 'three';
 import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
-import { MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
+import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
 
 export interface TerrainStyle {
   rockColor: Color;
@@ -41,9 +41,45 @@ export interface TerrainStyle {
   outsideColor: Color;
   /** Procedural paddock pattern strength. */
   fields: number;
-  /** Roof colours (three variants) and garden colour for the urban pattern. */
-  roofs: [Color, Color, Color];
+  /** Roof palette (six colours) and garden / tree-canopy colours for the urban pattern. */
+  roofs: Color[];
   garden: Color;
+  canopy: Color;
+  /** Shore band colours (beach sand, black sand west of blackSandX, rocky shore). */
+  sand: Color;
+  blackSand: Color;
+  shoreRock: Color;
+  blackSandX: number;
+  /** Vineyard region (ellipse centre x, z, radii x, z in m) or null. */
+  vineyard: [number, number, number, number] | null;
+  /** Sink low coastal land under the water plane (terrain with a coast mask / linear shores). */
+  sink: boolean;
+  /** Fixed CBD street grid (see urbanGrid.ts CbdGrid) or null. */
+  cbd: { x: number; z: number; radius: number; hash: number } | null;
+  /** Volcanic cones (≤ MAX_CONES): crater bowls shaded below heightfield resolution, flank terraces. */
+  cones?: ConeShading[];
+}
+
+/** One volcanic cone for the terrain shader (m): crater radius / depth (0 = no crater), cone radius / height. */
+export interface ConeShading {
+  x: number;
+  z: number;
+  craterR: number;
+  craterDepth: number;
+  coneR: number;
+  coneH: number;
+  /** Pā earthwork terraces on the flanks. */
+  terraces: boolean;
+}
+
+export { MAX_CONES };
+
+/** Coast mask (R8 signed distance) covering a square centred on (cx, cz). */
+export interface CoastMaskInfo {
+  texture: Texture;
+  x0: number;
+  z0: number;
+  size: number;
 }
 
 export interface TerrainRendererOptions {
@@ -60,6 +96,14 @@ export interface TerrainRendererOptions {
   drawDistance: number;
   /** Range multiplier (≥ 2.2 keeps morphing crack-free). */
   lodRange?: number;
+  /** Optional high-resolution coast mask (shared with the water). */
+  coast: CoastMaskInfo | null;
+  /** 1×1 fallback texture when there is no coast mask. */
+  dummy: Texture;
+  /** Airfield rectangles (≤ 6) where the paddock pattern is suppressed. */
+  noFields?: { x: number; z: number; heading: number; halfW: number; halfL: number }[];
+  /** The water's shallow colour (terrain seaward of the coast mask is painted as water). */
+  seaShallow?: Color;
 }
 
 const MORPH_START = 0.68;
@@ -246,10 +290,20 @@ export class TerrainRenderer {
         uOutside: { value: hf.extent / 2 },
         uOutsideColor: { value: o.style.outsideColor },
         uFields: { value: o.style.fields },
-        uRoofA: { value: o.style.roofs[0] },
-        uRoofB: { value: o.style.roofs[1] },
-        uRoofC: { value: o.style.roofs[2] },
+        uRoofs: { value: o.style.roofs },
         uGarden: { value: o.style.garden },
+        uCanopy: { value: o.style.canopy },
+        uSand: { value: o.style.sand },
+        uBlackSand: { value: o.style.blackSand },
+        uShoreRock: { value: o.style.shoreRock },
+        uSeaShallow: { value: o.seaShallow ?? new Color(0x3f8a8c) },
+        uBlackSandX: { value: o.style.blackSandX },
+        uVineyard: { value: o.style.vineyard ? new Vector4(...o.style.vineyard) : new Vector4(0, 0, 0, 0) },
+        uSink: { value: o.style.sink ? 1 : 0 },
+        uCbd: { value: o.style.cbd ? new Vector4(o.style.cbd.x, o.style.cbd.z, o.style.cbd.radius, o.style.cbd.hash) : new Vector4(0, 0, 0, 0) },
+        ...coastUniforms(o.coast, o.dummy),
+        ...noFieldUniforms(o.noFields ?? []),
+        ...coneUniforms(o.style.cones ?? []),
       },
     });
     this.mesh = new Mesh(this.geometry, this.material);
@@ -380,6 +434,40 @@ export class TerrainRenderer {
     this.material.dispose();
     this.heightTexture.dispose();
   }
+}
+
+function noFieldUniforms(list: { x: number; z: number; heading: number; halfW: number; halfL: number }[]): { uNoFieldA: { value: Vector4[] }; uNoFieldB: { value: Vector4[] } } {
+  const a: Vector4[] = [];
+  const b: Vector4[] = [];
+  for (let i = 0; i < 6; i++) {
+    const r = list[i];
+    a.push(r ? new Vector4(r.x, r.z, Math.cos(r.heading), Math.sin(r.heading)) : new Vector4());
+    b.push(r ? new Vector4(r.halfW, r.halfL, 250, 0) : new Vector4());
+  }
+  return { uNoFieldA: { value: a }, uNoFieldB: { value: b } };
+}
+
+/** Cone list → uConeA (x, z, crater radius, crater depth), uConeB (cone radius, height, terraces), uConeBox (xz bounds). */
+export function coneUniforms(list: ConeShading[]): { uConeA: { value: Vector4[] }; uConeB: { value: Vector4[] }; uConeBox: { value: Vector4 } } {
+  const a: Vector4[] = [];
+  const b: Vector4[] = [];
+  const box = new Vector4(1e9, 1e9, -1e9, -1e9);
+  for (let i = 0; i < MAX_CONES; i++) {
+    const c = list[i];
+    a.push(c ? new Vector4(c.x, c.z, c.craterR, c.craterDepth) : new Vector4());
+    b.push(c ? new Vector4(c.coneR, c.coneH, c.terraces ? 1 : 0, 0) : new Vector4());
+    if (c) box.set(Math.min(box.x, c.x - c.coneR), Math.min(box.y, c.z - c.coneR), Math.max(box.z, c.x + c.coneR), Math.max(box.w, c.z + c.coneR));
+  }
+  if (!list.length) box.set(0, 0, -1, -1); // empty: nothing inside
+  return { uConeA: { value: a }, uConeB: { value: b }, uConeBox: { value: box } };
+}
+
+/** Uniforms of COAST_GLSL (shared by terrain and water). */
+export function coastUniforms(coast: CoastMaskInfo | null, dummy: Texture): { uCoastMask: { value: Texture }; uCoastRect: { value: Vector4 } } {
+  return {
+    uCoastMask: { value: coast ? coast.texture : dummy },
+    uCoastRect: { value: coast ? new Vector4(coast.x0, coast.z0, 1 / coast.size, 1) : new Vector4(0, 0, 1, 0) },
+  };
 }
 
 /** R32F mip chain with a [1 2 1] tent filter, corner-aligned (mip l+1 sample j ≈ mip l sample 2j). */

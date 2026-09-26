@@ -3,7 +3,9 @@ import { Vector3 } from 'three';
 import { atmosphere } from '../src/core/atmosphere';
 import { AB_DETENT, type AircraftType, type Difficulty } from '../src/core/types';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
-import { liftCoefficient, alphaForLift } from '../src/sim/flight/aero';
+import { liftCoefficient, alphaForLift, dragCoefficient, thrustMil } from '../src/sim/flight/aero';
+import { rollRateLimit } from '../src/sim/flight/controlLaws';
+import { GLOC } from '../src/sim/flight/gloc';
 import { DEG, KT, makeWorld, run, type TestWorld } from './sim-fakes';
 
 function spawnF35(tw: TestWorld, alt: number, tas: number, extra: { heading?: number; fuel?: number } = {}) {
@@ -33,8 +35,7 @@ describe('aircraft performance data', () => {
     expect(p.minG).toBe(-3);
     expect(p.maxMach).toBeCloseTo(1.6);
     expect(p.rcs).toBeLessThanOrEqual(0.001);
-    expect(p.aoaLimitAssisted / DEG).toBeCloseTo(28);
-    expect(p.aoaLimitUnassisted / DEG).toBeCloseTo(50);
+    expect(p.aoaLimit / DEG).toBeCloseTo(28);
   });
   it('lift curve is continuous, peaks at the stall AoA and inverts', () => {
     for (const type of Object.keys(AIRCRAFT_PERF) as AircraftType[]) {
@@ -168,64 +169,236 @@ describe('flight model — F-35A (assisted)', () => {
   });
 });
 
-describe('flight model — unassisted (ace)', () => {
-  it('departs when over-pulled at low speed and recovers when unloaded', () => {
+describe('flight model — Ace keeps the F-35 carefree handling (regression i1)', () => {
+  // Reviewer: Ace multiplied the g limit by 1.35 and let the AoA reach 50°, so a full-stick
+  // "thumb flick" over-G'd (12.2 g, health 70 in 6 s) or departed the jet.
+  for (const spd of [250, 300, 350]) {
+    it(`full aft stick at ${spd} m/s on Ace: ≤ 9.3 g, no overstress, no damage`, () => {
+      const tw = makeWorld('ace');
+      const ac = spawnF35(tw, 3000, spd);
+      let gMax = 0;
+      run(tw.world, 6, () => {
+        ac.input.throttle = 0.9;
+        ac.input.pitch = 1;
+        ac.input.roll = 0;
+        gMax = Math.max(gMax, ac.flight.gLoad);
+      });
+      expect(gMax).toBeGreaterThan(8.5);
+      expect(gMax).toBeLessThan(9.3);
+      expect(ac.flight.overstress).toBe(0);
+      expect(ac.health).toBe(ac.maxHealth);
+      expect(ac.damage.hydraulics).toBe(0);
+      expect(tw.of('hud:message').some((m) => m.text === 'OVERSTRESS')).toBe(false);
+    });
+  }
+
+  it('full aft stick + roll at low speed on Ace never departs (AoA limiter below the stall)', () => {
     const tw = makeWorld('ace');
     const ac = spawnF35(tw, 6000, 140);
     let aMax = 0;
     let stalled = false;
-    run(tw.world, 5, () => {
+    let depMax = 0;
+    run(tw.world, 8, (t) => {
       ac.input.throttle = AB_DETENT;
       ac.input.pitch = 1;
+      ac.input.roll = t < 4 ? 0.5 : -1;
       aMax = Math.max(aMax, ac.flight.alpha);
       stalled ||= ac.flight.stalled;
+      depMax = Math.max(depMax, ac.sim!.departure);
     });
-    expect(aMax).toBeGreaterThan(AIRCRAFT_PERF.f35a.alphaStall);
-    expect(stalled).toBe(true);
-    // unload
-    run(tw.world, 2, () => {
-      ac.input.pitch = -0.4;
-      ac.input.roll = 0;
-    });
-    run(tw.world, 4, () => {
-      ac.input.pitch = 0;
-    });
-    expect(ac.flight.stalled).toBe(false);
-    expect(ac.flight.alpha).toBeLessThan(AIRCRAFT_PERF.f35a.alphaStall - 5 * DEG);
-    expect(ac.alive).toBe(true);
+    expect(aMax / DEG).toBeLessThan(29);
+    expect(stalled).toBe(false);
+    expect(depMax).toBeLessThan(0.01);
   });
 
-  it('a developed departure (spin) recovers once the stick is released', () => {
+  it('the departure model still exists past the stall AoA (forced state) and recovers unloaded', () => {
     const tw = makeWorld('ace');
-    const ac = spawnF35(tw, 6000, 250);
+    const ac = spawnF35(tw, 6000, 120);
+    // force a post-stall attitude (e.g. a tail slide the limiter could not prevent)
+    ac.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), 45 * DEG);
     let depMax = 0;
-    run(tw.world, 6, () => {
-      ac.input.throttle = AB_DETENT;
+    run(tw.world, 1.5, () => {
       ac.input.pitch = 1;
       depMax = Math.max(depMax, ac.sim!.departure);
     });
-    expect(depMax).toBeGreaterThan(0.5);
-    run(tw.world, 4, () => {
+    expect(depMax).toBeGreaterThan(0.2);
+    run(tw.world, 6, () => {
       ac.input.pitch = 0;
+      ac.input.roll = 0;
     });
     expect(ac.sim!.departure).toBeLessThan(0.05);
-    expect(Math.abs(ac.flight.beta)).toBeLessThan(5 * DEG);
     expect(ac.flight.stalled).toBe(false);
+    expect(ac.alive).toBe(true);
   });
 
-  it('can over-G and accumulates overstress (damage) without the limiter', () => {
-    const tw = makeWorld('ace');
-    const ac = spawnF35(tw, 3000, 300);
-    let gMax = 0;
-    run(tw.world, 4, () => {
+  it('Ace drops only the neutral-stick flight-path latch (the assisted law holds it)', () => {
+    const drift = (diff: Difficulty) => {
+      const tw = makeWorld(diff);
+      const ac = spawnF35(tw, 5000, 230);
+      run(tw.world, 1.5, () => {
+        ac.input.pitch = 0.4;
+      });
+      run(tw.world, 1, () => {
+        ac.input.pitch = 0;
+      });
+      const g1 = Math.asin(ac.velocity.y / ac.velocity.length());
+      run(tw.world, 6, () => {
+        ac.input.pitch = 0;
+        ac.input.throttle = 1;
+      });
+      return Math.abs(Math.asin(ac.velocity.y / ac.velocity.length()) - g1);
+    };
+    expect(drift('pilot')).toBeLessThan(2 * DEG);
+    expect(drift('ace')).toBeLessThan(12 * DEG); // still bank/γ-compensated 1 g, just no latch
+  });
+});
+
+describe('G-LOC (Ace only)', () => {
+  /** Hold ~9 g in a level-ish turn by pinning the speed (isolates the physiology model). */
+  function sustainedPull(diff: Difficulty, seconds: number) {
+    const tw = makeWorld(diff);
+    const ac = spawnF35(tw, 5000, 300);
+    const gTrace: { t: number; g: number; gloc: number; auth: number }[] = [];
+    run(tw.world, seconds, (t) => {
       ac.input.throttle = 1;
       ac.input.pitch = 1;
-      gMax = Math.max(gMax, ac.flight.gLoad);
+      ac.input.roll = Math.max(-1, Math.min(1, (80 * DEG - ac.flight.roll) * 2));
+      ac.velocity.setLength(300); // keep the energy up so the jet can hold the g
+      gTrace.push({ t, g: ac.flight.gLoad, gloc: ac.gloc ?? 0, auth: ac.sim!.pilotAuthority });
     });
-    expect(gMax).toBeGreaterThan(10);
-    const damaged = ac.flight.overstress > 0 || ac.health < ac.maxHealth;
-    expect(damaged).toBe(true);
-    expect(tw.of('damage').some((d) => d.weapon === 'collision')).toBe(true);
+    return { tw, ac, gTrace };
+  }
+
+  it('sustained 9 g knocks the Ace pilot out after ~8-16 s; the stick is ignored, then control returns', () => {
+    const { tw, ac, gTrace } = sustainedPull('ace', 30);
+    const msg = tw.of('hud:message').find((m) => m.text === 'G-LOC');
+    expect(msg).toBeTruthy();
+    const out = gTrace.find((s) => s.gloc >= 1)!;
+    expect(out.t).toBeGreaterThan(8);
+    expect(out.t).toBeLessThan(16);
+    // unconscious: full aft stick is ignored → the FBW unloads towards ~1-2 g
+    const during = gTrace.filter((s) => s.t > out.t + 1.5 && s.t < out.t + GLOC.glocTime - 0.2);
+    expect(Math.max(...during.map((s) => s.g))).toBeLessThan(3);
+    expect(during.every((s) => s.auth === 0)).toBe(true);
+    // wakes up and gets the stick back
+    const back = gTrace.find((s) => s.t > out.t + GLOC.glocTime + GLOC.recoveryTime + 0.2);
+    expect(back?.auth).toBe(1);
+    expect(ac.alive).toBe(true);
+  });
+
+  it('no G-LOC on Pilot (vision effects only, HUD side)', () => {
+    const { tw, gTrace } = sustainedPull('pilot', 25);
+    expect(tw.of('hud:message').some((m) => m.text === 'G-LOC')).toBe(false);
+    expect(gTrace.every((s) => s.auth === 1)).toBe(true);
+  });
+
+  it('short 9 g pulls (a break turn) do not G-LOC', () => {
+    const { tw } = sustainedPull('ace', 6);
+    expect(tw.of('hud:message').some((m) => m.text === 'G-LOC')).toBe(false);
+  });
+});
+
+describe('flight model realism (regression i1)', () => {
+  const mass = 13_290 + 0.6 * 8_278 + 4 * 161 + 180 * 0.45;
+  /** Highest Mach where MIL thrust exceeds 1 g level-flight drag. */
+  function milTopMach(alt: number): number {
+    const p = AIRCRAFT_PERF.f35a;
+    const atm = atmosphere(alt);
+    let top = 0;
+    for (let M = 0.5; M < 1.6; M += 0.005) {
+      const V = M * atm.speedOfSound;
+      const qS = 0.5 * atm.density * V * V * p.wingArea;
+      const cl = (mass * 9.80665) / qS;
+      const D = dragCoefficient(p, cl / p.clAlpha, 0, cl, M, 0) * qS;
+      if (thrustMil(p, alt, atm.sigma, M) > D) top = M;
+    }
+    return top;
+  }
+  it('no supercruise: MIL tops out at ~M0.9-0.95 (reviewer: M0.99 low / M1.09 high)', () => {
+    const low = milTopMach(300);
+    const high = milTopMach(9_000);
+    expect(low).toBeGreaterThan(0.86);
+    expect(low).toBeLessThan(0.95);
+    expect(high).toBeGreaterThan(0.9);
+    expect(high).toBeLessThan(0.98);
+    expect(high).toBeGreaterThanOrEqual(low);
+  });
+  it('MIL top speed in the full flight model (level, 240 s at 9 km) stays subsonic', () => {
+    const tw = makeWorld('pilot');
+    const ac = spawnF35(tw, 9_000, 230);
+    let top = 0;
+    run(tw.world, 240, () => {
+      ac.input.throttle = AB_DETENT;
+      ac.input.roll = 0;
+      ac.input.pitch = Math.max(-1, Math.min(1, -ac.velocity.y * 0.02 + (9_000 - ac.position.y) * 0.001));
+      top = Math.max(top, ac.flight.mach);
+    });
+    expect(top).toBeLessThan(0.98);
+    expect(top).toBeGreaterThan(0.88);
+  });
+
+  it('roll rate varies with speed: slow at low KEAS, peak near corner, trimmed at high q̄ (reviewer: flat 210°/s)', () => {
+    const p = AIRCRAFT_PERF.f35a;
+    const q = (keas: number) => 0.5 * 1.225 * (keas * KT) ** 2;
+    const at = (keas: number, nz = 1, ext = 0, heavy = 0) => rollRateLimit(p, q(keas), 3 * DEG, nz, ext, heavy) / DEG;
+    expect(at(150)).toBeLessThan(110);
+    expect(at(250)).toBeLessThan(175);
+    expect(at(250)).toBeGreaterThan(at(150) + 40);
+    expect(at(380)).toBeGreaterThan(200);
+    expect(at(600)).toBeLessThan(at(400) - 25);
+    // rolling-pull limit and heavy external stores
+    expect(at(400, 9)).toBeLessThan(0.75 * at(400, 1));
+    expect(at(400, 1, 2, 4)).toBeLessThan(0.8 * at(400));
+  });
+
+  it('measured full-stick roll rate in the flight model follows the schedule', () => {
+    const peak = (keas: number, loadout: 'a2a_stealth' | 'strike_beast' = 'a2a_stealth') => {
+      const tw = makeWorld('pilot');
+      const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 3000, 0), heading: 0, speed: tasFromIas(keas * KT, 3000), loadout, fuel: 0.6 });
+      let pMax = 0;
+      run(tw.world, 1.5, () => {
+        ac.input.roll = 1;
+        pMax = Math.max(pMax, ac.rates.x);
+      });
+      return pMax / DEG;
+    };
+    const slow = peak(180);
+    const corner = peak(400);
+    const fast = peak(600);
+    expect(slow).toBeLessThan(corner - 50);
+    expect(fast).toBeLessThan(corner - 20);
+    expect(peak(400, 'strike_beast')).toBeLessThan(corner * 0.85);
+  });
+
+  it('full aft stick on the AoA limiter is crisp: no overshoot, no bobbing, steady bleed', () => {
+    for (const spd of [120, 150, 200, 260]) {
+      const tw = makeWorld('pilot');
+      const ac = spawnF35(tw, 3000, spd);
+      const a: number[] = [];
+      const g: number[] = [];
+      run(tw.world, 10, (t) => {
+        ac.input.throttle = 1;
+        ac.input.roll = 0;
+        ac.input.pitch = t > 0.2 ? 1 : 0;
+        a.push(ac.flight.alpha / DEG);
+        g.push(ac.flight.gLoad);
+      });
+      const aMax = Math.max(...a);
+      expect(aMax).toBeLessThan(28.3); // limiter 28°: < 0.3° overshoot
+      expect(aMax).toBeGreaterThan(27.5);
+      // after capture (last 6 s): AoA stays within ±0.3° and g changes smoothly (no oscillation)
+      const tail = a.slice(-360);
+      expect(Math.max(...tail) - Math.min(...tail)).toBeLessThan(0.6);
+      const gt = g.slice(-360);
+      let reversals = 0;
+      let prev = 0;
+      for (let i = 12; i < gt.length; i += 12) {
+        const d = gt[i] - gt[i - 12];
+        if (Math.abs(d) > 0.02 && prev !== 0 && Math.sign(d) !== Math.sign(prev)) reversals++;
+        if (Math.abs(d) > 0.02) prev = d;
+      }
+      expect(reversals).toBeLessThanOrEqual(1);
+    }
   });
 });
 
@@ -356,9 +529,13 @@ describe('Auto-GCAS', () => {
     expect(tw.of('player:down')).toHaveLength(0);
     expect(ac.gcasActive).toBe(false); // hands control back after the recovery
   });
-  it('does not save an unassisted (ace) pilot', () => {
-    const { tw, ac } = diveAtGround('ace');
-    expect(ac.alive).toBe(false);
-    expect(tw.of('player:down')[0]?.reason).toBe('crash');
+  it('saves the Ace pilot too — Auto-GCAS is part of the jet (regression i1: Ace used to crash)', () => {
+    let gcasSeen = false;
+    const { tw, ac } = diveAtGround('ace', (a) => {
+      gcasSeen ||= !!a.gcasActive;
+    });
+    expect(gcasSeen).toBe(true);
+    expect(ac.alive).toBe(true);
+    expect(tw.of('player:down')).toHaveLength(0);
   });
 });

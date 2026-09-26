@@ -5,7 +5,7 @@
 import { Vector3 } from 'three';
 import { AIRCRAFT_INFO } from '../../core/data';
 import { DEG, clamp } from '../../core/math';
-import type { LoadoutId } from '../../core/types';
+import type { DifficultyParams, LoadoutId } from '../../core/types';
 import type { AiTask } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
@@ -22,6 +22,39 @@ export function scaledCount(def: AircraftGroupDef, enemyCountScale: number): num
   if (def.team === 'red' && !def.fixedCount) n = Math.max(1, Math.round(def.count * enemyCountScale));
   if (def.maxCount !== undefined) n = Math.min(n, def.maxCount);
   return Math.max(1, n);
+}
+
+/** Aircraft type actually flown on this difficulty (see AircraftGroupDef.downgrade). */
+export function groupType(def: AircraftGroupDef, difficulty: DifficultyParams['id']): AircraftGroupDef['type'] {
+  if (def.downgrade && !difficultyAtLeast(difficulty, def.downgrade.below)) return def.downgrade.type;
+  return def.type;
+}
+
+/**
+ * Scale a list of base group sizes so their TOTAL follows `scale` (min 1 aircraft overall):
+ * shrinking takes from the last groups first, growing adds one per group round-robin.
+ */
+export function scaleTotal(counts: number[], scale: number, maxEach = 4): number[] {
+  const out = [...counts];
+  const base = counts.reduce((a, b) => a + b, 0);
+  if (base <= 0) return out;
+  let target = Math.max(1, Math.round(base * scale));
+  let cur = base;
+  for (let i = out.length - 1; i >= 0 && cur > target; i--) {
+    while (out[i] > 0 && cur > target) {
+      out[i]--;
+      cur--;
+    }
+  }
+  target = Math.min(target, out.length * maxEach);
+  for (let k = 0; cur < target && k < 64; k++) {
+    const i = k % out.length;
+    if (out[i] < maxEach) {
+      out[i]++;
+      cur++;
+    }
+  }
+  return out;
 }
 
 /** AI skill for a group member. */
@@ -79,7 +112,7 @@ function clampXZ(v: Vector3): Vector3 {
 }
 
 /** Resolve a mission task to an AiTask (null = none / unresolvable). */
-export function resolveTask(task: TaskDef | undefined, s: MissionState): AiTask | undefined {
+export function resolveTask(task: TaskDef | undefined, s: MissionState, forTeam: 'blue' | 'red' = 'red'): AiTask | undefined {
   if (!task) return undefined;
   switch (task.kind) {
     case 'patrol':
@@ -90,7 +123,9 @@ export function resolveTask(task: TaskDef | undefined, s: MissionState): AiTask 
       return s.player ? { kind: 'attack', targetId: s.player.id } : undefined;
     case 'attack_group': {
       const t = firstAlive(s.groups.get(task.group));
-      return t ? { kind: 'attack', targetId: t.id } : s.player ? { kind: 'attack', targetId: s.player.id } : undefined;
+      if (t) return { kind: 'attack', targetId: t.id };
+      // nothing to attack (not spawned / all dead): hostiles go for the player, friendlies idle
+      return s.player && forTeam !== s.player.team ? { kind: 'attack', targetId: s.player.id } : undefined;
     }
     case 'escort_group': {
       const t = firstAlive(s.groups.get(task.group));
@@ -159,15 +194,17 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
   const fz = -Math.cos(heading);
   const rx = Math.cos(heading);
   const rz = Math.sin(heading);
-  const spacing = def.spacing ?? (HEAVIES.has(def.type) ? 600 : 300);
+  const spacing = def.spacing ?? (HEAVIES.has(groupType(def, s.difficulty.id)) ? 600 : 300);
   const formation: Formation = def.formation ?? (n === 1 ? 'single' : n >= 4 ? 'box' : 'pair');
   const skill = groupSkill(def, s.difficulty.aiSkill);
   const task = def.task ?? defaultTask(def);
-  const stem = def.callsign ?? AIRCRAFT_INFO[def.type].nato;
+  const type = groupType(def, s.difficulty.id);
+  const stem = def.callsign ?? AIRCRAFT_INFO[type].nato;
   const first = def.firstNumber ?? 1;
   let leadId: number | null = null;
 
   g.spawnedAt = world.time;
+  g.task = task;
   for (let i = 0; i < n; i++) {
     formationOffset(formation, i, n, spacing, _slot);
     const pos = new Vector3(
@@ -176,11 +213,11 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
       def.z + rz * _slot.right - fz * _slot.aft,
     );
     clampXZ(pos);
-    const aiTask = resolveTask(task, s);
+    const aiTask = resolveTask(task, s, def.team);
     const ai = s.deps.createAi(def.role, { skill, task: aiTask, seed: (s.def.seed * 31 + s.enemiesSpawned * 7 + i * 13) >>> 0 });
     const wingman = def.role === 'wingman';
     const ac = world.spawnAircraft({
-      type: def.type,
+      type,
       team: def.team,
       position: pos,
       heading,
@@ -190,9 +227,12 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
       leaderId: wingman ? (s.player?.id ?? null) : i === 0 ? null : leadId,
       groupId: g.id,
       fuel: def.fuel ?? 0.8,
-      loadout: def.team === 'blue' && def.type === 'f35a' ? (def.loadout ?? 'a2a_stealth') : undefined,
+      loadout: def.team === 'blue' && type === 'f35a' ? (def.loadout ?? 'a2a_stealth') : undefined,
     });
-    if (i === 0) leadId = ac.id;
+    if (i === 0) {
+      leadId = ac.id;
+      g.leadId = ac.id;
+    }
     if (def.unarmed) disarm(ac);
     g.members.push(ac);
     if (def.team === 'red') s.enemiesSpawned++;
@@ -271,6 +311,17 @@ export function buildGroups(s: MissionState): void {
     g.air = def;
     g.expected = scaledCount(def, scale);
   }
+  if (sc.scaleEnemyTotal) {
+    const list = sc.groups.filter((d) => d.team === 'red' && !d.fixedCount && difficultyAtLeast(diff, d.minDifficulty));
+    const counts = scaleTotal(
+      list.map((d) => d.count),
+      scale,
+    );
+    list.forEach((d, i) => {
+      const g = s.groups.get(d.id)!;
+      g.expected = d.maxCount !== undefined ? Math.min(counts[i], d.maxCount) : counts[i];
+    });
+  }
   for (const def of sc.sams) {
     const g = ensure(def.group, def.team ?? 'red');
     if (difficultyAtLeast(diff, def.minDifficulty)) g.expected++;
@@ -285,13 +336,18 @@ export function buildGroups(s: MissionState): void {
 export function spawnInitial(s: MissionState): void {
   const diff = s.difficulty.id;
   const sc = s.script;
-  // Aircraft groups in definition order (bombers before their escorts so escort tasks resolve).
+  // SAM sites and ground targets first so 'attack_group' tasks on them (SEAD flights) resolve,
+  // then aircraft groups in definition order (bombers before their escorts).
+  spawnInitialSurface(s, diff, sc);
   for (const def of sc.groups) {
     const g = s.groups.get(def.id)!;
     if (g.expected <= 0) continue;
     if (!def.spawn || def.spawn.kind === 'start') spawnAirGroup(s, g);
     else s.pendingAir.push(g);
   }
+}
+
+function spawnInitialSurface(s: MissionState, diff: MissionState['difficulty']['id'], sc: MissionState['script']): void {
   for (const def of sc.sams) {
     if (!difficultyAtLeast(diff, def.minDifficulty)) continue;
     if (!def.spawn || def.spawn.kind === 'start') spawnSamSite(s, def);
@@ -308,9 +364,54 @@ export function spawnInitial(s: MissionState): void {
 export function retaskGroup(s: MissionState, groupId: string, task: TaskDef): void {
   const g = s.groups.get(groupId);
   if (!g) return;
-  const aiTask = resolveTask(task, s);
+  const aiTask = resolveTask(task, s, g.team);
   if (!aiTask) return;
+  g.task = task;
   for (const m of g.members) {
     if (m.kind === 'aircraft' && m.alive && m.ai?.setTask) m.ai.setTask(aiTask);
   }
+}
+
+/**
+ * The rest of a route from `pos`: drops the points already flown (everything up to the point
+ * nearest to `pos`, and that one too once `pos` is past it towards the next).
+ */
+export function remainingRoute(task: Extract<TaskDef, { kind: 'route' }>, pos: { x: number; z: number }): Extract<TaskDef, { kind: 'route' }> {
+  const pts = task.points;
+  if (pts.length <= 1 || task.loop) return task;
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const d = Math.hypot(pts[i].x - pos.x, pts[i].z - pos.z);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  if (best < pts.length - 1) {
+    // past the nearest point already? (closer to the next one than the nearest is to it)
+    const a = pts[best];
+    const b = pts[best + 1];
+    const ab = Math.hypot(b.x - a.x, b.z - a.z);
+    const pb = Math.hypot(b.x - pos.x, b.z - pos.z);
+    if (pb < ab || bestD < 2_000) best++;
+  }
+  return { kind: 'route', points: pts.slice(best), loop: false };
+}
+
+/**
+ * A group's lead went down: the survivors (formation followers of a dead lead) re-take the
+ * group's route from where they are, so a strike package still reaches its target.
+ */
+export function updateGroupLead(s: MissionState, g: GroupRt): void {
+  if (g.leadId === undefined || g.leadId < 0 || !g.task) return;
+  const lead = s.world.getEntity(g.leadId);
+  if (lead && lead.alive) return;
+  const next = firstAlive(g);
+  if (!next) {
+    g.leadId = -1;
+    return;
+  }
+  g.leadId = next.id;
+  if (g.task.kind === 'route') retaskGroup(s, g.id, remainingRoute(g.task, next.position));
 }

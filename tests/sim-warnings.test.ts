@@ -72,11 +72,19 @@ describe('ICAWS warnings', () => {
     run(tw.world, 1);
     for (const id of none) expect(ac.warnings.has(id)).toBe(true);
 
+    // defeated missile dropped by MAWS: the MISSILE warning (and Betty) clears within 0.5 s
+    // (regression i1: it used to hang on for 1.5 s after the incoming list emptied)
+    const cleared: number[] = [];
+    tw.events.on('warning', (w) => {
+      if (w.id === 'missile' && !w.active) cleared.push(tw.world.time);
+    });
+    const t0 = tw.world.time;
     ac.incoming.length = 0;
-    run(tw.world, 0.5);
-    expect(ac.warnings.has('missile')).toBe(true); // hysteresis hold
-    run(tw.world, 1.5);
+    run(tw.world, 0.1);
+    expect(ac.warnings.has('missile')).toBe(true); // brief hysteresis (no chatter on a 1-frame gap)
+    run(tw.world, 0.4);
     expect(ac.warnings.has('missile')).toBe(false);
+    expect(cleared[0] - t0).toBeLessThanOrEqual(0.5);
   });
 
   it('flares/chaff low only warn if the jet carried more than the threshold', () => {

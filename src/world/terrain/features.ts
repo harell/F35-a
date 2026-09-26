@@ -4,6 +4,7 @@
  * so runways always sit on the flattened strip).
  */
 import type { SceneryFeature } from '../../core/contracts';
+import { AKL } from '../../core/auckland';
 import type { Anchor, Footprint } from './types';
 
 /* ───────────── Airbase layout (local frame: v along the runway heading, u to its right) ───────────── */
@@ -28,6 +29,16 @@ export const AIRBASE = {
 } as const;
 
 const DEG = Math.PI / 180;
+
+/**
+ * Runway length (m) of an airbase feature: Auckland Airport's 3,635 m 05R/23L, RNZAF Whenuapai's
+ * 2,030 m 03/21 (a full 3 km strip would run into the upper harbour), 3 km elsewhere.
+ */
+export function runwayLengthFor(f: SceneryFeature): number {
+  if (Math.hypot(f.x - AKL.akl_airport.x, f.z - AKL.akl_airport.z) < 2500) return 3600;
+  if (Math.hypot(f.x - AKL.whenuapai.x, f.z - AKL.whenuapai.z) < 800) return 2050;
+  return AIRBASE.runwayLength;
+}
 
 /** Default flatten footprint for a feature. */
 export function footprintOf(f: SceneryFeature): Footprint {
@@ -54,7 +65,7 @@ export function footprintOf(f: SceneryFeature): Footprint {
       base.x = f.x + Math.cos(heading) * cu;
       base.z = f.z + Math.sin(heading) * cu;
       base.halfW = AIRBASE.flatHalfW;
-      base.halfL = AIRBASE.flatHalfL;
+      base.halfL = AIRBASE.flatHalfL + (runwayLengthFor(f) - AIRBASE.runwayLength) / 2;
       base.radius = Math.hypot(base.halfW, base.halfL);
       base.blend = AIRBASE.flatBlend;
       base.minLevel = 5;

@@ -29,7 +29,7 @@ import type { CombatCtx } from './context';
 import { acState } from './context';
 import { MUNITIONS } from './defs';
 import { updateCountermeasurePrograms, updateDecoys } from './countermeasures';
-import { ccipPoint, gpsMaxRange, launchZoneFor, munitionForRelease, type ZoneHooks } from './dlz';
+import { ccipPoint, gpsMaxRange, launchZoneFor, munitionForRelease, type CombatLaunchZone, type ZoneHooks } from './dlz';
 import { updateMissiles } from './flight';
 import { gunLeadPoint, updateAircraftGun, updateProjectiles } from './gun';
 import * as loadouts from './loadouts';
@@ -45,8 +45,10 @@ import {
 import { irSeekerSees } from '../sensors/irSeeker';
 import { updateSams } from '../sam/SamSystem';
 
+/** A fresh zone object (CombatLaunchZone: LaunchZone + the calibrated SHOOT range `rShoot`). */
 function emptyZone(weapon: WeaponId, targetId: number | null): LaunchZone {
-  return { weapon, targetId, range: 0, rMin: 0, rNe: 0, rMax: 0, shoot: false, closure: 0, timeOfFlight: 0 };
+  const z: CombatLaunchZone = { weapon, targetId, range: 0, rMin: 0, rNe: 0, rMax: 0, shoot: false, closure: 0, timeOfFlight: 0, rShoot: 0 };
+  return z;
 }
 
 export const createCombatSystem: CreateCombatSystem = () => createCombatSystemSeeded(0xf35a);
@@ -217,4 +219,5 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
 
 /** Re-export for other modules (HUD/AI) that want the typed munition table or station info. */
 export { MUNITIONS } from './defs';
+export type { CombatLaunchZone } from './dlz';
 export { stationMunition } from './loadouts';

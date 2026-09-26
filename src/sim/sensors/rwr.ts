@@ -3,7 +3,8 @@
  *
  *  fighters  'search' if we're inside their emitting radar's scan volume and within 1.2× its
  *            reference range (LPI radars — APG-81, Su-57 — only 40 % in search), 'track' when
- *            they hold an STT lock on us, 'launch' while they illuminate a missile at us
+ *            they hold an STT lock on us (a TWS track / designation is silent), 'launch' while
+ *            they illuminate a semi-active missile at us (active missiles are silent until pitbull)
  *  SAMs      'search' when radar on and we're within 1.5× their detection range (terrain-masked
  *            for the player), 'track' when tracking us, 'launch' while guiding a missile at us
  *  EWRs      'search' (symbol EW)
@@ -88,7 +89,7 @@ export function updateRwr(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState,
   // emitters currently guiding (illuminating / commanding) a missile at us
   guiders.clear();
   for (const m of world.missiles) {
-    if (!m.alive || m.targetId !== ac.id || m.team === ac.team || !isCombatMissile(m)) continue;
+    if (!m.alive || m.targetId !== ac.id || m.team === ac.team || !isCombatMissile(m) || !m.threat) continue;
     const g = m.cdef.guidance;
     if ((g === 'semi_active' || g === 'command') && !m.trackBroken) guiders.add(m.guiderId);
   }

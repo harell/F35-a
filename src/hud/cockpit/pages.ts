@@ -1,10 +1,12 @@
 /**
  * Panoramic Cockpit Display (PCD) pages, drawn with Canvas2D into a portal rectangle of the PCD
  * texture: TSD (tactical situation), RDR (B-scope attack radar), SMS (stores), FUEL, ENG, ICAWS
- * (cautions & warnings), RWR/EW. Big fonts: the texture is seen small on a phone.
+ * (cautions & warnings), RWR/EW. Big fonts (≥ 22 texels ≈ 9–10 CSS px on the phone PCD, ≥ 26 for
+ * values): the texture is seen small on a phone. The same renderers draw the full-size PCD zoom
+ * overlay (tap a portal), where the page gets a wider box and every TSD label.
  *
- * Content is ordered top-first: at the default head position only the upper ~55 % of the PCD is in
- * view (the rest shows when the pilot looks down).
+ * Content is ordered top-first: at the default head position the upper ~60 % of the PCD is in view
+ * (the rest shows when the pilot looks down or zooms the page).
  */
 import { NM, RAD, toFeet, toNm } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
@@ -37,6 +39,8 @@ export interface PcdData {
   p: AircraftEntity;
   /** Slow blink state (true/false) for flashing items. */
   flash: boolean;
+  /** Drawn in the large 2D zoom overlay (all TSD labels; more room). */
+  zoom?: boolean;
 }
 
 export type PageId = 'TSD' | 'RDR' | 'SMS' | 'FUEL' | 'ENG' | 'ICAWS' | 'RWR';
@@ -75,34 +79,34 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   const s = tsdStyle;
   s.cx = x + w / 2;
   // ownship high in the portal: at the default head pose only the upper part of the PCD is in view
-  s.cy = y + h * 0.4;
-  s.radius = h * 0.36;
+  s.cy = y + h * (d.zoom ? 0.5 : 0.44);
+  s.radius = h * (d.zoom ? 0.4 : 0.38);
   s.range = tsdRange;
   s.clipRect = [x, y, w, h];
   s.clipCircle = 0;
   s.rings = 2;
-  s.labels = true;
-  s.font = 20;
-  s.sym = 2.1;
+  s.labels = d.zoom ? true : 'key';
+  s.font = d.zoom ? 21 : 24;
+  s.sym = d.zoom ? 1.8 : 2.2;
   s.compass = true;
   s.route = true;
   s.bullseye = true;
   s.lw = 2;
   drawTsd(pen, ctx, p, s, TSD_COLORS, d.flash);
   // overlay readouts
-  pen.text(String(Math.round(tsdRange / NM)) + ' NM', x + 10, y + 18, PC.label, 20, 'left');
+  pen.text(String(Math.round(tsdRange / NM)) + ' NM', x + 10, y + 18, PC.label, 24, 'left');
   const hdg = Math.round((((p.flight.heading * RAD) % 360) + 360) % 360) % 360;
-  pen.text('HDG ' + String(hdg).padStart(3, '0'), x + w - 10, y + 18, PC.value, 20, 'right');
+  pen.text('HDG ' + String(hdg).padStart(3, '0'), x + w - 10, y + 18, PC.value, 24, 'right');
   // bullseye call (Sky Tower = origin): bearing/range from bullseye to ownship
   const bx = p.position.x;
   const bz = p.position.z;
   let brg = Math.atan2(bx, -bz) * RAD;
   if (brg < 0) brg += 360;
   const bull = 'BULL ' + String(Math.round(brg) % 360).padStart(3, '0') + '/' + Math.round(toNm(Math.hypot(bx, bz)));
-  pen.text(bull, x + 10, y + 44, PC.cyan, 18, 'left');
+  pen.text(bull, x + 10, y + 46, PC.cyan, 22, 'left');
   if (t && t.alive) {
     const lbl = (p.radar.lockedId === t.id ? 'LOCK ' : 'TGT ') + entityLabel(t);
-    pen.text(lbl, x + w - 10, y + 44, p.radar.lockedId === t.id ? PC.green : PC.value, 18, 'right');
+    pen.text(lbl, x + w - 10, y + 46, p.radar.lockedId === t.id ? PC.green : PC.value, 22, 'right');
   }
 };
 
@@ -116,8 +120,8 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   const g = pen.g;
   const az = 60 / RAD;
   const px = x + 30;
-  const pw = w - 60;
-  const top = y + 34;
+  const pw = w - 70;
+  const top = y + 38;
   const bottom = y + h - 12;
   const ph = bottom - top;
   // range: fit the farthest hostile air contact
@@ -136,9 +140,9 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   pen.rect(px, top, pw, ph);
   pen.strokePlain(PC.frame, 2);
   const mode = p.radar.mode === 'acm' ? 'ACM' : p.radar.mode === 'ground' ? 'GMT' : 'RWS';
-  pen.text(p.radar.emitting ? mode : 'SILENT', x + 10, y + 16, p.radar.emitting ? PC.green : PC.amber, 20, 'left');
-  pen.text(String(Math.round(rdrRange / NM)), px + pw + 4, top + 10, PC.label, 18, 'left');
-  pen.text(String(Math.round(rdrRange / NM / 2)), px + pw + 4, top + ph / 2, PC.label, 18, 'left');
+  pen.text(p.radar.emitting ? mode : 'SILENT', x + 10, y + 18, p.radar.emitting ? PC.green : PC.amber, 24, 'left');
+  pen.text(String(Math.round(rdrRange / NM)), px + pw + 4, top + 12, PC.label, 22, 'left');
+  pen.text(String(Math.round(rdrRange / NM / 2)), px + pw + 4, top + ph / 2, PC.label, 22, 'left');
   // scan line
   if (p.radar.emitting) {
     const tt = ctx.time * 0.9;
@@ -167,19 +171,19 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
     const friend = e.team === p.team;
     const col = friend ? PC.blue : PC.red;
     pen.begin();
-    if (friend) pen.circle(cx, cy, 7);
-    else pen.rect(cx - 7, cy - 7, 14, 14);
+    if (friend) pen.circle(cx, cy, 9);
+    else pen.rect(cx - 9, cy - 9, 18, 18);
     if (e.id === lock) pen.fillPlain(col);
     pen.strokePlain(col, 3);
-    if (!friend) pen.text(String(Math.round(toFeet(c.position.y) / 1000)), cx + 12, cy + 2, PC.value, 17, 'left');
+    if (!friend) pen.text(String(Math.round(toFeet(c.position.y) / 1000)), cx + 14, cy + 2, PC.value, 22, 'left');
     if (e.id === lock || e.id === des) {
       pen.begin();
-      pen.rect(cx - 14, cy - 14, 28, 28);
+      pen.rect(cx - 16, cy - 16, 32, 32);
       pen.strokePlain(PC.green, 3);
       lockLabel = (e.id === lock ? 'LOCK ' : 'TGT ') + (e.kind === 'aircraft' ? AIRCRAFT_LABEL[e.type] : '') + ' ' + toNm(r).toFixed(1);
     }
   }
-  if (lockLabel) pen.text(lockLabel, x + w - 10, y + 16, PC.green, 20, 'right');
+  if (lockLabel) pen.text(lockLabel, x + w - 10, y + 18, PC.green, 24, 'right');
   // ownship caret
   pen.begin();
   g.moveTo(px + pw / 2, bottom - 14);
@@ -187,7 +191,7 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   g.lineTo(px + pw / 2 + 10, bottom);
   g.closePath();
   pen.fillPlain(PC.value);
-  if (!p.radar.emitting && d.flash) pen.text('EMCON', px + pw / 2, top + ph * 0.35, PC.amber, 34);
+  if (!p.radar.emitting && d.flash) pen.text('EMCON', px + pw / 2, top + ph * 0.3, PC.amber, 36);
 };
 
 /* ───────────────────────── SMS ───────────────────────── */
@@ -212,17 +216,17 @@ export const drawSmsPage: PageFn = (pen, x, y, w, h, d) => {
   const sel = p.selectedWeapon;
   const n = sel === 'gun' ? p.gunAmmo : stationCount(p.stores, sel);
   const cx = x + w / 2;
-  pen.text(WEAPON_NAME[sel], cx, y + 24, PC.green, 30);
-  pen.text((sel === 'gun' ? 'RDS ' : 'QTY ') + n, cx, y + 58, n > 0 ? PC.value : PC.amber, 26);
+  pen.text(WEAPON_NAME[sel], cx, y + 26, PC.green, 32);
+  pen.text((sel === 'gun' ? 'RDS ' : 'QTY ') + n, cx, y + 62, n > 0 ? PC.value : PC.amber, 30);
   const bay = p.bayDoors > 0.05 ? (p.bayDoors > 0.9 ? 'BAY OPEN' : 'BAY MOVING') : 'BAY CLSD';
-  pen.text(bay, cx, y + 88, p.bayDoors > 0.05 ? PC.amber : PC.label, 20);
-  pen.text('GUN ' + p.gunAmmo, x + 10, y + 116, sel === 'gun' ? PC.green : PC.value, 20, 'left');
-  pen.text('F' + p.flares + ' C' + p.chaff, x + w - 10, y + 116, p.flares <= 4 || p.chaff <= 4 ? PC.amber : PC.value, 20, 'right');
+  pen.text(bay, cx, y + 94, p.bayDoors > 0.05 ? PC.amber : PC.label, 23);
+  pen.text('GUN ' + p.gunAmmo, x + 10, y + 124, sel === 'gun' ? PC.green : PC.value, 23, 'left');
+  pen.text('F' + p.flares + ' C' + p.chaff, x + w - 10, y + 124, p.flares <= 4 || p.chaff <= 4 ? PC.amber : PC.value, 23, 'right');
 
   // planform with stations (internal bays + wing pylons)
   const g = pen.g;
-  const oy = y + 140;
-  const sh = h - 150;
+  const oy = y + 146;
+  const sh = h - 154;
   const s = Math.min(w / 240, sh / 230);
   const ox = cx;
   const P = (px: number, py: number) => [ox + px * s, oy + py * s] as const;
@@ -273,8 +277,8 @@ export const drawSmsPage: PageFn = (pen, x, y, w, h, d) => {
       g.fill();
     }
     pen.strokePlain(col, 2.5);
-    pen.text(WEAPON_HUD[st.weapon].slice(0, 4), X, Y - 34, col, 15);
-    pen.text(String(st.count), X, Y + 1, col, 22);
+    pen.text(WEAPON_HUD[st.weapon].slice(0, 4), X, Y - 34, col, 17);
+    pen.text(String(st.count), X, Y + 1, col, 24);
   }
 };
 
@@ -287,33 +291,33 @@ export const drawFuelPage: PageFn = (pen, x, y, w, h, d) => {
   const bingoLb = F35_FUEL_KG * BINGO_FRACTION * KG_TO_LB;
   const cx = x + w / 2;
   const low = d.p.warnings.has('bingo') || lb < bingoLb;
-  pen.text('TOTAL LB', cx, y + 20, PC.label, 18);
-  pen.text(groupThousands(Math.round(lb / 10) * 10), cx, y + 52, low ? PC.amber : PC.value, 38);
+  pen.text('TOTAL LB', cx, y + 20, PC.label, 22);
+  pen.text(groupThousands(Math.round(lb / 10) * 10), cx, y + 56, low ? PC.amber : PC.value, 42);
   // gauge bar with bingo mark
   const bx = x + 18;
   const bw = w - 36;
-  const by = y + 82;
+  const by = y + 86;
   pen.begin();
-  pen.rect(bx, by, bw, 18);
+  pen.rect(bx, by, bw, 20);
   pen.strokePlain(PC.frame, 2);
   pen.setFill(low ? PC.amber : PC.green);
-  pen.g.fillRect(bx + 2, by + 2, (bw - 4) * Math.max(0, Math.min(1, lb / maxLb)), 14);
+  pen.g.fillRect(bx + 2, by + 2, (bw - 4) * Math.max(0, Math.min(1, lb / maxLb)), 16);
   const bm = bx + bw * (bingoLb / maxLb);
   pen.begin();
-  pen.line(bm, by - 5, bm, by + 23);
+  pen.line(bm, by - 5, bm, by + 25);
   pen.strokePlain(PC.red, 3);
   const flowPph = fl.fuelFlow * KG_TO_LB * 3600;
   const endur = fl.fuelFlow > 0.01 ? fl.fuel / fl.fuelFlow : 0;
-  row(pen, x, y + 128, w, 'BINGO', groupThousands(Math.round(bingoLb / 100) * 100), PC.value);
-  row(pen, x, y + 158, w, 'FLOW PPH', groupThousands(Math.round(flowPph / 100) * 100), fl.afterburner > 0.02 ? PC.amber : PC.value);
-  row(pen, x, y + 188, w, 'ENDUR H:M', hmm(endur), endur < 300 ? PC.amber : PC.value);
+  row(pen, x, y + 134, w, 'ENDUR', hmm(endur), endur < 300 ? PC.amber : PC.value);
+  row(pen, x, y + 168, w, 'BINGO', groupThousands(Math.round(bingoLb / 100) * 100), PC.value);
+  row(pen, x, y + 202, w, 'FLOW PPH', groupThousands(Math.round(flowPph / 100) * 100), fl.afterburner > 0.02 ? PC.amber : PC.value);
   const leak = d.p.damage.fuelLeak > 0.05;
-  if (leak && d.flash) pen.text('FUEL LEAK', cx, y + 224, PC.red, 24);
+  if (leak && d.flash) pen.text('FUEL LEAK', cx, y + 240, PC.red, 28);
 };
 
 function row(pen: Pen, x: number, y: number, w: number, label: string, value: string, col: string): void {
-  pen.text(label, x + 12, y, PC.label, 19, 'left');
-  pen.text(value, x + w - 12, y, col, 23, 'right');
+  pen.text(label, x + 12, y, PC.label, 22, 'left');
+  pen.text(value, x + w - 12, y, col, 27, 'right');
 }
 
 /* ───────────────────────── ENG ───────────────────────── */
@@ -323,8 +327,8 @@ export const drawEngPage: PageFn = (pen, x, y, w, h, d) => {
   const fl = p.flight;
   const cx = x + w / 2;
   const n2 = Math.max(0, fl.engineRpm * 100);
-  const gy = y + 104;
-  const R = Math.min(w * 0.3, 60);
+  const gy = y + 110;
+  const R = Math.min(w * 0.3, 62);
   // N2 arc gauge
   const a0 = Math.PI * 0.8;
   const a1 = Math.PI * 2.2;
@@ -336,18 +340,18 @@ export const drawEngPage: PageFn = (pen, x, y, w, h, d) => {
   pen.begin();
   pen.arc(cx, gy, R, a0, a0 + (a1 - a0) * frac);
   pen.strokePlain(fire ? PC.red : n2 > 100 ? PC.amber : PC.green, 8);
-  pen.text(Math.round(n2) + '%', cx, gy + 2, PC.value, 32);
-  pen.text('N2', cx, gy + 32, PC.label, 18);
+  pen.text(Math.round(n2) + '%', cx, gy + 2, PC.value, 34);
+  pen.text('N2', cx, gy + 34, PC.label, 22);
   const thr = p.input.throttle;
   const ab = fl.afterburner > 0.02;
   const stage = ab ? Math.max(1, Math.min(5, Math.ceil(((thr - AB_DETENT) / (1 - AB_DETENT)) * 5))) : 0;
-  pen.text(ab ? 'AB ' + stage : thr >= AB_DETENT - 0.02 ? 'MIL' : thr < 0.08 ? 'IDLE' : 'THR ' + Math.round((thr / AB_DETENT) * 100), x + 12, y + 20, ab ? PC.amber : PC.green, 24, 'left');
+  pen.text(ab ? 'AB ' + stage : thr >= AB_DETENT - 0.02 ? 'MIL' : thr < 0.08 ? 'IDLE' : 'THR ' + Math.round((thr / AB_DETENT) * 100), x + 12, y + 22, ab ? PC.amber : PC.green, 28, 'left');
   const tit = 520 + n2 * 5.6 + fl.afterburner * 90 + (fire ? 250 : 0);
-  row(pen, x, y + 176, w, 'TIT °C', String(Math.round(tit / 5) * 5), tit > 1150 ? PC.amber : PC.value);
-  row(pen, x, y + 206, w, 'THRUST', (fl.thrust * 0.2248 / 1000).toFixed(1) + 'K', PC.value);
-  row(pen, x, y + 236, w, 'NOZ %', String(Math.round(ab ? 60 + fl.afterburner * 40 : 25 + (1 - Math.min(1, thr / AB_DETENT)) * 20)), PC.value);
-  if (fire && d.flash) pen.text('ENG FIRE', cx, y + 272, PC.red, 26);
-  else if (p.damage.engine > 0.05) pen.text('ENG DMG ' + Math.round(p.damage.engine * 100) + '%', cx, y + 272, PC.amber, 20);
+  if (fire && d.flash) pen.text('ENG FIRE', x + w - 12, y + 22, PC.red, 26, 'right');
+  else if (p.damage.engine > 0.05) pen.text('DMG ' + Math.round(p.damage.engine * 100) + '%', x + w - 12, y + 22, PC.amber, 24, 'right');
+  row(pen, x, y + 190, w, 'TIT °C', String(Math.round(tit / 5) * 5), tit > 1150 ? PC.amber : PC.value);
+  row(pen, x, y + 224, w, 'THRUST', (fl.thrust * 0.2248 / 1000).toFixed(1) + 'K', PC.value);
+  row(pen, x, y + 258, w, 'NOZ %', String(Math.round(ab ? 60 + fl.afterburner * 40 : 25 + (1 - Math.min(1, thr / AB_DETENT)) * 20)), PC.value);
 };
 
 /* ───────────────────────── ICAWS ───────────────────────── */
@@ -356,7 +360,7 @@ const ORDER = (Object.keys(WARNING_INFO) as WarningId[]).sort((a, b) => WARNING_
 
 export const drawIcawsPage: PageFn = (pen, x, y, w, h, d) => {
   const p = d.p;
-  let yy = y + 20;
+  let yy = y + 22;
   let n = 0;
   for (const id of ORDER) {
     if (!p.warnings.has(id)) continue;
@@ -364,25 +368,25 @@ export const drawIcawsPage: PageFn = (pen, x, y, w, h, d) => {
     const col = info.level === 2 ? PC.red : info.level === 1 ? PC.amber : PC.cyan;
     const flashOff = info.level === 2 && !d.flash;
     pen.setFill(info.level === 2 ? 'rgba(255,69,56,0.18)' : 'rgba(255,181,46,0.12)');
-    pen.g.fillRect(x + 6, yy - 15, w - 12, 30);
+    pen.g.fillRect(x + 6, yy - 16, w - 12, 32);
     pen.setFill(col);
-    pen.g.fillRect(x + 6, yy - 15, 6, 30);
-    if (!flashOff) pen.text(info.label, x + 20, yy, col, 22, 'left');
-    yy += 36;
+    pen.g.fillRect(x + 6, yy - 16, 6, 32);
+    if (!flashOff) pen.text(info.label, x + 20, yy, col, 25, 'left');
+    yy += 38;
     if (++n >= 6) break;
   }
   if (n === 0) {
-    pen.text('NO FAULTS', x + w / 2, y + 26, PC.green, 26);
-    yy = y + 60;
+    pen.text('NO FAULTS', x + w / 2, y + 28, PC.green, 30);
+    yy = y + 64;
   }
   // subsystem status
   const hp = p.maxHealth > 0 ? p.health / p.maxHealth : 1;
   const dm = p.damage;
   yy += 6;
   row(pen, x, yy, w, 'AIRFRAME', Math.round(hp * 100) + '%', hp < 0.4 ? PC.red : hp < 0.75 ? PC.amber : PC.green);
-  row(pen, x, yy + 30, w, 'ENGINE', Math.round((1 - dm.engine) * 100) + '%', dm.engine > 0.5 ? PC.red : dm.engine > 0.05 ? PC.amber : PC.green);
-  row(pen, x, yy + 60, w, 'HYD', Math.round((1 - dm.hydraulics) * 100) + '%', dm.hydraulics > 0.5 ? PC.red : dm.hydraulics > 0.05 ? PC.amber : PC.green);
-  row(pen, x, yy + 90, w, 'AVIONICS', Math.round((1 - dm.avionics) * 100) + '%', dm.avionics > 0.5 ? PC.red : dm.avionics > 0.05 ? PC.amber : PC.green);
+  row(pen, x, yy + 32, w, 'ENGINE', Math.round((1 - dm.engine) * 100) + '%', dm.engine > 0.5 ? PC.red : dm.engine > 0.05 ? PC.amber : PC.green);
+  row(pen, x, yy + 64, w, 'HYD', Math.round((1 - dm.hydraulics) * 100) + '%', dm.hydraulics > 0.5 ? PC.red : dm.hydraulics > 0.05 ? PC.amber : PC.green);
+  row(pen, x, yy + 96, w, 'AVIONICS', Math.round((1 - dm.avionics) * 100) + '%', dm.avionics > 0.5 ? PC.red : dm.avionics > 0.05 ? PC.amber : PC.green);
 };
 
 /* ───────────────────────── RWR / EW ───────────────────────── */
@@ -391,8 +395,8 @@ export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
   const p = d.p;
   const g = pen.g;
   const cx = x + w / 2;
-  const cy = y + h * 0.4;
-  const R = Math.min(w * 0.42, h * 0.36);
+  const cy = y + h * 0.44;
+  const R = Math.min(w * 0.42, h * 0.37);
   // rings + ticks
   pen.begin();
   pen.circle(cx, cy, R);
@@ -421,11 +425,11 @@ export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
     if (c.state === 'launch') launch = true;
     if (c.state === 'launch' && !d.flash) continue;
     pen.begin();
-    if (c.state === 'launch') pen.circle(sx, sy, 17);
-    else if (c.state === 'track') pen.diamond(sx, sy, 18);
-    else if (c.age < 3) pen.arc(sx, sy, 15, Math.PI, Math.PI * 2);
+    if (c.state === 'launch') pen.circle(sx, sy, 19);
+    else if (c.state === 'track') pen.diamond(sx, sy, 20);
+    else if (c.age < 3) pen.arc(sx, sy, 17, Math.PI, Math.PI * 2);
     pen.strokePlain(col, 3);
-    pen.text(c.symbol || 'U', sx, sy + 1, col, 20);
+    pen.text(c.symbol || 'U', sx, sy + 1, col, 24);
   }
   for (const m of p.incoming) {
     const r = R * Math.max(0.12, Math.min(0.95, m.timeToImpact / 20));
@@ -438,9 +442,9 @@ export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
     g.closePath();
     pen.fillPlain(m.guidance === 'ir' ? '#ff8a1c' : PC.red);
   }
-  pen.text(p.rwr.length + ' EMIT', x + 10, y + 16, PC.label, 18, 'left');
-  if (launch && d.flash) pen.text('LAUNCH', x + w - 10, y + 16, PC.red, 20, 'right');
-  else if (!p.radar.emitting) pen.text('EMCON', x + w - 10, y + 16, PC.amber, 18, 'right');
+  pen.text(p.rwr.length + ' EMIT', x + 10, y + 18, PC.label, 22, 'left');
+  if (launch && d.flash) pen.text('LAUNCH', x + w - 10, y + 18, PC.red, 24, 'right');
+  else if (!p.radar.emitting) pen.text('EMCON', x + w - 10, y + 18, PC.amber, 22, 'right');
 };
 
 export const PAGE_FNS: Record<PageId, PageFn> = {

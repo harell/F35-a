@@ -19,6 +19,8 @@ import {
 } from 'three';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { createWaterNormalFallback } from '../textures/procedural';
+import { COAST_GLSL } from '../terrain/terrainShader';
+import { coastUniforms, type CoastMaskInfo } from '../terrain/TerrainRenderer';
 
 const vertex = /* glsl */ `
 varying vec3 vWorld;
@@ -31,6 +33,7 @@ void main() {
 
 const fragment = /* glsl */ `
 ${ATMOSPHERE_GLSL}
+${COAST_GLSL}
 uniform sampler2D uNormalMap;
 uniform highp sampler2D uHeight;
 uniform sampler2D uDetail;
@@ -70,13 +73,21 @@ void main() {
   float strength = mix(0.55, 0.12, smoothstep(300.0, 15000.0, dist));
   vec3 N = normalize(vec3(slope.x * strength, 1.0, slope.y * strength));
 
-  // Land wins wherever the exact ground is above sea level: no depth fighting at any range.
+  // Shoreline: near the camera the 15 m coast mask decides (the terrain there is sunk just below
+  // the water plane); further out, and outside the mask, the exact bilinear ground height does.
   float gh = groundHeight(wp);
-  if (gh > 0.0) discard;
-  float depth = -gh;
-  // Surf only where the sea floor shelves quickly (beaches, rocks) — not over flat mudflats.
+  float mw;
+  float sdM = coastMaskSD(wp, mw) + coastWiggle(uDetail, wp);
+  mw *= 1.0 - smoothstep(3500.0, 5500.0, dist);
+  float sd = mix(gh / 0.03, sdM, mw);
+  // the mask may only move the shore onto hf water that is less than 0.6 m deep (the terrain
+  // there is held just below the water plane, never pushed into a trench)
+  if (sd > 0.0 && gh > -0.6) discard;
+  float depth = max(-gh, -sd * 0.03 * mw);
+  // Surf: along the mask shoreline (beaches and rocks), or where the sea floor shelves quickly.
   float grad = length(vec2(dFdx(depth), dFdy(depth))) / max(1e-3, length(vec2(length(dFdx(wp)), length(dFdy(wp)))));
-  float shore = (1.0 - smoothstep(0.0, 0.9, depth)) * smoothstep(0.004, 0.03, grad);
+  float shoreH = (1.0 - smoothstep(0.0, 0.9, depth)) * smoothstep(0.004, 0.03, grad);
+  float shore = mix(shoreH, 1.0 - smoothstep(0.0, 16.0, -sd), mw);
 
   float ndv = max(dot(N, V), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
@@ -92,16 +103,17 @@ void main() {
   vec3 col = mix(body, sky, fres * (1.0 - shore * 0.4));
 
   // Sun / moon glint
-  float sd = max(dot(R, uSunDir), 0.0);
-  float spec = pow(sd, 900.0) * 14.0 + pow(sd, 90.0) * 0.18 + pow(sd, 12.0) * 0.02;
+  float sdot = max(dot(R, uSunDir), 0.0);
+  float spec = pow(sdot, 900.0) * 14.0 + pow(sdot, 90.0) * 0.18 + pow(sdot, 12.0) * 0.02;
   col += uSunColor * spec * uGlint * smoothstep(-0.05, 0.05, uSunDir.y);
 
   // Shore foam: animated bands where the water gets very shallow
   float fade = 1.0 - smoothstep(1500.0, 6000.0, dist);
   if (shore > 0.0 && fade > 0.0) {
     float fn = texture2D(uDetail, wp / 19.0 + vec2(t * 0.013, t * 0.007)).r;
-    float wave = 0.5 + 0.5 * sin(t * 1.4 - depth * 3.5 + fn * 4.0);
-    float foam = shore * (smoothstep(0.55, 0.85, fn * 0.7 + wave * 0.5) * 0.7 + (1.0 - smoothstep(0.0, 0.25, depth)) * 0.45);
+    float wave = 0.5 + 0.5 * sin(t * 1.4 - (mw > 0.5 ? -sd * 0.35 : depth * 3.5) + fn * 4.0);
+    float edge = mw > 0.5 ? 1.0 - smoothstep(0.0, 3.0, -sd) : 1.0 - smoothstep(0.0, 0.25, depth);
+    float foam = shore * (smoothstep(0.55, 0.85, fn * 0.7 + wave * 0.5) * 0.7 + edge * 0.45);
     col = mix(col, (uHemiSky * 0.6 + uSunColor * 0.3) * 0.9, clamp(foam, 0.0, 1.0) * 0.6 * fade);
   }
 
@@ -131,6 +143,8 @@ export interface WaterOptions {
   seaIce: number;
   shallowDepth: number;
   radius: number;
+  coast: CoastMaskInfo | null;
+  dummy: Texture;
 }
 
 export class Water {
@@ -156,6 +170,7 @@ export class Water {
         uSeaIce: { value: o.seaIce },
         uGlint: { value: 1 },
         uShallowDepth: { value: o.shallowDepth },
+        ...coastUniforms(o.coast, o.dummy),
       },
     });
     new TextureLoader().load(
@@ -172,6 +187,11 @@ export class Water {
     this.mesh.name = 'water';
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 0;
+  }
+
+  /** Shared uniform holding the (async-loaded) water normal map. */
+  get normalMapUniform(): { value: Texture } {
+    return this.material.uniforms.uNormalMap as { value: Texture };
   }
 
   preRender(camPos: Vector3): void {

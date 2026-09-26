@@ -102,7 +102,9 @@ void main() {
   bool below = uCamPos.y < uDeckY;
   vec3 col;
   if (below) {
-    col = mix(uCloudShade * 1.1, uCloudShade * 0.62, dens);
+    // solid grey underside with darker, lumpy rolls
+    float lump = texture2D(uLayer, vWorld.xz / 1300.0 + uTime * vec2(0.003, -0.002)).r;
+    col = mix(uCloudShade * 1.15, uCloudShade * 0.7, clamp(dens * 0.6 + lump * 0.5, 0.0, 1.0));
   } else {
     float sun = max(uSunDir.y, 0.0);
     col = mix(uCloudShade, uCloudLit, 0.55 + 0.45 * dens) * (0.75 + 0.35 * sun);
@@ -125,6 +127,9 @@ interface Cloud {
   rv: number;
   puffs: { dx: number; dy: number; dz: number; size: number; shade: number; atlas: number; rot: number; sun: number; opacity: number }[];
 }
+
+/** Overcast: base of the stratus deck (m) and its coverage (0..1). */
+export const OVERCAST_DECK = { altitude: 1800, cover: 0.985 } as const;
 
 export interface CloudOptions {
   weather: Weather;
@@ -167,11 +172,12 @@ export class Clouds {
     const perCloud = w === 'clear' ? 3 : 6;
     const cloudN = Math.max(2, Math.round(puffCount / perCloud));
     this.period = Math.sqrt(cloudN) * (w === 'clear' ? 11_000 : 6500);
-    this.deckY = 2700;
+    // Overcast: a low stratus deck (~1,800 m) with ragged scud below it.
+    this.deckY = OVERCAST_DECK.altitude;
     const sun = o.preset.sunDir;
 
     for (let i = 0; i < cloudN; i++) {
-      const base = w === 'clear' ? 4200 + rnd() * 1500 : w === 'overcast' ? 900 + rnd() * 900 : 1300 + rnd() * 900;
+      const base = w === 'clear' ? 4200 + rnd() * 1500 : w === 'overcast' ? 600 + rnd() * 700 : 1300 + rnd() * 900;
       const r = w === 'clear' ? 1400 + rnd() * 1800 : 700 + rnd() * 900;
       const cloud: Cloud = { x: rnd() * this.period, z: rnd() * this.period, y: base, r, rv: r * 0.55, puffs: [] };
       const n = perCloud + ((rnd() * 3) | 0) - 1;
@@ -258,7 +264,7 @@ export class Clouds {
         uniforms: {
           ...o.atmo,
           uLayer: { value: o.layer },
-          uCover: { value: 0.78 },
+          uCover: { value: OVERCAST_DECK.cover },
           uDeckY: { value: this.deckY },
           uCloudLit: { value: o.preset.cloudLit },
           uCloudShade: { value: o.preset.cloudShade },

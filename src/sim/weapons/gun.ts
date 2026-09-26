@@ -9,7 +9,8 @@ import { Vector3 } from 'three';
 import { G, clamp, forwardOf } from '../../core/math';
 import { atmosphere } from '../../core/atmosphere';
 import type { Team } from '../../core/types';
-import type { AircraftEntity, GroundTargetEntity, Projectile, SamSiteEntity } from '../entities';
+import type { AircraftEntity, AnyEntity, GroundTargetEntity, Projectile, SamSiteEntity } from '../entities';
+import type { LaunchZone } from '../api';
 import type { AcCombatState, CombatCtx } from './context';
 import { gaussian, radio } from './context';
 import { GUNS, type GunDef } from './defs';
@@ -21,6 +22,21 @@ export const BULLET_DRAG = 1.9e-4;
 export const DEFAULT_PIPPER_RANGE = 304.8;
 /** Max range for a target-computed pipper (2 nm). */
 export const LCOS_MAX_RANGE = 3_700;
+/** Gun cue ranges (m): minimum, lethal (4–8 hits kill), effective (SHOOT), funnel / max cue. */
+export const GUN_MIN_RANGE = 150;
+export const GUN_LETHAL_RANGE = 800;
+export const GUN_EFFECTIVE_RANGE = 1_200;
+export const GUN_CUE_RANGE = 1_500;
+
+/**
+ * Energy factor of a round at impact: 0.55 (fuze/HE part) + 0.45 × (v / v_nominal)² (kinetic part),
+ * v_nominal = muzzle velocity + a typical 250 m/s launch speed.
+ */
+export function roundEnergyFactor(p: Projectile): number {
+  const nominal = p.calibre >= 0.0295 ? GUNS.gsh301.muzzle + 250 : p.calibre >= 0.0245 ? GUNS.gau22.muzzle + 250 : GUNS.zsu23.muzzle;
+  const r = Math.min(1, p.velocity.length() / nominal);
+  return 0.55 + 0.45 * r * r;
+}
 
 const _atm = { temperature: 0, pressure: 0, density: 0, speedOfSound: 0, sigma: 0 };
 const _dir = new Vector3();
@@ -201,7 +217,7 @@ function hitTest(ctx: CombatCtx, p: Projectile, dt: number): boolean {
     if (r.d <= ac.radius * 0.55) {
       p.position.lerpVectors(p.prevPosition, p.position, r.s);
       const weapon = p.flak ? 'flak' : 'gun';
-      world.applyDamage(ac, p.damage, p.shooterId, weapon, p.position);
+      world.applyDamage(ac, p.damage * roundEnergyFactor(p), p.shooterId, weapon, p.position);
       const shooter = world.getEntity(p.shooterId);
       if (shooter && shooter.kind === 'aircraft') markBurstHit(shooter);
       impact(ctx, p, 'target', ac.id);
@@ -235,7 +251,7 @@ function strafeHit(ctx: CombatCtx, p: Projectile, shooter: AircraftEntity, list:
     const r = segDistToOrigin(_rel0, _rel1);
     if (r.d <= g.radius * 0.6) {
       p.position.lerpVectors(p.prevPosition, p.position, r.s);
-      ctx.world.applyDamage(g, p.damage, p.shooterId, 'gun', p.position);
+      ctx.world.applyDamage(g, p.damage * roundEnergyFactor(p), p.shooterId, 'gun', p.position);
       markBurstHit(shooter);
       impact(ctx, p, 'target', g.id);
       return true;
@@ -251,6 +267,42 @@ function markBurstHit(shooter: AircraftEntity): void {
   if (shots === shooter.shotsFired) return;
   burstHits.set(shooter, shooter.shotsFired);
   shooter.hits++;
+}
+
+/* ───────────────────────── Gun cue ───────────────────────── */
+
+const _gz = new Vector3();
+const _gt = new Vector3();
+
+/**
+ * Gun "launch zone": rMin 150 m, rNe 800 m (lethal: 4–8 hits kill), rMax 1,500 m (funnel / cue),
+ * SHOOT inside the 1,200 m effective range only while the LCOS pipper is on the target (within
+ * ~1.6 target radii) — i.e. "a burst now will hit". Without a designation the nose (±20°) is used.
+ */
+export function gunZone(ctx: CombatCtx, ac: AircraftEntity, target: AnyEntity, range: number, out: LaunchZone): LaunchZone {
+  _gt.subVectors(target.position, ac.position);
+  out.range = range;
+  out.rMin = GUN_MIN_RANGE;
+  out.rNe = GUN_LETHAL_RANGE;
+  out.rMax = GUN_CUE_RANGE;
+  (out as LaunchZone & { rShoot: number }).rShoot = GUN_EFFECTIVE_RANGE;
+  out.closure = range > 1 ? (ac.velocity.dot(_gt) - target.velocity.dot(_gt)) / range : 0;
+  out.timeOfFlight = range / 950;
+  out.shoot = false;
+  if (ac.gunAmmo <= 0 || target.kind !== 'aircraft' || range < GUN_MIN_RANGE || range > GUN_EFFECTIVE_RANGE) return out;
+  forwardOf(ac.quaternion, _gz);
+  if (_gz.dot(_gt) < range * Math.cos(0.35)) return out;
+  const designated = (ac.radar.lockedId ?? ac.radar.designatedId) === target.id;
+  if (!designated) {
+    out.shoot = true; // no pipper solution on it: nose-on and in range
+    return out;
+  }
+  const lp = gunLeadPoint(ctx, ac);
+  if (!lp) return out;
+  _gz.subVectors(lp, ac.position).normalize();
+  const err = Math.acos(clamp(_gz.dot(_gt) / range, -1, 1));
+  out.shoot = err <= Math.max(0.015, (1.6 * target.radius) / range);
+  return out;
 }
 
 /* ───────────────────────── LCOS pipper ───────────────────────── */

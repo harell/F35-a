@@ -1,45 +1,72 @@
 /**
- * Threat symbology: DAS missile approach warning ("MISSILE" + direction arrows around the flight path
- * marker, colour coded radar/IR, time-to-impact ticks, conformal missile markers), RWR spike arrows at
- * the screen edge, ICAWS warning stack, PULL UP break-X, STALL, airframe damage.
+ * Threat symbology and the WARNING BAND.
+ *
+ *  - DAS missile approach warning: dashed threat ring around the flight path marker (HMD) with direction
+ *    arrows, range chevrons and time-to-impact; defeated missiles stay on the ring crossed out for ~1 s.
+ *    External views put the arrows on the radar inset rim instead of a ring in the middle of the screen.
+ *  - Warning band (top centre, above the FPM, fixed position):
+ *      row 1 — ONE critical line, highest priority wins: PULL UP › MISSILE › MISSILE DEFEATED › STALL ›
+ *              AUTO GCAS › red ICAWS warning › SPEED › AOA › mission title banner
+ *      row 2 — chips: SPIKE / MUD SPIKE (filled, with the emitter symbol and a bearing arrow), DEFEATED,
+ *              then the remaining ICAWS cautions (overflow collapses into "+N")
+ *  - RWR spike arrows at the screen-edge ellipse, PULL UP break-X, Auto-GCAS chevrons, airframe damage.
  */
 import { WARNING_INFO, NumText } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
+import { DEFEAT_MARK, DEFEAT_SHOW } from './threatTracker';
+import { pcdZoom } from '../cockpit/zoom';
 import type { WarningId } from '../../core/types';
 
 const edge = { x: 0, y: 0 };
 const ttiTxt: NumText[] = Array.from({ length: 8 }, () => new NumText(0));
 const WARN_ORDER = (Object.keys(WARNING_INFO) as WarningId[]).sort((a, b) => WARNING_INFO[a].order - WARNING_INFO[b].order);
-/** Warnings with their own dedicated big cue (not repeated in the stack). */
-const SPECIAL: Partial<Record<WarningId, true>> = { pull_up: true, missile: true, stall: true };
+/** Warnings with their own dedicated cue (never repeated as a chip). */
+const SPECIAL: Partial<Record<WarningId, true>> = { pull_up: true, missile: true, stall: true, spike: true };
+/** Red ICAWS warnings that may take row 1 (in priority order). */
+const ROW1_RED: WarningId[] = ['engine_fire', 'over_g', 'altitude', 'engine_fail'];
 
 /* ───────────────────────── Missile approach warning ───────────────────────── */
 
-/** Returns true when the MISSILE banner is shown (so the message stack can move down). */
+/** Draws the DAS threat cue. Returns true when a missile is inbound. */
 export function drawIncoming(f: HudFrame): boolean {
-  const { p, pen, pal, L, proj, world } = f;
+  const { p, pen, pal, L, proj, world, st } = f;
   const inc = p.incoming;
-  if (!inc || inc.length === 0) return false;
+  const marks = st.threats.marks;
+  let anyMark = false;
+  for (const m of marks) anyMark = anyMark || m.active;
+  if ((!inc || inc.length === 0) && !anyMark) return false;
   const u = L.u;
-  // ring centre: the FPM when visible in the HMD, else the screen centre
+  // ring centre: the FPM in the HMD, the radar inset in external views (never over the jet / target)
   let cx = L.cx;
   let cy = L.cy;
-  if (f.mode === 'hmd' && f.fpm.front && f.fpm.onScreen && f.fpm.y < L.cockpitTop - 60 * u) {
-    cx = f.fpm.x;
-    cy = f.fpm.y;
+  let R = 62 * u;
+  const hmd = f.mode === 'hmd';
+  if (hmd) {
+    if (f.cockpit) R = 54 * u;
+    if (f.fpm.front && f.fpm.onScreen && f.fpm.y > L.row2Y) {
+      cx = f.fpm.x;
+      cy = f.fpm.y;
+    }
+    // keep the ring (and its arrows) above the cockpit panel
+    if (f.cockpit) cy = Math.min(cy, L.cockpitTop - R - 10 * u);
+  } else {
+    cx = L.insetCx;
+    cy = L.insetCy;
+    R = L.insetR + 3 * u;
   }
-  const R = 62 * u;
   let nearest = Infinity;
   for (let i = 0; i < inc.length; i++) nearest = Math.min(nearest, inc[i].timeToImpact);
   const urgentAll = nearest < 5;
-  // threat ring (dashed) around the flight path marker
-  pen.setDash('dash');
-  pen.begin();
-  pen.circle(cx, cy, R);
-  pen.strokeGlow(withAlpha(pal.danger, urgentAll && !blink(f, 5) ? 0.35 : 0.8), 1.4);
-  pen.setDash('solid');
+  if (hmd && inc.length > 0) {
+    pen.setDash('dash');
+    pen.begin();
+    pen.circle(cx, cy, R);
+    pen.strokeGlow(withAlpha(pal.danger, urgentAll && !blink(f, 5) ? 0.35 : 0.8), 1.4);
+    pen.setDash('solid');
+  }
+  const aLen = (hmd ? 20 : 12) * u;
   const n = Math.min(inc.length, ttiTxt.length);
   for (let i = 0; i < n; i++) {
     const m = inc[i];
@@ -48,28 +75,33 @@ export function drawIncoming(f: HudFrame): boolean {
     const col = m.guidance === 'ir' ? pal.ir : pal.danger;
     const urgent = m.timeToImpact < 5;
     // arrow on the ring pointing out toward the missile
-    const tipX = cx + sx * (R + 20 * u);
-    const tipY = cy + sy * (R + 20 * u);
+    const tipX = cx + sx * (R + aLen);
+    const tipY = cy + sy * (R + aLen);
     pen.begin();
-    pen.arrow(tipX, tipY, sx, sy, 20 * u, 10 * u);
+    pen.arrow(tipX, tipY, sx, sy, aLen, aLen * 0.5);
     if (!(urgent && !blink(f, 5))) {
       pen.strokeGlow(col, 2);
       pen.fillPlain(col);
     }
     // distance ticks outside the arrow: more chevrons = closer
     const chev = m.timeToImpact < 4 ? 3 : m.timeToImpact < 9 ? 2 : 1;
+    const ck = hmd ? 1 : 0.6;
     pen.begin();
     for (let k = 0; k < chev; k++) {
-      const d = R + 26 * u + k * 7 * u;
+      const d = R + aLen + 6 * u + k * 7 * u * ck;
       const px = cx + sx * d;
       const py = cy + sy * d;
-      pen.g.moveTo(px - sy * 8 * u - sx * 5 * u, py + sx * 8 * u - sy * 5 * u);
+      pen.g.moveTo(px - sy * 8 * u * ck - sx * 5 * u * ck, py + sx * 8 * u * ck - sy * 5 * u * ck);
       pen.g.lineTo(px, py);
-      pen.g.lineTo(px + sy * 8 * u - sx * 5 * u, py - sx * 8 * u - sy * 5 * u);
+      pen.g.lineTo(px + sy * 8 * u * ck - sx * 5 * u * ck, py - sx * 8 * u * ck - sy * 5 * u * ck);
     }
     pen.strokeGlow(col, 2.2);
-    // time to impact inside the ring
-    pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), cx + sx * (R - 14 * u), cy + sy * (R - 14 * u), col, 13);
+    // time to impact inside the ring (HMD) / next to the arrow (inset)
+    const tr = hmd ? R - 14 * u : R - 12 * u;
+    pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), cx + sx * tr, cy + sy * tr, col, hmd ? 13 : 11);
+    // labels near the ring make way for the arrow / chevrons / time to impact
+    f.occ.addBox(cx + sx * tr, cy + sy * tr, 9 * u, 8 * u);
+    f.occ.addBox(cx + sx * (R + aLen + 8 * u), cy + sy * (R + aLen + 8 * u), 16 * u, 16 * u);
     // conformal marker when the missile is in view (DAS)
     const e = world.getEntity(m.missileId);
     if (e && e.alive && proj.point(e.position, f.sp) && f.sp.onScreen) {
@@ -84,12 +116,28 @@ export function drawIncoming(f: HudFrame): boolean {
       if (blink(f, 4)) pen.strokeGlow(col, 2.2);
     }
   }
-  // banner
-  const size = nearest < 5 ? 26 : 22;
-  if (blink(f, nearest < 5 ? 5 : 3, 0.65)) {
-    pen.text('MISSILE', L.cx, L.msgY, pal.danger, size);
+  // defeated missiles: their arrow stays a moment, dimmed and crossed out
+  for (const m of marks) {
+    if (!m.active) continue;
+    const a = Math.max(0, 1 - m.age / DEFEAT_MARK);
+    const sx = Math.sin(m.bearing);
+    const sy = -Math.cos(m.bearing);
+    const tx = cx + sx * (R + aLen);
+    const ty = cy + sy * (R + aLen);
+    pen.g.globalAlpha = a;
+    pen.begin();
+    pen.arrow(tx, ty, sx, sy, aLen, aLen * 0.5);
+    pen.strokeGlow(pal.good, 1.6);
+    const mx = cx + sx * (R + aLen * 0.55);
+    const my = cy + sy * (R + aLen * 0.55);
+    const k = 9 * u;
+    pen.begin();
+    pen.line(mx - k, my - k, mx + k, my + k);
+    pen.line(mx - k, my + k, mx + k, my - k);
+    pen.strokeGlow(pal.good, 2.2);
+    pen.g.globalAlpha = 1;
   }
-  return true;
+  return inc.length > 0;
 }
 
 /* ───────────────────────── RWR spikes ───────────────────────── */
@@ -105,10 +153,10 @@ export function drawRwrEdge(f: HudFrame): void {
     edgeOfEllipse(L.edgeCx, L.edgeCy, L.edgeRx, sy > 0 ? L.edgeRy * 0.85 : L.edgeRy, sx, sy, edge);
     let x = edge.x;
     let y = edge.y;
-    // stay out of the thumb zones / cockpit panel
-    if (y > L.thumbY - 12 * u && (x < L.thumbLX + 16 * u || x > L.thumbRX - 16 * u)) y = L.thumbY - 12 * u;
+    // stay out of the thumb zones / cockpit panel / warning band
+    if (y > L.ctlTop - 12 * u && (x < L.ctlLeft + 16 * u || x > L.ctlRight - 16 * u)) y = L.ctlTop - 12 * u;
     if (f.mode === 'hmd' && f.cockpit) y = Math.min(y, L.cockpitTop - 16 * u);
-    y = Math.max(y, L.tapeY + 56 * u);
+    y = Math.max(y, L.row2Y + 18 * u);
     const launch = c.state === 'launch';
     const track = c.state === 'track';
     const col = launch ? pal.danger : track ? pal.warn : pal.dim;
@@ -128,82 +176,262 @@ export function drawRwrEdge(f: HudFrame): void {
   }
 }
 
-/* ───────────────────────── ICAWS ───────────────────────── */
+/* ───────────────────────── Warning band ───────────────────────── */
 
-/** Big PULL UP / STALL cues + the warning stack. Returns the next free y of the stack. */
-export function drawWarnings(f: HudFrame, y: number): number {
-  const { p, pen, pal, L } = f;
+const missileTxt: string[] = ['MISSILE', 'MISSILE', 'MISSILE ×2', 'MISSILE ×3', 'MISSILE ×4', 'MISSILE ×5', 'MISSILE ×6'];
+const ttiBand = new NumText(0, '', 's');
+
+/** Chip scratch (no per-frame allocation). */
+interface Chip {
+  text: string;
+  col: string;
+  fill: boolean;
+  arrow: number;
+  w: number;
+}
+const chips: Chip[] = Array.from({ length: 12 }, () => ({ text: '', col: '', fill: false, arrow: NaN, w: 0 }));
+const PLUS: string[] = ['+0', '+1', '+2', '+3', '+4', '+5', '+6', '+7', '+8', '+9', '+10', '+11', '+12'];
+
+/** RWR spike chip text ("SPIKE 29" / "MUD SPIKE 6") keyed by the emitter (cached strings). */
+const spikeCache = new Map<string, string>();
+function spikeText(sam: boolean, sym: string): string {
+  const k = (sam ? 'M' : 'F') + sym;
+  let s = spikeCache.get(k);
+  if (!s) spikeCache.set(k, (s = (sam ? 'MUD SPIKE ' : 'SPIKE ') + sym));
+  return s;
+}
+
+/**
+ * Reserve the warning band rows that will be drawn this frame (so conformal labels make way for them).
+ * Row 1 = one critical line; row 2 = the chips band between the speed / altitude columns.
+ */
+export function reserveWarningBand(f: HudFrame): void {
+  const { p, st, L, occ } = f;
   const u = L.u;
   const w = p.warnings;
-  // high AoA caution (before the stall warning triggers)
-  if (p.flight.alpha > 0.42 && !w.has('stall') && !p.flight.stalled) {
-    if (blink(f, 3)) pen.text('AOA', L.cx, y, pal.warn, 16);
-    y += 20 * u;
-  }
-  if (w.size === 0) return y;
-  if (w.has('pull_up')) {
-    const on = blink(f, 3.5, 0.7);
-    if (on) {
-      const cx = L.cx;
-      const cy = L.cy;
-      const k = 58 * u;
-      pen.setDash('solid');
-      pen.begin();
-      pen.line(cx - k, cy - k * 0.8, cx + k, cy + k * 0.8);
-      pen.line(cx - k, cy + k * 0.8, cx + k, cy - k * 0.8);
-      pen.strokeGlow(pal.danger, 3);
-      pen.text('PULL UP', cx, cy - k * 0.8 - 18 * u, pal.danger, 30);
-    }
-  }
-  if (w.has('stall') && !w.has('pull_up')) {
-    if (blink(f, 3)) pen.text('STALL', L.cx, L.cy - 44 * u, pal.danger, 24);
-  }
-  if (w.has('speed_low') && !w.has('pull_up') && !w.has('stall') && blink(f, 2)) pen.text('SPEED', L.cx, L.cy - 44 * u, pal.warn, 18);
-  // stack rows: boxed labels (red warnings / amber cautions), wrapped to the band between the columns
-  const size = 12.5;
-  const maxW = Math.max(160 * u, L.altLeft - L.spdRight - 24 * u);
-  const flash = f.st.warnAge < 2.5 && !blink(f, 4, 0.6);
-  let rowStart = 0; // index into WARN_ORDER of the first label of the row
-  let shown = 0;
-  let rows = 0;
-  while (rows < 2) {
-    // measure the row
-    let total = 0;
-    let end = rowStart;
-    let cnt = 0;
-    for (let i = rowStart; i < WARN_ORDER.length; i++) {
-      const id = WARN_ORDER[i];
-      end = i + 1;
-      if (!w.has(id) || SPECIAL[id]) continue;
-      const tw = pen.textWidth(WARNING_INFO[id].label, size) + 14 * u;
-      if (cnt > 0 && total + tw > maxW) {
-        end = i;
+  let row1 = w.has('pull_up') || p.incoming.length > 0 || st.threats.showing || w.has('stall') || p.flight.stalled || !!p.gcasActive;
+  if (!row1) row1 = w.has('speed_low') || p.flight.alpha > 0.42 || (!!st.title && st.titleAge < st.titleDur);
+  for (let i = 0; i < ROW1_RED.length && !row1; i++) row1 = w.has(ROW1_RED[i]);
+  if (row1) occ.add(L.cx - 125 * u, L.warnY - 14 * u, L.cx + 125 * u, L.warnY + 14 * u);
+  let chips = w.has('spike') || st.threats.showing;
+  for (let i = 0; i < WARN_ORDER.length && !chips; i++) chips = w.has(WARN_ORDER[i]) && !SPECIAL[WARN_ORDER[i]];
+  if (chips) occ.add(L.spdRight, L.row2Y - 10 * u, L.altLeft, L.row2Y + 10 * u);
+}
+
+/**
+ * The warning band. Returns true when row 1 shows a CRITICAL warning (PULL UP / MISSILE / STALL):
+ * the centre message slot then holds back.
+ */
+export function drawWarningBand(f: HudFrame): boolean {
+  const { p, pen, pal, L, st, occ } = f;
+  const u = L.u;
+  const w = p.warnings;
+  const inc = p.incoming;
+  const cx = L.cx;
+  const y1 = L.warnY;
+
+  /* row 1 */
+  let row1: WarningId | 'title' | 'defeated' | 'gcas' | 'aoa' | '' = '';
+  let critical = false;
+  if (w.has('pull_up')) row1 = 'pull_up';
+  else if (inc.length > 0) row1 = 'missile';
+  else if (st.threats.showing) row1 = 'defeated';
+  else if (w.has('stall') || p.flight.stalled) row1 = 'stall';
+  else if (p.gcasActive) row1 = 'gcas';
+  else {
+    for (const id of ROW1_RED) {
+      if (w.has(id)) {
+        row1 = id;
         break;
       }
-      total += tw;
-      cnt++;
     }
-    if (cnt === 0) break;
-    let x = L.cx - total / 2 + 3 * u;
-    for (let i = rowStart; i < end; i++) {
-      const id = WARN_ORDER[i];
-      if (!w.has(id) || SPECIAL[id]) continue;
-      const info = WARNING_INFO[id];
-      const tw = pen.textWidth(info.label, size) + 8 * u;
-      const col = info.level === 2 ? pal.danger : info.level === 1 ? pal.warn : pal.dim;
-      if (!flash) {
-        pen.box(x, y - 9 * u, tw, 18 * u, col, 1.5, 'rgba(0,0,0,0.45)');
-        pen.text(info.label, x + tw / 2, y + 0.5, col, size);
-      }
-      x += tw + 6 * u;
-      shown++;
-    }
-    rowStart = end;
-    rows++;
-    y += 22 * u;
-    if (rowStart >= WARN_ORDER.length) break;
+    if (!row1 && w.has('speed_low')) row1 = 'speed_low';
+    else if (!row1 && p.flight.alpha > 0.42) row1 = 'aoa';
+    else if (!row1 && st.title && st.titleAge < st.titleDur) row1 = 'title';
   }
-  return shown > 0 ? y + 2 * u : y;
+  // looking down into the cockpit (PCD): only the life-critical cues stay at full strength; the rest
+  // fades out (the PCD's ICAWS page carries them — it jumps there on engine fire / hydraulics)
+  const crit1 = row1 === 'pull_up' || row1 === 'missile' || row1 === 'stall';
+  pen.g.globalAlpha = crit1 ? 1 : f.declutter;
+  switch (row1) {
+    case 'pull_up': {
+      critical = true;
+      if (blink(f, 3.5, 0.8)) {
+        // break-X over the centre + the words in the band
+        const k = 58 * u;
+        pen.setDash('solid');
+        pen.begin();
+        pen.line(L.cx - k, L.cy - k * 0.8, L.cx + k, L.cy + k * 0.8);
+        pen.line(L.cx - k, L.cy + k * 0.8, L.cx + k, L.cy - k * 0.8);
+        pen.strokeGlow(pal.danger, 3);
+        pen.text('PULL UP', cx, y1, pal.danger, 28);
+      }
+      break;
+    }
+    case 'missile': {
+      critical = true;
+      let nearest = Infinity;
+      for (let i = 0; i < inc.length; i++) nearest = Math.min(nearest, inc[i].timeToImpact);
+      const txt = missileTxt[Math.min(missileTxt.length - 1, inc.length)];
+      // steady while there is time, flashing when impact is close
+      const size = nearest < 5 ? 25 : 22;
+      if (nearest >= 5 || blink(f, 5, 0.7)) pen.text(txt, cx, y1, pal.danger, size);
+      // time to impact of the nearest one, right of the word
+      const tw = pen.textWidth(txt, size);
+      pen.text(ttiBand.get(Math.max(0, Math.ceil(nearest))), cx + tw / 2 + 8 * u, y1 + 1, pal.danger, 14, 'left');
+      break;
+    }
+    case 'defeated': {
+      const a = Math.min(1, (DEFEAT_SHOW - st.threats.defeatAge) / 0.4);
+      pen.g.globalAlpha = Math.max(0, a) * Math.max(0.5, f.declutter);
+      pen.box(cx - 104 * u, y1 - 13 * u, 208 * u, 26 * u, pal.good, 1.6, 'rgba(0,20,8,0.5)');
+      pen.text('MISSILE DEFEATED', cx, y1 + 0.5, pal.good, 19);
+      pen.g.globalAlpha = 1;
+      break;
+    }
+    case 'stall':
+      critical = true;
+      if (blink(f, 3)) pen.text('STALL', cx, y1, pal.danger, 24);
+      break;
+    case 'gcas':
+      pen.text('AUTO GCAS', cx, y1, pal.warn, 20);
+      break;
+    case 'speed_low':
+      if (blink(f, 2)) pen.text('SPEED', cx, y1, pal.warn, 19);
+      break;
+    case 'aoa':
+      if (blink(f, 3)) pen.text('AOA', cx, y1, pal.warn, 17);
+      break;
+    case 'title': {
+      const a = Math.max(0, Math.min(1, st.titleAge / 0.25, (st.titleDur - st.titleAge) / 0.5)) * f.declutter;
+      const tw = pen.textWidth(st.title, 17);
+      const k = occ.hits(cx - tw / 2 - 30 * u, y1 - 11 * u, cx + tw / 2 + 30 * u, y1 + 11 * u, 1) ? 0.35 : 1;
+      pen.g.globalAlpha = a * k;
+      pen.text(st.title, cx, y1, pal.bright, 17);
+      pen.begin();
+      pen.line(cx - tw / 2 - 30 * u, y1, cx - tw / 2 - 8 * u, y1);
+      pen.line(cx + tw / 2 + 8 * u, y1, cx + tw / 2 + 30 * u, y1);
+      pen.strokeGlow(pal.main, 1.4);
+      pen.g.globalAlpha = 1;
+      break;
+    }
+    case '':
+      break;
+    default: {
+      // a red ICAWS warning
+      const info = WARNING_INFO[row1];
+      const flash = st.warnAge < 2.5 && !blink(f, 4, 0.6);
+      if (!flash) pen.text(info.label, cx, y1, info.level === 2 ? pal.danger : pal.warn, 21);
+    }
+  }
+
+  pen.g.globalAlpha = 1;
+
+  /* row 2: chips (not over the PCD zoom overlay: its ICAWS / RWR pages carry them) */
+  if (f.cockpit && pcdZoom.open) return critical;
+  const size = 12;
+  let n = 0;
+  if (w.has('spike')) {
+    // strongest emitter tracking us
+    let best = -1;
+    for (let i = 0; i < p.rwr.length; i++) {
+      const c = p.rwr[i];
+      if (c.state !== 'track' && c.state !== 'launch') continue;
+      if (best < 0 || (c.state === 'launch' && p.rwr[best].state !== 'launch') || c.strength > p.rwr[best].strength) best = i;
+    }
+    const c = best >= 0 ? p.rwr[best] : null;
+    const ch = chips[n++];
+    ch.text = c ? spikeText(c.kind === 'sam' || c.kind === 'aaa', c.symbol || 'U') : 'SPIKE';
+    ch.col = c && c.state === 'launch' ? pal.danger : pal.warn;
+    ch.fill = true;
+    ch.arrow = c ? c.bearing : NaN;
+  }
+  if (st.threats.showing && row1 !== 'defeated') {
+    const ch = chips[n++];
+    ch.text = 'DEFEATED';
+    ch.col = pal.good;
+    ch.fill = false;
+    ch.arrow = NaN;
+  }
+  for (const id of WARN_ORDER) {
+    if (n >= chips.length - 1) break;
+    if (!w.has(id) || SPECIAL[id] || id === row1) continue;
+    const info = WARNING_INFO[id];
+    const ch = chips[n++];
+    ch.text = info.label;
+    ch.col = info.level === 2 ? pal.danger : info.level === 1 ? pal.warn : pal.dim;
+    ch.fill = false;
+    ch.arrow = NaN;
+  }
+  if (n === 0) return critical;
+  // fit into the band between the speed / altitude columns
+  const maxW = Math.max(180 * u, L.altLeft - L.spdRight - 20 * u);
+  const gap = 6 * u;
+  let total = 0;
+  let shown = 0;
+  for (let i = 0; i < n; i++) {
+    const ch = chips[i];
+    ch.w = pen.textWidth(ch.text, size) + (Number.isNaN(ch.arrow) ? 10 : 24) * u;
+    const plusW = i < n - 1 ? pen.textWidth('+9', size) + 10 * u + gap : 0;
+    if (shown > 0 && total + gap + ch.w + plusW > maxW) break;
+    total += (shown > 0 ? gap : 0) + ch.w;
+    shown++;
+  }
+  const more = n - shown;
+  const plus = more > 0 ? PLUS[Math.min(PLUS.length - 1, more)] : '';
+  const plusW = more > 0 ? pen.textWidth(plus, size) + 10 * u : 0;
+  if (more > 0) total += gap + plusW;
+  const y2 = L.row2Y;
+  const h = 18 * u;
+  const flash = st.warnAge < 2.5 && !blink(f, 4, 0.6);
+  // centred; slid sideways off the target box / FPM if they are in the way, else see-through
+  let x = cx - total / 2;
+  let base = 1;
+  if (occ.hits(x, y2 - h / 2, x + total, y2 + h / 2, 1)) {
+    const xl = L.spdRight + 4 * u;
+    const xr = L.altLeft - 4 * u - total;
+    if (!occ.hits(xl, y2 - h / 2, xl + total, y2 + h / 2, 1)) x = xl;
+    else if (!occ.hits(xr, y2 - h / 2, xr + total, y2 + h / 2, 1)) x = xr;
+    else base = 0.4;
+  }
+  pen.g.globalAlpha = base * f.declutter;
+  if (f.declutter <= 0.02) {
+    pen.g.globalAlpha = 1;
+    return critical;
+  }
+  for (let i = 0; i < shown; i++) {
+    const ch = chips[i];
+    const launchBlink = ch.fill && ch.col === pal.danger && !blink(f, 4, 0.6);
+    if (ch.fill) {
+      pen.setFill(launchBlink ? withAlpha(ch.col, 0.35) : ch.col);
+      pen.g.fillRect(x, y2 - h / 2, ch.w, h);
+      pen.begin();
+      pen.rect(x, y2 - h / 2, ch.w, h);
+      pen.strokeGlow(ch.col, 1.2);
+      let tx = x + 5 * u;
+      if (!Number.isNaN(ch.arrow)) {
+        // bearing arrow toward the emitter (nose up)
+        const ax = x + 11 * u;
+        const sx = Math.sin(ch.arrow);
+        const sy = -Math.cos(ch.arrow);
+        pen.begin();
+        pen.arrow(ax + sx * 6 * u, y2 + sy * 6 * u, sx, sy, 12 * u, 4 * u);
+        pen.fillPlain('#140c00');
+        tx = x + 21 * u;
+      }
+      pen.setFont(size);
+      pen.setAlign('left', 'middle');
+      pen.setFill('#140c00');
+      pen.g.fillText(ch.text, tx, y2 + 0.5);
+    } else if (!flash || ch.col === pal.good) {
+      pen.box(x, y2 - h / 2, ch.w, h, ch.col, 1.5, 'rgba(0,0,0,0.45)');
+      pen.text(ch.text, x + ch.w / 2, y2 + 0.5, ch.col, size);
+    }
+    x += ch.w + gap;
+  }
+  if (more > 0) pen.text(plus, x + plusW / 2, y2 + 0.5, pal.warn, size);
+  pen.g.globalAlpha = 1;
+  return critical;
 }
 
 /* ───────────────────────── Damage ───────────────────────── */
@@ -218,6 +446,7 @@ export function drawDamage(f: HudFrame, x: number, y: number): number {
   const d = p.damage;
   if (hp > 0.985 && d.engine < 0.05 && d.hydraulics < 0.05 && !d.fire && d.fuelLeak < 0.05) return y;
   const col = hp < 0.35 ? pal.danger : hp < 0.7 ? pal.warn : pal.main;
+  pen.g.globalAlpha = 0.3 + 0.7 * f.declutter;
   pen.text(hpTxt.get(hp * 100), x, y, col, 12, 'left');
   y += 11 * u;
   const bw = 96 * u;
@@ -245,12 +474,13 @@ export function drawDamage(f: HudFrame, x: number, y: number): number {
   }
   if (d.fire && blink(f, 3)) pen.text('FIRE', sx, y, pal.danger, 11, 'left');
   if (sx !== x || d.fire) y += 14 * u;
-  return y;
+  pen.g.globalAlpha = 1;
+  return y + 4 * u;
 }
 
 /* ───────────────────────── Auto-GCAS ───────────────────────── */
 
-/** Auto-GCAS fly-up: two chevrons converging on the flight path marker. */
+/** Auto-GCAS fly-up: two chevrons converging on the flight path marker ("AUTO GCAS" is in the band). */
 export function drawGcas(f: HudFrame): void {
   if (!f.p.gcasActive || f.mode !== 'hmd') return;
   const { pen, pal, L } = f;
@@ -267,5 +497,4 @@ export function drawGcas(f: HudFrame): void {
     pen.g.lineTo(cx + s * 14 * u, y + 10 * u);
   }
   pen.strokeGlow(pal.warn, 2.4);
-  pen.text('AUTO GCAS', L.cx, L.stackY - 20 * u, pal.warn, 14);
 }

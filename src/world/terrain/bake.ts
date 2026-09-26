@@ -26,6 +26,7 @@ import {
   MAT_URBAN,
   MAT_BUSH,
   MAT_CONE,
+  MAT_CLEARING,
 } from './types';
 import { createVegetation } from './vegetation';
 
@@ -154,13 +155,14 @@ const PAL = {
     paddockC: hex(0x9cae62),
     bush: hex(0x2d4a27),
     bushLight: hex(0x3c5c30),
-    urban: hex(0x8f928a),
-    urbanGreen: hex(0x6f8660),
-    beach: hex(0xdccb9c),
+    urban: hex(0x86837a),
+    urbanGreen: hex(0x66705a),
+    beach: hex(0xd2bf92),
     blackSand: hex(0x3e3c3a),
-    lava: hex(0x2f302c),
-    lavaBush: hex(0x3b4a33),
-    cone: hex(0x648a44),
+    lava: hex(0x45413a),
+    lavaBush: hex(0x33492b),
+    cone: hex(0x4c6e34),
+    clearing: hex(0x5e5646),
     rock: hex(0x6a655e),
     seabed: hex(0x8a8468),
     airfield: hex(0x7fa052),
@@ -328,7 +330,9 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
         case 'auckland': {
           const p = P.auckland;
           if (h < 0) {
-            mix(col, p.seabed, p.seabed, 0);
+            // Never seen through the (opaque) water, except in the thin sunk strip the shaders
+            // draw as shore: keep it a sandy/grassy shore tone rather than dark seabed.
+            mix(col, p.beach, p.pasture, 0.35);
             break;
           }
           mix(col, p.pasture, p.pastureDry, sstep(-0.35, 0.55, v));
@@ -336,7 +340,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
           const pu = Math.floor(x / 260 + 0.35 * n1);
           const pv = Math.floor(z / 190 - 0.35 * n1);
           const pr = hash2(pu, pv, seed);
-          blendInto(col, pr < 0.33 ? p.paddockA : pr < 0.66 ? p.paddockB : p.paddockC, 0.45 * sstep(0.05, 0.3, 0.3 - slope));
+          if (mat !== MAT_URBAN && mat !== MAT_VOLCANIC) blendInto(col, pr < 0.33 ? p.paddockA : pr < 0.66 ? p.paddockB : p.paddockC, 0.28 * sstep(0.05, 0.3, 0.3 - slope));
           switch (mat) {
             case MAT_URBAN:
               urban = aux;
@@ -348,14 +352,20 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
               blendInto(col, tmp, 0.5 + 0.5 * aux);
               break;
             case MAT_VOLCANIC:
-              mix(tmp, p.lava, p.lavaBush, aux);
-              blendInto(col, tmp, 0.9);
+              // Rangitoto: black basalt lava fields under pōhutukawa bush — no pasture underneath
+              mix(col, p.lava, p.lavaBush, sstep(0.35, 0.75, aux + 0.12 * n2));
               break;
             case MAT_CONE:
-              blendInto(col, p.cone, 0.65);
+              blendInto(col, p.cone, 0.8);
+              break;
+            case MAT_CLEARING:
+              // levelled military pad: dry grass and gravel
+              mix(tmp, p.clearing, p.pastureDry, sstep(-0.4, 0.6, n2));
+              blendInto(col, tmp, 0.85);
               break;
             case MAT_BEACH:
-              blendInto(col, hf.aux[k] > 128 ? p.blackSand : p.beach, 0.9 * (1 - sstep(4, 8, h)));
+              // the crisp 15 m beach band is painted by the terrain shader from the coast mask
+              blendInto(col, hf.aux[k] > 128 ? p.blackSand : p.beach, 0.3 * (1 - sstep(3, 6, h)));
               break;
           }
           break;
@@ -471,9 +481,11 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
           if (type === 'airbase') {
             const w = footprintWeight(ft.fp, x, z);
             if (w > 0) {
-              blendInto(col, pal.airfield, Math.min(1, w * 1.3) * (0.75 + 0.25 * n2));
-              clear = Math.max(clear, w);
-              airfield = Math.max(airfield, Math.min(1, w * 1.8));
+              // mown airfield grass over the levelled strip; suburbs / trees resume just outside it
+              const core = theater === 'auckland' ? sstep(0.55, 0.95, w) : Math.min(1, w * 1.3);
+              blendInto(col, pal.airfield, core * (0.75 + 0.25 * n2));
+              clear = Math.max(clear, theater === 'auckland' ? core : w);
+              airfield = Math.max(airfield, theater === 'auckland' ? sstep(0.7, 0.95, w) : Math.min(1, w * 1.8));
             }
             continue;
           }
@@ -564,6 +576,49 @@ function farmColor(out: RGB, theater: TheaterId, lx: number, lz: number, angle: 
   out[0] = a[0];
   out[1] = a[1];
   out[2] = a[2];
+}
+
+/**
+ * Water texels are never seen through the opaque water, except in the thin strip along the shore
+ * where the shaders draw the exact (15 m) coastline over the 86 m colour map. Give them the colour
+ * of the nearest land texel (two 3×3 dilation passes ≈ 170 m) so that strip continues the land
+ * (dark lava on Rangitoto, suburbs, bush) instead of a uniform sandy fringe. `heights` is an m × m
+ * view of the heightfield (same layout as the colour map). In place.
+ */
+export function dilateLandColour(rgba: Uint8Array, heights: Float32Array, m: number, passes = 2): void {
+  const land = new Uint8Array(m * m);
+  for (let k = 0; k < m * m; k++) land[k] = heights[k] > 0 ? 1 : 0;
+  const next = new Uint8Array(m * m);
+  for (let pass = 0; pass < passes; pass++) {
+    next.set(land);
+    for (let j = 0; j < m; j++) {
+      for (let i = 0; i < m; i++) {
+        const k = j * m + i;
+        if (land[k]) continue;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let dj = -1; dj <= 1; dj++) {
+          const jj = j + dj;
+          if (jj < 0 || jj >= m) continue;
+          for (let di = -1; di <= 1; di++) {
+            const ii = i + di;
+            if (ii < 0 || ii >= m || !land[jj * m + ii]) continue;
+            const o = (jj * m + ii) * 4;
+            r += rgba[o];
+            g += rgba[o + 1];
+            b += rgba[o + 2];
+            n++;
+          }
+        }
+        if (!n) continue;
+        const o = k * 4;
+        rgba[o] = r / n;
+        rgba[o + 1] = g / n;
+        rgba[o + 2] = b / n;
+        next[k] = 1;
+      }
+    }
+    land.set(next);
+  }
 }
 
 /** Airbase grass/sand strip is also used by scenery; re-exported for convenience. */

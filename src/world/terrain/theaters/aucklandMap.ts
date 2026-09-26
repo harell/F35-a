@@ -161,12 +161,15 @@ export const AKL_URBAN: number[][] = [
   [-7.5, -30.5, -5.0, -30.5, -5.0, -27.0, -7.0, -27.0],
   // Oneroa / Surfdale (Waiheke)
   [20.3, -8.0, 24.0, -8.5, 24.0, -6.5, 20.3, -6.5],
+  // Hobsonville, West Harbour, Massey, Westgate and Whenuapai village round the air base
+  // (the airfield footprint itself stays clear: the colour baker removes suburbs under it)
+  [-16.2, -2.0, -16.0, -5.4, -14.6, -6.2, -13.4, -5.9, -12.6, -5.3, -11.2, -5.4, -10.0, -5.6, -9.0, -6.4, -8.4, -5.6, -8.8, -3.8, -10.4, -2.4, -13.2, -1.8],
 ];
 
 /** Parks & green spaces inside the urban area (km, radius km) — no houses. */
 export const AKL_PARKS: [number, number, number][] = [
   [1.4, 1.3, 0.55], // Auckland Domain
-  [0.35, -0.2, 0.2], // Albert Park
+  [0.48, 0.2, 0.17], // Albert Park
   [2.3, 6.0, 0.9], // Cornwall Park / One Tree Hill
   [-4.5, 1.8, 0.5], // Western Springs
   [0.6, 5.0, 0.35], // Alexandra Park

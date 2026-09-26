@@ -1,55 +1,68 @@
 /**
  * Low-poly unit archetypes for instancing (vertex coloured; instance colour tints them):
- * conifer, broadleaf, palm (≈12–24 triangles each), house walls / gable roof, apartment walls /
- * flat roof. Unit size: trees 1 m tall (scaled per instance), buildings 1 × 1 × 1.
+ * conifer, broadleaf, palm (16–18 triangles each), merged house (walls + gable roof, 14) and
+ * apartment block (walls + flat roof + plant room). Unit size: trees 1 m tall (scaled per
+ * instance), buildings 1 × 1 × 1.
  */
-import { BufferAttribute, BufferGeometry, Color, IcosahedronGeometry } from 'three';
+import { BufferGeometry, Color } from 'three';
 import { GeometryBuilder, WIN_HOME, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import type { TheaterId } from '../../core/types';
 
 const F0: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
+/** Cone of `segs` triangles (apex up) — cheaper than a capped frustum. */
+function cone(b: GeometryBuilder, y0: number, r: number, h: number, segs: number, color: Color | number, phase = 0): void {
+  for (let i = 0; i < segs; i++) {
+    const a0 = ((i + phase) / segs) * Math.PI * 2;
+    const a1 = ((i + 1 + phase) / segs) * Math.PI * 2;
+    b.tri(F0, [Math.cos(a1) * r, y0, Math.sin(a1) * r, Math.cos(a0) * r, y0, Math.sin(a0) * r, 0, y0 + h, 0], color);
+  }
+}
+
+/** Conifer: 3-sided trunk + two stacked 6/5-sided cones (17 triangles). */
 export function coniferGeometry(snowy: boolean): BufferGeometry {
   const b = new GeometryBuilder();
   const trunk = 0x5a4430;
   const leafA = new Color(0x2f4a30);
   const leafB = new Color(0x3a5a38);
   const snow = new Color(0xe8eef4);
-  b.cylinder(F0, 0, 0, 0, 0.05, 0.04, 0.2, 4, trunk, 0, false);
-  b.cylinder(F0, 0, 0.15, 0, 0.3, 0.02, 0.55, 6, leafA, 0, true);
-  b.cylinder(F0, 0, 0.45, 0, 0.22, 0.0, 0.55, 6, snowy ? snow : leafB, 0, false);
+  b.cylinder(F0, 0, 0, 0, 0.05, 0.04, 0.2, 3, trunk, 0, false);
+  cone(b, 0.15, 0.3, 0.6, 6, leafA);
+  cone(b, 0.45, 0.22, 0.55, 5, snowy ? snow : leafB, 0.5);
   return b.build()!;
 }
 
+/** Broadleaf: 3-sided trunk + a 10-triangle bipyramid crown with shaded facets (16 triangles). */
 export function broadleafGeometry(): BufferGeometry {
   const b = new GeometryBuilder();
-  b.cylinder(F0, 0, 0, 0, 0.06, 0.045, 0.4, 4, 0x5c4630, 0, false);
-  const trunk = b.build()!;
-  const crown = new IcosahedronGeometry(0.42, 0); // already non-indexed
-  const p = crown.getAttribute('position') as BufferAttribute;
-  const cols = new Float32Array(p.count * 3);
+  b.cylinder(F0, 0, 0, 0, 0.06, 0.045, 0.4, 3, 0x5c4630, 0, false);
   const c = new Color();
-  for (let i = 0; i < p.count; i++) {
-    p.setXYZ(i, p.getX(i) * 1.05, p.getY(i) * 0.82 + 0.62, p.getZ(i) * 1.05);
-    const shade = 0.8 + 0.35 * ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) * 0.5;
-    c.setHex(0x3f6a34).multiplyScalar(shade);
-    cols[i * 3] = c.r;
-    cols[i * 3 + 1] = c.g;
-    cols[i * 3 + 2] = c.b;
+  const segs = 5;
+  const yMid = 0.6;
+  const top = 1.0;
+  const bot = 0.3;
+  const r = 0.46;
+  for (let i = 0; i < segs; i++) {
+    const a0 = (i / segs) * Math.PI * 2;
+    const a1 = ((i + 1) / segs) * Math.PI * 2;
+    const x0 = Math.cos(a0) * r;
+    const z0 = Math.sin(a0) * r;
+    const x1 = Math.cos(a1) * r;
+    const z1 = Math.sin(a1) * r;
+    c.setHex(0x3f6a34).multiplyScalar(0.85 + 0.3 * ((i * 0.37) % 1));
+    b.tri(F0, [x1, yMid, z1, x0, yMid, z0, 0, top, 0], c);
+    c.multiplyScalar(0.8);
+    b.tri(F0, [x0, yMid, z0, x1, yMid, z1, 0, bot, 0], c);
   }
-  crown.setAttribute('color', new BufferAttribute(cols, 3));
-  crown.computeVertexNormals();
-  return mergeSimple([trunk, crown]);
+  return b.build()!;
 }
 
+/** Palm: 3-sided leaning trunk + six drooping fronds (18 triangles). */
 export function palmGeometry(): BufferGeometry {
   const b = new GeometryBuilder();
   const trunk = 0x8a7456;
   const leaf = new Color(0x4a7a34);
-  // slightly leaning two-segment trunk
-  b.beam(F0, 0, 0, 0, 0.04, 0.5, 0, 0.07, trunk);
-  b.beam(F0, 0.04, 0.5, 0, 0.1, 0.95, 0, 0.06, trunk);
-  // six drooping fronds
+  b.cylinder({ ...F0, c: Math.cos(0.08), s: Math.sin(0.08) }, 0.03, 0, 0, 0.05, 0.035, 0.95, 3, trunk, 0, false);
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2;
     const cx = Math.cos(a);
@@ -64,30 +77,32 @@ export function palmGeometry(): BufferGeometry {
   return b.build()!;
 }
 
-/** House walls (unit box) — instance scale sets footprint and wall height. */
-export function houseWallsGeometry(): BufferGeometry {
+/**
+ * House (merged, one instanced draw): four walls (unit box, windows) + gable roof (ridge along local
+ * Z, rise 0.45 of the wall height). With the building material's HOUSES variant the roof takes the
+ * instance colour and the walls a weatherboard tint derived from the instance position.
+ */
+export function houseGeometry(): BufferGeometry {
   const b = new GeometryBuilder();
-  b.box(F0, 0, 0, 0, 1, 1, 1, 0xffffff, 0xffffff, WIN_HOME);
+  const w = 0xffffff;
+  b.quad(F0, [-0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 1, 0.5, -0.5, 1, 0.5], w, WIN_HOME);
+  b.quad(F0, [0.5, 0, -0.5, -0.5, 0, -0.5, -0.5, 1, -0.5, 0.5, 1, -0.5], w, WIN_HOME);
+  b.quad(F0, [0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 1, -0.5, 0.5, 1, 0.5], w, WIN_HOME);
+  b.quad(F0, [-0.5, 0, -0.5, -0.5, 0, 0.5, -0.5, 1, 0.5, -0.5, 1, -0.5], w, WIN_HOME);
+  b.gable(F0, 0, 1, 0, 1.1, 1.08, 0.45, w);
   return b.build()!;
 }
 
-/** Gable roof sitting on the unit box (rise 0.45 of the wall height). */
-export function houseRoofGeometry(): BufferGeometry {
+/** Apartment / commercial block (merged): office-window walls + flat roof with a plant room. */
+export function apartmentGeometry(): BufferGeometry {
   const b = new GeometryBuilder();
-  b.gable(F0, 0, 1, 0, 1.08, 1.06, 0.45, 0xffffff);
-  return b.build()!;
-}
-
-export function apartmentWallsGeometry(): BufferGeometry {
-  const b = new GeometryBuilder();
-  b.box(F0, 0, 0, 0, 1, 1, 1, 0xffffff, 0xffffff, WIN_OFFICE);
-  return b.build()!;
-}
-
-export function apartmentRoofGeometry(): BufferGeometry {
-  const b = new GeometryBuilder();
-  b.box(F0, 0, 1, 0, 0.35, 0.04, 0.3, 0xffffff, 0xffffff);
-  b.quad(F0, [-0.5, 1.001, 0.5, 0.5, 1.001, 0.5, 0.5, 1.001, -0.5, -0.5, 1.001, -0.5], 0xffffff);
+  const w = 0xffffff;
+  b.quad(F0, [-0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 1, 0.5, -0.5, 1, 0.5], w, WIN_OFFICE);
+  b.quad(F0, [0.5, 0, -0.5, -0.5, 0, -0.5, -0.5, 1, -0.5, 0.5, 1, -0.5], w, WIN_OFFICE);
+  b.quad(F0, [0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 1, -0.5, 0.5, 1, 0.5], w, WIN_OFFICE);
+  b.quad(F0, [-0.5, 0, -0.5, -0.5, 0, 0.5, -0.5, 1, 0.5, -0.5, 1, -0.5], w, WIN_OFFICE);
+  b.quad(F0, [-0.5, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, -0.5, -0.5, 1, -0.5], w);
+  b.box(F0, 0.15, 1, -0.1, 0.3, 0.05, 0.25, 0xbdbdbd, 0xbdbdbd);
   return b.build()!;
 }
 
@@ -103,30 +118,4 @@ export function treeTint(theater: TheaterId): Color {
     default:
       return new Color(1, 1, 1);
   }
-}
-
-/** Merge non-indexed/indexed geometries that share position/normal/color attributes. */
-function mergeSimple(list: BufferGeometry[]): BufferGeometry {
-  const pos: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const win: number[] = [];
-  for (const g0 of list) {
-    const g = g0.index ? g0.toNonIndexed() : g0;
-    const p = g.getAttribute('position');
-    const n = g.getAttribute('normal');
-    const c = g.getAttribute('color');
-    for (let i = 0; i < p.count; i++) {
-      pos.push(p.getX(i), p.getY(i), p.getZ(i));
-      nrm.push(n.getX(i), n.getY(i), n.getZ(i));
-      col.push(c ? c.getX(i) : 1, c ? c.getY(i) : 1, c ? c.getZ(i) : 1);
-      win.push(0);
-    }
-  }
-  const out = new BufferGeometry();
-  out.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-  out.setAttribute('normal', new BufferAttribute(new Float32Array(nrm), 3));
-  out.setAttribute('color', new BufferAttribute(new Float32Array(col), 3));
-  out.setAttribute('aWin', new BufferAttribute(new Float32Array(win), 1));
-  return out;
 }

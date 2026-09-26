@@ -31,7 +31,8 @@ describe('hud layout (844x390 phone landscape)', () => {
     const L = computeLayout(makeLayout(), W, H, noSafe, tan30, true);
     const expected = H / 2 + (Math.tan(GLARE_LIP_ANGLE) / tan30) * (H / 2);
     expect(L.cockpitTop).toBeCloseTo(expected, 3);
-    expect(L.cockpitTop / H).toBeGreaterThan(0.68);
+    // lip lowered so ~60 % of the PCD is in view (i1): the outside view keeps ≥ 64 % of the height
+    expect(L.cockpitTop / H).toBeGreaterThan(0.64);
     expect(L.cockpitTop / H).toBeLessThan(0.8);
     expect(L.stackY).toBeLessThan(L.cockpitTop - 30);
     const ext = computeLayout(makeLayout(), W, H, noSafe, tan30, false);

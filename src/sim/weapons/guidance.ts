@@ -14,11 +14,15 @@
 import { Vector3 } from 'three';
 import { G, clamp } from '../../core/math';
 import { airDensity } from '../../core/atmosphere';
-import type { AircraftEntity, AnyEntity, SamSiteEntity } from '../entities';
+import type { AnyEntity, SamSiteEntity } from '../entities';
 import type { CombatCtx } from './context';
-import { acState, playerTeam, SENSOR_DIV } from './context';
+import { acState, gaussian, SENSOR_DIV } from './context';
 import type { CombatMissile } from './missile';
 import { aircraftRcs, irIntensity, rcsRangeFactor } from '../sensors/signatures';
+import { cmFactor, notchDepth, rollNotchNeed, stepNotch } from './ew';
+import { breakSiteTrack, siteTracks } from '../sam/SamSystem';
+
+export { notchDepth } from './ew';
 
 const _r = new Vector3();
 const _vrel = new Vector3();
@@ -28,12 +32,20 @@ const _tmp = new Vector3();
 const _aim = new Vector3();
 const _vhat = new Vector3();
 
-/** Countermeasure / notch probability multiplier for a missile vs its target (difficulty). */
+/** Semi-active: seconds without illumination before the missile goes ballistic. */
+export const SARH_MEMORY = 0.3;
+/** Command guidance: seconds of coasting on the last uplink before going ballistic. */
+export const COMMAND_MEMORY = 1.0;
+/** Guider destroyed: the uplink / illumination stops at once. */
+export const GUIDER_DEAD_MEMORY = 0.2;
+/** Active radar: seconds after losing the seeker lock (post-pitbull) before the missile is lost. */
+export const ACTIVE_MEMORY = 2.5;
+/** TWS (no STT) midcourse: track revisit period (s) and error model. */
+export const TWS_REVISIT = 2;
+
+/** @deprecated use cmFactor (ew.ts). Countermeasure / notch multiplier for a missile vs its target. */
 export function cmScale(ctx: CombatCtx, m: CombatMissile, target: AnyEntity): number {
-  let k = 1;
-  if (target.kind === 'aircraft' && target.isPlayer) k *= ctx.world.difficulty.countermeasureEffectiveness;
-  if (m.team !== playerTeam(ctx.world)) k /= Math.max(0.3, ctx.world.difficulty.enemyMissileSkill);
-  return k;
+  return cmFactor(ctx, m.team, target);
 }
 
 /** Angle between the missile's velocity and the direction to a point is within `limit`. */
@@ -46,23 +58,7 @@ export function inGimbal(m: CombatMissile, point: Vector3, limit: number): boole
   return _tmp.dot(m.velocity) / (d * v) >= Math.cos(limit);
 }
 
-/**
- * Doppler-notch depth 0..1 of a target as seen by a radar at `radarPos`:
- * radial velocity below 40 m/s AND ground clutter behind the target (look-down or low altitude).
- */
-export function notchDepth(ctx: CombatCtx, radarPos: Vector3, target: AircraftEntity): number {
-  _tmp.subVectors(target.position, radarPos);
-  const dist = _tmp.length();
-  if (dist < 1) return 0;
-  const vr = Math.abs(target.velocity.dot(_tmp) / dist);
-  if (vr >= 40) return 0;
-  const agl = target.position.y - ctx.world.terrain.surfaceHeightAt(target.position.x, target.position.z);
-  const lookDown = _tmp.y < -0.03 * dist;
-  const clutter = agl < 1500 ? 1 : lookDown ? 0.8 : 0.2;
-  return (1 - vr / 40) * clutter;
-}
-
-/** Break the illuminating/guiding radar's track after a successful notch / chaff seduction. */
+/** Break the illuminating/guiding radar's track after a successful chaff seduction. */
 export function breakGuiderTrack(ctx: CombatCtx, m: CombatMissile, targetId: number): void {
   const guider = ctx.world.getEntity(m.guiderId);
   if (!guider) return;
@@ -71,20 +67,9 @@ export function breakGuiderTrack(ctx: CombatCtx, m: CombatMissile, targetId: num
     guider.radar.lockProgress = 0;
     acState(guider).lockLostTimer = 0;
     ctx.world.events.emit('lock', { ownerId: guider.id, targetId, locked: false });
-  } else if (guider.kind === 'sam' && guider.trackedTargetId === targetId) {
-    guider.trackedTargetId = null;
-    guider.trackProgress = 0;
-    if (guider.state !== 'emcon' && guider.state !== 'off') guider.state = 'search';
+  } else if (guider.kind === 'sam') {
+    breakSiteTrack(ctx, guider, targetId);
   }
-}
-
-/** Per-second notch probability → roll at the 10 Hz guidance-check rate. Returns true if the track broke. */
-function notchRoll(ctx: CombatCtx, m: CombatMissile, radarPos: Vector3, target: AircraftEntity): boolean {
-  const depth = notchDepth(ctx, radarPos, target);
-  if (depth <= 0) return false;
-  const perSec = 1.3 * (1 - m.cdef.notchResistance) * depth * cmScale(ctx, m, target);
-  const p = 1 - Math.exp(-perSec * (SENSOR_DIV / 60));
-  return ctx.rng() < p;
 }
 
 function setEstimate(ctx: CombatCtx, m: CombatMissile, pos: Vector3, vel: Vector3): void {
@@ -115,6 +100,28 @@ function siteLos(ctx: CombatCtx, m: CombatMissile, site: SamSiteEntity, target: 
 }
 
 /**
+ * Terminal (millimetre-wave) seeker success chance of an anti-radiation missile against an
+ * emitter that went silent: crews are better at hiding / the seeker is less lucky on harder
+ * difficulties, and a large memory error puts the site outside the seeker footprint.
+ */
+export function armTerminalChance(ctx: CombatCtx, errorM: number): number {
+  const base = 0.82 - 0.5 * ctx.world.difficulty.aiSkill; // recruit ≈ 0.7 … ace ≈ 0.35
+  return base * clamp(1.25 - errorM / 320, 0.15, 1);
+}
+
+/**
+ * TWS midcourse: re-roll the launcher's track error at each TWS revisit. The error grows with the
+ * range to the target (≈ 0.6 km at 10 km, 1.35 km at 20 km, 2.3 km at 30 km, 1σ per horizontal axis).
+ */
+function rollTwsError(ctx: CombatCtx, m: CombatMissile, range: number): void {
+  const rk = range / 1000;
+  const sp = 150 + 30 * rk + 1.5 * rk * rk;
+  const sv = 30;
+  m.twsPosErr.set(gaussian(ctx.rng) * sp, gaussian(ctx.rng) * sp * 0.5, gaussian(ctx.rng) * sp);
+  m.twsVelErr.set(gaussian(ctx.rng) * sv, gaussian(ctx.rng) * sv * 0.4, gaussian(ctx.rng) * sv);
+}
+
+/**
  * Refresh the missile's target estimate from its guidance source (seeker, datalink,
  * illuminator, command link). Sets seekerLocked / trackBroken / decoy following.
  */
@@ -139,18 +146,19 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
       m.seekerLocked = true;
     } else if (!emitting) {
       if (!m.armMemory) {
-        // emitter shut down: fly to the last known point with a degraded (INS) error
+        // emitter shut down: fly to the last fix with an angle-only / INS error that grows with the
+        // range at shutdown (a site that goes quiet early is hard to find)
         m.armMemory = true;
         const ang = ctx.rng() * Math.PI * 2;
-        const err = 20 + ctx.rng() * 45;
+        const err = (25 + 0.012 * dist) * (0.5 + ctx.rng());
         m.armError.set(Math.cos(ang) * err, 0, Math.sin(ang) * err);
         m.estPos.add(m.armError);
         m.seekerLocked = false;
       }
-      // AARGM millimetre-wave terminal seeker can still find the (silent) site
+      // AARGM millimetre-wave terminal seeker may still find the (silent) site
       if (!m.terminalRolled && target.alive && m.position.distanceTo(m.estPos) < 3_000) {
         m.terminalRolled = true;
-        if (ctx.rng() < 0.55) {
+        if (ctx.rng() < armTerminalChance(ctx, m.armError.length())) {
           m.estPos.copy(target.position);
           m.armMemory = false;
           m.seekerLocked = true;
@@ -191,14 +199,19 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
   if (def.guidance === 'active_radar') {
     if (target.kind !== 'aircraft') return;
     if (m.notchBlank > 0) m.notchBlank -= dt;
+    // this seeker's susceptibility to the Doppler notch (∞ = its processing is not fooled)
+    if (m.notchNeed < 0) m.notchNeed = rollNotchNeed(ctx, def.notchResistance, cmFactor(ctx, m.team, target));
     const seekRange = def.seekerRange * rcsRangeFactor(aircraftRcs(target, m.position));
     const dist = m.position.distanceTo(target.position);
     if (m.seekerLocked) {
       if (dist <= seekRange * 1.3 && inGimbal(m, target.position, def.gimbalLimit)) {
         setEstimate(ctx, m, target.position, target.velocity);
-        if (checkTick && notchRoll(ctx, m, m.position, target)) {
+        // a sustained Doppler notch (beam + clutter behind the target) breaks the seeker's track
+        m.notchAccum = stepNotch(m.notchAccum, notchDepth(ctx, m.position, target), dt);
+        if (m.notchAccum >= m.notchNeed) {
           m.seekerLocked = false;
-          m.notchBlank = 1.5;
+          m.notchBlank = 1.0;
+          m.notchAccum = 0;
           memoryError(ctx, m);
         }
       } else {
@@ -206,35 +219,57 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
       }
       return;
     }
+    if (m.everLocked) {
+      // memory mode after a break-lock: lost for good if the seeker can't find the target again
+      m.lostTimer += dt;
+      if (m.lostTimer > ACTIVE_MEMORY) {
+        m.trackBroken = true;
+        return;
+      }
+    }
     // Midcourse: datalink updates while the launcher holds a track on the target.
-    if (def.datalink) {
+    if (def.datalink && !m.everLocked) {
       const launcher = world.getEntity(m.shooterId);
       if (launcher && launcher.kind === 'aircraft' && launcher.alive) {
         // F-35 sensor fusion feeds any fused track; others need their own radar track
         const c = acState(launcher).contacts.get(target.id);
         const fresh = c && (launcher.type === 'f35a' ? c.lastSeen >= ctx.time - 0.6 : c.radarTime >= ctx.time - 0.6);
         if (c && fresh) {
-          m.estPos.copy(c.position);
-          m.estVel.copy(c.velocity);
-          m.estTime = c.lastSeen;
-          m.lostTimer = 0;
+          const stt = launcher.radar.lockedId === target.id && launcher.radar.emitting;
+          if (stt || !m.tws) {
+            m.estPos.copy(c.position);
+            m.estVel.copy(c.velocity);
+            m.estTime = c.lastSeen;
+            m.lostTimer = 0;
+          } else if (ctx.time >= m.twsNext) {
+            // TWS: coarse, noisy updates at the scan revisit rate (error grows with range)
+            m.twsNext = ctx.time + TWS_REVISIT;
+            rollTwsError(ctx, m, launcher.position.distanceTo(c.position));
+            m.estPos.copy(c.position).add(m.twsPosErr);
+            m.estVel.copy(c.velocity).add(m.twsVelErr);
+            m.estTime = c.lastSeen;
+            m.lostTimer = 0;
+          }
         }
       }
     }
     // Pitbull: the seeker switches on when the estimated range-to-go drops below activeRange.
     _tmp.copy(m.estPos).addScaledVector(m.estVel, ctx.time - m.estTime);
     const toGo = m.position.distanceTo(_tmp);
-    if (toGo < def.activeRange && m.notchBlank <= 0 && checkTick && dist <= seekRange) {
-      // target must be inside the seeker's search cone around the predicted position
+    if ((toGo < def.activeRange || m.everLocked) && m.notchBlank <= 0 && checkTick && dist <= seekRange) {
+      // target must be inside the seeker's search basket around the predicted position (a TWS-cued
+      // seeker searches a narrower basket: its range/Doppler gates come from a coarser track)
       _los.subVectors(_tmp, m.position).normalize();
       _r.subVectors(target.position, m.position).normalize();
-      const inCone = _los.dot(_r) >= Math.cos(def.seekerFov);
+      const inCone = _los.dot(_r) >= Math.cos(m.tws && !m.everLocked ? def.seekerFov * 0.5 : def.seekerFov);
       if (inCone && inGimbal(m, target.position, def.gimbalLimit)) {
-        // a target sitting in the Doppler notch is very hard to (re)acquire
-        const depth = notchDepth(ctx, m.position, target);
-        const pAcq = depth > 0.5 ? 0.15 * def.notchResistance : 1 - depth * (1 - def.notchResistance);
+        // a target sitting in the Doppler notch is very hard to (re)acquire — unless this seeker's
+        // processing isn't fooled by it (immune roll)
+        const depth = m.notchNeed === Infinity ? 0 : notchDepth(ctx, m.position, target);
+        const pAcq = depth > 0.5 ? 0.02 : 1 - depth * (1 - def.notchResistance);
         if (ctx.rng() < pAcq) {
           m.seekerLocked = true;
+          m.everLocked = true;
           setEstimate(ctx, m, target.position, target.velocity);
         }
       }
@@ -243,16 +278,31 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
   }
 
   if (def.guidance === 'semi_active' || def.guidance === 'command') {
-    if (target.kind !== 'aircraft') return;
     const guider = world.getEntity(m.guiderId);
+    const guiderLost = !guider || !guider.alive;
     let supported = false;
-    if (guider && guider.alive) {
+    if (target.kind === 'missile') {
+      // SAM point defence against an incoming munition (command uplink from the site's radar)
+      if (!guiderLost && guider.kind === 'sam') supported = guider.radarOn && siteTracks(guider, target.id) && siteLos(ctx, m, guider, target, dt);
+      if (supported) {
+        setEstimate(ctx, m, target.position, target.velocity);
+        m.seekerLocked = true;
+      } else {
+        m.seekerLocked = false;
+        m.lostTimer += dt;
+        if (m.lostTimer > (guiderLost ? GUIDER_DEAD_MEMORY : COMMAND_MEMORY)) m.trackBroken = true;
+      }
+      return;
+    }
+    if (target.kind !== 'aircraft') return;
+    if (!guiderLost) {
       if (guider.kind === 'aircraft') {
-        // STT lock held AND the radar still paints the target (terrain LOS, not notched)
+        // STT lock held, target inside the radar gimbal AND painted this sweep (not notched / masked)
         const c = acState(guider).contacts.get(target.id);
-        supported = guider.radar.emitting && guider.radar.lockedId === target.id && !!c && c.radarTime >= ctx.time - 0.5;
+        supported = guider.radar.emitting && guider.radar.lockedId === target.id && !!c && c.inGimbal && c.radarTime >= ctx.time - 0.35;
       } else if (guider.kind === 'sam') {
-        supported = guider.radarOn && guider.trackedTargetId === target.id && siteLos(ctx, m, guider, target, dt);
+        // the site must hold a fire-control-quality track (see SamSystem: notch, chaff, EMCON break it)
+        supported = guider.radarOn && siteTracks(guider, target.id) && siteLos(ctx, m, guider, target, dt);
       }
     }
     const seekerOk = def.guidance === 'command' || inGimbal(m, target.position, def.gimbalLimit);
@@ -260,13 +310,11 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
       setEstimate(ctx, m, target.position, target.velocity);
       // TVM (SA-10) seeker / SARH seeker "locked" once the missile is near
       m.seekerLocked = def.guidance === 'semi_active' || m.position.distanceTo(target.position) < Math.max(3_000, def.seekerRange);
-      if (checkTick && guider && notchRoll(ctx, m, guider.position, target)) {
-        breakGuiderTrack(ctx, m, target.id);
-      }
     } else {
       m.seekerLocked = false;
       m.lostTimer += dt;
-      if (m.lostTimer > (def.guidance === 'command' ? 1.0 : 1.5)) m.trackBroken = true;
+      const limit = guiderLost ? GUIDER_DEAD_MEMORY : def.guidance === 'semi_active' ? SARH_MEMORY : COMMAND_MEMORY;
+      if (m.lostTimer > limit) m.trackBroken = true;
     }
   }
 }
@@ -277,6 +325,17 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
 const ENDGAME_TGO = 2.5;
 /** Heading error to the intercept point beyond which the missile does a max-g turn instead of PN. */
 const COS_PURSUIT = Math.cos((25 * Math.PI) / 180);
+/** End-game PN only while the target is within this angle of the velocity vector (cos). */
+const COS_ENDGAME_PN = Math.cos((35 * Math.PI) / 180);
+/** Heading error beyond which midcourse PN gets an extra pursuit term (rad → cos). */
+const COS_HEADING_TERM = Math.cos((3 * Math.PI) / 180);
+/** Time constant of the midcourse heading-error term (s). */
+const HEADING_TAU = 1.3;
+/** Aim point stays this far above the terrain until the endgame (m). */
+const AIM_CLEARANCE = 40;
+/** Terrain avoidance: look-ahead time (s) and minimum clearance (m). */
+const TERRAIN_LOOKAHEAD = 1.2;
+const TERRAIN_GAP = 30;
 
 /** Loft: aim point raised by k·(range − end), capped at max (m). */
 const LOFT = {
@@ -397,7 +456,9 @@ export function steeringCommand(ctx: CombatCtx, m: CombatMissile, aMax: number, 
     m.tgoLocked = m.seekerLocked;
   }
   const tgo = Math.max(0, m.tgo - m.tgoAge);
-  const endgame = tgo < ENDGAME_TGO && m.seekerLocked;
+  // end-game true PN only with the target reasonably close to the velocity vector: a high
+  // off-boresight / fast crossing shot keeps flying the max-g lead turn to the intercept point
+  const endgame = tgo < ENDGAME_TGO && m.seekerLocked && _vhat.dot(_r) >= COS_ENDGAME_PN * R0;
   if (endgame) {
     // final seconds: true proportional navigation on the target itself
     _vrel.subVectors(m.estVel, m.velocity);
@@ -408,6 +469,11 @@ export function steeringCommand(ctx: CombatCtx, m: CombatMissile, aMax: number, 
       const L = def.category === 'agm' ? LOFT.agm : LOFT.aam;
       _aim.y += clamp((_aim.distanceTo(m.position) - L.end) * L.k, 0, L.max);
     }
+    // terrain clearance: never aim into the ground before the endgame
+    if (tgo > 2) {
+      const floor = ctx.world.terrain.surfaceHeightAt(_aim.x, _aim.z) + AIM_CLEARANCE;
+      if (_aim.y < floor) _aim.y = floor;
+    }
     _vrel.copy(m.velocity).negate();
   }
   _r.subVectors(_aim, m.position);
@@ -417,18 +483,38 @@ export function steeringCommand(ctx: CombatCtx, m: CombatMissile, aMax: number, 
   const cosErr = _vhat.dot(_los);
 
   if (!endgame && cosErr < COS_PURSUIT && R > 400) {
-    // Large heading error to the intercept point (vertical launch turn-over, high off-boresight shot): max-g turn
+    // Large heading error to the intercept point (high off-boresight shot, crossing target): max-g
+    // turn — after burnout only as hard as the energy allows (stay above the kill speed)
     out.copy(_los).addScaledVector(_vhat, -cosErr);
     const len = out.length();
-    if (len > 1e-6) out.multiplyScalar(aMax / len);
+    let a = aMax;
+    if (m.age > m.burnEnd && def.minKillSpeed > 0) a *= clamp((v - def.minKillSpeed) / (0.6 * def.minKillSpeed), 0.25, 1);
+    if (len > 1e-6) out.multiplyScalar(a / len);
   } else {
     // Proportional navigation: a = N · Vc · (ω × LOS)
     _omega.crossVectors(_r, _vrel).divideScalar(R * R);
     out.crossVectors(_omega, _los).multiplyScalar(def.navConstant * Math.max(vc, 0.3 * v));
     out.y += G; // gravity compensation
+    // heading-error term in midcourse: PN alone corrects a heading error to a far aim point only
+    // slowly (a ∝ v²·ε/R) — add a pursuit term a = v·ε/τ so the missile settles on the collision course
+    if (!endgame && cosErr < COS_HEADING_TERM) {
+      _tmp.copy(_los).addScaledVector(_vhat, -cosErr);
+      out.addScaledVector(_tmp, v / HEADING_TAU);
+    }
   }
   // lateral only
   out.addScaledVector(_vhat, -out.dot(_vhat));
+  // terrain avoidance before the endgame: pull up if the flight path would clip the ground
+  if (!endgame) {
+    _tmp.copy(m.position).addScaledVector(m.velocity, TERRAIN_LOOKAHEAD);
+    const gap = _tmp.y - ctx.world.terrain.surfaceHeightAt(_tmp.x, _tmp.z);
+    const aimLow = _aim.y - ctx.world.terrain.surfaceHeightAt(_aim.x, _aim.z) < TERRAIN_GAP && tgo < 3;
+    if (gap < TERRAIN_GAP && !aimLow) {
+      _tmp.set(0, 1, 0).addScaledVector(_vhat, -_vhat.y);
+      const l = _tmp.length();
+      if (l > 1e-3) out.addScaledVector(_tmp, (Math.min(TERRAIN_GAP * 2, TERRAIN_GAP - gap) * 6) / l);
+    }
+  }
   return out;
 }
 

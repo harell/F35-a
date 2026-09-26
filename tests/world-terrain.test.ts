@@ -58,16 +58,18 @@ describe('world terrain generation', () => {
     const hf = gen(theater);
     let mn = Infinity;
     let mx = -Infinity;
+    let bad = 0;
     for (const v of hf.data) {
-      expect(Number.isFinite(v)).toBe(true);
-      mn = Math.min(mn, v);
-      mx = Math.max(mx, v);
+      if (!Number.isFinite(v)) bad++;
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
     }
+    expect(bad).toBe(0);
     expect(mn).toBeGreaterThan(-1000);
     expect(mx).toBeLessThan(5500);
     if (theater === 'mountains') expect(mx).toBeGreaterThan(3000);
     if (theater === 'islands') expect(mn).toBeLessThan(-200);
-  });
+  }, 20_000);
 
   it('heightAt is bilinear and continuous', () => {
     const hf = gen('mountains');

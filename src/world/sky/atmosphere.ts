@@ -4,7 +4,7 @@
  * SAME uniform objects, so updating them once per frame updates all materials, and the distant
  * terrain always melts into the sky at the horizon.
  */
-import { Color, Vector3 } from 'three';
+import { Color, Vector3, Vector4 } from 'three';
 import type { SkyPreset } from './presets';
 
 export interface AtmosphereUniforms {
@@ -26,6 +26,8 @@ export interface AtmosphereUniforms {
   uTime: { value: number };
   /** 0 = day, 1 = full night (emissive lights on). */
   uNight: { value: number };
+  /** Night light dome over a city: centre x, z (m), radius (m), strength (0 = none). */
+  uCityGlow: { value: Vector4 };
 }
 
 export function createAtmosphereUniforms(p: SkyPreset, drawDistance: number): AtmosphereUniforms {
@@ -45,6 +47,7 @@ export function createAtmosphereUniforms(p: SkyPreset, drawDistance: number): At
     uCamPos: { value: new Vector3() },
     uTime: { value: 0 },
     uNight: { value: p.lights },
+    uCityGlow: { value: new Vector4(0, 0, 1, 0) },
   };
 }
 
@@ -80,6 +83,22 @@ uniform float uHazeHeight;
 uniform vec3 uCamPos;
 uniform float uTime;
 uniform float uNight;
+uniform vec4 uCityGlow;
+
+// Sodium / LED light dome over the city at night: low on the horizon in the city's direction,
+// all around (and overhead) when flying over it.
+vec3 atmoCityGlow(vec3 dir) {
+  vec2 to = uCityGlow.xy - uCamPos.xz;
+  float d = length(to);
+  float R = uCityGlow.z;
+  float inside = 1.0 - smoothstep(R * 0.6, R * 1.4, d);
+  float angw = clamp(R / max(d, 1.0), 0.2, 3.1);
+  float az = dot(normalize(dir.xz + vec2(1e-5)), to / max(d, 1.0));
+  float toward = smoothstep(cos(min(angw * 1.5, 3.1)), 1.0, az);
+  float el = exp(-max(dir.y, 0.0) * mix(10.0, 3.0, inside));
+  float fall = 1.0 / (1.0 + max(0.0, d - R) / (R * 1.5));
+  return vec3(1.0, 0.56, 0.26) * uCityGlow.w * el * mix(toward, 1.0, inside) * fall;
+}
 
 // Horizon haze colour in a view direction (warmer towards the sun) + broad sun glow.
 vec3 atmoHorizon(vec3 dir) {
@@ -87,6 +106,7 @@ vec3 atmoHorizon(vec3 dir) {
   float sunUp = smoothstep(-0.12, 0.08, uSunDir.y);
   vec3 hz = mix(uHorizon, uHorizonSun, pow(s, 4.0) * sunUp);
   hz += uSunDisk * uSunGlow * (0.10 * pow(s, 10.0) + 0.06 * pow(s, 3.0)) * sunUp;
+  if (uCityGlow.w > 0.0) hz += atmoCityGlow(dir);
   return hz;
 }
 

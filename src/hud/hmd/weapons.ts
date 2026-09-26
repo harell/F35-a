@@ -5,6 +5,7 @@
  * time to release, IN RNG).
  */
 import { DEG, G, dirFromHeadingPitch, forwardOf, rightOf, toKnots, upOf } from '../../core/math';
+import type { Vector3 } from 'three';
 import type { WeaponId } from '../../core/types';
 import { dlzLayout, makeDlzGeometry } from './dlz';
 import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG } from './format';
@@ -50,6 +51,17 @@ export function masterMode(f: HudFrame): 'A-A' | 'A-G' | 'NAV' {
     if (e && e.alive && e.kind === 'aircraft') return 'A-A';
   }
   return 'NAV';
+}
+
+/** Lines the full (non-compact) weapon block will use this frame. */
+export function weaponBlockLines(f: HudFrame): number {
+  const p = f.p;
+  let n = 3;
+  if (p.selectedWeapon !== 'gun') n++;
+  if (!p.radar.emitting) n++;
+  if (p.bayDoors > 0.05) n++;
+  if (f.st.deniedAge < 1.8 && f.st.deniedText) n++;
+  return n;
 }
 
 export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = false): number {
@@ -136,17 +148,92 @@ export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): vo
   if (z.timeOfFlight > 0) pen.text(tofTxt.get(z.timeOfFlight), x, bottom + 11 * u, pal.main, 11);
 }
 
-/** SHOOT / IN RNG cue in the centre stack. Returns the next free y. */
-export function drawShootCue(f: HudFrame, y: number): number {
-  const { pen, pal, L } = f;
+/**
+ * Place one centre-cue text line near `yPref` (fixed slot below the FPM / above the jet), dodging the
+ * protected symbols. Returns the centre y (and registers the line).
+ */
+export function placeCueLine(f: HudFrame, text: string, size: number, yPref: number): number {
+  const { pen, L, occ } = f;
+  const u = L.u;
+  const hw = pen.textWidth(text, size) / 2 + 4 * u;
+  const h = (size + 4) * u;
+  const lo = L.row2Y + 16 * u;
+  let top = occ.freeY(L.cx - hw, L.cx + hw, h, yPref - h / 2, lo, Math.max(L.msgFloor, yPref + h), 'down');
+  if (!Number.isFinite(top)) top = yPref - h / 2;
+  occ.add(L.cx - hw, top, L.cx + hw, top + h);
+  return top + h / 2;
+}
+
+/* ───────────────────────── Centre cue lines (SHOOT / IN RNG / FOX 3) ───────────────────────── */
+
+interface CueLine {
+  text: string;
+  size: number;
+  col: string;
+  /** Blink rate (0 = steady). */
+  hz: number;
+  alpha: number;
+  y: number;
+}
+const cues: CueLine[] = Array.from({ length: 3 }, () => ({ text: '', size: 0, col: '', hz: 0, alpha: 1, y: 0 }));
+let cueCount = 0;
+
+function addCue(text: string, size: number, col: string, hz: number, alpha = 1): void {
+  if (cueCount >= cues.length || !text) return;
+  const c = cues[cueCount++];
+  c.text = text;
+  c.size = size;
+  c.col = col;
+  c.hz = hz;
+  c.alpha = alpha;
+}
+
+/**
+ * Decide the centre cue lines for this frame and RESERVE their spots (below the FPM / above the jet,
+ * dodging the protected symbols). Call right after the protected symbols, before secondary labels, so
+ * waypoint / contact labels make way for the cues. `drawCues` draws them later, on top.
+ */
+export function planCues(f: HudFrame): number {
+  cueCount = 0;
+  const { pal, st, p, L } = f;
   const z = f.zone;
-  if (z && z.shoot && z.weapon !== 'gbu31' && z.weapon !== 'gbu39') {
-    if (blink(f, 4, 0.7)) {
-      pen.text('SHOOT', L.cx, y, pal.bright, 20);
+  // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
+  // never lands on the target box that the pipper is tracking)
+  if (z && z.shoot && z.weapon !== 'gbu31' && z.weapon !== 'gbu39') addCue('SHOOT', 20, pal.bright, 4);
+  // bombs: release cue
+  const w = p.selectedWeapon;
+  if (f.mode === 'hmd' && (w === 'gbu31' || w === 'gbu39')) {
+    const bi = bombInfo(f);
+    if (bi) {
+      if (p.radar.groundPoint) {
+        if (bi.inRange) addCue('IN RNG', 19, pal.bright, 3.5);
+        else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
+        else addCue('OUT RNG', 15, pal.warn, 0);
+      } else if (!bombOnScreen) addCue('CCIP', 13, pal.dim, 0);
+      else if (bi.inRange) addCue('PICKLE', 17, pal.bright, 3.5);
     }
-    return y + 22 * L.u;
   }
-  return y;
+  // brevity flash after a release ("FOX 3")
+  if (st.brevityAge <= 1.3 && st.brevity) addCue(st.brevity, 15, pal.white, 0, Math.max(0, Math.min(1, (1.3 - st.brevityAge) / 0.4)));
+  let y = L.cueY;
+  for (let i = 0; i < cueCount; i++) {
+    const c = cues[i];
+    c.y = placeCueLine(f, c.text, c.size, y);
+    y = c.y + (c.size + 4) * L.u;
+  }
+  return cueCount > 0 ? y : L.msgY;
+}
+
+/** Draw the planned cue lines. */
+export function drawCues(f: HudFrame): void {
+  const { pen, L } = f;
+  for (let i = 0; i < cueCount; i++) {
+    const c = cues[i];
+    if (c.hz > 0 && !blink(f, c.hz, 0.7)) continue;
+    pen.g.globalAlpha = c.alpha * f.declutter;
+    pen.text(c.text, L.cx, c.y, c.col, c.size);
+    pen.g.globalAlpha = 1;
+  }
 }
 
 /* ───────────────────────── AIM-9X ───────────────────────── */
@@ -175,6 +262,7 @@ export function drawAim9x(f: HudFrame): void {
     pen.line(x, y - 5 * u, x, y + 5 * u);
     pen.strokeGlow(pal.bright, 2);
     pen.text('TONE', x, y + r + 10 * u, pal.bright, 11);
+    f.occ.add(x - r - 3 * u, y - r - 3 * u, x + r + 3 * u, y + r + 17 * u, 1);
   } else {
     // searching: dashed wobbling circle ("growl")
     const r = 24 * u + Math.sin(f.st.clock * 7) * 1.5 * u;
@@ -184,6 +272,7 @@ export function drawAim9x(f: HudFrame): void {
     pen.strokeGlow(pal.main, 1.6);
     pen.setDash('solid');
     pen.text('GROWL', x, y + r + 10 * u, pal.dim, 10.5);
+    f.occ.add(x - r - 3 * u, y - r - 3 * u, x + r + 3 * u, y + r + 17 * u, 1);
   }
 }
 
@@ -275,6 +364,7 @@ export function drawGun(f: HudFrame): void {
   const x = sp.x;
   const y = sp.y;
   const R = 19 * u;
+  f.occ.add(x - R - 7 * u, y - R - 7 * u, x + R + 7 * u, y + R + 7 * u, 1);
   const t = f.target;
   const range = t ? t.position.distanceTo(p.position) : GUN_EFFECTIVE * 2;
   const inRange = range < GUN_EFFECTIVE;
@@ -295,27 +385,38 @@ export function drawGun(f: HudFrame): void {
   pen.begin();
   pen.line(x + Math.cos(ta) * (R + 1), y + Math.sin(ta) * (R + 1), x + Math.cos(ta) * (R + 6 * u), y + Math.sin(ta) * (R + 6 * u));
   pen.strokeGlow(pal.main, 1.4);
-  if (inRange && t && blink(f, 4, 0.7)) pen.text('SHOOT', x, y + R + 12 * u, pal.bright, 13);
 }
 
 /* ───────────────────────── Air-to-ground ───────────────────────── */
 
-export function drawAirToGround(f: HudFrame, stackY: number): number {
+let bombOnScreen = false;
+let biFrame = -1;
+let biCache: { point: Vector3; inRange: boolean; timeToRelease: number } | null = null;
+/** Bomb impact / release info for this frame (cached: planCues + drawAirToGround both need it). */
+function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToRelease: number } | null {
+  if (biFrame === f.st.frame) return biCache;
+  biFrame = f.st.frame;
+  try {
+    biCache = f.world.combat.bombImpactPoint(f.p, f.world);
+  } catch {
+    biCache = null;
+  }
+  bombOnScreen = !!biCache && f.proj.point(biCache.point, f.sp2) && f.sp2.onScreen;
+  return biCache;
+}
+
+/** Air-to-ground conformal cues: GPS azimuth steering line / target point, or the CCIP pipper. */
+export function drawAirToGround(f: HudFrame): void {
   const p = f.p;
   const w = p.selectedWeapon;
-  if (w !== 'gbu31' && w !== 'gbu39') return stackY;
+  if (w !== 'gbu31' && w !== 'gbu39') return;
   const { pen, pal, L, proj } = f;
   const u = L.u;
-  let bi: ReturnType<typeof f.world.combat.bombImpactPoint> = null;
-  try {
-    bi = f.world.combat.bombImpactPoint(p, f.world);
-  } catch {
-    bi = null;
-  }
-  if (!bi) return stackY;
+  const bi = bombInfo(f);
+  if (!bi) return;
   const gp = p.radar.groundPoint;
   if (gp) {
-    // GPS weapon: azimuth steering line through the target bearing, release countdown
+    // GPS weapon: azimuth steering line through the target bearing
     const brg = Math.atan2(gp.x - p.position.x, -(gp.z - p.position.z));
     dirFromHeadingPitch(brg, f.vPitch + 7 * DEG, f.v1);
     dirFromHeadingPitch(brg, f.vPitch - 9 * DEG, f.v2);
@@ -333,22 +434,13 @@ export function drawAirToGround(f: HudFrame, stackY: number): number {
       pen.diamond(a.x, a.y, 9 * u);
       pen.strokeGlow(pal.main, 1.8);
     }
-    if (bi.inRange) {
-      if (blink(f, 3.5, 0.7)) pen.text('IN RNG', L.cx, stackY, pal.bright, 19);
-    } else if (bi.timeToRelease >= 0) {
-      pen.text(relTxt.get(Math.ceil(bi.timeToRelease)), L.cx, stackY, pal.main, 17);
-    } else {
-      pen.text('OUT RNG', L.cx, stackY, pal.warn, 15);
-    }
-    return stackY + 22 * u;
+    return;
   }
   // CCIP: impact pipper + bomb fall line from the FPM
-  if (!proj.point(bi.point, f.sp) || !f.sp.onScreen) {
-    pen.text('CCIP', L.cx, stackY, pal.dim, 13);
-    return stackY + 18 * u;
-  }
+  if (!proj.point(bi.point, f.sp) || !f.sp.onScreen) return;
   const x = f.sp.x;
   const y = f.sp.y;
+  f.occ.addBox(x, y, 13 * u, 13 * u, 1);
   const col = bi.inRange ? pal.bright : pal.main;
   pen.setDash(bi.inRange ? 'solid' : 'dash');
   if (f.fpm.front && f.fpm.onScreen) {
@@ -362,22 +454,6 @@ export function drawAirToGround(f: HudFrame, stackY: number): number {
   pen.strokeGlow(col, 1.8);
   pen.setFill(col);
   pen.g.fillRect(x - 1.5 * u, y - 1.5 * u, 3 * u, 3 * u);
-  if (bi.inRange && blink(f, 3.5, 0.7)) {
-    pen.text('PICKLE', L.cx, stackY, pal.bright, 17);
-    return stackY + 22 * u;
-  }
-  return stackY;
-}
-
-/** Brevity flash after a player release ("FOX 3"). */
-export function drawBrevity(f: HudFrame, y: number): number {
-  const { st, pen, pal, L } = f;
-  if (st.brevityAge > 1.3 || !st.brevity) return y;
-  const a = Math.max(0, Math.min(1, (1.3 - st.brevityAge) / 0.4));
-  pen.g.globalAlpha = a;
-  pen.text(st.brevity, L.cx, y, pal.white, 15);
-  pen.g.globalAlpha = 1;
-  return y + 18 * L.u;
 }
 
 export { WEAPON_BREVITY };

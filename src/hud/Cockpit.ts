@@ -11,6 +11,9 @@
  *
  * render(): autoClear off → clearDepth → render cockpit → restore (the world stays in the colour
  * buffer, the cockpit always draws on top).
+ *
+ * Taps: a tap on a PCD portal opens it in the big 2D zoom overlay (cockpit/zoom.ts, drawn by the HUD);
+ * while it is open every tap is consumed — on a tab it switches the page, anywhere else it closes.
  */
 import {
   Color,
@@ -35,6 +38,7 @@ import { DEG } from '../core/math';
 import { loadHudFont } from './font';
 import { PCD, UFD, UFD_POS, buildCockpit, pcdFrame } from './cockpit/geometry';
 import { PcdDisplay } from './cockpit/pcd';
+import { pcdZoom } from './cockpit/zoom';
 
 /** Cockpit lighting per time of day (sun azimuth/elevation in degrees, colours sRGB). */
 const LIGHT: Record<TimeOfDay, { az: number; el: number; sun: number; sunI: number; sky: number; ground: number; hemiI: number; glow: number }> = {
@@ -99,6 +103,8 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   let lightKey = '';
   let fov = 60;
   let aspect = 16 / 9;
+  let viewW = 1;
+  let viewH = 1;
   const sunWorld = new Vector3(0, 1, 0);
   const tmpColor = new Color();
 
@@ -129,8 +135,10 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     update(ctx: FrameContext, headLocal: Quaternion) {
       if (!api.visible) {
         wasVisible = false;
+        if (pcdZoom.open) pcdZoom.close();
         return;
       }
+      if (ctx.player && !ctx.player.alive && pcdZoom.open) pcdZoom.close();
       if (!wasVisible) {
         wasVisible = true;
         pcd.markDirty();
@@ -186,6 +194,8 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     },
 
     resize(width, height) {
+      viewW = Math.max(1, width);
+      viewH = Math.max(1, height);
       aspect = Math.max(0.1, width / Math.max(1, height));
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
@@ -193,7 +203,15 @@ export const createCockpit: CreateCockpit = (events, quality) => {
 
     handleTap(nx, ny) {
       if (!api.visible) return false;
+      if (pcdZoom.open) {
+        const tab = pcdZoom.tabAt(nx * viewW, ny * viewH);
+        if (tab >= 0) pcd.setPage(pcdZoom.portal, tab);
+        else pcdZoom.close();
+        return true;
+      }
       _ndc.set(nx * 2 - 1, -(ny * 2 - 1));
+      // (matrices are normally refreshed by render(); a tap can come before the first cockpit frame)
+      screen.updateMatrixWorld();
       raycaster.setFromCamera(_ndc, camera);
       const hit = raycaster.intersectObject(screen, false)[0];
       if (!hit || !hit.uv) return false;
@@ -201,6 +219,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     },
 
     dispose() {
+      pcdZoom.close();
       scene.traverse((o) => {
         const m = o as Mesh;
         if (m.isMesh) m.geometry.dispose();

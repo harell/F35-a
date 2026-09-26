@@ -8,7 +8,21 @@ import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import type { AircraftEntity } from '../../sim/entities';
 import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
+import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
+
+/** Label de-collision inside one TSD draw. */
+const lblOcc = new Occupancy(64);
+/** Draw a label unless it would overlap one already drawn (or the ownship). */
+function label(pen: Pen, text: string, x: number, y: number, color: string, size: number, align: 'left' | 'center' = 'center'): void {
+  if (!text) return;
+  const w = pen.textWidth(text, size);
+  const x0 = align === 'left' ? x : x - w / 2;
+  const h = size * 0.55;
+  if (lblOcc.hits(x0, y - h, x0 + w, y + h)) return;
+  lblOcc.add(x0, y - h, x0 + w, y + h);
+  pen.text(text, x, y, color, size, align);
+}
 
 export interface TsdColors {
   ring: string;
@@ -34,7 +48,8 @@ export interface TsdStyle {
   clipCircle: number;
   clipRect: [number, number, number, number] | null;
   rings: number;
-  labels: boolean;
+  /** Labels: 'all' (de-collided), 'key' (designated / locked / current waypoint / SAMs tracking us), false. */
+  labels: boolean | 'key';
   /** Base font size. */
   font: number;
   /** Symbol scale. */
@@ -95,6 +110,10 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   else g.arc(st.cx, st.cy, st.clipCircle, 0, Math.PI * 2);
   g.clip();
   pen.reset();
+  lblOcc.clear();
+  lblOcc.addBox(st.cx, st.cy, 9 * st.sym, 9 * st.sym);
+  const all = st.labels === true;
+  const key = st.labels === 'key' || all;
 
   // range rings
   pen.setDash('dash');
@@ -102,7 +121,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   for (let i = 1; i <= st.rings; i++) pen.circle(st.cx, st.cy, (st.radius * i) / st.rings);
   pen.strokePlain(c.ring, 1 * lw);
   pen.setDash('solid');
-  if (st.labels && st.rings > 0) {
+  if (key && st.rings > 0) {
     const nm = Math.round(st.range / NM);
     pen.text(String(nm), st.cx + st.radius * 0.72, st.cy - st.radius * 0.72, c.ring, st.font * 0.9);
   }
@@ -148,7 +167,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
       pen.begin();
       pen.circle(pt.x, pt.y, (isCur ? 5.5 : 4) * s);
       pen.strokePlain(isCur ? c.highlight : c.route, (isCur ? 2 : 1.2) * lw);
-      if (st.labels) pen.text(w.label || w.id, pt.x, pt.y - 10 * s, isCur ? c.highlight : c.route, st.font * 0.85);
+      if (all || (key && isCur)) label(pen, w.label || w.id, pt.x, pt.y - 11 * s, isCur ? c.highlight : c.route, st.font * 0.85);
     }
     // steering line from ownship to the current waypoint
     if (cur) {
@@ -187,7 +206,8 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     g.lineTo(x + 5 * s, y + 4 * s);
     g.closePath();
     pen.strokePlain(c.hostile, 1.6 * lw);
-    if (st.labels) pen.text(SAM_LABEL[sam.type] ?? '', x, y + 11 * s, c.hostile, st.font * 0.85);
+    const samTracking = sam.radarOn && sam.trackedTargetId === p.id;
+    if (all || (key && (samTracking || sam.id === des || sam.id === lock))) label(pen, SAM_LABEL[sam.type] ?? '', x, y + 12 * s, c.hostile, st.font * 0.85);
     if (sam.id === des || sam.id === lock) ringHighlight(pen, x, y, s, c, sam.id === lock);
   }
   for (const gt of world.ground) {
@@ -231,7 +251,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
       pen.fillPlain(col);
     }
     if (e.id === des || e.id === lock) ringHighlight(pen, x, y - 1 * s, s, c, e.id === lock);
-    if (st.labels) pen.text(AIRCRAFT_SHORT[e.type] ?? '', x + 9 * s, y + 6 * s, col, st.font * 0.85, 'left');
+    if (all || (key && (e.id === des || e.id === lock))) label(pen, AIRCRAFT_SHORT[e.type] ?? '', x + 9 * s, y + 6 * s, col, st.font * 0.85, 'left');
   }
 
   // friendlies (datalink)

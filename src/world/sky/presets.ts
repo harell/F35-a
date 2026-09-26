@@ -140,17 +140,21 @@ export function skyPreset(theater: TheaterId, tod: TimeOfDay, weather: Weather, 
   const cloudLit = c(b.cloudLit);
   const cloudShade = c(b.cloudShade);
   if (weather === 'scattered') fogK *= 1.08;
+  let waterK = 1;
   if (weather === 'overcast') {
-    // Grey, flat light under a cloud deck.
-    const grey = tod === 'night' ? c(0x0a0e16) : tod === 'day' ? c(0x9aa4b0) : c(0x7a7680);
-    horizon.lerp(grey, 0.65);
-    zenith.lerp(tod === 'night' ? c(0x05070c) : c(0x707c8c), 0.75);
-    horizonSun.lerp(grey, 0.6);
-    hemiSky.lerp(grey, 0.5);
-    sunI *= 0.42;
-    hemiI *= 1.25;
-    fogK *= 1.45;
-    cloudLit.lerp(grey, 0.3);
+    // Grey, flat, diffuse light under a low stratus deck: almost no direct sun, a bright grey
+    // sky dome, murky haze, dull grey-green water.
+    const grey = tod === 'night' ? c(0x0a0e16) : tod === 'day' ? c(0x9ba3ab) : c(0x7a7680);
+    horizon.lerp(grey, 0.9);
+    zenith.lerp(tod === 'night' ? c(0x05070c) : c(0x9a9da0), 0.97);
+    horizonSun.lerp(grey, 0.9);
+    hemiSky.lerp(grey, 0.75);
+    sunI *= 0.16;
+    hemiI *= 1.55;
+    fogK *= 1.9;
+    cloudLit.lerp(grey, 0.5);
+    cloudShade.lerp(tod === 'day' ? c(0x8a9098) : grey, 0.6);
+    waterK = 0.72;
   }
 
   // three.js ACESFilmic divides by 0.6 before the curve: author sky radiance ~0.62× so skies stay
@@ -176,12 +180,12 @@ export function skyPreset(theater: TheaterId, tod: TimeOfDay, weather: Weather, 
     fogDensity: fogK / Math.max(8000, drawDistance),
     hazeHeight: t.hazeH,
     sunDisk: c(b.disk),
-    sunGlow: b.glow * (weather === 'overcast' ? 0.35 : 1),
+    sunGlow: b.glow * (weather === 'overcast' ? 0.08 : 1),
     starAlpha: weather === 'overcast' ? b.stars * 0.15 : b.stars,
     cloudLit,
     cloudShade,
-    waterDeep: c(t.deep),
-    waterShallow: c(t.shallow),
+    waterDeep: c(t.deep).lerp(c(0x2a3438), 1 - waterK).multiplyScalar(waterK),
+    waterShallow: c(t.shallow).lerp(c(0x3a4644), 1 - waterK).multiplyScalar(waterK),
     seaIce: t.ice,
     shallowDepth: theater === 'islands' ? 14 : theater === 'desert' ? 9 : theater === 'auckland' ? 5 : 4,
     lights: b.lights,

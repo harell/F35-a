@@ -51,9 +51,12 @@ describe('combat: missile flight & guidance', () => {
     const rMax = placeAtFraction(w, f35.id, mig.id, 0.6, 6000);
     expect(rMax).toBeGreaterThan(22_000);
     expect(rMax).toBeLessThan(40_000);
-    // radar picks it up, auto-designates, locks
-    w.run(2.5);
+    // radar picks it up and auto-designates (TWS); the pilot taps the TD box to command the lock
+    w.run(0.5);
     expect(f35.radar.designatedId).toBe(mig.id);
+    expect(f35.radar.lockedId).toBeNull();
+    w.combat.designate(f35, mig.id, w);
+    w.run(2);
     expect(f35.radar.lockedId).toBe(mig.id);
 
     const launches = w.record('munition:launch');

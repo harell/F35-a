@@ -46,20 +46,26 @@ export interface FighterRadarSpec {
   lpi: boolean;
   /** Infra-red search & track range vs IR intensity 1 (m); 0 = none. */
   irst: number;
+  /** 0..1 resistance of the radar's tracker to a sustained Doppler notch (see weapons/ew.ts). */
+  notchResistance: number;
 }
 
 const DEG = Math.PI / 180;
 
-/** Fire-control radars. APG-81 reference 60 km; the enemy's are weaker. */
+/**
+ * Fire-control radars. APG-81 reference 60 km; the enemy's are weaker. IRST ranges are the
+ * gameplay-compressed (~45 %) OLS figures vs a fighter's tail at MIL (irIntensity 1): a clean
+ * F-35 at MIL is seen by a MiG-29 IRST only inside ~7 km head-on, but ~13 km in afterburner.
+ */
 export const FIGHTER_RADAR: Record<AircraftType, FighterRadarSpec> = {
-  f35a: { range: 60_000, gimbal: 60 * DEG, lpi: true, irst: 0 },
-  mig29: { range: 35_000, gimbal: 60 * DEG, lpi: false, irst: 15_000 },
-  su27: { range: 45_000, gimbal: 60 * DEG, lpi: false, irst: 16_000 },
-  su35: { range: 55_000, gimbal: 60 * DEG, lpi: false, irst: 20_000 },
-  su57: { range: 55_000, gimbal: 60 * DEG, lpi: true, irst: 20_000 },
-  tu22m: { range: 0, gimbal: 0, lpi: false, irst: 0 },
+  f35a: { range: 60_000, gimbal: 60 * DEG, lpi: true, irst: 0, notchResistance: 0.7 },
+  mig29: { range: 35_000, gimbal: 60 * DEG, lpi: false, irst: 12_000, notchResistance: 0.3 },
+  su27: { range: 45_000, gimbal: 60 * DEG, lpi: false, irst: 13_000, notchResistance: 0.4 },
+  su35: { range: 55_000, gimbal: 60 * DEG, lpi: false, irst: 16_000, notchResistance: 0.55 },
+  su57: { range: 55_000, gimbal: 60 * DEG, lpi: true, irst: 16_000, notchResistance: 0.6 },
+  tu22m: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
   // A-50 AEW&C: 360° rotodome, strong look-down radar (feeds the red datalink)
-  a50: { range: 110_000, gimbal: Math.PI, lpi: false, irst: 0 },
+  a50: { range: 110_000, gimbal: Math.PI, lpi: false, irst: 0, notchResistance: 0.5 },
 };
 
 /** Early-warning radar (ground, VHF): long range and better against stealth shaping. */
@@ -69,6 +75,25 @@ export const EWR_STEALTH_BONUS = 25;
 
 export function isStealthy(ac: AircraftEntity): boolean {
   return ac.rcsBase < 0.5;
+}
+
+/**
+ * Airborne X-band fire-control radars vs low-observable shaping: a CLEAN stealth jet (internal
+ * stores only, bay doors shut) is detected at a fraction of the radar-equation range — the
+ * softened RCS exponent under-rates how hard a fighter radar's scan finds a 0.001 m² target.
+ * How much of the radar's potential the crew gets out of it grows with the enemy's training
+ * (difficulty.aiSkill): LO_FCR_FACTOR + LO_FCR_SKILL × aiSkill ≈ 0.76 (Recruit) … 0.87 (Ace).
+ * Clean F-35A head-on vs a MiG-29: ≈ 6.9 km (Recruit) … 7.9 km (Ace); Su-35 / Su-57 ≈ 10.8 … 12.3 km
+ * — inside the F-35's SHOOT range, so a disciplined (STT / TWS / EMCON, no afterburner) F-35
+ * typically gets the first shot. Beast mode (external pylons) and an open weapon bay lose the
+ * bonus: MiG-29 ≈ 16 km, Su-35 ≈ 25 km. Ground radars (SAM / EWR, VHF) are not affected; the
+ * F-35's own radar vs a Su-57 uses the base factor.
+ */
+export const LO_FCR_FACTOR = 0.72;
+export const LO_FCR_SKILL = 0.16;
+export function fcrStealthFactor(ac: AircraftEntity, observerSkill = 0.2): number {
+  if (!isStealthy(ac) || (ac.rcsMultiplier ?? 1) > 1.5 || ac.bayDoors > 0.05) return 1;
+  return LO_FCR_FACTOR + LO_FCR_SKILL * Math.max(0, Math.min(1, observerSkill));
 }
 
 /** Radar-equation range factor for an RCS (1 at 5 m²). */

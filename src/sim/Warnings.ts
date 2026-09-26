@@ -31,7 +31,9 @@ const RULES: Record<WarningId, Rule> = {
   engine_fail: { on: 0.2, off: 1 },
   hydraulics: { on: 0.2, off: 1 },
   damage: { on: 0, off: 1 },
-  missile: { on: 0, off: 1.5 },
+  // MAWS drops a defeated missile within ~0.1 s (sensors/maws.ts): clear the MISSILE warning
+  // (and Betty) almost at once so a successful defence is confirmed immediately
+  missile: { on: 0, off: 0.25 },
   spike: { on: 0, off: 1.2 },
   flares_low: { on: 0.2, off: 1 },
   chaff_low: { on: 0.2, off: 1 },
@@ -98,7 +100,6 @@ export class WarningSystem {
     }
     const f = p.flight;
     const perf = p.sim?.perf ?? AIRCRAFT_PERF[p.type];
-    const assisted = world.difficulty.flightAssist;
 
     this.probeTimer -= dt;
     if (this.probeTimer <= 0) {
@@ -108,16 +109,16 @@ export class WarningSystem {
     c.pull_up = this.pullUpPredicted;
     c.altitude = f.agl < WARNING_THRESHOLDS.altitudeAgl && f.verticalSpeed < -1.5;
 
-    const al = alphaLimits(perf, assisted, _al);
-    const aoaLimit = assisted ? al.max : perf.alphaStall;
-    c.stall = f.stalled || (f.alpha > aoaLimit - 0.6 * (Math.PI / 180) && f.gLoad < 0.9);
+    // FBW AoA limiter (active on every difficulty): pinned on the limiter while unable to hold 1 g
+    const al = alphaLimits(perf, _al);
+    c.stall = f.stalled || (f.alpha > al.max - 0.6 * (Math.PI / 180) && f.gLoad < 0.9);
 
     let heavy = 0;
     for (let i = 0; i < p.stores.length; i++) {
       const s = p.stores[i];
       if (!s.internal && s.weapon === 'gbu31') heavy += s.count;
     }
-    const gl = gLimits(perf, heavy, 0, true, _gl);
+    const gl = gLimits(perf, heavy, 0, _gl);
     c.over_g = f.gLoad > gl.max + 0.3 || f.gLoad < gl.min - 0.3;
 
     const fuelFrac = f.fuel / perf.internalFuel;

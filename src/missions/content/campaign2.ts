@@ -4,8 +4,8 @@
  * the SA-10 itself and the Su-57 finale.
  */
 import type { MissionDef } from '../../core/contracts';
-import type { Condition } from '../schema';
-import { FEATURES, P, WAIHEKE_RUNWAY_HDG, flight, mission, off, runwayPoint, site, target, wingmen } from './common';
+import type { Condition, TaskDef } from '../schema';
+import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, fighterSweep, flight, mission, off, runwayPoint, site, target, wingmen } from './common';
 
 const DS = 'DARKSTAR';
 
@@ -24,12 +24,13 @@ export const C07: MissionDef = mission({
   briefing: [
     'An A-50 Mainstay radar plane is orbiting beyond Tiritiri Matangi Island. From up there it sees every jet that leaves Whenuapai and hands the picture straight to their fighters and SAM crews.',
     "Kill it and they go blind. Two Su-35s fly close escort on the Mainstay and two more hold a CAP between it and the coast. An early-warning radar on Tiritiri feeds the network from the ground.",
-    'The A-50 will run as soon as it realises it is being hunted, and a relief orbit arrives in nine minutes. The Su-35 is a far better fighter than the MiG-29: stay in the bays, stay invisible, and let DARKSTAR call the picture off bullseye — the Sky Tower.',
+    'The A-50 will run as soon as it realises it is being hunted, and a relief orbit arrives in twelve minutes. The Su-35 is a far better fighter than the MiG-29: stay in the bays, stay invisible, and let DARKSTAR call the picture off bullseye — the Sky Tower.',
   ],
   recommendedLoadout: 'a2a_stealth',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
   player: c07Start,
-  timeLimit: 540,
+  // 12 min: room for one Winchester trip to Whenuapai and back (≈3 min) on top of the hunt
+  timeLimit: 720,
   script: {
     parTime: 420,
     awacs: { style: 'bullseye', bullseye: { x: 0, z: 0, name: 'Tower' } },
@@ -40,8 +41,8 @@ export const C07: MissionDef = mission({
         fixedCount: true,
         task: { kind: 'patrol', x: 8000, z: -29000, radius: 5000, altitude: 9000 },
       }),
-      flight('guard', 'su35', 2, { x: 10500, z: -28000 }, 9500, 0, 230, 'escort', { skillOffset: 0.05, task: { kind: 'escort_group', group: 'mainstay' } }),
-      flight('cap', 'su35', 2, { x: 22000, z: -20000 }, 7500, 250, 240, 'cap', { skillOffset: 0.05, task: { kind: 'patrol', x: 16000, z: -19000, radius: 7000, altitude: 7500 } }),
+      flight('guard', 'su35', 2, { x: 10500, z: -28000 }, 9500, 0, 230, 'escort', { skillOffset: -0.1, maxCount: 2, task: { kind: 'escort_group', group: 'mainstay' } }),
+      flight('cap', 'su35', 2, { x: 22000, z: -20000 }, 7500, 250, 240, 'cap', { skillOffset: -0.1, maxCount: 2, task: { kind: 'patrol', x: 16000, z: -19000, radius: 7000, altitude: 7500 } }),
     ],
     sams: [site('sa8', 'tiri_sa8', 'sa8', off(P.tiritiri, 400, 200), { minDifficulty: 'veteran' })],
     ground: [target('ewr', 'tiri_ewr', 'ewr', P.tiritiri, { name: 'EW Radar' })],
@@ -61,7 +62,7 @@ export const C07: MissionDef = mission({
           { kind: 'retask', group: 'mainstay', task: { kind: 'rtb', x: 4000, z: -35500, altitude: 10000 } },
         ],
       },
-      { id: 't_relief', when: { kind: 'time', t: 420 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two minutes until their relief orbit arrives.', priority: 2 }] },
+      { id: 't_relief', when: { kind: 'time', t: 600 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two minutes until their relief orbit arrives.', priority: 2 }] },
     ],
     opening: [
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Mainstay orbiting north of Tiritiri, two Su-35s on him, two more on CAP. Bullseye is the Tower.', priority: 2 },
@@ -72,8 +73,15 @@ export const C07: MissionDef = mission({
 
 /* ───────────────────────── 8. Under the Umbrella — low-level strike beneath the SA-10 ───────────────────────── */
 
-const c08Start = { x: -22000, z: 4500, altitude: 1200, heading: 70, speed: 230 };
-const channel = { x: 12100, z: -5000 };
+const c08Start = { x: -24500, z: 4000, altitude: 1200, heading: 70, speed: 230 };
+/**
+ * The landing ships lie in the Rangitoto Channel off the volcano's south-west side, loading from
+ * Rangitoto Wharf: the SA-10 on Motutapu's western slopes cannot see that water, nor the harbour approach
+ * from the Harbour Bridge, below ~1,000 ft (Rangitoto blocks it — checked with
+ * e2e/review/dev-missions-los.ts: masked at 60 m from the bridge to the wharf, and up to ~300 m
+ * AGL around the wharf). Everything north / east of Rangitoto, or above ~1,500 ft, is in view.
+ */
+const wharf = { x: 4200, z: -4700 };
 
 export const C08: MissionDef = mission({
   id: 'c08',
@@ -85,46 +93,48 @@ export const C08: MissionDef = mission({
   weather: 'clear',
   features: [FEATURES.whenuapai, FEATURES.waihekeStrip, FEATURES.motutapuDepot],
   briefing: [
-    'The enemy has brought an SA-10 Grumble onto Motutapu. At medium altitude it can kill anything over Auckland, and under its umbrella they are loading landing ships in the channel east of Rangitoto for a push onto the North Shore.',
-    'We cannot touch the SA-10 yet. So we go under it. Rangitoto rises 260 metres out of the harbour: if you stay below 300 feet and keep the volcano between you and Motutapu, the Grumble cannot see you.',
-    'Fly the harbour at wave-top height — under the Harbour Bridge if you have the nerve — pass North Head, pop up just enough to toss your JDAMs on the landing ships, and get back down. Shilkas and MANPADS guard the Rangitoto shore.',
+    'The enemy has brought an SA-10 Grumble onto Motutapu. At medium altitude it can kill anything over Auckland, and under its umbrella landing ships in the Rangitoto Channel are loading troops from Rangitoto Wharf for a push onto the North Shore.',
+    'We cannot touch the SA-10 yet. So we go under it. Rangitoto rises 260 metres out of the harbour: stay below 300 feet in the harbour and the Rangitoto Channel and the volcano hides you from Motutapu. Climb above 1,500 feet, or stray north or east of the island, and the Grumble sees you.',
+    'Fly the harbour at wave-top height — under the Harbour Bridge if you have the nerve — pass North Head and turn north into the channel. Pop up to about 800 feet only for the release: the GBU-39 small diameter bombs glide 1.5 km from there, so let them go the moment IN RANGE shows, then get straight back down. One SDB sinks a landing ship. MANPADS guard the Rangitoto shore: flares ready.',
   ],
-  recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth'],
+  recommendedLoadout: 'sead_stealth',
+  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
   player: c08Start,
   script: {
     parTime: 540,
     groups: [
       flight('migs', 'mig29', 2, { x: 20000, z: -16000 }, 6500, 225, 240, 'fighter', {
         skillOffset: 0.1,
-        spawn: { kind: 'area', x: channel.x, z: channel.z, radius: 15000 },
-        task: { kind: 'patrol', x: 12000, z: -8000, radius: 6000, altitude: 6000 },
+        // scramble once the ships are hit (a hot egress), or when the strike is taking too long
+        spawn: { kind: 'any', of: [{ kind: 'objective', id: 'o_ships', state: 'complete' }, { kind: 'time', t: 300 }] },
+        task: { kind: 'patrol', x: 8000, z: -6000, radius: 6000, altitude: 5000 },
       }),
     ],
     sams: [
-      site('sa10', 'sa10', 'sa10', P.motuN, { heading: 220 }),
-      site('zsu', 'aaa', 'zsu23', { x: 9900, z: -6100 }),
-      site('manpads', 'aaa', 'sa18', { x: 10500, z: -7300 }, { minDifficulty: 'pilot' }),
+      // on Motutapu's western slopes above Islington Bay: Rangitoto shadows the Rangitoto Channel from it
+      site('sa10', 'sa10', 'sa10', { x: 12200, z: -8600 }, { heading: 230 }),
+      site('zsu', 'aaa', 'zsu23', P.rangS),
+      site('manpads', 'aaa', 'sa18', { x: 8000, z: -5600 }, { minDifficulty: 'pilot' }),
       site('sa15pop', 'popup', 'sa15', P.brownsIs, { emcon: true, minDifficulty: 'veteran' }),
     ],
     ground: [
-      target('lst1', 'landing', 'ship', { x: 12100, z: -5300 }, { name: 'Landing Ship', heading: 200 }),
-      target('lst2', 'landing', 'ship', { x: 12800, z: -4700 }, { name: 'Landing Ship', heading: 210 }),
-      target('lst3', 'landing', 'ship', { x: 11600, z: -4300 }, { name: 'Landing Ship', heading: 190 }),
-      target('fuel1', 'depot', 'fuel', { x: 10400, z: -6300 }),
-      target('fuel2', 'depot', 'fuel', { x: 10100, z: -5800 }),
+      target('lst1', 'landing', 'ship', { x: wharf.x, z: wharf.z }, { name: 'Landing Ship', heading: 200, health: 300 }),
+      target('lst2', 'landing', 'ship', { x: wharf.x + 500, z: wharf.z - 250 }, { name: 'Landing Ship', heading: 210, health: 300 }),
+      target('lst3', 'landing', 'ship', { x: wharf.x - 500, z: wharf.z + 250 }, { name: 'Landing Ship', heading: 190, health: 300 }),
+      target('fuel1', 'depot', 'fuel', { x: 7300, z: -5500 }),
+      target('fuel2', 'depot', 'fuel', { x: 7600, z: -5800 }),
     ],
     objectives: [
       { id: 'o_ships', kind: 'destroy', groups: ['landing'], count: 2, label: 'Sink at least two landing ships', primary: true },
-      { id: 'o_depot', kind: 'destroy', groups: ['depot'], label: 'Destroy the fuel depot on Rangitoto', primary: false },
+      { id: 'o_depot', kind: 'destroy', groups: ['depot'], label: 'Destroy the fuel depot at Rangitoto Wharf', primary: false },
       { id: 'o_aaa', kind: 'destroy', groups: ['aaa'], label: 'Silence the Rangitoto flak', primary: false },
       { id: 'o_low', kind: 'reach', x: P.northHead.x, z: P.northHead.z, radius: 1500, below: 120, label: 'Pass North Head below 400 ft', primary: false },
     ],
     waypoints: [
-      { id: 'wp_teatatu', label: 'Te Atatū', kind: 'nav', x: -7000, z: -1500, altitude: 150 },
+      { id: 'wp_teatatu', label: 'Te Atatū', kind: 'nav', x: -7000, z: -1500, altitude: 60 },
       { id: 'wp_bridge', label: 'Harbour Bridge', kind: 'nav', x: P.harbourBridge.x, z: P.harbourBridge.z, altitude: 30, radius: 900 },
-      { id: 'wp_ip', label: 'IP North Head', kind: 'ip', x: P.northHead.x, z: P.northHead.z, altitude: 60, radius: 1500 },
-      { id: 'wp_ships', label: 'Landing ships', kind: 'target', x: channel.x, z: channel.z, objective: 'o_ships' },
+      { id: 'wp_ip', label: 'IP North Head', kind: 'ip', x: P.northHead.x, z: P.northHead.z, altitude: 50, radius: 1500 },
+      { id: 'wp_ships', label: 'Landing ships', kind: 'target', x: wharf.x, z: wharf.z, altitude: 60, objective: 'o_ships' },
     ],
     triggers: [
       {
@@ -136,12 +146,13 @@ export const C08: MissionDef = mission({
         id: 't_ships',
         when: { kind: 'objective', id: 'o_ships', state: 'complete' },
         delay: 2,
-        actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. That's enough to stop the landing. Stay low on the way out." }],
+        actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. That's enough to stop the landing. Stay low on the way out — back west, under the bridge." }],
       },
     ],
     hints: [
       { id: 'h_low', text: 'The SA-10 kills anything high. Stay below 300 ft and keep Rangitoto between you and Motutapu', when: { kind: 'time', t: 4 }, duration: 10 },
       { id: 'h_bridge', text: 'Harbour Bridge ahead: the main span has 43 m of clearance…', when: { kind: 'area', x: P.harbourBridge.x, z: P.harbourBridge.z, radius: 3500 }, duration: 6 },
+      { id: 'h_pop', text: 'Ships ahead: SDB selected, TGT to designate, pop to ~800 ft, release the moment IN RANGE shows, then back down', when: { kind: 'area', x: wharf.x, z: wharf.z, radius: 5000 }, duration: 8 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Grumble is up on Motutapu. Nothing high survives out there tonight. Go low.', priority: 2 }],
     successText: 'The landing is off. Get home low and fast.',
@@ -153,8 +164,34 @@ export const C08: MissionDef = mission({
 const c09Start = { x: -6000, z: -5000, altitude: 6500, heading: 95, speed: 240 };
 const strip = P.waiAirstrip;
 const rw = (v: number, u: number) => runwayPoint(strip, WAIHEKE_RUNWAY_HDG, v, u);
-const hammerAtTarget: Condition = { kind: 'area', who: { group: 'hammer' }, x: strip.x, z: strip.z, radius: 3500 };
+/** Hammer's release basket: a JDAM toss from ~5 km (the route's run-in point is 3 km south of the strip). */
+const hammerAtTarget: Condition = { kind: 'area', who: { group: 'hammer' }, x: strip.x, z: strip.z, radius: 5000 };
+/**
+ * Safety net: a package that went defensive (jinking at 350+ m/s, 1.4 g) can sail past the run-in
+ * point and end up orbiting the last route point forever — the mission would never end. If there
+ * is no release 200 s after the push, Hammer is sent straight over the strip (re-sent every 2 min).
+ */
+const HAMMER_REATTACK: TaskDef = {
+  kind: 'route',
+  points: [
+    { x: strip.x, z: strip.z, altitude: 3200 }, // above the Shilkas' reach
+    { x: 8000, z: 3000, altitude: 3000 },
+  ],
+};
 const hammerHome: Condition = { kind: 'area', who: { group: 'hammer' }, x: 8000, z: 3000, radius: 6000 };
+/** Ingress from the push point: down into the Tāmaki Strait, run in low from the south (under the SA-6's radar). */
+const HAMMER_INGRESS: TaskDef = {
+  kind: 'route',
+  points: [
+    { x: 9000, z: 3000, altitude: 4000 },
+    { x: 17000, z: 2500, altitude: 900 },
+    { x: 24500, z: 300, altitude: 300 },
+    { x: strip.x + 300, z: strip.z + 3000, altitude: 400 },
+    { x: 33000, z: 1500, altitude: 3000 },
+  ],
+};
+/** The push: Flankers dealt with (splashed or driven off), or Hammer can't wait any longer. */
+const hammerPush: Condition = { kind: 'any', of: [{ kind: 'group_defeated', group: 'flankers' }, { kind: 'time', t: 200 }] };
 
 export const C09: MissionDef = mission({
   id: 'c09',
@@ -166,8 +203,8 @@ export const C09: MissionDef = mission({
   weather: 'scattered',
   briefing: [
     'The enemy is rebuilding the Waiheke airstrip and flying fuel in by sea. Hammer flight — four F-35As with JDAMs — is going to burn the fuel farm and the radar that runs the strip.',
-    "Hammer's jets are loaded for the ground and can't fight their way in. You are the escort. Flankers will come off the Gulf the moment Hammer is detected, and Su-35s are expected once the package commits to the target.",
-    'The SA-6 on the western end of Waiheke sits close to the ingress route and will engage Hammer if it can see them. Kill it early if you can. At least two Hammer jets have to make it back over the city.',
+    "Hammer's jets are loaded for the ground and can't fight their way in. They hold on the tanker west of the city until you clear the air: a pair of Flankers is coming off the Gulf — kill them and DARKSTAR calls \"Hammer, push\". Hammer can only wait about three minutes. Su-35s scramble from the island a minute after the push: stay between them and Hammer.",
+    'Weasel flight will go after the SA-6 on the eastern end of Waiheke with AARGMs, and Hammer runs in low through the Tāmaki Strait under its radar. At least two Hammer jets have to make it back over the city.',
   ],
   recommendedLoadout: 'a2a_beast',
   allowedLoadouts: ['a2a_beast', 'a2a_stealth', 'sead_stealth'],
@@ -175,7 +212,8 @@ export const C09: MissionDef = mission({
   script: {
     parTime: 540,
     groups: [
-      flight('hammer', 'f35a', 4, { x: -8000, z: -3500 }, 6000, 95, 230, 'bomber', {
+      // Hammer holds on the tanker west of the city and joins at the push point on "Hammer, push"
+      flight('hammer', 'f35a', 4, { x: 0, z: 3000 }, 6000, 95, 230, 'bomber', {
         team: 'blue',
         callsign: 'Hammer',
         fixedCount: true,
@@ -183,28 +221,31 @@ export const C09: MissionDef = mission({
         formation: 'box',
         spacing: 250,
         announce: false,
-        task: {
-          kind: 'route',
-          points: [
-            { x: 8000, z: 2500, altitude: 6000 },
-            { x: 20000, z: -500, altitude: 6000 },
-            { x: strip.x, z: strip.z + 300, altitude: 5000 },
-            { x: 31000, z: -9000, altitude: 6000 },
-          ],
-        },
+        spawn: NEVER,
+        task: HAMMER_INGRESS,
+      }),
+      flight('weasel', 'f35a', 2, { x: -4000, z: 1500 }, 7000, 95, 240, 'fighter', {
+        team: 'blue',
+        callsign: 'Weasel',
+        fixedCount: true,
+        loadout: 'sead_stealth',
+        announce: false,
+        task: { kind: 'attack_group', group: 'wai_sa6' },
       }),
       flight('flankers', 'su27', 2, { x: 32000, z: -22000 }, 7000, 240, 250, 'interceptor', {
         skillOffset: 0.05,
+        maxCount: 2,
         spawn: { kind: 'time', t: 50 },
         task: { kind: 'attack_group', group: 'hammer' },
       }),
       flight('sukhois', 'su35', 2, { x: 35000, z: -2000 }, 7500, 270, 250, 'interceptor', {
-        skillOffset: 0.1,
-        spawn: { kind: 'area', who: { group: 'hammer' }, x: strip.x, z: strip.z, radius: 12000 },
+        skillOffset: 0.05,
+        maxCount: 2,
+        spawn: NEVER,
         task: { kind: 'attack_group', group: 'hammer' },
       }),
     ],
-    sams: [site('sa6', 'wai_sa6', 'sa6', P.waiW, { heading: 200 }), site('zsu', 'wai_aaa', 'zsu23', rw(0, 150))],
+    sams: [site('sa6', 'wai_sa6', 'sa6', P.waiE, { heading: 230 }), site('zsu', 'wai_aaa', 'zsu23', rw(0, 150))],
     ground: [
       target('fuel1', 'depot', 'fuel', rw(500, 620)),
       target('fuel2', 'depot', 'fuel', rw(580, 620)),
@@ -222,8 +263,9 @@ export const C09: MissionDef = mission({
         primary: true,
       },
       { id: 'o_strike', kind: 'destroy', groups: ['depot'], label: 'Hammer destroys the Waiheke fuel farm', primary: true },
+      { id: 'o_flankers', kind: 'destroy', groups: ['flankers'], label: 'Clear the Flankers so Hammer can push', primary: false, activeAt: { kind: 'group_spawned', group: 'flankers' } },
+      { id: 'o_sukhois', kind: 'destroy', groups: ['sukhois'], label: 'Splash the Su-35 scramble', primary: false, activeAt: { kind: 'group_spawned', group: 'sukhois' } },
       { id: 'o_sa6', kind: 'destroy', groups: ['wai_sa6'], label: 'Kill the SA-6 before Hammer arrives', primary: false },
-      { id: 'o_bandits', kind: 'destroy', groups: ['flankers', 'sukhois'], label: 'Splash the interceptors', primary: false },
       {
         id: 'o_all4',
         kind: 'protect',
@@ -235,12 +277,42 @@ export const C09: MissionDef = mission({
       },
     ],
     waypoints: [
-      { id: 'wp_push', label: 'Push point', kind: 'nav', x: 8000, z: 2000, altitude: 6500 },
+      { id: 'wp_screen', label: 'Screen', kind: 'cap', x: 5000, z: -12000, altitude: 7000, objective: 'o_flankers' },
       { id: 'wp_target', label: 'Waiheke strip', kind: 'target', x: strip.x, z: strip.z, objective: 'o_strike' },
       { id: 'wp_egress', label: 'Egress', kind: 'nav', x: 8000, z: 3000, altitude: 6000, objective: 'o_hammer' },
     ],
     triggers: [
+      {
+        id: 't_push',
+        when: hammerPush,
+        delay: 3,
+        actions: [
+          { kind: 'radio', from: DS, text: 'Hammer, Darkstar. Picture is as clean as it gets. Hammer, push!', priority: 3 },
+          { kind: 'spawn', group: 'hammer' },
+          { kind: 'radio', from: 'Hammer 1', text: 'Hammer 1, pushing. Going low through the strait.', priority: 2 },
+          { kind: 'hud', text: 'HAMMER PUSHING', tone: 'info', duration: 3 },
+        ],
+      },
+      {
+        id: 't_su35',
+        when: { kind: 'any', of: [{ kind: 'group_defeated', group: 'flankers' }, { kind: 'trigger', id: 't_push' }] },
+        delay: 60,
+        actions: [
+          { kind: 'spawn', group: 'sukhois' },
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Su-35s off the deck, east of Waiheke, going for Hammer!', priority: 2 },
+        ],
+      },
       { id: 't_release', when: hammerAtTarget, delay: 1, actions: [{ kind: 'radio', from: 'Hammer 1', text: 'Hammer 1, in hot… bombs away!', voice: 'p_rifle', priority: 2 }] },
+      {
+        id: 't_reattack',
+        when: { kind: 'all', of: [{ kind: 'trigger', id: 't_push' }, { kind: 'not', of: { kind: 'trigger', id: 't_release' } }] },
+        delay: 200,
+        repeat: 120,
+        actions: [
+          { kind: 'retask', group: 'hammer', task: HAMMER_REATTACK },
+          { kind: 'radio', from: 'Hammer', text: 'Hammer overshot the target — coming around for another pass. Viper, keep them off us!', priority: 2 },
+        ],
+      },
       {
         id: 't_impact',
         when: { kind: 'trigger', id: 't_release' },
@@ -254,7 +326,7 @@ export const C09: MissionDef = mission({
             task: {
               kind: 'route',
               points: [
-                { x: 20000, z: 3000, altitude: 6500 },
+                { x: 22000, z: 3000, altitude: 3000 },
                 { x: 8000, z: 3000, altitude: 6000 },
                 { x: P.whenuapai.x, z: P.whenuapai.z, altitude: 2000 },
               ],
@@ -263,12 +335,17 @@ export const C09: MissionDef = mission({
         ],
       },
       { id: 't_home', when: { kind: 'all', of: [{ kind: 'trigger', id: 't_impact' }, hammerHome] }, actions: [{ kind: 'radio', from: 'Hammer 1', text: "Hammer's feet dry over the city. Thanks for the escort, Viper." }] },
-      { id: 't_su35', when: { kind: 'group_spawned', group: 'sukhois' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Su-35s off the deck, east of Waiheke, going for Hammer!', priority: 2 }] },
+      { id: 't_sa6', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, delay: 2, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Waiheke SA-6 is off the air.', priority: 2 }] },
       { id: 't_loss', when: { kind: 'group_destroyed', group: 'hammer', count: 1 }, actions: [{ kind: 'radio', from: 'Hammer 1', text: "Hammer's lost a jet! Viper, we need cover!", priority: 3 }] },
     ],
+    hints: [
+      { id: 'h_screen', text: 'Hammer waits until the Flankers are dead: fly the steering cue east and meet them over the Gulf', when: { kind: 'time', t: 6 }, duration: 9 },
+      { id: 'h_escort', text: 'Hammer is pushing: stay between Hammer and the Su-35s coming from the east', when: { kind: 'group_spawned', group: 'hammer' }, duration: 8 },
+    ],
     opening: [
-      { kind: 'radio', from: 'Hammer 1', text: 'Hammer 1, pushing. Viper, you have the lead on the fight.', priority: 2 },
-      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Picture clean for now. SA-6 active on Waiheke west.' },
+      { kind: 'radio', from: 'Hammer 1', text: 'Hammer 1, holding on the tanker. Viper, clear us a path to the push point.', priority: 2 },
+      { kind: 'radio', from: 'Weasel 1', text: 'Weasel 1, going for the SA-6. Magnum shortly.' },
+      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Picture clean for now. SA-6 active on Waiheke east. Expect Flankers from the north-east.' },
     ],
     successText: 'Fuel farm destroyed and Hammer is home. Textbook escort.',
   },
@@ -304,9 +381,10 @@ export const C10: MissionDef = mission({
         spacing: 700,
         task: { kind: 'route', points: [{ x: 1000, z: -24000, altitude: 8000 }, { x: 3000, z: -12000, altitude: 7500 }, { x: 0, z: 0, altitude: 7500 }] },
       }),
-      flight('escortN', 'mig29', 2, { x: 7500, z: -34000 }, 9000, 185, 240, 'escort', { skillOffset: 0.05, task: { kind: 'escort_group', group: 'raidN' } }),
+      flight('escortN', 'mig29', 2, { x: 7500, z: -34000 }, 9000, 185, 240, 'escort', { skillOffset: 0.05, maxCount: 2, task: { kind: 'escort_group', group: 'raidN' } }),
       flight('sweep', 'su27', 2, { x: 32000, z: -26000 }, 7500, 235, 250, 'fighter', {
         skillOffset: 0.1,
+        maxCount: 2,
         spawn: { kind: 'time', t: 45 },
         task: { kind: 'patrol', x: 6000, z: -12000, radius: 7000, altitude: 7000 },
       }),
@@ -387,7 +465,8 @@ export const C11: MissionDef = mission({
   briefing: [
     'This is the big one. The SA-10 Grumble on Motutapu is the keystone of their air defence: while it lives, nothing of ours flies over the Gulf. An SA-15 Tor sits beside it to swat incoming missiles and fighters.',
     'An early-warning radar on Rakino Island feeds the network, Su-35s hold a CAP north of Rangitoto, and a reserve pair will scramble when the Grumble is hit.',
-    'Choose your weapons carefully. Clean, in the bays, the Grumble only sees you inside about 19 km. With pylons it sees you at over 30. AARGMs ride its radar home when it emits; SDBs can glide in from 30 km. Viper 2 will take care of the fighters.',
+    'Choose your weapons carefully. Clean, in the bays, the Grumble only sees you inside about 19 km — but every weapon release pops the bay doors and it will see that: fire, then beam and descend. AARGMs ride its radar home; SDBs glide in from 30 km at 30,000 ft. The Tor shoots down incoming AARGMs and SDBs aimed at anything within 3 km of it: kill the Tor first, or saturate it with everything at once.',
+    'You are not alone. Vipers 2 and 3 set up a CAP ahead of you, west of the Grumble’s umbrella, and take on the Su-35s when they come for you. Weasel flight follows with AARGMs for the Tor — when Weasel calls Magnum, put your own weapons on the Grumble so they arrive together. Out of weapons? Rearm at Whenuapai and come back.',
   ],
   recommendedLoadout: 'sead_stealth',
   allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
@@ -395,12 +474,28 @@ export const C11: MissionDef = mission({
   script: {
     parTime: 540,
     groups: [
-      wingmen(1, c11Start),
-      flight('flankers', 'su35', 2, { x: 10000, z: -20000 }, 8000, 230, 240, 'cap', { skillOffset: 0.1, task: { kind: 'patrol', x: 6000, z: -15000, radius: 7000, altitude: 8000 } }),
+      flight('flankers', 'su35', 2, { x: 10000, z: -20000 }, 8000, 230, 240, 'cap', { skillOffset: 0.05, maxCount: 2, task: { kind: 'patrol', x: 6000, z: -15000, radius: 7000, altitude: 8000 } }),
       flight('reserve', 'su35', 2, { x: 30000, z: -20000 }, 7500, 250, 250, 'interceptor', {
-        skillOffset: 0.1,
-        spawn: { kind: 'any', of: [{ kind: 'group_destroyed', group: 'sa10' }, { kind: 'time', t: 240 }] },
+        skillOffset: 0.05,
+        maxCount: 2,
+        spawn: { kind: 'any', of: [{ kind: 'group_destroyed', group: 'sa10' }, { kind: 'time', t: 330 }] },
         task: { kind: 'attack_player' },
+      }),
+      // Vipers 2–3: a fighter sweep a few km ahead, sent at the Su-35 CAP (as briefed — a wingman
+      // only commits inside 15 km, which left the player alone with the Flankers at the IP)
+      // Vipers 2–3 hold a CAP ahead of the player, west of the SA-10 umbrella, and commit (40 km)
+      // on the Flankers as they come for him — measured better than sending them at the Su-35
+      // station itself, 8 km from the Grumble, where they were shot down and left him alone
+      fighterSweep(2, { x: -19000, z: -6500 }, 7500, 68, 'flankers', { task: { kind: 'patrol', x: -12000, z: -9000, radius: 5000, altitude: 7500 } }),
+      // Weasel pair: AARGMs on the Tor, so the player's weapons on the Grumble can saturate it
+      flight('weasel', 'f35a', 2, { x: -16000, z: 5000 }, 7000, 60, 240, 'fighter', {
+        team: 'blue',
+        callsign: 'Weasel',
+        fixedCount: true,
+        loadout: 'sead_stealth',
+        announce: false,
+        spawn: { kind: 'time', t: 30 },
+        task: { kind: 'attack_group', group: 'sa15' },
       }),
     ],
     sams: [
@@ -418,10 +513,17 @@ export const C11: MissionDef = mission({
       { id: 'o_sa6', kind: 'destroy', groups: ['sa6'], label: 'Destroy the SA-6 on Waiheke', primary: false },
     ],
     waypoints: [
-      { id: 'wp_ip', label: 'IP Takapuna', kind: 'ip', x: P.takapuna.x, z: P.takapuna.z, altitude: 6000 },
+      // IP ~28 km from the Grumble at 30,000 ft: AARGM / SDB stand-off range, outside its detection of a clean F-35
+      { id: 'wp_ip', label: 'IP Hobsonville', kind: 'ip', x: -14000, z: -9000, altitude: 9000 },
       { id: 'wp_sa10', label: 'SA-10', kind: 'target', x: P.motuN.x, z: P.motuN.z, objective: 'o_sa10' },
     ],
     triggers: [
+      {
+        id: 't_weasel',
+        when: { kind: 'group_spawned', group: 'weasel' },
+        delay: 2,
+        actions: [{ kind: 'radio', from: 'Weasel 1', text: 'Weasel 1, two-ship, pushing on the Tor. Magnum in about a minute — Viper 1, time your shots on the Grumble with ours.', priority: 2 }],
+      },
       {
         id: 't_dead',
         when: { kind: 'objective', id: 'o_sa10', state: 'complete' },
@@ -432,12 +534,15 @@ export const C11: MissionDef = mission({
     hints: [
       {
         id: 'h_choice',
-        text: 'The SA-10 turns its radar on when it sees you. Stay clean and stealthy, and fire the AARGM the moment it emits',
+        text: 'Weasel takes the Tor: put your weapons on the Grumble from 30 km, then beam and descend',
         when: { kind: 'time', t: 5 },
         duration: 10,
       },
     ],
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Grumble is on Motutapu, Su-35s on CAP north of Rangitoto, Rakino radar feeding them. Kill the Grumble.', priority: 2 }],
+    opening: [
+      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Grumble is on Motutapu with a Tor beside it, Su-35s on CAP north of Rangitoto, Rakino radar feeding them. Kill the Grumble.', priority: 2 },
+      { kind: 'radio', from: 'Viper 2', text: 'Two and Three, pushing ahead to CAP west of Rangitoto. We have the fighters.' },
+    ],
     successText: 'The SA-10 is scrap. The Gulf is open.',
   },
 });
@@ -470,7 +575,8 @@ export const C12: MissionDef = mission({
       wingmen(2, c12Start, { loadout: 'a2a_beast' }),
       flight('cap', 'su35', 2, { x: 10000, z: -18000 }, 7500, 220, 240, 'cap', { skillOffset: 0.15, task: { kind: 'patrol', x: 10000, z: -16000, radius: 7000, altitude: 7500 } }),
       flight('felons', 'su57', 2, { x: 26000, z: -20000 }, 9000, 240, 260, 'interceptor', {
-        skill: 1,
+        // their best pilots: well above the difficulty's norm, but still scaled by it
+        skillOffset: 0.3,
         maxCount: 3,
         noun: 'Felons',
         spawn: { kind: 'any', of: [{ kind: 'area', x: hq.x, z: hq.z, radius: 22000 }, { kind: 'time', t: 120 }] },
@@ -524,6 +630,7 @@ export const C12: MissionDef = mission({
       { kind: 'radio', from: 'Viper 3', text: 'Three.' },
     ],
     successText: 'Southern Cross is complete. The Gulf is ours. Welcome home, Viper.',
+    campaignFinale: true,
   },
 });
 

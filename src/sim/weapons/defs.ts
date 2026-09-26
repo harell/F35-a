@@ -27,8 +27,16 @@ export interface CombatMunitionDef extends MunitionDef {
   fullGQ: number;
   /** Extra g from thrust-vector control / gas vanes while the motor burns (independent of q). */
   tvcG: number;
-  /** Induced-drag area factor (m²/kg-ish): induced decel = aLat² / (q · liftArea). */
+  /**
+   * Induced-drag area factor: induced decel = aAero² / (q · liftArea). Derived at module load from
+   * `ldMax` so that a max-g aerodynamic pull at any q ≤ fullGQ costs aeroMax / ldMax (a missile
+   * body's lift-to-drag ratio at max AoA). Thrust-vectoring g is NOT charged here (see flight.ts).
+   */
   liftArea: number;
+  /** Lift-to-drag ratio of the airframe at max aerodynamic g (≈ 3 for a missile body). */
+  ldMax: number;
+  /** Vertical launch only: pitch-over rate after ignition (rad/s, gas-dynamic / TVC turnover). */
+  turnRate: number;
   /** Motor ignition delay after release (bay ejection / cold vertical launch), s. */
   igniteDelay: number;
   /** Separation speed from the launcher (m/s): ejector push, rail exit, cold-launch gas. */
@@ -49,6 +57,8 @@ type Def = CombatMunitionDef;
 
 const BASE = {
   glideRatio: 0,
+  ldMax: 3,
+  turnRate: 0,
   activeRange: 0,
   datalink: false,
   loft: false,
@@ -131,7 +141,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     damage: 115,
     blastRadius: 16,
     maxFlightTime: 25,
-    flareResistance: 0.8,
+    flareResistance: 0.9, // imaging IR seeker: rejects most flares
     smoke: 0.25,
     length: 3.02,
     diameter: 0.127,
@@ -476,6 +486,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     fullGQ: 30_000,
     tvcG: 25,
     liftArea: 0.012,
+    turnRate: 1.15, // ~65°/s turnover
     igniteDelay: 0.6,
     ejectSpeed: 30,
     blast: 'large',
@@ -517,6 +528,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     fullGQ: 40_000,
     tvcG: 30,
     liftArea: 0.01,
+    turnRate: 1.75, // ~100°/s gas-dynamic turnover (Tor)
     igniteDelay: 0.4,
     ejectSpeed: 25,
     blast: 'medium',
@@ -562,6 +574,11 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   },
 };
 
+// Induced drag consistent with the airframe L/D at max g (see CombatMunitionDef.liftArea).
+for (const d of Object.values(MUNITIONS)) {
+  if (d.category !== 'bomb') d.liftArea = (d.maxG * 9.80665 * d.ldMax) / d.fullGQ;
+}
+
 /* ───────────────────────── Guns ───────────────────────── */
 
 export type GunId = 'gau22' | 'gsh301' | 'zsu23';
@@ -574,7 +591,7 @@ export interface GunDef {
   muzzle: number;
   /** Dispersion (rad, 1-sigma per axis). */
   dispersion: number;
-  /** Damage per round. */
+  /** Damage per round at muzzle energy (scaled by the round's remaining energy at impact, see gun.ts). */
   damage: number;
   /** Round lifetime / self-destruct (s). */
   life: number;
@@ -588,10 +605,11 @@ export interface GunDef {
 }
 
 export const GUNS: Record<GunId, GunDef> = {
-  // GAU-22/A Equalizer, 25 mm, 4 barrels, 3,300 rpm, 180 rounds (~3.3 s of fire)
-  gau22: { id: 'gau22', rate: 55, muzzle: 1040, dispersion: 0.0032, damage: 7, life: 3, calibre: 0.025, tracerEvery: 4, dragK: 1.8e-4, flak: false },
+  // GAU-22/A Equalizer, 25 mm PGU-47 APEX (armour-piercing HEI), 4 barrels, 3,300 rpm, 180 rounds
+  // (~3.3 s of fire): ~18 damage per hit at ≤ 800 m ⇒ a fighter (100 HP) falls to 5–7 hits
+  gau22: { id: 'gau22', rate: 55, muzzle: 1040, dispersion: 0.0032, damage: 20, life: 3, calibre: 0.025, tracerEvery: 4, dragK: 1.8e-4, flak: false },
   // GSh-30-1, 30 mm, 1,800 rpm
-  gsh301: { id: 'gsh301', rate: 30, muzzle: 860, dispersion: 0.003, damage: 11, life: 3, calibre: 0.03, tracerEvery: 3, dragK: 2.0e-4, flak: false },
+  gsh301: { id: 'gsh301', rate: 30, muzzle: 860, dispersion: 0.003, damage: 12.5, life: 3, calibre: 0.03, tracerEvery: 3, dragK: 2.0e-4, flak: false },
   // ZSU-23-4 Shilka: 4 × 2A7 23 mm, ~3,400 rpm combined; rounds self-destruct at ~5 s
-  zsu23: { id: 'zsu23', rate: 57, muzzle: 970, dispersion: 0.008, damage: 3, life: 3.5, calibre: 0.023, tracerEvery: 3, dragK: 2.2e-4, flak: true },
+  zsu23: { id: 'zsu23', rate: 57, muzzle: 970, dispersion: 0.008, damage: 3.4, life: 3.5, calibre: 0.023, tracerEvery: 3, dragK: 2.2e-4, flak: true },
 };

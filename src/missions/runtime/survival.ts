@@ -6,7 +6,7 @@ import { clamp, mulberry32 } from '../../core/math';
 import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
 import type { AircraftGroupDef } from '../schema';
 import { spawnAirGroup } from './spawner';
-import { aliveCount, type GroupRt, type MissionState } from './state';
+import { aliveCount, drivenOffCount, type GroupRt, type MissionState } from './state';
 import { aircraftHudName } from './names';
 
 export class SurvivalDirector {
@@ -31,7 +31,9 @@ export class SurvivalDirector {
     const t = s.time;
 
     if (this.current) {
-      if (this.current.members.length > 0 && aliveCount(this.current) === 0) {
+      // a wave is cleared when every bandit is dead or driven off (a crippled MiG running home
+      // must not hold the next wave back forever)
+      if (this.current.members.length > 0 && aliveCount(this.current) - drivenOffCount(s, this.current) <= 0) {
         s.waves++;
         this.current = null;
         this.nextAt = t + cfg.interWaveDelay;
@@ -63,7 +65,11 @@ export class SurvivalDirector {
     const p = s.player!;
     this.wave++;
     const n = Math.min(cfg.maxCount, Math.floor(cfg.baseCount + cfg.growth * (this.wave - 1)));
-    const type = cfg.types[Math.floor(this.rng() * cfg.types.length) % cfg.types.length];
+    // modern types join as the waves get sharper: MiG-29 / Su-27 first, Su-35 from wave 4,
+    // Su-57 from wave 7 (a single-type choice is used as is)
+    const pool = cfg.types.length > 1 ? cfg.types.filter((t) => (t !== 'su35' || this.wave >= 4) && (t !== 'su57' || this.wave >= 7)) : cfg.types;
+    const types = pool.length > 0 ? pool : cfg.types;
+    const type = types[Math.floor(this.rng() * types.length) % types.length];
     // spawn ahead-ish of the player (±70°), facing them
     const bearing = Math.atan2(p.velocity.x, -p.velocity.z) + (this.rng() - 0.5) * 2.4;
     const lim = 34_000;

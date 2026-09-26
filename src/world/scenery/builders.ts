@@ -23,6 +23,11 @@ export class LightList {
     this.sb.push(size, blink);
   }
 
+  /** Visit every light: position, linear colour, size (m). */
+  forEach(cb: (x: number, y: number, z: number, r: number, g: number, b: number, size: number, blink: number) => void): void {
+    for (let i = 0; i < this.count; i++) cb(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2], this.col[i * 3], this.col[i * 3 + 1], this.col[i * 3 + 2], this.sb[i * 2], this.sb[i * 2 + 1]);
+  }
+
   build(material: Material): Points | null {
     if (this.count === 0) return null;
     const g = new BufferGeometry();

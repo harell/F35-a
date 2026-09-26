@@ -15,6 +15,7 @@ import {
   DataTexture,
   LinearFilter,
   LinearMipmapLinearFilter,
+  RedFormat,
   RGBAFormat,
   SRGBColorSpace,
   UnsignedByteType,
@@ -25,13 +26,17 @@ import {
 } from 'three';
 import type { CreateEnvironment, EnvironmentApi, FrameContext } from '../core/contracts';
 import { BASE_MAX, finishTerrain, generateTerrain } from './terrain/generate';
-import { TerrainWorkerPool } from './terrain/parallel';
+import { reduceView, TerrainWorkerPool } from './terrain/parallel';
 import { anchorsFor } from './terrain/features';
 import { Heightfield as HeightfieldClass } from './terrain/Heightfield';
 import { HF_EXTENT } from './terrain/types';
 import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
-import { TerrainRenderer } from './terrain/TerrainRenderer';
-import { bakeColorRows, bakeSunVisibility, bakeSurface } from './terrain/bake';
+import { coastUniforms, TerrainRenderer, type CoastMaskInfo } from './terrain/TerrainRenderer';
+import { LightReflections } from './scenery/nightLights';
+import { bakeAucklandCoastMask, WHENUAPAI_CROSS } from './terrain/theaters/auckland';
+import { footprintOf } from './terrain/features';
+import type { SceneryFeature } from '../core/contracts';
+import { bakeColorRows, bakeSunVisibility, bakeSurface, dilateLandColour } from './terrain/bake';
 import { skyPreset } from './sky/presets';
 import { blendAtmosphere, createAtmosphereUniforms } from './sky/atmosphere';
 import { SkySystem } from './sky/SkySystem';
@@ -67,6 +72,12 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads };
   const pool = TerrainWorkerPool.create();
   const workerCount = pool?.size ?? 0;
+  // High-resolution coast mask (Auckland): 15 m signed coast distance over the central 32 km,
+  // baked on the workers alongside the heightfield.
+  const coastN = opts.theater === 'auckland' ? (q.terrainDetail === 0 ? 1024 : 2048) : 0;
+  const coastExtent = 32_000;
+  let coastPromise: Promise<Uint8Array | null> | null = null;
+  if (coastN && pool) coastPromise = pool.bakeCoast(opts.seed, coastN, coastExtent).catch(() => null);
   let hf: Heightfield | null = null;
   if (pool) {
     try {
@@ -108,12 +119,30 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const colorSize = Math.min(1024, n);
   let colorData: Uint8Array | null = null;
   if (pool) {
+    if (coastPromise) await coastPromise;
     try {
       colorData = await pool.bakeColor(hf, opts.theater, opts.seed, features, colorSize, (f) => report(0.62 + f * 0.2, 'Painting terrain'));
     } catch (err) {
       console.warn('[world] colour bake workers failed, falling back to main thread', err);
     }
     pool.dispose();
+  }
+  let coastData: Uint8Array | null = coastPromise ? await coastPromise : null;
+  if (coastN && !coastData) {
+    const cd = new Uint8Array(coastN * coastN);
+    const seed = opts.seed;
+    await runSliced(
+      (function* () {
+        const rows = 256;
+        for (let j = 0; j < coastN; j += rows) {
+          const j1 = Math.min(coastN, j + rows);
+          cd.set(bakeAucklandCoastMask(seed, coastN, coastExtent, j, j1), j * coastN);
+          yield j1 / coastN;
+        }
+      })(),
+      () => undefined,
+    );
+    coastData = cd;
   }
   if (!colorData) {
     const cd = new Uint8Array(colorSize * colorSize * 4);
@@ -131,6 +160,10 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       (f) => report(0.62 + f * 0.2, 'Painting terrain'),
     );
     colorData = cd;
+  }
+  if (opts.theater === 'auckland') {
+    const view = colorSize === n ? hf.data : reduceView(hf, colorSize).data;
+    dilateLandColour(colorData, view, colorSize);
   }
   const bakeMs = performance.now() - t0;
   lap('colour');
@@ -155,9 +188,23 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   colorTex.needsUpdate = true;
   const detail = createDetailTextures();
   detail.detail.anisotropy = detail.normal.anisotropy = Math.min(maxAniso, cfg.anisotropy);
+  let coast: CoastMaskInfo | null = null;
+  if (coastData) {
+    const t = new DataTexture(coastData, coastN, coastN, RedFormat, UnsignedByteType);
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = LinearFilter;
+    t.minFilter = LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.needsUpdate = true;
+    coast = { texture: t, x0: -coastExtent / 2, z0: -coastExtent / 2, size: coastExtent };
+  }
+  const dummyTex = new DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, RGBAFormat, UnsignedByteType);
+  dummyTex.needsUpdate = true;
   const cloudLayer = createCloudLayerTexture();
 
   const atmo = createAtmosphereUniforms(preset, q.drawDistance);
+  // Auckland's light dome at night (centre of the built-up area, ~12 km radius)
+  if (opts.theater === 'auckland' && preset.lights > 0.01) atmo.uCityGlow.value.set(1500, 2500, 12_000, 0.035 * preset.lights * (opts.weather === 'overcast' ? 1.8 : 1));
   const cloudCover = opts.weather === 'overcast' ? 0.75 : opts.weather === 'scattered' ? 0.42 : 0.12;
   const sky = new SkySystem({ scene, preset, atmo, quality: q, cloudLayer, cloudCover });
 
@@ -174,6 +221,10 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     patchQuads: cfg.patchQuads,
     drawDistance: q.drawDistance,
     lodRange: cfg.lodRange,
+    coast,
+    dummy: dummyTex,
+    noFields: airfieldRects(features, opts.theater),
+    seaShallow: preset.waterShallow,
   });
   scene.add(terrain.mesh);
 
@@ -187,6 +238,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     seaIce: preset.seaIce,
     shallowDepth: preset.shallowDepth,
     radius: q.drawDistance * 1.2,
+    coast,
+    dummy: dummyTex,
   });
   scene.add(water.mesh);
 
@@ -211,6 +264,11 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     lights: preset.lights,
   });
   scene.add(scenery.group);
+  let reflections: LightReflections | null = null;
+  if (scenery.reflectionSources.length) {
+    reflections = new LightReflections(atmo, scenery.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));
+    scene.add(reflections.mesh);
+  }
 
   lap('scenery');
   timings.total = Math.round(performance.now() - t0);
@@ -285,6 +343,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       terrain.dispose();
       water.dispose();
       scenery.dispose();
+      reflections?.dispose();
       clouds.dispose();
       cloudAtlas.dispose();
       sky.dispose();
@@ -293,10 +352,27 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       detail.detail.dispose();
       detail.normal.dispose();
       cloudLayer.dispose();
+      coast?.texture.dispose();
+      dummyTex.dispose();
     },
   };
   return env;
 };
+
+/** Airfield rectangles (runway strips + aprons) where the terrain shader draws no paddocks. */
+function airfieldRects(features: SceneryFeature[], theater: string): { x: number; z: number; heading: number; halfW: number; halfL: number }[] {
+  const out: { x: number; z: number; heading: number; halfW: number; halfL: number }[] = [];
+  for (const f of features) {
+    if (f.type !== 'airbase') continue;
+    const fp = footprintOf(f);
+    out.push({ x: fp.x, z: fp.z, heading: fp.heading, halfW: fp.halfW * 0.8, halfL: fp.halfL });
+  }
+  if (theater === 'auckland') {
+    const X = WHENUAPAI_CROSS;
+    out.push({ x: X.x, z: X.z, heading: X.heading, halfW: 150, halfL: X.length / 2 + 120 });
+  }
+  return out.slice(0, 6);
+}
 
 export type { EnvironmentOptions };
 export type { WebGLRenderer };

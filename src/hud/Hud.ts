@@ -3,9 +3,14 @@
  *
  * The real F-35 has no physical HUD: everything is on the helmet-mounted display. In the cockpit and
  * hud views this draws the full HMD (conformal flight path marker, pitch ladder, targets, weapon cues,
- * threats); external views get a compact "external HUD" with a radar inset; the tactical map only gets a
- * minimal label/objective overlay. Event-driven feeds (messages, radio subtitles, kill feed, hit markers,
- * G / hit vignettes) live in HudState.
+ * threats); external views get a compact "external HUD" with a radar inset; the tactical (MAP) view is a
+ * full 2D tactical map. Event-driven feeds (messages, radio subtitles, kill feed, hit markers, G / hit
+ * vignettes, missile-defeat tracking) live in HudState.
+ *
+ * Text is managed in fixed zones (see hmd/layout.ts): warning band top-centre above the FPM, one centre
+ * message slot below it, kill feed top-right, objectives / hint top-left, paged radio subtitles between
+ * the touch clusters (top-centre in the cockpit view). Symbols that must never be covered (FPM, target
+ * box, pipper, the jet) register in an occupancy pass first and every text placer dodges them.
  *
  * Draw modules live in ./hmd/* and share one HudFrame object (no per-frame allocation).
  */
@@ -13,26 +18,43 @@ import { Quaternion, Vector3 } from 'three';
 import type { CreateHud, FrameContext, HudApi } from '../core/contracts';
 import type { WeaponId } from '../core/types';
 import { loadHudFont } from './font';
-import { drawExternalBlock, drawInset, drawMissileCam, drawTacticalOverlay } from './hmd/external';
+import { drawExternalBlock, drawInset, drawMissileCam } from './hmd/external';
 import { WARNING_INFO, WEAPON_BREVITY, killText } from './hmd/format';
+import { classifyHudMessage } from './hmd/feeds';
 import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, drawSpeedColumn, drawWaterline } from './hmd/flight';
 import { HudState, makeFrame, type HudMode } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
-import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio } from './hmd/overlays';
+import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
+import { drawPcdZoom } from './hmd/pcdOverlay';
 import { Pen } from './hmd/pen';
 import { PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
-import { drawContacts, drawDesignated, drawFriendlies, drawGroundAndSams, drawOwnMissiles, drawWaypoint, waypointBearing } from './hmd/targets';
-import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarnings } from './hmd/threats';
-import { drawAim9x, drawAirToGround, drawBrevity, drawDlz, drawGun, drawShootCue, drawWeaponBlock } from './hmd/weapons';
+import { TacMapState, drawTacticalMap } from './hmd/tacmap';
+import {
+  drawContacts,
+  drawDesignated,
+  drawFriendlies,
+  drawGroundAndSams,
+  drawLockCone,
+  drawOwnMissiles,
+  drawWaypoint,
+  lockCommandedOf,
+  waypointBearing,
+} from './hmd/targets';
+import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
+import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
+import { pcdZoom } from './cockpit/zoom';
 
 const _q = new Quaternion();
 const _fwd = new Vector3();
 /** Head pitch (rad) below which the HMD declutters to keep the PCD readable (cockpit view). */
 const DECLUTTER_START = 0.2;
 const DECLUTTER_SPAN = 0.14;
+const WARNING_LABELS = new Set(Object.values(WARNING_INFO).map((w) => w.label));
+/** Tap radius on the tactical map (smaller than the HMD's so empty-map taps zoom). */
+const TAC_PICK_RADIUS = 26;
 
 export const createHud: CreateHud = (canvas, events) => {
   const g2 = canvas.getContext('2d', { alpha: true });
@@ -44,6 +66,8 @@ export const createHud: CreateHud = (canvas, events) => {
   const L = makeLayout();
   const f = makeFrame(pen, proj, picks, st, L, paletteFor('green'));
   const vignettes = new Vignettes();
+  const tac = new TacMapState();
+  const layoutOpts: { external: boolean; leftHanded: boolean; headPitch: number } = { external: false, leftHanded: false, headPitch: 0 };
 
   let visible = true;
   let W = Math.max(1, canvas.clientWidth || 1);
@@ -52,6 +76,18 @@ export const createHud: CreateHud = (canvas, events) => {
   let dpr = 1;
   let dirty = true;
   let playerTeam: string | null = null;
+  let lastMode: HudMode = 'hmd';
+  // threat tracker lookups (bound once: no per-frame closures)
+  let curWorld: FrameContext['world'] | null = null;
+  let curPlayer: FrameContext['player'] = null;
+  const missileAlive = (id: number) => {
+    const m = curWorld?.getEntity(id);
+    return !!m && m.alive;
+  };
+  const missileDist = (id: number) => {
+    const m = curWorld?.getEntity(id);
+    return m && curPlayer ? m.position.distanceTo(curPlayer.position) : Infinity;
+  };
 
   void loadHudFont(() => {
     pen.fontsChanged();
@@ -60,7 +96,9 @@ export const createHud: CreateHud = (canvas, events) => {
   /* ───────────── events → transient state ───────────── */
   const isPlayer = (id: number | null | undefined) => id != null && id === st.playerId;
   const offs = [
-    events.on('hud:message', ({ text, duration, tone }) => st.messages.push(text, tone ?? 'info', duration ?? 2.5)),
+    events.on('hud:message', ({ text, duration, tone }) => {
+      if (st.inbox.length < 16) st.inbox.push({ text, tone: tone ?? 'info', duration: duration ?? 2.5 });
+    }),
     events.on('radio', ({ from, text, priority, team }) => st.radio.push(from, text, priority ?? 0, team)),
     events.on('lock', ({ ownerId, targetId, locked }) => {
       if (isPlayer(ownerId) && locked) {
@@ -100,9 +138,12 @@ export const createHud: CreateHud = (canvas, events) => {
       if (!isPlayer(attackerId) || target.team === playerTeam) return;
       if (target.kind === 'aircraft' || target.kind === 'sam' || target.kind === 'ground') st.addHit(target.id, false);
     }),
+    events.on('munition:end', ({ missile, targetId, reason }) => {
+      st.threats.onMunitionEnd(missile.id, targetId, reason, st.playerId);
+    }),
     events.on('player:hit', ({ amount }) => hitFlash(st.g, amount)),
     events.on('warning', ({ id, active }) => {
-      if (active && WARNING_INFO[id] && WARNING_INFO[id].level >= 1) st.warnAge = 0;
+      if (active && id !== 'missile' && id !== 'spike') st.warnAge = 0;
     }),
     events.on('munition:launch', ({ missile, shooter }) => {
       if (!isPlayer(shooter.id)) return;
@@ -110,8 +151,9 @@ export const createHud: CreateHud = (canvas, events) => {
       st.brevity = WEAPON_BREVITY[w] ?? '';
       st.brevityAge = 0;
     }),
-    events.on('objective', () => {
-      st.objShow = 7;
+    events.on('objective', ({ id }) => {
+      st.objShow = 6;
+      st.objChangedId = id;
     }),
   ];
 
@@ -136,6 +178,34 @@ export const createHud: CreateHud = (canvas, events) => {
     return 'external';
   }
 
+  /** Route queued 'hud:message' events to their zones (the mission title is known now). */
+  function routeInbox(ctx: FrameContext): void {
+    if (st.inbox.length === 0) return;
+    const title = ctx.mission?.def?.title ?? null;
+    for (const m of st.inbox) {
+      // a message repeating a warning-band item ("ENGINE FIRE", "BINGO") is already on screen there
+      const r = WARNING_LABELS.has(m.text.trim()) ? 'drop' : classifyHudMessage(m.text, title);
+      if (r === 'kill') st.kills.merge(m.text, m.tone);
+      else if (r === 'title') {
+        st.title = m.text;
+        st.titleAge = 0;
+        st.titleDur = Math.max(2, Math.min(3.5, m.duration));
+      } else if (r === 'centre') st.messages.push(m.text, m.tone, m.duration);
+    }
+    st.inbox.length = 0;
+  }
+
+  /** External views: the jet itself is protected from text (chase / orbit / flyby / target). */
+  function protectJet(ctx: FrameContext): void {
+    const p = ctx.player;
+    if (!p || ctx.viewMode === 'missile') return;
+    if (!proj.point(p.position, f.sp) || !f.sp.onScreen) return;
+    const d = Math.max(1, f.sp.depth);
+    const hw = Math.max(24 * L.u, (7.5 / d) * proj.pxPerRad);
+    const hh = Math.max(14 * L.u, (3.5 / d) * proj.pxPerRad);
+    f.occ.add(f.sp.x - hw, f.sp.y - hh * 1.6, f.sp.x + hw, f.sp.y + hh, 1);
+  }
+
   const hud: HudApi = {
     update(ctx) {
       // low quality: cap the overlay resolution
@@ -153,6 +223,7 @@ export const createHud: CreateHud = (canvas, events) => {
           st.reset();
           st.playerId = null;
         }
+        tac.active = false;
         picks.begin();
         return;
       }
@@ -162,7 +233,14 @@ export const createHud: CreateHud = (canvas, events) => {
         st.playerId = p.id;
       }
       playerTeam = p?.team ?? null;
+      routeInbox(ctx);
+      // missile defeat detection runs in every view (and while the HUD is hidden)
+      curWorld = ctx.world;
+      curPlayer = p;
+      if (p && !ctx.paused) st.threats.update(p.incoming, missileAlive, ctx.dt, missileDist);
       const mode = modeOf(ctx);
+      lastMode = mode;
+      if (mode !== 'tactical') tac.active = false;
       if (!visible && mode !== 'tactical') {
         picks.begin();
         return;
@@ -175,20 +253,34 @@ export const createHud: CreateHud = (canvas, events) => {
       pen.baseTransform();
       proj.update(ctx.camera, W, H);
       const cockpit = ctx.viewMode === 'cockpit';
-      computeLayout(L, W, H, ctx.screen.safe, proj.tanHalfV, cockpit);
+      // head pitch relative to the airframe (cockpit view): moves the glare-shield line, drives declutter
+      let headPitch = 0;
+      if (cockpit && p) {
+        _q.copy(p.quaternion).invert();
+        _fwd.copy(proj.forward).applyQuaternion(_q);
+        headPitch = Math.asin(Math.max(-1, Math.min(1, _fwd.y)));
+      }
+      layoutOpts.external = mode !== 'hmd';
+      layoutOpts.leftHanded = !!ctx.settings.leftHanded;
+      layoutOpts.headPitch = headPitch;
+      computeLayout(L, W, H, ctx.screen.safe, proj.tanHalfV, cockpit, layoutOpts);
       pen.fontScale = L.u;
       picks.begin();
+      f.occ.clear();
       dirty = true;
 
       f.ctx = ctx;
       f.world = ctx.world;
       f.mode = mode;
       f.cockpit = cockpit;
+      f.declutter = 1;
 
       if (!p || !p.alive) {
         // player down: keep the feeds (mission messages, radio, kills)
-        drawMessages(f, L.msgY);
+        reserveMessage(f, L.msgY);
+        drawMessages(f);
         drawKillFeed(f, L.killX, L.killY);
+        reserveRadio(f);
         drawRadio(f);
         return;
       }
@@ -197,6 +289,7 @@ export const createHud: CreateHud = (canvas, events) => {
       const t = ctx.world.getEntity(tid);
       f.target = t && t.alive && t.team !== p.team && t.kind !== 'missile' && t.kind !== 'decoy' ? t : null;
       f.locked = !!f.target && p.radar.lockedId === f.target.id;
+      f.lockCommanded = !!f.target && !f.locked && lockCommandedOf(p);
       try {
         f.zone = ctx.world.combat.launchZone(p, ctx.world);
       } catch {
@@ -204,9 +297,15 @@ export const createHud: CreateHud = (canvas, events) => {
       }
 
       if (mode === 'tactical') {
-        drawTacticalOverlay(f);
-        drawObjectives(f, L.objX, L.objY + 16 * L.u, true);
-        drawMessages(f, L.msgY);
+        reserveRadio(f);
+        const legendBottom = drawTacticalMap(f, tac);
+        drawObjectives(f, L.colX, legendBottom + 10 * L.u, true, Math.min(L.colW, 200 * L.u), 7);
+        const critical = drawWarningBand(f);
+        const cur = st.messages.current;
+        if (!critical || (cur && cur.priority >= 4)) {
+          reserveMessage(f, L.msgY);
+          drawMessages(f);
+        }
         drawKillFeed(f, L.killX, L.killY);
         drawRadio(f);
         return;
@@ -218,64 +317,94 @@ export const createHud: CreateHud = (canvas, events) => {
 
       // looking down into the cockpit: fade the flight/target symbology so the PCD stays readable
       let declutter = 1;
-      if (cockpit) {
-        _q.copy(p.quaternion).invert();
-        _fwd.copy(proj.forward).applyQuaternion(_q);
-        const headPitch = Math.asin(Math.max(-1, Math.min(1, _fwd.y)));
-        declutter = Math.max(0.12, Math.min(1, 1 - (-headPitch - DECLUTTER_START) / DECLUTTER_SPAN));
-      }
+      if (cockpit) declutter = Math.max(0, Math.min(1, 1 - (-headPitch - DECLUTTER_START) / DECLUTTER_SPAN));
+      f.declutter = declutter;
       g2.globalAlpha = declutter;
 
+      // conformal symbology never spills onto the cockpit panel / PCD (clipped at the glare-shield line)
+      if (cockpit) {
+        g2.save();
+        g2.beginPath();
+        g2.rect(0, 0, W, Math.max(0, L.cockpitTop - 2));
+        g2.clip();
+        pen.reset();
+      }
+      // 1) protected symbols (they register in the occupancy pass): FPM, pipper / seeker, target box
       drawFpm(f);
+      if (hmd) {
+        drawAim9x(f);
+        drawGun(f);
+      } else protectJet(ctx);
+      drawDesignated(f);
+      g2.globalAlpha = 1;
+      // 2) reserve the centre cue + message slots (they dodge the protected symbols only)
+      const zoomed = cockpit && pcdZoom.open;
+      const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
+      if (!zoomed) {
+        const below = planCues(f);
+        const cur = st.messages.current;
+        if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));
+        else clearMessagePlan();
+      } else clearMessagePlan();
+      reserveWarningBand(f);
+      reserveRadio(f);
+      // 3) everything else: secondary labels make way for the reserved text
+      g2.globalAlpha = declutter;
       if (hmd) {
         drawLadder(f);
         drawBankScale(f);
         drawWaterline(f);
+        drawLockCone(f);
       }
-      drawWaypoint(f);
+      g2.globalAlpha = 1;
+      drawIncoming(f);
+      g2.globalAlpha = declutter;
       drawFriendlies(f);
       drawGroundAndSams(f);
       drawContacts(f);
+      drawWaypoint(f);
       drawOwnMissiles(f);
-      drawDesignated(f);
-      if (hmd) {
-        drawAim9x(f);
-        drawGun(f);
-      }
+      if (hmd) drawAirToGround(f);
       g2.globalAlpha = 1;
       drawGcas(f);
-      const missileBanner = drawIncoming(f);
       drawRwrEdge(f);
+      if (cockpit) {
+        g2.restore();
+        pen.reset();
+        pen.baseTransform();
+        g2.globalAlpha = 1;
+      }
 
-      let leftY: number;
+      let colY: number;
       if (hmd) {
         g2.globalAlpha = declutter;
         drawHeadingTape(f, waypointBearing(f));
         drawSpeedColumn(f);
         drawAltColumn(f);
         drawDlz(f, L.dlzX, L.dlzTop, L.dlzBottom);
-        drawWeaponBlock(f, L.wpnX, L.wpnY);
+        // weapon block: never runs down into the throttle cluster
+        const wy = Math.min(L.wpnY, L.ctlTop - 6 * L.u - weaponBlockLines(f) * L.line);
+        drawWeaponBlock(f, L.wpnX, wy);
         g2.globalAlpha = 1;
-        leftY = drawObjectives(f, L.objX, L.objY);
-        drawHint(f, L.hintY);
+        colY = L.colY;
       } else {
-        leftY = drawExternalBlock(f) + 6 * L.u;
-        leftY = drawObjectives(f, L.extX, leftY);
+        colY = drawExternalBlock(f) + 8 * L.u;
         drawInset(f);
         if (ctx.viewMode === 'missile') drawMissileCam(f);
-        else drawHint(f, L.H * 0.2);
       }
-      drawDamage(f, hmd ? L.objX : L.extX, leftY + 8 * L.u);
+      // top-left column: objectives (briefly), damage, mission hint
+      colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
+      colY = drawDamage(f, L.colX, colY);
+      drawHint(f, L.colX, colY + 2 * L.u, L.colW, L.colBottom);
 
-      // centre stack
-      let y = L.stackY;
-      y = drawShootCue(f, y);
-      if (hmd) y = drawAirToGround(f, y);
-      y = drawBrevity(f, y);
-      drawWarnings(f, y);
+      // PCD zoom overlay (cockpit): above the symbology, below the warning band and radio
+      if (zoomed) drawPcdZoom(f);
 
-      // PULL UP owns the centre of the screen: hold other centre messages back
-      if (!p.warnings.has('pull_up')) drawMessages(f, L.msgY + (missileBanner ? 30 * L.u : 0));
+      drawWarningBand(f);
+      if (!zoomed) {
+        drawCues(f);
+        drawMessages(f);
+      }
       drawKillFeed(f, hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u, L.killY);
       drawHitMarkers(f);
       drawRadio(f);
@@ -299,6 +428,14 @@ export const createHud: CreateHud = (canvas, events) => {
     },
 
     pick(x, y) {
+      if (lastMode === 'tactical') {
+        // tap a symbol = designate it; tap the map = next range (10 / 20 / 40 km)
+        const id = picks.pick(x, y, TAC_PICK_RADIUS);
+        if (id == null) tac.cycle();
+        return id;
+      }
+      // the PCD zoom overlay swallows taps (the cockpit handles them first)
+      if (pcdZoom.open) return null;
       return picks.pick(x, y);
     },
 

@@ -3,17 +3,22 @@
  * dynamic-inversion CLAW:
  *
  *  PITCH  stick → commanded normal load (g). Neutral stick = 1 g corrected for flight-path
- *         angle and bank (assisted modes latch and hold the flight-path angle). The g command is
+ *         angle and bank (ControlLaw.pathHold latches and holds the flight-path angle). The g command is
  *         inverted through the lift curve to a required AoA, which the pitch rate loop tracks:
  *              q_cmd = (g/V)(n_achievable − n_gravity) + Kα (α_req − α)
  *         α_req is clamped by the AoA limiter, n by the g limiter. At low dynamic pressure the
  *         stick blends into a pitch-rate command (C* style) — still AoA limited.
- *  ROLL   stick → stability-axis roll-rate command, scaled down at low q̄ / high AoA / stores.
+ *  ROLL   stick → stability-axis roll-rate command, scheduled with equivalent airspeed (steady
+ *         roll rate ∝ V below ~0.85 × corner speed, peak around corner, high-q̄ limit above
+ *         ~440 KEAS), load factor (rolling-pull limit), AoA and external stores — see rollRateLimit.
  *  YAW    automatic turn coordination (β → 0, gravity feed-forward), rudder = sideslip command.
  *
- *  Unassisted (difficulty.flightAssist = false): no flight-path hold, 35 % more g / much more
- *  AoA available, body-axis roll, weak yaw damper — over-pulling past the stall AoA departs the
- *  jet (wing drop + nose slice), recoverable by unloading.
+ *  The g / AoA limiters ("carefree handling") are ALWAYS on — like the real F-35 CLAW — on every
+ *  difficulty. `ControlLaw.pathHold` (neutral-stick flight-path latch) is the only convenience
+ *  the Ace difficulty removes; Ace also gets a rougher buffet at the AoA limiter and G-LOC
+ *  (see ./gloc.ts). The departure model (wing drop + nose slice past the stall AoA) stays for
+ *  transients the limiter cannot catch (damaged hydraulics, tail slides) but a full stick
+ *  deflection alone can no longer depart the jet.
  *
  * Body rates follow the commands through first-order lags (actuators + airframe inertia) whose
  * time constants grow as authority (q̄, hydraulics) drops.
@@ -36,16 +41,23 @@ export interface StickInput {
   nzOverride: number | null;
 }
 
+/** Per-aircraft control-law options (the g/AoA limiters are always on). */
+export interface ControlLaw {
+  /** Neutral stick latches and holds the flight-path angle (off for the player on Ace). */
+  pathHold: boolean;
+  /** Buffet severity at high AoA (1 = normal; Ace 1.6: rougher ride, less precise tracking). */
+  buffetGain: number;
+}
+
 /**
  * Neutral-stick normal-load command (g).
- *  - assisted, near-level flight: bank-compensated flight-path hold  n = cosγ / cosφ
- *  - assisted, steep climbs/dives (|γ| 30°→60°): blends to a 1 g-per-cosφ law, so a released
+ *  - near-level flight: bank-compensated flight-path hold  n = cosγ / cosφ
+ *  - steep climbs/dives (|γ| 30°→60°): blends to a 1 g-per-cosφ law, so a released
  *    stick gently rounds out dives instead of holding them
  *  - beyond ~60–100° of bank the compensation fades to a plain 1 g (F-16 / F-35 style)
- *  - unassisted: plain 1 g
+ * (the flight-path latch on top of it is ControlLaw.pathHold, see updateControlLaws)
  */
-export function neutralStickG(gamma: number, cosBank: number, bank: number, assisted: boolean): number {
-  if (!assisted) return 1;
+export function neutralStickG(gamma: number, cosBank: number, bank: number): number {
   const cb = Math.max(cosBank, 0.5);
   const steep = sstep(Math.abs(gamma), 30 * DEG, 60 * DEG);
   const comp = (Math.cos(gamma) * (1 - steep) + steep) / cb;
@@ -53,37 +65,47 @@ export function neutralStickG(gamma: number, cosBank: number, bank: number, assi
   return comp + (1 - comp) * w;
 }
 
-/** Structural / FBW g limits for an aircraft (stores & hydraulics). Written into `out`. */
-export function gLimits(
-  perf: AircraftPerf,
-  heavyExternal: number,
-  hydraulics: number,
-  assisted: boolean,
-  out: { max: number; min: number },
-): { max: number; min: number } {
+/**
+ * FBW g limits for an aircraft (stores & hydraulics). Written into `out`. The limiter is part of
+ * the jet's control laws and is active on every difficulty.
+ */
+export function gLimits(perf: AircraftPerf, heavyExternal: number, hydraulics: number, out: { max: number; min: number }): { max: number; min: number } {
   const storesF = heavyExternal > 0 ? Math.max(0.75, 1 - 0.045 * heavyExternal) : 1;
-  let nMax = perf.maxG * storesF;
-  let nMin = perf.minG;
-  if (!assisted) {
-    nMax *= 1.35;
-    nMin *= 1.35;
-  }
+  const nMax = perf.maxG * storesF;
+  const nMin = perf.minG;
   const hyd = Math.min(1, hydraulics);
   out.max = 1 + (nMax - 1) * (1 - 0.5 * hyd);
   out.min = 1 + (nMin - 1) * (1 - 0.5 * hyd);
   return out;
 }
 
-/** AoA limits for the current control law (rad). */
-export function alphaLimits(perf: AircraftPerf, assisted: boolean, out: { max: number; min: number }): { max: number; min: number } {
-  if (assisted) {
-    out.max = Math.min(perf.aoaLimitAssisted, perf.alphaStall - 1.5 * DEG);
-    out.min = -Math.min(0.45 * perf.aoaLimitAssisted, perf.alphaStallNeg - 1 * DEG);
-  } else {
-    out.max = perf.aoaLimitUnassisted;
-    out.min = -Math.max(0.6 * perf.aoaLimitUnassisted, perf.alphaStallNeg + 5 * DEG);
-  }
+/** FBW AoA limiter (rad): always a margin below the stall AoA, so full stick never departs the jet. */
+export function alphaLimits(perf: AircraftPerf, out: { max: number; min: number }): { max: number; min: number } {
+  out.max = Math.min(perf.aoaLimit, perf.alphaStall - 1.5 * DEG);
+  out.min = -Math.min(0.45 * perf.aoaLimit, perf.alphaStallNeg - 1 * DEG);
   return out;
+}
+
+/**
+ * Roll-rate limit of the FCS (rad/s) for the current flight condition:
+ *  - equivalent airspeed: a fixed aileron/flaperon deflection gives a steady roll rate ∝ V, so
+ *    below ~0.85 × corner speed the available rate falls linearly (≈ 45 % at 150 KEAS for the
+ *    F-35A); full rate around corner speed; above ~1.1 × corner the FCS trims it back (high-q̄
+ *    structural / roll-coupling limit, −25 % by ~1.5 × corner)
+ *  - load factor: rolling-pull limit, −30 % at 9 g
+ *  - AoA: stability-axis roll at high AoA is slow, −55 % at 32°
+ *  - external stores (roll inertia, pylon loads): −4 % per station, −4.5 % per heavy bomb
+ * `hydF` is the hydraulic-damage authority factor (1 = healthy).
+ */
+export function rollRateLimit(perf: AircraftPerf, qbar: number, alpha: number, nz: number, extStations: number, heavyExternal: number, hydF = 1): number {
+  const eas = Math.sqrt((2 * Math.max(0, qbar)) / 1.225);
+  const vFull = 0.85 * perf.cornerSpeed;
+  const low = Math.min(1, Math.max(perf.tvc ? 0.3 : 0.15, eas / vFull));
+  const high = 1 - 0.25 * sstep(eas, 1.1 * perf.cornerSpeed, 1.5 * perf.cornerSpeed);
+  const gF = 1 - 0.3 * sstep(Math.abs(nz), 4, 9);
+  const aFade = 1 - 0.55 * sstep(Math.abs(alpha), 12 * DEG, 32 * DEG);
+  const stores = Math.max(0.6, 1 - 0.04 * extStations - 0.045 * heavyExternal);
+  return perf.rollRateMax * low * high * gF * aFade * stores * hydF;
 }
 
 function wrapPi(a: number): number {
@@ -99,11 +121,20 @@ function pitchRateFor(perf: AircraftPerf, ad: AirData, aTarget: number, kA: numb
   return (G / ad.Vc) * (nAch - ad.liftUp) + kA * wrapPi(aTarget - ad.alpha);
 }
 
-/** Dynamic inversion: pitch rate command for a normal-load command `nz`. */
-function pitchRateForG(perf: AircraftPerf, ad: AirData, nz: number, aMax: number, aMin: number, kA: number): number {
+/**
+ * Dynamic inversion: pitch rate command for a normal-load command `nz`. When the AoA limiter is
+ * the active constraint the α error is taken on α predicted one pitch time-constant ahead
+ * (α + α̇·τ): the limiter captures its AoA without overshoot or bobbing ("crisp" at full stick).
+ */
+function pitchRateForG(perf: AircraftPerf, ad: AirData, nz: number, aMax: number, aMin: number, kA: number, alphaDotLead: number): number {
   const qS = Math.max(ad.qS, 1);
   const clReq = (nz * ad.mass * G - ad.thrust * Math.sin(ad.alpha)) / qS;
   const aReq = alphaForLift(perf, clReq, ad.mach, aMax, aMin);
+  if (alphaDotLead !== 0 && (aReq >= aMax - 1e-4 || aReq <= aMin + 1e-4)) {
+    const W = ad.mass * G;
+    const nAch = (ad.qS * liftCoefficient(perf, aReq, ad.mach) + ad.thrust * Math.sin(aReq)) / W;
+    return (G / ad.Vc) * (nAch - ad.liftUp) + kA * wrapPi(aReq - ad.alpha - alphaDotLead);
+  }
   return pitchRateFor(perf, ad, aReq, kA);
 }
 
@@ -119,7 +150,7 @@ export function updateControlLaws(
   st: AircraftSimState,
   ad: AirData,
   h: number,
-  assisted: boolean,
+  law: ControlLaw,
   input: StickInput,
 ): void {
   const perf = st.perf;
@@ -135,9 +166,9 @@ export function updateControlLaws(
   const tauR = Math.min(2, perf.yawTau / auth);
 
   /* ───────── PITCH ───────── */
-  const lim = gLimits(perf, ad.heavyExternal, hyd, assisted, _gl);
-  let n0 = neutralStickG(ad.gamma, ad.cosBankW, ad.bankW, assisted);
-  if (assisted && input.nzOverride === null) {
+  const lim = gLimits(perf, ad.heavyExternal, hyd, _gl);
+  let n0 = neutralStickG(ad.gamma, ad.cosBankW, ad.bankW);
+  if (law.pathHold && input.nzOverride === null) {
     // Flight-path-angle hold (near-level flight only): latch γ shortly after the stick
     // returns to neutral; re-latch if the path has been pushed far from the reference.
     if (Math.abs(sp) < 0.05 && Math.abs(ad.bankW) < 65 * DEG && Math.abs(ad.gamma) < 30 * DEG) st.neutralTime += h;
@@ -165,21 +196,23 @@ export function updateControlLaws(
   const maxStep = (dn > 0 ? 14 : 20) * h;
   st.nzCmd += dn > maxStep ? maxStep : dn < -maxStep ? -maxStep : dn;
 
-  const al = alphaLimits(perf, assisted, _al);
+  const al = alphaLimits(perf, _al);
   const kA = Math.min(6, 0.6 / tauQ);
-  let qCmd = pitchRateForG(perf, ad, st.nzCmd, al.max, al.min, kA);
+  // α̇ ≈ body pitch rate − flight-path rotation rate at the current α (limiter lead term)
+  const qss = pitchRateFor(perf, ad, ad.alpha, 0);
+  const alphaDotLead = (rates.y - qss) * tauQ;
+  let qCmd = pitchRateForG(perf, ad, st.nzCmd, al.max, al.min, kA, alphaDotLead);
 
   // C*-style blend: at low q̄ the stick becomes a pitch-rate command (still AoA limited).
   const wG = sstep(ad.qbar, 3500, 10_000);
   if (wG < 1 && input.nzOverride === null) {
     // Neutral stick: flight-path hold (DI at n0). Deflected stick: pitch-rate command on top of
     // the current flight-path rotation (so α changes at the commanded rate).
-    const hold = pitchRateForG(perf, ad, n0, al.max, al.min, kA);
-    const qss = pitchRateFor(perf, ad, ad.alpha, 0);
+    const hold = pitchRateForG(perf, ad, n0, al.max, al.min, kA, alphaDotLead);
     const w = Math.min(1, Math.abs(sp) * 3);
     let qR = hold * (1 - w) + (qss + sp * perf.pitchRateMax) * w;
-    const qHi = pitchRateFor(perf, ad, al.max, kA);
-    const qLo = pitchRateFor(perf, ad, al.min, kA);
+    const qHi = pitchRateFor(perf, ad, al.max, kA) - kA * alphaDotLead;
+    const qLo = pitchRateFor(perf, ad, al.min, kA) - kA * alphaDotLead;
     qR = qR > qHi ? qHi : qR < qLo ? qLo : qR;
     qCmd = qR + (qCmd - qR) * wG;
   }
@@ -188,27 +221,17 @@ export function updateControlLaws(
 
   /* ───────── ROLL / YAW ───────── */
   const rollAuth = Math.min(1, Math.max(perf.tvc ? 0.3 : 0.15, ad.qbar / (perf.qFull * 1.1)));
-  const aAbs = Math.abs(ad.alpha);
-  const aFade = 1 - 0.55 * sstep(aAbs, 12 * DEG, 32 * DEG);
-  const storeRoll = Math.max(0.75, 1 - 0.04 * ad.extStations);
-  const highQ = ad.qbar > 55_000 ? Math.max(0.75, 1 - (ad.qbar - 55_000) / 100_000) : 1;
-  const pMax = perf.rollRateMax * rollAuth * aFade * storeRoll * highQ * hydF;
+  const pMax = rollRateLimit(perf, ad.qbar, ad.alpha, st.nzCmd, ad.extStations, ad.heavyExternal, hydF);
   const ps = sr * pMax;
   const cosA = Math.cos(ad.alpha);
   const sinA = Math.sin(ad.alpha);
   const cosAc = cosA > 0.3 ? cosA : 0.3;
   const gTurn = ad.gRight / (ad.Vc * cosAc); // yaw rate that cancels gravity-induced sideslip
   const kB = 3 * Math.max(auth, 0.2);
-  let pCmd: number;
-  let rCmd: number;
-  if (assisted) {
-    pCmd = ps * cosA; // roll about the velocity vector
-    const betaCmd = -sy * 8 * DEG * (0.5 + 0.5 * rollAuth);
-    rCmd = ps * sinA + gTurn + kB * (ad.beta - betaCmd);
-  } else {
-    pCmd = ps; // body-axis roll: rolling at high AoA creates adverse sideslip
-    rCmd = 0.5 * gTurn + 0.5 * kB * ad.beta + sy * perf.yawRateMax * rollAuth;
-  }
+  // stability-axis roll (about the velocity vector) with automatic turn coordination
+  let pCmd = ps * cosA;
+  const betaCmd = -sy * 8 * DEG * (0.5 + 0.5 * rollAuth);
+  let rCmd = ps * sinA + gTurn + kB * (ad.beta - betaCmd);
   const rLimit = perf.yawRateMax + Math.abs(ps * sinA) + Math.abs(gTurn);
   rCmd = rCmd > rLimit ? rLimit : rCmd < -rLimit ? -rLimit : rCmd;
 
@@ -237,17 +260,22 @@ export function updateControlLaws(
   }
 
   /* ───────── BUFFET ───────── */
+  // Airframe buffet (felt through the camera / haptics via st.buffet) from high AoA, departure and
+  // transonic high-g. Its effect on the body rates is small — a light wing rock — so the limiter
+  // stays crisp; Ace (buffetGain 1.6) gets a rougher, less precise ride near the limit.
+  const aAbs = Math.abs(ad.alpha);
   const transonic = ad.mach > 0.92 && ad.mach < 1.05 && st.nzCmd > 4 ? 0.15 : 0;
-  const buf = 0.35 * sstep(aAbs, 0.7 * perf.alphaStall, perf.alphaStall) + 0.65 * D + transonic;
+  const buf = (0.35 * sstep(aAbs, 0.7 * perf.alphaStall, perf.alphaStall) + transonic) * law.buffetGain + 0.65 * D;
   st.buffet = buf > 1 ? 1 : buf;
   if (buf > 0.01) {
     const k = Math.min(1, 25 * h);
     st.noiseP += (st.rng() * 2 - 1 - st.noiseP) * k;
     st.noiseQ += (st.rng() * 2 - 1 - st.noiseQ) * k;
     st.noiseR += (st.rng() * 2 - 1 - st.noiseR) * k;
-    pCmd += st.noiseP * buf * 0.35;
-    qCmd += st.noiseQ * buf * 0.12;
-    rCmd += st.noiseR * buf * 0.1;
+    const rock = D > 0.05 ? 1 : law.buffetGain > 1 ? 0.6 : 0.35;
+    pCmd += st.noiseP * buf * 0.35 * rock;
+    qCmd += st.noiseQ * buf * 0.12 * rock;
+    rCmd += st.noiseR * buf * 0.1 * rock;
   }
 
   /* ───────── RATE RESPONSE (first-order lags) ───────── */

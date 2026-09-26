@@ -25,3 +25,17 @@ Techniques and references (reimplemented, no code copied):
 Geography: the Auckland (Tāmaki Makaurau) coastline, islands, volcanic cones and landmarks are a
 stylised reconstruction hand-traced from public geographic knowledge, using the landmark
 coordinates in `src/core/auckland.ts`. No map data files were imported.
+
+Iteration 1 additions (all procedural, no new assets or dependencies):
+* Coastline: exact vector distance to the hand-traced coast polygons (segment splatting,
+  `src/world/terrain/coastline.ts`) instead of a raster distance transform; a 15 m signed-distance
+  coast mask (R8, 2048² over the central 32 km) drives the water shoreline, beach band and surf.
+* City: CBD skyline with a dozen named towers placed at their approximate real positions (PwC Tower,
+  Vero Centre, Pacifica, Metropolis, ANZ Centre, …; heights from public knowledge), suburban town
+  centres, the port with ships at berth, and the motorway network (SH1, SH16, SH18, SH20)
+  hand-traced from memory at ~100–200 m accuracy (`src/world/scenery/motorways.ts`). No map data
+  files were imported.
+* Motorway surface texture, window / street-light LODs, harbour light reflections and the city
+  light carpet are generated in code.
+* Volcanic cone crater bowls and pā terraces are shaded in the terrain shader from the cone list
+  in `src/world/terrain/theaters/aucklandMap.ts` (crater sizes from public knowledge).

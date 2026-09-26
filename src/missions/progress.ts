@@ -11,6 +11,41 @@ import { gradeRank } from './runtime/scoring';
 
 export const PROGRESS_KEY = 'f35a.progress.v1';
 
+/**
+ * Extra, optional progress data kept inside the saved object (outside the CampaignProgress
+ * contract): consecutive failures per campaign mission and missions skipped with skipMission().
+ * The UI reads them through failStreak() / wasSkipped() — e.g. to offer "Retry on Recruit" /
+ * "Skip mission" after repeated failures.
+ */
+export interface ProgressExtras {
+  failStreak?: Record<string, number>;
+  skipped?: string[];
+}
+type Ext = CampaignProgress & ProgressExtras;
+
+/** Consecutive failed attempts at a mission (0 after a success). */
+export function failStreak(p: CampaignProgress, missionId: string): number {
+  return (p as Ext).failStreak?.[missionId] ?? 0;
+}
+
+/** Mission was skipped (unlocked the next one without a win). */
+export function wasSkipped(p: CampaignProgress, missionId: string): boolean {
+  return !!(p as Ext).skipped?.includes(missionId);
+}
+
+/**
+ * Safety valve for a mission the player keeps failing: unlock the next campaign mission without
+ * a win (returns a new object; the skipped mission keeps no grade).
+ */
+export function skipMission(p: CampaignProgress, missionId: string, campaign: MissionDef[]): CampaignProgress {
+  const src = p as Ext;
+  const next: Ext = { unlocked: [...p.unlocked], best: { ...p.best }, totals: { ...p.totals }, failStreak: { ...(src.failStreak ?? {}) }, skipped: [...(src.skipped ?? [])] };
+  const i = campaign.findIndex((m) => m.id === missionId);
+  if (i >= 0 && i + 1 < campaign.length && !next.unlocked.includes(campaign[i + 1].id)) next.unlocked.push(campaign[i + 1].id);
+  if (!next.skipped!.includes(missionId)) next.skipped!.push(missionId);
+  return next;
+}
+
 function storage(): Storage | null {
   try {
     return typeof localStorage !== 'undefined' ? localStorage : null;
@@ -41,11 +76,18 @@ export function sanitizeProgress(raw: unknown, campaign: MissionDef[], training:
   }
   const t = r.totals ?? base.totals;
   const num = (v: unknown) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : 0);
-  return {
+  const out: Ext = {
     unlocked: [...unlocked],
     best,
     totals: { missions: num(t.missions), airKills: num(t.airKills), groundKills: num(t.groundKills), deaths: num(t.deaths) },
   };
+  const ext = raw as ProgressExtras;
+  if (ext.failStreak && typeof ext.failStreak === 'object') {
+    out.failStreak = {};
+    for (const [id, n] of Object.entries(ext.failStreak)) if (num(n) > 0) out.failStreak[id] = num(n);
+  }
+  if (Array.isArray(ext.skipped)) out.skipped = ext.skipped.filter((id): id is string => typeof id === 'string');
+  return out;
 }
 
 export function loadProgressFrom(campaign: MissionDef[], training: MissionDef[]): CampaignProgress {
@@ -74,11 +116,17 @@ export function saveProgressTo(p: CampaignProgress): void {
  * `campaign` is the ordered campaign list used for unlocking.
  */
 export function applyResult(p: CampaignProgress, r: MissionResult, campaign: MissionDef[]): CampaignProgress {
-  const next: CampaignProgress = {
+  const src = p as Ext;
+  const next: Ext = {
     unlocked: [...p.unlocked],
     best: { ...p.best },
     totals: { ...p.totals },
+    failStreak: { ...(src.failStreak ?? {}) },
   };
+  if (src.skipped) next.skipped = [...src.skipped];
+  // consecutive failures (the UI can offer Recruit / skip after a few)
+  if (r.success) delete next.failStreak![r.missionId];
+  else next.failStreak![r.missionId] = (next.failStreak![r.missionId] ?? 0) + 1;
   next.totals.airKills += r.kills.air;
   next.totals.groundKills += r.kills.sam + r.kills.ground;
   if (r.success) next.totals.missions += 1;

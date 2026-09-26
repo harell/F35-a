@@ -51,7 +51,7 @@ describe('combat: radar & stealth', () => {
     expect(rBeast).toBeGreaterThan(rF35 * 1.4);
   });
 
-  it('player lock builds over playerLockTime after auto-designation', () => {
+  it('auto-designation gives a TWS track only; a commanded lock builds over playerLockTime', () => {
     const w = new FakeWorld({ difficulty: 'veteran' });
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 6000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
     const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(2000, 6000, -40000), heading: Math.PI, speed: 250 });
@@ -60,13 +60,87 @@ describe('combat: radar & stealth', () => {
     w.run(0.3);
     expect(f35.radar.designatedId).toBe(mig.id);
     expect(des[0]).toMatchObject({ ownerId: f35.id, targetId: mig.id });
+    // no automatic STT: nothing builds and the MiG's RWR stays silent
+    w.run(3);
     expect(f35.radar.lockedId).toBeNull();
+    expect(f35.radar.lockProgress).toBe(0);
+    expect(mig.rwr.some((r) => r.sourceId === f35.id)).toBe(false);
+    // tap on the TD box → the lock builds over playerLockTime (1.5 s on veteran)
+    w.combat.designate(f35, mig.id, w);
     w.run(1.0);
     expect(f35.radar.lockedId).toBeNull();
-    expect(f35.radar.lockProgress).toBeGreaterThan(0.4);
-    w.run(0.8);
+    expect(f35.radar.lockProgress).toBeGreaterThan(0.5);
+    expect(f35.radar.lockProgress).toBeLessThan(0.8);
+    w.run(0.6);
     expect(f35.radar.lockedId).toBe(mig.id);
     expect(locks.some((l) => l.locked && l.targetId === mig.id && l.ownerId === f35.id)).toBe(true);
+    // STT spikes the target's RWR
+    w.run(0.3);
+    expect(mig.rwr.find((r) => r.sourceId === f35.id)?.state).toBe('track');
+  });
+
+  it('lock cone ±30°: no progress outside it (decays), an established lock holds to ±60° and is lost beyond', () => {
+    const w = new FakeWorld({ difficulty: 'pilot' });
+    const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 6000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
+    // 45° off the nose: inside the gimbal, outside the lock cone
+    const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(14000, 6000, -14000), heading: 0, speed: 250 });
+    w.controllers.set(mig.id, (ac) => ac.velocity.copy(f35.velocity)); // keep the geometry
+    w.run(0.3);
+    w.combat.designate(f35, mig.id, w);
+    w.run(2);
+    expect(f35.radar.designatedId).toBe(mig.id);
+    expect(f35.radar.lockedId).toBeNull();
+    expect(f35.radar.lockProgress).toBe(0);
+    // bring it to 20° off the nose → locks
+    mig.position.set(Math.sin(0.35) * 20000, 6000, -Math.cos(0.35) * 20000);
+    w.run(1.2);
+    expect(f35.radar.lockedId).toBe(mig.id);
+    // 50° off the nose: the established lock holds inside the ±60° gimbal
+    mig.position.set(Math.sin(0.87) * 20000, 6000, -Math.cos(0.87) * 20000);
+    w.run(3);
+    expect(f35.radar.lockedId).toBe(mig.id);
+    // 75°: outside the gimbal → lost after ~2 s
+    mig.position.set(Math.sin(1.3) * 20000, 6000, -Math.cos(1.3) * 20000);
+    w.run(1.5);
+    expect(f35.radar.lockedId).toBe(mig.id);
+    w.run(1);
+    expect(f35.radar.lockedId).toBeNull();
+    // leaving the cone before the lock completes: progress decays
+    mig.position.set(0, 6000, -20000);
+    w.run(0.3);
+    w.combat.designate(f35, mig.id, w);
+    w.run(0.5);
+    const p = f35.radar.lockProgress;
+    expect(p).toBeGreaterThan(0.3);
+    mig.position.set(Math.sin(0.87) * 20000, 6000, -Math.cos(0.87) * 20000);
+    w.run(0.5);
+    expect(f35.radar.lockProgress).toBeLessThan(p);
+    expect(f35.radar.lockedId).toBeNull();
+  });
+
+  it('TGT cycles designation and drops the lock; with one bandit it toggles lock / break-lock', () => {
+    const w = new FakeWorld({ difficulty: 'recruit' });
+    const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 6000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
+    const a = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, -15000), heading: 0, speed: 250 });
+    w.run(0.3);
+    expect(f35.radar.designatedId).toBe(a.id);
+    w.combat.cycleTarget(f35, w); // single candidate → command lock
+    w.run(0.8);
+    expect(f35.radar.lockedId).toBe(a.id);
+    w.combat.cycleTarget(f35, w); // → break lock (silent TWS track)
+    expect(f35.radar.lockedId).toBeNull();
+    w.run(1.5);
+    expect(f35.radar.lockedId).toBeNull();
+    const b = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(3000, 6000, -25000), heading: 0, speed: 250 });
+    w.run(0.3);
+    w.combat.designate(f35, a.id, w);
+    w.run(0.8);
+    expect(f35.radar.lockedId).toBe(a.id);
+    w.combat.cycleTarget(f35, w); // next bandit: lock on A dropped, lock commanded on B
+    expect(f35.radar.designatedId).toBe(b.id);
+    expect(f35.radar.lockedId).toBeNull();
+    w.run(0.8);
+    expect(f35.radar.lockedId).toBe(b.id);
   });
 
   it('EMCON: radar silent keeps DAS/datalink tracks, drops radar tracks, and the target gets no RWR warning', () => {
@@ -74,7 +148,9 @@ describe('combat: radar & stealth', () => {
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 6000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
     const near = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, -12000), heading: 0, speed: 250 });
     const far = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, -30000), heading: 0, speed: 250 });
-    w.run(2.5);
+    w.run(0.5);
+    w.combat.designate(f35, near.id, w);
+    w.run(2);
     // radar on: tracked + locked → the MiG hears a track
     expect(f35.radar.lockedId).toBe(near.id);
     expect(near.rwr.some((r) => r.sourceId === f35.id && r.state === 'track')).toBe(true);

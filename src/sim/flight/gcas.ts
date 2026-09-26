@@ -10,7 +10,8 @@
  * the full g limit. If the pilot is already pulling harder than the recovery would, the
  * prediction uses the pilot's g and the system stays out of the way.
  *
- * Enabled for the player when difficulty.flightAssist, and for friendly AI F-35s.
+ * Always on for the player's F-35 (on every difficulty — the real jet has it) and for friendly
+ * AI F-35s. It is also what saves a pilot who G-LOCs on Ace (see ./gloc.ts).
  */
 import { G } from '../../core/math';
 import { AB_DETENT } from '../../core/types';
@@ -37,10 +38,9 @@ const MAX_CLIMB_ANGLE = 60 * DEG;
 const MIN_LOOKAHEAD = 6;
 
 /** Is Auto-GCAS available on this aircraft right now? */
-export function gcasAvailable(ac: AircraftEntity, env: FlightEnv): boolean {
+export function gcasAvailable(ac: AircraftEntity, _env: FlightEnv): boolean {
   if (!ac.alive || ac.crashed || ac.damage.avionics >= 0.7) return false;
-  if (ac.isPlayer) return env.difficulty.flightAssist;
-  return ac.type === 'f35a' && ac.team === 'blue';
+  return ac.type === 'f35a' && (ac.isPlayer || ac.team === 'blue');
 }
 
 /** Nominal recovery g. */
@@ -53,7 +53,7 @@ const _al = { max: 0.5, min: -0.2 };
 function availableG(ac: AircraftEntity, st: AircraftSimState): number {
   const f = ac.flight;
   const qbar = 0.5 * 1.225 * f.ias * f.ias;
-  const al = alphaLimits(st.perf, true, _al);
+  const al = alphaLimits(st.perf, _al);
   const W = Math.max(1, f.mass) * G;
   return (qbar * st.perf.wingArea * liftCoefficient(st.perf, al.max, f.mach)) / W;
 }

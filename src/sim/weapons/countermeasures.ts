@@ -6,17 +6,19 @@
  *
  * Seduction is rolled once per salvo per missile (at release):
  *  - flares vs IR missiles: flare/target IR ratio, beam geometry, range, flareResistance,
- *    difficulty (countermeasureEffectiveness vs the player, enemyMissileSkill for enemy missiles)
- *  - chaff vs radar-guided missiles: only really works together with a beam (Doppler-notch)
- *    manoeuvre; chaffResistance; the illuminating radar is seduced too.
+ *    k_cm (ew.ts: difficulty for the human player, the defending pilot's skill for AI)
+ *  - chaff vs radar-guided missiles: see rollChaff — beam geometry, end-game timing, resistance,
+ *    k_cm and diminishing returns; a seduced SAM/fighter fire-control radar loses its track.
  */
 import { Vector3 } from 'three';
-import { G, clamp } from '../../core/math';
+import { G, clamp, smoothstep } from '../../core/math';
 import { DecoyEntity, type AircraftEntity } from '../entities';
 import type { AcCombatState, CombatCtx } from './context';
-import { breakGuiderTrack, cmScale, inGimbal, notchDepth } from './guidance';
+import { breakGuiderTrack, inGimbal } from './guidance';
+import { cmFactor, notchDepth, radialSpeed } from './ew';
 import { isCombatMissile, type CombatMissile } from './missile';
 import { irIntensity } from '../sensors/signatures';
+import { siteEw } from '../sam/SamSystem';
 
 export const FLARE_LIFE = 3.5;
 export const CHAFF_LIFE = 5;
@@ -120,36 +122,81 @@ function rollFlares(ctx: CombatCtx, ac: AircraftEntity, flare: DecoyEntity): voi
     const geometry = 0.55 + 0.45 * sinAspect;
     // too late when the missile is already in the fuze envelope; weak before the seeker sees clearly
     const timing = dist < 300 ? 0.25 : dist > m.cdef.seekerRange ? 0.5 : 1;
-    const p = clamp(0.6 * ratio * geometry * timing * (1 - m.cdef.flareResistance) * cmScale(ctx, m, ac), 0, 0.92);
+    const p = clamp(0.6 * ratio * geometry * timing * (1 - m.cdef.flareResistance) * cmFactor(ctx, m.team, ac), 0, 0.92);
     if (ctx.rng() < p) seduce(m, flare);
   }
 }
 
+/** Chaff seduction probability scale (per salvo, perfect geometry and timing, no resistance). */
+export const CHAFF_BASE = 0.33;
+/** Diminishing returns: each full-timing salvo already seen by the same radar multiplies p by this. */
+export const CHAFF_DIMINISH = 0.68;
+/** The tracker's adaptation to chaff fades with this time constant (s). */
+export const CHAFF_MEMORY = 5;
+const _rolledGuiders = new Set<number>();
+
+/**
+ * Chaff vs radar-guided missiles. One roll per salvo per tracking radar (the missile's own seeker
+ * for active missiles, the illuminating / commanding radar for SARH / command guidance):
+ *   p = CHAFF_BASE · geometry · timing · (1 − chaffResistance) · k_cm^1.5 · CHAFF_DIMINISH^exposure
+ *   geometry = 0.08·k + (1 − 0.08·k)·beam, beam = 1 − smoothstep(|v_radial|, 40·√k, 180·√k)
+ *              (chaff hangs at ~0 radial speed: only a beaming target makes it Doppler-
+ *              indistinguishable; easier difficulties forgive a sloppier beam)
+ *   timing   = 1 in the last ~6 s before impact, 0.25 early (ramp 6–10 s), or the notch depth
+ *   exposure = Σ earlier salvos' timing² against the same radar, fading with a 5 s memory — the
+ *              tracker adapts (diminishing returns), so spamming chaff early is weak and holding the
+ *              button never guarantees a break.
+ */
 function rollChaff(ctx: CombatCtx, ac: AircraftEntity, chaff: DecoyEntity): void {
-  for (const m of ctx.world.missiles) {
+  const world = ctx.world;
+  _rolledGuiders.clear();
+  for (const m of world.missiles) {
     if (!m.alive || !isCombatMissile(m) || m.targetId !== ac.id || m.trackBroken) continue;
     const g = m.cdef.guidance;
     // only radars that are tracking the target right now can be seduced
     const tracking = (g === 'active_radar' && m.seekerLocked) || g === 'semi_active' || g === 'command';
     if (!tracking) continue;
-    if (ctx.time - m.lastChaffRoll < 0.4) continue;
-    m.lastChaffRoll = ctx.time;
     let radarPos = m.position;
+    let ew: { chaffExposure: number; lastChaffRoll: number } = m;
     if (g !== 'active_radar') {
-      const guider = ctx.world.getEntity(m.guiderId);
-      if (!guider) continue;
+      const guider = world.getEntity(m.guiderId);
+      if (!guider || !guider.alive) continue;
       radarPos = guider.position;
+      if (guider.kind === 'sam') {
+        if (_rolledGuiders.has(guider.id)) continue; // one roll per fire-control radar per salvo
+        _rolledGuiders.add(guider.id);
+        ew = siteEw(ctx, guider);
+      }
     }
-    // chaff alone is filtered by the Doppler gate; together with a beam turn it works
-    const depth = notchDepth(ctx, radarPos, ac);
-    _v.subVectors(ac.position, radarPos);
-    const range = _v.length();
-    const vr = range > 1 ? Math.abs(ac.velocity.dot(_v) / range) : 0;
-    const beam = 1 - clamp(vr / 150, 0, 1);
-    const p = clamp((0.06 + 0.5 * beam + 0.25 * depth) * (1 - m.cdef.chaffResistance) * cmScale(ctx, m, ac), 0, 0.9);
+    if (ctx.time - ew.lastChaffRoll < 0.3) continue;
+    ew.chaffExposure *= Math.exp(-(ctx.time - ew.lastChaffRoll) / CHAFF_MEMORY);
+    ew.lastChaffRoll = ctx.time;
+    // Doppler geometry — the easier the difficulty (k_cm), the more a sloppy beam is forgiven
+    const kcm = cmFactor(ctx, m.team, ac);
+    const wide = Math.sqrt(clamp(kcm, 0.5, 3));
+    const beam = 1 - smoothstep(radialSpeed(radarPos, ac), 40 * wide, 180 * wide);
+    const geometry = 0.08 * Math.min(2, kcm) + (1 - 0.08 * Math.min(2, kcm)) * beam;
+    // timing: time to impact of this missile
+    _v.subVectors(ac.position, m.position);
+    const dist = _v.length();
+    _w.subVectors(m.velocity, ac.velocity);
+    const closing = dist > 1 ? _w.dot(_v) / dist : 0;
+    const tti = dist / Math.max(50, closing);
+    let timing = tti <= 6 ? 1 : tti >= 10 ? 0.25 : 1 - (0.75 * (tti - 6)) / 4;
+    timing = Math.max(timing, notchDepth(ctx, radarPos, ac));
+    const f = geometry * timing;
+    const k = Math.pow(kcm, 1.5);
+    const p = clamp(CHAFF_BASE * f * (1 - m.cdef.chaffResistance) * k * Math.pow(CHAFF_DIMINISH, ew.chaffExposure), 0, 0.9);
+    ew.chaffExposure += timing * timing;
     if (ctx.rng() < p) {
-      seduce(m, chaff);
-      if (g !== 'active_radar') breakGuiderTrack(ctx, m, ac.id);
+      if (g === 'active_radar') seduce(m, chaff);
+      else {
+        // the fire-control radar's range/Doppler gate walked off onto the chaff: its track is
+        // gone (every missile it guides loses the uplink) and this missile is defeated
+        m.decoyed = true;
+        m.trackBroken = true;
+        breakGuiderTrack(ctx, m, ac.id);
+      }
     }
   }
 }

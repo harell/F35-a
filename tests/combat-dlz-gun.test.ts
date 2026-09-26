@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { FakeWorld, v3 } from './combat-helpers';
 import { GUNS, MUNITIONS } from '../src/sim/weapons/defs';
-import { gpsMaxRange } from '../src/sim/weapons/dlz';
+import { gpsMaxRange, type CombatLaunchZone } from '../src/sim/weapons/dlz';
 import { DEFAULT_PIPPER_RANGE } from '../src/sim/weapons/gun';
 import type { AircraftEntity } from '../src/sim/entities';
 
@@ -49,25 +49,54 @@ describe('combat: dynamic launch zone', () => {
     expect(head.rMax).toBeLessThan(40_000);
   });
 
-  it('shoot cue needs a track and the zone; generous cues on easy difficulty widen it', () => {
-    const vet = zone({ difficulty: 'veteran' });
-    const R = vet.z.rMax * 1.05;
-    vet.b.position.set(0, 6000, -R);
-    vet.w.run(0.2);
-    expect(vet.w.combat.launchZoneFor(vet.a, 'aim120', vet.b, vet.w).shoot).toBe(false);
-    vet.b.position.set(0, 6000, -vet.z.rMax * 0.8);
-    vet.w.run(0.2);
-    expect(vet.w.combat.launchZoneFor(vet.a, 'aim120', vet.b, vet.w).shoot).toBe(true);
-    const rec = zone({ difficulty: 'recruit' });
-    rec.b.position.set(0, 6000, -rec.z.rMax * 1.05);
-    rec.w.run(0.2);
-    expect(rec.w.combat.launchZoneFor(rec.a, 'aim120', rec.b, rec.w).shoot).toBe(true);
+  it('SHOOT only inside the Pk-calibrated range (rNe ≤ rShoot ≤ 0.9·rMax); generous cues never go beyond it', () => {
+    for (const difficulty of ['veteran', 'recruit'] as const) {
+      const t = zone({ difficulty });
+      const rShoot = (t.z as CombatLaunchZone).rShoot;
+      expect(rShoot).toBeGreaterThanOrEqual(t.z.rNe * 0.8);
+      expect(rShoot).toBeLessThanOrEqual(t.z.rMax * 0.9);
+      expect(rShoot).toBeLessThanOrEqual(t.z.rNe * 1.36);
+      // between rShoot and rMax: in range but no SHOOT (the reviewers' 1.1·rMax cue is gone)
+      for (const frac of [1.05, 0.95, 0.8]) {
+        t.b.position.set(0, 6000, -t.z.rMax * frac);
+        t.w.run(0.2);
+        const z = t.w.combat.launchZoneFor(t.a, 'aim120', t.b, t.w) as CombatLaunchZone;
+        if (z.range > z.rShoot) expect(z.shoot, `${difficulty} @${frac}·rMax`).toBe(false);
+      }
+      t.b.position.set(0, 6000, -rShoot * 0.8);
+      t.w.run(0.2);
+      const zIn = t.w.combat.launchZoneFor(t.a, 'aim120', t.b, t.w) as CombatLaunchZone;
+      expect(zIn.range).toBeLessThan(zIn.rShoot);
+      expect(zIn.shoot).toBe(true);
+    }
     // HUD helper: selected weapon vs designated target
+    const rec = zone({ difficulty: 'recruit' });
     const hud = rec.w.combat.launchZone(rec.a, rec.w);
     expect(hud?.targetId).toBe(rec.b.id);
     rec.w.combat.designate(rec.a, null, rec.w);
     rec.b.alive = false;
     expect(rec.w.combat.launchZone(rec.a, rec.w)).toBeNull();
+  });
+
+  it('SHOOT range is shorter against a hot bandit than its kinematic rMax, and shorter for a TWS than an STT shot', () => {
+    const t = zone({ range: 16000 });
+    t.w.run(0.3);
+    const tws = t.w.combat.launchZoneFor(t.a, 'aim120', t.b, t.w) as CombatLaunchZone;
+    t.w.combat.designate(t.a, t.b.id, t.w);
+    t.w.run(1.8);
+    expect(t.a.radar.lockedId).toBe(t.b.id);
+    const stt = t.w.combat.launchZoneFor(t.a, 'aim120', t.b, t.w) as CombatLaunchZone;
+    expect(stt.rShoot).toBeLessThan(stt.rMax * 0.6);
+    expect(tws.rShoot).toBeLessThan(stt.rShoot);
+    // an AI shooter still gets the kinematic cue (its own doctrine picks the range)
+    const ai = t.w.spawnAircraft({ type: 'su27', team: 'red', position: v3(30000, 6000, -20000), heading: 0, speed: 280 });
+    const blue = t.w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(30000, 6000, -40000), heading: Math.PI, speed: 280 });
+    t.w.run(0.5);
+    ai.radar.designatedId = blue.id;
+    t.w.run(3);
+    const zAi = t.w.combat.launchZoneFor(ai, 'aim120', blue, t.w);
+    expect(zAi.range).toBeGreaterThan((zAi as CombatLaunchZone).rShoot);
+    expect(zAi.shoot).toBe(true);
   });
 
   it('GPS envelopes: SDB standoff ≫ JDAM, higher and faster releases reach further', () => {
@@ -151,6 +180,67 @@ describe('combat: guns', () => {
     } finally {
       GUNS.gau22.dispersion = disp;
     }
+  });
+
+  it('GAU-22 (25 mm APEX): a fighter falls to 4–8 hits inside 800 m, still ≤ 9 hits at 1.2 km', () => {
+    const disp = GUNS.gau22.dispersion;
+    GUNS.gau22.dispersion = 0;
+    try {
+      for (const range of [300, 600, 800, 1200]) {
+        const w = new FakeWorld();
+        const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 3000, 0), heading: 0, speed: 240, loadout: 'a2a_stealth' });
+        const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 3000, -range), heading: 0, speed: 230 });
+        w.run(0.3);
+        w.combat.designate(f35, mig.id, w);
+        w.controllers.set(mig.id, () => {
+          // keep the target sitting on the pipper at a constant range
+          const p = w.combat.gunLeadPoint(f35, w)!;
+          const d = p.clone().sub(f35.position).setLength(range);
+          mig.position.copy(f35.position).add(d);
+          mig.velocity.copy(f35.velocity).multiplyScalar(230 / 240);
+        });
+        f35.input.fireGun = true;
+        w.run(3.4, () => !mig.alive);
+        const hits = w.damageLog.filter((d) => d.targetId === mig.id && d.weapon === 'gun').length;
+        expect(mig.alive, `range ${range}`).toBe(false);
+        if (range <= 800) {
+          expect(hits, `range ${range}`).toBeGreaterThanOrEqual(4);
+          expect(hits, `range ${range}`).toBeLessThanOrEqual(8);
+        } else expect(hits).toBeLessThanOrEqual(9);
+        expect(f35.gunAmmo, 'most of the 180 rounds left for more kills').toBeGreaterThan(90);
+      }
+    } finally {
+      GUNS.gau22.dispersion = disp;
+    }
+  });
+
+  it('gun cue: funnel to 1.5 km, SHOOT only inside 1.2 km with the pipper on the target', () => {
+    const w = new FakeWorld();
+    const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 3000, 0), heading: 0, speed: 240, loadout: 'a2a_stealth' });
+    const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 3000, -700), heading: 0, speed: 240 });
+    w.combat.selectWeapon(f35, 'gun', w);
+    w.run(0.3);
+    w.combat.designate(f35, mig.id, w);
+    const place = (range: number, offRad: number) => {
+      const p = w.combat.gunLeadPoint(f35, w)!;
+      const d = p.clone().sub(f35.position).normalize();
+      d.applyAxisAngle(new Vector3(0, 1, 0), offRad);
+      mig.position.copy(f35.position).addScaledVector(d, range);
+      return w.combat.launchZone(f35, w)!;
+    };
+    let z = place(700, 0);
+    for (let i = 0; i < 4; i++) z = place(700, 0);
+    expect(z.weapon).toBe('gun');
+    expect(z.rMax).toBe(1500);
+    expect(z.rNe).toBe(800);
+    expect(z.shoot).toBe(true);
+    for (let i = 0; i < 4; i++) z = place(700, 0.05); // 3° off the pipper
+    expect(z.shoot).toBe(false);
+    for (let i = 0; i < 4; i++) z = place(1350, 0); // on the pipper, but beyond the effective range
+    expect(z.range).toBeGreaterThan(1300);
+    expect(z.shoot).toBe(false);
+    for (let i = 0; i < 4; i++) z = place(1100, 0);
+    expect(z.shoot).toBe(true);
   });
 
   it('pipper defaults to the 1,000 ft range line with no target', () => {

@@ -9,14 +9,15 @@
  *   n0 (neutral stick) = cosγ / cos(bank) for bank ≤ 60° (level turn / flight-path hold) in
  *   near-level flight, 1/cos(bank) in steep climbs/dives, fading to 1 g beyond ~100° of bank.
  *   AoA limiting caps what is achievable at low speed.
- * Roll stick is a roll-rate command (full stick ≈ perf.rollRateMax at q̄ ≥ perf.qFull).
+ * Roll stick is a roll-rate command: full stick = rollRateLimit() (≈ perf.rollRateMax around
+ * corner speed, less at low / very high speed, high g, high AoA and with external stores).
  */
 import { atmosphere, type AtmosphereSample } from '../../core/atmosphere';
 import { G } from '../../core/math';
 import type { AircraftEntity } from '../entities';
 import { AIRCRAFT_PERF, type AircraftPerf } from './aircraftData';
 import { dragCoefficient, liftCoefficient, thrustMax, thrustMil } from './aero';
-import { alphaLimits, gLimits, neutralStickG } from './controlLaws';
+import { alphaLimits, gLimits, neutralStickG, rollRateLimit } from './controlLaws';
 import { massOf } from './FlightModel';
 
 const ATM: AtmosphereSample = { temperature: 288, pressure: 101325, density: 1.225, speedOfSound: 340, sigma: 1 };
@@ -37,9 +38,27 @@ function heavyExternal(ac: AircraftEntity): number {
   return n;
 }
 
-/** FBW g limits (assisted law) for this jet right now (stores, hydraulic damage). */
+function externalStations(ac: AircraftEntity): number {
+  let n = 0;
+  for (let i = 0; i < ac.stores.length; i++) if (!ac.stores[i].internal) n++;
+  return n;
+}
+
+/**
+ * Full-stick roll rate (rad/s) the FCS gives right now (speed, g, AoA, stores, hydraulics) — the
+ * same schedule the control laws use.
+ */
+export function rollRateAvailable(ac: AircraftEntity): number {
+  const f = ac.flight;
+  const qbar = 0.5 * 1.225 * f.ias * f.ias;
+  const hyd = Math.min(1, ac.damage.hydraulics);
+  const hydF = hyd > 0.95 ? 0.12 : 1 - 0.65 * hyd;
+  return rollRateLimit(perfOf(ac), qbar, f.alpha, f.gLoad, externalStations(ac), heavyExternal(ac), hydF);
+}
+
+/** FBW g limits for this jet right now (stores, hydraulic damage). */
 export function gLimitsOf(ac: AircraftEntity, out = { max: 9, min: -3 }): { max: number; min: number } {
-  return gLimits(perfOf(ac), heavyExternal(ac), ac.damage.hydraulics, true, out);
+  return gLimits(perfOf(ac), heavyExternal(ac), ac.damage.hydraulics, out);
 }
 
 /** Load factor commanded by a neutral stick in the current attitude (assisted law). */
@@ -47,7 +66,7 @@ export function neutralG(ac: AircraftEntity): number {
   const V = ac.velocity.length();
   const gamma = V > 1 ? Math.asin(Math.max(-1, Math.min(1, ac.velocity.y / V))) : 0;
   const bank = ac.flight.roll;
-  return neutralStickG(gamma, Math.cos(bank), bank, true);
+  return neutralStickG(gamma, Math.cos(bank), bank);
 }
 
 /** Stick deflection (−1..1) that commands load factor `g` (assisted law). */
@@ -65,7 +84,7 @@ export function availableG(ac: AircraftEntity): number {
   const perf = perfOf(ac);
   const f = ac.flight;
   const qbar = 0.5 * 1.225 * f.ias * f.ias;
-  const al = alphaLimits(perf, true, _al);
+  const al = alphaLimits(perf, _al);
   const n = (qbar * perf.wingArea * liftCoefficient(perf, al.max, f.mach)) / (massOf(ac) * G);
   return Math.min(n, gLimitsOf(ac, _gl).max);
 }
@@ -73,7 +92,7 @@ export function availableG(ac: AircraftEntity): number {
 /** 1 g stall (AoA-limit) speed, IAS m/s, at the current mass. */
 export function stallSpeedIas(ac: AircraftEntity, g = 1): number {
   const perf = perfOf(ac);
-  const al = alphaLimits(perf, true, _al);
+  const al = alphaLimits(perf, _al);
   const cl = liftCoefficient(perf, al.max, Math.min(0.5, ac.flight.mach));
   return Math.sqrt((2 * g * massOf(ac) * G) / (1.225 * perf.wingArea * cl));
 }

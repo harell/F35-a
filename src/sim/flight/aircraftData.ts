@@ -81,10 +81,8 @@ export interface AircraftPerf {
   /* ── Structural & flight-control limits ── */
   readonly maxG: number;
   readonly minG: number;
-  /** FBW AoA limiter in assisted modes (rad). */
-  readonly aoaLimitAssisted: number;
-  /** AoA the FCS allows with assists off (rad) — beyond alphaStall the jet can depart. */
-  readonly aoaLimitUnassisted: number;
+  /** FBW AoA limiter (rad) — active on every difficulty (carefree handling). */
+  readonly aoaLimit: number;
   /** Max roll rate at full authority (rad/s). */
   readonly rollRateMax: number;
   /** Pitch-rate command gain used at low dynamic pressure (rad/s at full stick). */
@@ -99,7 +97,7 @@ export interface AircraftPerf {
   readonly qFull: number;
   /** Thrust vectoring: keeps pitch/yaw authority at low speed. */
   readonly tvc: boolean;
-  /** Departure (unassisted stall) violence: wing-drop roll and nose-slice yaw rates (rad/s). */
+  /** Departure violence past the stall AoA (wing-drop roll and nose-slice yaw rates, rad/s). */
   readonly departRoll: number;
   readonly departYaw: number;
 
@@ -175,6 +173,11 @@ const RAW: Record<AircraftType, PerfInput> = {
     thrustAB: 191_000, // F135 max AB
     hasAfterburner: true,
     ...AB_TURBOFAN,
+    // F135 dry thrust barely grows with ram (high-pressure-ratio core) and lapses a bit faster with
+    // altitude: with the steep transonic drag rise below, MIL tops out at ≈ M0.92 low / M0.95 high
+    // — the F-35A does not supercruise.
+    dryLapse: 0.9,
+    dryRam: 0,
     abCap: 1.08,
     spoolUpTime: 3.5,
     abLightTime: 0.4,
@@ -187,15 +190,14 @@ const RAW: Record<AircraftType, PerfInput> = {
     kInduced: 0.15,
     kHigh: 0.25,
     clHigh: 0.6,
-    mCrit: 0.82,
-    mWavePeak: 1.1,
-    cdWave: 0.035, // not area-ruled: big transonic drag rise
+    mCrit: 0.8,
+    mWavePeak: 1.0,
+    cdWave: 0.04, // big body, internal bays, not area-ruled: steep transonic drag rise
     cyBeta: -0.9,
     airbrakeCd: 0.05,
     maxG: 9,
     minG: -3,
-    aoaLimitAssisted: 28 * DEG,
-    aoaLimitUnassisted: 50 * DEG,
+    aoaLimit: 28 * DEG,
     rollRateMax: 210 * DEG,
     pitchRateMax: 28 * DEG,
     yawRateMax: 25 * DEG,
@@ -248,8 +250,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     airbrakeCd: 0.05,
     maxG: 9,
     minG: -3,
-    aoaLimitAssisted: 26 * DEG,
-    aoaLimitUnassisted: 40 * DEG,
+    aoaLimit: 26 * DEG,
     rollRateMax: 240 * DEG,
     pitchRateMax: 25 * DEG,
     yawRateMax: 25 * DEG,
@@ -302,8 +303,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     airbrakeCd: 0.06,
     maxG: 9,
     minG: -3,
-    aoaLimitAssisted: 26 * DEG,
-    aoaLimitUnassisted: 60 * DEG,
+    aoaLimit: 26 * DEG,
     rollRateMax: 250 * DEG,
     pitchRateMax: 25 * DEG,
     yawRateMax: 25 * DEG,
@@ -356,8 +356,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     airbrakeCd: 0.06,
     maxG: 9,
     minG: -3,
-    aoaLimitAssisted: 32 * DEG, // thrust vectoring
-    aoaLimitUnassisted: 90 * DEG,
+    aoaLimit: 32 * DEG, // thrust vectoring
     rollRateMax: 270 * DEG,
     pitchRateMax: 45 * DEG,
     yawRateMax: 35 * DEG,
@@ -410,8 +409,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     airbrakeCd: 0.05,
     maxG: 9,
     minG: -3.5,
-    aoaLimitAssisted: 35 * DEG,
-    aoaLimitUnassisted: 90 * DEG,
+    aoaLimit: 35 * DEG,
     rollRateMax: 270 * DEG,
     pitchRateMax: 50 * DEG,
     yawRateMax: 35 * DEG,
@@ -464,8 +462,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     airbrakeCd: 0.03,
     maxG: 2.5,
     minG: -1,
-    aoaLimitAssisted: 14 * DEG,
-    aoaLimitUnassisted: 18 * DEG,
+    aoaLimit: 14 * DEG,
     rollRateMax: 50 * DEG,
     pitchRateMax: 8 * DEG,
     yawRateMax: 8 * DEG,
@@ -523,8 +520,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     airbrakeCd: 0.03,
     maxG: 2,
     minG: -0.5,
-    aoaLimitAssisted: 12 * DEG,
-    aoaLimitUnassisted: 15 * DEG,
+    aoaLimit: 12 * DEG,
     rollRateMax: 30 * DEG,
     pitchRateMax: 5 * DEG,
     yawRateMax: 5 * DEG,

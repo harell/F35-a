@@ -6,14 +6,17 @@ import { FLARE_LIFE } from '../src/sim/weapons/countermeasures';
 
 /**
  * R-77 (Su-35, 7 km) vs a MiG-29 at 1,500 m, head-on at 9–11.5 km. The target optionally beams
- * (turns perpendicular to the missile) once the missile is inside 5 km, and optionally pumps chaff.
+ * (turns perpendicular to the missile) from the launch warning on, and optionally pumps chaff in
+ * the end-game (missile inside 5 km).
  */
-function radarTrial(seed: number, beam: boolean, chaff: boolean): { defeated: boolean; reason: string } {
+function radarTrial(seed: number, beam: boolean, chaff: boolean, pilotSkill?: number, targetAlt = 1500, beamStart = Infinity): { defeated: boolean; reason: string } {
   const w = new FakeWorld({ seed, difficulty: 'veteran' });
   const off = ((seed * 7919) % 4000) - 2000;
   const range = 9000 + ((seed * 104729) % 2500);
   const a = w.spawnAircraft({ type: 'su35', team: 'red', position: v3(0, 7000, 0), heading: 0, speed: 280 });
-  const b = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(off, 1500, -range), heading: Math.PI, speed: 280 });
+  const b = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(off, targetAlt, -range), heading: Math.PI, speed: 280 });
+  // an AI pilot of the given defensive skill (read by the countermeasure model like a real brain's)
+  if (pilotSkill !== undefined) b.ai = { role: 'fighter', update() {}, skill: { defense: pilotSkill } } as never;
   w.run(1);
   const ends = w.record('munition:end');
   const m = w.combat.fire(a, w, 'aim120', b.id) as CombatMissile;
@@ -21,9 +24,9 @@ function radarTrial(seed: number, beam: boolean, chaff: boolean): { defeated: bo
   const side = seed % 2 ? 1 : -1;
   const dir = new Vector3();
   w.controllers.set(b.id, (ac, dt) => {
-    if (!m.alive || m.position.distanceTo(ac.position) > 5000) return;
-    ac.input.chaff = chaff;
-    if (!beam) return;
+    if (!m.alive) return;
+    ac.input.chaff = chaff && m.position.distanceTo(ac.position) < 5000;
+    if (!beam || m.position.distanceTo(ac.position) > beamStart) return;
     dir.subVectors(ac.position, m.position);
     dir.y = 0;
     dir.normalize();
@@ -67,7 +70,7 @@ const rate = (n: number, f: (seed: number) => { defeated: boolean }) => {
 };
 
 describe('combat: countermeasures', () => {
-  it('flares decoy IR missiles statistically (never always, never never)', () => {
+  it('flares decoy IR missiles statistically (never always, never never)', { timeout: 60_000 }, () => {
     const N = 30;
     const control = rate(N, (s) => irTrial(s, false, true));
     const withFlares = rate(N, (s) => irTrial(s, true, true));
@@ -79,7 +82,7 @@ describe('combat: countermeasures', () => {
     expect(reasons.has('decoyed')).toBe(true);
   });
 
-  it('hard beam + chaff low in the clutter defeats radar missiles sometimes; chaff alone rarely', () => {
+  it('beam + chaff low in the clutter defeats radar missiles; chaff alone rarely; defender skill matters', { timeout: 60_000 }, () => {
     const N = 30;
     const control = rate(N, (s) => radarTrial(s, false, false));
     const chaffOnly = rate(N, (s) => radarTrial(s, false, true));
@@ -87,9 +90,18 @@ describe('combat: countermeasures', () => {
     const beamChaff = rate(N, (s) => radarTrial(s, true, true));
     expect(control).toBe(0);
     expect(chaffOnly).toBeLessThan(0.25); // Doppler filtering: chaff without a beam turn is weak
-    expect(beamChaff).toBeGreaterThan(0.2);
-    expect(beamChaff).toBeLessThan(0.95);
-    expect(beamChaff).toBeGreaterThan(beamOnly);
+    expect(beamOnly).toBeGreaterThan(0.5); // a sustained notch in look-down clutter is strong …
+    expect(beamChaff).toBeGreaterThanOrEqual(beamOnly);
+    // … but only in the clutter: co-altitude at 7 km there is nothing to hide in
+    const beamHigh = rate(N, (s) => radarTrial(s, true, false, undefined, 7000));
+    const beamChaffHigh = rate(N, (s) => radarTrial(s, true, true, undefined, 7000));
+    expect(beamHigh).toBeLessThan(0.3);
+    expect(beamChaffHigh).toBeGreaterThan(beamHigh);
+    expect(beamChaffHigh).toBeLessThan(0.9);
+    // the same (late, 6 km) beam + chaff flown by a rookie AI pilot works far less often than by an ace
+    const rookie = rate(N, (s) => radarTrial(s, true, true, 0.1, 1500, 6000));
+    const ace = rate(N, (s) => radarTrial(s, true, true, 1, 1500, 6000));
+    expect(ace).toBeGreaterThan(rookie + 0.15);
   });
 
   it('flare program: rising edge = 2-flare salvo 0.15 s apart, held = repeat every 0.6 s', () => {

@@ -16,11 +16,13 @@ import { createDesert } from './theaters/desert';
 import { createIslands } from './theaters/islands';
 import { createMountains } from './theaters/mountains';
 import { createArctic } from './theaters/arctic';
-import { createAuckland } from './theaters/auckland';
+import { createAuckland, WHENUAPAI_CROSS } from './theaters/auckland';
+import { AKL } from '../../core/auckland';
 import {
   EDGE_FADE_END,
   EDGE_FADE_START,
   HF_EXTENT,
+  MAT_CLEARING,
   MAT_NONE,
   type Anchor,
   type Footprint,
@@ -131,14 +133,22 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
     yield* upsample2x(base, hf, spec.seed, p0, 0.9);
   }
 
-  // 3) Keep anchors dry (features / pads never end up in the sea).
-  for (const a of anchors) liftAnchor(hf, a);
+  // 3) Keep anchors dry (features / pads never end up in the sea). Auckland's coast is mapped and its
+  //    missions place everything on land: lifting there would grow aprons of land into the harbours.
+  const mapped = spec.theater === 'auckland';
+  if (!mapped) for (const a of anchors) liftAnchor(hf, a);
   yield 0.93;
 
   // 4) Flatten features, then pads (pads see the already flattened ground).
   for (const f of spec.features) {
     const fp = footprintOf(f);
-    if (fp.flatten) flatten(hf, fp);
+    if (!fp.flatten) continue;
+    const level = flatten(hf, fp, mapped);
+    // RNZAF Whenuapai: level the cross runway 08/26 to the same height as the main strip
+    if (mapped && f.type === 'airbase' && Math.hypot(f.x - AKL.whenuapai.x, f.z - AKL.whenuapai.z) < 800) {
+      const X = WHENUAPAI_CROSS;
+      flatten(hf, { kind: 'rect', x: X.x, z: X.z, halfW: 70, halfL: X.length / 2 + 80, radius: 0, heading: X.heading, blend: 350, strength: 1, minLevel: 2, flatten: true }, mapped, MAT_NONE, level);
+    }
   }
   yield 0.97;
   for (const p of spec.pads) {
@@ -154,7 +164,7 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
       strength: 1,
       minLevel: 2,
       flatten: true,
-    });
+    }, mapped, MAT_CLEARING);
   }
   yield 1;
   return hf;
@@ -231,8 +241,13 @@ function liftAnchor(hf: Heightfield, a: Anchor): void {
   }
 }
 
-/** Blend terrain towards a flat level inside a footprint (target = mean core height). */
-export function flatten(hf: Heightfield, footprint: Footprint): void {
+/**
+ * Blend terrain towards a flat level inside a footprint (target = mean core height). With
+ * `keepCoast`, the blend zone fades out over the first 4 m above sea level so the (continuous,
+ * mapped) shoreline is not pushed into the water; the core is always levelled. Samples levelled
+ * above 60 % get material `mat`.
+ */
+export function flatten(hf: Heightfield, footprint: Footprint, keepCoast = false, mat = MAT_NONE, level?: number): number {
   // Grow the core by 1.5 cells so every grid cell touching the footprint is fully flat
   // (bilinear/triangle interpolation inside the footprint then returns exactly the target).
   const pad = hf.cell * 1.5;
@@ -255,7 +270,7 @@ export function flatten(hf: Heightfield, footprint: Footprint): void {
       }
     }
   }
-  let target = cnt > 0 ? sum / cnt : hf.heightAt(fp.x, fp.z);
+  let target = level ?? (cnt > 0 ? sum / cnt : hf.heightAt(fp.x, fp.z));
   target = Math.max(target, fp.minLevel);
 
   const reach = footprintReach(fp);
@@ -266,13 +281,19 @@ export function flatten(hf: Heightfield, footprint: Footprint): void {
   for (let j = j0; j <= j1; j++) {
     const z = hf.pos(j);
     for (let i = i0; i <= i1; i++) {
-      const w = footprintWeight(fp, hf.pos(i), z);
+      let w = footprintWeight(fp, hf.pos(i), z);
       if (w <= 0) continue;
       const k = j * hf.n + i;
+      if (keepCoast && w < fp.strength) w *= sstep(0, 4, hf.data[k]);
       hf.data[k] += (target - hf.data[k]) * w;
-      if (w > 0.6) hf.mat[k] = MAT_NONE;
+      // Material: special pads (clearings) only inside the original, unpadded core; mapped theatres
+      // keep suburbs right up to the levelled core.
+      if (mat !== MAT_NONE) {
+        if (footprintWeight(footprint, hf.pos(i), z) >= footprint.strength * 0.999) hf.mat[k] = mat;
+      } else if (w > (keepCoast ? 0.93 : 0.6)) hf.mat[k] = mat;
     }
   }
+  return target;
 }
 
 /** Run a progress generator to completion synchronously. */

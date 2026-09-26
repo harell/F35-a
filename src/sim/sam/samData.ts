@@ -50,6 +50,11 @@ export interface SamTypeData {
   burst: number;
   burstPause: number;
   ammo: number;
+  /**
+   * Point defence against incoming munitions (anti-radiation missiles, JDAM/SDB) aimed within
+   * `protect` m of the site: engagement range, and kill probability per interceptor that fuzes.
+   */
+  pointDefense: { range: number; minRange: number; protect: number; pkAgm: number; pkBomb: number } | null;
 }
 
 const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageMin' | 'engageMax' | 'altMin' | 'altMax'> = {
@@ -70,6 +75,7 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
   burst: 0,
   burstPause: 0,
   ammo: 0,
+  pointDefense: null,
 };
 
 export const SAM_DATA: Record<SamType, SamTypeData> = {
@@ -144,6 +150,8 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     lowAltFactor: 0.75,
     armDiscipline: 0.5,
     mastHeight: 5,
+    // Osa: can engage a munition only close in, with a poor chance
+    pointDefense: { range: 4_500, minRange: 1_200, protect: 1_500, pkAgm: 0.2, pkBomb: 0.3 },
   },
   // 9K330 Tor: vertical launch, fast reaction, good against low / small targets
   sa15: {
@@ -168,6 +176,8 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     lowAltFactor: 0.9,
     armDiscipline: 0.65,
     mastHeight: 5,
+    // Tor: designed to kill precision munitions — protects itself and co-located sites
+    pointDefense: { range: 9_000, minRange: 1_000, protect: 3_000, pkAgm: 0.35, pkBomb: 0.45 },
   },
   // 9K38 Igla team: visual/IR acquisition, no radar, no RWR warning
   sa18: {

@@ -72,10 +72,19 @@ function genericLayout(): Layout {
   };
 }
 
-/** Enemy type for the i-th aircraft. */
+/** Enemy type for a flight ('mixed' draws from every fighter type). */
 function pickType(opts: InstantActionOptions, rng: () => number): AircraftType {
   if (opts.enemyType !== 'mixed') return opts.enemyType;
   return FIGHTERS[Math.floor(rng() * FIGHTERS.length) % FIGHTERS.length];
+}
+
+/**
+ * 'mixed' only: the modern Su-35 / Su-57 are Veteran / Ace opponents — below that the flight is
+ * a MiG-29 or Su-27 instead (resolved by the runner for the difficulty being flown).
+ */
+function mixedDowngrade(opts: InstantActionOptions, type: AircraftType, rng: () => number): Partial<AircraftGroupDef> {
+  if (opts.enemyType !== 'mixed' || (type !== 'su35' && type !== 'su57')) return {};
+  return { downgrade: { below: 'veteran', type: rng() < 0.5 ? 'mig29' : 'su27' } };
 }
 
 /** Split `n` enemies into pairs (last group may be a single). */
@@ -95,10 +104,12 @@ function enemyFlights(opts: InstantActionOptions, n: number, lay: Layout, rng: (
       x: Math.round(lay.enemyAt.x + rx * lateral - Math.sin(h) * back),
       z: Math.round(lay.enemyAt.z + rz * lateral + Math.cos(h) * back),
     };
+    const type = pickType(opts, rng);
     out.push(
-      flight(`bandits${i + 1}`, pickType(opts, rng), size, at, 5500 + ((i * 700) % 2800), lay.enemyHeading, 245, i % 2 === 0 ? 'fighter' : 'interceptor', {
-        fixedCount: true,
+      // sizes follow the difficulty (script.scaleEnemyTotal: the total scales, not each pair)
+      flight(`bandits${i + 1}`, type, size, at, 5500 + ((i * 700) % 2800), lay.enemyHeading, 245, i % 2 === 0 ? 'fighter' : 'interceptor', {
         task: i % 2 === 0 ? { kind: 'patrol', x: Math.round((lay.enemyAt.x + lay.player.x) / 2), z: Math.round((lay.enemyAt.z + lay.player.z) / 2), radius: 9000, altitude: 5500 } : { kind: 'attack_player' },
+        ...mixedDowngrade(opts, type, rng),
         ...extra,
       }),
     );
@@ -129,8 +140,13 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast' }));
       const flights = enemyFlights(opts, n, lay, rng);
       groups.push(...flights);
-      objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: `Splash all ${n} bandit${n > 1 ? 's' : ''}`, primary: true });
-      briefing = [`${n} hostile fighter${n > 1 ? 's' : ''} inbound. Weapons free — splash them all.`, n >= 3 ? 'Viper 2 is on your wing.' : 'You are on your own.'];
+      objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
+      briefing = [
+        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, more on Ace). Weapons free — splash them all.`,
+        opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s — Su-35s and Su-57s join on Veteran and Ace.' : '',
+        n >= 3 ? 'Viper 2 is on your wing.' : 'You are on your own.',
+      ].filter(Boolean);
+      script.scaleEnemyTotal = true;
       script.parTime = 180 + n * 45;
       break;
     }
@@ -151,7 +167,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         { id: 'o_target', kind: 'destroy', groups: ['target'], label: 'Destroy the depot at the end of the gauntlet', primary: true },
         { id: 'o_belt', kind: 'destroy', groups: ['belt'], label: 'Destroy every SAM in the belt', primary: false },
       );
-      if (n >= 4) groups.push(flight('cap', pickType(opts, rng), 2, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', { fixedCount: true, spawn: { kind: 'time', t: 120 }, task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 } }));
+      if (n >= 4) {
+        const capType = pickType(opts, rng);
+        groups.push(
+          flight('cap', capType, 2, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', {
+            spawn: { kind: 'time', t: 120 },
+            task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
+            ...mixedDowngrade(opts, capType, rng),
+          }),
+        );
+      }
       briefing = [`A belt of ${count} SAM sites guards a depot. Some sites are silent until you are close.`, 'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.'];
       script.parTime = 420;
       break;
@@ -175,6 +200,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', akl ? P.waiC : rw(1600, 1100)));
       const cap = enemyFlights(opts, Math.max(1, Math.ceil(n / 2)), lay, rng, { role: 'cap' });
       groups.push(...cap);
+      script.scaleEnemyTotal = true;
       objectives.push(
         { id: 'o_jets', kind: 'destroy', groups: ['parked'], label: 'Destroy the parked jets', primary: true },
         { id: 'o_hangars', kind: 'destroy', groups: ['hangars', 'fuel'], label: 'Destroy the hangars and fuel', primary: false },

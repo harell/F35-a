@@ -163,8 +163,15 @@ describe('MissionRunner: objectives and outcome', () => {
 
   it('scripted strike by a friendly package destroys the target (c09)', () => {
     const h = harness(byId('c09'));
+    // i1 re-pacing: Hammer only pushes (spawns at the push point) once the Flankers are dealt with
     h.run(0.5);
+    expect(h.world.aircraft.some((a) => a.groupId === 'hammer')).toBe(false);
+    h.run(52, () => shieldPlayer(h));
+    killGroup(h, 'flankers');
+    h.run(12, () => shieldPlayer(h));
+    expect(h.of('radio').some((r) => /Hammer, push/.test(r.text))).toBe(true);
     const lead = h.world.aircraft.find((a) => a.groupId === 'hammer')!;
+    expect(lead).toBeTruthy();
     // teleport Hammer over the strip
     h.world.aircraft.filter((x) => x.groupId === 'hammer').forEach((a, i) => a.position.set(26500 + i * 300, 5000 + i * 40, -6000 + (i % 2) * 300));
     h.run(22, () => shieldPlayer(h));
@@ -193,7 +200,8 @@ describe('MissionRunner: objectives and outcome', () => {
     const h = harness(byId('c07'));
     h.world.player!.position.set(-30000, 7000, 30000); // far from the fight
     h.run(0.2);
-    (h.world as unknown as { time: number }).time = 539.5;
+    const limit = byId('c07').timeLimit!; // 720 s since i1 (room for a Winchester trip)
+    (h.world as unknown as { time: number }).time = limit - 0.5;
     h.run(1, () => shieldPlayer(h));
     expect(h.runner.state).toBe('failed');
     expect(h.runner.result(h.world).reason).toMatch(/time/i);

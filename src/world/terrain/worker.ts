@@ -4,6 +4,7 @@
  */
 import { createTheaterGenerator, generateBaseRows } from './generate';
 import { bakeColorRows, type HfView } from './bake';
+import { bakeAucklandCoastMask } from './theaters/auckland';
 import type { Anchor, TheaterGenerator } from './types';
 import type { TheaterId } from '../../core/types';
 import type { SceneryFeature } from '../../core/contracts';
@@ -11,11 +12,13 @@ import type { SceneryFeature } from '../../core/contracts';
 export type WorkerJob =
   | { id: number; kind: 'base'; theater: TheaterId; seed: number; anchors: Anchor[]; n: number; z0: number; z1: number }
   | { id: number; kind: 'hf'; hf: HfView }
-  | { id: number; kind: 'color'; theater: TheaterId; seed: number; features: SceneryFeature[]; m: number; j0: number; j1: number };
+  | { id: number; kind: 'color'; theater: TheaterId; seed: number; features: SceneryFeature[]; m: number; j0: number; j1: number }
+  | { id: number; kind: 'coast'; seed: number; n: number; extent: number; j0: number; j1: number };
 
 export type WorkerResult =
   | { id: number; kind: 'base'; z0: number; z1: number; data: Float32Array; mat: Uint8Array; aux: Uint8Array }
   | { id: number; kind: 'color'; j0: number; j1: number; rgba: Uint8Array }
+  | { id: number; kind: 'coast'; j0: number; j1: number; data: Uint8Array }
   | { id: number; kind: 'ok' }
   | { id: number; kind: 'error'; message: string };
 
@@ -44,6 +47,9 @@ scope.onmessage = (e) => {
       const aux = new Uint8Array(rows * job.n);
       generateBaseRows(cached, job.n, job.z0, job.z1, data, mat, aux);
       scope.postMessage({ id: job.id, kind: 'base', z0: job.z0, z1: job.z1, data, mat, aux }, [data.buffer, mat.buffer, aux.buffer]);
+    } else if (job.kind === 'coast') {
+      const data = bakeAucklandCoastMask(job.seed, job.n, job.extent, job.j0, job.j1);
+      scope.postMessage({ id: job.id, kind: 'coast', j0: job.j0, j1: job.j1, data }, [data.buffer]);
     } else if (job.kind === 'hf') {
       hfView = job.hf;
       scope.postMessage({ id: job.id, kind: 'ok' });

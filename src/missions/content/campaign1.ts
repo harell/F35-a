@@ -7,7 +7,7 @@
  * always military; the CBD, Sky Tower and Harbour Bridge are things you protect.
  */
 import type { MissionDef } from '../../core/contracts';
-import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, flight, mission, runwayPoint, site, target, wingmen } from './common';
+import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, fighterSweep, flight, mission, runwayPoint, site, target, wingmen } from './common';
 
 const DS = 'DARKSTAR';
 
@@ -26,7 +26,7 @@ export const C01: MissionDef = mission({
   briefing: [
     '04:12. A hostile expeditionary force came ashore on Rangitoto, Motutapu and Waiheke in the dark. Within the hour their fighters were probing the Waitematā, and Auckland woke up to sirens and jet noise over the harbour.',
     'Operation Southern Cross starts now. You and Viper 2 are the first F-35As off the runway at Whenuapai. Climb to CAP ALPHA over the upper harbour and let DARKSTAR, the AWACS orbiting over the Hunua Ranges, talk you onto a pair of MiG-29s sweeping in from the Gulf.',
-    'A clean F-35 is almost invisible to a Fulcrum radar, so see them first: tap TGT to designate, wait for the SHOOT cue, and send an AMRAAM. Keep them off the North Shore. Expect company once the first pair goes down.',
+    'A clean F-35 is almost invisible to a Fulcrum radar, so see them first: tap the TD box (or TGT) to lock — keep the nose within 30° while it locks — wait for SHOOT, fire, then crank 50° to support the missile. Keep them off the North Shore. Expect company once the first pair goes down. Out of missiles? Hold over Whenuapai to rearm.',
   ],
   recommendedLoadout: 'a2a_stealth',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
@@ -116,8 +116,9 @@ export const C02: MissionDef = mission({
           ],
         },
       }),
-      flight('hunters', 'mig29', 2, { x: 33000, z: -28000 }, 6500, 243, 260, 'interceptor', { skillOffset: -0.1, task: { kind: 'attack_group', group: 'kiwi' } }),
-      flight('flankers', 'su27', 2, { x: 33000, z: -9000 }, 7000, 275, 250, 'interceptor', { skillOffset: -0.05, spawn: { kind: 'time', t: 80 }, task: { kind: 'attack_group', group: 'kiwi' } }),
+      // fighter pairs stay pairs on Ace (sharper pilots + GCI instead of more of them)
+      flight('hunters', 'mig29', 2, { x: 33000, z: -28000 }, 6500, 243, 260, 'interceptor', { skillOffset: -0.1, maxCount: 2, task: { kind: 'attack_group', group: 'kiwi' } }),
+      flight('flankers', 'su27', 2, { x: 33000, z: -9000 }, 7000, 275, 250, 'interceptor', { skillOffset: -0.05, maxCount: 2, spawn: { kind: 'time', t: 80 }, task: { kind: 'attack_group', group: 'kiwi' } }),
     ],
     objectives: [
       { id: 'o_kiwi', kind: 'protect', group: 'kiwi', minSurvivors: 1, until: home, label: 'Get Kiwi flight home to Whenuapai', primary: true },
@@ -208,7 +209,7 @@ export const C03: MissionDef = mission({
     ],
     hints: [
       { id: 'h_arm', text: 'SEAD: WPN selects AARGM. Tap TGT on the SA-6 while its radar is on, then fire', when: { kind: 'time', t: 5 }, duration: 10 },
-      { id: 'h_sdb', text: 'SDBs glide ~30 km from altitude: select SDB, designate the SA-8 with TGT, release in range', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, duration: 9 },
+      { id: 'h_sdb', text: 'SDBs glide ~30 km from altitude: select SDB, designate the SA-8 with TGT, release inside 20 km', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, duration: 9 },
     ],
     opening: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. Rangitoto's SAMs are up and painting the harbour: SA-6 on the south-west slope, SA-8 on the east shore. Magnum at will.", priority: 2 }],
     successText: 'Rangitoto is quiet. The harbour is ours again.',
@@ -232,8 +233,8 @@ export const C04: MissionDef = mission({
   features: [FEATURES.whenuapai, FEATURES.waihekeStrip],
   briefing: [
     "The enemy has bulldozed a 2,000-metre strip across Waiheke's vineyards and is flying MiG-29s off it. Satellite passes this afternoon count four Fulcrums on the apron, two hardened shelters and a fuel farm.",
-    'Take the southern route through the Tāmaki Strait, well clear of the SA-8 on Motutapu, and put two JDAMs into the parked jets. An SA-6 covers the western end of the island and Shilkas sit either side of the runway.',
-    'If they get a pair airborne before you arrive, deal with it. Beast mode carries six JDAMs for the hangars and fuel too — but every pylon makes you easier to see.',
+    'Take the southern route through the Tāmaki Strait, well clear of the SA-8 on Motutapu, and put two JDAMs into the parked jets. An SA-6 covers the western end of the island and Shilkas sit either side of the runway. Weasel flight goes in ahead of you with AARGMs for the SA-6; Viper 2 flies top cover against the MiGs.',
+    'Climb high for the attack: from 25,000 ft a JDAM glides about 10 km, far outside the Shilkas and above the Tor. Run in northbound from the IP off Beachlands, let it go the moment IN RANGE shows, then turn away. Beast mode carries six JDAMs for the hangars and fuel too — but every pylon makes you easier to see.',
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth'],
@@ -242,7 +243,17 @@ export const C04: MissionDef = mission({
     autoHints: true,
     parTime: 480,
     groups: [
+      flight('weasel', 'f35a', 2, { x: 4000, z: 1500 }, 6500, 95, 240, 'fighter', {
+        team: 'blue',
+        callsign: 'Weasel',
+        fixedCount: true,
+        loadout: 'sead_stealth',
+        announce: false,
+        task: { kind: 'attack_group', group: 'wai_sa6' },
+      }),
       flight('cap', 'mig29', 2, { x: 26000, z: -12000 }, 5500, 250, 230, 'cap', { task: { kind: 'patrol', x: 26000, z: -11000, radius: 6000, altitude: 5500 } }),
+      // Viper 2 flies top cover as a sweep ahead of the player, straight at the MiG CAP
+      fighterSweep(1, { x: 7000, z: -3500 }, 7000, 75, 'cap'),
       flight('scramble', 'mig29', 2, rw(-900, 0), 500, WAIHEKE_RUNWAY_HDG, 170, 'interceptor', {
         spawn: {
           kind: 'all',
@@ -260,7 +271,8 @@ export const C04: MissionDef = mission({
       site('zsuE', 'wai_aaa', 'zsu23', rw(700, 150)),
       site('sa15', 'wai_sa15', 'sa15', P.waiC, { minDifficulty: 'pilot' }),
       site('manpads', 'wai_manpads', 'sa18', { x: 27300, z: -6900 }, { minDifficulty: 'veteran' }),
-      site('sa8', 'motu_sa8', 'sa8', P.motuN),
+      // Recruit / Pilot: the Motutapu Osa is gone (a dogfight with the CAP drifts right into it)
+      site('sa8', 'motu_sa8', 'sa8', P.motuN, { minDifficulty: 'veteran' }),
     ],
     ground: [
       target('jet1', 'parked', 'parked_jet', rw(-180, 320), { heading: 170, name: 'MiG-29' }),
@@ -279,7 +291,10 @@ export const C04: MissionDef = mission({
       { id: 'o_sa6', kind: 'destroy', groups: ['wai_sa6'], label: 'Destroy the SA-6', primary: false },
     ],
     waypoints: [
-      { id: 'wp_strait', label: 'Tāmaki Strait', kind: 'nav', x: 15000, z: -600, altitude: 4500 },
+      // the southern route at 25,000 ft (above the SA-8 / Tor / Shilka envelopes; the SA-6 is
+      // Weasel's), then a northbound run-in from the IP off Beachlands, ~13 km out (12.9 km from the Tor)
+      { id: 'wp_strait', label: 'Tāmaki Strait', kind: 'nav', x: 15000, z: 3000, altitude: 7500 },
+      { id: 'wp_ip', label: 'IP Beachlands', kind: 'ip', x: 23500, z: 6500, altitude: 7500 },
       { id: 'wp_strip', label: 'Airstrip', kind: 'target', x: rw(0, 320).x, z: rw(0, 320).z, objective: 'o_jets' },
     ],
     triggers: [
@@ -294,9 +309,15 @@ export const C04: MissionDef = mission({
         delay: 2,
         actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. Good hits! Those Fulcrums aren't flying again." }],
       },
+      { id: 't_sa6', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, delay: 2, actions: [{ kind: 'radio', from: 'Weasel 1', text: 'Weasel 1: the SA-6 is down. Your turn, Viper.' }] },
+    ],
+    hints: [
+      { id: 'h_high', text: 'Climb to 25,000 ft on the way in: the higher you release, the further the JDAM glides', when: { kind: 'time', t: 6 }, duration: 8 },
+      { id: 'h_rel', text: 'Designate the parked jets with TGT and release the moment IN RANGE shows — then turn away', when: { kind: 'area', x: strip.x, z: strip.z, radius: 20000 }, duration: 8 },
     ],
     opening: [
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Four Fulcrums on the Waiheke apron and a pair on CAP north of the island. Come in from the south.', priority: 2 },
+      { kind: 'radio', from: 'Weasel 1', text: 'Weasel 1, pushing for the SA-6. Magnum in two minutes.' },
     ],
     successText: 'The Waiheke strip is out of business.',
   },
@@ -339,7 +360,7 @@ export const C05: MissionDef = mission({
           ],
         },
       }),
-      flight('escort', 'su27', 2, { x: 32500, z: -30500 }, 9500, 240, 250, 'escort', { task: { kind: 'escort_group', group: 'raid' } }),
+      flight('escort', 'su27', 2, { x: 32500, z: -30500 }, 9500, 240, 250, 'escort', { maxCount: 2, task: { kind: 'escort_group', group: 'raid' } }),
       flight('raid2', 'tu22m', 2, { x: -6000, z: -35500 }, 9000, 160, 240, 'bomber', {
         maxCount: 3,
         spawn: { kind: 'time', t: 150 },
@@ -425,7 +446,7 @@ export const C06: MissionDef = mission({
   briefing: [
     'Two enemy corvettes are escorting a supply ship through the Tāmaki Strait, between Waiheke and the eastern suburbs, bringing fuel and missiles to the island garrisons.',
     'Sink both corvettes. An SA-15 Tor on Motuihe Island and an SA-8 on the south shore of Waiheke cover the strait, a Shilka sits on Browns Island at the mouth of the Tāmaki River, and a pair of Flankers is holding CAP overhead.',
-    "The corvettes are steaming slowly on a patrol line. A JDAM flies to where the ship was when you let it go, so release close and let the blast radius do the rest. Line up from the south-west, over the city, and you'll stay out of the Tor's reach.",
+    "The corvettes are creeping along a patrol line at two knots. A JDAM flies to where the ship was when you let it go — release the moment IN RANGE shows from 25,000 ft and the blast does the rest. Fly to the IP south of Beachlands and run in northbound: up there you are above the Tor and the SA-8 (both top out below 20,000 ft) and well outside their reach. Viper 2 will take on the Flankers.",
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth'],
@@ -434,6 +455,8 @@ export const C06: MissionDef = mission({
     parTime: 480,
     groups: [
       flight('flankers', 'su27', 2, { x: 26000, z: -1000 }, 5500, 250, 240, 'cap', { skillOffset: 0.05, task: { kind: 'patrol', x: 21000, z: -2500, radius: 7000, altitude: 5000 } }),
+      // Viper 2 takes on the Flankers: a sweep ahead of the player, straight at the CAP
+      fighterSweep(1, { x: 5500, z: 5000 }, 6500, 70, 'flankers'),
     ],
     sams: [
       site('sa15', 'motuihe_sa15', 'sa15', P.motuihe),
@@ -442,8 +465,10 @@ export const C06: MissionDef = mission({
       site('manpads', 'wai_manpads', 'sa18', P.waiW, { minDifficulty: 'veteran' }),
     ],
     ground: [
-      target('cv1', 'fleet', 'ship', { x: 24000, z: 1000 }, { name: 'Corvette 531', path: [{ x: 17000, z: -500 }, { x: 24000, z: 1000 }], loop: true, speed: 3 }),
-      target('cv2', 'fleet', 'ship', { x: 25500, z: 1800 }, { name: 'Corvette 532', path: [{ x: 18500, z: 300 }, { x: 25500, z: 1800 }], loop: true, speed: 3 }),
+      // slow patrol line (≈2 kn): a JDAM flies to where the ship was at release, so a fast ship
+    // would sail out of the blast during a long glide
+      target('cv1', 'fleet', 'ship', { x: 24000, z: 1000 }, { name: 'Corvette 531', path: [{ x: 17000, z: -500 }, { x: 24000, z: 1000 }], loop: true, speed: 1 }),
+      target('cv2', 'fleet', 'ship', { x: 25500, z: 1800 }, { name: 'Corvette 532', path: [{ x: 18500, z: 300 }, { x: 25500, z: 1800 }], loop: true, speed: 1 }),
       target('supply', 'supply', 'ship', { x: 20500, z: -2300 }, { name: 'Supply Ship' }),
     ],
     objectives: [
@@ -453,7 +478,9 @@ export const C06: MissionDef = mission({
       { id: 'o_cap', kind: 'destroy', groups: ['flankers'], label: 'Splash the Flanker CAP', primary: false },
     ],
     waypoints: [
-      { id: 'wp_ip', label: 'IP St Heliers', kind: 'ip', x: 8700, z: 1500, altitude: 3000 },
+      // south of Beachlands at 25,000 ft: 16 km from the Motuihe Tor and 15 km from the SA-8,
+      // ~10 km (JDAM glide) from the patrol line — the briefed run-in is northbound
+      { id: 'wp_ip', label: 'IP Beachlands', kind: 'ip', x: 21500, z: 11000, altitude: 7500 },
       { id: 'wp_fleet', label: 'Corvettes', kind: 'target', x: 21000, z: 500, objective: 'o_fleet' },
     ],
     triggers: [
@@ -464,7 +491,7 @@ export const C06: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. One corvette burning. The other's still making way — finish it." }],
       },
     ],
-    hints: [{ id: 'h_ships', text: 'Moving ships: designate with TGT and release close — the JDAM flies to where the ship WAS', when: { kind: 'area', x: 21000, z: 500, radius: 22000 }, duration: 8 }],
+    hints: [{ id: 'h_ships', text: 'Ships: designate with TGT and release the moment IN RANGE shows — the JDAM flies to where the ship WAS', when: { kind: 'area', x: 21000, z: 500, radius: 22000 }, duration: 8 }],
     opening: [
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two corvettes and a supply ship in the Tāmaki Strait. SA-15 on Motuihe, SA-8 on Waiheke south. Flankers overhead.', priority: 2 },
     ],

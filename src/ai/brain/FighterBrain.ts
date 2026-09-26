@@ -23,6 +23,7 @@ import { Vector3 } from 'three';
 import type { AiRole, AiTask, SimWorld } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import type { WeaponId } from '../../core/types';
+import { isStealthy } from '../../sim/sensors/signatures';
 import { gammaForAltitude, type FlightIntent } from '../pilot/Autopilot';
 import { FormationKeeper, SLOT_ESCORT, SLOT_FIGHTING_WING, SLOT_FINGERTIP } from '../pilot/formation';
 import { aspectOf, clampN, dirTo, dirWithElevation, headingDir, interceptPoint, rotateHorizontal, signedHorizAngle } from '../geom';
@@ -74,6 +75,12 @@ export class FighterBrain extends Brain {
   private readonly ctx: TickCtx;
   /** Air-to-ground attack task finished (weapons gone / target dead): egress home. */
   private strikeDone = false;
+  /**
+   * Spawned without any weapons (training target drone, unarmed transport): not "Winchester" —
+   * it keeps flying its task (and defends itself) instead of bugging out; only an 'attack' task
+   * makes it press in on its target (a harmless merge for gun / AIM-9X practice).
+   */
+  private unarmed = false;
 
   private targetId: number | null = null;
   private retargetAt = 0;
@@ -91,6 +98,11 @@ export class FighterBrain extends Brain {
   private lastPlayerDes: number | null = null;
   /** Sim time of the last engagement tick (for quick mid-fight re-targeting). */
   private lastEngageTime = -99;
+  /** Tail chase of a cold, non-threatening bandit: since when, and which bandit. */
+  private chaseSince = -1;
+  private chaseId = -1;
+  /** Bandits the pilot gave up chasing (id → sim time until which they are ignored). */
+  private readonly ignoreUntil = new Map<number, number>();
 
   constructor(role: AiRole, opts: BrainOptions, cfg: FighterConfig) {
     super(role, opts);
@@ -115,6 +127,9 @@ export class FighterBrain extends Brain {
 
   protected override onInit(ac: AircraftEntity): void {
     this.lastKills = ac.kills;
+    let stores = ac.gunAmmo;
+    for (const st of ac.stores) stores += st.count;
+    this.unarmed = stores === 0;
   }
 
   protected override onTask(task: AiTask): void {
@@ -154,6 +169,10 @@ export class FighterBrain extends Brain {
     // 2. out of the fight?
     if (this.shouldBugout(ac)) {
       this.flyBugout(ac, world, it);
+      return;
+    }
+    if (this.unarmed && this.task?.kind !== 'attack') {
+      this.idle(ac, world, it, dt);
       return;
     }
 
@@ -251,6 +270,12 @@ export class FighterBrain extends Brain {
     let best: Bandit | null = null;
     let bestScore = -Infinity;
     for (const b of this.aw.bandits) {
+      // a bandit we gave up chasing stays ignored unless it turns on us or comes close
+      const ign = this.ignoreUntil.get(b.id);
+      if (ign !== undefined) {
+        if (this.now < ign && b.threat === 0 && b.range > 6_000 && aspectOf(b.pos, b.vel, ac.position) < 100 * DEG) continue;
+        this.ignoreUntil.delete(b.id);
+      }
       let ok: boolean;
       if (b.id === attackId) ok = true;
       else if (cfg.escort && leader) ok = b.pos.distanceTo(leader.position) <= 20_000 || (b.threat > 0 && b.range < 12_000);
@@ -299,9 +324,38 @@ export class FighterBrain extends Brain {
     if (ac.selectedWeapon !== want) world.combat.selectWeapon(ac, want, world);
   }
 
+  /**
+   * Hostile pilots don't chase a cold, non-threatening bandit forever (a fleeing F-35 runs back
+   * under its own air defences): after a skill-based time (rookie ≈ 30 s … ace ≈ 85 s) of tail
+   * chase they break off and ignore it for a minute unless it turns back or comes close.
+   * Returns true when the chase was abandoned.
+   */
+  private chaseLimit(ac: AircraftEntity, b: Bandit): boolean {
+    if (ac.team !== 'red' || this.task?.kind === 'attack') return false;
+    const cold = b.threat === 0 && b.range > 3_000 && aspectOf(b.pos, b.vel, ac.position) < 60 * DEG;
+    if (!cold) {
+      if (this.chaseId === b.id) this.chaseSince = -1;
+      return false;
+    }
+    if (this.chaseId !== b.id || this.chaseSince < 0) {
+      this.chaseId = b.id;
+      this.chaseSince = this.now;
+    }
+    if (this.now - this.chaseSince < 20 + 75 * this.skill.level) return false;
+    this.ignoreUntil.set(b.id, this.now + 60);
+    this.chaseSince = -1;
+    this.targetId = null;
+    this.engagedId = null;
+    return true;
+  }
+
   private engage(ac: AircraftEntity, world: SimWorld, it: FlightIntent, b: Bandit): void {
     const c = this.ctx;
     const skill = this.skill;
+    if (this.chaseLimit(ac, b)) {
+      this.idle(ac, world, it, c.dt);
+      return;
+    }
     this.lastEngageTime = this.now;
     if (ac.radar.designatedId !== b.id) world.combat.designate(ac, b.id, world);
     const R = b.range;
@@ -400,6 +454,12 @@ export class FighterBrain extends Brain {
     dirWithElevation(_h, gamma, it.dir);
     it.speed = speed;
     it.allowAb = fast || tailChase || b.range < 20_000;
+    // a clean stealth jet keeps out of afterburner once inside an IRST's reach (the plume is
+    // what it sees): MIL inside ~25 km unless chasing a runner
+    if (isStealthy(ac) && (ac.rcsMultiplier ?? 1) <= 1.5 && b.range < 25_000 && !tailChase) {
+      it.allowAb = false;
+      it.speed = Math.min(it.speed, tasForIas(250, ac.position.y));
+    }
     it.gMax = Math.min(bvr ? 5 : 4, skill.maxG);
     it.gain = 1.1;
     it.track = b.range < 20_000;
@@ -458,8 +518,8 @@ export class FighterBrain extends Brain {
     if (this.task?.kind === 'attack') {
       const e = world.getEntity(this.task.targetId);
       if (e && e.kind === 'aircraft' && e.alive) target = e;
-    } else if (this.cfg.gci) {
-      // scramble: vectors onto the closest hostile aircraft
+    } else if (this.cfg.gci || this.offboardGci(ac)) {
+      // scramble / ace-level GCI support: vectors onto the closest hostile aircraft
       let bestD = Infinity;
       for (const e of world.aircraft) {
         if (!e.alive || e.team === ac.team) continue;
@@ -469,6 +529,8 @@ export class FighterBrain extends Brain {
           target = e;
         }
       }
+      // off-board GCI only talks the pilot onto bandits inside its commit range
+      if (!this.cfg.gci && bestD > this.cfg.commitRange * this.cfg.commitRange) target = null;
     }
     if (!target) return false;
     const err = ac.team === 'red' ? 2_500 : 300;
@@ -486,6 +548,17 @@ export class FighterBrain extends Brain {
     this.selectWeapon(ac, world, false);
     this.setState('INTERCEPT');
     return true;
+  }
+
+  /**
+   * Ace-level hostile fighters fly with ground-controlled-intercept support (the island radar
+   * network / an airborne controller): coarse vectors (±2.5 km, refreshed every 8 s) onto the
+   * nearest hostile jet inside their commit range, even a stealthy one they can't see. They still
+   * need their own radar / IRST track to shoot, so stealth keeps the first shot — but an Ace
+   * enemy does not lose a player who runs.
+   */
+  private offboardGci(ac: AircraftEntity): boolean {
+    return ac.team === 'red' && this.skill.level >= 0.75 && !this.cfg.escort && !this.cfg.friendlyWing;
   }
 
   /** Turn towards a fighter radar locking us (RWR 'track' / 'launch'). */
@@ -561,10 +634,24 @@ export class FighterBrain extends Brain {
 
   private shouldBugout(ac: AircraftEntity): boolean {
     const missiles = this.wpn.bvrLeft(this.ctx) + this.wpn.irLeft(this.ctx);
-    const winchester = missiles === 0 && (ac.gunAmmo < 30 || this.skill.level < 0.35);
+    // Winchester: hostile pilots defend their airspace with the gun to the end (and stay
+    // killable — a mission never stalls on a MiG hiding at home); friendly pilots with only the
+    // gun left disengage from missile-armed fighters that have not merged with them yet
+    const winchester = !this.unarmed && missiles === 0 && (ac.gunAmmo < 30 || (ac.team !== 'red' && this.gunOnlyVsFighter()));
     const damaged = ac.health < 35 || ac.damage.engine > 0.5 || ac.damage.hydraulics > 0.6;
     const bingo = ac.flight.fuel < this.perfOf(ac).internalFuel * 0.08;
     return winchester || damaged || bingo;
+  }
+
+  /**
+   * Out of missiles with only the gun, facing a hostile fighter (which presumably still carries
+   * IR missiles) that has not merged with us yet: a sound pilot disengages rather than taking a
+   * gun into a merge with a missile-armed bandit. Once already in a turning fight (≤ 4 km) turning
+   * tail is worse than fighting, so it stays (and a guns solution is always pressed).
+   */
+  private gunOnlyVsFighter(): boolean {
+    const b = this.aw.closest(true);
+    return !!b && b.range <= 15_000 && b.range >= 4_000;
   }
 
   private flyBugout(ac: AircraftEntity, world: SimWorld, it: FlightIntent): void {

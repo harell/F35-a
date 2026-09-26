@@ -123,9 +123,10 @@ describe('scatter sources', () => {
     for (const arr of a.data) {
       for (let i = 0; i < arr.length; i += 11) {
         const [x, y, z] = [arr[i], arr[i + 1], arr[i + 2]];
-        expect(x).toBeGreaterThanOrEqual(1200);
-        expect(x).toBeLessThan(1500);
-        expect(Math.abs(y + 1.2 - hf.meshHeightAt(x, z))).toBeLessThan(0.01);
+        // house centres are offset inside their lot (lot centres lie in the tile)
+        expect(x).toBeGreaterThanOrEqual(1200 - 12);
+        expect(x).toBeLessThan(1500 + 12);
+        expect(Math.abs(y + 0.8 - hf.meshHeightAt(x, z))).toBeLessThan(0.01);
         expect(hf.heightAt(x, z)).toBeGreaterThan(0.5);
       }
     }

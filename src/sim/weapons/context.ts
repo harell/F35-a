@@ -43,6 +43,9 @@ export interface TrackContact extends RadarContact {
   inGimbal: boolean;
   /** Entity kind of the contact. */
   entityKind: 'aircraft' | 'sam' | 'ground';
+  /** Sustained-notch accumulator of our radar's track on it and the break threshold (−1 = not rolled). */
+  notchAccum: number;
+  notchNeed: number;
 }
 
 export interface PendingRelease {
@@ -100,6 +103,8 @@ export interface AcCombatState {
   contactPool: TrackContact[];
   lastSensorTime: number;
   lockLostTimer: number;
+  /** Human player: a lock was commanded on the current designation (tap on the TD box / TGT). */
+  lockCommanded: boolean;
   /** Seconds the designated target has been missing from the contact list. */
   designationStale: number;
   /** AI lock time (s), derived from skill. */
@@ -144,6 +149,7 @@ export function acState(ac: AircraftEntity): AcCombatState {
       contactPool: [],
       lastSensorTime: -1,
       lockLostTimer: 0,
+      lockCommanded: false,
       designationStale: 0,
       lockTime: 1.5,
       groundPoint: new Vector3(),

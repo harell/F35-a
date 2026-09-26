@@ -1,6 +1,8 @@
 /**
  * F35-A — shared static data tables (difficulty, quality presets, loadouts, display names).
- * OWNERSHIP: orchestrator. The COMBAT agent may tune LOADOUTS numbers; nobody else edits.
+ * OWNERSHIP: orchestrator. The COMBAT agent may tune LOADOUTS numbers; SIM/AI may retune the
+ * DIFFICULTIES numbers and descriptions (balance measured with tests/ai-balance.test.ts and
+ * e2e/review/dev-simai-balance.ts); nobody else edits.
  */
 import type {
   AircraftType,
@@ -23,10 +25,10 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   recruit: {
     id: 'recruit',
     label: 'Recruit',
-    description: 'Full flight assists, forgiving enemies, generous countermeasures. Learn the jet.',
+    description: 'Forgiving enemies that react slowly and shoot late, generous countermeasures, three missile hits to kill. Learn the jet.',
     playerDamageScale: 0.35,
     aiSkill: 0.25,
-    aiReactionTime: 2.2,
+    aiReactionTime: 3.0,
     aiMaxG: 5.5,
     enemyMissileSkill: 0.55,
     samRangeScale: 0.75,
@@ -44,10 +46,10 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   pilot: {
     id: 'pilot',
     label: 'Pilot',
-    description: 'Balanced. Assisted flight, competent enemies, SAMs are dangerous.',
+    description: 'Balanced. Competent enemies and dangerous SAMs — see them first, shoot first, defend every missile.',
     playerDamageScale: 0.65,
     aiSkill: 0.5,
-    aiReactionTime: 1.4,
+    aiReactionTime: 2.0,
     aiMaxG: 7,
     enemyMissileSkill: 0.8,
     samRangeScale: 0.9,
@@ -65,7 +67,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   veteran: {
     id: 'veteran',
     label: 'Veteran',
-    description: 'Aggressive, well-trained enemies. Manage your energy and your emissions.',
+    description: 'Aggressive, well-trained enemies; one missile hit is fatal. Manage your energy and your emissions.',
     playerDamageScale: 1,
     aiSkill: 0.75,
     aiReactionTime: 0.8,
@@ -78,7 +80,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     flightAssist: true,
     gEffects: true,
     generousShootCues: false,
-    enemyCountScale: 1.25,
+    enemyCountScale: 1,
     scoreMultiplier: 1.5,
     playerMissileHitsToKill: 1,
     fuelBurnScale: 1,
@@ -86,7 +88,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   ace: {
     id: 'ace',
     label: 'Ace',
-    description: 'Realistic. No flight assists, full G effects, lethal SAMs, one hit kills.',
+    description: 'Realistic. Carefree FBW and Auto-GCAS like the real jet, but no flight-path hold, rough buffet and G-LOC. More, sharper enemies with GCI support, lethal SAMs, one hit kills.',
     playerDamageScale: 1.25,
     aiSkill: 0.95,
     aiReactionTime: 0.4,

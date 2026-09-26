@@ -1,11 +1,12 @@
 /**
- * PCD manager: one wide CanvasTexture (20x8 in panoramic cockpit display) split into portals.
+ * PCD manager: one wide CanvasTexture (panoramic cockpit display) split into portals.
  *
  *   [ SMS / FUEL / ENG / ICAWS ] [        TSD / RDR        ] [ RWR / ICAWS / FUEL / ENG ]
  *
- * Tapping a portal cycles its page. The canvas is redrawn at a throttled rate (8–10 Hz, 5 Hz on low
- * quality) and uploaded only then. The UFD (small up-front strip under the glare shield) shares the
- * redraw cadence.
+ * (left-handed layout: the RWR portal moves to the left, away from the right-hand throttle cluster.)
+ * Tapping a portal opens it in the large 2D zoom overlay (zoom.ts, drawn by the HUD) where tabs switch
+ * its page. The canvas is redrawn at a throttled rate (8–10 Hz, 5 Hz on low quality) and uploaded only
+ * then. The UFD (small up-front strip under the glare shield) shares the redraw cadence.
  */
 import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace } from 'three';
 import type { FrameContext } from '../../core/contracts';
@@ -14,6 +15,8 @@ import { RAD, toNm } from '../../core/math';
 import { Pen } from '../hmd/pen';
 import { WEAPON_HUD, WEAPON_IS_AG, mmss } from '../hmd/format';
 import { PAGE_FNS, PC, type PageId, type PcdData } from './pages';
+import { PCD } from './geometry';
+import { pcdZoom } from './zoom';
 
 interface Portal {
   x: number;
@@ -23,8 +26,12 @@ interface Portal {
 }
 
 export const PCD_W = 1024;
-export const PCD_H = 410;
-const TITLE_H = 38;
+/** Texture height follows the screen's aspect (no stretched texels). */
+export const PCD_H = Math.round((PCD_W * PCD.height) / PCD.width / 2) * 2;
+export const TITLE_H = 36;
+
+const SMS_PAGES: PageId[] = ['SMS', 'FUEL', 'ENG', 'ICAWS'];
+const RWR_PAGES: PageId[] = ['RWR', 'ICAWS', 'FUEL', 'ENG'];
 
 export class PcdDisplay {
   readonly canvas: HTMLCanvasElement;
@@ -34,14 +41,15 @@ export class PcdDisplay {
   private readonly pen: Pen;
   private readonly ufdPen: Pen;
   private readonly portals: Portal[] = [
-    { x: 0, w: 256, pages: ['SMS', 'FUEL', 'ENG', 'ICAWS'], index: 0 },
+    { x: 0, w: 256, pages: SMS_PAGES, index: 0 },
     { x: 256, w: 512, pages: ['TSD', 'RDR'], index: 0 },
-    { x: 768, w: 256, pages: ['RWR', 'ICAWS', 'FUEL', 'ENG'], index: 0 },
+    { x: 768, w: 256, pages: RWR_PAGES, index: 0 },
   ];
+  private leftHanded = false;
   private acc = 1;
   private dirty = true;
   private readonly period: number;
-  private readonly data: PcdData = { ctx: null as unknown as FrameContext, p: null as unknown as PcdData['p'], flash: false };
+  private readonly data: PcdData = { ctx: null as unknown as FrameContext, p: null as unknown as PcdData['p'], flash: false, zoom: false };
   private lastWarnCount = 0;
 
   constructor(quality: QualitySettings) {
@@ -84,17 +92,64 @@ export class PcdDisplay {
     this.dirty = true;
   }
 
-  /** Tap at PCD texture uv (0..1, v up). Cycles the portal's page. */
-  tapUv(u: number, v: number): boolean {
+  /** Portal index under texture u (0..1), or -1. */
+  portalAt(u: number): number {
     const x = u * PCD_W;
-    for (const p of this.portals) {
-      if (x >= p.x && x < p.x + p.w) {
-        p.index = (p.index + 1) % p.pages.length;
-        this.dirty = true;
-        return true;
-      }
+    for (let i = 0; i < this.portals.length; i++) {
+      const p = this.portals[i];
+      if (x >= p.x && x < p.x + p.w) return i;
     }
-    return v >= 0 && v <= 1;
+    return -1;
+  }
+
+  /** Tap at PCD texture uv (0..1, v up): opens that portal in the zoom overlay. */
+  tapUv(u: number, v: number): boolean {
+    if (v < 0 || v > 1) return false;
+    const i = this.portalAt(u);
+    if (i < 0) return false;
+    this.openZoom(i);
+    return true;
+  }
+
+  /** Show portal `i` in the big 2D overlay (the HUD draws it). */
+  openZoom(i: number): void {
+    const p = this.portals[i];
+    if (!p) return;
+    pcdZoom.openPortal(i, p.pages, p.index);
+  }
+
+  /** Select a page of a portal (zoom tabs). */
+  setPage(portal: number, index: number): void {
+    const p = this.portals[portal];
+    if (!p) return;
+    p.index = Math.max(0, Math.min(p.pages.length - 1, index));
+    this.dirty = true;
+    if (pcdZoom.portal === portal) {
+      pcdZoom.pages = p.pages;
+      pcdZoom.index = p.index;
+    }
+  }
+
+  /** Cycle a portal's page (legacy tap behaviour; keyboard / tests). */
+  cyclePage(portal: number): void {
+    const p = this.portals[portal];
+    if (p) this.setPage(portal, (p.index + 1) % p.pages.length);
+  }
+
+  /** Left-handed layout: RWR on the left portal (the throttle cluster covers the right one). */
+  setLeftHanded(lh: boolean): void {
+    if (lh === this.leftHanded) return;
+    this.leftHanded = lh;
+    const a = this.portals[0];
+    const b = this.portals[2];
+    const pa = a.pages;
+    const ia = a.index;
+    a.pages = b.pages;
+    a.index = b.index;
+    b.pages = pa;
+    b.index = ia;
+    if (pcdZoom.portal === 0 || pcdZoom.portal === 2) pcdZoom.close();
+    this.dirty = true;
   }
 
   /** Current page ids (for tests / debugging). */
@@ -105,13 +160,13 @@ export class PcdDisplay {
   update(ctx: FrameContext, dt: number): void {
     const p = ctx.player;
     if (!p || !ctx.world) return;
+    this.setLeftHanded(!!ctx.settings?.leftHanded);
     this.acc += dt;
-    // new warnings: jump the right portal to ICAWS once so the pilot sees it
+    // new warnings: jump the RWR portal to ICAWS once so the pilot sees it
     const wc = p.warnings.size;
     if (wc > this.lastWarnCount && (p.warnings.has('engine_fire') || p.warnings.has('hydraulics') || p.warnings.has('engine_fail'))) {
-      const right = this.portals[2];
-      right.index = right.pages.indexOf('ICAWS');
-      this.dirty = true;
+      const i = this.portals[0].pages === RWR_PAGES ? 0 : 2;
+      this.setPage(i, this.portals[i].pages.indexOf('ICAWS'));
     }
     this.lastWarnCount = wc;
     if (!this.dirty && this.acc < this.period) return;
@@ -154,15 +209,22 @@ export class PcdDisplay {
       pen.begin();
       pen.rect(x, 4, w, PCD_H - 8);
       pen.strokePlain(PC.frame, 3);
-      pen.text(page, x + 12, 4 + TITLE_H / 2 + 1, PC.title, 26, 'left');
-      // page dots (tap to cycle)
+      pen.text(page, x + 12, 4 + TITLE_H / 2 + 1, PC.title, 28, 'left');
+      // page dots + zoom hint (tap to open)
       const n = portal.pages.length;
       for (let i = 0; i < n; i++) {
         pen.begin();
-        pen.circle(x + w - 14 - (n - 1 - i) * 16, 4 + TITLE_H / 2, 5);
+        pen.circle(x + w - 14 - (n - 1 - i) * 17, 4 + TITLE_H / 2, 5.5);
         if (i === portal.index) pen.fillPlain(PC.cyan);
         else pen.strokePlain(PC.dim, 2);
       }
+      // magnifier glyph: tap to zoom
+      const mx = x + w - 30 - (n - 1) * 17 - 16;
+      const my = 4 + TITLE_H / 2;
+      pen.begin();
+      pen.circle(mx, my - 2, 7);
+      pen.line(mx + 5, my + 3, mx + 10, my + 9);
+      pen.strokePlain(PC.label, 2.5);
       // page content (clipped to the portal body)
       const cy = 4 + TITLE_H;
       const ch = PCD_H - 8 - TITLE_H;

@@ -6,14 +6,14 @@ import type { ObjectiveStatus } from '../../core/contracts';
 import type { ObjectiveDef } from '../schema';
 import { evalCondition } from './conditions';
 import { retaskGroup } from './spawner';
-import { aliveCount, deadCount, difficultyAtLeast, type MissionState, type ObjectiveRt } from './state';
+import { aliveCount, deadCount, difficultyAtLeast, drivenOffCount, type MissionState, type ObjectiveRt } from './state';
 import { POINTS } from './scoring';
 
 export function createObjectives(s: MissionState): void {
   for (const def of s.script.objectives) {
     if (!difficultyAtLeast(s.difficulty.id, def.minDifficulty)) continue;
     const status: ObjectiveStatus = { id: def.id, label: def.label, state: 'pending', primary: def.primary };
-    const rt: ObjectiveRt = { def, status, accum: 0, aborted: false };
+    const rt: ObjectiveRt = { def, status, accum: 0, aborted: false, drivenOff: 0 };
     s.objectives.push(rt);
     s.objectiveById.set(def.id, rt);
   }
@@ -21,6 +21,14 @@ export function createObjectives(s: MissionState): void {
 
 export function objectiveBonus(def: ObjectiveDef): number {
   return def.bonus ?? (def.primary ? POINTS.primary : POINTS.secondary);
+}
+
+/** Bonus actually earned: bandits driven off instead of killed are worth half. */
+export function earnedBonus(o: ObjectiveRt): number {
+  const base = objectiveBonus(o.def);
+  const total = o.status.progress?.total ?? 0;
+  if (o.drivenOff <= 0 || total <= 0) return base;
+  return Math.round(base * (1 - (0.5 * Math.min(o.drivenOff, total)) / total));
 }
 
 function setState(s: MissionState, o: ObjectiveRt, state: ObjectiveStatus['state'], announce = true): void {
@@ -58,18 +66,20 @@ function otherPrimariesDone(s: MissionState, self: ObjectiveRt): boolean {
   return true;
 }
 
-function groupsProgress(s: MissionState, ids: string[]): { done: number; total: number; spawnedAll: boolean } {
+function groupsProgress(s: MissionState, ids: string[], countDrivenOff = false): { done: number; total: number; spawnedAll: boolean; drivenOff: number } {
   let done = 0;
   let total = 0;
+  let drivenOff = 0;
   let spawnedAll = true;
   for (const id of ids) {
     const g = s.groups.get(id);
     if (!g) continue;
     total += g.expected;
     done += deadCount(g);
+    if (countDrivenOff) drivenOff += drivenOffCount(s, g);
     if (g.members.length < g.expected) spawnedAll = false;
   }
-  return { done, total, spawnedAll };
+  return { done: done + drivenOff, total, spawnedAll, drivenOff };
 }
 
 /** Evaluate every objective (called at the runner's evaluation rate). */
@@ -91,9 +101,11 @@ export function updateObjectives(s: MissionState, dt: number): void {
 
     switch (def.kind) {
       case 'destroy': {
-        const pr = groupsProgress(s, def.groups);
+        // bandits that bugged out / ran home count as defeated (never a stalled mission)
+        const pr = groupsProgress(s, def.groups, true);
         const need = def.count !== undefined ? Math.min(def.count, pr.total) : pr.total;
         st.progress = { done: Math.min(pr.done, need), total: need };
+        o.drivenOff = Math.min(pr.drivenOff, need);
         if (need > 0 && pr.done >= need && (def.count !== undefined || pr.spawnedAll)) setState(s, o, 'complete');
         break;
       }
@@ -242,7 +254,7 @@ export function objectiveSummary(s: MissionState): {
       secondaryTotal++;
       if (done) secondaryDone++;
     }
-    if (done) bonus += objectiveBonus(o.def);
+    if (done) bonus += earnedBonus(o);
   }
   return { primaryTotal, primaryDone, primaryFailed, secondaryTotal, secondaryDone, bonus };
 }

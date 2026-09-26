@@ -42,10 +42,11 @@ export abstract class Brain implements AiBrain {
   protected readonly pilot = new Autopilot();
   protected readonly radio = new RadioOperator();
   protected readonly rng: () => number;
-  protected readonly spawnSkill: number;
+  /** The mission's 0..1 skill for this pilot (public: the combat model duck-types it). */
+  readonly spawnSkill: number;
   protected task: AiTask | null;
   /** Derived on the first update (needs team, type and world difficulty). */
-  protected skill!: PilotSkill;
+  private derivedSkill!: PilotSkill;
   protected initialised = false;
   /** Sim time of the current tick. */
   protected now = 0;
@@ -72,6 +73,15 @@ export abstract class Brain implements AiBrain {
     this.spawnSkill = opts.skill;
     this.task = opts.task ?? null;
     this.rng = mulberry32(opts.seed ?? (seedCounter++ * 7919 + 17));
+  }
+
+  /**
+   * The pilot's derived skill (reaction, g, aim, defence…). Public and stable: the combat model
+   * reads `skill.defense` for countermeasure / notch effectiveness against this pilot.
+   * Undefined until the brain's first update.
+   */
+  get skill(): PilotSkill {
+    return this.derivedSkill;
   }
 
   update(ac: AircraftEntity, world: SimWorld, dt: number): void {
@@ -109,7 +119,7 @@ export abstract class Brain implements AiBrain {
 
   private init(ac: AircraftEntity, world: SimWorld): void {
     this.initialised = true;
-    this.skill = deriveSkill(world.difficulty, this.spawnSkill, ac.team, ac.type);
+    this.derivedSkill = deriveSkill(world.difficulty, this.spawnSkill, ac.team, ac.type);
     this.home.copy(ac.position);
     this.homeHeading = ac.flight.heading;
     this.homeAlt = ac.position.y;

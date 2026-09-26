@@ -3,7 +3,7 @@
  * meshes (one draw call per feature), textured ground decals (runways, taxiways, aprons), a single
  * Points object for all night lights, and camera-local instanced scatters for trees and houses.
  */
-import { Group, Mesh, type BufferGeometry, type Camera, type PerspectiveCamera, type ShaderMaterial, type Texture, type Vector3 } from 'three';
+import { Color, Group, Mesh, type BufferGeometry, type Camera, type PerspectiveCamera, type ShaderMaterial, type Texture, type Vector3 } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
 import type { QualitySettings, TheaterId } from '../../core/types';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
@@ -13,16 +13,21 @@ import type { TerrainStyle } from '../terrain/TerrainRenderer';
 import { createVegetation } from '../terrain/vegetation';
 import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
-import { buildAirbase } from './airbase';
+import { buildAirbase, buildExtraRunway } from './airbase';
 import { buildSettlement } from './settlements';
-import { aucklandBuiltinFeatures, buildCBD, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyTower, isDuplicateOfAuckland } from './auckland';
-import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial } from './materials';
+import { aucklandBuiltinFeatures, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyTower, isDuplicateOfAuckland } from './auckland';
+import { aucklandRoadPaths, RoadNetwork } from './motorways';
+import { buildCityLightPoints, type ReflectionSource } from './nightLights';
+import { WHENUAPAI_CROSS } from '../terrain/theaters/auckland';
+import { AKL_CBD_GRID } from '../config';
+import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
-import { createConcreteTexture } from '../textures/procedural';
+import { createConcreteTexture, createMotorwayTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
 import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, TreeSource } from './sources';
-import { apartmentRoofGeometry, apartmentWallsGeometry, broadleafGeometry, coniferGeometry, houseRoofGeometry, houseWallsGeometry, palmGeometry } from './archetypes';
+import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry } from './archetypes';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { AIRBASE, runwayLengthFor } from '../terrain/features';
 import { AKL } from '../../core/auckland';
 
 export interface SceneryOptions {
@@ -55,10 +60,19 @@ export class Scenery {
   private readonly trees: TileScatter | null;
   private readonly houses: TileScatter | null;
   private readonly lightsMat: ShaderMaterial;
+  private readonly treeRadius: number;
+  private readonly houseRadius: number;
+  /** Auckland motorway network (null elsewhere). */
+  roads: RoadNetwork | null = null;
+  cbdStats: { towers: number; tallest: number; heights: number[] } | null = null;
+  /** Bright lights near the water (for the harbour reflection streaks). */
+  reflectionSources: ReflectionSource[] = [];
   stats = { meshes: 0, lights: 0 };
 
   constructor(o: SceneryOptions) {
     this.group.name = 'world-scenery';
+    this.treeRadius = o.cfg.treeRadius;
+    this.houseRadius = o.cfg.houseRadius;
     const hf = o.hf;
     const height = (x: number, z: number) => hf.meshHeightAt(x, z);
     const detail = o.quality.sceneryDensity;
@@ -89,7 +103,7 @@ export class Scenery {
     features.forEach((f, i) => {
       if (f.type === 'airbase') {
         const civil = o.theater === 'auckland' && Math.hypot(f.x - AKL.akl_airport.x, f.z - AKL.akl_airport.z) < 2500;
-        const length = civil ? 3600 : 3000;
+        const length = o.theater === 'auckland' ? runwayLengthFor(f) : AIRBASE.runwayLength;
         const names = runwayDesignators(f.rotation ?? 0);
         const key = `${names[0]}/${names[1]}/${length}`;
         let rw = runways.get(key);
@@ -100,6 +114,15 @@ export class Scenery {
         const b = new GeometryBuilder();
         buildAirbase({ feature: f, style: civil ? 'civil' : 'military', runwayLength: length }, { buildings: b, runway: rw.builder, concrete, lights }, height, detail);
         addMesh(b, `airbase-${i}`);
+        // RNZAF Base Auckland also has its cross runway 08/26
+        if (o.theater === 'auckland' && Math.hypot(f.x - AKL.whenuapai.x, f.z - AKL.whenuapai.z) < 800) {
+          const X = WHENUAPAI_CROSS;
+          const xnames = runwayDesignators((X.heading * 180) / Math.PI);
+          const xkey = `${xnames[0]}/${xnames[1]}/${X.length}`;
+          let xr = runways.get(xkey);
+          if (!xr) runways.set(xkey, (xr = { builder: new DecalBuilder(), length: X.length, names: xnames }));
+          buildExtraRunway(X, xr.builder, lights, height);
+        }
       } else if (f.type !== 'forest' && f.type !== 'farmland') {
         const b = new GeometryBuilder();
         buildSettlement(f, o.theater, b, lights, height, detail);
@@ -109,11 +132,30 @@ export class Scenery {
 
     // ── Auckland landmarks ──
     if (o.theater === 'auckland') {
+      const roads = new RoadNetwork(aucklandRoadPaths());
+      this.roads = roads;
+      const cbd = o.style.cbd ?? AKL_CBD_GRID;
       const city = new GeometryBuilder();
       buildSkyTower(city, lights, height);
-      buildCBD(city, lights, height, detail);
+      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads);
       buildMuseumAndObelisk(city, lights, height);
       addMesh(city, 'akl-cbd');
+      const centres = new GeometryBuilder();
+      buildCentres(centres, lights, height, detail, cbd, roads);
+      // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
+      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01);
+      addMesh(centres, 'akl-centres');
+      const roadTex = createMotorwayTexture();
+      roadTex.anisotropy = o.cfg.anisotropy;
+      this.textures.push(roadTex);
+      const roadMat = createRoadMaterial(o.atmo, roadTex);
+      this.materials.push(roadMat);
+      this.geometries.push(roadGeo);
+      const roadMesh = new Mesh(roadGeo, roadMat);
+      roadMesh.name = 'akl-motorways';
+      roadMesh.renderOrder = -4;
+      roadMesh.matrixAutoUpdate = false;
+      this.group.add(roadMesh);
       const bridge = new GeometryBuilder();
       buildHarbourBridge(bridge, lights, height);
       addMesh(bridge, 'akl-harbour-bridge');
@@ -162,7 +204,7 @@ export class Scenery {
       }
     }
 
-    // Night lights
+    // Night lights: fixtures (runways, towers, bridge, port, motorways) + the far-field city carpet
     if (o.lights > 0.01) {
       const pts = lights.build(this.lightsMat);
       if (pts) {
@@ -170,6 +212,48 @@ export class Scenery {
         this.group.add(pts);
         this.stats.lights = lights.count;
       }
+      const city = new LightList();
+      const maxCity = o.quality.level === 'low' ? 14_000 : o.quality.level === 'medium' ? 30_000 : 48_000;
+      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city);
+      const cityMat = createLightsMaterial(o.atmo);
+      cityMat.uniforms.uIntensity.value = o.lights;
+      cityMat.uniforms.uNearFade.value = 1600;
+      cityMat.uniforms.uFar.value = 0.85;
+      cityMat.uniforms.uPixelScale = this.lightsMat.uniforms.uPixelScale;
+      cityMat.uniforms.uPixelRatio = this.lightsMat.uniforms.uPixelRatio;
+      this.materials.push(cityMat);
+      const cpts = city.build(cityMat);
+      if (cpts) {
+        cpts.name = 'world-city-lights';
+        this.geometries.push(cpts.geometry);
+        this.group.add(cpts);
+        this.stats.lights += city.count;
+      }
+      // Harbour reflections: fixtures and city lights close to sea level, plus the lit CBD waterfront
+      const refl: ReflectionSource[] = [];
+      const tmpC = new Color();
+      lights.forEach((x, y, z, r, g, b, size, blink) => {
+        // steady white / sodium fixtures near sea level (waterfront, bridge, port, ships) and the
+        // Sky Tower's pod; not the small red obstruction beacons
+        if (blink >= 0 || (r > 0.5 && g < 0.25) || size < 2.4) return;
+        const gh = height(x, z);
+        if (gh > 7 && y - gh < 150) return;
+        refl.push({ x, y, z, color: tmpC.setRGB(r, g, b).getHex(), intensity: Math.min(1.3, 0.22 * size) });
+      });
+      let every = 0;
+      city.forEach((x, y, z, r, g, b) => {
+        if (height(x, z) > 5 || every++ % 3 !== 0) return;
+        refl.push({ x, y, z, color: tmpC.setRGB(r, g, b).getHex(), intensity: 0.7 });
+      });
+      if (o.theater === 'auckland') {
+        for (let x = -560; x <= 960; x += 40) {
+          const z = -660 + ((x * 7) % 50);
+          if (height(x, z) < 1) continue;
+          refl.push({ x, y: 18 + ((x * 13) % 40 + 40) % 40, z, color: 0xffe2b8, intensity: 0.9 });
+        }
+      }
+      refl.sort((a, b) => b.intensity - a.intensity);
+      this.reflectionSources = refl.slice(0, o.quality.level === 'low' ? 250 : 700);
     }
 
     // ── Instanced scatters ──
@@ -181,8 +265,10 @@ export class Scenery {
     const snowy = o.theater === 'arctic';
     const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry(snowy)];
     this.geometries.push(...treeGeoms);
+    const roadsRef = this.roads;
+    const offRoad = roadsRef ? (x: number, z: number, m: number) => roadsRef.near(x, z, m) : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
@@ -194,34 +280,38 @@ export class Scenery {
     );
     for (const m of this.trees.meshes) this.group.add(m);
 
-    const houseGeoms = [houseWallsGeometry(), houseRoofGeometry(), apartmentWallsGeometry(), apartmentRoofGeometry()];
+    const houseGeoms = [houseGeometry(), apartmentGeometry()];
     this.geometries.push(...houseGeoms);
+    const houseMat = createBuildingMaterial(o.atmo, { houses: true });
+    this.materials.push(houseMat);
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad),
       [
-        { geometry: houseGeoms[0], material: buildingMat, capacity: hc, kind: HOUSE },
-        { geometry: houseGeoms[1], material: buildingMat, capacity: hc, kind: HOUSE, color: roofFn },
-        { geometry: houseGeoms[2], material: buildingMat, capacity: Math.round(hc / 3), kind: APARTMENT },
-        { geometry: houseGeoms[3], material: buildingMat, capacity: Math.round(hc / 3), kind: APARTMENT, color: roofFn },
+        { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
+        { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
       ],
       300,
       o.cfg.houseRadius,
-      2,
+      3,
     );
     for (const m of this.houses.meshes) this.group.add(m);
   }
 
-  /** Stream scatter tiles; hide them when the camera is too high for them to matter. */
+  /**
+   * Stream scatter tiles. Instances thin out with the slant range from the camera (so they fade
+   * gradually as the jet climbs instead of vanishing at a fixed height); the scatters stop drawing
+   * once the camera is higher than their radius.
+   */
   update(camPos: Vector3, agl: number): void {
     if (this.trees) {
-      this.trees.visible = agl < 2200;
-      if (this.trees.visible) this.trees.update(camPos);
+      this.trees.visible = agl < this.treeRadius;
+      if (this.trees.visible) this.trees.update(camPos, agl);
     }
     if (this.houses) {
-      this.houses.visible = agl < 1500;
-      if (this.houses.visible) this.houses.update(camPos);
+      this.houses.visible = agl < this.houseRadius;
+      if (this.houses.visible) this.houses.update(camPos, agl);
     }
   }
 

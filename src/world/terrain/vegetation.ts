@@ -20,6 +20,7 @@ import {
   MAT_BUSH,
   MAT_URBAN,
   MAT_CONE,
+  MAT_CLEARING,
 } from './types';
 import { footprintOf, footprintWeight } from './features';
 import type { Footprint } from './types';
@@ -80,9 +81,11 @@ export function createVegetation(theater: TheaterId, seed: number, features: Sce
     switch (theater) {
       case 'auckland': {
         if (mat === MAT_BUSH) return (aux / 255) * (1 - sstep(0.7, 1.1, slope)) * (0.8 + 0.2 * sstep(-0.4, 0.2, patch));
-        if (mat === MAT_VOLCANIC) return 0.55 * (aux / 255) * sstep(-0.5, 0.1, patch + 0.2);
-        if (mat === MAT_URBAN || mat === MAT_BEACH) return 0;
-        if (mat === MAT_CONE) return 0.06 * sstep(0.3, 0.5, patch);
+        // Rangitoto: bush over lava everywhere (≥ 0.3 keeps paddock patterns off), densest in lobes
+        if (mat === MAT_VOLCANIC) return 0.3 + 0.55 * sstep(0.35, 0.8, aux / 255);
+        if (mat === MAT_URBAN || mat === MAT_BEACH || mat === MAT_CLEARING) return 0;
+        // scoria cones: grass with clumps of trees on the lower slopes
+        if (mat === MAT_CONE) return 0.14 * sstep(0.1, 0.45, patch) * (1 - sstep(0.5, 0.9, slope));
         // Riverhead pine plantation
         const pine = 1 - sstep(3500, 6000, Math.hypot(x + 16_000, z + 14_500));
         if (pine > 0) return Math.max(0.85 * pine * sstep(-0.6, -0.2, patch), 0.3 * sstep(0.15, 0.45, patch));

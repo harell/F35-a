@@ -36,6 +36,8 @@ export class CombatMissile extends MissileEntity {
   trackBroken = false;
   /** Seconds since guidance was permanently lost. */
   ballisticTime = 0;
+  /** Guidance-loss transient applied. */
+  lossKicked = false;
   /** Seconds the seeker is blanked after a notch/chaff break (re-acquisition window after). */
   notchBlank = 0;
   /** Seconds after burnout without closing on the target (kinematic defeat). */
@@ -56,6 +58,26 @@ export class CombatMissile extends MissileEntity {
   /** Sim time of the last countermeasure roll (a salvo counts once). */
   lastFlareRoll = -999;
   lastChaffRoll = -999;
+  /** Accumulated chaff exposure (Σ of earlier salvo effectiveness) — diminishing returns. */
+  chaffExposure = 0;
+  /** Sustained-notch accumulator of the missile's own seeker (s·depth) and its break threshold (−1 = not rolled). */
+  notchAccum = 0;
+  notchNeed = -1;
+  /** Active seeker has been locked at least once (post-pitbull). */
+  everLocked = false;
+  /** Still able to hit its (original) target — MAWS / RWR / AI defence only list threatening missiles. */
+  threat = true;
+  /** Seconds since the missile stopped being a threat (defeated missiles self-destruct shortly after). */
+  defeatTimer = 0;
+  /** Seconds the range to the target has been opening, and last range (threat assessment). */
+  openTime = 0;
+  prevThreatRange = Infinity;
+  /** Active radar missile launched without an STT lock (TWS shot): degraded midcourse updates. */
+  tws = false;
+  /** TWS midcourse track error (position m, velocity m/s) and time of the next TWS revisit. */
+  readonly twsPosErr = new Vector3();
+  readonly twsVelErr = new Vector3();
+  twsNext = 0;
   /** Previous-step range to the target (for closure). */
   prevRange = Infinity;
   /** Cached time-to-go estimate (s), its age (s) and the seeker state it was computed with. */
@@ -64,6 +86,10 @@ export class CombatMissile extends MissileEntity {
   tgoLocked = false;
   /** Speed (m/s) cached each step. */
   speed = 0;
+  /** Vertical launch: pitch-over finished (normal guidance from then on). */
+  turned = true;
+  /** Launch altitude (m MSL) — vertical-launch turnover clearance. */
+  launchAlt = 0;
   /** Burn time total (s). */
   readonly burnEnd: number;
   ended = false;
@@ -155,6 +181,8 @@ export function launchMunition(
     orientAlong(m.quaternion, m.velocity);
     m.guiderId = site.id;
   }
+  m.launchAlt = m.position.y;
+  m.turned = def.launch !== 'vertical';
 
   // initial target estimate = launcher's targeting data
   if (opts.targetPoint) {

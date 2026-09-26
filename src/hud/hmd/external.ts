@@ -1,10 +1,10 @@
 /**
  * External-view HUD (chase / orbit / flyby / target / missile): compact flight + weapon + target block,
- * mini DLZ, radar/TSD inset (top-right), missile-cam label; and the minimal tactical-map overlay.
+ * mini DLZ, radar/TSD inset (top-right), missile-cam label. (The tactical MAP view lives in tacmap.ts.)
  */
 import { RAD, toFeet, toKnots, toNm } from '../../core/math';
 import { dlzLayout, makeDlzGeometry } from './dlz';
-import { HDG3_STR, INT_STR, NumText, entityLabel, SAM_LABEL, AIRCRAFT_SHORT } from './format';
+import { HDG3_STR, INT_STR, NumText, entityLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { rangeLabel, rangeLabelNm } from './targets';
@@ -91,7 +91,14 @@ export function drawExternalBlock(f: HudFrame): number {
     const d = t.position.distanceTo(p.position);
     const lbl = entityLabel(t);
     pen.text(lbl, x, y, f.locked ? pal.bright : pal.main, 12, 'left');
-    pen.text(rangeLabelNm(d), x + pen.textWidth(lbl, 12) + 8 * u, y, pal.main, 12, 'left');
+    const rl = rangeLabelNm(d);
+    pen.text(rl, x + pen.textWidth(lbl, 12) + 8 * u, y, pal.main, 12, 'left');
+    // lock state: LOCK / LOCKING (builds inside the ±30° nose cone) / NOSE ON (commanded, outside it)
+    const lx = x + pen.textWidth(lbl, 12) + pen.textWidth(rl, 12) + 16 * u;
+    if (f.locked) pen.text('LOCK', lx, y, pal.bright, 12, 'left');
+    else if (p.radar.lockProgress > 0.01 && t.kind === 'aircraft') {
+      if (blink(f, 2.5, 0.75)) pen.text('LOCKING', lx, y, pal.main, 12, 'left');
+    } else if (f.lockCommanded && t.kind === 'aircraft') pen.text('NOSE ON', lx, y, pal.warn, 12, 'left');
     y += 14 * u;
     // mini horizontal DLZ
     const z = f.zone;
@@ -183,52 +190,4 @@ export function drawMissileCam(f: HudFrame): void {
   pen.text(info, L.cx, y + 18 * u, pal.dim, 12);
   if (m.seekerLocked && blink(f, 3, 0.75)) pen.text(m.def.guidance === 'ir' ? 'TRACKING' : 'PITBULL', L.cx, y + 36 * u, pal.bright, 13);
   if (m.decoyed) pen.text('DECOYED', L.cx, y + 52 * u, pal.warn, 13);
-}
-
-/* ───────────────────────── Tactical overlay ───────────────────────── */
-
-export function drawTacticalOverlay(f: HudFrame): void {
-  const { pen, pal, L, world, p, proj, ctx } = f;
-  const u = L.u;
-  pen.text('TACTICAL', L.cx, L.tapeY + 10 * u, pal.dim, 12);
-  // SAM rings (top-down: project the centre and a rim point)
-  pen.setDash('dash');
-  for (const s of world.sams) {
-    if (!s.alive || s.team === p.team || !s.known) continue;
-    if (!proj.point(s.position, f.sp)) continue;
-    f.v1.copy(s.position);
-    f.v1.x += s.engageRange ?? 20_000;
-    if (!proj.point(f.v1, f.sp2)) continue;
-    const R = Math.hypot(f.sp2.x - f.sp.x, f.sp2.y - f.sp.y);
-    if (f.sp.x + R < 0 || f.sp.x - R > L.W || f.sp.y + R < 0 || f.sp.y - R > L.H) continue;
-    pen.begin();
-    pen.circle(f.sp.x, f.sp.y, R);
-    pen.strokeGlow(withAlpha(pal.danger, 0.75), 1.4);
-  }
-  pen.setDash('solid');
-  // labels next to the render module's icons
-  for (const a of world.aircraft) {
-    if (!a.alive || a === p) continue;
-    if (!proj.point(a.position, f.sp) || !f.sp.onScreen) continue;
-    const col = a.team === p.team ? pal.friend : pal.danger;
-    const lbl = a.team === p.team ? a.callsign || a.name : AIRCRAFT_SHORT[a.type] ?? '';
-    pen.text(lbl, f.sp.x + 12 * u, f.sp.y, col, 11, 'left');
-    if (a.id === p.radar.designatedId || a.id === p.radar.lockedId) {
-      pen.begin();
-      pen.rect(f.sp.x - 11 * u, f.sp.y - 11 * u, 22 * u, 22 * u);
-      pen.strokeGlow(pal.bright, 1.6);
-    }
-  }
-  for (const s of world.sams) {
-    if (!s.alive || s.team === p.team || !s.known) continue;
-    if (!proj.point(s.position, f.sp) || !f.sp.onScreen) continue;
-    pen.text(SAM_LABEL[s.type], f.sp.x + 12 * u, f.sp.y, pal.warn, 11, 'left');
-  }
-  const wp = ctx.mission?.currentWaypoint;
-  if (wp && proj.point(wp.position, f.sp) && f.sp.onScreen) {
-    pen.begin();
-    pen.diamond(f.sp.x, f.sp.y, 8 * u);
-    pen.strokeGlow(pal.main, 1.6);
-    pen.text(wp.label || wp.id, f.sp.x, f.sp.y - 16 * u, pal.main, 11);
-  }
 }

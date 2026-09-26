@@ -5,11 +5,16 @@
  * Shot doctrine (rolled per engagement from skill):
  *   ace       fires between the no-escape range and ~40 % of the way to rMax: high Pk
  *   average   anywhere in the inner half of the zone
- *   rookie    either "trigger happy" at rMax (wasted missiles the player can drag out) or
- *             "hesitant", waiting until well inside rNe (lets the player shoot first)
+ *   rookie    either "trigger happy" (wasted missiles the player can drag out) or "hesitant",
+ *             waiting until well inside rNe (lets the player shoot first)
+ * On top of that, a skill-based ceiling on the launch range (fraction of rMax — rookies ≤ 45 %,
+ * average ≤ 55 %, veterans ≤ 70 %, aces ≤ 85 %) and a trigger delay after the solution first
+ * appears (rookies hesitate ~1.5 s, aces fire at once). Hostile (red) pilots never shoot a radar
+ * missile without their OWN sensor track on the target (no datalink / GCI shots).
  * One radar missile in the air per target at a time (aces may fire a second one inside rNe).
  * Everything goes through world.combat.launchZoneFor / fire — the same release rules as the
  * player (lock for R-27, own-sensor track for R-77, IR seeker for R-73/AIM-9X).
+ * IR dogfight missiles: rookies only take rear-hemisphere shots (or point-blank ones).
  *
  * Guns: the LCOS lead point from combat.gunLeadPoint (target designated) steers the nose so the
  * pipper sits on the bandit; a skill-scaled aim error wanders every 0.5 s; bursts of 0.4–1 s,
@@ -39,6 +44,13 @@ export class WeaponsOfficer {
   private lastBvrShot = -99;
   private lastIrShot = -99;
   private bias = 0.35;
+  /** Max launch range as a fraction of rMax (skill ceiling, rolled with the doctrine). */
+  private maxFrac = 0.7;
+  /** Seconds the pilot hesitates after a shot solution first appears. */
+  private triggerDelay = 0;
+  /** Sim time the current BVR solution first appeared (−1 = none). */
+  private solutionSince = -1;
+  private solutionTarget = -1;
   private zone: LaunchZone | null = null;
   private zoneTime = -99;
   private zoneTarget = -1;
@@ -56,6 +68,15 @@ export class WeaponsOfficer {
     if (level >= 0.6) this.bias = 0.1 + 0.3 * rng();
     else if (level >= 0.3) this.bias = 0.3 + 0.5 * rng();
     else this.bias = rng() < 0.5 ? 0.85 + 0.15 * rng() : -(0.4 + 0.4 * rng());
+    this.maxFrac = level < 0.3 ? 0.45 : level < 0.55 ? 0.55 : level < 0.75 ? 0.7 : 0.85;
+    this.triggerDelay = Math.max(0, 1.6 * (1 - level / 0.8)) * (0.7 + 0.6 * rng());
+    this.solutionSince = -1;
+  }
+
+  /** Doctrine launch-range ceiling for a zone (m) — exposed for tests. */
+  shotRange(z: LaunchZone): number {
+    const thr = this.bias >= 0 ? z.rNe + (z.rMax - z.rNe) * this.bias : z.rNe * -this.bias;
+    return Math.min(thr, this.maxFrac * z.rMax);
   }
 
   bvrLeft(c: TickCtx): number {
@@ -121,14 +142,27 @@ export class WeaponsOfficer {
     const { ac, world, now, skill } = c;
     if (this.bvrLeft(c) <= 0 || now - this.lastBvrShot < 4) return false;
     if (b.range > 60_000) return false;
+    // hostile pilots shoot only what their own radar / IRST holds (no datalink or GCI shots)
+    if (ac.team === 'red' && !b.sensor) {
+      this.solutionSince = -1;
+      return false;
+    }
     const z = this.evalZone(c, b, 'aim120', 0.4);
     if (!z.shoot || z.rMax <= 0) return false;
     // don't waste energy on big off-boresight launches
     _fwd.set(0, 0, -1).applyQuaternion(ac.quaternion);
     _rel.subVectors(b.ent.position, ac.position);
     if (_fwd.dot(_rel) < Math.cos(0.6) * _rel.length()) return false;
-    const thr = this.bias >= 0 ? z.rNe + (z.rMax - z.rNe) * this.bias : z.rNe * -this.bias;
-    if (z.range > Math.max(thr, z.rMin * 1.5)) return false;
+    if (z.range > Math.max(this.shotRange(z), z.rMin * 1.5)) {
+      this.solutionSince = -1;
+      return false;
+    }
+    // trigger discipline: hesitate a moment after the solution appears (rookies longer)
+    if (this.solutionTarget !== b.id || this.solutionSince < 0) {
+      this.solutionTarget = b.id;
+      this.solutionSince = now;
+    }
+    if (now - this.solutionSince < this.triggerDelay) return false;
     const flying = this.inFlight(c, b.id);
     if (flying > 0 && !(skill.level > 0.7 && z.range < z.rNe * 0.8 && now - this.lastBvrShot > 8)) return false;
     const m = world.combat.fire(ac, world, 'aim120', b.id);
@@ -148,6 +182,12 @@ export class WeaponsOfficer {
     if (!z.shoot) return false;
     const frac = skill.level > 0.45 ? 0.55 + 0.25 * skill.level : 0.95;
     if (z.range > z.rMax * frac) return false;
+    // rookies can't judge a front-hemisphere IR shot: they wait for the bandit's tail (or point-blank)
+    if (skill.level < 0.45 && z.range > 2_000) {
+      _fwd.set(0, 0, -1).applyQuaternion(b.ent.quaternion);
+      _rel.subVectors(ac.position, b.ent.position);
+      if (_fwd.dot(_rel) > -0.2 * _rel.length()) return false;
+    }
     if (this.inFlight(c, b.id, 'ir') > 0) return false;
     const m = world.combat.fire(ac, world, 'aim9x', b.id);
     if (!m) return false;

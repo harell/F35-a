@@ -9,7 +9,10 @@
  * result(): score, grade and statistics for the debrief.
  *
  * Helper modules live in ./runtime (state, spawner, conditions, objectives, awacs, hints,
- * callouts, survival, scoring).
+ * callouts, survival, scoring, rearm (Winchester / Whenuapai rearm point), withdrawal (bandits
+ * that bug out count as driven off), debrief (tips, medals)).
+ * dispose(): detaches every event handler and drops the world / entity references (Game calls it
+ * on teardown — restarts must not leak the previous session).
  */
 import { Vector3 } from 'three';
 import type { CreateMissionRunner, MissionDef, MissionResult, MissionRunnerApi, ObjectiveStatus, Waypoint } from '../core/contracts';
@@ -25,7 +28,10 @@ import { activateObjective, createObjectives, failOpenObjectives, objectiveSumma
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS } from './runtime/reasons';
 import { computeScore } from './runtime/scoring';
-import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite } from './runtime/spawner';
+import { awardMedals, buildTips, deathReason } from './runtime/debrief';
+import { RearmController } from './runtime/rearm';
+import { WithdrawalMonitor } from './runtime/withdrawal';
+import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { SurvivalDirector } from './runtime/survival';
 
@@ -51,6 +57,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly hints: HintSystem;
   private readonly callouts: Callouts;
   private readonly survival: SurvivalDirector | null;
+  private readonly rearm: RearmController;
+  private readonly withdrawal: WithdrawalMonitor;
+  private finalResult: MissionResult | null = null;
   private evalAcc = 0;
   private outsideAo = 0;
   private aoWarnAt = 0;
@@ -81,7 +90,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
     for (const t of def.script.triggers) this.s.triggers.push({ def: t, since: -1, fired: false, nextRepeat: 0 });
     this.awacs = new AwacsController(this.s);
-    this.hints = new HintSystem(this.s);
+    this.rearm = new RearmController(this.s);
+    this.withdrawal = new WithdrawalMonitor(this.s);
+    this.hints = new HintSystem(this.s, this.rearm);
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
     this.survival = def.script.survival ? new SurvivalDirector(this.s) : null;
   }
@@ -94,19 +105,45 @@ class MissionRunnerImpl implements MissionRunnerApi {
 
   get currentWaypoint(): Waypoint | null {
     const s = this.s;
+    if (s.disposed) return null;
+    // Winchester / bingo: steer home to the rearm point
+    if (s.state === 'running' && this.rearm.current) return this.rearm.waypoint;
     return s.waypoints[s.waypointIndex]?.wp ?? null;
   }
 
   get hint(): string | null {
-    return this.hints.current;
+    return this.s.disposed ? null : this.hints.current;
+  }
+
+  /** Winchester / bingo state and the rearm point (HUD / tests). */
+  get rearmState(): { need: 'winchester' | 'bingo' | null; waypoint: Waypoint; holding: number } {
+    return { need: this.rearm.current, waypoint: this.rearm.waypoint, holding: this.rearm.holdTime };
+  }
+
+  dispose(): void {
+    const s = this.s;
+    if (s.disposed) return;
+    s.disposed = true;
+    this.callouts.detach();
+    s.radio.clear();
+    this.hints.clear();
+    s.world = null as unknown as SimWorld;
+    s.player = null;
+    for (const g of s.groups.values()) g.members.length = 0;
+    s.pendingAir.length = 0;
+    s.pendingSites.length = 0;
+    s.withdrawn.clear();
+    s.withdrawSince.clear();
+    this.isSetup = false;
   }
 
   setup(world: SimWorld, loadout: LoadoutId): void {
     const s = this.s;
     s.world = world;
     buildGroups(s);
-    spawnPlayer(s, loadout);
+    const p = spawnPlayer(s, loadout);
     spawnInitial(s);
+    this.rearm.init(p, loadout);
     this.callouts.attach();
     // ground-level steering for target waypoints without an explicit altitude
     for (const w of s.waypoints) {
@@ -119,7 +156,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
 
   update(world: SimWorld, dt: number): void {
     const s = this.s;
-    if (!this.isSetup || world !== s.world) return;
+    if (!this.isSetup || s.disposed || world !== s.world) return;
     s.radio.update(world.time);
     this.evalAcc += dt;
     if (this.evalAcc < EVAL_PERIOD - 1e-6) return;
@@ -131,6 +168,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       return;
     }
     this.updateSpawns();
+    for (const g of s.groups.values()) if (g.air && g.spawnedAt >= 0) updateGroupLead(s, g);
     this.updateCommits();
     this.updateTriggers();
     updateObjectives(s, edt);
@@ -138,6 +176,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.updateBoundary(edt);
     this.updateTimeLimit();
     this.updateBridge();
+    this.withdrawal.update();
+    this.rearm.update(edt);
     this.awacs.update();
     this.survival?.update();
     this.checkEnd();
@@ -146,6 +186,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
 
   result(world: SimWorld): MissionResult {
     const s = this.s;
+    if (s.disposed || !s.world) {
+      if (this.finalResult) return this.finalResult;
+      throw new Error('MissionRunner.result() after dispose()');
+    }
     const p = s.player;
     const time = s.endTime >= 0 ? s.endTime : world.time;
     const sum = objectiveSummary(s);
@@ -172,7 +216,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
       scoreMultiplier: s.difficulty.scoreMultiplier,
       waves: this.survival ? s.waves : undefined,
     });
-    return {
+    const finale = success && this.def.kind === 'campaign' && !!s.script.campaignFinale;
+    const r: MissionResult = {
       missionId: this.def.id,
       title: this.def.title,
       success,
@@ -189,6 +234,11 @@ class MissionRunnerImpl implements MissionRunnerApi {
       damageTaken: Math.round(damageTaken),
       objectives: this.objectives.map((o) => ({ ...o, progress: o.progress ? { ...o.progress } : undefined })),
     };
+    r.tips = buildTips(s, r);
+    r.medals = awardMedals(s, r, finale);
+    if (finale) r.campaignComplete = true;
+    this.finalResult = r;
+    return r;
   }
 
   /* ───────────────────────────── Spawns & triggers ───────────────────────────── */
@@ -222,6 +272,15 @@ class MissionRunnerImpl implements MissionRunnerApi {
     for (const g of s.groups.values()) {
       const def = g.air;
       if (!def || g.team !== 'red' || g.committed || g.spawnedAt < 0) continue;
+      // escorts whose charges are all dead have nothing left to do: commit them at once
+      if (def.task?.kind === 'escort_group') {
+        const charge = s.groups.get(def.task.group);
+        if (charge && charge.spawnedAt >= 0 && charge.members.length >= charge.expected && !firstAlive(charge)) {
+          g.committed = true;
+          retaskGroup(s, g.id, { kind: 'attack_player' });
+        }
+        continue;
+      }
       if (def.role !== 'fighter' && def.role !== 'cap') continue;
       if (def.task && def.task.kind !== 'patrol') continue;
       const after = def.commitAfter ?? DEFAULT_COMMIT;
@@ -441,6 +500,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       const hit = segmentIntersect(this.lastPos.x, this.lastPos.z, p.position.x, p.position.z, S.x, S.z, N.x, N.z);
       if (hit >= BRIDGE_SPAN.t0 && hit <= BRIDGE_SPAN.t1 && p.position.y < BRIDGE_SPAN.maxAlt && p.position.y > BRIDGE_SPAN.minAlt) {
         this.bridgeDone = true;
+        s.stats.bridge = true;
         s.bonus += BRIDGE_SPAN.bonus;
         s.hud(`UNDER THE HARBOUR BRIDGE!  +${BRIDGE_SPAN.bonus}`, 'good', 4);
         s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}... did you just fly under the Harbour Bridge? We did not see that.`, priority: 2 });
@@ -498,7 +558,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.playerDied = true;
     if (s.state !== 'running') return;
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, eject, eject!`, voice: 'a_eject', priority: URGENT_PRIORITY + 1 });
-    const base = REASONS[reason] ?? REASONS.shot;
+    const base = deathReason(s, reason);
     if (this.survival) {
       const n = s.waves;
       this.fail(`${base} — survived ${n} wave${n === 1 ? '' : 's'}`);

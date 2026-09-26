@@ -39,7 +39,7 @@ const CALLS: Record<StoreWeapon, { text: string; voice: VoiceId }> = {
   aargm: { text: 'Magnum', voice: 'p_magnum' },
 };
 
-const _zone: LaunchZone = { weapon: 'aim120', targetId: null, range: 0, rMin: 0, rNe: 0, rMax: 0, shoot: false, closure: 0, timeOfFlight: 0 };
+const _zone: LaunchZone = { weapon: 'aim120', targetId: null, range: 0, rMin: 0, rNe: 0, rMax: 0, shoot: false, closure: 0, timeOfFlight: 0, rShoot: 0 } as LaunchZone;
 const _fwd = new Vector3();
 const _rel = new Vector3();
 const _pt = new Vector3();
@@ -208,6 +208,8 @@ function release(
 ): CombatMissile {
   const s = ac.stores[station];
   const m = launchMunition(ctx, ac, mun, target, { internal: s.internal, targetPoint: groundPoint, guided });
+  // active radar missile fired off a TWS track (no STT): silent, but coarser midcourse updates
+  if (m.cdef.guidance === 'active_radar' && target && !(ac.radar.lockedId === target.id && ac.radar.emitting)) m.tws = true;
   if (m.def.category === 'aam') dasLaunchCue(ctx, ac);
   s.count--;
   ac.shotsFired++;

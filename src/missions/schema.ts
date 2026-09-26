@@ -54,6 +54,11 @@ export type Condition =
   | { kind: 'area'; x: number; z: number; radius: number; who?: 'player' | { group: string }; below?: number; above?: number }
   /** At least `count` members of a group destroyed (default: all of them). The group must have spawned. */
   | { kind: 'group_destroyed'; group: string; count?: number }
+  /**
+   * At least `count` members of a group destroyed OR driven off (bugged out / withdrawn fighters),
+   * default: all of them. The group must have spawned.
+   */
+  | { kind: 'group_defeated'; group: string; count?: number }
   /** The group has spawned. */
   | { kind: 'group_spawned'; group: string }
   /** The player has reached (captured) a waypoint. */
@@ -68,6 +73,11 @@ export type Condition =
   | { kind: 'trigger'; id: string }
   /** Player fired at least `count` weapons of any kind. */
   | { kind: 'player_fired'; count?: number }
+  /**
+   * The player's radar: 'designated' = a hostile aircraft has the TD box but no lock yet,
+   * 'locked' = hard (STT) lock on a hostile aircraft.
+   */
+  | { kind: 'player_radar'; state: 'designated' | 'locked' }
   | { kind: 'all'; of: Condition[] }
   | { kind: 'any'; of: Condition[] }
   | { kind: 'not'; of: Condition };
@@ -110,6 +120,11 @@ export interface AircraftGroupDef {
   fixedCount?: boolean;
   /** Upper bound after scaling. */
   maxCount?: number;
+  /**
+   * Flown by a lesser type below a difficulty (Instant Action 'mixed': Su-35 / Su-57 only on
+   * Veteran and Ace, a MiG-29 / Su-27 below).
+   */
+  downgrade?: { below: Difficulty; type: AircraftType };
   formation?: Formation;
   /** Distance between elements (m). Default 300 (fighters) / 600 (heavies). */
   spacing?: number;
@@ -347,10 +362,18 @@ export interface MissionScript {
   playerCallsign?: string;
   /** Endless survival waves (Instant Action). */
   survival?: SurvivalDef;
+  /**
+   * Scale the TOTAL of the non-fixed red aircraft groups by difficulty.enemyCountScale instead of
+   * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit, 6 on Ace; per-group
+   * rounding would leave pairs unchanged). Groups that lose all members don't spawn.
+   */
+  scaleEnemyTotal?: boolean;
   /** Opening radio calls at mission start (convenience for a 'start' trigger). */
   opening?: Action[];
   /** Radio line on success (after "Mission complete, RTB"). */
   successText?: string;
+  /** Last mission of the campaign: success sets MissionResult.campaignComplete (campaign ending). */
+  campaignFinale?: boolean;
 }
 
 /** Empty script (helper for builders). */

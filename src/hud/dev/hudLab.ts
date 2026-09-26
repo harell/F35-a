@@ -5,6 +5,8 @@
  *                &view=cockpit|hud|chase|missile|tactical  &color=green|amber|cyan
  *                &tod=day|dawn|dusk|night  &bg=sky|snow  &q=low|medium|high  &fov=60
  *                &yaw=<deg>&pitch=<deg> (head look)  &t=<s> (pre-roll mock time)
+ *                &zoom=0|1|2 (open that PCD portal in the zoom overlay, cockpit view)
+ *                &defeat=1 (threat scene: the inbound missiles are defeated at t = 1.5 s)
  *
  * Renders a simple sky/ground scene with placeholder entity meshes so conformal symbols can be checked
  * against where objects really are, then runs the real createHud / createCockpit with a mocked
@@ -36,6 +38,7 @@ import type { CameraMode, QualityLevel, Settings, TimeOfDay } from '../../core/t
 import { createHud } from '../Hud';
 import { createCockpit } from '../Cockpit';
 import { buildMock, type Scenario } from './mockWorld';
+import { pcdZoom } from '../cockpit/zoom';
 
 const params = new URLSearchParams(location.search);
 const scene = (params.get('scene') ?? 'aa') as Scenario;
@@ -222,6 +225,25 @@ const script: [number, () => void][] = [
   [0.6, () => (scene === 'lock' ? events.emit('lock', { ownerId: player.id, targetId: player.radar.lockedId, locked: true }) : undefined)],
   [0.7, () => (scene === 'damage' ? events.emit('player:hit', { amount: 30, direction: null }) : undefined)],
   [0.8, () => events.emit('weapon:denied', { ownerId: player.id, weapon: player.selectedWeapon, reason: scene === 'ag' ? 'Out of range' : 'No lock' })],
+  [0.9, () => {
+    const z = params.get('zoom');
+    if (z !== null && view === 'cockpit') {
+      // simulate a tap on that portal: the cockpit opens it
+      const portal = Number(z);
+      const pages = portal === 1 ? ['TSD', 'RDR'] : portal === 0 ? ['SMS', 'FUEL', 'ENG', 'ICAWS'] : ['RWR', 'ICAWS', 'FUEL', 'ENG'];
+      pcdZoom.openPortal(portal, pages as never, 0);
+    }
+  }],
+  [1.5, () => {
+    if (params.get('defeat') !== '1') return;
+    for (const m of world.missiles) {
+      if (m.targetId !== player.id) continue;
+      m.alive = false;
+      events.emit('munition:end', { missile: m, position: m.position, reason: 'decoyed', targetId: player.id });
+    }
+    player.incoming = [];
+    player.warnings.delete('missile');
+  }],
 ];
 
 let last = performance.now();

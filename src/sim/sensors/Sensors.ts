@@ -17,9 +17,9 @@ import type { Team } from '../../core/types';
 import { forwardOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, SamSiteEntity } from '../entities';
 import type { AcCombatState, CombatCtx, TrackContact } from '../weapons/context';
-import { acState, CONTACT_MEMORY, SENSOR_DIV } from '../weapons/context';
-import { notchDepth } from '../weapons/guidance';
-import { aircraftRcs, EWR_RANGE, EWR_STEALTH_BONUS, FIGHTER_RADAR, irIntensity, isStealthy, rcsRangeFactor } from './signatures';
+import { acState, CONTACT_MEMORY, playerTeam, SENSOR_DIV } from '../weapons/context';
+import { cmFactor, notchDepth, rollNotchNeed, stepNotch } from '../weapons/ew';
+import { aircraftRcs, EWR_RANGE, EWR_STEALTH_BONUS, fcrStealthFactor, FIGHTER_RADAR, irIntensity, isStealthy, rcsRangeFactor } from './signatures';
 import { lineOfSight } from './los';
 import { updateRwr } from './rwr';
 import { updateMaws } from './maws';
@@ -135,12 +135,16 @@ function upsert(st: AcCombatState, e: AnyEntity, source: Source, now: number, po
       ownTime: -999,
       inGimbal: false,
       entityKind: 'aircraft',
+      notchAccum: 0,
+      notchNeed: -1,
     };
     c.id = e.id;
     c.lastSeen = -1;
     c.radarTime = -999;
     c.ownTime = -999;
     c.inGimbal = false;
+    c.notchAccum = 0;
+    c.notchNeed = -1;
     st.contacts.set(e.id, c);
   }
   c.entityKind = e.kind === 'aircraft' ? 'aircraft' : e.kind === 'sam' ? 'sam' : 'ground';
@@ -162,8 +166,27 @@ function upsert(st: AcCombatState, e: AnyEntity, source: Source, now: number, po
   return c;
 }
 
+/**
+ * Doppler notch vs a fighter radar: a target that is not yet tracked can't be picked up while it
+ * sits in the notch (depth ≥ 0.5); an existing track survives short notches and is lost only once
+ * the notch has been held long enough (sustained-notch accumulator, ew.ts).
+ */
+function radarHolds(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, t: AircraftEntity, now: number, sdt: number, resistance: number): boolean {
+  const c = st.contacts.get(t.id);
+  if (c && c.notchNeed === Infinity) return true; // this radar/track isn't fooled by the notch
+  const depth = notchDepth(ctx, ac.position, t);
+  if (!c || c.radarTime < now - 1) return depth < 0.5;
+  if (c.notchNeed < 0) c.notchNeed = rollNotchNeed(ctx, resistance, cmFactor(ctx, ac.team, t));
+  if (c.notchNeed === Infinity) return true;
+  c.notchAccum = stepNotch(c.notchAccum, depth, sdt);
+  if (c.notchAccum < c.notchNeed) return true;
+  c.notchAccum = 0;
+  c.radarTime = -999; // track lost: must be re-acquired outside the notch
+  return false;
+}
+
 /** Full sensor sweep of one aircraft. */
-function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorShared): void {
+function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorShared, sdt: number): void {
   const world = ctx.world;
   const now = ctx.time;
   const spec = FIGHTER_RADAR[ac.type];
@@ -189,10 +212,12 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
     if (radarOn && cosOff >= cosGimbal) {
       inGimbal = true;
       let R = spec.range * rcsRangeFactor(aircraftRcs(t, ac.position));
+      // X-band fighter radar vs LO shaping (hostile crews: better trained on harder difficulties)
+      if (ac.type !== 'a50') R *= fcrStealthFactor(t, ac.team === playerTeam(world) ? 0.2 : world.difficulty.aiSkill);
       if (ac.radar.mode === 'acm') R = Math.min(R, ACM_RANGE);
       else if (ac.radar.mode === 'ground') R *= 0.6; // interleaved A/A while mapping
       if (_rel.y < -0.03 * d) R *= 0.85; // look-down clutter
-      if (d <= R && notchDepth(ctx, ac.position, t) < 0.5) {
+      if (d <= R && radarHolds(ctx, ac, st, t, now, sdt, spec.notchResistance)) {
         los = lineOfSight(world.terrain, ac.position, t.position) ? 1 : 0;
         if (los === 1) upsert(st, t, 'radar', now, null, null, now);
       }
@@ -289,20 +314,34 @@ export function dasLaunchCue(ctx: CombatCtx, shooter: AircraftEntity): void {
 
 /* ───────────────────────── Designation & lock ───────────────────────── */
 
-export function setDesignation(ctx: CombatCtx, ac: AircraftEntity, id: number | null): void {
+/**
+ * Move the TD box. `commanded` = the human player asked for a lock on it (tap / TGT / look);
+ * auto-designation only builds a TWS track (no STT, no RWR spike).
+ */
+export function setDesignation(ctx: CombatCtx, ac: AircraftEntity, id: number | null, commanded = false): void {
   const r = ac.radar;
-  if (r.designatedId === id) return;
+  const st = acState(ac);
+  if (r.designatedId === id) {
+    if (commanded && id !== null) st.lockCommanded = true;
+    return;
+  }
   r.designatedId = id;
   r.lockProgress = 0;
-  const st = acState(ac);
+  st.lockCommanded = commanded && id !== null;
   st.designationStale = 0;
-  if (r.lockedId !== null && r.lockedId !== id) {
-    const old = r.lockedId;
-    r.lockedId = null;
-    ctx.world.events.emit('lock', { ownerId: ac.id, targetId: old, locked: false });
-  }
+  if (r.lockedId !== null && r.lockedId !== id) dropLock(ctx, ac, st);
   updateGroundPoint(ctx, ac, st);
   ctx.world.events.emit('designate', { ownerId: ac.id, targetId: id });
+}
+
+/** Break the STT lock (emits 'lock'). */
+function dropLock(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): void {
+  const r = ac.radar;
+  const old = r.lockedId;
+  r.lockedId = null;
+  r.lockProgress = 0;
+  st.lockLostTimer = 0;
+  if (old !== null) ctx.world.events.emit('lock', { ownerId: ac.id, targetId: old, locked: false });
 }
 
 function updateGroundPoint(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): void {
@@ -359,13 +398,26 @@ function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): Trac
   return list.map((x) => x.c);
 }
 
+/**
+ * TGT button: move the designation to the next candidate (dropping any lock) and command a lock
+ * on it. With a single candidate it toggles: locked / locking → break lock (back to a silent TWS
+ * track), otherwise command the lock.
+ */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
   const list = candidates(ctx, ac, st);
   if (list.length === 0) return;
   const idx = list.findIndex((c) => c.id === ac.radar.designatedId);
   const next = list[(idx + 1) % list.length];
-  setDesignation(ctx, ac, next.id);
+  if (next.id === ac.radar.designatedId) {
+    if (ac.radar.lockedId !== null || st.lockCommanded) {
+      st.lockCommanded = false;
+      if (ac.radar.lockedId !== null) dropLock(ctx, ac, st);
+      ac.radar.lockProgress = 0;
+    } else st.lockCommanded = true;
+    return;
+  }
+  setDesignation(ctx, ac, next.id, true);
 }
 
 export function designateNearestTo(ctx: CombatCtx, ac: AircraftEntity, dir: Vector3): void {
@@ -385,15 +437,16 @@ export function designateNearestTo(ctx: CombatCtx, ac: AircraftEntity, dir: Vect
       best = c;
     }
   }
-  if (best) setDesignation(ctx, ac, best.id);
+  if (best) setDesignation(ctx, ac, best.id, true);
 }
 
+/** Tap on a HUD box / PCD symbol: designate it and command a lock (builds while inside the lock cone). */
 export function designate(ctx: CombatCtx, ac: AircraftEntity, id: number | null): void {
   if (id === null) return setDesignation(ctx, ac, null);
   const st = acState(ac);
   const c = st.contacts.get(id);
   if (!c || c.team === ac.team) return;
-  setDesignation(ctx, ac, id);
+  setDesignation(ctx, ac, id, true);
 }
 
 /** Drop designations of dead targets or targets missing from the picture for > 3 s. */
@@ -429,12 +482,56 @@ function autoDesignate(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): v
   if (inFront || threat) setDesignation(ctx, ac, c.id);
 }
 
-/** Radar STT lock progression (every step). */
+/** Human player's lock cone: a commanded lock builds only while the target is within ±30° of the nose. */
+export const PLAYER_LOCK_CONE = (30 * Math.PI) / 180;
+const COS_LOCK_CONE = Math.cos(PLAYER_LOCK_CONE);
+
+/**
+ * Radar STT lock progression (every step).
+ *
+ * Human player: auto-designation only gives a TWS track. A lock must be commanded (tap on the
+ * TD box / TGT); it builds over difficulty.playerLockTime while the target is painted by the
+ * radar inside the ±30° lock cone (progress decays outside it), and once established it holds
+ * anywhere in the ±60° gimbal — lost outside it or when not painted for > 2 s.
+ * AI (and the autopilot): designation + radar track inside the gimbal locks over its skill time.
+ */
 function updateLock(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, dt: number): void {
   const r = ac.radar;
   const des = r.designatedId;
   const c = des !== null ? st.contacts.get(des) : undefined;
-  const canLock = !!c && c.entityKind === 'aircraft' && r.emitting && c.inGimbal && c.radarTime >= ctx.time - 0.35;
+  const painted = !!c && c.entityKind === 'aircraft' && r.emitting && c.radarTime >= ctx.time - 0.35;
+  if (ac.isPlayer && !ac.ai) {
+    if (r.lockedId !== null) {
+      if (r.lockedId === des && painted && c!.inGimbal) st.lockLostTimer = 0;
+      else {
+        st.lockLostTimer += dt;
+        if (st.lockLostTimer > 2 || !r.emitting || r.lockedId !== des) {
+          dropLock(ctx, ac, st);
+          st.lockCommanded = false;
+        }
+      }
+      return;
+    }
+    let inCone = false;
+    if (painted) {
+      forwardOf(ac.quaternion, _fwd);
+      _rel.subVectors(c!.position, ac.position);
+      const d = _rel.length();
+      inCone = d > 1 && _fwd.dot(_rel) / d >= COS_LOCK_CONE;
+    }
+    if (st.lockCommanded && inCone) {
+      r.lockProgress = Math.min(1, r.lockProgress + dt / Math.max(0.05, ctx.world.difficulty.playerLockTime));
+      if (r.lockProgress >= 1) {
+        r.lockedId = des;
+        st.lockLostTimer = 0;
+        ctx.world.events.emit('lock', { ownerId: ac.id, targetId: des, locked: true });
+      }
+    } else {
+      r.lockProgress = Math.max(0, r.lockProgress - dt * 0.5);
+    }
+    return;
+  }
+  const canLock = painted && c!.inGimbal;
   const lockTime = ac.isPlayer ? ctx.world.difficulty.playerLockTime : st.lockTime;
   if (canLock) {
     st.lockLostTimer = 0;
@@ -447,13 +544,7 @@ function updateLock(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, dt: n
     }
   } else if (r.lockedId !== null) {
     st.lockLostTimer += dt;
-    if (st.lockLostTimer > 2 || !r.emitting) {
-      const old = r.lockedId;
-      r.lockedId = null;
-      r.lockProgress = 0;
-      st.lockLostTimer = 0;
-      ctx.world.events.emit('lock', { ownerId: ac.id, targetId: old, locked: false });
-    }
+    if (st.lockLostTimer > 2 || !r.emitting) dropLock(ctx, ac, st);
   } else {
     r.lockProgress = Math.max(0, r.lockProgress - dt * 0.5);
   }
@@ -462,11 +553,11 @@ function updateLock(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, dt: n
 /** Radar emission on/off (EMCON). Silent: radar tracks and the STT lock drop. */
 export function setRadarEmitting(ctx: CombatCtx, ac: AircraftEntity, emitting: boolean): void {
   ac.radar.emitting = emitting;
-  if (!emitting && ac.radar.lockedId !== null) {
-    const old = ac.radar.lockedId;
-    ac.radar.lockedId = null;
+  if (!emitting) {
+    const st = acState(ac);
+    st.lockCommanded = false;
+    if (ac.radar.lockedId !== null) dropLock(ctx, ac, st);
     ac.radar.lockProgress = 0;
-    ctx.world.events.emit('lock', { ownerId: ac.id, targetId: old, locked: false });
   }
 }
 
@@ -492,7 +583,7 @@ export function updateSensors(ctx: CombatCtx, sh: SensorShared, dt: number): voi
     if ((ctx.tick + ac.id) % SENSOR_DIV === 0 || st.lastSensorTime < 0) {
       const sdt = st.lastSensorTime < 0 ? SENSOR_DIV / 60 : ctx.time - st.lastSensorTime;
       st.lastSensorTime = ctx.time;
-      scan(ctx, ac, st, sh);
+      scan(ctx, ac, st, sh, sdt);
       validateDesignation(ctx, ac, st, sdt);
       autoDesignate(ctx, ac, st);
       updateRwr(ctx, ac, st, sdt);

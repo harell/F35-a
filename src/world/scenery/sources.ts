@@ -11,7 +11,7 @@ import type { VegetationField } from '../terrain/vegetation';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import { REC, type ScatterSource, type TileInstances } from './scatter';
-import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, blockHash, districtAt, lotHash, lotInset, toLocal, toWorld, type District } from './urbanGrid';
+import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
 export class ColorMapSampler {
@@ -54,9 +54,20 @@ export class ColorMapSampler {
 
 const _c = new Color();
 
+/** True on (or within 2 m of) a street or arterial of the urban grid the terrain shader paints. */
+export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: District): boolean {
+  const d = districtAt(x, z, undefined, scratch, cbd);
+  if (d.border < 9.5) return true;
+  const [px, pz] = toLocal(d, x, z);
+  const fx = ((px % BLOCK_W) + BLOCK_W) % BLOCK_W;
+  const fz = ((pz % BLOCK_D) + BLOCK_D) % BLOCK_D;
+  return Math.min(fx, BLOCK_W - fx, fz, BLOCK_D - fz) < ROAD_HALF + 2;
+}
+
 export class TreeSource implements ScatterSource {
   readonly kinds = 3;
   private readonly tint: Color;
+  private readonly dist: District = {} as District;
   constructor(
     private readonly hf: Heightfield,
     private readonly cmap: ColorMapSampler,
@@ -64,6 +75,8 @@ export class TreeSource implements ScatterSource {
     private readonly theater: TheaterId,
     private readonly seed: number,
     private readonly spacing = 14,
+    private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
+    private readonly cbd: CbdGrid | null = null,
   ) {
     this.tint = theater === 'desert' ? new Color(1.08, 1.02, 0.78) : theater === 'arctic' ? new Color(0.82, 0.9, 0.88) : new Color(1, 1, 1);
   }
@@ -89,6 +102,9 @@ export class TreeSource implements ScatterSource {
         if (h3 > dens) continue;
         const gh = hf.heightAt(x, z);
         if (gh < 0.6) continue;
+        if (this.blocked && this.blocked(x, z, 3)) continue;
+        // garden / street trees stay off the painted streets and arterials
+        if (urban > 0.05 && onStreet(x, z, this.cbd, this.dist)) continue;
         const slope = hf.slopeAt(x, z);
         if (slope > 0.9) continue;
         const mi = Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell);
@@ -111,15 +127,30 @@ export class TreeSource implements ScatterSource {
 export const HOUSE = 0;
 export const APARTMENT = 1;
 
-const WALLS = [0xf2efe6, 0xe8e2d2, 0xdfe6ea, 0xf0e6d8, 0xd8dcd4, 0xe6d8c8, 0xc8d4dc];
+const f32 = Math.fround;
+const fract = (x: number) => x - Math.floor(x);
+/** GLSL fract(lh * k) with float32 rounding (matches the terrain shader's per-lot hashes). */
+const lotFrac = (lh: number, k: number) => fract(f32(f32(lh) * f32(k)));
+
+/**
+ * House footprint inside its lot, exactly as the terrain shader paints it (urbanPattern):
+ * centre / size as fractions of the 17.5 × 38 m lot.
+ */
+export function houseFootprint(lh: number, lz: number, apt: boolean): { cx: number; cz: number; sx: number; sz: number } {
+  if (apt) return { cx: 0.5, cz: 0.5, sx: 0.78, sz: 0.6 + 0.2 * lotFrac(lh, 13.9) };
+  const row = ((lz % 2) + 2) % 2;
+  return { cx: 0.5 + (lotFrac(lh, 37.1) - 0.5) * 0.14, cz: row === 0 ? 0.34 : 0.66, sx: 0.5 + 0.24 * lotFrac(lh, 71.7), sz: 0.28 + 0.14 * lotFrac(lh, 13.9) };
+}
 
 export class HouseSource implements ScatterSource {
   readonly kinds = 2;
-  private readonly wall = WALLS.map((h) => new Color(h));
   private readonly dist: District = {} as District;
   constructor(
     private readonly hf: Heightfield,
     private readonly cmap: ColorMapSampler,
+    private readonly groundAt: (x: number, z: number) => number = (x, z) => hf.meshHeightAt(x, z),
+    private readonly cbd: CbdGrid | null = null,
+    private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
   ) {}
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
@@ -127,7 +158,7 @@ export class HouseSource implements ScatterSource {
     const seen: District[] = [];
     for (let j = 0; j <= 2; j++)
       for (let i = 0; i <= 2; i++) {
-        const d = districtAt(x0 + (size * i) / 2, z0 + (size * j) / 2);
+        const d = districtAt(x0 + (size * i) / 2, z0 + (size * j) / 2, undefined, undefined, this.cbd);
         if (!seen.some((s) => s.cx === d.cx && s.cz === d.cz)) seen.push(d);
       }
     const lotW = BLOCK_W / LOTS_X;
@@ -149,38 +180,41 @@ export class HouseSource implements ScatterSource {
       }
       for (let lz = Math.floor(minZ / lotD); lz <= Math.floor(maxZ / lotD); lz++) {
         for (let lx = Math.floor(minX / lotW); lx <= Math.floor(maxX / lotW); lx++) {
-          const [wx, wz] = toWorld(d, (lx + 0.5) * lotW, (lz + 0.5) * lotD);
-          if (wx < x0 || wx >= x0 + size || wz < z0 || wz >= z0 + size) continue;
-          const own = districtAt(wx, wz, undefined, this.dist);
+          const [cwx, cwz] = toWorld(d, (lx + 0.5) * lotW, (lz + 0.5) * lotD);
+          if (cwx < x0 || cwx >= x0 + size || cwz < z0 || cwz >= z0 + size) continue;
+          const own = districtAt(cwx, cwz, undefined, this.dist, this.cbd);
           if (own.cx !== d.cx || own.cz !== d.cz || own.border < 9) continue;
-          const dens = this.cmap.urban(wx, wz);
+          const dens = this.cmap.urban(cwx, cwz);
           if (dens < 0.08) continue;
           const bx = Math.floor(lx / LOTS_X);
           const bz = Math.floor(lz / LOTS_Z);
-          if (blockHash(d, bx, bz) >= 0.94 - dens * 0.06) continue; // park block
+          if (blockHash(d, bx, bz) >= 0.975 - dens * 0.03) continue; // park block (same rule as the shader)
           const lh = lotHash(d, lx, lz);
-          if (lh >= 0.62 + 0.38 * dens) continue;
-          const gh = this.hf.meshHeightAt(wx, wz);
+          if (lh >= 0.8 + 0.2 * dens) continue;
+          const apt = dens > 0.9;
+          const fp = houseFootprint(lh, lz, apt);
+          const [wx, wz] = toWorld(d, (lx + fp.cx) * lotW, (lz + fp.cz) * lotD);
+          const gh = this.groundAt(wx, wz);
           if (gh < 1) continue;
-          const [ix, iz] = lotInset(dens);
-          const w = lotW * (1 - 2 * ix);
-          const dd = lotD * (1 - 2 * iz);
-          const apt = dens > 0.82;
-          const hgt = apt ? 12 + 26 * ((lh * 5.7) % 1) * dens : 4.5 + 2.8 * ((lh * 3.3) % 1);
-          const wc = this.wall[Math.floor(((lh * 17.3) % 1) * this.wall.length)];
-          out.data[apt ? APARTMENT : HOUSE].push(wx, gh - 1.2, wz, -d.angle, w, hgt + 1.2, dd, wc.r, wc.g, wc.b, lh);
+          if (this.blocked && this.blocked(wx, wz, 12)) continue;
+          const w = fp.sx * lotW;
+          const dd = fp.sz * lotD;
+          const hgt = apt ? 12 + 26 * lotFrac(lh, 5.7) * dens : 3.2 + 1.6 * lotFrac(lh, 3.3);
+          // ridge along the long side: the unit archetype's ridge runs along local Z
+          const swap = w > dd;
+          out.data[apt ? APARTMENT : HOUSE].push(wx, gh - 0.8, wz, -d.angle + (swap ? Math.PI / 2 : 0), swap ? dd : w, hgt + 0.8, swap ? w : dd, 1, 1, 1, lh);
         }
       }
     }
   }
 }
 
-/** Roof colour for a house record (matches the shader's lot roof colour). */
-export function roofColorFn(roofs: [Color, Color, Color]): (rec: number[], i: number, out: Color) => void {
+/** Roof colour for a house record (matches the terrain shader's roofColor(lh)). */
+export function roofColorFn(roofs: Color[]): (rec: number[], i: number, out: Color) => void {
   return (rec, _i, out) => {
     const lh = rec[10];
-    const c = lh < 0.3 ? roofs[0] : lh < 0.66 ? roofs[1] : roofs[2];
-    const k = 0.8 + 0.45 * ((lh * 7.3) % 1);
+    const c = roofs[Math.min(roofs.length - 1, Math.floor(lotFrac(lh, 5.1) * 5.999))];
+    const k = 0.85 + 0.3 * lotFrac(lh, 7.3);
     out.setRGB(c.r * k, c.g * k, c.b * k);
   };
 }

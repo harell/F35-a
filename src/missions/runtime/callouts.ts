@@ -4,9 +4,12 @@
  *  - player ground / SAM kill: "Target destroyed." (p_target_destroyed) + "SA-6 SITE DESTROYED"
  *  - wingman kills, friendly losses ("Friendly down!"), SAM engagement flag, player down.
  *
- * The runner is never explicitly disposed by Game.ts and the EventBus outlives a mission, so
- * every handler first checks that its world is still alive (a disposed world has no player)
- * and detaches itself otherwise.
+ * Also the debrief bookkeeping (MissionState.stats): what hit the player last, AMRAAM shots fired
+ * before the SHOOT cue, missiles that missed, gun kills.
+ *
+ * The EventBus outlives a mission: MissionRunner.dispose() (called by Game on teardown) detaches
+ * every handler. As a second line of defence each handler also checks that its world is still
+ * alive (a disposed world has no player) and detaches itself otherwise.
  */
 import type { GameEventMap } from '../../core/events';
 import { AircraftEntity, type AnyEntity } from '../../sim/entities';
@@ -27,7 +30,7 @@ export class Callouts {
   attach(): void {
     const ev = this.s.events;
     this.unsubs.push(
-      ev.on('destroyed', (e) => this.guard() && this.onDestroyed(e.entity, e.attackerId)),
+      ev.on('destroyed', (e) => this.guard() && this.onDestroyed(e.entity, e.attackerId, e.weapon)),
       ev.on('munition:launch', (e) => {
         if (!this.guard()) return;
         const p = this.s.player;
@@ -40,7 +43,37 @@ export class Callouts {
       }),
       ev.on('player:down', (e) => {
         if (!this.guard()) return;
+        this.s.stats.downReason = e.reason;
         this.onPlayerDown(e.reason);
+      }),
+      ev.on('damage', (e) => {
+        if (!this.guard()) return;
+        const p = this.s.player;
+        if (!p || e.target !== p || e.attackerId === null) return;
+        const a = this.s.world.getEntity(e.attackerId);
+        const st = this.s.stats;
+        st.lastHitWeapon = e.weapon;
+        st.lastHitBy = a ? (a.kind === 'aircraft' ? 'aircraft' : a.kind === 'sam' ? 'sam' : a.kind === 'ground' ? 'ground' : null) : null;
+        st.lastHitType = a && (a.kind === 'aircraft' || a.kind === 'sam' || a.kind === 'ground') ? a.type : null;
+      }),
+      ev.on('munition:launch', (e) => {
+        if (!this.guard()) return;
+        const p = this.s.player;
+        if (!p || e.shooter !== p || e.missile.def.category !== 'aam') return;
+        const st = this.s.stats;
+        st.aamShots++;
+        const t = this.s.world.getEntity(e.targetId);
+        if (!t || !t.alive || e.missile.def.id !== 'aim120') return;
+        // fired before the calibrated SHOOT cue (CombatLaunchZone.rShoot) → a long, low-Pk shot
+        const z = this.s.world.combat.launchZoneFor(p, 'aim120', t, this.s.world) as { range: number; rShoot?: number; rMax: number };
+        const shootRange = z.rShoot && z.rShoot > 0 ? z.rShoot : z.rMax * 0.7;
+        if (z.range > shootRange * 1.08) st.longShots++;
+      }),
+      ev.on('munition:end', (e) => {
+        if (!this.guard()) return;
+        const p = this.s.player;
+        if (!p || e.missile.shooterId !== p.id || e.missile.def.category !== 'aam') return;
+        if (e.reason === 'decoyed' || e.reason === 'selfdestruct' || e.reason === 'ground' || e.reason === 'water') this.s.stats.misses++;
       }),
     );
   }
@@ -64,7 +97,7 @@ export class Callouts {
     return this.s.world.getEntity(e.id) === e;
   }
 
-  private onDestroyed(entity: AnyEntity, attackerId: number | null): void {
+  private onDestroyed(entity: AnyEntity, attackerId: number | null, weapon: GameEventMap['destroyed']['weapon']): void {
     const s = this.s;
     if (entity.kind === 'missile' || entity.kind === 'decoy') return;
     if (!this.belongsToUs(entity)) return;
@@ -76,6 +109,7 @@ export class Callouts {
 
     if (entity.team !== p.team) {
       if (byPlayer) {
+        if (entity.kind === 'aircraft' && running && weapon === 'gun') s.stats.gunKills++;
         if (running) {
           if (entity.kind === 'aircraft') s.kills.air++;
           else if (entity.kind === 'sam') s.kills.sam++;

@@ -3,7 +3,13 @@
  *
  * The F-35's DAS sees every hostile missile homing on it within 15 km, IR or radar, motor
  * burning or not. Other aircraft (AI) only know about missiles their RWR reports (SARH/command
- * illumination, active seekers) or that they can see (skill-dependent visual range).
+ * illumination, active seekers after pitbull) or that they can see (skill-dependent visual range).
+ * An AMRAAM / R-77 in midcourse is silent: an STT lock spikes the target's RWR ("track") but the
+ * launch itself is not detected until the missile's seeker goes active.
+ *
+ * Only missiles that still THREATEN the aircraft are listed (CombatMissile.threat, updated every
+ * step by flight.ts): a missile that lost guidance, went for a decoy, ran out of energy or passed
+ * drops off the list at the next 10 Hz sensor update — so the MISSILE warning / Betty clear at once.
  */
 import { Quaternion, Vector3 } from 'three';
 import type { AircraftEntity, IncomingMissile } from '../entities';
@@ -26,7 +32,8 @@ export function updateMaws(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState
   _qi.copy(ac.quaternion).invert();
   let n = 0;
   for (const m of world.missiles) {
-    if (!m.alive || m.team === ac.team || m.targetId !== ac.id || !isCombatMissile(m)) continue;
+    if (!m.alive || m.team === ac.team || !isCombatMissile(m) || m.ended || !m.threat) continue;
+    if (m.targetId !== ac.id && m.originalTargetId !== ac.id) continue;
     _rel.subVectors(m.position, ac.position);
     const d = _rel.length();
     if (d > MAWS_RANGE) continue;

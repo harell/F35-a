@@ -4,6 +4,7 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { AKL } from '../src/core/auckland';
 import { MAT_URBAN } from '../src/world/terrain/types';
+import { runwayLengthFor } from '../src/world/terrain/features';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { SceneryFeature } from '../src/core/contracts';
 
@@ -67,7 +68,8 @@ describe('Auckland theatre geography', () => {
     for (const f of [MISSION[0], features[0]]) {
       const hd = ((f.rotation ?? 0) * Math.PI) / 180;
       const h0 = q.heightAt(f.x, f.z);
-      for (let v = -1600; v <= 1600; v += 400) {
+      const half = runwayLengthFor(f) / 2;
+      for (let v = -half; v <= half; v += half / 4) {
         expect(Math.abs(q.heightAt(f.x + Math.sin(hd) * v, f.z - Math.cos(hd) * v) - h0)).toBeLessThan(1);
       }
     }

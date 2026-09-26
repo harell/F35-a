@@ -16,12 +16,16 @@ import { buildInstantMission } from './content/instant';
 import { CAMPAIGN_PART1 } from './content/campaign1';
 import { CAMPAIGN_PART2 } from './content/campaign2';
 import { TRAINING_MISSIONS } from './content/training';
-import { applyResult, loadProgressFrom, saveProgressTo } from './progress';
+import { applyResult, loadProgressFrom, saveProgressTo, skipMission as skipMissionIn } from './progress';
+
+export { failStreak, wasSkipped, type ProgressExtras } from './progress';
 
 export { createMissionRunner } from './MissionRunner';
 export { buildInstantMission, buildInstantMissionSeeded } from './content/instant';
 export { terrainPadsFor } from './pads';
 export { validateMission } from './validate';
+/** Debrief awards (ids, names, descriptions) — MissionResult.medals entries come from here. */
+export { MEDALS, MEDAL_LIST, type MedalDef, type MedalId } from './runtime/debrief';
 export type { MissionScript } from './schema';
 
 /** Operation Southern Cross — 12 missions over Auckland, in order. */
@@ -42,6 +46,14 @@ export function saveProgress(p: CampaignProgress): void {
 /** Fold a result into the progress (unlocks the next campaign mission on success). Returns a new object. */
 export function recordResult(p: CampaignProgress, r: MissionResult): CampaignProgress {
   return applyResult(p, r, CAMPAIGN);
+}
+
+/**
+ * Safety valve: unlock the mission after `id` without a win (offer it after repeated failures —
+ * see failStreak()). Returns a new progress object; save it with saveProgress().
+ */
+export function skipMission(p: CampaignProgress, id: string): CampaignProgress {
+  return skipMissionIn(p, id, CAMPAIGN);
 }
 
 /** Next campaign mission in order, or null after the last / for non-campaign ids. */

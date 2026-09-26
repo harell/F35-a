@@ -62,6 +62,8 @@ export function drawFpm(f: HudFrame): void {
     pen.line(x - k, y + k, x + k, y - k);
   }
   pen.strokeGlow(pal.main, 1.8);
+  // protected: no text ever covers the flight path marker
+  f.occ.addBox(x, y, r + 14 * u, r + 9 * u, 1);
   // ghost at the true position when it is still on screen (e.g. under the glare shield)
   if (limited && fp.onScreen) {
     pen.setDash('dot');

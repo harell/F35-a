@@ -128,6 +128,24 @@ export class TerrainWorkerPool {
     return out;
   }
 
+  /** Auckland coast mask (n × n bytes over `extent`), rows split over the workers. */
+  async bakeCoast(seed: number, n: number, extent: number): Promise<Uint8Array> {
+    const out = new Uint8Array(n * n);
+    const chunks = this.workers.length;
+    const rows = Math.ceil(n / chunks);
+    const jobs: Promise<void>[] = [];
+    for (let j0 = 0; j0 < n; j0 += rows) {
+      const j1 = Math.min(n, j0 + rows);
+      jobs.push(
+        this.run({ kind: 'coast', seed, n, extent, j0, j1 }).then((r) => {
+          if (r.kind === 'coast') out.set(r.data, r.j0 * n);
+        }),
+      );
+    }
+    await Promise.all(jobs);
+    return out;
+  }
+
   private runOn(index: number, job: JobInput): Promise<WorkerResult> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {

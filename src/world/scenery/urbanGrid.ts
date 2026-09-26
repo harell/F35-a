@@ -43,8 +43,37 @@ export interface District {
   border: number;
 }
 
-/** Voronoi district containing (x, z) (matches GLSL district()). */
-export function districtAt(x: number, z: number, size = DISTRICT_SIZE, out?: District): District {
+/**
+ * A fixed street grid overriding the Voronoi districts inside a circle (Auckland CBD: one grid
+ * roughly aligned with Queen Street). `hash` sets the grid angle (hash · 6.2831 rad, like the
+ * shader) and seeds the block / lot hashes. Must match the terrain shader's uCbd uniform.
+ */
+export interface CbdGrid {
+  x: number;
+  z: number;
+  radius: number;
+  hash: number;
+}
+
+/** Voronoi district containing (x, z) (matches GLSL urbanDistrict() / district()). */
+export function districtAt(x: number, z: number, size = DISTRICT_SIZE, out?: District, cbd?: CbdGrid | null): District {
+  if (cbd && size === DISTRICT_SIZE) {
+    const r = Math.hypot(x - cbd.x, z - cbd.z);
+    if (r < cbd.radius) {
+      const o = out ?? ({} as District);
+      o.cx = cbd.x;
+      o.cz = cbd.z;
+      o.hash = f32(cbd.hash);
+      o.angle = f32(o.hash * 6.2831);
+      o.cos = Math.cos(o.angle);
+      o.sin = Math.sin(o.angle);
+      o.border = cbd.radius - r;
+      return o;
+    }
+    const o = districtAt(x, z, size, out, null);
+    o.border = Math.min(o.border, r - cbd.radius);
+    return o;
+  }
   const gx = Math.floor(x / size);
   const gz = Math.floor(z / size);
   let b1 = 1e30;
@@ -99,7 +128,7 @@ export function blockHash(d: District, bx: number, bz: number): number {
   return hash12(bx + d.hash * 91, bz + d.hash * 91);
 }
 
-/** Lot hash (built when < 0.62 + 0.38·dens; roof colour by thirds). */
+/** Lot hash (built when < 0.8 + 0.2·dens; roof palette index / footprint via fract(lh·k)). */
 export function lotHash(d: District, lx: number, lz: number): number {
   return hash12(lx + 17 + d.hash * 13, lz + 17 + d.hash * 13);
 }

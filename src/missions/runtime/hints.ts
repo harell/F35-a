@@ -1,22 +1,38 @@
 /**
- * F35-A — contextual HUD hints: scripted HintDefs plus built-in "auto hints" that react to
- * what the player is doing (training + early campaign): designate, shoot, defend against a
- * missile, go low under the SA-10, strike designation, guns, energy.
+ * F35-A — contextual HUD hints: scripted HintDefs plus built-in "auto hints" that react to what
+ * the player is doing (training + early campaign) and always-on ones (Winchester / rearm).
+ *
+ * The weapon hints follow the SELECTED weapon and the real stores (names from WEAPON_INFO):
+ *  - AMRAAM: tap the TD box (or TGT) to lock → point the nose (±30° lock cone) → wait for SHOOT
+ *    → fire → crank 50°;
+ *  - AIM-9X / gun: seeker tone / pipper;
+ *  - AARGM: designate an emitting SAM, fire on SHOOT (never sent to a bomb while an AARGM cue is up);
+ *  - SDB / JDAM: designate with TGT, release IN RANGE;
+ *  - an A/A weapon selected while a surface objective is near: which A/G store to select.
+ * Texts stay short; the HUD decides visibility (Settings.hints).
  */
-import type { AircraftEntity } from '../../sim/entities';
+import { WEAPON_INFO } from '../../core/data';
+import type { WeaponId } from '../../core/types';
+import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { evalCondition } from './conditions';
 import { aircraftHudName } from './names';
 import type { MissionState } from './state';
+import type { RearmController } from './rearm';
 
 interface AutoHint {
   id: string;
+  /** Shown even when the mission has no autoHints (critical guidance): no show limit. */
+  always?: boolean;
+  /** Seconds before the rule may show again (default COOLDOWN; 0 = continuous). */
+  cooldown?: number;
   /** Returns the hint text when it applies, else null. */
-  test(p: AircraftEntity, s: MissionState): string | null;
+  test(p: AircraftEntity, s: MissionState, h: HintSystem): string | null;
 }
 
 const SHOW_TIME = 6;
 const COOLDOWN = 25;
 const MAX_SHOWS = 3;
+const COS_LOCK_CONE = Math.cos((30 * Math.PI) / 180);
 
 function nearestLiveSam(s: MissionState, p: AircraftEntity, type: string, within: number): boolean {
   for (const site of s.world.sams) {
@@ -26,14 +42,81 @@ function nearestLiveSam(s: MissionState, p: AircraftEntity, type: string, within
   return false;
 }
 
-function hasAg(p: AircraftEntity): boolean {
-  for (const st of p.stores) if (st.count > 0 && (st.weapon === 'gbu31' || st.weapon === 'gbu39')) return true;
-  return false;
+function remaining(p: AircraftEntity, w: WeaponId): number {
+  if (w === 'gun') return p.gunAmmo;
+  let n = 0;
+  for (const st of p.stores) if (st.weapon === w) n += st.count;
+  return n;
 }
 
-function designatedEntityKind(p: AircraftEntity, s: MissionState) {
-  const e = s.world.getEntity(p.radar.designatedId);
+function hostileDesignated(p: AircraftEntity, s: MissionState): AnyEntity | null {
+  const e = s.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
   return e && e.alive && e.team !== p.team ? e : null;
+}
+
+/** Target within ±30° of the nose (the player's lock cone). */
+function inLockCone(p: AircraftEntity, e: AnyEntity): boolean {
+  const dx = e.position.x - p.position.x;
+  const dy = e.position.y - p.position.y;
+  const dz = e.position.z - p.position.z;
+  const d = Math.hypot(dx, dy, dz);
+  if (d < 1) return true;
+  // body nose = -Z rotated by the aircraft quaternion
+  const q = p.quaternion;
+  const fx = -2 * (q.x * q.z + q.w * q.y);
+  const fy = -2 * (q.y * q.z - q.w * q.x);
+  const fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
+  return (fx * dx + fy * dy + fz * dz) / d >= COS_LOCK_CONE;
+}
+
+/** Radar SAM that is emitting (or known) — an AARGM target. */
+function armTargetable(e: AnyEntity): boolean {
+  return (e.kind === 'sam' && e.type !== 'zsu23' && e.type !== 'sa18' && (e.radarOn || e.known)) || (e.kind === 'ground' && e.emitter);
+}
+
+/** Nearest live hostile surface target of an active PRIMARY objective within `within` m. */
+function surfaceObjectiveTarget(s: MissionState, p: AircraftEntity, within: number): AnyEntity | null {
+  let best: AnyEntity | null = null;
+  let bestD = within;
+  for (const o of s.objectives) {
+    if (o.status.state !== 'active' || !o.def.primary) continue;
+    const d = o.def;
+    if (d.kind === 'destroy') {
+      for (const id of d.groups) {
+        const g = s.groups.get(id);
+        if (!g || g.air) continue;
+        for (const m of g.members) {
+          if (!m.alive) continue;
+          const r = m.position.distanceTo(p.position);
+          if (r < bestD) {
+            bestD = r;
+            best = m;
+          }
+        }
+      }
+    } else if (d.kind === 'destroy_sams') {
+      for (const site of s.world.sams) {
+        if (!site.alive || site.team === p.team || Math.hypot(site.position.x - d.x, site.position.z - d.z) > d.radius) continue;
+        const r = site.position.distanceTo(p.position);
+        if (r < bestD) {
+          bestD = r;
+          best = site;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/** SDB releases beyond this (m) glide so long and arrive so slow that point defences eat them. */
+export const SDB_PRESS_RANGE = 22_000;
+
+/** Best air-to-ground store for a target (AARGM for emitters, then SDB, then JDAM). */
+function agWeaponFor(p: AircraftEntity, t: AnyEntity): WeaponId | null {
+  if (armTargetable(t) && remaining(p, 'aargm') > 0) return 'aargm';
+  if (remaining(p, 'gbu39') > 0) return 'gbu39';
+  if (remaining(p, 'gbu31') > 0) return 'gbu31';
+  return null;
 }
 
 /** Built-in hints, in priority order. */
@@ -43,14 +126,36 @@ const AUTO: AutoHint[] = [
     test(p) {
       if (p.incoming.length === 0) return null;
       const ir = p.incoming[0].guidance === 'ir';
-      return ir ? 'MISSILE! Pop FLARES and break hard into it' : 'MISSILE! Drop CHAFF and turn 90° to the missile to notch it';
+      return ir ? 'MISSILE (IR)! FLARES and break hard into it — out of afterburner' : 'MISSILE! Beam it: turn 90° to the missile, dive, CHAFF in the last seconds';
+    },
+  },
+  {
+    id: 'rearming',
+    always: true,
+    cooldown: 0,
+    test(p, _s, h) {
+      const r = h.rearm;
+      if (!r || !r.inGateNow(p) || r.holdTime <= 0) return null;
+      return `REARMING — hold over ${r.homeName} (${Math.max(1, Math.ceil(5 - r.holdTime))} s)`;
+    },
+  },
+  {
+    id: 'winchester',
+    always: true,
+    cooldown: 20,
+    test(_p, _s, h) {
+      const r = h.rearm;
+      if (!r) return null;
+      if (r.current === 'winchester') return `WINCHESTER: follow the steering cue to ${r.homeName} — hold over the field below 5,000 ft to rearm`;
+      if (r.current === 'bingo') return `BINGO FUEL: RTB to ${r.homeName} — hold over the field below 5,000 ft to refuel`;
+      return null;
     },
   },
   {
     id: 'sa10_low',
     test(p, s) {
       if (p.flight.agl < 150 || !nearestLiveSam(s, p, 'sa10', 40_000)) return null;
-      return 'Fly below 300 ft to hide from the SA-10 — use the terrain to mask you';
+      return 'SA-10 up: fly below 300 ft and keep the terrain between you and Motutapu';
     },
   },
   {
@@ -60,56 +165,82 @@ const AUTO: AutoHint[] = [
     },
   },
   {
-    id: 'designate_air',
-    test(p, s) {
-      if (p.radar.designatedId !== null) return null;
+    id: 'aa',
+    test(p, s, h) {
       const w = p.selectedWeapon;
       if (w !== 'aim120' && w !== 'aim9x' && w !== 'gun') return null;
-      for (const c of p.radar.contacts) {
-        if (c.team === p.team) continue;
-        const e = s.world.getEntity(c.id);
-        if (e && e.alive && e.kind === 'aircraft') return `Tap TGT to designate the ${aircraftHudName(e.type)}`;
-      }
-      return null;
-    },
-  },
-  {
-    id: 'shoot',
-    test(p, s) {
-      const e = designatedEntityKind(p, s);
-      if (!e || e.kind !== 'aircraft') return null;
-      const r = e.position.distanceTo(p.position);
-      if (p.selectedWeapon === 'aim120' && r < 35_000) return 'Fire AMRAAM when SHOOT flashes — then keep the target in front';
-      if (p.selectedWeapon === 'aim9x' && r < 8_000) return 'Look at the bandit: fire the AIM-9X on the lock tone';
-      if (p.selectedWeapon === 'gun' && r < 1_500) return 'GUNS: put the pipper on the bandit and hold FIRE';
-      return null;
-    },
-  },
-  {
-    id: 'strike',
-    test(p, s) {
-      if (!hasAg(p)) return null;
-      const w = p.selectedWeapon;
-      const ag = w === 'gbu31' || w === 'gbu39';
-      if (!ag) {
-        // only nag when a ground objective is reasonably close
-        for (const g of s.world.ground) if (g.alive && g.team !== p.team && g.position.distanceTo(p.position) < 30_000) return 'Open the bays: JDAM needs ground designation — tap WPN to select JDAM, then TGT';
+      const e = hostileDesignated(p, s);
+      if (!e || e.kind !== 'aircraft') {
+        for (const c of p.radar.contacts) {
+          if (c.team === p.team) continue;
+          const t = s.world.getEntity(c.id);
+          if (t && t.alive && t.kind === 'aircraft') return `Tap the TD box (or TGT) to lock the ${aircraftHudName(t.type)}`;
+        }
         return null;
       }
-      if (!p.radar.groundPoint) return 'Tap TGT to designate a ground target for the GPS bombs';
-      return 'Release inside the range cue — the bomb flies itself to the target';
+      const r = e.position.distanceTo(p.position);
+      if (w === 'aim9x') return r < 8_000 ? 'Look at the bandit: fire the AIM-9X on the lock TONE' : null;
+      if (w === 'gun') return r < 1_500 ? 'GUNS: pipper on the bandit, fire inside 1,200 m' : null;
+      // AMRAAM: supporting a shot in flight → crank
+      for (const m of s.world.missiles) {
+        if (m.alive && m.shooterId === p.id && m.targetId === e.id && m.def.id === 'aim120') return 'Crank 50° off the bandit — keep it on the radar until the missile goes PITBULL';
+      }
+      if (p.radar.lockedId !== e.id && !inLockCone(p, e)) return 'Point the nose at the TD box: the lock builds inside 30°';
+      const z = h.zone(p, s);
+      if (z && z.shoot) return 'SHOOT — fire the AMRAAM, then crank 50°';
+      if (z && z.range <= z.rMax && z.range >= z.rMin) return 'IN RANGE — wait for SHOOT: closer shots hit';
+      return p.radar.lockedId === e.id ? 'Locked. Close in until SHOOT flashes' : null;
     },
   },
   {
-    id: 'aargm',
-    test(p, s) {
-      if (p.selectedWeapon !== 'aargm') return null;
-      const e = designatedEntityKind(p, s);
-      if (e && e.kind === 'sam') return null;
-      return 'AARGM homes on radar: designate an emitting SAM with TGT, then fire';
+    id: 'ag',
+    test(p, s, h) {
+      const w = p.selectedWeapon;
+      const name = WEAPON_INFO[w].short;
+      if (w === 'aargm') {
+        const e = hostileDesignated(p, s);
+        if (!e || !armTargetable(e)) return 'AARGM homes on radars: designate an emitting SAM with TGT, then fire';
+        const z = h.zone(p, s);
+        if (z && z.shoot) return 'SHOOT — fire the AARGM: it keeps homing even if the radar shuts down';
+        return 'Close in: fire the AARGM when SHOOT shows';
+      }
+      if (w === 'gbu31' || w === 'gbu39') {
+        const b = s.world.combat.bombImpactPoint(p, s.world);
+        if (!p.radar.groundPoint) return `Tap TGT to designate a ground target for the ${name}`;
+        if (b && b.inRange) {
+          // an SDB lobbed from its 30 km maximum glides for 3+ minutes and arrives slow — easy
+          // meat for a Tor / Osa: press in to ~20 km first
+          const gp = p.radar.groundPoint;
+          if (w === 'gbu39' && Math.hypot(gp.x - p.position.x, gp.z - p.position.z) > SDB_PRESS_RANGE) return 'IN RANGE — press in to 20 km: a max-range SDB arrives slow and gets shot down';
+          return `IN RANGE — release the ${name}, it flies itself to the target`;
+        }
+        return `Fly toward the target and release the ${name} when the range cue shows IN RANGE`;
+      }
+      // A/A weapon selected with a surface objective ahead and no bandit to worry about
+      const e = hostileDesignated(p, s);
+      if (e && e.kind === 'aircraft') return null;
+      const t = surfaceObjectiveTarget(s, p, 30_000);
+      if (!t) return null;
+      const ag = agWeaponFor(p, t);
+      if (!ag) return null;
+      return `Tap WPN to select the ${WEAPON_INFO[ag].short}, then TGT to designate the target`;
     },
   },
 ];
+
+/** Built-in rule by id (allocation-free lookup; evaluated at 10 Hz). */
+function ruleById(id: string): AutoHint | null {
+  for (let i = 0; i < AUTO.length; i++) if (AUTO[i].id === id) return AUTO[i];
+  return null;
+}
+
+/** Minimal launch-zone shape used by the hints (CombatLaunchZone carries rShoot too). */
+interface ZoneLike {
+  shoot: boolean;
+  range: number;
+  rMin: number;
+  rMax: number;
+}
 
 export class HintSystem {
   /** Current text (MissionRunnerApi.hint). */
@@ -122,8 +253,23 @@ export class HintSystem {
   private readonly scriptedDone = new Set<string>();
   /** A trigger-pushed hint (overrides everything until it expires). */
   private forced: { text: string; until: number } | null = null;
+  private zoneCache: ZoneLike | null = null;
+  private zoneAt = -1;
 
-  constructor(private readonly s: MissionState) {}
+  constructor(
+    private readonly s: MissionState,
+    /** Winchester / rearm state (always-on hints). */
+    readonly rearm: RearmController | null = null,
+  ) {}
+
+  /** Launch zone of the selected weapon vs the designation (cached per evaluation). */
+  zone(p: AircraftEntity, s: MissionState): ZoneLike | null {
+    if (this.zoneAt !== s.time) {
+      this.zoneAt = s.time;
+      this.zoneCache = s.world.combat.launchZone(p, s.world);
+    }
+    return this.zoneCache;
+  }
 
   /** Trigger action: show a hint now. */
   force(text: string, duration = 8): void {
@@ -133,6 +279,7 @@ export class HintSystem {
   clear(): void {
     this.current = null;
     this.forced = null;
+    this.zoneCache = null;
   }
 
   update(): void {
@@ -151,20 +298,25 @@ export class HintSystem {
       this.forced = null;
     }
 
-    // keep the current hint on screen for its duration while it still applies
+    // always-on hints (Winchester / rearming) pre-empt scripted and weapon hints
+    const cur = ruleById(this.currentId);
+    if (!cur?.always && this.tryAuto(p, true)) return;
+
+    // keep the current hint on screen for its duration while it still applies (text may evolve)
     if (this.current && t - this.shownAt < this.currentDuration) {
       if (this.currentId.startsWith('script:')) return;
-      const rule = AUTO.find((r) => r.id === this.currentId);
-      const text = rule?.test(p, s);
+      const rule = ruleById(this.currentId);
+      const text = rule?.test(p, s, this);
       if (text) {
         this.current = text;
-        return;
+        // a higher-priority always-on / defend hint may pre-empt a weapon hint
+        if (!this.preempted(rule!, p)) return;
       }
     }
     this.current = null;
     this.currentId = '';
 
-    // scripted hints (each shown once)
+    // scripted hints, then auto hints
     for (const h of s.script.hints ?? []) {
       if (this.scriptedDone.has(h.id)) continue;
       if (h.until && evalCondition(h.until, s)) {
@@ -177,18 +329,36 @@ export class HintSystem {
         return;
       }
     }
-
     if (!s.script.autoHints) return;
-    for (const rule of AUTO) {
-      const n = this.shows.get(rule.id) ?? 0;
-      if (n >= MAX_SHOWS) continue;
-      if (t - (this.lastShown.get(rule.id) ?? -999) < COOLDOWN) continue;
-      const text = rule.test(p, s);
-      if (!text) continue;
-      this.shows.set(rule.id, n + 1);
-      this.show(rule.id, text, SHOW_TIME);
-      return;
+    this.tryAuto(p, false);
+  }
+
+  /** A more urgent rule (defend / rearm) applies while `rule` is showing. */
+  private preempted(rule: AutoHint, p: AircraftEntity): boolean {
+    const idx = AUTO.indexOf(rule);
+    for (let i = 0; i < idx; i++) {
+      const r = AUTO[i];
+      if (!r.always && !(r.id === 'defend' && this.s.script.autoHints)) continue;
+      if (r.test(p, this.s, this)) return true;
     }
+    return false;
+  }
+
+  private tryAuto(p: AircraftEntity, alwaysOnly: boolean): boolean {
+    const s = this.s;
+    const t = s.time;
+    for (const rule of AUTO) {
+      if (alwaysOnly && !rule.always) continue;
+      if (!alwaysOnly && rule.always) continue;
+      if (!rule.always && (this.shows.get(rule.id) ?? 0) >= MAX_SHOWS) continue;
+      if (t - (this.lastShown.get(rule.id) ?? -999) < (rule.cooldown ?? COOLDOWN)) continue;
+      const text = rule.test(p, s, this);
+      if (!text) continue;
+      this.shows.set(rule.id, (this.shows.get(rule.id) ?? 0) + 1);
+      this.show(rule.id, text, SHOW_TIME);
+      return true;
+    }
+    return false;
   }
 
   private show(id: string, text: string, duration: number): void {

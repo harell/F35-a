@@ -1,9 +1,10 @@
 /**
- * Screen overlays: G-effect vignettes (tunnel vision / grey-out, red-out) and hit flash, centre
- * messages, radio subtitles, kill feed, objective summary, mission hint and hit markers.
+ * Screen overlays: G-effect vignettes (tunnel vision / grey-out, red-out) and hit flash, the centre
+ * message slot, radio subtitles (paged), kill feed, objective summary, mission hint and hit markers.
  */
-import { MessageQueue, type MessageTone, type Subtitle } from './feeds';
+import { MessageQueue, RADIO_PAGE_LINES, type MessageTone, type Subtitle } from './feeds';
 import type { HudFrame } from './frame';
+import { RADIO_FONT, RADIO_LINE } from './layout';
 import { vignetteParams } from './gEffects';
 import { withAlpha, type Palette } from './palette';
 
@@ -110,72 +111,182 @@ export function wrap(text: string, maxChars: number): string[] {
   return lines;
 }
 
-/* ───────────────────────── Centre messages ───────────────────────── */
-
-export function drawMessages(f: HudFrame, y: number): void {
-  const { pen, pal, L, st } = f;
-  const u = L.u;
-  const maxChars = Math.max(12, Math.floor((L.right - L.left - 40) / pen.charWidth(19)));
-  for (const m of st.messages.items) {
-    const a = MessageQueue.alpha(m);
-    if (a <= 0.02) continue;
-    const size = m.tone === 'bad' || m.tone === 'warn' ? 20 : 19;
-    const col = toneColor(pal, m.tone);
-    pen.g.globalAlpha = a;
-    for (const line of wrap(m.text, maxChars)) {
-      pen.text(line, L.cx, y, col, size);
-      y += 22 * u;
-    }
-    pen.g.globalAlpha = 1;
+/**
+ * Wrap to at most `maxLines` lines WITHOUT cutting a word: if the text still does not fit, the last
+ * line ends at a word boundary with an ellipsis. Cached like wrap().
+ */
+const fitCache = new Map<number, Map<string, string[]>>();
+export function wrapFit(text: string, maxChars: number, maxLines: number): string[] {
+  const key = maxChars * 16 + maxLines;
+  let byText = fitCache.get(key);
+  if (!byText) fitCache.set(key, (byText = new Map()));
+  let lines = byText.get(text);
+  if (lines) return lines;
+  const all = wrap(text, maxChars);
+  if (all.length <= maxLines) lines = all;
+  else {
+    lines = all.slice(0, maxLines);
+    let last = lines[maxLines - 1];
+    while (last.length + 1 > maxChars && last.includes(' ')) last = last.slice(0, last.lastIndexOf(' '));
+    lines[maxLines - 1] = last + '…';
   }
+  if (byText.size > 100) byText.clear();
+  byText.set(text, lines);
+  return lines;
+}
+
+/* ───────────────────────── Centre message slot ───────────────────────── */
+
+/** Placement of the centre message for this frame (reserveMessage → drawMessages). */
+const msgPlan = { active: false, top: 0, lh: 0, size: 17, lines: [] as string[], alpha: 1, tone: 'info' as MessageTone };
+
+/**
+ * Reserve the centre message's spot: its fixed slot below the flight path marker (above the jet in
+ * external views), moved only as far as needed to stay off the protected symbols (FPM, target box,
+ * pipper, the jet). Call right after the protected symbols so secondary labels make way for it.
+ */
+export function reserveMessage(f: HudFrame, yPref: number, yMin = yPref - 8 * f.L.u, yMax = f.L.msgFloor): void {
+  const { pen, L, st, occ } = f;
+  msgPlan.active = false;
+  const m = st.messages.current;
+  if (!m) return;
+  const a = MessageQueue.alpha(m) * f.declutter;
+  if (a <= 0.02) return;
+  const u = L.u;
+  const band = f.mode === 'hmd' ? Math.max(200 * u, L.altLeft - L.spdRight - 16 * u) : Math.min(L.W * 0.6, 460 * u);
+  let size = m.tone === 'bad' || m.tone === 'warn' ? 18 : 17;
+  let lines = wrap(m.text, Math.max(10, Math.floor(band / pen.charWidth(size))));
+  if (lines.length > 2) {
+    size = 14;
+    lines = wrapFit(m.text, Math.max(10, Math.floor(band / pen.charWidth(size))), 2);
+  }
+  const lh = (size + 3) * u;
+  const h = lines.length * lh;
+  let widest = 0;
+  for (const l of lines) widest = Math.max(widest, l.length);
+  const hw = (widest * pen.charWidth(size)) / 2 + 4 * u;
+  const top0 = yPref - lh / 2;
+  let top = occ.freeY(L.cx - hw, L.cx + hw, h, top0, yMin - lh / 2, Math.max(yMax, top0 + h), 'down');
+  let alpha = a;
+  if (!Number.isFinite(top)) {
+    top = top0;
+    alpha *= 0.35; // no free spot at all: stay see-through
+  }
+  occ.add(L.cx - hw, top, L.cx + hw, top + h);
+  msgPlan.active = true;
+  msgPlan.top = top;
+  msgPlan.lh = lh;
+  msgPlan.size = size;
+  msgPlan.lines = lines;
+  msgPlan.alpha = alpha;
+  msgPlan.tone = m.tone;
+}
+
+/** No centre message this frame (held back / PCD zoom open). */
+export function clearMessagePlan(): void {
+  msgPlan.active = false;
+}
+
+/** Draw the reserved centre message (call reserveMessage first). */
+export function drawMessages(f: HudFrame): void {
+  if (!msgPlan.active) return;
+  const { pen, pal, L } = f;
+  const col = toneColor(pal, msgPlan.tone);
+  pen.g.globalAlpha = msgPlan.alpha;
+  let y = msgPlan.top + msgPlan.lh / 2;
+  for (const line of msgPlan.lines) {
+    pen.text(line, L.cx, y, col, msgPlan.size);
+    y += msgPlan.lh;
+  }
+  pen.g.globalAlpha = 1;
 }
 
 /* ───────────────────────── Radio subtitles ───────────────────────── */
 
 let subRef: Subtitle | null = null;
+let subChars = 0;
 let subLines: string[] = [];
 let subHead = '';
+let subWidest = 0;
 
-export function drawRadio(f: HudFrame): void {
-  const { pen, pal, L, st } = f;
+/** Radio pill placement for this frame (reserveRadio → drawRadio). */
+const radioPlan = { active: false, x: 0, top: 0, w: 0, h: 0, first: 0, n: 0, pages: 1, page: 0 };
+
+/**
+ * Lay out the radio subtitle pill (2 lines per page; long calls are paged via RadioQueue.setPages,
+ * never truncated) and reserve its rectangle so conformal labels make way for it. Bottom centre in the
+ * free band between the touch clusters; top centre (under the heading tape) in the cockpit view so the
+ * panoramic cockpit display stays clear.
+ */
+export function reserveRadio(f: HudFrame): void {
+  const { pen, L, st, occ } = f;
+  radioPlan.active = false;
   const q = st.radio;
   const s = q.current;
   if (!s) return;
-  const a = q.alpha;
-  if (a <= 0.02) return;
   const u = L.u;
-  const size = 13;
-  const cw = pen.charWidth(size);
-  const maxW = Math.min(L.W * 0.66, L.thumbRX - L.thumbLX - 16 * u);
-  const maxChars = Math.max(16, Math.floor(maxW / cw) - 2);
-  if (s !== subRef) {
+  const cw = pen.charWidth(RADIO_FONT);
+  const maxW = Math.max(160 * u, L.radioX1 - L.radioX0);
+  // (room at the right end for the page counter)
+  const maxChars = Math.max(18, Math.floor((maxW - 38 * u) / cw));
+  if (s !== subRef || maxChars !== subChars) {
     subRef = s;
+    subChars = maxChars;
     subHead = '[' + s.from.toUpperCase() + '] ';
     subLines = wrap(subHead + s.text, maxChars);
+    subWidest = 0;
+    for (const l of subLines) subWidest = Math.max(subWidest, l.length);
   }
-  const lh = 17 * u;
-  const n = Math.min(3, subLines.length);
-  let widest = 0;
-  for (let i = 0; i < n; i++) widest = Math.max(widest, subLines[i].length);
-  const w = widest * cw + 20 * u;
-  const h = n * lh + 8 * u;
-  const cx = L.cx;
-  const bottom = L.radioY + lh / 2 + 4 * u;
-  const top = bottom - h;
-  pen.setFill(withAlpha('#000000', 0.55 * a));
-  pen.roundRect(cx - w / 2, top, w, h, 7 * u);
+  const pages = Math.max(1, Math.ceil(subLines.length / RADIO_PAGE_LINES));
+  q.setPages(pages);
+  if (q.alpha <= 0.02) return;
+  const page = q.page;
+  const first = page * RADIO_PAGE_LINES;
+  const n = Math.min(RADIO_PAGE_LINES, subLines.length - first);
+  if (n <= 0) return;
+  const rows = Math.min(RADIO_PAGE_LINES, subLines.length);
+  const w = Math.min(maxW, subWidest * cw + (pages > 1 ? 38 : 22) * u);
+  const h = rows * RADIO_LINE * u + 8 * u;
+  // centred on the screen when it fits the band, else as close to the centre as the band allows
+  const cx = Math.max(L.radioX0 + w / 2, Math.min(L.radioX1 - w / 2, L.cx));
+  radioPlan.active = true;
+  radioPlan.x = cx - w / 2;
+  radioPlan.top = L.radioTop ? L.radioY : L.radioY - h;
+  radioPlan.w = w;
+  radioPlan.h = h;
+  radioPlan.first = first;
+  radioPlan.n = n;
+  radioPlan.pages = pages;
+  radioPlan.page = page;
+  occ.add(radioPlan.x, radioPlan.top, radioPlan.x + w, radioPlan.top + h);
+}
+
+/** Draw the reserved radio pill (see reserveRadio). */
+export function drawRadio(f: HudFrame): void {
+  const { pen, pal, L, st, occ } = f;
+  const s = st.radio.current;
+  if (!radioPlan.active || !s) return;
+  const u = L.u;
+  const { x: px, top, w, h, first, n, pages, page } = radioPlan;
+  const cw = pen.charWidth(RADIO_FONT);
+  const lh = RADIO_LINE * u;
+  // translucent while it would cover the target box / pipper
+  const k = occ.hits(px, top, px + w, top + h, 1) ? 0.45 : 1;
+  const alpha = st.radio.alpha * k;
+  pen.setFill(withAlpha('#000000', 0.55 * alpha));
+  pen.roundRect(px, top, w, h, 7 * u);
   pen.g.fill();
   const enemy = s.team === 'red';
-  const headCol = withAlpha(enemy ? pal.danger : '#8fd8ff', a);
-  const bodyCol = withAlpha('#f0f6f2', a);
-  pen.setFont(size);
+  const headCol = withAlpha(enemy ? pal.danger : '#8fd8ff', alpha);
+  const bodyCol = withAlpha('#f0f6f2', alpha);
+  pen.setFont(RADIO_FONT);
   pen.setAlign('left', 'middle');
-  const x0 = cx - w / 2 + 10 * u;
+  const x0 = px + 11 * u;
+  const head = subHead.trimEnd();
   for (let i = 0; i < n; i++) {
-    const line = subLines[i];
+    const line = subLines[first + i];
     const y = top + 4 * u + lh * (i + 0.5);
-    if (i === 0 && line.startsWith(subHead.trimEnd())) {
-      const head = subHead.trimEnd();
+    if (first + i === 0 && line.startsWith(head)) {
       pen.setFill(headCol);
       pen.g.fillText(head, x0, y);
       pen.setFill(bodyCol);
@@ -185,21 +296,37 @@ export function drawRadio(f: HudFrame): void {
       pen.g.fillText(line, x0, y);
     }
   }
+  if (pages > 1) {
+    pen.setAlign('right', 'middle');
+    pen.setFont(9);
+    pen.setFill(withAlpha('#8fd8ff', alpha));
+    pen.g.fillText(pageLabel(page, pages), px + w - 5 * u, top + h - 6 * u);
+  }
+}
+/** "2/3" page labels (cached, no per-frame string building). */
+const pageLabels: string[][] = [];
+function pageLabel(page: number, pages: number): string {
+  const n = Math.min(20, pages);
+  let row = pageLabels[n];
+  if (!row) row = pageLabels[n] = Array.from({ length: n }, (_, i) => i + 1 + '/' + n);
+  return row[Math.max(0, Math.min(n - 1, page))];
 }
 
 /* ───────────────────────── Kill feed ───────────────────────── */
 
-export function drawKillFeed(f: HudFrame, x: number, y: number): void {
+/** Kill feed (max 3 lines, newest first), right aligned at (x, y). Returns the next free y. */
+export function drawKillFeed(f: HudFrame, x: number, y: number): number {
   const { pen, pal, L, st } = f;
   const u = L.u;
   for (const e of st.kills.items) {
-    const a = st.kills.alpha(e);
+    const a = st.kills.alpha(e) * (0.4 + 0.6 * f.declutter);
     if (a <= 0.02) continue;
     pen.g.globalAlpha = a;
     pen.text(e.text, x, y, toneColor(pal, e.tone), 13, 'right');
     pen.g.globalAlpha = 1;
     y += 17 * u;
   }
+  return y;
 }
 
 /* ───────────────────────── Objectives / hint ───────────────────────── */
@@ -210,67 +337,111 @@ interface ObjLineEntry {
   done: number;
   total: number;
   maxChars: number;
-  text: string;
+  lines: string[];
 }
-/** Per-objective cached line (objective status objects are long-lived). */
+/** Per-objective cached lines (objective status objects are long-lived). */
 const objLineCache = new WeakMap<object, ObjLineEntry>();
 
-function objLine(o: { label: string; state: string; progress?: { done: number; total: number } }, maxChars: number): string {
+/**
+ * Objective summary lines: state mark + label wrapped at word boundaries onto at most 3 lines (never
+ * cut mid-word), with the progress count on the last line.
+ */
+export function objectiveLines(o: { label: string; state: string; progress?: { done: number; total: number } }, maxChars: number): string[] {
   const done = o.progress?.done ?? 0;
   const total = o.progress?.total ?? 0;
   let e = objLineCache.get(o);
-  if (e && e.label === o.label && e.state === o.state && e.done === done && e.total === total && e.maxChars === maxChars) return e.text;
+  if (e && e.label === o.label && e.state === o.state && e.done === done && e.total === total && e.maxChars === maxChars) return e.lines;
   const mark = o.state === 'complete' ? '+ ' : o.state === 'failed' ? 'x ' : o.state === 'active' ? '> ' : '- ';
   const prog = total > 1 ? ' ' + done + '/' + total : '';
-  let body = o.label.toUpperCase();
-  const room = maxChars - mark.length - prog.length;
-  if (body.length > room) body = body.slice(0, Math.max(4, room - 1)) + '.';
-  const text = mark + body + prog;
-  if (!e) objLineCache.set(o, (e = { label: o.label, state: o.state, done, total, maxChars, text }));
-  else Object.assign(e, { label: o.label, state: o.state, done, total, maxChars, text });
-  return text;
+  const body = o.label.toUpperCase() + prog;
+  const wrapped = wrapFit(body, Math.max(8, maxChars - 2), 3);
+  const lines = wrapped.map((l, i) => (i === 0 ? mark : '  ') + l);
+  if (!e) objLineCache.set(o, (e = { label: o.label, state: o.state, done, total, maxChars, lines }));
+  else Object.assign(e, { label: o.label, state: o.state, done, total, maxChars, lines });
+  return lines;
 }
 
-/** Compact objective summary (top-left). Returns the next free y. */
-export function drawObjectives(f: HudFrame, x: number, y: number, force = false): number {
+/**
+ * Compact objective summary (top-left column), shown only for a few seconds at mission start and after
+ * an objective changes (the full list lives on the pause screen / tactical map). Returns the next free y.
+ */
+export function drawObjectives(f: HudFrame, x: number, y: number, force = false, maxW = f.L.colW, maxLines = 7): number {
   const { pen, pal, L, st, ctx } = f;
   const objs = ctx.mission?.objectives;
   if (!objs || objs.length === 0) return y;
-  const show = force ? 1 : Math.min(1, st.objShow / 0.6);
+  const show = (force ? 1 : Math.min(1, st.objShow / 0.6)) * f.declutter;
   if (show <= 0.02) return y;
   const u = L.u;
   const size = 11;
-  const maxChars = Math.max(14, Math.floor(Math.min(L.W * 0.28, 250 * u) / pen.charWidth(size)));
+  const lh = 13.5 * u;
+  const maxChars = Math.max(14, Math.floor(maxW / pen.charWidth(size)));
   pen.g.globalAlpha = show;
   pen.text('OBJECTIVES', x, y, pal.dim, 10, 'left');
   y += 14 * u;
-  let n = 0;
-  for (const o of objs) {
-    if (n >= 5) break;
-    if (o.state === 'pending' && !o.primary) continue;
-    const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? pal.danger : o.state === 'active' ? pal.main : pal.dim;
-    pen.text(objLine(o, maxChars), x, y, col, size, 'left');
-    y += 14 * u;
-    n++;
+  let used = 0;
+  // the objective that just changed first, then the active / primary ones
+  for (let pass = 0; pass < 2 && used < maxLines; pass++) {
+    for (const o of objs) {
+      const changed = !!st.objChangedId && o.id === st.objChangedId;
+      if (pass === 0 ? !changed : changed) continue;
+      if (pass === 1 && !force && o.state !== 'active' && !(o.state === 'pending' && o.primary)) continue;
+      if (pass === 1 && force && o.state === 'pending' && !o.primary) continue;
+      const lines = objectiveLines(o, maxChars);
+      if (used + lines.length > maxLines) continue;
+      const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? pal.danger : o.state === 'active' ? pal.main : pal.dim;
+      for (const l of lines) {
+        pen.text(l, x, y, col, size, 'left');
+        y += lh;
+      }
+      used += lines.length;
+      if (used >= maxLines) break;
+    }
   }
   pen.g.globalAlpha = 1;
   return y + 4 * u;
 }
 
-export function drawHint(f: HudFrame, y: number): void {
+let hintRef = '';
+let hintStart = 0;
+/** Seconds each page of a long hint stays up. */
+const HINT_PAGE = 4;
+
+/**
+ * Mission / tutorial hint: a left-aligned block in the top-left column (outside the pitch-ladder window
+ * and away from the fight), max 3 lines per page, long hints page every few seconds.
+ */
+export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMax = f.L.colBottom): number {
   const hint = f.ctx.mission?.hint;
-  if (!hint || !f.ctx.settings.hints) return;
+  if (!hint || !f.ctx.settings.hints) return y;
   const { pen, pal, L, st } = f;
   const u = L.u;
-  const size = 12.5;
-  // centred; narrower while the objective summary (top-left) is showing
-  const side = st.objShow > 0 ? Math.min(L.W * 0.28, 250 * u) : Math.max(0, L.cx - L.tapeHalfW - L.left) * 0.4;
-  const maxW = Math.min(L.W * 0.6, 520 * u, L.right - L.left - 2 * side - 20 * u);
-  const maxChars = Math.max(20, Math.floor(maxW / pen.charWidth(size)) - 2);
+  const size = 11.5;
+  const cw = pen.charWidth(size);
+  const maxChars = Math.max(16, Math.floor((maxW - 16 * u) / cw));
   const lines = wrap(hint, maxChars);
-  for (let i = 0; i < Math.min(3, lines.length); i++) {
-    pen.pillText(lines[i], L.cx, y + i * 20 * u, pal.main, size, 'rgba(0,12,6,0.55)', 'center', 9 * u, 4 * u);
+  if (hint !== hintRef) {
+    hintRef = hint;
+    hintStart = st.clock;
   }
+  const lh = 15 * u;
+  const room = Math.max(1, Math.min(3, Math.floor((yMax - y - 8 * u) / lh)));
+  const pages = Math.ceil(lines.length / room);
+  const page = pages > 1 ? Math.floor((st.clock - hintStart) / HINT_PAGE) % pages : 0;
+  const first = page * room;
+  const n = Math.min(room, lines.length - first);
+  let widest = 0;
+  for (let i = 0; i < lines.length; i++) widest = Math.max(widest, lines[i].length);
+  const w = Math.min(maxW, widest * cw + 16 * u);
+  const h = n * lh + 8 * u;
+  const a = 0.35 + 0.65 * f.declutter;
+  pen.g.globalAlpha = a;
+  pen.setFill('rgba(0,12,6,0.55)');
+  pen.roundRect(x - 4 * u, y, w, h, 6 * u);
+  pen.g.fill();
+  for (let i = 0; i < n; i++) pen.text(lines[first + i], x + 4 * u, y + 4 * u + lh * (i + 0.5), pal.main, size, 'left');
+  if (pages > 1) pen.text(pageLabel(page, pages), x - 4 * u + w - 4 * u, y + h - 5 * u, pal.dim, 8.5, 'right');
+  pen.g.globalAlpha = 1;
+  return y + h + 6 * u;
 }
 
 /* ───────────────────────── Hit markers ───────────────────────── */

@@ -2,7 +2,7 @@
  * F35-A — mission condition evaluation (spawn triggers, objective activation, triggers, hints).
  */
 import type { Condition } from '../schema';
-import { deadCount, type MissionState } from './state';
+import { deadCount, defeatedCount, type MissionState } from './state';
 
 /** Horizontal distance² between an entity-ish position and a point. */
 function dist2(px: number, pz: number, x: number, z: number): number {
@@ -51,6 +51,13 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       if (c.count === undefined && g.members.length < g.expected) return false;
       return deadCount(g) >= need;
     }
+    case 'group_defeated': {
+      const g = s.groups.get(c.group);
+      if (!g || g.spawnedAt < 0) return false;
+      const need = c.count === undefined ? g.expected : Math.min(c.count, g.expected);
+      if (c.count === undefined && g.members.length < g.expected) return false;
+      return defeatedCount(s, g) >= need;
+    }
     case 'group_spawned': {
       const g = s.groups.get(c.group);
       return !!g && g.spawnedAt >= 0;
@@ -74,6 +81,14 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
     case 'player_fired': {
       const p = s.player;
       return !!p && p.shotsFired >= (c.count ?? 1);
+    }
+    case 'player_radar': {
+      const p = s.player;
+      if (!p || !p.alive) return false;
+      const id = c.state === 'locked' ? p.radar.lockedId : p.radar.designatedId;
+      const e = s.world.getEntity(id);
+      if (!e || !e.alive || e.kind !== 'aircraft' || e.team === p.team) return false;
+      return c.state === 'locked' || p.radar.lockedId !== id;
     }
     case 'all':
       for (const sub of c.of) if (!evalCondition(sub, s)) return false;
@@ -99,6 +114,7 @@ export function conditionRefs(c: Condition, out: { groups: string[]; objectives:
       if (c.who && c.who !== 'player') out.groups.push(c.who.group);
       break;
     case 'group_destroyed':
+    case 'group_defeated':
     case 'group_spawned':
       out.groups.push(c.group);
       break;
