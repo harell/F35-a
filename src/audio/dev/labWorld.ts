@@ -1,5 +1,5 @@
 /**
- * DEV ONLY — a tiny mock sim for audio-lab.html: the player's jet flying straight and level
+ * DEV ONLY — a tiny mock sim for labs/audio-lab.html: the player's jet flying straight and level
  * with slider-driven engine/flight state, AI jets doing flybys, missiles that ignite, fly and
  * explode, and a camera rig for every view mode. It emits the same events the real sim does,
  * so the real AudioSystem can be exercised end-to-end. Not imported by the game.

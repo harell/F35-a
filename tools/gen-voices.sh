@@ -15,7 +15,7 @@
 #   piper   neural VITS voices (Piper, rhasspy) — natural prosody, by far the most human-sounding
 #           option available offline. Set up with tools/voice-piper-setup.sh (pip wheel from PyPI
 #           + voice models from the rhasspy/piper GitHub release v0.0.2). Voices (see
-#           docs/CREDITS-audio.md for licences): Betty = kathleen (CC0), pilot + AWACS = two
+#           docs/credits/audio.md for licences): Betty = kathleen (CC0), pilot + AWACS = two
 #           different male LibriTTS speakers (CC BY 4.0).
 #   flite   ffmpeg's built-in libflite (CMU Flite clustergen slt/rms/awb) — the old robotic voices
 #   espeak  espeak-ng (last resort)
@@ -67,7 +67,7 @@ if [ "$ENGINE" = auto ]; then
 fi
 
 # Speakers per role: flite voice | espeak voice:speed:pitch
-# Chosen by ASR word accuracy after processing (see docs/CREDITS-audio.md):
+# Chosen by ASR word accuracy after processing (see docs/credits/audio.md):
 #   Betty slt 0.41 (≈ raw), AWACS rms 0.75, pilot awb 0.43 — awb/rms are clearly different speakers.
 BETTY_FLITE=slt;  BETTY_ESPEAK="en-us+f5:150:55"
 PILOT_FLITE=awb;  PILOT_ESPEAK="en-us+m1:165:40"

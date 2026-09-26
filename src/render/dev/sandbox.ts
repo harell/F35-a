@@ -1,8 +1,8 @@
 /**
- * DEV ONLY — render integration sandbox (sandbox.html): the REAL Environment, SimWorld, CombatSystem
+ * DEV ONLY — render integration sandbox (labs/sandbox.html): the REAL Environment, SimWorld, CombatSystem
  * and AI with this module's EntityRenderer + Effects + CameraRig, without the missions module.
  *
- *   /sandbox.html?view=chase|cockpit|orbit|target|missile|flyby|tactical&theater=desert&tod=day&q=medium&loadout=a2a_beast
+ *   /labs/sandbox.html?view=chase|cockpit|orbit|target|missile|flyby|tactical&theater=desert&tod=day&q=medium&loadout=a2a_beast
  */
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 import { EventBus } from '../../core/events';

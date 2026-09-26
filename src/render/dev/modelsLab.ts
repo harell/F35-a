@@ -1,7 +1,7 @@
 /**
- * DEV ONLY — models lab (models-lab.html). Turntable/inspection view for every procedural model.
+ * DEV ONLY — models lab (labs/models-lab.html). Turntable/inspection view for every procedural model.
  *
- *   /models-lab.html?model=f35a&view=34&ab=1&bay=1&loadout=a2a_beast
+ *   /labs/models-lab.html?model=f35a&view=34&ab=1&bay=1&loadout=a2a_beast
  *   model = <aircraft type> | m:<munition id> | sam:<sam type> | gt:<ground target type> | all
  *   view  = front | side | top | bottom | rear | 34 | 34b | 34l | low
  *   flight: ab, rpm, bay, elev, ail, rud, flaps, brake, alpha, mach   dead=1   night=1   spin=1   zoom=1

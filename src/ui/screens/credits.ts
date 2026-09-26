@@ -30,7 +30,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
     title: 'Art & assets',
     items: [
       ['Procedural', 'Aircraft, terrain, clouds, cockpit, HMD symbology, menus, icons and the Auckland chart are generated in code.'],
-      ['Textures', 'Water normals, lens flare and moon textures from the three.js examples (MIT). See docs/CREDITS-*.md.'],
+      ['Textures', 'Water normals, lens flare and moon textures from the three.js examples (MIT). See docs/CREDITS.md.'],
       ['Map data', 'Auckland coastline and landmarks hand-traced and approximated from public geography.'],
     ],
   },

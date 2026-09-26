@@ -1,6 +1,6 @@
 /**
  * HMD / PCD typeface: B612 Mono Bold — the open-source font Airbus designed for cockpit displays
- * (SIL OFL 1.1, see docs/CREDITS-hud.md). Loaded once through the FontFace API; until it arrives the
+ * (SIL OFL 1.1, see docs/credits/hud.md). Loaded once through the FontFace API; until it arrives the
  * canvas falls back to the system monospace stack, so nothing blocks on it.
  */
 import fontUrl from './assets/B612Mono-Bold.ttf?url';

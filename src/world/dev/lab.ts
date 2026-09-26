@@ -1,7 +1,7 @@
 /**
- * WORLD lab (dev only, world-lab.html): renders the environment alone with a free-flying camera.
+ * WORLD lab (dev only, labs/world-lab.html): renders the environment alone with a free-flying camera.
  *
- *   world-lab.html?theater=auckland&tod=day&weather=scattered&quality=medium&seed=1234
+ *   labs/world-lab.html?theater=auckland&tod=day&weather=scattered&quality=medium&seed=1234
  *                 &cam=x,y,z&look=headingDeg,pitchDeg
  *
  * Keys: WASD/QE fly, arrows look, Shift = fast. `window.__lab` exposes setCamera/stats for

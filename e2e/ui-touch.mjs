@@ -383,7 +383,7 @@ async function lab() {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`${base}ui-lab.html?screen=controls`, { waitUntil: 'load' });
+  await page.goto(`${base}labs/ui-lab.html?screen=controls`, { waitUntil: 'load' });
   // wait for the first input.update() to lay the controls out
   await page.waitForFunction(() => (document.querySelector('.ctl-throttle')?.getBoundingClientRect().height ?? 0) > 50);
   await page.evaluate(() => {
@@ -428,7 +428,7 @@ async function lab() {
 
   // left-handed: the stick lives bottom-left
   const lh = await ctx.newPage();
-  await lh.goto(`${base}ui-lab.html?screen=controls&left=1`, { waitUntil: 'load' });
+  await lh.goto(`${base}labs/ui-lab.html?screen=controls&left=1`, { waitUntil: 'load' });
   await lh.waitForFunction(() => (document.querySelector('.ctl-throttle')?.getBoundingClientRect().height ?? 0) > 50);
   const t2 = await touchApi(lh);
   await t2.down(1, 130, 300);
@@ -444,7 +444,7 @@ async function lab() {
 
   // tilt scheme: stick hidden, RECENTER shown and wired
   const tp = await ctx.newPage();
-  await tp.goto(`${base}ui-lab.html?screen=controls&tilt=1`, { waitUntil: 'load' });
+  await tp.goto(`${base}labs/ui-lab.html?screen=controls&tilt=1`, { waitUntil: 'load' });
   await tp.waitForFunction(() => (document.querySelector('.ctl-throttle')?.getBoundingClientRect().height ?? 0) > 50);
   await tp.evaluate(() => {
     window.__cmds = [];

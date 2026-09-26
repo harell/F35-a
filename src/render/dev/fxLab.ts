@@ -1,8 +1,8 @@
 /**
- * DEV ONLY — effects lab (fx-lab.html). Runs the real EntityRenderer + Effects + CameraRig against a
+ * DEV ONLY — effects lab (labs/fx-lab.html). Runs the real EntityRenderer + Effects + CameraRig against a
  * small mock SimWorld with scripted scenarios, so every effect can be screenshotted deterministically:
  *
- *   /fx-lab.html?fx=sam|aam|boom|wreck|flares|guns|contrail|cone|all&cam=chase|fixed|orbit|flyby|missile|target|cockpit|tactical
+ *   /labs/fx-lab.html?fx=sam|aam|boom|wreck|flares|guns|contrail|cone|all&cam=chase|fixed|orbit|flyby|missile|target|cockpit|tactical
  *   &night=1  &t=<seconds to fast-forward>  &q=low|medium|high
  */
 import {

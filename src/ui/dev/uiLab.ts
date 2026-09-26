@@ -1,5 +1,5 @@
 /**
- * F35-A UI lab (dev only, served at /ui-lab.html): renders one screen with mock data for visual checks.
+ * F35-A UI lab (dev only, served at /labs/ui-lab.html): renders one screen with mock data for visual checks.
  *   ?screen=splash|main|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|loading|rotate|toast|controls
  *   &mission=c01          mission for briefing / pause
  *   &tab=obj|hangar       briefing tab to open

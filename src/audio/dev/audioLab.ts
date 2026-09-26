@@ -1,5 +1,5 @@
 /**
- * DEV ONLY — audio-lab.html: buttons for every sound and voice, sliders for the engine /
+ * DEV ONLY — labs/audio-lab.html: buttons for every sound and voice, sliders for the engine /
  * flight state, view-mode switch, level meter, plus `window.__audioLab` hooks used by the
  * headless check (src/audio/dev/audioCheck.mjs) to run scenarios and record the output.
  */

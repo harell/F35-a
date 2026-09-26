@@ -1,10 +1,10 @@
 /**
  * DEV ONLY — headless audio check (Playwright + Chromium, no speakers needed).
  *
- *   node src/audio/dev/audioCheck.mjs [--url=http://localhost:5173/audio-lab.html] [--out=/tmp/f35-audio-check]
+ *   node src/audio/dev/audioCheck.mjs [--url=http://localhost:5173/labs/audio-lab.html] [--out=/tmp/f35-audio-check]
  *                                     [--only=scenario,scenario] [--seconds=3]
  *
- * 1. opens audio-lab.html, taps "Unlock audio" (a real user gesture)
+ * 1. opens labs/audio-lab.html, taps "Unlock audio" (a real user gesture)
  * 2. waits for every voice clip to be fetched + decoded and prints the HTTP statuses
  * 3. runs each lab scenario, records the master output through a ScriptProcessor tap and
  *    writes <out>/<scenario>.wav plus a spectrogram PNG (ffmpeg) and level stats
@@ -21,7 +21,7 @@ const args = Object.fromEntries(
     return m ? [m[1], m[2] === '' ? true : m[2]] : [a, true];
   }),
 );
-const url = args.url || 'http://localhost:5173/audio-lab.html';
+const url = args.url || 'http://localhost:5173/labs/audio-lab.html';
 const out = args.out || '/tmp/f35-audio-check';
 const seconds = args.seconds ? Number(args.seconds) : undefined;
 fs.mkdirSync(out, { recursive: true });

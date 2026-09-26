@@ -1,5 +1,5 @@
 /**
- * UI screenshots of every menu screen via the dev-only UI lab (/ui-lab.html).
+ * UI screenshots of every menu screen via the dev-only UI lab (/labs/ui-lab.html).
  *
  *   node e2e/ui-shots.mjs [--base=http://localhost:5173] [--device=phone|desktop|se|all] [--only=main,briefing]
  *
@@ -60,7 +60,7 @@ for (const dev of devices) {
     const errors = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(`${base}/ui-lab.html?${query}`, { waitUntil: 'load' });
+    await page.goto(`${base}/labs/ui-lab.html?${query}`, { waitUntil: 'load' });
     await page.waitForTimeout(wait);
     const file = `e2e/screenshots/ui/${dev}-${name}.png`;
     await page.screenshot({ path: file });

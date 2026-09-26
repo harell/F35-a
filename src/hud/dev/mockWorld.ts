@@ -1,5 +1,5 @@
 /**
- * DEV ONLY — mocked SimWorld / player / mission for hud-lab.html. Builds a static scenario that
+ * DEV ONLY — mocked SimWorld / player / mission for labs/hud-lab.html. Builds a static scenario that
  * exercises every HMD / PCD symbol (targets, lock, DLZ, incoming missiles, RWR, warnings, SAM rings,
  * gun, AIM-9X, JDAM, damage...). Not imported by the game.
  */

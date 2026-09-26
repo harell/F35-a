@@ -13,6 +13,6 @@ No third-party assets were downloaded for this module. Everything is made in cod
 | Touch controls (stick, throttle, buttons) | DOM + CSS (`src/input/touch/*`) |
 
 Fonts: the menus use the platform system font stack. Numeric read-outs use the HUD module's "B612 HMD" face when it has
-loaded (see `docs/CREDITS-hud.md`, SIL OFL 1.1) and fall back to the system monospace font otherwise.
+loaded (see `docs/credits/hud.md`, SIL OFL 1.1) and fall back to the system monospace font otherwise.
 
 Libraries used at build/test time only: playwright-core (Apache-2.0) for icon rendering and screenshots.

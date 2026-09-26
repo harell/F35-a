@@ -1,7 +1,7 @@
 /**
- * DEV ONLY — HUD / HMD / cockpit lab (hud-lab.html).
+ * DEV ONLY — HUD / HMD / cockpit lab (labs/hud-lab.html).
  *
- *   /hud-lab.html?scene=aa|lock|threat|gun|9x|ag|ccip|damage|pullup|offscreen|nav
+ *   /labs/hud-lab.html?scene=aa|lock|threat|gun|9x|ag|ccip|damage|pullup|offscreen|nav
  *                &view=cockpit|hud|chase|missile|tactical  &color=green|amber|cyan
  *                &tod=day|dawn|dusk|night  &bg=sky|snow  &q=low|medium|high  &fov=60
  *                &yaw=<deg>&pitch=<deg> (head look)  &t=<s> (pre-roll mock time)

@@ -103,6 +103,8 @@ react to `munition:launch`, `explosion`, `destroyed`, `radio`, `warning` and so 
 
 * `npx tsc --noEmit` must be clean.
 * `npx vitest run` covers unit tests (flight model trim and limits, missile guidance, radar and RCS, mission logic).
+* `node e2e/missions.mjs --base=http://localhost:5173/` loads every campaign and training mission in headless Chromium and reports errors, entity counts and draw calls.
+* Developer labs live in `labs/` (`/labs/models-lab.html`, `fx-lab`, `hud-lab`, `audio-lab`, `ui-lab`, `world-lab`, `sandbox`).
 * `node e2e/shot.mjs --url='http://localhost:5173/?mission=c01&autostart=1&view=chase' --wait=6000 --out=e2e/screenshots/x.png`
   takes a mobile-landscape (844×390 @2x) screenshot with headless Chromium (SwiftShader, so it's slow) and prints
   console errors plus `window.__f35.state()`. The dev server runs with `npx vite --port 5173`.
