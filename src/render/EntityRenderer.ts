@@ -127,30 +127,12 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
     }
   };
 
-  /**
-   * Tactical (top-down) view: the HUD is hidden there, so draw bright icons for every entity
-   * (player cyan, friendlies blue, hostile aircraft red, SAMs orange, ground targets yellow,
-   * missiles white) with a fixed on-screen size.
-   */
-  function tacticalMarkers(): void {
-    const pid = world.player?.id;
-    for (const a of world.aircraft) {
-      if (!a.alive) continue;
-      const me = a.id === pid;
-      if (me) lights.add(a.position.x, a.position.y, a.position.z, 0.2, 2.2, 2.6, 1, 1, 26);
-      else if (a.team === 'blue') lights.add(a.position.x, a.position.y, a.position.z, 0.4, 0.9, 2.6, 1, 1, 18);
-      else lights.add(a.position.x, a.position.y, a.position.z, 2.8, 0.35, 0.25, 1, 1, 18);
-    }
-    for (const s of world.sams) if (s.alive) lights.add(s.position.x, s.position.y + 5, s.position.z, 2.6, 1.2, 0.2, 1, 1, 18);
-    for (const g of world.ground) if (g.alive) lights.add(g.position.x, g.position.y + 5, g.position.z, 2.4, 2.1, 0.3, 1, 1, 13);
-    for (const m of world.missiles) if (m.alive) lights.add(m.position.x, m.position.y, m.position.z, 2.2, 2.2, 2.2, 1, 1, 9);
-  }
-
   function updateLights(ctx: FrameContext): void {
     fctx = ctx;
     lights.begin(pixelScale(ctx.camera.fov, ctx.screen.height));
-    if (ctx.viewMode === 'tactical') tacticalMarkers();
-    else aircraft.forEach(lightFor);
+    // tactical view: the HUD draws its own north-up 2D map (contacts, SAM rings, route) over the
+    // faint 3D background, so no 3D markers are drawn there (they would not match the map scale)
+    if (ctx.viewMode !== 'tactical') aircraft.forEach(lightFor);
     lights.end();
   }
 

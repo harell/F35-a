@@ -18,7 +18,23 @@
  *   │ └──┘ (FIRE)                                                       │
  *   └──────────────────────────────────────────────────────────────────┘
  * Left-handed swaps the throttle cluster and the stick zone (the button column stays on the right,
- * where the HUD expects it; the throttle then sits just inside the column).
+ * where the HUD expects it; the throttle then sits just inside the column, FIRE/GUN left of it and
+ * CMS at the foot of the button column, so nothing but FIRE/GUN reaches into the PCD's right portal):
+ *
+ *   ┌───────────────────────────────────────────────────────────┬──────┐
+ *   │ (HUD objectives)                                    (kills)│PAUSE │
+ *   │                                                            │ CAM  │
+ *   │                                                            │ TGT  │
+ *   │                                                            │ WPN  │
+ *   │ floating stick zone                          (GUN) ┌──┐    │RADAR │
+ *   │                                                   │TH│    │      │
+ *   │ (RECENTER)                                  (FIRE) └──┘    │ CMS  │
+ *   └──────────────────────────────────────────────────────────────────┘
+ *
+ * Zones the HUD must keep free of text (it imports computeTouchLayout itself and fits the radio band
+ * between the live clusters, so the two always agree): the throttle rect + FIRE/GUN/CMS, the stick
+ * zone's home circle (stickHome ± stickRadius) and the right button column (≈ 70 px, see
+ * src/hud/hmd/layout.ts BUTTON_COLUMN). Keep the button ids and this signature stable.
  */
 
 export interface Rect {
@@ -108,9 +124,9 @@ export function computeTouchLayout(width: number, height: number, safe: Insets, 
     const fx = tx - 12 * s - fireD;
     fire = r(fx, B - fireD, fireD, fireD);
     gun = r(fx + (fireD - gunD) / 2, fire.y - 8 * s - gunD, gunD, gunD);
-    // mirrored cluster sits further in (the button column takes the edge), so CMS drops a row to keep
-    // clear of the view centre and the altitude column
-    cms = r(fx - 10 * s - cmsD, fire.y - 14 * s, cmsD, cmsD);
+    // CMS goes to the foot of the button column (under RADAR, right thumb): mirrored next to FIRE it
+    // covered the cockpit PCD's right portal and pushed the cluster towards the view centre.
+    cms = r(colX + (colW - cmsD) / 2, B - cmsD, cmsD, cmsD);
   }
 
   // ── stick zone (opposite side) ──

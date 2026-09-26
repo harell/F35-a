@@ -72,3 +72,21 @@ describe('touch layout', () => {
     for (const id of ['pause', 'cam', 'tgt', 'wpn', 'radar'] as const) expect(L.buttons[id].x).toBeGreaterThan(844 - 80);
   });
 });
+
+describe('left-handed layout keeps the PCD / RWR clear (i1 regression)', () => {
+  for (const [W, H, safe] of SCREENS) {
+    it(`${W}×${H}: CMS sits in the right button column, below RADAR`, () => {
+      const L = computeTouchLayout(W, H, safe, { leftHanded: true });
+      const cms = L.buttons.cms;
+      const radar = L.buttons.radar;
+      // same column as the other right-edge buttons (was left of FIRE, over the PCD's right portal)
+      expect(cms.x).toBeGreaterThanOrEqual(radar.x - 2);
+      expect(cms.x + cms.w).toBeLessThanOrEqual(W - safe.right);
+      expect(cms.y).toBeGreaterThanOrEqual(radar.y + radar.h);
+      // the whole weapon cluster stays inside the right 40 % of the screen (the PCD's centre and
+      // left/RWR portal are free)
+      for (const id of ['fire', 'gun', 'cms'] as const) expect(L.buttons[id].x, id).toBeGreaterThan(W * 0.6 - 40);
+      expect(L.throttle.x).toBeGreaterThan(W * 0.6);
+    });
+  }
+});

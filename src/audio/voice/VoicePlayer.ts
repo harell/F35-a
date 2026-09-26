@@ -20,6 +20,10 @@ import { voiceChannel } from './voiceIds';
 
 const KEYUP = 0.075;
 const RADIO_GAP = 0.35;
+/** A radio call waits this long after a Betty clip ends before keying up (so neither masks the other). */
+const AFTER_BETTY = 0.12;
+/** Fade (time constant, s) when a Betty clip is cut because its warning cleared. */
+const CLEAR_FADE = 0.03;
 
 export class VoicePlayer {
   readonly betty = new BettyScheduler();
@@ -36,6 +40,10 @@ export class VoicePlayer {
   private readonly radioGain: GainNode;
   private ducked = false;
   private radioDucked = false;
+  /** Someone (Betty or radio) is speaking — read by the music ducker. */
+  speaking = false;
+  /** Called when a clip starts: voice id + channel (for logs / tests). */
+  onClipStart: ((id: VoiceId, channel: 'betty' | 'radio', clock: number) => void) | null = null;
 
   constructor(
     private readonly env: SynthEnv,
@@ -93,7 +101,12 @@ export class VoicePlayer {
     const now = this.clock;
     const ctx = this.env.ctx;
 
-    // Betty
+    // Betty: a clip whose warning has cleared (missile defeated, pulled up…) is cut at once
+    const cur = this.betty.playingWarning(now);
+    if (cur && this.bettySrc && (!warnings || !warnings.has(cur))) {
+      this.stopBetty(CLEAR_FADE);
+      this.betty.stopped(now);
+    }
     if (warnings) {
       const d = this.betty.update(now, warnings);
       if (d) {
@@ -103,17 +116,23 @@ export class VoicePlayer {
         }
         const buf = this.bank.get(d.voice);
         this.betty.started(d.warning, now, buf ? buf.duration : 0);
-        if (buf) this.startBetty(buf, d.preempt ? 0.03 : 0);
+        if (buf) {
+          this.startBetty(buf, d.preempt ? 0.03 : 0);
+          this.onClipStart?.(d.voice, 'betty', now);
+        }
       }
     }
     const bettyOn = now < this.bettyUntil;
 
-    // Radio
-    if (!this.radioBusy() && now >= this.radioNext) {
+    // Radio: never keys up over Betty — it waits for the clip to end (+ a short gap); while the
+    // call plays, Betty's reminders (not new warnings, not PULL UP) wait for it to finish.
+    if (!this.radioBusy() && now >= this.radioNext && now >= this.bettyUntil + AFTER_BETTY) {
       const item = this.radio.next(now);
       if (item) {
         const buf = this.bank.get(item.voice);
         if (buf) {
+          this.betty.deferRepeats(now + KEYUP + buf.duration + 0.1);
+          this.onClipStart?.(item.voice, 'radio', now);
           const t = ctx.currentTime + 0.01;
           squelchKey(this.env, t, 1);
           const src = ctx.createBufferSource();
@@ -135,6 +154,7 @@ export class VoicePlayer {
       this.radioGain.gain.setTargetAtTime(bettyOn ? 0.32 : 0.9, ctx.currentTime, 0.05);
     }
     const speaking = bettyOn || radioOn;
+    this.speaking = speaking;
     if (speaking !== this.ducked) {
       this.ducked = speaking;
       this.env.mixer.setDuck(speaking ? 0.72 : 1);

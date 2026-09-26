@@ -5,11 +5,14 @@
  *  chase        behind/above in a lagged aircraft frame (feels the rolls), looks ahead along the
  *               velocity, FOV kick with afterburner/speed, drag to look around, never below terrain
  *  orbit        drag to orbit, slow auto-rotate when idle
- *  target       over-the-shoulder padlock keeping jet + designated/locked target in frame
+ *  target       over-the-shoulder padlock (20 m up, 15 m right, <=35 m back): jet low-left,
+ *               designated/locked target upper-right
  *               (falls back to chase without a target)
- *  missile      follows the player's latest missile/bomb; holds on the impact ~2 s, then returns
+ *  missile      rigid along-track behind/right of the player's latest missile (body, flame and trail
+ *               in frame, target biased in); lingers ~3 s on the impact, then returns
  *  flyby        fixed point ahead of the flight path; re-placed after the jet passes
- *  tactical     high top-down, heading-up overview
+ *  tactical     high top-down, north-up overview (background for the HUD's 2D map; coverage on
+ *               camera.userData.tactical)
  *  death cam    automatic orbit around the player's wreck (reported as 'orbit')
  * Screen shake decays exponentially; near/far planes are set per mode.
  */
@@ -25,11 +28,21 @@ import {
   flybyAnchor,
   fovToFrame,
   headQuaternion,
+  impactPose,
+  missileCamPose,
   orbitOffset,
+  padlockPose,
   passedAnchor,
   shakeNoise,
+  sideOf,
   smoothK,
+  tacticalCoverage,
+  tacticalHeight,
 } from './camera/cameraMath';
+
+/** Tactical (MAP) view: fixed vertical FOV and default half-coverage of the ground (metres). */
+export const TACTICAL_FOV = 60;
+export const TACTICAL_HALF_COVERAGE = 10_000;
 
 const ORDER: CameraMode[] = ['cockpit', 'hud', 'chase', 'orbit', 'target', 'missile', 'flyby', 'tactical'];
 
@@ -41,6 +54,9 @@ const _fwd = new Vector3();
 const _q = new Quaternion();
 const _qs = new Quaternion();
 const _look = { yaw: 0, pitch: 0 };
+const _dir = new Vector3();
+const _side = new Vector3();
+const _right = new Vector3();
 
 export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   const camera = new PerspectiveCamera(settings.fov, 16 / 9, 1, 60_000);
@@ -70,8 +86,15 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   let lastMissileId: number | null = null;
   let followMissile: number | null = null;
   const holdPos = new Vector3();
+  const holdCam = new Vector3();
+  const mFwd = new Vector3(0, 0, -1);
+  const mSide = new Vector3(1, 0, 0);
+  let mSideValid = false;
   let holdUntil = -1;
   let holding = false;
+  // padlock
+  const padPos = new Vector3();
+  let padValid = false;
   // flyby
   const anchor = new Vector3();
   let anchorValid = false;
@@ -92,7 +115,11 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   const offEnd = world.events.on('munition:end', ({ missile, position }) => {
     if (mode === 'missile' && followMissile === missile.id) {
       holdPos.copy(position);
-      holdUntil = time + 2.2;
+      // freeze a spot behind/above/right of the impact along the final track and linger on it
+      impactPose(holdPos, mFwd, mSide, holdCam);
+      clampAboveGround(holdCam, groundY(holdCam.x, holdCam.z), 5);
+      camera.position.copy(holdCam); // kill-cam cut
+      holdUntil = time + 3.2;
       holding = true;
     }
   });
@@ -228,14 +255,24 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
       tgtDir.copy(_v);
       tgtValid = true;
     }
-    tgtDir.lerp(_v, smoothK(4, dt)).normalize();
-    const back = spec.chase.dist * 1.15 + Math.min(60, range * 0.02);
-    const hUp = spec.chase.height * 1.3;
-    camera.position.copy(p.position).addScaledVector(tgtDir, -back);
-    camera.position.y += hUp;
-    clampAboveGround(camera.position, groundY(camera.position.x, camera.position.z), 3);
-    // aim between the jet and the target (closer targets pull the aim point back)
-    _aim.copy(p.position).addScaledVector(tgtDir, Math.min(range, 600) * 0.85);
+    // smooth only the line-of-sight direction; the pose itself is rigid on the jet (no lag/jitter)
+    tgtDir.lerp(_v, smoothK(3, dt)).normalize();
+    padlockPose(p.position, tgt.position, tgtDir, spec.chase.dist, _w, _dir);
+    if (!padValid) {
+      padPos.copy(_w).sub(p.position);
+      padValid = true;
+    }
+    // offset relative to the jet is smoothed (stable when the LOS swings through the vertical)
+    padPos.lerp(_w.sub(p.position), smoothK(6, dt));
+    camera.position.copy(p.position).add(padPos);
+    const lifted = clampAboveGround(camera.position, groundY(camera.position.x, camera.position.z), 3);
+    if (lifted) {
+      // re-aim at the bisector from the lifted position
+      _w.copy(p.position).sub(camera.position).normalize();
+      _aim.copy(tgt.position).sub(camera.position).normalize();
+      _dir.copy(_w).add(_aim).normalize();
+    }
+    _aim.copy(camera.position).add(_dir);
     camera.up.set(0, 1, 0);
     camera.lookAt(_aim);
     // widen the lens when the target is close so both stay in frame
@@ -244,14 +281,18 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     return true;
   }
 
-  function missileCam(dt: number, ctx: FrameContext): boolean {
+  function missileCam(dt: number, ctx: FrameContext, fovOut: { v: number }): boolean {
     if (holding) {
+      // linger on the impact: fixed camera, slow push-in, narrower lens on the fireball/wreck
+      camera.position.lerp(holdPos, smoothK(0.08, dt));
       camera.up.set(0, 1, 0);
       camera.lookAt(holdPos);
+      fovOut.v = Math.min(fovOut.v, 45);
       setPlanes(1, ctx.quality.drawDistance);
       if (time > holdUntil) {
         holding = false;
         followMissile = null;
+        mSideValid = false;
         mode = prevMode === 'missile' ? 'chase' : prevMode;
         sqValid = false;
         return false;
@@ -261,14 +302,19 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     const m = liveMissile(followMissile ?? lastMissileId);
     if (!m) return false;
     followMissile = m.id;
-    _fwd.set(0, 0, -1).applyQuaternion(m.quaternion);
+    mFwd.set(0, 0, -1).applyQuaternion(m.quaternion);
+    // lateral offset direction is smoothed (rotation only); the along-track distance is rigid
+    sideOf(mFwd, _right.set(1, 0, 0).applyQuaternion(m.quaternion), _side);
+    if (!mSideValid) {
+      mSide.copy(_side);
+      mSideValid = true;
+    }
+    mSide.lerp(_side, smoothK(4, dt)).normalize();
     const L = (m as { def?: { length: number } }).def?.length ?? 3.6;
-    _v.copy(m.position).addScaledVector(_fwd, -(8 + L * 1.5));
-    _v.y += 2.2;
-    camera.position.lerp(_v, smoothK(12, dt));
-    if (camera.position.distanceTo(_v) > 200) camera.position.copy(_v);
+    const tid = (m as { targetId?: number | null }).targetId ?? null;
+    const t = tid != null ? world.getEntity(tid) : null;
+    missileCamPose(m.position, mFwd, mSide, L, t && t.alive ? t.position : null, camera.position, _aim);
     clampAboveGround(camera.position, groundY(camera.position.x, camera.position.z), 2);
-    _aim.copy(m.position).addScaledVector(_fwd, 40);
     camera.up.set(0, 1, 0);
     camera.lookAt(_aim);
     holdPos.copy(m.position);
@@ -295,16 +341,21 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     setPlanes(1, ctx.quality.drawDistance);
   }
 
-  function tactical(p: AircraftEntity, ctx: FrameContext): void {
-    const H = 9000;
+  let tacticalHalf = TACTICAL_HALF_COVERAGE;
+  function tactical(p: AircraftEntity, ctx: FrameContext, fovOut: { v: number }): void {
+    // north-up top-down, centred on the player; fixed FOV so the HUD's 2D map can match the scale
+    fovOut.v = TACTICAL_FOV;
+    const H = tacticalHeight(tacticalHalf, TACTICAL_FOV);
     camera.position.set(p.position.x, p.position.y + H, p.position.z);
-    _fwd.set(0, 0, -1).applyQuaternion(p.quaternion);
-    _fwd.y = 0;
-    if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, -1);
-    camera.up.copy(_fwd.normalize());
+    camera.up.set(0, 0, -1); // north (-Z) at the top of the screen
     camera.lookAt(p.position.x, p.position.y, p.position.z);
+    camera.userData.tactical = tacticalInfo;
+    tacticalInfo.height = H;
+    tacticalInfo.halfCoverageM = tacticalCoverage(H, camera.fov);
     setPlanes(50, H + ctx.quality.drawDistance);
   }
+  /** Exposed on camera.userData.tactical for the HUD map overlay (read-only). */
+  const tacticalInfo = { northUp: true, height: 0, fov: TACTICAL_FOV, halfCoverageM: TACTICAL_HALF_COVERAGE };
 
   const fovBox = { v: 60 };
 
@@ -328,9 +379,10 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
         prevMode = mode;
         followMissile = lastMissileId;
         holding = false;
+        mSideValid = false;
       }
       if (m === 'flyby') anchorValid = false;
-      if (m === 'target') tgtValid = false;
+      if (m === 'target') tgtValid = padValid = false;
       if (m === 'orbit') {
         const p = world.player;
         if (p) {
@@ -404,7 +456,7 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
         // no player (menu/teardown): keep the camera where it is
       } else {
         let m = mode;
-        if (m === 'missile' && !missileCam(dt, ctx)) m = mode === 'missile' ? 'chase' : mode;
+        if (m === 'missile' && !missileCam(dt, ctx, fovBox)) m = mode === 'missile' ? 'chase' : mode;
         if (m === 'target' && !target(p, dt, ctx, fovBox)) m = 'chase';
         switch (m) {
           case 'cockpit':
@@ -424,7 +476,7 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
             flyby(p, ctx, fovBox);
             break;
           case 'tactical':
-            tactical(p, ctx);
+            tactical(p, ctx, fovBox);
             break;
           default:
             break;

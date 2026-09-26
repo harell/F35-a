@@ -70,6 +70,8 @@ export class BettyScheduler {
   private readonly st = new Map<WarningId, WarnState>();
   private playing: { warning: WarningId; priority: number; until: number } | null = null;
   private holdUntil = -Infinity;
+  /** Repeats (not first announcements) of warnings below PULL UP wait until this time (radio call in progress). */
+  private repeatHoldUntil = -Infinity;
   /** Master-caution chime ringing: non-urgent clips wait for it, PULL UP / MISSILE don't. */
   private chimeUntil = -Infinity;
   private readonly decision: BettyDecision = { warning: 'pull_up', voice: 'b_pull_up', priority: 0, preempt: false };
@@ -82,7 +84,21 @@ export class BettyScheduler {
     for (const id of RULE_IDS) this.st.set(id, { active: false, announced: false, lastStart: -Infinity });
     this.playing = null;
     this.holdUntil = -Infinity;
+    this.repeatHoldUntil = -Infinity;
     this.chimeUntil = -Infinity;
+  }
+
+  /**
+   * Let an important radio call finish: reminders (repeats) of warnings other than PULL UP wait
+   * until `until`. First announcements are never held back.
+   */
+  deferRepeats(until: number): void {
+    if (until > this.repeatHoldUntil) this.repeatHoldUntil = until;
+  }
+
+  /** Warning whose clip is playing at `now` (null = silent). */
+  playingWarning(now: number): WarningId | null {
+    return this.playing && now < this.playing.until ? this.playing.warning : null;
   }
 
   /** Delay the next non-urgent clip (let the master-caution chime ring first). */
@@ -115,7 +131,7 @@ export class BettyScheduler {
       }
       if (!s.active) continue;
       const since = now - s.lastStart;
-      const due = s.announced ? since >= rule.repeat : since >= rule.rearm;
+      const due = s.announced ? since >= rule.repeat && (rule.priority >= 100 || now >= this.repeatHoldUntil) : since >= rule.rearm;
       if (!due) continue;
       if (!bestRule || rule.priority > bestRule.priority) {
         best = id;

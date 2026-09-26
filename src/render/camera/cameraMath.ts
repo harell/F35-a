@@ -93,3 +93,99 @@ export function fovToFrame(size: number, dist: number, frac: number, minDeg: num
   const f = (2 * Math.atan(size / (2 * Math.max(1, dist) * frac))) / DEG;
   return Math.max(minDeg, Math.min(maxDeg, f));
 }
+
+const _s1 = new Vector3();
+const _s2 = new Vector3();
+
+/**
+ * Right-hand side vector of a direction, horizontal when possible (dir × worldUp). Falls back to
+ * `fallback` when `dir` is (near) vertical. Returns a unit vector in `out`.
+ */
+export function sideOf(dir: Vector3, fallback: Vector3, out: Vector3): Vector3 {
+  out.set(-dir.z, 0, dir.x); // dir × (0,1,0)
+  if (out.lengthSq() < 1e-4) out.copy(fallback);
+  return out.normalize();
+}
+
+/** Padlock framing constants (reviewer: ~20 m up, ~15 m to the side, back distance capped ~35 m). */
+export const PADLOCK = { up: 20, side: 15, backMin: 22, backMax: 35 };
+
+/**
+ * Over-the-shoulder padlock pose: the camera sits behind the jet on the (smoothed) jet→target line,
+ * lifted `PADLOCK.up` and offset `PADLOCK.side` to the right, so the jet sits low-left and the target
+ * upper-right. The look direction bisects the directions to the jet and the target, which keeps both
+ * in frame for any range. `back` grows slightly with the jet's chase distance but is capped at 35 m.
+ */
+export function padlockPose(jet: Vector3, tgt: Vector3, tgtDir: Vector3, chaseDist: number, outPos: Vector3, outLook: Vector3): void {
+  const back = Math.max(PADLOCK.backMin, Math.min(PADLOCK.backMax, chaseDist * 1.2));
+  sideOf(tgtDir, X, _s1);
+  outPos.copy(jet).addScaledVector(tgtDir, -back).addScaledVector(_s1, PADLOCK.side);
+  outPos.y += PADLOCK.up;
+  // bisector of the unit directions camera→jet and camera→target
+  _s1.copy(jet).sub(outPos).normalize();
+  _s2.copy(tgt).sub(outPos);
+  if (_s2.lengthSq() < 1) _s2.copy(tgtDir);
+  _s2.normalize();
+  outLook.copy(_s1).add(_s2);
+  if (outLook.lengthSq() < 1e-6) outLook.copy(tgtDir);
+  outLook.normalize();
+}
+
+/** Missile camera framing: rigid along-track behind the missile, lifted and to the right. */
+export const MISSILE_CAM = { back: 6, up: 1.2, side: 1.5, aheadLook: 60 };
+
+/**
+ * Missile camera pose (rigid along-track: no lag, so the missile body, motor flame and trail stay
+ * large in the lower-left of the frame at any speed). `side` is the (smoothed) lateral unit vector.
+ * The look point is ahead along the track; when a target is known it is pulled toward the target
+ * (up to 25% of the view) so the target is in frame too.
+ */
+export function missileCamPose(
+  mPos: Vector3,
+  fwd: Vector3,
+  side: Vector3,
+  length: number,
+  tgt: Vector3 | null,
+  outPos: Vector3,
+  outAim: Vector3,
+): void {
+  outPos
+    .copy(mPos)
+    .addScaledVector(fwd, -(MISSILE_CAM.back + length))
+    .addScaledVector(side, MISSILE_CAM.side);
+  outPos.y += MISSILE_CAM.up;
+  outAim.copy(mPos).addScaledVector(fwd, MISSILE_CAM.aheadLook);
+  if (tgt) {
+    _s1.copy(tgt).sub(outPos);
+    const r = _s1.length();
+    if (r > 1) {
+      _s1.divideScalar(r);
+      _s2.copy(outAim).sub(outPos).normalize();
+      // only bias toward targets that are roughly ahead (inside ±50°)
+      if (_s1.dot(_s2) > 0.64) {
+        _s2.lerp(_s1, 0.3).normalize();
+        outAim.copy(outPos).addScaledVector(_s2, MISSILE_CAM.aheadLook);
+      }
+    }
+  }
+}
+
+/**
+ * Impact-linger pose: after the missile ends the camera freezes a spot behind/above/right of the
+ * impact (along the final track) far enough to frame the fireball and falling wreck.
+ */
+export function impactPose(impact: Vector3, fwd: Vector3, side: Vector3, outPos: Vector3): Vector3 {
+  return outPos.copy(impact).addScaledVector(fwd, -90).addScaledVector(side, 45).add(_s1.set(0, 28, 0));
+}
+
+/**
+ * Tactical (MAP) camera: north-up top-down, centred on the player. Returns the camera height for a
+ * wanted half-height ground coverage (metres, along the screen's short/vertical axis) at vertical
+ * FOV `fovDeg`: halfHeight = height · tan(fov/2).
+ */
+export function tacticalHeight(halfCoverage: number, fovDeg: number): number {
+  return halfCoverage / Math.tan((fovDeg * DEG) / 2);
+}
+export function tacticalCoverage(height: number, fovDeg: number): number {
+  return height * Math.tan((fovDeg * DEG) / 2);
+}
