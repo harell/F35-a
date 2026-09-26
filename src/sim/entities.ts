@@ -239,6 +239,12 @@ export class AircraftEntity implements Entity {
   // EXTENSION (sim-core / combat agents may append optional fields below this line)
   /** (combat) Radar cross-section multiplier from external stores (LOADOUTS.rcsMultiplier); 1 = clean. */
   rcsMultiplier?: number;
+  /** (sim-core) Private flight-model / world bookkeeping (engine spool, FBW filters, Auto-GCAS, AI timer, wreck). Opaque to other modules. */
+  sim?: import('./flight/state').AircraftSimState;
+  /** (sim-core) Auto-GCAS currently has control of the jet (HUD may show the GCAS chevrons / "AUTO GCAS"). */
+  gcasActive?: boolean;
+  /** (sim-core) Airframe buffet 0..1 (high AoA, departure, transonic high-g) — for camera shake / haptics. */
+  buffet?: number;
 
   constructor(
     readonly id: number,

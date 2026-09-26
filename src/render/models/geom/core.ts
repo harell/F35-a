@@ -203,3 +203,39 @@ export function dome(rx: number, ry: number, rz: number, wSeg = 12, hSeg = 5, co
 export function triCount(geo: BufferGeometry): number {
   return geo.index ? geo.index.count / 3 : geo.attributes.position.count / 3;
 }
+
+/** Box-projected UVs (per-triangle dominant axis) in metres × scale — for tiling grime textures. */
+export function boxUV(geo: BufferGeometry, scale = 0.25): BufferGeometry {
+  const p = geo.attributes.position.array as Float32Array;
+  const uv = geo.attributes.uv.array as Float32Array;
+  for (let t = 0; t < p.length / 9; t++) {
+    const o = t * 9;
+    const ax = p[o + 3] - p[o];
+    const ay = p[o + 4] - p[o + 1];
+    const az = p[o + 5] - p[o + 2];
+    const bx = p[o + 6] - p[o];
+    const by = p[o + 7] - p[o + 1];
+    const bz = p[o + 8] - p[o + 2];
+    const nx = Math.abs(ay * bz - az * by);
+    const ny = Math.abs(az * bx - ax * bz);
+    const nz = Math.abs(ax * by - ay * bx);
+    for (let k = 0; k < 3; k++) {
+      const x = p[o + k * 3];
+      const y = p[o + k * 3 + 1];
+      const z = p[o + k * 3 + 2];
+      const i = (t * 3 + k) * 2;
+      if (ny >= nx && ny >= nz) {
+        uv[i] = x * scale;
+        uv[i + 1] = z * scale;
+      } else if (nx >= nz) {
+        uv[i] = z * scale;
+        uv[i + 1] = y * scale;
+      } else {
+        uv[i] = x * scale;
+        uv[i + 1] = y * scale;
+      }
+    }
+  }
+  geo.attributes.uv.needsUpdate = true;
+  return geo;
+}

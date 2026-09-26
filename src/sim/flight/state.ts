@@ -61,6 +61,10 @@ export interface AircraftSimState {
   gcasTime: number;
   gcasCheckTimer: number;
   gcasLastMessage: number;
+  /** g the recovery is currently commanding (5 g, escalated to max g when 5 g won't clear). */
+  gcasG: number;
+  /** Climb angle the fly-up captures (rad) — steepened while the predicted path doesn't clear. */
+  gcasClimb: number;
 
   /* ── World bookkeeping ── */
   /** AI brain accumulator (20 Hz, staggered). */
@@ -108,6 +112,8 @@ export function createSimState(type: AircraftType, seed: number): AircraftSimSta
     gcasTime: 0,
     gcasCheckTimer: 0,
     gcasLastMessage: -999,
+    gcasG: 5,
+    gcasClimb: 0.26,
     aiTimer: 0,
     crashTime: -1,
     wreckSpin: new Vector3(),

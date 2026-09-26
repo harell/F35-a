@@ -113,7 +113,7 @@ export function dragCoefficient(perf: AircraftPerf, alpha: number, beta: number,
 
 /** Inlet / engine recovery loss beyond the design Mach (sets the top speed). */
 export function inletFactor(perf: AircraftPerf, mach: number): number {
-  return 1 - 0.85 * sstep(mach, perf.maxMach - 0.12, perf.maxMach + 0.3);
+  return 1 - 0.85 * sstep(mach, perf.maxMach - 0.15, perf.maxMach + 0.3);
 }
 
 /** Thrust drop-off above the service ceiling. */

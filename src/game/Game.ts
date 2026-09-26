@@ -30,7 +30,7 @@ import type {
   MissionRunnerApi,
   UiApi,
 } from '../core/contracts';
-import type { CameraMode, LoadoutId, QualityLevel, QualitySettings, Settings } from '../core/types';
+import type { CameraMode, ControlInput, LoadoutId, QualityLevel, QualitySettings, Settings } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import { createSimWorld } from '../sim/World';
 import { createCombatSystem } from '../sim/weapons/CombatSystem';
@@ -52,6 +52,7 @@ import {
   loadProgress,
   nextMissionAfter,
   recordResult,
+  missionById,
   saveProgress,
   terrainPadsFor,
 } from '../missions';
@@ -76,6 +77,7 @@ interface Session {
   rig: CameraRigApi;
   cockpit: CockpitApi;
   endTimer: number;
+  lastViewMode: CameraMode | null;
   unsubscribers: (() => void)[];
   resolve: (outcome: 'ended' | 'restart' | 'quit') => void;
 }
@@ -104,6 +106,9 @@ export class Game {
   private fpsAccum = { frames: 0, time: 0 };
   private wakeLock: { release(): Promise<void> } | null = null;
   private readonly params = new URLSearchParams(location.search);
+  /** Test hooks: AI flies the player's jet / scripted control override. */
+  private autopilot = false;
+  private controlOverride: Partial<ControlInput> | null = null;
   private screen = { width: 1, height: 1, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } };
   private safeProbe: HTMLDivElement;
 
@@ -173,7 +178,7 @@ export class Game {
     void this.audio.load();
     const missionId = this.params.get('mission');
     if (missionId) {
-      const def = [...CAMPAIGN, ...TRAINING].find((m) => m.id === missionId) ?? CAMPAIGN[0];
+      const def = missionById(missionId) ?? CAMPAIGN[0];
       const loadout = (this.params.get('loadout') as LoadoutId | null) ?? def.recommendedLoadout;
       if (autostart) await this.missionFlow(def, loadout);
       else await this.missionFlow(def);
@@ -301,13 +306,14 @@ export class Game {
         rig,
         cockpit,
         endTimer: -1,
+        lastViewMode: null,
         unsubscribers: [],
         resolve,
       };
     });
     this.applyViewMode(rig.mode);
     this.resize();
-    this.input.setThrottle(def.player.speed > 200 ? 0.82 : 0.75);
+    this.input.setThrottle(0.68);
     this.input.setEnabled(true);
     this.hud.setVisible(true);
     this.paused = false;
@@ -484,6 +490,7 @@ export class Game {
   private applyViewMode(mode: CameraMode): void {
     const s = this.session;
     if (!s) return;
+    s.lastViewMode = mode;
     const inside = mode === 'cockpit' || mode === 'hud';
     s.entities.setPlayerVisible(!inside);
     s.cockpit.visible = mode === 'cockpit';
@@ -511,7 +518,10 @@ export class Game {
     if (!this.paused) {
       // Player controls → sim
       const p = s.world.player;
-      if (p?.alive) Object.assign(p.input, this.input.controls);
+      if (p?.alive && !this.autopilot) {
+        Object.assign(p.input, this.input.controls);
+        if (this.controlOverride) Object.assign(p.input, this.controlOverride);
+      }
 
       // Look-around & taps
       const look = this.input.consumeLook();
@@ -548,6 +558,8 @@ export class Game {
     s.env.update(fctx);
     s.entities.update(fctx);
     s.rig.update(fctx);
+    // The rig can change mode on its own (death cam, missile cam hand-back) — keep cockpit/HUD in sync.
+    if (s.rig.mode !== s.lastViewMode) this.applyViewMode(s.rig.mode);
     s.effects.update(fctx);
     const ctx2 = this.frameContext(dt, s); // camera may have moved/changed mode
     s.cockpit.update(ctx2, s.rig.headLocal);
@@ -700,7 +712,7 @@ export class Game {
       },
       /** Programmatically start a mission (tests). */
       fly: (id: string, loadout?: LoadoutId) => {
-        const def = [...CAMPAIGN, ...TRAINING].find((m) => m.id === id);
+        const def = missionById(id);
         if (!def) throw new Error(`no mission ${id}`);
         this.ui.hideAll();
         void this.missionFlow(def, loadout ?? def.recommendedLoadout);
@@ -718,6 +730,16 @@ export class Game {
         if (cmd === 'radar') s.world.combat.setRadarEmitting(p, !p.radar.emitting, s.world);
       },
       pause: () => this.openPauseMenu(),
+      /** Let an AI fighter brain fly the player's jet (for automated playtests). */
+      autopilot: (on: boolean, role: 'fighter' | 'wingman' | 'interceptor' = 'fighter') => {
+        const p = this.session?.world.player;
+        this.autopilot = on;
+        if (p) p.ai = on ? createAiBrain(role, { skill: 0.9 }) : null;
+      },
+      /** Override (merge) player controls, e.g. {pitch: 1, throttle: 1}; null clears. */
+      controls: (c: Partial<ControlInput> | null) => {
+        this.controlOverride = c;
+      },
       missions: () => [...CAMPAIGN, ...TRAINING].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
     };

@@ -175,6 +175,7 @@ const RAW: Record<AircraftType, PerfInput> = {
     thrustAB: 191_000, // F135 max AB
     hasAfterburner: true,
     ...AB_TURBOFAN,
+    abCap: 1.08,
     spoolUpTime: 3.5,
     abLightTime: 0.4,
     tsfcDry: 2.5e-5, // ≈ 0.886 lb/lbf/h
@@ -186,9 +187,9 @@ const RAW: Record<AircraftType, PerfInput> = {
     kInduced: 0.15,
     kHigh: 0.25,
     clHigh: 0.6,
-    mCrit: 0.86,
+    mCrit: 0.82,
     mWavePeak: 1.1,
-    cdWave: 0.034, // not area-ruled: big transonic drag rise
+    cdWave: 0.035, // not area-ruled: big transonic drag rise
     cyBeta: -0.9,
     airbrakeCd: 0.05,
     maxG: 9,

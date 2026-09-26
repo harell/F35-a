@@ -52,6 +52,8 @@ export interface PendingRelease {
   targetId: number | null;
   /** GPS aim point captured at the pickle (null = unguided CCIP drop). */
   groundPoint: Vector3 | null;
+  /** Guided (GPS/ARM) vs unguided CCIP drop. */
+  guided: boolean;
   /** Seconds since the pickle (safety timeout). */
   timer: number;
 }

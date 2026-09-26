@@ -130,5 +130,5 @@ export function throttleForThrust(st: AircraftSimState, thrust: number, altitude
   const tMax = thrustMax(perf, altitude, sigma, mach);
   if (tMax <= tMil) return AB_DETENT;
   const ab = (thrust - tMil) / (tMax - tMil);
-  return AB_DETENT + (1 - AB_DETENT) * Math.min(1, Math.max(0.02, ab));
+  return AB_DETENT + (1 - AB_DETENT) * Math.min(1, Math.max(0.05, ab));
 }

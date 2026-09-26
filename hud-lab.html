@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>F35-A HUD lab (dev only)</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+      #gl, #hud { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #hud { pointer-events: none; }
+      #info { position: fixed; left: 50%; transform: translateX(-50%); bottom: 2px; font: 10px monospace; color: #fff; background: rgba(0,0,0,.4); padding: 1px 6px; pointer-events: none; z-index: 5; }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl"></canvas>
+    <canvas id="hud"></canvas>
+    <div id="info"></div>
+    <script type="module" src="/src/hud/dev/hudLab.ts"></script>
+  </body>
+</html>

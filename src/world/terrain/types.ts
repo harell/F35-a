@@ -26,6 +26,9 @@ export const MAT_RIVER = 9; // valley floor / river plain, aux = strength
 export const MAT_JUNGLE = 10; // aux = density
 export const MAT_ROCKY = 11; // bare mountain rock, aux = strength
 export const MAT_TUNDRA = 12;
+export const MAT_URBAN = 13; // aux = built-up density
+export const MAT_BUSH = 14; // native bush / dense forest, aux = density
+export const MAT_CONE = 15; // grassy volcanic cone (Auckland)
 
 /** Scratch record the per-sample generator writes material hints into. */
 export interface SampleOut {
