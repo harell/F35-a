@@ -8,6 +8,12 @@ Inspired by NovaLogic's *F-22 Raptor* (1997). Built with three.js (WebGL 2), Typ
 
 <p align="center"><em>Landscape · two thumbs · headphones recommended</em></p>
 
+<p align="center">
+  <img src="docs/screenshots/bridge-cockpit.png" width="49%" alt="Cockpit view: lining up at 40 m to fly under the Auckland Harbour Bridge">
+  <img src="docs/screenshots/skytower-chase.png" width="49%" alt="Chase view: the F-35A over the Waitematā Harbour heading for the Sky Tower and the CBD">
+</p>
+<p align="center"><em>Left: cockpit view, lining up to fly under the Harbour Bridge. Right: chase view, inbound to the Sky Tower over the Waitematā.</em></p>
+
 ## Play
 
 * **Play now:** https://harell.github.io/F35-a/ (GitHub Pages; redeployed automatically on every push to `master`).
