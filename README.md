@@ -1,4 +1,4 @@
-# F35-A
+# F35-A Ratites
 
 <p align="center"><img src="docs/cover.jpg" width="420" alt="F-35-a Ratites game cover: an F-35A over Auckland's Sky Tower and skyline, with a kiwi in the flames"></p>
 

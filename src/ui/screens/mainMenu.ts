@@ -51,7 +51,7 @@ function menuOnce(host: UiHost, version: string, ctx: MainMenuContext): Promise<
 
     const left = h('div', { class: 'mm-left' });
     left.innerHTML =
-      logoBlock('LIGHTNING II · COMBAT FLIGHT') +
+      logoBlock() +
       `<div class="mm-theatre ui-panel brk">` +
       `<div class="mm-th-k">${icon('pin')} THEATRE</div>` +
       `<div class="mm-th-t">Auckland, New Zealand</div>` +

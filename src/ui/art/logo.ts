@@ -46,7 +46,7 @@ export function logoMark(): string {
 }
 
 /** Full logo block: emblem + wordmark + tagline. */
-export function logoBlock(tagline = 'LIGHTNING II COMBAT FLIGHT'): string {
+export function logoBlock(tagline = 'RATITES'): string {
   return (
     `<div class="logo">` +
     `<div class="logo-emblem">${logoMark()}</div>` +

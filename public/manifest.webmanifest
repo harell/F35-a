@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "F35-A",
+  "name": "F35-A Ratites",
   "short_name": "F35-A",
-  "description": "F35-A — combat flight simulator for your phone. Fly the F-35A Lightning II over Auckland: dogfights, SAM suppression, deep strike.",
+  "description": "F35-A Ratites — combat flight simulator for your phone. Fly the F-35A Lightning II over Auckland: dogfights, SAM suppression, deep strike.",
   "lang": "en",
   "start_url": "./",
   "scope": "./",

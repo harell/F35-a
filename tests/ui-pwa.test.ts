@@ -25,7 +25,7 @@ describe('PWA manifest', () => {
   const m = JSON.parse(manifestRaw);
 
   it('names, display and orientation', () => {
-    expect(m.name).toBe('F35-A');
+    expect(m.name).toBe('F35-A Ratites');
     expect(m.short_name).toBe('F35-A');
     expect(m.display).toBe('fullscreen');
     expect(m.orientation).toBe('landscape');

@@ -37,7 +37,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
   {
     title: 'Disclaimer',
     items: [
-      ['Not affiliated', 'F35-A is an independent fan project. It is not affiliated with, endorsed or sponsored by Lockheed Martin, the U.S. Air Force, the RNZAF or NovaLogic. “F-35” and “Lightning II” are used descriptively.'],
+      ['Not affiliated', 'F35-A Ratites is an independent fan project. It is not affiliated with, endorsed or sponsored by Lockheed Martin, the U.S. Air Force, the RNZAF or NovaLogic. “F-35” and “Lightning II” are used descriptively.'],
       ['Realism', 'Performance figures, ranges and tactics are simplified and compressed for gameplay.'],
     ],
   },
@@ -55,7 +55,7 @@ export function showCredits(host: UiHost, version: string): Promise<void> {
     };
     el.appendChild(screenHeader({ kicker: `Version ${version}`, title: 'Credits', back: finish }));
     const body = h('div', { class: 'scr-body cr-body' });
-    const side = h('div', { class: 'cr-side', html: `<div class="cr-emblem">${logoMark()}</div><div class="cr-word">F35<span>-</span>A</div><div class="cr-tag">LIGHTNING II · COMBAT FLIGHT</div>` });
+    const side = h('div', { class: 'cr-side', html: `<div class="cr-emblem">${logoMark()}</div><div class="cr-word">F35<span>-</span>A</div><div class="cr-tag">RATITES</div>` });
     const list = h('div', { class: 'cr-list ui-panel ui-scroll' });
     for (const s of SECTIONS) {
       list.appendChild(h('div', { class: 'cr-h', text: s.title }));
