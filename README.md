@@ -1,5 +1,7 @@
 # F35-A
 
+<p align="center"><img src="docs/cover.jpg" width="420" alt="F-35-a Ratites game cover: an F-35A over Auckland's Sky Tower and skyline, with a kiwi in the flames"></p>
+
 **A combat flight simulator for your phone's browser.** Fly the F-35A Lightning II over Auckland, New Zealand.
 Defend the city against a hostile force dug in on the Hauraki Gulf islands: dogfight MiGs and Flankers over the Waitematā,
 dodge SA-10s behind Rangitoto, and thread the Harbour Bridge at 40 m.
