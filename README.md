@@ -10,9 +10,7 @@ Inspired by NovaLogic's *F-22 Raptor* (1997). Built with three.js (WebGL 2), Typ
 
 ## Play
 
-* **Play now:** https://claude.ai/artifact/QRxZ9cWNPt7m561L1AZtdQ (private claude.ai link; the owner can share it from the page's Share menu).
-* **GitHub Pages:** `https://harell.github.io/F35-a/` goes live automatically once Pages is enabled
-  (*Settings → Pages → Source: GitHub Actions*; private repositories need a paid plan, or make the repo public).
+* **Play now:** https://harell.github.io/F35-a/ (GitHub Pages; redeployed automatically on every push to `master`).
   The PWA install and offline mode work from there.
 * **Install (GitHub Pages build):** open it on your phone, then use *Share → Add to Home Screen* (iOS) or *Install app* (Android).
   It then runs full-screen in landscape and works offline.
