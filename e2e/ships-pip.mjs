@@ -4,7 +4,7 @@
  * sinking at several stages. Screenshots (full frame + a 3× crop of the PiP) go to
  * e2e/screenshots/ships/.
  *
- *   npm run dev &  node e2e/ships-pip.mjs [--base=http://localhost:5173/] [--quality=medium]
+ *   npm run dev &  node e2e/ships-pip.mjs [--base=http://localhost:5173/] [--quality=medium] [--only=day|night]
  */
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -67,7 +67,7 @@ const report = [];
 for (const [mission, tod] of [
   ['c02', 'day'],
   ['c10', 'night'],
-]) {
+].filter(([, tod]) => !args.only || args.only === tod)) {
   const { page, errors } = await fly(mission);
   for (const vessel of ['container', 'cruise']) {
     const s = await designate(page, vessel);
@@ -83,35 +83,30 @@ for (const [mission, tod] of [
     report.push(`${mission} ${tod} ${vessel} ${s.name}${s.anchored ? ' (anchored)' : ''}: pip open=${r.open} rendered=${r.rendered === s.id}`);
   }
   if (tod === 'day') {
-    // sinking stages: kill the designated ship, then (within the PiP hold) show the pose T s in
+    // sinking: kill the designated ship, then during the PiP hold step its pose through the
+    // sequence (destroyedAt shifted back) — one kill, several stages
+    const s = await designate(page, 'container');
+    // keep it designated until the PiP shows it (the radar may auto-designate something else)
+    for (let i = 0; i < 6; i++) {
+      await designate(page, 'container');
+      await page.waitForTimeout(1000);
+      if ((await page.evaluate(() => window.__f35.targetCam())).rendered === s.id) break;
+    }
+    await page.evaluate((id) => {
+      const w = window.__f35.game.session.world;
+      w.applyDamage(w.getEntity(id), 5, w.player.id, 'gbu31');
+    }, s.id);
     for (const T of [2, 20, 40, 60]) {
-      const s = await designate(page, 'container');
-      // keep it designated until the PiP shows it (the radar may auto-designate something else)
-      for (let i = 0; i < 6; i++) {
-        await designate(page, 'container');
-        await page.waitForTimeout(1000);
-        if ((await page.evaluate(() => window.__f35.targetCam())).rendered === s.id) break;
-      }
       await page.evaluate(
         ({ id, T }) => {
           const w = window.__f35.game.session.world;
-          const e = w.getEntity(id);
-          w.applyDamage(e, 5, w.player.id, 'gbu31');
-          e.destroyedAt = w.time - T;
+          w.getEntity(id).destroyedAt = w.time - T;
         },
         { id: s.id, T },
       );
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(1200);
       const r = await shot(page, `sinking-${String(T).padStart(2, '0')}s`);
-      report.push(`sinking +${T}s: pip open=${r.open}`);
-      // revive it for the next stage
-      await page.evaluate((id) => {
-        const e = window.__f35.game.session.world.getEntity(id);
-        e.alive = true;
-        e.health = e.maxHealth;
-        e.destroyedAt = -1;
-      }, s.id);
-      await page.waitForTimeout(6500); // let the PiP hold run out
+      report.push(`sinking +${T}s: pip open=${r.open} rendered=${r.rendered === s.id}`);
     }
   }
   const st = await page.evaluate(() => window.__f35.state());
