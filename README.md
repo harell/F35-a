@@ -42,7 +42,7 @@ Clarity can't see inside the WebGL canvas, so the useful data is the custom even
 | **Cockpit** | F-35 HMD symbology plus a 3D cockpit with a panoramic display (TSD, SMS, FUEL, ENG, RWR, ICAWS, radar pages; tap to zoom) |
 | **Views** | Cockpit, HMD-only, chase, orbit, padlock/target, missile cam, flyby and tactical map, plus a picture-in-picture target camera: a live head-on shot of the bandit or a slow orbit of the SAM site (radars spinning) with name, range and radar state / aspect |
 | **Sound** | Synthesized F135 roar and afterburner, gun, missile launches, explosions delayed by distance, RWR search/lock/launch tones, AIM-9 growl, "Bitching Betty" voice warnings, radio chatter, adaptive music |
-| **Auckland** | Map-driven terrain from LINZ open data: Waitematā and Manukau harbours, Hauraki Gulf islands, volcanic cones, the real CBD (LINZ streets, and every building extruded from its outline to its 2024 LiDAR height) with the Sky Tower (built from its OpenStreetMap 3D model), the Harbour Bridge, the port, Whenuapai and the airport |
+| **Auckland** | Map-driven terrain from LINZ open data: Waitematā and Manukau harbours, Hauraki Gulf islands, volcanic cones, the real CBD (LINZ streets, and every building extruded from its outline to its 2024 LiDAR height) with the Sky Tower (built from its OpenStreetMap 3D model), the Harbour Bridge and the port. Whenuapai, Auckland Airport, Ardmore and North Shore (Dairy Flat) are their real OpenStreetMap layouts: runways, taxiways, aprons, hangars, and lighting driven from the real runway ends |
 | **Civil traffic** | A320neos of *AeroFlop*, a fictional airline in Air NZ-style black-and-white colours, land on and depart from Auckland Airport's 05R/23L. They're a neutral side: enemy AI and SAMs ignore them, and they never get auto-locked or picked before a bandit. You *can* box and shoot one down, but AWACS calls check fire, it costs 500 points, and it shows in the debrief |
 | **Sky Tower** | A protected landmark. One stray bomb or missile from you brings it down: AWACS calls check fire, the mission fails on the spot, the tower topples onto the CBD, and the stump stays in your save for every later Auckland sortie. The gun can't hurt it, and flying into it is fatal |
 | **Campaign** | *Operation Southern Cross*: 12 missions (CAP, raid intercepts, SEAD, strike, ship strike, AWACS hunt, escort, night defence, Su-57 finale), 3 training missions, Instant Action (dogfight, SAM gauntlet, strike, survival) in 5 theatres, medals and debrief tips |
@@ -80,7 +80,9 @@ effects, HUD, audio, UI and world live in [`labs/`](labs/).
 ## Credits
 
 Everything is procedural (models, textures, sounds, terrain) except the items listed in [docs/CREDITS.md](docs/CREDITS.md):
-three.js (MIT) plus a few MIT-licensed textures from its repository, the B612 Mono font (OFL 1.1), and TTS-generated voice clips.
+three.js (MIT) plus a few MIT-licensed textures from its repository, the B612 Mono font (OFL 1.1), TTS-generated voice clips,
+LINZ open data (CC BY 4.0) for Auckland's terrain, roads and CBD buildings, and OpenStreetMap data (© OpenStreetMap contributors, ODbL 1.0)
+for its airfields and the Sky Tower model. The OSM bake is rebuilt with [`tools/osm`](tools/osm/README.md).
 
 F35-A is a fan-made game. It is not affiliated with or endorsed by Lockheed Martin, the RNZAF, the USAF or NovaLogic.
 Auckland geography is a stylised reconstruction, and the scenario is fictional.

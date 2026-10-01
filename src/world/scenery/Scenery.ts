@@ -13,14 +13,14 @@ import type { TerrainStyle } from '../terrain/TerrainRenderer';
 import { createVegetation } from '../terrain/vegetation';
 import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
-import { buildAirbase, buildExtraRunway } from './airbase';
+import { buildAirbase, buildExtraRunway, buildRealAirfield } from './airbase';
+import { airfieldLayout } from './aucklandOsm';
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
 import { aucklandRoadPaths, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
-import { WHENUAPAI_CROSS } from '../terrain/theaters/auckland';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
@@ -29,8 +29,8 @@ import { TileScatter } from './scatter';
 import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, TreeSource } from './sources';
 import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry } from './archetypes';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
-import { AIRBASE, runwayLengthFor } from '../terrain/features';
-import { AKL } from '../../core/auckland';
+import { AIRBASE, airfieldOf } from '../terrain/features';
+import { AIRFIELDS, airfieldRotation, runwaysOf } from '../../core/airfields';
 import type { SimWorld } from '../../sim/api';
 
 export interface SceneryOptions {
@@ -103,33 +103,39 @@ export class Scenery {
     const concreteTex = createConcreteTexture();
     this.textures.push(concreteTex);
     const concrete = new DecalBuilder();
-    const runways = new Map<string, { builder: DecalBuilder; length: number; names: [string, string] }>();
+    const runways = new Map<string, { builder: DecalBuilder; length: number; width: number; names: [string, string] }>();
+    const runwayDecal = (names: [string, string], length: number, width: number) => {
+      const key = `${names[0]}/${names[1]}/${Math.round(length)}/${width}`;
+      let rw = runways.get(key);
+      if (!rw) runways.set(key, (rw = { builder: new DecalBuilder(), length, width, names }));
+      return rw.builder;
+    };
 
     // ── Features ──
     const features = allFeatures(o.theater, o.features);
     features.forEach((f, i) => {
       if (f.type === 'airbase') {
-        const civil = o.theater === 'auckland' && Math.hypot(f.x - AKL.akl_airport.x, f.z - AKL.akl_airport.z) < 2500;
-        const length = o.theater === 'auckland' ? runwayLengthFor(f) : AIRBASE.runwayLength;
-        const names = runwayDesignators(f.rotation ?? 0);
-        const key = `${names[0]}/${names[1]}/${length}`;
-        let rw = runways.get(key);
-        if (!rw) {
-          rw = { builder: new DecalBuilder(), length, names };
-          runways.set(key, rw);
-        }
         const b = new GeometryBuilder();
-        buildAirbase({ feature: f, style: civil ? 'civil' : 'military', runwayLength: length }, { buildings: b, runway: rw.builder, concrete, lights }, height, detail);
-        addMesh(b, `airbase-${i}`);
-        // RNZAF Base Auckland also has its cross runway 08/26
-        if (o.theater === 'auckland' && Math.hypot(f.x - AKL.whenuapai.x, f.z - AKL.whenuapai.z) < 800) {
-          const X = WHENUAPAI_CROSS;
-          const xnames = runwayDesignators((X.heading * 180) / Math.PI);
-          const xkey = `${xnames[0]}/${xnames[1]}/${X.length}`;
-          let xr = runways.get(xkey);
-          if (!xr) runways.set(xkey, (xr = { builder: new DecalBuilder(), length: X.length, names: xnames }));
-          buildExtraRunway(X, xr.builder, lights, height);
+        // Auckland's real airfields: their OpenStreetMap layout, else the template on the real runways
+        const id = o.theater === 'auckland' ? airfieldOf(f) : null;
+        const layout = id ? airfieldLayout(id) : null;
+        if (id && layout) {
+          buildRealAirfield(layout, runwaysOf(id), { buildings: b, runway: (rw) => runwayDecal(rw.names, rw.length, rw.width), concrete, lights }, height, detail);
+        } else if (id) {
+          const [main, ...others] = runwaysOf(id);
+          // the feature's yaw runs a → b, or b → a when the apron is on the left of a → b
+          const rot = airfieldRotation(id);
+          const flip = Math.abs((((rot - (main.heading * 180) / Math.PI) % 360) + 360) % 360 - 180) < 90;
+          const names: [string, string] = flip ? [main.names[1], main.names[0]] : main.names;
+          const feature = { ...f, x: main.x, z: main.z, rotation: rot };
+          buildAirbase({ feature, style: AIRFIELDS[id].style, runwayLength: main.length, runwayWidth: main.width }, { buildings: b, runway: runwayDecal(names, main.length, main.width), concrete, lights }, height, detail);
+          // the other paved runways (Whenuapai's cross runway 08/26)
+          for (const X of others) if (X.paved) buildExtraRunway(X, runwayDecal(X.names, X.length, X.width), lights, height);
+        } else {
+          const length = AIRBASE.runwayLength;
+          buildAirbase({ feature: f, style: 'military', runwayLength: length }, { buildings: b, runway: runwayDecal(runwayDesignators(f.rotation ?? 0), length, AIRBASE.runwayWidth), concrete, lights }, height, detail);
         }
+        addMesh(b, `airbase-${i}`);
       } else if (f.type !== 'forest' && f.type !== 'farmland') {
         const b = new GeometryBuilder();
         buildSettlement(f, o.theater, b, lights, height, detail);
@@ -182,9 +188,9 @@ export class Scenery {
       const g = rw.builder.build();
       if (!g) continue;
       const hi = o.quality.level === 'high';
-      const tex = createRunwayTexture(rw.length, 45, rw.names);
-      if (!hi) {
-        // halve the canvas for mobile memory
+      const tex = createRunwayTexture(rw.length, rw.width, rw.names);
+      // halve the canvas for mobile memory (and for the short general-aviation strips everywhere)
+      if (!hi || rw.length < 1600) {
         const img = tex.image as HTMLCanvasElement;
         const small = document.createElement('canvas');
         small.width = img.width / 2;

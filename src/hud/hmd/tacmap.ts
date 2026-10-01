@@ -168,6 +168,7 @@ const LANDMARKS: { id: string; text: string }[] = [
   { id: 'devonport', text: 'DEVONPORT' },
   { id: 'takapuna', text: 'TAKAPUNA' },
   { id: 'akl_airport', text: 'AKL AIRPORT' },
+  { id: 'ardmore', text: 'ARDMORE' },
   { id: 'whangaparaoa', text: 'WHANGAPARAOA' },
   { id: 'tiritiri', text: 'TIRITIRI' },
   { id: 'waitakere', text: 'WAITAKERE RA' },

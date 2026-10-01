@@ -1,13 +1,15 @@
 /**
  * Vitest setup file (vite.config.ts): installs the real LINZ Auckland data
  * (src/world/terrain/data/auckland-linz.bin: terrain, auckland-roads.bin: road centrelines,
- * auckland-buildings.bin: CBD buildings) for every test, as the game does in the browser
- * (loadAucklandLinz / loadAucklandRoads / loadAucklandBuildings). Tests of the hand-traced fallbacks
- * clear them with setAucklandLinz(null) / setAucklandRoads(null) / setAucklandBuildings(null).
+ * auckland-buildings.bin: CBD buildings) and the OpenStreetMap layers (src/world/scenery/data/auckland-osm.bin:
+ * airfield layouts) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
+ * loadAucklandBuildings / loadAucklandOsm). Tests of the hand-traced fallbacks clear them with
+ * setAucklandLinz(null) / setAucklandRoads(null) / setAucklandBuildings(null) / setAucklandOsm(null).
  */
 import { setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
 import { setAucklandRoads } from '../src/world/scenery/aucklandRoads';
 import { setAucklandBuildings } from '../src/world/scenery/aucklandBuildings';
+import { setAucklandOsm } from '../src/world/scenery/aucklandOsm';
 
 // node:fs / node:zlib without @types/node (the project doesn't ship node typings): the surface used here
 interface Fs {
@@ -30,3 +32,7 @@ setAucklandRoads(ROADS_BYTES);
 export const BUILDINGS_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/terrain/data/auckland-buildings.bin', import.meta.url)));
 export const BUILDINGS_BYTES = new Uint8Array(zlib.gunzipSync(BUILDINGS_GZ));
 setAucklandBuildings(BUILDINGS_BYTES);
+
+export const OSM_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/scenery/data/auckland-osm.bin', import.meta.url)));
+export const OSM_BYTES = new Uint8Array(zlib.gunzipSync(OSM_GZ));
+setAucklandOsm(OSM_BYTES);

@@ -59,6 +59,13 @@ export interface SceneryFeature {
   size?: number;
   /** Flatten terrain under the feature (default true for airbase/town/city/industrial/port). */
   flatten?: boolean;
+  /** Airbase: one of the theatre's real airfields (src/core/airfields.ts), set by the world module. */
+  airfield?: string;
+  /**
+   * Real footprint to level instead of the default shape: a ring, flat [x0, z0, x1, z1, ...] (world m),
+   * e.g. an airfield's runway strips, taxiways and aprons from OpenStreetMap. Set by the world module.
+   */
+  outline?: number[];
 }
 
 export interface EnvironmentOptions {

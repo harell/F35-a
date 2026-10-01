@@ -1,0 +1,42 @@
+{
+  "output": "../../src/world/scenery/data/auckland-osm.bin",
+  "bytes": 63686,
+  "gzip_bytes": 43742,
+  "sha256": "2ee292719d52382256e2d389d84cf2215f96fa7fd369836100b66cfd8cfd4283",
+  "bbox": [
+    174.31,
+    -37.21,
+    175.21,
+    -36.49
+  ],
+  "simplify_m": 1.0,
+  "quantum_m": 0.5,
+  "inputs": [
+    {
+      "file": "Auckland.osm.pbf",
+      "timestamp": "2026-09-25T23:00:00Z",
+      "sha256": "088d9daadc6bfb7c8050a1bca87ca24fc60484eb3d420ec0155741807f2627d4"
+    },
+    {
+      "file": "nzne-dairy-flat.osm",
+      "timestamp": "downloaded 2026-10-01T20:30Z",
+      "sha256": "8732d2ca8d194bd0dd430f49c929368a234d3bf88e7d62649b296e0e4dc5998e"
+    }
+  ],
+  "layers": {
+    "aerodrome": 7,
+    "apron": 73,
+    "breakwater": 186,
+    "core": 6,
+    "hangar": 127,
+    "helipad": 9,
+    "marina": 17,
+    "military": 24,
+    "naval": 1,
+    "pier": 1487,
+    "runway": 25,
+    "tank": 115,
+    "taxiway": 259,
+    "terminal": 7
+  }
+}
