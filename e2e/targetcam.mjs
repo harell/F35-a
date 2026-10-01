@@ -2,7 +2,7 @@
  * Target camera (PiP) smoke test: flies a mission, designates the nearest hostile of a kind
  * (air / sam / ground), switches view and screenshots the target camera window.
  *
- *   node e2e/targetcam.mjs [--base=http://localhost:5173/] [--mission=c01] [--kind=air|sam|ground]
+ *   node e2e/targetcam.mjs [--base=http://localhost:5173/] [--mission=c01] [--kind=air|civil|sam|ground]
  *                          [--view=cockpit|hud|chase] [--wait=6000] [--steps=1 --every=1000] [--clip] [--dpr=2]
  *                          [--out=e2e/screenshots/targetcam/<mission>-<kind>-<view>.png]
  *
@@ -48,11 +48,12 @@ const picked = await page.evaluate((kind) => {
   const g = window.__f35.game;
   const s = g.session;
   const p = s.world.player;
-  const pool = kind === 'air' ? s.world.aircraft : kind === 'sam' ? s.world.sams : s.world.ground;
+  const pool = kind === 'air' || kind === 'civil' ? s.world.aircraft : kind === 'sam' ? s.world.sams : s.world.ground;
   let best = null;
   let bd = Infinity;
   for (const e of pool) {
     if (!e.alive || e.team === p.team) continue;
+    if ((kind === 'civil') !== (e.team === 'neutral')) continue;
     const d = e.position.distanceTo(p.position);
     if (d < bd) {
       bd = d;

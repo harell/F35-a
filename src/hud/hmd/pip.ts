@@ -15,6 +15,7 @@
  *    radar state, or the bandit's aspect).
  */
 import type { AircraftType, SamType } from '../../core/types';
+import type { CivilPhase } from '../../sim/civil/route';
 import type { AnyEntity } from '../../sim/entities';
 import { AIRCRAFT_LABEL, GROUND_LABEL, SAM_LABEL } from './format';
 import type { HudFrame } from './frame';
@@ -33,6 +34,7 @@ export const NATO_AIR: Record<AircraftType, string> = {
   su57: 'FELON',
   tu22m: 'BACKFIRE',
   a50: 'MAINSTAY',
+  a320: '', // civil airliner: no reporting name (pipName shows its callsign)
 };
 
 export const NATO_SAM: Record<SamType, string> = {
@@ -44,10 +46,35 @@ export const NATO_SAM: Record<SamType, string> = {
   zsu23: 'SHILKA',
 };
 
-export type PipTone = 'main' | 'warn' | 'danger' | 'dim' | 'good';
+export type PipTone = 'main' | 'warn' | 'danger' | 'dim' | 'good' | 'civil';
 
-/** Name line ("SA-6 GAINFUL", "MIG-29 FULCRUM", "SHIP"). */
-export function pipName(t: AnyEntity): string {
+/** Civil traffic (neutral airliners): drawn in white like the HMD's CIV boxes, never as a threat. */
+export function isCivil(t: AnyEntity): boolean {
+  return t.team === 'neutral';
+}
+
+/** What a civil airliner is doing (its scripted flight phase). */
+const CIVIL_PHASE: Record<CivilPhase, string> = {
+  approach: 'APPROACH',
+  flare: 'LANDING',
+  rollout: 'LANDING',
+  taxi: 'TAXI',
+  takeoff: 'TAKEOFF',
+  climb: 'CLIMB',
+  enroute: 'CRUISE',
+};
+
+/**
+ * Name line ("SA-6 GAINFUL", "MIG-29 FULCRUM", "AEROFLOP 104 A320", "SHIP").
+ * @param short  narrow window: just the callsign (civil) or the type designation (military)
+ */
+export function pipName(t: AnyEntity, short = false): string {
+  if (t.kind === 'aircraft' && isCivil(t)) {
+    const cs = (t.callsign || t.name).toUpperCase();
+    return short ? cs : `${cs} ${AIRCRAFT_LABEL[t.type] ?? ''}`.trim();
+  }
+  if (short && t.kind === 'aircraft') return AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase();
+  if (short && t.kind === 'sam') return SAM_LABEL[t.type] ?? t.type.toUpperCase();
   if (t.kind === 'aircraft') return `${AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase()} ${NATO_AIR[t.type] ?? ''}`.trim();
   if (t.kind === 'sam') return `${SAM_LABEL[t.type] ?? t.type.toUpperCase()} ${NATO_SAM[t.type] ?? ''}`.trim();
   if (t.kind === 'ground') return GROUND_LABEL[t.type] ?? t.type.toUpperCase();
@@ -56,9 +83,16 @@ export function pipName(t: AnyEntity): string {
 
 /**
  * Status pill. SAM: what its radar is doing. Aircraft: aspect relative to the player (HOT = pointing at
- * us, FLANK = beaming, COLD = running). Ground: TGT.
+ * us, FLANK = beaming, COLD = running). Civil airliner: its flight phase, or CHECK FIRE once the player
+ * has locked it. Ground: TGT.
  */
-export function pipStatus(t: AnyEntity, playerPos: { x: number; y: number; z: number }): { text: string; tone: PipTone } {
+export function pipStatus(t: AnyEntity, playerPos: { x: number; y: number; z: number }, locked = false): { text: string; tone: PipTone } {
+  if (isCivil(t)) {
+    if (!t.alive) return { text: 'DOWN', tone: 'danger' };
+    if (locked) return { text: 'CHECK FIRE', tone: 'warn' };
+    const phase = t.kind === 'aircraft' ? t.civil?.phase : undefined;
+    return { text: phase ? CIVIL_PHASE[phase] : 'CIVIL', tone: 'civil' };
+  }
   if (!t.alive) return { text: 'DESTROYED', tone: 'good' };
   if (t.kind === 'sam') {
     if (!t.radarOn || t.state === 'off' || t.state === 'emcon') return { text: 'SILENT', tone: 'dim' };
@@ -177,7 +211,17 @@ export function stepPip(L: HudLayout, target: AnyEntity | null, lookup: (id: num
 /* ───────────────────────── overlay ───────────────────────── */
 
 /** Short forms of the status tags for narrow windows. */
-const STATUS_SHORT: Record<string, string> = { DESTROYED: 'KILL', SEARCH: 'SRCH', RELOAD: 'RLD', SILENT: 'OFF', LAUNCH: 'LNCH' };
+const STATUS_SHORT: Record<string, string> = {
+  DESTROYED: 'KILL',
+  SEARCH: 'SRCH',
+  RELOAD: 'RLD',
+  SILENT: 'OFF',
+  LAUNCH: 'LNCH',
+  'CHECK FIRE': 'CHK FIRE',
+  APPROACH: 'APPR',
+  TAKEOFF: 'T/O',
+  LANDING: 'LDG',
+};
 
 let rangeKey = -1;
 let rangeText = '';
@@ -206,7 +250,8 @@ export function drawPip(f: HudFrame, t: AnyEntity | null): void {
   const g = pen.g;
   g.clearRect(x, y, w, h);
   const locked = f.locked && f.target === t;
-  const col = locked ? pal.bright : pal.main;
+  const civil = isCivil(t);
+  const col = civil ? pal.white : locked ? pal.bright : pal.main;
   // thin frame + corner brackets
   pen.begin();
   pen.rect(x + 0.5, y + 0.5, w - 1, h - 1);
@@ -224,8 +269,12 @@ export function drawPip(f: HudFrame, t: AnyEntity | null): void {
   pen.strokeGlow(col, 2);
   if (v.anim < 0.9) return; // labels once the window is open
   // name (top left) + lock tag (top right)
-  pen.text(pipName(t), x + 6 * u, y + 9 * u, pal.white, 10, 'left');
-  if (locked) pen.text('LOCK', x + w - 6 * u, y + 9 * u, pal.bright, 9, 'right');
+  const tag = civil ? (locked ? 'LOCK' : 'CIV') : locked ? 'LOCK' : '';
+  const tagW = tag ? pen.textWidth(tag, 9) + 8 * u : 0;
+  let name = pipName(t);
+  if (pen.textWidth(name, 10) > w - 12 * u - tagW) name = pipName(t, true);
+  pen.text(name, x + 6 * u, y + 9 * u, pal.white, 10, 'left');
+  if (tag) pen.text(tag, x + w - 6 * u, y + 9 * u, civil ? (locked ? pal.warn : pal.white) : pal.bright, 9, 'right');
   // bottom strip: threat icon, range, status pill
   const sh = 16 * u;
   const sy = y + h - sh;
@@ -233,9 +282,12 @@ export function drawPip(f: HudFrame, t: AnyEntity | null): void {
   g.fillRect(x + 1, sy, w - 2, sh - 1);
   const my = sy + sh / 2;
   const ix = x + 10 * u;
-  const danger = t.team !== p.team ? pal.danger : pal.friend;
+  const danger = civil ? pal.white : t.team !== p.team ? pal.danger : pal.friend;
   pen.begin();
-  if (t.kind === 'aircraft') {
+  if (civil) {
+    // neutral symbol: a circle (not a threat chevron / diamond)
+    pen.circle(ix, my, 4.5 * u);
+  } else if (t.kind === 'aircraft') {
     g.moveTo(ix, my - 5 * u);
     g.lineTo(ix + 5 * u, my + 5 * u);
     g.lineTo(ix, my + 2 * u);
@@ -246,8 +298,9 @@ export function drawPip(f: HudFrame, t: AnyEntity | null): void {
   const range = rangeLabel(t.position.distanceTo(p.position));
   pen.text(range, ix + 9 * u, my, pal.white, 10, 'left');
   const rangeRight = ix + 9 * u + pen.textWidth(range, 10);
-  const st = pipStatus(t, p.position);
-  const tone = st.tone === 'danger' ? pal.danger : st.tone === 'warn' ? pal.warn : st.tone === 'good' ? pal.good : st.tone === 'dim' ? pal.dim : pal.main;
+  const st = pipStatus(t, p.position, locked);
+  const tone =
+    st.tone === 'danger' ? pal.danger : st.tone === 'warn' ? pal.warn : st.tone === 'good' ? pal.good : st.tone === 'dim' ? pal.dim : st.tone === 'civil' ? pal.white : pal.main;
   // pill: outlined, blinking dot for the active states
   // (a narrow window: the long DESTROYED tag falls back to KILL rather than overprinting the range)
   let label = st.text;

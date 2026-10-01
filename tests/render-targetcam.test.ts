@@ -216,8 +216,31 @@ describe('target camera labels', () => {
     expect(pipName(new SamSiteEntity(2, 'sa6', 'red'))).toBe('SA-6 GAINFUL');
     expect(pipName(new SamSiteEntity(2, 'sa10', 'red'))).toBe('SA-10 GRUMBLE');
     expect(pipName(new GroundTargetEntity(3, 'ship', 'red'))).toBe('SHIP');
-    for (const k of Object.keys(NATO_AIR)) expect(NATO_AIR[k as AircraftType].length).toBeGreaterThan(2);
+    // every military type has a reporting name (the civil A320 shows its callsign instead)
+    for (const k of Object.keys(NATO_AIR)) if (k !== 'a320') expect(NATO_AIR[k as AircraftType].length).toBeGreaterThan(2);
     for (const k of Object.keys(NATO_SAM)) expect(NATO_SAM[k as SamType].length).toBeGreaterThan(2);
+  });
+
+  it('shows civil airliners as civil traffic: callsign, flight phase, CHECK FIRE when locked', () => {
+    const a = new AircraftEntity(5, 'a320', 'neutral', { callsign: 'AeroFlop 104' });
+    a.civil = { phase: 'approach' } as AircraftEntity['civil'];
+    const me = new Vector3(0, 1000, -10_000);
+    expect(pipName(a)).toBe('AEROFLOP 104 A320');
+    expect(pipName(a, true)).toBe('AEROFLOP 104');
+    expect(pipName(jet('su35'), true)).toBe('SU-35');
+    expect(pipStatus(a, me)).toEqual({ text: 'APPROACH', tone: 'civil' });
+    a.civil!.phase = 'rollout';
+    expect(pipStatus(a, me).text).toBe('LANDING');
+    a.civil!.phase = 'takeoff';
+    expect(pipStatus(a, me).text).toBe('TAKEOFF');
+    // never an aspect / threat tag, even when pointing at us
+    a.velocity.set(0, 0, -100);
+    expect(['HOT', 'FLANK', 'COLD']).not.toContain(pipStatus(a, me).text);
+    expect(pipStatus(a, me, true)).toEqual({ text: 'CHECK FIRE', tone: 'warn' });
+    a.alive = false;
+    expect(pipStatus(a, me)).toEqual({ text: 'DOWN', tone: 'danger' });
+    // framed for a 36 m span
+    expect(framingDistance(a)).toBeGreaterThan(50);
   });
 
   it('shows the SAM radar state', () => {
