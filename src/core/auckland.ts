@@ -1,8 +1,9 @@
 /**
  * F35-A — Auckland (Tāmaki Makaurau), New Zealand: geographic reference for the primary theatre.
  * OWNERSHIP: orchestrator. Used by the WORLD module (terrain/coastline/landmarks) and MISSIONS
- * (spawn positions). Coordinates are approximate (±200–400 m) and hand-compiled; the terrain
- * generator should treat the coastline as a stylised but recognisable reconstruction.
+ * (spawn positions). Coordinates are hand-compiled (±200–400 m inland), then checked against the
+ * real LINZ coastline: every landmark sits on the side of the shore its `site` says, with ≥ 50 m
+ * to spare on land (tests/world-landmarks.test.ts; tools/linz/landmarks.ts measures and suggests).
  *
  * World origin (0, 0) = Sky Tower. +X = east, −Z = north, metres. The 80 km world spans
  * roughly Muriwai/Piha (west coast, x≈−30 km) to eastern Waiheke (x≈+35 km) and from
@@ -50,6 +51,12 @@ export interface AklLandmark {
   /** Approximate radius / half-extent (m), where meaningful. */
   radius?: number;
   note?: string;
+  /**
+   * Where it sits against the real LINZ coastline: on land at least 50 m inland unless set
+   * ('water': a lake, marina basin or river mouth; 'shore': a bridge abutment, on the shoreline).
+   * Checked by tests/world-landmarks.test.ts; tools/linz/landmarks.ts reports and suggests fixes.
+   */
+  site?: 'water' | 'shore';
 }
 
 /** Key places (lat/lon WGS84, approx; volcano summits snapped to the LINZ LiDAR DEM). Use AKL[id] for world coordinates. */
@@ -60,16 +67,18 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'britomart', name: 'Britomart / Queens Wharf', kind: 'landmark', lat: -36.8440, lon: 174.7680 },
   { id: 'viaduct', name: 'Viaduct Harbour', kind: 'marina', lat: -36.8440, lon: 174.7575, radius: 250 },
   { id: 'wynyard', name: 'Wynyard Quarter', kind: 'port', lat: -36.8400, lon: 174.7550, radius: 350 },
-  { id: 'westhaven', name: 'Westhaven Marina', kind: 'marina', lat: -36.8385, lon: 174.7490, radius: 400 },
-  { id: 'port', name: 'Ports of Auckland (Fergusson Container Terminal)', kind: 'port', lat: -36.8420, lon: 174.7790, radius: 600, note: 'Container cranes, wharves projecting ~600 m north into the harbour' },
-  // abutments: the ends of the LINZ SH1 bridge centreline (NZ Addresses road sections), where the motorway ribbons meet the model
-  { id: 'bridge_s', name: 'Harbour Bridge (south abutment, St Marys Bay)', kind: 'bridge', lat: -36.83504, lon: 174.74275 },
-  { id: 'bridge_n', name: 'Harbour Bridge (north abutment, Northcote Point)', kind: 'bridge', lat: -36.82724, lon: 174.74786, note: 'Steel truss, ~1,020 m, main span 243 m, 43 m clearance over the water' },
+  { id: 'westhaven', name: 'Westhaven Marina', kind: 'marina', lat: -36.8385, lon: 174.7490, radius: 400, site: 'water' },
+  { id: 'port', name: 'Ports of Auckland (Fergusson Container Terminal)', kind: 'port', lat: -36.8438, lon: 174.7857, radius: 600, note: 'Container cranes, wharves projecting ~600 m north into the harbour' },
+  // abutments: on the LINZ SH1 bridge centreline, where the motorway ribbons meet the model. The north one is the end of the
+  // LINZ bridge section; the section's south end is 11 m out over Westhaven, so the abutment is 40 m further back along the
+  // deck, on the St Marys Bay shore (≈ 25 m inland, like Northcote Point's ≈ 16 m). Deck length ≈ 1,020 m, as built.
+  { id: 'bridge_s', name: 'Harbour Bridge (south abutment, St Marys Bay)', kind: 'bridge', lat: -36.83536, lon: 174.74254, site: 'shore' },
+  { id: 'bridge_n', name: 'Harbour Bridge (north abutment, Northcote Point)', kind: 'bridge', lat: -36.82724, lon: 174.74786, note: 'Steel truss, ~1,020 m, main span 243 m, 43 m clearance over the water', site: 'shore' },
   { id: 'domain', name: 'Auckland Domain (Pukekawa) & War Memorial Museum', kind: 'landmark', lat: -36.8600, lon: 174.7780 },
   { id: 'ponsonby', name: 'Ponsonby / Herne Bay', kind: 'suburb', lat: -36.8480, lon: 174.7400 },
   { id: 'parnell', name: 'Parnell', kind: 'suburb', lat: -36.8560, lon: 174.7800 },
   { id: 'newmarket', name: 'Newmarket', kind: 'suburb', lat: -36.8700, lon: 174.7780 },
-  { id: 'tamaki_drive', name: 'Tamaki Drive / Mission Bay', kind: 'coast', lat: -36.8470, lon: 174.8330 },
+  { id: 'tamaki_drive', name: 'Tamaki Drive / Mission Bay', kind: 'coast', lat: -36.8485, lon: 174.8331 },
   { id: 'bastion', name: 'Bastion Point (Takaparawhau)', kind: 'landmark', lat: -36.8468, lon: 174.8270 },
   { id: 'st_heliers', name: 'St Heliers', kind: 'suburb', lat: -36.8520, lon: 174.8600 },
 
@@ -79,10 +88,10 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'mt_victoria_dp', name: 'Mt Victoria (Takarunga)', kind: 'volcano', lat: -36.8266, lon: 174.7990, height: 82, radius: 350 },
   { id: 'northcote', name: 'Northcote', kind: 'suburb', lat: -36.8050, lon: 174.7480 },
   { id: 'takapuna', name: 'Takapuna', kind: 'suburb', lat: -36.7880, lon: 174.7700 },
-  { id: 'pupuke', name: 'Lake Pupuke', kind: 'lake', lat: -36.7810, lon: 174.7650, radius: 550, note: 'Crater lake' },
+  { id: 'pupuke', name: 'Lake Pupuke', kind: 'lake', lat: -36.7810, lon: 174.7650, radius: 550, note: 'Crater lake', site: 'water' },
   { id: 'browns_bay', name: "Browns Bay", kind: 'suburb', lat: -36.7160, lon: 174.7480 },
   { id: 'long_bay', name: 'Long Bay', kind: 'coast', lat: -36.6800, lon: 174.7450 },
-  { id: 'whangaparaoa', name: 'Whangaparāoa Peninsula (tip)', kind: 'coast', lat: -36.6330, lon: 174.8700, note: 'Peninsula runs west→east from ~174.72 to ~174.87 along lat ≈ -36.62…-36.64' },
+  { id: 'whangaparaoa', name: 'Whangaparāoa Peninsula (tip)', kind: 'coast', lat: -36.6050, lon: 174.8370, note: 'Peninsula runs west→east from Silverdale (~174.70) to Whangaparāoa Head (~174.84) along lat ≈ -36.59…-36.64' },
   { id: 'tiritiri', name: 'Tiritiri Matangi Island', kind: 'island', lat: -36.6010, lon: 174.8910, radius: 1300, height: 90 },
 
   // Hauraki Gulf islands (enemy-held in the campaign fiction)
@@ -91,7 +100,7 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'browns_is', name: 'Browns Island (Motukorea)', kind: 'volcano', lat: -36.8291, lon: 174.8955, height: 65, radius: 600 },
   { id: 'waiheke_w', name: 'Waiheke Island (Oneroa, west)', kind: 'island', lat: -36.7850, lon: 175.0100 },
   { id: 'waiheke', name: 'Waiheke Island (centre)', kind: 'island', lat: -36.8000, lon: 175.0700, radius: 9000, height: 230, note: '~19 km E-W, 2-9 km N-S, deeply indented bays, vineyards' },
-  { id: 'waiheke_e', name: 'Waiheke Island (east end)', kind: 'island', lat: -36.8300, lon: 175.1600 },
+  { id: 'waiheke_e', name: 'Waiheke Island (east end)', kind: 'island', lat: -36.8295, lon: 175.1591 },
   { id: 'rakino', name: 'Rakino Island', kind: 'island', lat: -36.7237, lon: 174.9497, radius: 800 },
   { id: 'motuihe', name: 'Motuihe Island', kind: 'island', lat: -36.8080, lon: 174.9437, radius: 1100 },
 
@@ -105,15 +114,15 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'mangere_mtn', name: 'Māngere Mountain', kind: 'volcano', lat: -36.9486, lon: 174.7820, height: 104, radius: 600 },
 
   // Harbours, rivers & isthmus
-  { id: 'tamaki_mouth', name: 'Tāmaki River mouth', kind: 'coast', lat: -36.8470, lon: 174.8830, note: 'Estuary runs south ~9 km to Panmure/Ōtāhuhu' },
+  { id: 'tamaki_mouth', name: 'Tāmaki River mouth', kind: 'coast', lat: -36.8470, lon: 174.8830, note: 'Estuary runs south ~9 km to Panmure/Ōtāhuhu', site: 'water' },
   { id: 'otahuhu', name: 'Ōtāhuhu portage (narrowest isthmus, ~1.3 km)', kind: 'landmark', lat: -36.9450, lon: 174.8400 },
   { id: 'onehunga', name: 'Onehunga (Manukau Harbour north shore)', kind: 'coast', lat: -36.9250, lon: 174.7850 },
   { id: 'blockhouse_bay', name: 'Blockhouse Bay', kind: 'coast', lat: -36.9250, lon: 174.7000 },
   { id: 'titirangi', name: 'Titirangi', kind: 'suburb', lat: -36.9400, lon: 174.6550 },
-  { id: 'huia', name: 'Huia', kind: 'coast', lat: -37.0000, lon: 174.5700 },
-  { id: 'manukau_heads', name: 'Manukau Heads (harbour entrance)', kind: 'coast', lat: -37.0500, lon: 174.5400, note: 'Narrow entrance ~2 km, harbour spreads NE/E/SE with many arms and mudflats' },
+  { id: 'huia', name: 'Huia', kind: 'coast', lat: -36.9988, lon: 174.5702 },
+  { id: 'manukau_heads', name: 'Manukau Heads (harbour entrance)', kind: 'coast', lat: -37.0501, lon: 174.5407, note: 'Narrow entrance ~2 km, harbour spreads NE/E/SE with many arms and mudflats' },
   { id: 'chelsea', name: 'Chelsea (upper Waitematā)', kind: 'coast', lat: -36.8200, lon: 174.7200 },
-  { id: 'herald_is', name: 'Herald Island', kind: 'island', lat: -36.7700, lon: 174.6500, radius: 600 },
+  { id: 'herald_is', name: 'Herald Island', kind: 'island', lat: -36.7672, lon: 174.6535, radius: 600, note: 'Joined to Whenuapai by a causeway (one landmass in the LINZ coastline)' },
   { id: 'riverhead', name: 'Riverhead (head of Waitematā)', kind: 'coast', lat: -36.7600, lon: 174.5900 },
   { id: 'hobsonville', name: 'Hobsonville Point', kind: 'coast', lat: -36.7930, lon: 174.6600 },
 
@@ -124,10 +133,13 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   // Ranges & coasts
   { id: 'waitakere', name: 'Waitākere Ranges', kind: 'range', lat: -36.9500, lon: 174.5400, height: 474, radius: 9000, note: 'Bush-clad hills 250-474 m, dropping in cliffs to the Tasman coast' },
   { id: 'piha', name: 'Piha (west coast, Lion Rock)', kind: 'coast', lat: -36.9530, lon: 174.4700 },
-  { id: 'muriwai', name: 'Muriwai Beach (west coast)', kind: 'coast', lat: -36.8300, lon: 174.4250, note: 'Long straight black-sand beach running north' },
+  { id: 'muriwai', name: 'Muriwai Beach (west coast)', kind: 'coast', lat: -36.8292, lon: 174.4268, note: 'Long straight black-sand beach running north' },
   { id: 'hunua', name: 'Hunua Ranges', kind: 'range', lat: -37.0600, lon: 175.1000, height: 688, radius: 9000 },
   { id: 'beachlands', name: 'Beachlands / Maraetai (Tāmaki Strait south shore)', kind: 'coast', lat: -36.8850, lon: 175.0000 },
 ];
+
+/** Centre of the Harbour Bridge's 243 m navigation span, as a fraction of the deck from bridge_s to bridge_n. */
+export const BRIDGE_SPAN_T = 0.64;
 
 /** World-space lookup: AKL.skytower → { x, z, height?, radius? }. */
 export const AKL: Record<string, { x: number; z: number; height?: number; radius?: number; name: string }> = Object.fromEntries(

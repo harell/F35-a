@@ -7,7 +7,7 @@
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
-import { AKL } from '../../core/auckland';
+import { AKL, BRIDGE_SPAN_T } from '../../core/auckland';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import { LightList, type HeightFn } from './builders';
@@ -78,7 +78,7 @@ export function buildHarbourBridge(B: GeometryBuilder, lights: LightList, height
   const at = (s: number) => [S.x + (dx * s) / len, S.z + (dz * s) / len] as const;
   const gS = Math.max(4, height(S.x, S.z)) + 1;
   const gN = Math.max(4, height(N.x, N.z)) + 1;
-  const sm = len * 0.64;
+  const sm = len * BRIDGE_SPAN_T;
   const eMax = 48; // deck top → 43 m clearance under the girders
   const deck = (s: number) => {
     if (s <= sm) {

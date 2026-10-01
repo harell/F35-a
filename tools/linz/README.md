@@ -28,6 +28,20 @@ python3 bake.py <work>            # writes ../../src/world/terrain/data/auckland
 python3 cones.py <work>           # prints LiDAR-snapped cone centres for aucklandMap.ts / core/auckland.ts
 ```
 
+### Landmarks against the coastline
+
+```sh
+npx vite-node tools/linz/landmarks.ts [margin m = 50]
+```
+
+Reads the baked coastline (no download) and prints the signed coast distance (+ land, − water) of every landmark
+in `src/core/auckland.ts`, every named mission position (`P` in `src/missions/content/common.ts`) and every hand-traced
+road vertex in the water (`src/world/scenery/motorways.ts`). Landmarks are expected on land with the margin to spare
+unless their `site` says `'water'` (a lake, marina basin or river mouth) or `'shore'` (the Harbour Bridge abutments);
+for each one that isn't, it suggests the nearest point that is. Review every suggestion by hand: the nearest land
+with a margin can be the wrong landmass (it puts the Whangaparāoa tip on Tiritiri Matangi).
+`tests/world-landmarks.test.ts` asserts the same rules.
+
 No API key is needed (the `nz-elevation` bucket is public). The LINZ Data Service (data.linz.govt.nz) serves
 the same products and the vector layers (building outlines, roads) for later phases; it needs a free API key.
 
@@ -72,7 +86,7 @@ What comes out:
   class: 19 m main streets (Queen St, Customs St, Symonds St, K Rd, …), 12 m streets, 7 m lanes; steps, walks, arcades
   and marina accessways are left out.
 - **Motorways**: one 13 m ribbon per carriageway / ramp (DP 1.5 m), cut over the water beside the Harbour Bridge model
-  (its abutments are the ends of the LINZ bridge section). Runs along a vehicle tunnel are flagged: within 22 m of short
+  (its abutments are on the shore at the ends of the LINZ bridge section). Runs along a vehicle tunnel are flagged: within 22 m of short
   tunnels (Victoria Park, where the address data has only the viaduct), anywhere between the portals of tunnels over
   1 km (Waterview, where the address centreline is schematic). Runs under 150 m are dropped.
 - **Arterials**: Dominion Rd, Mt Eden Rd, Manukau Rd, Remuera Rd, Sandringham Rd, New North Rd, Lake Rd, Onewa Rd and East

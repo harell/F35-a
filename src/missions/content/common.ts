@@ -1,12 +1,12 @@
 /**
  * F35-A — shared mission-building helpers and named Auckland positions.
  *
- * Positions are metres in world space (origin = Sky Tower, +X east, −Z north). Island
- * positions were checked against the WORLD module's coastline map (aucklandMap.ts) so SAM
- * sites and compounds sit comfortably on land (≥ 700 m from the shore); ship positions sit in
- * open water.
+ * Positions are metres in world space (origin = Sky Tower, +X east, −Z north). Land positions
+ * come from the landmarks (src/core/auckland.ts, checked against the real LINZ coastline) or were
+ * placed against it by hand so SAM sites and compounds sit on land with their pad radius to spare
+ * (tests/world-linz.test.ts, tests/world-landmarks.test.ts); ship positions sit in open water.
  */
-import { AKL } from '../../core/auckland';
+import { AKL, BRIDGE_SPAN_T } from '../../core/auckland';
 import type { IntelMarker, MissionDef, SceneryFeature } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, GroundTargetType, SamType } from '../../core/types';
@@ -21,6 +21,11 @@ export const AKL_SEED = 1840;
 export const NEVER: Condition = { kind: 'not', of: { kind: 'start' } };
 
 const pt = (id: string): XZ => ({ x: Math.round(AKL[id].x), z: Math.round(AKL[id].z) });
+/** Point `t` of the way from landmark `a` to landmark `b`. */
+const along = (a: string, b: string, t: number): XZ => ({
+  x: Math.round(AKL[a].x + (AKL[b].x - AKL[a].x) * t),
+  z: Math.round(AKL[a].z + (AKL[b].z - AKL[a].z) * t),
+});
 
 /** Named places (m). */
 export const P = {
@@ -28,7 +33,8 @@ export const P = {
   whenuapai: pt('whenuapai'),
   bridgeS: pt('bridge_s'),
   bridgeN: pt('bridge_n'),
-  harbourBridge: { x: -1400, z: -1870 },
+  /** Under the navigation span (the bridge model's hump, on the deck centreline). */
+  harbourBridge: along('bridge_s', 'bridge_n', BRIDGE_SPAN_T),
   devonport: pt('devonport'),
   northHead: pt('north_head'),
   takapuna: pt('takapuna'),
