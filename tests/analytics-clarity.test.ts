@@ -3,7 +3,7 @@ import { analyticsActive, initAnalytics, tag, track, upgrade } from '../src/anal
 
 describe('Clarity analytics', () => {
   it('stays inactive outside a production browser build and never throws', () => {
-    initAnalytics({ game_version: 'test' });
+    initAnalytics({ build: 'test' });
     expect(analyticsActive()).toBe(false);
     expect(() => {
       track('mission_start');

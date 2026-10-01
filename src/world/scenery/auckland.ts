@@ -865,7 +865,10 @@ export function buildCentres(B: GeometryBuilder, lights: LightList, height: Heig
   return n;
 }
 
-/** Fergusson / Bledisloe container terminal on reclaimed wharves, with ships at berth. */
+/**
+ * Fergusson / Bledisloe container terminal on reclaimed wharves. The ships at berth (and the cruise
+ * liner at Princes Wharf) are sim entities, not scenery: missions/runtime/shipping.ts PORT_BERTHS.
+ */
 export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number): void {
   const rnd = mulberry32(99);
   // wharf platforms (world axis-aligned; the harbour polygon carved water under them)
@@ -914,9 +917,6 @@ export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightF
     B.beam(IDENT, x, 3 + legH + 2, z + 8, x, 3 + legH + 20, z + 2, 1.2, craneCol);
     lights.add(x, 3 + legH + 22, z + 2, 0xff2a18, 3, rnd());
   }
-  // Container ship alongside the north face, a car carrier at Bledisloe (east face)
-  ship(B, lights, (main.x0 + main.x1) / 2 - 40, main.z0 - 24, Math.PI / 2, 270, 34, rnd, true);
-  ship(B, lights, main.x1 + 22, (main.z0 + main.z1) / 2 + 60, 0, 200, 32, rnd, false);
   // Sheds and the car terminal
   for (let i = 0; i < 3; i++) B.box(IDENT, main.x1 - 70, 3, main.z1 - 90 - i * 70, 110, 14, 50, 0xbfc3c4, 0x7d8388, WIN_INDUSTRIAL);
   B.box(IDENT, (decks[1].x0 + decks[1].x1) / 2, 3, (decks[1].z0 + decks[1].z1) / 2, 240, 22, 180, 0xb4b6b2, 0x7a7c78, WIN_INDUSTRIAL);
@@ -926,44 +926,6 @@ export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightF
     B.beam(IDENT, x, 3, main.z1 - 30, x, 33, main.z1 - 30, 1, 0x9a9a98);
     lights.add(x, 34, main.z1 - 30, 0xfff0d0, 10);
   }
-  // Cruise ship at Princes Wharf
-  ship(B, lights, 250, -1010, 0, 290, 36, rnd, false, true);
-}
-
-/**
- * A ship moored at (x, z), bow along `heading` (rad): hull, superstructure aft (or a full-length
- * cruise-ship block), deck cargo for container ships, and deck / mast lights.
- */
-function ship(B: GeometryBuilder, lights: LightList, x: number, z: number, heading: number, L: number, W: number, rnd: () => number, containers: boolean, cruise = false): void {
-  const fr = frameFromHeading(x, -8, z, heading);
-  const hull = cruise ? 0xf2f2f0 : containers ? 0x2a3440 : 0x9a2a28;
-  // hull (bow taper via two wedges)
-  B.box(fr, 0, 0, 0, W, 17, L * 0.82, hull, 0x6a6a66);
-  B.quad(fr, [-W / 2, 17, -L * 0.41, W / 2, 17, -L * 0.41, 0, 17, -L * 0.5, 0, 17, -L * 0.5], 0x6a6a66);
-  B.tri(fr, [W / 2, 0, -L * 0.41, W / 2, 17, -L * 0.41, 0, 17, -L * 0.5], hull);
-  B.tri(fr, [-W / 2, 17, -L * 0.41, -W / 2, 0, -L * 0.41, 0, 17, -L * 0.5], hull);
-  if (cruise) {
-    for (let t = 0; t < 5; t++) B.box(fr, 0, 17 + t * 5.5, L * 0.04, W * (0.96 - t * 0.06), 5.5, L * (0.74 - t * 0.07), 0xf4f4f2, 0xd8dcdc, WIN_HOME);
-    B.box(fr, 0, 45, L * 0.18, 8, 9, 14, 0x2a4a8a, 0x2a4a8a);
-    for (let k = -3; k <= 3; k++) lights.add(x + Math.sin(heading) * k * 35, 36, z - Math.cos(heading) * k * 35, 0xfff0d0, 4);
-    return;
-  }
-  // superstructure aft
-  B.box(fr, 0, 17, L * 0.33, W * 0.8, 20, 16, 0xf0f0ec, 0xd0d0cc, WIN_HOME);
-  B.box(fr, 0, 37, L * 0.33, W * 1.0, 1.2, 8, 0xf0f0ec, 0xd0d0cc);
-  B.box(fr, 0, 17, L * 0.4, 5, 26, 5, 0x3a3a3a, 0x222222);
-  if (containers) {
-    const colors = [0xb03a2e, 0x2e5a9a, 0x2f7a4a, 0xd87a2a, 0xe8e6e0, 0x6a6e72, 0x1f3f6a];
-    for (let bay = -7; bay <= 4; bay++) {
-      const tiers = 2 + ((rnd() * 4) | 0);
-      B.box(fr, 0, 17, bay * 13.5, W * 0.92, 2.6 * tiers, 12.2, colors[(rnd() * colors.length) | 0], colors[(rnd() * colors.length) | 0]);
-    }
-  } else {
-    // car carrier: tall box hull
-    B.box(fr, 0, 17, -L * 0.05, W * 0.98, 16, L * 0.66, 0xe0e2e0, 0xc8cac8);
-  }
-  lights.add(x, 48, z, 0xfff6e0, 3.5);
-  lights.add(x - Math.sin(heading) * L * 0.45, 22, z + Math.cos(heading) * L * 0.45, 0xfff6e0, 3);
 }
 
 /** Westhaven and Viaduct marinas: pontoons with rows of yachts (8 triangles each). */

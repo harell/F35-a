@@ -44,7 +44,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
   },
 ];
 
-export function showCredits(host: UiHost, version: string): Promise<void> {
+export function showCredits(host: UiHost, build: string): Promise<void> {
   return new Promise((resolve) => {
     let done = false;
     const el = h('section', { class: 'scr-credits' });
@@ -54,7 +54,7 @@ export function showCredits(host: UiHost, version: string): Promise<void> {
       host.leave(el);
       resolve();
     };
-    el.appendChild(screenHeader({ kicker: `Version ${version}`, title: 'Credits', back: finish }));
+    el.appendChild(screenHeader({ kicker: `Build ${build}`, title: 'Credits', back: finish }));
     const body = h('div', { class: 'scr-body cr-body' });
     const side = h('div', { class: 'cr-side', html: `<div class="cr-emblem">${logoMark()}</div><div class="cr-word">F35<span>-</span>A</div><div class="cr-tag">RATITES</div>` });
     const list = h('div', { class: 'cr-list ui-panel ui-scroll' });

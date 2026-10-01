@@ -19,6 +19,8 @@ import { radio } from './context';
 import { pointDefensePk } from '../sam/SamSystem';
 import { SAM_INFO } from '../../core/data';
 import { STRUCTURAL_BLAST_FRACTION, destroyLandmark, firstLandmarkHit, landmarkDistance } from '../landmarks';
+import { vesselHullDistance } from '../civil/vessels';
+import { isHostile } from '../../core/types';
 
 type EndReason = 'hit' | 'proximity' | 'ground' | 'water' | 'selfdestruct' | 'decoyed';
 
@@ -394,13 +396,14 @@ function applyBlast(ctx: CombatCtx, m: CombatMissile, point: Vector3, primary: A
   let hitHostile = false;
   const hurt = (e: AnyEntity, radiusFactor: number): void => {
     if (!e.alive || e.id === m.shooterId) return;
-    const d = Math.max(0, point.distanceTo(e.position) - e.radius * radiusFactor);
+    // civil ships: distance to the long hull, not to a 140 m bounding sphere
+    const d = e.kind === 'ground' && e.vessel ? vesselHullDistance(e, point) : Math.max(0, point.distanceTo(e.position) - e.radius * radiusFactor);
     if (d >= def.blastRadius) return;
     const dmg = def.damage * (1 - d / def.blastRadius);
     if (dmg <= 0.5) return;
     world.applyDamage(e, dmg, m.shooterId, def.id, point);
     if (e === primary) hitPrimary = true;
-    if (e.team !== m.team) hitHostile = true;
+    if (isHostile(m.team, e.team)) hitHostile = true; // hitting civil traffic is no "hit" for accuracy
   };
   for (const ac of world.aircraft) hurt(ac, 0.5);
   if (def.category === 'bomb' || def.category === 'agm') {

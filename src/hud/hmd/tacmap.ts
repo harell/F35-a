@@ -444,15 +444,17 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     tacProject(proj, gt.position.x, gt.position.z, pt);
     if (!onMap(pt.x, pt.y, R * 1.02)) continue;
     const r = 4 * u;
+    const civil = gt.team === 'neutral'; // civil ships: white, labelled CIV
+    const col = civil ? pal.white : C.ground;
     pen.begin();
     pen.rect(pt.x - r, pt.y - r, r * 2, r * 2);
-    pen.strokeGlow(C.ground, 1.5);
+    pen.strokeGlow(col, 1.5);
     occ.addBox(pt.x, pt.y, r + 2, r + 2);
-    const lbl = GROUND_LABEL[gt.type] ?? '';
+    const lbl = civil ? 'CIV' : GROUND_LABEL[gt.type] ?? '';
     const hw = pen.textWidth(lbl, 9.5) / 2 + 2;
     const ly = pt.y + r + 7 * u;
     if (lbl && !occ.hits(pt.x - hw, ly - 5, pt.x + hw, ly + 5)) {
-      pen.text(lbl, pt.x, ly, withAlpha(C.ground, 0.85), 9.5);
+      pen.text(lbl, pt.x, ly, withAlpha(col, 0.85), 9.5);
       occ.add(pt.x - hw, ly - 5, pt.x + hw, ly + 5);
     }
     if (gt.id === p.radar.designatedId || gt.id === p.radar.lockedId) highlight(f, pt.x, pt.y, 10 * u, gt.id === p.radar.lockedId);

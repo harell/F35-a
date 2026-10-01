@@ -16,7 +16,7 @@ export interface RunnerDeps {
   createAi: CreateAiBrain;
   difficulty: DifficultyParams;
   events: EventBus;
-  /** Civil airliner traffic in the Auckland theatre (default on). */
+  /** Civil airliner and shipping traffic in the Auckland theatre (default on). */
   civilTraffic?: boolean;
   /** The Sky Tower is already down in this save (progress.ts skyTowerRuin): no tower to stand up. */
   skyTowerDown?: boolean;
@@ -159,8 +159,10 @@ export class MissionState {
   samEngaged = false;
   /** Stunt bonus points (Harbour Bridge). */
   bonus = 0;
-  /** Neutral civil airliners the player shot down. */
+  /** Neutral civil traffic the player destroyed (airliners + ships; each costs POINTS.civilian). */
   civilianKills = 0;
+  /** Of which civil ships (container ships, cruise liners). */
+  civilianShipKills = 0;
   /** Survival waves cleared. */
   waves = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */

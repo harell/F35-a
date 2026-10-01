@@ -12,7 +12,7 @@
  */
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 import { EventBus } from '../core/events';
-import { DIFFICULTIES, GAME_VERSION, QUALITY_PRESETS } from '../core/data';
+import { DIFFICULTIES, GAME_BUILD, QUALITY_PRESETS } from '../core/data';
 import { loadSettings, resolveQuality, saveSettings } from '../core/settings';
 import type {
   AudioApi,
@@ -163,7 +163,7 @@ export class Game {
     this.hud = createHud(hudCanvas, this.events);
     this.audio = createAudio(this.events);
     this.input = createInput(controlsRoot, this.settings);
-    this.ui = createUi(uiRoot, { uiClick: () => this.audio.uiClick(), version: GAME_VERSION });
+    this.ui = createUi(uiRoot, { uiClick: () => this.audio.uiClick(), build: GAME_BUILD });
     this.progress = loadProgress();
     this.applySettings();
 

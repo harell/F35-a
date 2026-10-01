@@ -17,8 +17,10 @@ export type MissionResultExt = MissionResult & {
   teamKills?: TeamKill[];
   /** Player kills / (player kills + own-flight kills), 0..1. */
   playerShare?: number;
-  /** Civil airliners the player shot down. */
+  /** Civil traffic the player destroyed: airliners + ships. */
   civilianKills?: number;
+  /** Of which civil ships (container ships, cruise liners). */
+  civilianShipKills?: number;
   /** The player brought the Sky Tower down this sortie (fall heading, rad): progress keeps the ruin. */
   skyTowerDown?: { fallHeading: number };
 };

@@ -146,14 +146,17 @@ export function drawGroundAndSams(f: HudFrame): void {
     project(f, g);
     if (!drawable(f)) continue;
     const r = 6 * u;
+    // civil ships: white box, always labelled CIV (like civil air traffic), never a threat diamond
+    const civil = g.team === 'neutral';
     pen.begin();
-    pen.diamond(f.sp.x, f.sp.y, r);
-    pen.strokeGlow(pal.main, 1.4);
-    if (d < 12_000 && labelled < 4) {
+    if (civil) pen.rect(f.sp.x - r, f.sp.y - r, r * 2, r * 2);
+    else pen.diamond(f.sp.x, f.sp.y, r);
+    pen.strokeGlow(civil ? pal.white : pal.main, 1.4);
+    if (civil || (d < 12_000 && labelled < 4)) {
       const t = entityLabel(g);
       if (placeLabel(f, t, 10, f.sp.x, f.sp.y + r + 8 * u, f.sp.y - r - 8 * u)) {
-        labelled++;
-        pen.text(t, lblPos.x, lblPos.y, pal.dim, 10);
+        if (!civil) labelled++;
+        pen.text(t, lblPos.x, lblPos.y, civil ? pal.white : pal.dim, 10);
       }
     }
     picks.add(g.id, f.sp.x, f.sp.y, r);

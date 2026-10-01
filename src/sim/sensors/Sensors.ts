@@ -89,7 +89,8 @@ function buildTeamPictures(ctx: CombatCtx, sh: SensorShared): void {
     if (!ac.alive) continue;
     const st = acState(ac);
     for (const c of st.contacts.values()) {
-      if (c.team === ac.team || c.ownTime < now - 0.35) continue;
+      // civil traffic stays off the datalink: only the human player's own sensors show it
+      if (c.team === ac.team || c.team === 'neutral' || c.ownTime < now - 0.35) continue;
       const e = world.getEntity(c.id);
       if (e && e.alive) pictureAdd(sh, ac.team, e, c.ownTime);
     }
@@ -279,6 +280,8 @@ function scanGround(
   const cosGimbal = Math.cos(FIGHTER_RADAR[ac.type].gimbal);
   for (const g of list) {
     if (!g.alive || g.team === ac.team) continue;
+    // civil ships only matter to the human player (AI crews never track or attack them)
+    if (g.team === 'neutral' && !ac.isPlayer) continue;
     _rel.subVectors(g.position, ac.position);
     const d = _rel.length();
     if (d > KNOWN_TARGET_RANGE) continue;
@@ -385,11 +388,13 @@ function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): numb
   _rel.subVectors(c.position, ac.position);
   const d = Math.max(1, _rel.length());
   const inFront = _fwd.dot(_rel) / d >= (air ? 0.5 : 0.7) ? 1 : 0;
-  // civil traffic can be designated (tap or TGT cycling) but always ranks behind every hostile
-  if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d - (c.team === 'neutral' ? NEUTRAL_RANK_PENALTY : 0);
+  // civil traffic (airliners, merchant ships) can be designated (tap or TGT cycling) but always
+  // ranks behind every hostile
+  const neutral = c.team === 'neutral' ? NEUTRAL_RANK_PENALTY : 0;
+  if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d - neutral;
   const e = ctx.world.getEntity(c.id);
   const emitting = e && ((e.kind === 'sam' && e.radarOn) || (e.kind === 'ground' && e.emitter)) ? 1 : 0;
-  return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 - d;
+  return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 - d - neutral;
 }
 
 /** Candidates for designation in the current mode, sorted by priority (allocates; input-driven). */
@@ -481,7 +486,7 @@ function autoDesignate(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): v
   let c: TrackContact | null = null;
   let best = -Infinity;
   for (const k of st.contacts.values()) {
-    if (k.team === 'neutral') continue; // never box an airliner on our own
+    if (k.team === 'neutral') continue; // never box an airliner / civil ship on our own
     const key = candidateKey(ctx, ac, k);
     if (key > best) {
       best = key;

@@ -2,7 +2,7 @@
  * F35-A — static per-type data for ground entities (SIM-CORE): bounding radius, hit points,
  * missiles carried and the explosion played when destroyed.
  */
-import type { AircraftType, ExplosionSize, GroundTargetType, SamType } from '../../core/types';
+import type { AircraftType, ExplosionSize, GroundTargetType, SamType, VesselClass } from '../../core/types';
 
 export interface SamSiteData {
   radius: number;
@@ -42,6 +42,27 @@ export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
   ship: { radius: 60, health: 400, explosion: 'huge', emitter: false, naval: true },
   factory: { radius: 40, health: 300, explosion: 'huge', emitter: false, naval: false },
   bridge: { radius: 40, health: 300, explosion: 'huge', emitter: false, naval: false },
+};
+
+export interface VesselData {
+  /** Overall length (m); the entity's bounding radius is half of it. */
+  length: number;
+  /** Beam (m). */
+  beam: number;
+  /** Height of the hull + superstructure above the waterline (m), for hit tests and framing. */
+  height: number;
+  /**
+   * Hit points. Any bomb / missile hit sinks a civil ship outright (Damage.damageStructure); this
+   * only paces the gun: a full 1.5 s GAU-22 pass with the pipper held on the hull does ~1,300, so
+   * it takes 2–3 passes (tests/civil-shipping.test.ts measures it).
+   */
+  health: number;
+}
+
+/** Civil merchant ships (neutral 'ship' entities with a VesselClass). */
+export const VESSEL_DATA: Record<VesselClass, VesselData> = {
+  container: { length: 270, beam: 34, height: 40, health: 2_800 },
+  cruise: { length: 290, beam: 36, height: 52, health: 3_200 },
 };
 
 /** Explosion for an aircraft blowing up (in the air or on impact). */
