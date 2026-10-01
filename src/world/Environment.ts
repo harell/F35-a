@@ -27,18 +27,19 @@ import {
 import type { CreateEnvironment, EnvironmentApi, FrameContext } from '../core/contracts';
 import { BASE_MAX, finishTerrain, generateTerrain } from './terrain/generate';
 import { reduceView, TerrainWorkerPool } from './terrain/parallel';
-import { anchorsFor } from './terrain/features';
+import { airfieldOf, anchorsFor, footprintOf } from './terrain/features';
 import { Heightfield as HeightfieldClass } from './terrain/Heightfield';
 import { HF_EXTENT } from './terrain/types';
 import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
 import { coastUniforms, TerrainRenderer, type CoastMaskInfo } from './terrain/TerrainRenderer';
 import { LightReflections } from './scenery/nightLights';
-import { bakeAucklandCoastMask, WHENUAPAI_CROSS } from './terrain/theaters/auckland';
+import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
-import { footprintOf } from './terrain/features';
+import { loadAucklandOsm } from './scenery/aucklandOsm';
+import { runwaysOf } from '../core/airfields';
 import type { SceneryFeature } from '../core/contracts';
 import { bakeColorRows, bakeSunVisibility, bakeSurface, dilateLandColour } from './terrain/bake';
 import { skyPreset } from './sky/presets';
@@ -65,7 +66,6 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const cfg = worldConfig(q);
   const report = (f: number, label: string) => opts.onProgress?.(Math.min(1, Math.max(0, f)), label);
   const preset = skyPreset(opts.theater, opts.timeOfDay, opts.weather, q.drawDistance);
-  const features = allFeatures(opts.theater, opts.features);
   // Above an overcast deck the sky is clear and sunny.
   const abovePreset = opts.weather === 'overcast' ? skyPreset(opts.theater, opts.timeOfDay, 'clear', q.drawDistance) : null;
   let lastAbove = -1;
@@ -73,13 +73,16 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // ── 1. Heightfield (worker pool when available, else time-sliced on the main thread) ──
   report(0, 'Generating terrain');
   await yieldToEventLoop();
-  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain };
-  // Real coastline + terrain heights, road centrelines and CBD buildings (LINZ); each falls back to
-  // the hand-traced map / roads or the procedural CBD if unavailable. The high tier also fetches the
+  // Real coastline + terrain heights, road centrelines and CBD buildings (LINZ), and the airfield layouts
+  // (OpenStreetMap); each falls back to the hand-traced map / roads, the procedural CBD or the template
+  // airfields if unavailable. The high tier also fetches the
   // real 2048² detail (≈ 1.2 MB; low / medium never request it): only finishTerrain (this thread)
   // reads it, so its download overlaps the workers' base generation.
   const hdLoad = opts.theater === 'auckland' && cfg.hdTerrain ? loadAucklandLinzHd() : null;
-  if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings()]);
+  if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm()]);
+  // (the real airfields level their OSM outlines: resolved once the layer is in)
+  const features = allFeatures(opts.theater, opts.features);
+  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain };
   let pool = TerrainWorkerPool.create();
   if (pool && opts.theater === 'auckland') {
     try {
@@ -399,11 +402,10 @@ function airfieldRects(features: SceneryFeature[], theater: string): { x: number
   for (const f of features) {
     if (f.type !== 'airbase') continue;
     const fp = footprintOf(f);
-    out.push({ x: fp.x, z: fp.z, heading: fp.heading, halfW: fp.halfW * 0.8, halfL: fp.halfL });
-  }
-  if (theater === 'auckland') {
-    const X = WHENUAPAI_CROSS;
-    out.push({ x: X.x, z: X.z, heading: X.heading, halfW: 150, halfL: X.length / 2 + 120 });
+    out.push({ x: fp.x, z: fp.z, heading: fp.heading, halfW: fp.halfW * (fp.kind === 'poly' ? 1 : 0.8), halfL: fp.halfL });
+    // a real airfield without its outline (fallback): its other runways too (Whenuapai's 08/26)
+    const id = theater === 'auckland' && fp.kind !== 'poly' ? airfieldOf(f) : null;
+    if (id) for (const X of runwaysOf(id).slice(1)) out.push({ x: X.x, z: X.z, heading: X.heading, halfW: 150, halfL: X.length / 2 + 120 });
   }
   return out.slice(0, 6);
 }

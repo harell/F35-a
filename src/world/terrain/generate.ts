@@ -12,13 +12,13 @@
  */
 import { Heightfield } from './Heightfield';
 import { Noise2D, sstep, mixf } from './noise';
-import { anchorsFor, footprintOf, footprintReach, footprintWeight } from './features';
+import { airfieldOf, anchorsFor, footprintCoreRadius, footprintOf, footprintReach, footprintWeight } from './features';
 import { createDesert } from './theaters/desert';
 import { createIslands } from './theaters/islands';
 import { createMountains } from './theaters/mountains';
 import { createArctic } from './theaters/arctic';
-import { createAuckland, WHENUAPAI_CROSS } from './theaters/auckland';
-import { AKL } from '../../core/auckland';
+import { createAuckland } from './theaters/auckland';
+import { runwaysOf } from '../../core/airfields';
 import { aucklandLinz } from './theaters/aucklandLinz';
 import { aucklandLinzHd, linzHdHeights, linzHdMatches } from './theaters/aucklandLinzHd';
 import {
@@ -149,10 +149,13 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
     const fp = footprintOf(f);
     if (!fp.flatten) continue;
     const level = flatten(hf, fp, mapped);
-    // RNZAF Whenuapai: level the cross runway 08/26 to the same height as the main strip
-    if (mapped && f.type === 'airbase' && Math.hypot(f.x - AKL.whenuapai.x, f.z - AKL.whenuapai.z) < 800) {
-      const X = WHENUAPAI_CROSS;
-      flatten(hf, { kind: 'rect', x: X.x, z: X.z, halfW: 70, halfL: X.length / 2 + 80, radius: 0, heading: X.heading, blend: 350, strength: 1, minLevel: 2, flatten: true }, mapped, MAT_NONE, level);
+    // A real airfield without its OSM outline (fallback): level its other runways (Whenuapai's cross
+    // runway 08/26) to the same height as the main strip. The outline already covers them.
+    const id = mapped && !fp.poly ? airfieldOf(f) : null;
+    if (id) {
+      for (const X of runwaysOf(id).slice(1)) {
+        flatten(hf, { kind: 'rect', x: X.x, z: X.z, halfW: 70, halfL: X.length / 2 + 80, radius: 0, heading: X.heading, blend: 350, strength: 1, minLevel: 2, flatten: true }, mapped, MAT_NONE, level);
+      }
     }
   }
   yield 0.97;
@@ -297,7 +300,7 @@ export function flatten(hf: Heightfield, footprint: Footprint, keepCoast = false
   // Target: mean height over the core (coarse sampling), clamped to the minimum level.
   let sum = 0;
   let cnt = 0;
-  const coreR = fp.kind === 'rect' ? Math.hypot(fp.halfW, fp.halfL) : fp.radius;
+  const coreR = footprintCoreRadius(fp);
   const step = Math.max(hf.cell, coreR / 12);
   for (let dz = -coreR; dz <= coreR; dz += step) {
     for (let dx = -coreR; dx <= coreR; dx += step) {

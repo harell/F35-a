@@ -10,7 +10,7 @@ import { bakeColorRows, dilateLandColour } from '../src/world/terrain/bake';
 import { reduceView } from '../src/world/terrain/parallel';
 import { createVegetation } from '../src/world/terrain/vegetation';
 import { MAT_URBAN, MAT_VOLCANIC } from '../src/world/terrain/types';
-import { WHENUAPAI_CROSS } from '../src/world/terrain/theaters/auckland';
+import { airfieldFeature, runwaysOf } from '../src/core/airfields';
 import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
 import { buildCBD, buildCentres } from '../src/world/scenery/auckland';
@@ -28,7 +28,7 @@ import { coneUniforms, MAX_CONES } from '../src/world/terrain/TerrainRenderer';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 
 const MISSION = [
-  { type: 'airbase' as const, x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 },
+  airfieldFeature('whenuapai'),
   { type: 'airbase' as const, x: 26_500, z: -6200, rotation: 80, size: 0.8 },
 ];
 const features = allFeatures('auckland', MISSION);
@@ -206,10 +206,11 @@ describe('Auckland signature details', () => {
     expect(n).toBeGreaterThan(20);
   });
 
-  it('Whenuapai has a level cross runway 08/26 and suburbs around the base', () => {
-    const X = WHENUAPAI_CROSS;
+  it('Whenuapai has level runways 03/21 and 08/26 and suburbs around the base', () => {
     const hs: number[] = [];
-    for (let s = -X.length / 2; s <= X.length / 2; s += 100) hs.push(hf.heightAt(X.x + Math.sin(X.heading) * s, X.z - Math.cos(X.heading) * s));
+    for (const X of runwaysOf('whenuapai')) {
+      for (let s = -X.length / 2; s <= X.length / 2; s += 100) hs.push(hf.heightAt(X.x + Math.sin(X.heading) * s, X.z - Math.cos(X.heading) * s));
+    }
     expect(Math.max(...hs) - Math.min(...hs)).toBeLessThan(1.5);
     let urban = 0;
     for (let a = 0; a < Math.PI * 2; a += 0.2) {

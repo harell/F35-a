@@ -7,6 +7,7 @@
  * (tests/world-linz.test.ts, tests/world-landmarks.test.ts); ship positions sit in open water.
  */
 import { AKL, BRIDGE_SPAN_T } from '../../core/auckland';
+import { airfieldFeature } from '../../core/airfields';
 import type { IntelMarker, MissionDef, SceneryFeature } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, GroundTargetType, SamType } from '../../core/types';
@@ -83,7 +84,8 @@ export const WAIHEKE_RUNWAY_HDG = 90;
 
 /** Home base + enemy forward airstrip + the Motutapu logistics site (terrain flattening). */
 export const FEATURES = {
-  whenuapai: { type: 'airbase', x: P.whenuapai.x, z: P.whenuapai.z, rotation: 30 } as SceneryFeature,
+  /** RNZAF Base Auckland: runways 03/21 and 08/26 (the world builds the real layout, src/core/airfields.ts). */
+  whenuapai: airfieldFeature('whenuapai'),
   waihekeStrip: { type: 'airbase', x: P.waiAirstrip.x, z: P.waiAirstrip.z, rotation: WAIHEKE_RUNWAY_HDG, size: 0.8 } as SceneryFeature,
   motutapuDepot: { type: 'industrial', x: 13300, z: -9800, size: 0.6 } as SceneryFeature,
 };

@@ -69,15 +69,18 @@ export interface TerrainSpec {
 
 /** Flatten footprint of a scenery feature (local frame: +Z along `rotation` heading). */
 export interface Footprint {
-  kind: 'rect' | 'circle';
-  /** Centre (world m). */
+  /** 'poly': a real outline (`poly`), levelled `radius` m beyond its edge. */
+  kind: 'rect' | 'circle' | 'poly';
+  /** Centre (world m); a polygon's bounding-box centre in the heading frame. */
   x: number;
   z: number;
-  /** Rect half extents (m): across (local X) and along (local Z) the heading. */
+  /** Rect (and polygon bounding-box) half extents (m): across (local X) and along (local Z) the heading. */
   halfW: number;
   halfL: number;
-  /** Circle radius (m). */
+  /** Circle radius (m); for a polygon, how far beyond its edge the core reaches. */
   radius: number;
+  /** Polygon ring, flat [x0, z0, x1, z1, ...] (world m). */
+  poly?: ArrayLike<number>;
   /** Heading (rad, 0 = north, clockwise). */
   heading: number;
   /** Blend distance outside the core (m). */

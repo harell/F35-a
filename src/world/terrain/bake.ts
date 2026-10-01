@@ -8,7 +8,7 @@
 import type { SceneryFeature } from '../../core/contracts';
 import type { TheaterId } from '../../core/types';
 import { Noise2D, sstep, hash2 } from './noise';
-import { footprintOf, footprintWeight, AIRBASE } from './features';
+import { footprintOf, footprintReach, footprintWeight, AIRBASE } from './features';
 import type { Footprint } from './types';
 import {
   MAT_BEACH,
@@ -299,7 +299,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
     const fp = footprintOf(f);
     const farm = f.type === 'farmland' ? fp.radius : 0;
     const belt = f.type === 'town' || f.type === 'city' || f.type === 'village' ? fp.radius * 2.6 + 1200 : 0;
-    const reach = Math.max(fp.kind === 'rect' ? Math.hypot(fp.halfW, fp.halfL) + fp.blend : fp.radius + fp.blend, farm, belt) + 300;
+    const reach = Math.max(footprintReach(fp), farm, belt) + 300;
     return { f, fp, reach, angle: hash2(i, 7, seed) * Math.PI, seed: (seed * 131 + i * 977) | 0 };
   });
   const P = PAL;

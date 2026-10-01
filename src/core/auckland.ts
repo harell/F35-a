@@ -127,8 +127,11 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'hobsonville', name: 'Hobsonville Point', kind: 'coast', lat: -36.7930, lon: 174.6600 },
 
   // Air bases (player operates from Whenuapai)
-  { id: 'whenuapai', name: 'RNZAF Base Auckland (Whenuapai)', kind: 'airbase', lat: -36.7880, lon: 174.6300, note: 'Main runway 03/21 (~2,000 m) + cross runway 08/26' },
-  { id: 'akl_airport', name: 'Auckland Airport (Māngere)', kind: 'airport', lat: -37.0122, lon: 174.7863, note: 'Runway 05R/23L, 3,635 m, ~070°/250° true, along the Manukau shore of the Māngere promontory (fitted to the LINZ coastline / LiDAR)' },
+  // Centres of the main runways (OpenStreetMap thresholds in src/core/airfields.ts)
+  { id: 'whenuapai', name: 'RNZAF Base Auckland (Whenuapai)', kind: 'airbase', lat: -36.79062, lon: 174.630006, note: 'Main runway 03/21 (2,020 m, 053° true) + cross runway 08/26 (1,570 m, 098° true)' },
+  { id: 'akl_airport', name: 'Auckland Airport (Māngere)', kind: 'airport', lat: -37.012063, lon: 174.786209, note: 'Runway 05R/23L, ≈3,650 m, 071°/251° true, along the Manukau shore of the Māngere promontory' },
+  { id: 'ardmore', name: 'Ardmore Airport', kind: 'airport', lat: -37.030862, lon: 174.97449, note: 'General aviation; sealed runway 03/21, 1,390 m, 046° true' },
+  { id: 'dairy_flat', name: 'North Shore Aerodrome (Dairy Flat)', kind: 'airport', lat: -36.656537, lon: 174.655261, note: 'General aviation; sealed 03/21 (730 m) and grass 09/27' },
 
   // Ranges & coasts
   { id: 'waitakere', name: 'Waitākere Ranges', kind: 'range', lat: -36.9500, lon: 174.5400, height: 474, radius: 9000, note: 'Bush-clad hills 250-474 m, dropping in cliffs to the Tasman coast' },

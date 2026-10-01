@@ -12,7 +12,7 @@ import { createEnvironment, type EnvironmentInternals } from '../Environment';
 import { QUALITY_PRESETS } from '../../core/data';
 import type { FrameContext, SceneryFeature } from '../../core/contracts';
 import type { QualityLevel, TheaterId, TimeOfDay, Weather } from '../../core/types';
-import { AKL } from '../../core/auckland';
+import { airfieldFeature } from '../../core/airfields';
 import { dirFromHeadingPitch } from '../../core/math';
 
 const params = new URLSearchParams(location.search);
@@ -41,7 +41,7 @@ function features(): { features: SceneryFeature[]; pads: { x: number; z: number;
   if (theater === 'auckland') {
     return {
       features: [
-        { type: 'airbase', x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 },
+        airfieldFeature('whenuapai'), // FEATURES.whenuapai (the real layout comes from OSM)
         { type: 'airbase', x: 26_900, z: -6600, rotation: 90, size: 0.8 }, // campaign Waiheke strip (FEATURES.waihekeStrip)
         { type: 'industrial', x: 13_300, z: -9800, size: 0.6 },
       ],

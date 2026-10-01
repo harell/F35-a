@@ -13,6 +13,7 @@ import { aucklandRoadPaths } from '../src/world/scenery/motorways';
 import { lightsForSun, skyPreset } from '../src/world/sky/presets';
 import { terrainStyle } from '../src/world/config';
 import { AKL } from '../src/core/auckland';
+import { airfieldFeature } from '../src/core/airfields';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { BARE_MIX, LEAFY_MIX, roofAverage, suburbFarAlbedo } from '../src/world/terrain/urbanColor';
 
@@ -93,7 +94,7 @@ describe('city lights follow the sun (dawn read as a light carpet under a sunris
 });
 
 describe('real arterial roads and softer volcanic cones', () => {
-  const features = allFeatures('auckland', [{ type: 'airbase', x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 }]);
+  const features = allFeatures('auckland', [airfieldFeature('whenuapai')]);
   const hf = runSync(generateTerrain({ theater: 'auckland', seed: 1840, resolution: 1024, features, pads: [] }));
 
   it('Dominion Rd, Great North Rd, Lake Rd, Onewa Rd etc. are road ribbons, on land', () => {
