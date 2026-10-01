@@ -32,7 +32,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
       ['Procedural', 'Aircraft, terrain, clouds, cockpit, HMD symbology, menus, icons and the Auckland chart are generated in code.'],
       ['Textures', 'Water normals, lens flare and moon textures from the three.js examples (MIT). See docs/CREDITS.md.'],
       ['Map data', 'Auckland coastline, terrain and roads: sourced from the LINZ Data Service (Toitū Te Whenua Land Information New Zealand — NZ LiDAR 1m DEM, NZ Contour-Interpolated 8m DEM, NZ Addresses: Road Sections, NZ Tunnel Centrelines) and licensed for reuse under CC BY 4.0. Other landmarks hand-placed from public geography.'],
-      ['OpenStreetMap', 'Airfield layouts (Whenuapai, Auckland Airport, Ardmore, North Shore) and the Sky Tower model — © OpenStreetMap contributors. Data available under the Open Database License (ODbL 1.0): openstreetmap.org/copyright.'],
+      ['OpenStreetMap', 'Airfield layouts (Whenuapai, Auckland Airport, Ardmore, North Shore), the port, wharves, marinas, Devonport Naval Base, the Wiri oil terminal, Eden Park and the Sky Tower model — © OpenStreetMap contributors. Data available under the Open Database License (ODbL 1.0): openstreetmap.org/copyright.'],
     ],
   },
   {

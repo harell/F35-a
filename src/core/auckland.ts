@@ -38,6 +38,9 @@ export type AklLandmarkKind =
   | 'range'
   | 'lake'
   | 'coast'
+  | 'naval'
+  | 'industrial'
+  | 'stadium'
   | 'landmark';
 
 export interface AklLandmark {
@@ -84,6 +87,7 @@ export const AKL_LANDMARKS: AklLandmark[] = [
 
   // North Shore
   { id: 'devonport', name: 'Devonport', kind: 'suburb', lat: -36.8310, lon: 174.7960 },
+  { id: 'devonport_naval', name: 'Devonport Naval Base (HMNZS Philomel)', kind: 'naval', lat: -36.828852, lon: 174.787233, radius: 450, note: 'RNZN home base: Calliope wharves, Calliope Dock (dry dock), the Boiler Wharf and the training jetty on the Calliope Basin. Layout from OpenStreetMap (world/scenery/waterfront.ts)' },
   { id: 'north_head', name: 'North Head (Maungauika)', kind: 'volcano', lat: -36.8276, lon: 174.8121, height: 64, radius: 450 },
   { id: 'mt_victoria_dp', name: 'Mt Victoria (Takarunga)', kind: 'volcano', lat: -36.8266, lon: 174.7990, height: 82, radius: 350 },
   { id: 'northcote', name: 'Northcote', kind: 'suburb', lat: -36.8050, lon: 174.7480 },
@@ -116,6 +120,8 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   // Harbours, rivers & isthmus
   { id: 'tamaki_mouth', name: 'Tāmaki River mouth', kind: 'coast', lat: -36.8470, lon: 174.8830, note: 'Estuary runs south ~9 km to Panmure/Ōtāhuhu', site: 'water' },
   { id: 'otahuhu', name: 'Ōtāhuhu portage (narrowest isthmus, ~1.3 km)', kind: 'landmark', lat: -36.9450, lon: 174.8400 },
+  { id: 'eden_park', name: 'Eden Park (Ngā Ana Wai)', kind: 'stadium', lat: -36.87498, lon: 174.744778, radius: 160, note: "New Zealand's largest stadium (≈ 50,000); the point is the centre of the Main Oval (OpenStreetMap)" },
+  { id: 'wiri_terminal', name: 'Wiri oil terminal', kind: 'industrial', lat: -37.006769, lon: 174.849536, radius: 350, note: "Auckland's fuel terminal at the end of the Marsden Point pipeline (Wiri Oil Services) next to the Liquigas LPG depot; the tanks (core/aucklandSites.ts WIRI_TANKS) are strike targets" },
   { id: 'onehunga', name: 'Onehunga (Manukau Harbour north shore)', kind: 'coast', lat: -36.9250, lon: 174.7850 },
   { id: 'blockhouse_bay', name: 'Blockhouse Bay', kind: 'coast', lat: -36.9250, lon: 174.7000 },
   { id: 'titirangi', name: 'Titirangi', kind: 'suburb', lat: -36.9400, lon: 174.6550 },

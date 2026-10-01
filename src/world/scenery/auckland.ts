@@ -53,6 +53,12 @@ export function buildSkyCityPodium(B: GeometryBuilder, height: HeightFn): void {
   B.box(IDENT, x + 10, height(x, z) - 2, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
 }
 
+/**
+ * The Harbour Bridge's piers as fractions of the deck from bridge_s to bridge_n (24 m across the deck, 9 m along it).
+ * Checked against the OpenStreetMap bridge outline (tests/world-waterfront.test.ts).
+ */
+export const HARBOUR_BRIDGE_PIERS: readonly number[] = [0.085, 0.17, 0.26, 0.35, 0.44, 0.535, 0.745, 0.85, 0.94];
+
 /** Auckland Harbour Bridge: 1 km, eight spans, steel truss hump over the 43 m navigation span. */
 export function buildHarbourBridge(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
   const S = AKL.bridge_s;
@@ -94,7 +100,7 @@ export function buildHarbourBridge(B: GeometryBuilder, lights: LightList, height
     B.quad(f, [-halfW, y0 - thick, -s0, -halfW, y1 - thick, -s1, halfW, y1 - thick, -s1, halfW, y0 - thick, -s0], girder);
   }
   // Piers (concrete, founded on the harbour floor)
-  const piers = [0.085, 0.17, 0.26, 0.35, 0.44, 0.535, 0.745, 0.85, 0.94].map((t) => t * len);
+  const piers = HARBOUR_BRIDGE_PIERS.map((t) => t * len);
   for (const s of piers) {
     const [wx, wz] = at(s);
     const gy = Math.min(0, height(wx, wz)) - 2;
@@ -866,15 +872,17 @@ export function buildCentres(B: GeometryBuilder, lights: LightList, height: Heig
 }
 
 /**
- * Fergusson / Bledisloe container terminal on reclaimed wharves. The ships at berth (and the cruise
- * liner at Princes Wharf) are sim entities, not scenery: missions/runtime/shipping.ts PORT_BERTHS.
+ * Hand-placed fallback for the port when the OpenStreetMap layer is missing (waterfront.ts builds the real wharves
+ * otherwise): the Fergusson and Bledisloe wharves as axis-aligned decks on their real extents, clear of the berths.
+ * The ships at berth (and the cruise liner at Princes Wharf) are sim entities, not scenery:
+ * missions/runtime/shipping.ts PORT_BERTHS.
  */
 export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number): void {
   const rnd = mulberry32(99);
-  // wharf platforms (world axis-aligned; the harbour polygon carved water under them)
+  // wharf platforms (world axis-aligned) over the real Fergusson (incl. its reclamations) and Bledisloe wharves
   const decks = [
-    { x0: 1180, x1: 1960, z0: -1370, z1: -700 },
-    { x0: 780, x1: 1120, z0: -1250, z1: -760 },
+    { x0: 1880, x1: 2170, z0: -935, z1: -330 },
+    { x0: 1000, x1: 1290, z0: -930, z1: -560 },
   ];
   const deckCol = new Color(0x8f8c86);
   for (const d of decks) {
@@ -884,8 +892,8 @@ export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightF
   // Container stacks: blocks of rows (4 high max) separated by straddle-carrier lanes
   const colors = [0xb03a2e, 0x2e5a9a, 0x2f7a4a, 0xd87a2a, 0xe8e6e0, 0x6a6e72, 0x9a2e5a, 0x1f3f6a, 0x8a6a3a, 0x3a8a9a];
   const rows = detail > 0.5 ? 12 : 8;
-  for (let r = 0; r < rows; r++) {
-    for (let k = 0; k < 16; k++) {
+  for (let r = 0; r < rows * 1.5; r++) {
+    for (let k = 0; k < 8; k++) {
       if (rnd() < 0.12) continue;
       const x = main.x0 + 70 + k * 36;
       const z = main.z0 + 110 + r * 34;
@@ -900,7 +908,7 @@ export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightF
   // Gantry cranes along the north face
   const craneCol = new Color(0xdad8d2);
   const boomCol = new Color(0xc0392b);
-  const cranes = detail > 0.5 ? 7 : 4;
+  const cranes = detail > 0.5 ? 5 : 3;
   for (let i = 0; i < cranes; i++) {
     const x = main.x0 + 70 + i * ((main.x1 - main.x0 - 140) / (cranes - 1));
     const z = main.z0 + 30;
@@ -918,11 +926,11 @@ export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightF
     lights.add(x, 3 + legH + 22, z + 2, 0xff2a18, 3, rnd());
   }
   // Sheds and the car terminal
-  for (let i = 0; i < 3; i++) B.box(IDENT, main.x1 - 70, 3, main.z1 - 90 - i * 70, 110, 14, 50, 0xbfc3c4, 0x7d8388, WIN_INDUSTRIAL);
-  B.box(IDENT, (decks[1].x0 + decks[1].x1) / 2, 3, (decks[1].z0 + decks[1].z1) / 2, 240, 22, 180, 0xb4b6b2, 0x7a7c78, WIN_INDUSTRIAL);
+  for (let i = 0; i < 3; i++) B.box(IDENT, main.x1 - 60, 3, main.z1 - 70 - i * 70, 80, 14, 50, 0xbfc3c4, 0x7d8388, WIN_INDUSTRIAL);
+  B.box(IDENT, (decks[1].x0 + decks[1].x1) / 2, 3, (decks[1].z0 + decks[1].z1) / 2, 200, 22, 160, 0xb4b6b2, 0x7a7c78, WIN_INDUSTRIAL);
   // Flood light towers
-  for (let i = 0; i < 6; i++) {
-    const x = main.x0 + 60 + i * 130;
+  for (let i = 0; i < 3; i++) {
+    const x = main.x0 + 60 + i * 85;
     B.beam(IDENT, x, 3, main.z1 - 30, x, 33, main.z1 - 30, 1, 0x9a9a98);
     lights.add(x, 34, main.z1 - 30, 0xfff0d0, 10);
   }

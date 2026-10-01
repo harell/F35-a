@@ -18,6 +18,7 @@ import { airfieldLayout } from './aucklandOsm';
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
+import { buildStrategicSites, buildWaterfront, waterfrontKeepOut, type Pad, type WaterfrontStats } from './waterfront';
 import { aucklandRoadPaths, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
@@ -49,6 +50,8 @@ export interface SceneryOptions {
   lights: number;
   /** Auckland: the Sky Tower is already down in this save (its fall heading, rad) — build the ruin. */
   skyTowerRuin?: number | null;
+  /** The mission's flat pads (SAM sites, ground targets): scenery storage tanks under one are left out. */
+  pads?: readonly Pad[];
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + theatre built-ins). */
@@ -72,6 +75,8 @@ export class Scenery {
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
   cbdStats: CbdStats | null = null;
+  /** Auckland's OSM waterfront (null elsewhere, or on the hand-placed fallback). */
+  waterfrontStats: WaterfrontStats | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
   stats = { meshes: 0, lights: 0 };
@@ -177,9 +182,14 @@ export class Scenery {
       const bridge = new GeometryBuilder();
       buildHarbourBridge(bridge, lights, height);
       addMesh(bridge, 'akl-harbour-bridge');
+      // real wharves, piers, marinas, naval base, tanks and Eden Park from OSM; else the hand-placed port and marinas
       const port = new GeometryBuilder();
-      buildPort(port, lights, height, detail);
-      buildMarinas(port, lights, height, detail);
+      this.waterfrontStats = buildWaterfront(port, lights, height, detail, o.pads ?? []);
+      if (!this.waterfrontStats) {
+        buildPort(port, lights, height, detail);
+        buildMarinas(port, lights, height, detail);
+        buildStrategicSites(port, lights, height, detail, o.pads ?? []);
+      }
       addMesh(port, 'akl-waterfront');
     }
 
@@ -290,7 +300,9 @@ export class Scenery {
     const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry(snowy)];
     this.geometries.push(...treeGeoms);
     const roadsRef = this.roads;
-    const offRoad = roadsRef ? (x: number, z: number, m: number) => roadsRef.near(x, z, m) : null;
+    // Auckland: no houses or trees on the roads, nor on the naval base, port land, stadiums or the Wiri tank farm
+    const keepOut = o.theater === 'auckland' ? waterfrontKeepOut() : null;
+    const offRoad = roadsRef ? (x: number, z: number, m: number) => roadsRef.near(x, z, m) || (keepOut !== null && keepOut(x, z)) : null;
     this.trees = new TileScatter(
       new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd),
       [

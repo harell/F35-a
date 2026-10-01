@@ -289,6 +289,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     style,
     lights: preset.lights,
     skyTowerRuin: opts.skyTowerRuin?.fallHeading ?? null,
+    pads: opts.pads,
   });
   scene.add(scenery.group);
   let reflections: LightReflections | null = null;

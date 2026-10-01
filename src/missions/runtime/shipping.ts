@@ -26,11 +26,15 @@ export interface ShipBerth {
   vessel: VesselClass;
 }
 
-/** Ships alongside in port (where buildPort used to draw static hulls). */
+/**
+ * Ships alongside in port, on the real berths (OpenStreetMap seamark berths and wharf outlines, tools/osm): each hull
+ * lies parallel to its wharf face, clear of both the OSM wharf and the LINZ coastline, which predates the Fergusson
+ * reclamations. Checked by tests/world-waterfront.test.ts and tests/civil-shipping.test.ts.
+ */
 export const PORT_BERTHS: readonly ShipBerth[] = [
-  { x: 1530, z: -1394, heading: 90, vessel: 'container' }, // Fergusson, north face
-  { x: 1995, z: -1110, heading: 0, vessel: 'container' }, // Bledisloe, east face
-  { x: 250, z: -1100, heading: 0, vessel: 'cruise' }, // Princes Wharf
+  { x: 2018, z: -974, heading: 96, vessel: 'container' }, // Fergusson North (FN), under the quay cranes A–C
+  { x: 1843, z: -810, heading: 348, vessel: 'container' }, // Fergusson Z (FZ), west face, under cranes H and I
+  { x: 386, z: -915, heading: 0, vessel: 'cruise' }, // Princes Wharf east (Princes E / F)
 ];
 
 /**
