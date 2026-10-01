@@ -25,6 +25,7 @@ import type {
   Projectile,
   SamSiteEntity,
 } from './entities';
+import type { LandmarkEntity } from './landmarks';
 
 /* ───────────────────────── Terrain (implemented by WORLD agent) ───────────────────────── */
 
@@ -211,6 +212,11 @@ export interface SimWorld {
   readonly sams: SamSiteEntity[];
   readonly ground: GroundTargetEntity[];
   readonly decoys: DecoyEntity[];
+  /**
+   * Protected structures (the Sky Tower). Not entities: no sensor, AI, objective or score code
+   * sees them; weapons, gun rounds and collisions test them (sim/landmarks.ts).
+   */
+  readonly landmarks: LandmarkEntity[];
   /** Pooled projectiles (check `active`). */
   readonly projectiles: Projectile[];
   readonly player: AircraftEntity | null;

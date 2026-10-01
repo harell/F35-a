@@ -11,6 +11,7 @@ import { atmosphere } from '../../core/atmosphere';
 import type { Team } from '../../core/types';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, Projectile, SamSiteEntity } from '../entities';
 import type { LaunchZone } from '../api';
+import { firstLandmarkHit } from '../landmarks';
 import type { AcCombatState, CombatCtx } from './context';
 import { gaussian, radio } from './context';
 import { GUNS, type GunDef } from './defs';
@@ -248,6 +249,15 @@ function hitTest(ctx: CombatCtx, p: Projectile, dt: number): boolean {
   const shooter = world.getEntity(p.shooterId);
   if (shooter && shooter.kind === 'aircraft') {
     if (strafeHit(ctx, p, shooter, world.ground, stepLen) || strafeHit(ctx, p, shooter, world.sams, stepLen)) return true;
+  }
+  // structures (the Sky Tower stops rounds; the gun cannot bring it down)
+  if (world.landmarks.length) {
+    const hit = firstLandmarkHit(world.landmarks, p.prevPosition, p.position);
+    if (hit) {
+      p.position.lerpVectors(p.prevPosition, p.position, hit.s);
+      impact(ctx, p, 'ground', null);
+      return true;
+    }
   }
   // terrain / sea
   const h = world.terrain.surfaceHeightAt(p.position.x, p.position.z);

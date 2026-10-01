@@ -19,6 +19,7 @@ import {
   type RwrContact,
 } from '../../sim/entities';
 import { MUNITIONS } from '../../sim/weapons/defs';
+import type { LandmarkEntity } from '../../sim/landmarks';
 
 const terrain: TerrainQuery = {
   size: 80_000,
@@ -58,6 +59,7 @@ export class LabWorld {
   readonly sams: SamSiteEntity[] = [];
   readonly ground = [];
   readonly decoys: DecoyEntity[] = [];
+  readonly landmarks: LandmarkEntity[] = [];
   readonly projectiles = [];
   readonly player: AircraftEntity;
   readonly camera = new PerspectiveCamera(60, 844 / 390, 0.5, 60000);

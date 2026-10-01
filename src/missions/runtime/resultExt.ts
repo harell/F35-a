@@ -19,4 +19,6 @@ export type MissionResultExt = MissionResult & {
   playerShare?: number;
   /** Civil airliners the player shot down. */
   civilianKills?: number;
+  /** The player brought the Sky Tower down this sortie (fall heading, rad): progress keeps the ruin. */
+  skyTowerDown?: { fallHeading: number };
 };

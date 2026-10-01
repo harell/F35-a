@@ -87,6 +87,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   const died = s.playerDied;
   const samType = st.lastHitBy === 'sam' ? (st.lastHitType as SamType | null) : w in SAM_MUNITION ? SAM_MUNITION[w] : null;
 
+  if (r.reason.startsWith(REASONS.skytower))
+    add('The Sky Tower is a protected landmark: check what is behind your target before you pickle, and never let a missile or bomb fly through the CBD.');
   if (died) {
     if (st.downReason === 'fuel') add('Afterburner drinks fuel: cruise at MIL power and RTB to Whenuapai when BINGO shows — hold over the field to refuel.');
     else if (st.downReason === 'crash' || st.downReason === 'collision')

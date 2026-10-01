@@ -310,6 +310,7 @@ export function buildMock(scene: Scenario): MockSetup {
     sams,
     ground,
     decoys: [],
+    landmarks: [],
     projectiles: [],
     player,
     nextId: () => nextId++,

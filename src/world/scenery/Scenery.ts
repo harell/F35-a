@@ -15,7 +15,8 @@ import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
 import { buildAirbase, buildExtraRunway } from './airbase';
 import { buildSettlement } from './settlements';
-import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyTower, isDuplicateOfAuckland } from './auckland';
+import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
+import { SkyTowerVisual } from './skyTower';
 import { aucklandRoadPaths, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
@@ -30,6 +31,7 @@ import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, p
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { AIRBASE, runwayLengthFor } from '../terrain/features';
 import { AKL } from '../../core/auckland';
+import type { SimWorld } from '../../sim/api';
 
 export interface SceneryOptions {
   atmo: AtmosphereUniforms;
@@ -45,6 +47,8 @@ export interface SceneryOptions {
   style: TerrainStyle;
   /** 0 = day … 1 = night (light intensity). */
   lights: number;
+  /** Auckland: the Sky Tower is already down in this save (its fall heading, rad) — build the ruin. */
+  skyTowerRuin?: number | null;
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + theatre built-ins). */
@@ -65,6 +69,8 @@ export class Scenery {
   private readonly houseRadius: number;
   /** Auckland motorway network (null elsewhere). */
   roads: RoadNetwork | null = null;
+  /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
+  skyTower: SkyTowerVisual | null = null;
   cbdStats: CbdStats | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
@@ -139,7 +145,10 @@ export class Scenery {
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
       const city = new GeometryBuilder();
-      buildSkyTower(city, lights, height, !buildings);
+      if (!buildings) buildSkyCityPodium(city, height);
+      this.skyTower = new SkyTowerVisual(buildingMat, o.lights > 0.01 ? this.lightsMat : null, height, o.skyTowerRuin ?? null);
+      this.group.add(this.skyTower.group);
+      this.stats.meshes++;
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
       buildMuseumAndObelisk(city, lights, height);
       addMesh(city, 'akl-cbd');
@@ -331,6 +340,11 @@ export class Scenery {
     this.lightsMat.uniforms.uPixelRatio.value = pixelRatio;
   }
 
+  /** Follow the sim's landmarks (the Sky Tower's collapse). */
+  updateLandmarks(world: SimWorld | null | undefined): void {
+    this.skyTower?.update(world);
+  }
+
   get idle(): boolean {
     return (this.trees?.idle ?? true) && (this.houses?.idle ?? true);
   }
@@ -343,6 +357,7 @@ export class Scenery {
     this.group.removeFromParent();
     this.trees?.dispose();
     this.houses?.dispose();
+    this.skyTower?.dispose();
     for (const g of this.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
     for (const t of this.textures) t.dispose();

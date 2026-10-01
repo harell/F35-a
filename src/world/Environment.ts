@@ -277,12 +277,21 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     colorSize,
     style,
     lights: preset.lights,
+    skyTowerRuin: opts.skyTowerRuin?.fallHeading ?? null,
   });
   scene.add(scenery.group);
   let reflections: LightReflections | null = null;
   if (scenery.reflectionSources.length) {
     reflections = new LightReflections(atmo, scenery.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));
     scene.add(reflections.mesh);
+  }
+  // the Sky Tower's own reflections (they go out with its lights when it falls)
+  let towerReflections: LightReflections | null = null;
+  if (scenery.skyTower?.reflectionSources.length) {
+    towerReflections = new LightReflections(atmo, scenery.skyTower.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));
+    towerReflections.mesh.name = 'akl-skytower-reflections';
+    scene.add(towerReflections.mesh);
+    scenery.skyTower.setReflections(towerReflections.mesh);
   }
 
   lap('scenery');
@@ -347,6 +356,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
         }
       }
       sky.update(f ? focus : null, camY, inCloud, 0);
+      scenery.updateLandmarks(ctx.world);
       if (cam) {
         const agl = cam.position.y - terrainQuery.surfaceHeightAt(cam.position.x, cam.position.z);
         scenery.update(cam.position, agl);
@@ -359,6 +369,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       water.dispose();
       scenery.dispose();
       reflections?.dispose();
+      towerReflections?.dispose();
       clouds.dispose();
       cloudAtlas.dispose();
       sky.dispose();

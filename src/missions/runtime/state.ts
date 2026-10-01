@@ -18,6 +18,8 @@ export interface RunnerDeps {
   events: EventBus;
   /** Civil airliner traffic in the Auckland theatre (default on). */
   civilTraffic?: boolean;
+  /** The Sky Tower is already down in this save (progress.ts skyTowerRuin): no tower to stand up. */
+  skyTowerDown?: boolean;
 }
 
 /** Runtime of a mission group (aircraft flight, SAM battery, target compound…). */

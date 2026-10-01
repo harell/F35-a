@@ -17,6 +17,7 @@ import { GpuParticles, resetSpawn, spawnParams, type ParticleSpawn } from './Gpu
 import { Ribbons, type RibbonStyle } from './Ribbons';
 import { SpriteBatch, pixelScale } from './SpriteBatch';
 import { Debris, Pulses, VaporCones } from './Props';
+import { COLLAPSE } from '../../core/skyTower';
 import { fireTexture, glowTexture, smokeTexture } from './textures';
 
 /* ───────────────────────── colours & styles ───────────────────────── */
@@ -631,6 +632,51 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     }
   }
 
+  /**
+   * The Sky Tower's pod hitting the ground: a dust wall rolling out along the fall line and the cross
+   * street (most of it channelled by the CBD's street canyons), plus a long-lived smoke column.
+   */
+  function collapseDust(x: number, gy: number, z: number, heading: number): void {
+    const t = now();
+    const d = distCam(x, gy, z);
+    const ux = Math.sin(heading);
+    const uz = -Math.cos(heading);
+    const n = count(140, d);
+    for (let i = 0; i < n; i++) {
+      resetSpawn(P);
+      // four street directions: along the fall line (both ways) and across it
+      const k = i % 4;
+      const ax = k < 2 ? ux : -uz;
+      const az = k < 2 ? uz : ux;
+      const sgn = k % 2 === 0 ? 1 : -1;
+      const along = (rnd() - 0.2) * 160;
+      const side = (rnd() - 0.5) * 30;
+      P.x = x + ax * along * (k < 2 ? 1 : 0.4) + -az * side;
+      P.z = z + az * along * (k < 2 ? 1 : 0.4) + ax * side;
+      P.y = gy + 4 + rnd() * 18;
+      const sp = 14 + rnd() * 26;
+      P.vx = ax * sgn * sp + (rnd() - 0.5) * 6;
+      P.vz = az * sgn * sp + (rnd() - 0.5) * 6;
+      P.vy = 3 + rnd() * 9;
+      P.drag = 0.45;
+      P.grav = 0.8;
+      P.size0 = 14 + rnd() * 10;
+      P.size1 = 55 + rnd() * 45;
+      P.sizeCurve = 1.6;
+      P.life = 9 + rnd() * 8;
+      P.rot = rnd() * 6.28;
+      P.rotSpeed = (rnd() - 0.5) * 0.3;
+      P.variant = (rnd() * 4) | 0;
+      col0(P, i % 3 === 0 ? C.dust : C.dustLight, 0.9);
+      col1(P, C.smokeGrey, 0);
+      P.fadeIn = 0.06;
+      P.minPx = 4;
+      smoke.spawn(P, t);
+    }
+    startFire(x, gy, z, 3.2, 220);
+    groundPillar(x, gy, z, 1.8);
+  }
+
   /** SAM / ground kill: a rising fire pillar that seeds the tall smoke column. */
   function groundPillar(x: number, gy: number, z: number, k: number): void {
     const t = now();
@@ -779,6 +825,12 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
           schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', water ? 'water' : 'ground');
       }
     }),
+    events.on('landmark:destroyed', ({ landmark }) => {
+      // the broken shaft keeps burning over the stump
+      const b = landmark.base;
+      startFire(b.x, b.y + COLLAPSE.breakHeight - 6, b.z, 1.4, 90);
+    }),
+    events.on('landmark:impact', ({ position: p, heading }) => collapseDust(p.x, p.y, p.z, heading)),
     events.on('damage', ({ target, weapon }) => {
       if (target.kind !== 'aircraft' || weapon === 'gun') return;
       const p = target.position;
