@@ -14,6 +14,7 @@ import type { UiHost } from '../host';
 import { screenHeader } from '../widgets';
 import { openDifficultySheet } from './difficultySheet';
 import { drawIntelMap } from './intelMap';
+import { aucklandLinz, loadAucklandLinz } from '../../world/terrain/theaters/aucklandLinz';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered cloud', overcast: 'Overcast' } as const;
 const ROLE_LABEL = { aa: 'AIR-AIR', ag: 'STRIKE', sead: 'SEAD' } as const;
@@ -205,5 +206,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     window.addEventListener('resize', redraw);
     host.present(el, { bg: true, back: () => (closeSheet?.() ? undefined : finish(null)), focus: fly });
     requestAnimationFrame(() => requestAnimationFrame(redraw));
+    // the real coastline may still be downloading (prefetched at app start): redraw when it lands
+    if (m.theater === 'auckland' && !aucklandLinz()) void loadAucklandLinz().then((ok) => ok && redraw());
   });
 }

@@ -491,6 +491,10 @@ export class GroundTargetEntity implements Entity {
    * capsule along the heading (sim/civil/vessels.ts), and one bomb / missile hit sinks it.
    */
   vessel: VesselClass | null = null;
+  /** Riding at anchor (civil ship): the visual swings slowly about the bow. */
+  anchored = false;
+  /** Sim time it was destroyed (-1 = alive): paces the sinking / collapse animation. */
+  destroyedAt = -1;
 
   constructor(
     readonly id: number,

@@ -4,6 +4,7 @@
 import { Game } from './game/Game';
 import { initAnalytics, track } from './analytics/clarity';
 import { GAME_BUILD } from './core/data';
+import { prefetchChartData } from './ui/art/aucklandChart';
 
 function displayMode(): string {
   if (matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone) return 'installed';
@@ -38,6 +39,8 @@ if (!webgl2Available()) {
   showFatal('F35-A needs WebGL 2. Please use an up-to-date Chrome, Safari (iOS 15+) or Firefox.');
 } else {
   const game = new Game(document.getElementById('app')!);
+  // the real coastline for the menu chart (and the first mission): fetched once the page is idle
+  prefetchChartData();
   game.start().catch((err) => {
     console.error(err);
     showFatal(`Something went wrong: ${err?.message ?? err}`);

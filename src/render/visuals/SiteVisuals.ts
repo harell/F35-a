@@ -1,6 +1,8 @@
 /**
  * Per-instance visuals for SAM sites and ground targets: animates radars / launchers / spinners,
  * shows ready missiles (one InstancedMesh per site), ship wakes, and wreck variants when destroyed.
+ * Ships ride the swell, swing at anchor and sink (fire, list, bow / stern settling, under in
+ * 60–90 s) — the pose maths is shared with the effects in shipMotion.ts.
  */
 import { InstancedMesh, Matrix4, Mesh, Object3D, Vector3, type Material } from 'three';
 import type { GroundTargetEntity, SamSiteEntity } from '../../sim/entities';
@@ -9,9 +11,9 @@ import { tubeCapGeometry } from '../models/sams';
 import type { GroundPrototype } from '../models/ground';
 import { munitionGeometry } from '../models/munitions';
 import { charredMaterial, getMaterial } from '../models/materials';
+import { shipMatrix } from './shipMotion';
 
 const _v = new Vector3();
-const _f = new Vector3();
 const _m = new Matrix4();
 
 /** Heading (0 = north/-Z, clockwise) of an object's forward axis. */
@@ -157,6 +159,10 @@ export class GroundVisual {
   private wreckT = -1;
   private mats = new Map<Mesh, Material | Material[]>();
   private readonly seed = Math.random();
+  /** A ship: swell / anchor swing / sinking pose from shipMotion (sim time, not frame dt). */
+  private readonly ship: boolean;
+  /** Which ship lights are lit (afloat and in range): 0 = none, 1 under way, 2 at anchor, 4 moored (deck lights only). */
+  lightMode = 0;
 
   constructor(readonly proto: GroundPrototype) {
     this.root = proto.root.clone(true);
@@ -166,11 +172,23 @@ export class GroundVisual {
     }
     this.wake = this.root.getObjectByName('wake') ?? null;
     this.mid = this.root.getObjectByName('span:mid') ?? null;
+    this.ship = proto.wreck === 'ship';
   }
 
   update(g: GroundTargetEntity, time: number, dt: number, camPos: Vector3, far: number): boolean {
-    this.root.position.copy(g.position);
-    this.root.quaternion.copy(g.quaternion);
+    this.lightMode = 0;
+    if (this.ship) {
+      const sink = shipMatrix(g, time, _m);
+      _m.decompose(this.root.position, this.root.quaternion, this.root.scale);
+      if (!g.alive && sink.progress >= 1) {
+        // fully under: nothing left to draw
+        this.root.visible = false;
+        return false;
+      }
+    } else {
+      this.root.position.copy(g.position);
+      this.root.quaternion.copy(g.quaternion);
+    }
     const dist = _v.copy(g.position).sub(camPos).length();
     if (dist > far * this.proto.farScale) {
       this.root.visible = false;
@@ -180,10 +198,12 @@ export class GroundVisual {
     if (!g.alive) {
       if (this.wreckT < 0) {
         this.wreckT = 0;
-        charAll(this.root, this.mats, true);
+        // a sinking ship keeps its colours (the fires and smoke tell the story, and the PiP still
+        // shows which ship it was); everything else chars
+        if (!this.ship) charAll(this.root, this.mats, true);
       }
       this.wreckT += dt;
-      this.applyWreck(this.wreckT);
+      if (!this.ship) this.applyWreck(this.wreckT);
       if (this.wake) this.wake.visible = false;
       return true;
     }
@@ -194,11 +214,12 @@ export class GroundVisual {
       if (this.mid) this.mid.position.set(0, 0, 0);
     }
     for (const s of this.spinners) s.node.rotation.y = time * s.rate;
+    const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
     if (this.wake) {
-      const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
       this.wake.visible = speed > 0.8;
       this.wake.scale.set(1, 1, Math.min(1.4, 0.25 + speed / 12));
     }
+    if (this.proto.lights.length) this.lightMode = speed > 0.5 ? 1 : g.anchored ? 2 : 4;
     return true;
   }
 
@@ -215,14 +236,6 @@ export class GroundVisual {
           this.mid.rotation.z = 0.05 * k;
         }
         break;
-      case 'ship': {
-        const s = Math.min(1, t / 25);
-        this.root.position.y -= 3.5 * s;
-        _f.set(0.06 * s, 0, 0.2 * s * (this.seed > 0.5 ? 1 : -1));
-        this.root.rotateX(_f.x);
-        this.root.rotateZ(_f.z);
-        break;
-      }
       case 'aircraft':
       case 'vehicle':
       default:

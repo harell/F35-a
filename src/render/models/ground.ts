@@ -6,8 +6,9 @@
  *  'spin:i'   continuously rotating antenna
  *  'span:mid' bridge middle span (drops when destroyed)
  *  'wake'     ship wake (scaled with speed)
+ * Civil ships also carry their night lights (ShipLight, drawn as sprites by the EntityRenderer).
  */
-import { BufferGeometry, Float32BufferAttribute, Group, Mesh, Object3D } from 'three';
+import { BufferGeometry, Float32BufferAttribute, Group, Mesh, Object3D, Vector3 } from 'three';
 import type { GroundTargetType, VesselClass } from '../../core/types';
 import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
@@ -15,9 +16,24 @@ import { loftRings, prismX, prismZ } from './geom/loft';
 import { capsuleRing } from './aircraft/parts';
 import { getAircraftPrototype } from './aircraft';
 import { getMaterial } from './materials';
+import { SHIP_DIMS } from '../visuals/shipMotion';
 import { PALETTES, building, mast, meshFrom, nodeFrom, panel, sawtoothHall, tank, trackedChassis, wheeledChassis, type Palette, type PaletteId } from './vehicles';
 
 export type WreckStyle = 'vehicle' | 'building' | 'bridge' | 'ship' | 'aircraft';
+
+/**
+ * A ship's night light (local position, bow at -Z). COLREGS-ish: 'way' lights (red port / green
+ * starboard sidelights, white mastheads) and the white 'stern' light are lit under way, the two
+ * all-round white 'anchor' lights at anchor; 'deck' lights (cabins, floodlights) are always on at
+ * night.
+ */
+export interface ShipLight {
+  pos: Vector3;
+  color: number;
+  kind: 'way' | 'stern' | 'anchor' | 'deck';
+  /** Sprite size (m). */
+  size: number;
+}
 
 export interface GroundPrototype {
   type: GroundTargetType;
@@ -27,6 +43,8 @@ export interface GroundPrototype {
   radius: number;
   /** Visible up to this distance multiplier (big structures further). */
   farScale: number;
+  /** Night lights (civil ships only). */
+  lights: ShipLight[];
 }
 
 const cache = new Map<string, GroundPrototype>();
@@ -250,7 +268,7 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
     body.name = 'static';
     root.add(body);
   }
-  return { type, root, spinners, wreck, radius, farScale };
+  return { type, root, spinners, wreck, radius, farScale, lights: [] };
 }
 
 /**
@@ -292,7 +310,14 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   statics.push(place(box(B * 0.98, 0.4, L * 0.84, cruise ? 0x9a8a72 : 0x5c6064), [0, F + 0.2, 8]));
   const spin = new Object3D();
   spin.name = 'spin:0';
-  let funnel: [number, number];
+  const lights: ShipLight[] = [];
+  const light = (x: number, y: number, z: number, color: number, kind: ShipLight['kind'], size = kind === 'deck' ? 2.4 : 4.5) =>
+    lights.push({ pos: new Vector3(x, y, z), color, kind, size });
+  const RED = 0xff2a1a;
+  const GREEN = 0x2aff5a;
+  const WHITE = 0xffffff;
+  const CABIN = 0xffcf8a;
+  const FLOOD = 0xfff0d6;
   if (!cruise) {
     // container bays forward of the accommodation block (deterministic colours)
     const rnd = mulberry32(270);
@@ -306,8 +331,15 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
     statics.push(place(box(B * 0.7, 22, 14, 0xf0f0ec), [0, F + 11, za]));
     statics.push(place(box(B * 1.04, 3, 9, 0xf0f0ec), [0, F + 23.5, za - 2]), place(box(B * 0.8, 1.2, 0.3, 0x1c2328), [0, F + 23.6, za - 6.6]));
     statics.push(place(box(5, 9, 3, 0xf0f0ec), [0, F + 29, za]));
-    funnel = [F + 10, za + 16];
     spin.position.set(0, F + 34, za);
+    // night: sidelights on the bridge wings, mastheads fore and aft, lit accommodation windows and
+    // floodlights on the lashing bridges
+    light(-B * 0.52, F + 24, za - 2, RED, 'way');
+    light(B * 0.52, F + 24, za - 2, GREEN, 'way');
+    light(0, F + 12, -L / 2 + 14, WHITE, 'way');
+    light(0, F + 37, za, WHITE, 'way');
+    for (let r = 0; r < 4; r++) for (const x of [-8, 0, 8]) light(x, F + 4 + r * 5, za - 7.3, CABIN, 'deck');
+    for (let z = -L / 2 + 34; z < L / 2 - 52; z += 27) for (const sx of [-1, 1]) light(sx * B * 0.47, F + 17, z, FLOOD, 'deck', 3.2);
     // forecastle
     statics.push(place(box(B * 0.6, 3, 16, hullCol), [0, F + 1.5, -L / 2 + 16]));
   } else {
@@ -326,15 +358,33 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
     statics.push(place(box(B * 1.02, 3.2, 10, 0xf6f6f2), [0, top - 2, -L * 0.24]), place(box(B * 0.9, 1, 0.3, 0x1c2328), [0, top - 1.6, -L * 0.24 - 5.1]));
     for (let z = -L * 0.2; z < L * 0.25; z += 13) for (const sx of [-1, 1]) statics.push(place(box(3, 2.4, 9, 0xf08a1a), [sx * (B * 0.5 + 0.8), F + 5.6, z]));
     statics.push(place(box(B * 0.5, 3, 30, 0x2a6a9a), [0, top + 1.5, 30])); // pool deck / lido roof
-    funnel = [top + 1, 60];
     spin.position.set(0, top + 10, -L * 0.2);
     statics.push(place(box(1.2, 10, 1.2, 0xd8dcdc), [0, top + 5, -L * 0.2]));
+    // night: sidelights on the bridge wings, mastheads, rows of lit cabins / balconies on both sides
+    light(-B * 0.52, top - 1, -L * 0.24, RED, 'way');
+    light(B * 0.52, top - 1, -L * 0.24, GREEN, 'way');
+    light(0, F + 8, -L / 2 + 10, WHITE, 'way');
+    light(0, top + 11.5, -L * 0.2, WHITE, 'way');
+    for (let t = 0; t < 7; t += 2) {
+      const len = L * (0.8 - t * 0.045);
+      const w = B * (0.96 - t * 0.03);
+      const zc = 18 + t * 2;
+      const n = Math.floor(len / 19);
+      for (let i = 0; i <= n; i++) for (const sx of [-1, 1]) light(sx * (w / 2 + 0.3), F + t * 3.4 + 0.6, zc - len / 2 + (i * len) / n, CABIN, 'deck');
+    }
+    for (const z of [18, 30, 42]) light(0, top + 4, z, FLOOD, 'deck', 3.2); // lido deck
   }
-  // funnel: company colours (blue with a white band and a black top)
-  const [fy, fz] = funnel;
+  // funnel: company colours (blue with a white band and a black top); its top is in SHIP_DIMS (the
+  // effects emit the exhaust there)
   const fH = cruise ? 12 : 14;
+  const [, fTop, fz] = SHIP_DIMS[vessel].funnel!;
+  const fy = fTop - fH;
   statics.push(place(box(cruise ? 9 : 6.5, fH, cruise ? 14 : 8, 0x1f4f8a), [0, fy + fH / 2, fz]));
   statics.push(place(box(cruise ? 9.1 : 6.6, 1.6, cruise ? 14.1 : 8.1, 0xf2f2ee), [0, fy + fH * 0.62, fz]), place(box(cruise ? 9.2 : 6.7, 1.4, cruise ? 14.2 : 8.2, 0x161a1c), [0, fy + fH + 0.7, fz]));
+  // stern light under way, all-round anchor lights fore and aft at anchor
+  light(0, F + 1.5, L / 2 + 0.6, WHITE, 'stern');
+  light(0, F + 7, -L / 2 + 6, WHITE, 'anchor');
+  light(0, F + 4, L / 2 - 3, WHITE, 'anchor');
   // mast + rotating radar
   spin.add(meshFrom(panel(5, 0.7, 0.3, 0x3a3e40), 'building'));
   root.add(spin);
@@ -346,7 +396,7 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   const body = meshFrom(statics, 'building');
   body.name = 'static';
   root.add(body);
-  return { type: 'ship', root, spinners, wreck: 'ship', radius: L / 2, farScale: 3.5 };
+  return { type: 'ship', root, spinners, wreck: 'ship', radius: L / 2, farScale: 3.5, lights };
 }
 
 /** Flat V-shaped wake strip on the water behind the stern (+Z), vertex colour fading to black (additive). */

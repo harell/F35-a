@@ -159,8 +159,14 @@ describe('civil shipping in missions', () => {
       expect(s).toBeDefined();
       expect(s.vessel).toBe(b.vessel);
       expect(s.speed).toBe(0);
+      expect(s.anchored).toBe(false); // moored alongside: no swinging (render/visuals/shipMotion.ts)
     }
     const moving = ships.filter((s) => s.path);
+    for (const s of moving) expect(s.anchored).toBe(false);
+    // everything else rides at anchor in the outer Gulf
+    const anchored = ships.filter((s) => s.anchored);
+    expect(anchored.length).toBe(ships.length - PORT_BERTHS.length - moving.length);
+    for (const s of anchored) expect(ANCHORAGES.some((a) => a.x === s.position.x && a.z === s.position.z)).toBe(true);
     expect(moving.length).toBeGreaterThanOrEqual(1);
     expect(moving.length).toBeLessThanOrEqual(2);
     expect(ships.some((s) => s.vessel === 'cruise')).toBe(true);
@@ -310,8 +316,11 @@ describe('civil ship damage', () => {
     const w = seaWorld();
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 3000, 10_000), heading: 0, speed: 230, loadout: 'strike_stealth' });
     const a = spawnShip(w, 'container', 0, -2000);
+    expect(a.destroyedAt).toBe(-1);
+    run(w, 1);
     w.applyDamage(a, 3, p.id, 'gbu39');
     expect(a.alive).toBe(false);
+    expect(a.destroyedAt).toBeCloseTo(w.time, 6); // paces the sinking animation
     const b = spawnShip(w, 'cruise', 2000, -2000, 0, 'Southern Barnacle');
     w.applyDamage(b, 5, p.id, 'aargm');
     expect(b.alive).toBe(false);
@@ -446,7 +455,10 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
     expect(entityLabel(ship)).toBe('CIV');
     expect(entityLabel(corvette)).toBe('SHIP');
     expect(pipName(ship)).toBe('SOUTHERN BARNACLE');
-    expect(pipStatus(ship, new Vector3()).text).toBe('CIVIL');
+    expect(pipStatus(ship, new Vector3()).text).toBe('MOORED');
+    ship.anchored = true;
+    expect(pipStatus(ship, new Vector3()).text).toBe('ANCHORED');
+    ship.anchored = false;
     expect(pipStatus(ship, new Vector3(), true).text).toBe('CHECK FIRE');
   });
 });
