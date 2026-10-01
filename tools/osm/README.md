@@ -22,9 +22,13 @@ Only the layers the game reads. Roads, streets and buildings come from LINZ (`to
 | runway, taxiway | `aeroway=runway` / `taxiway` (lines; split runway ways are joined by `ref`) | runways (checked against `src/core/airfields.ts`), concrete taxiways, blue edge lights |
 | apron, hangar, terminal | `aeroway=apron` / `hangar`, `building=hangar`, `aeroway=terminal` (areas) | aprons, extruded hangars and terminals, apron floodlights |
 | tower, helipad | `aeroway=control_tower` (or an aeroway ATC `man_made=tower`), `aeroway=helipad` | control tower position (none in the current data: a fallback places one) |
-| pier, breakwater, marina, port | `man_made=pier` / `breakwater`, `leisure=marina`, `landuse=port` | #33 (wharves, pontoons, marinas) |
-| storage tank | `man_made=storage_tank` at least 8 m across (farm water tanks dropped); flag for oil, fuel and gas content | airfield fuel farms; #33 (Wiri terminal) |
-| military, naval | `landuse=military`, `military=naval_base` | #33 (Devonport Naval Base) |
+| pier, breakwater, marina, port | `man_made=pier` / `breakwater`, `leisure=marina`, `landuse=port` or `industrial=port` (every outer ring over 2,000 m²) | #33: port deck and berth faces, piers, pontoons, breakwaters, yachts (`src/world/scenery/aucklandSites.ts`) |
+| dock | `waterway=dock` (areas) | #33: Calliope Dock at the naval base |
+| storage tank | `man_made=storage_tank` at least 8 m across (farm water tanks dropped); flag for oil, fuel and gas content | airfield fuel farms; #33: Wiri terminal (`WIRI_TANKS` in `src/core/sites.ts`) |
+| military, naval | `landuse=military`, `military=naval_base` | #33: Devonport Naval Base outline |
+| depot | `landuse=industrial` + `industrial=oil` | #33: Wiri oil terminal outline |
+| stadium, grandstand | `leisure=stadium` of at least 1 ha, `building=grandstand` | #33: Eden Park (and every other stadium with stands) |
+| building | `building=*` whose centre is inside a port, military, naval or depot area; the height (`height`, else `building:levels` × 3.5 m) goes in the width field | #33: port sheds, naval base and terminal buildings |
 | core (derived) | per aerodrome: the union of its runway strips (150 m each side of a sealed runway, 40 m for grass), taxiways (35 m), aprons, hangars and terminals (30 m), gaps under 80 m closed, holes filled, simplified to 15 m | the terrain levels this outline (`src/world/terrain/features.ts`) |
 
 Geometry is projected with the game's equirectangular formula (`geoToWorld` in `src/core/auckland.ts`: origin = Sky Tower,
@@ -65,12 +69,14 @@ The sandbox that produced this bake could not reach download.geofabrik.de or Ove
 ```sh
 python3 fetch.py bbbike <work>     # BBBike's Auckland extract, replication timestamp 2026-09-25T23:00:00Z
 # North Shore Aerodrome (Dairy Flat) lies just north of BBBike's box (−36.66): add it from the OSM API
-python3 fetch.py api 174.635,-36.672,174.680,-36.640 <work>/nzne-dairy-flat.osm   # downloaded 2026-10-01T20:30Z
+python3 fetch.py api 174.635,-36.672,174.680,-36.640 <work>/nzne-dairy-flat.osm   # downloaded 2026-10-01T23:15Z
 python3 bake.py ../../src/world/scenery/data/auckland-osm.bin <work>/Auckland.osm.pbf <work>/nzne-dairy-flat.osm
 ```
 
 The BBBike box (lon 174.45…175.05, lat −37.15…−36.66) covers every layer #32 and #33 use. Switching to the pinned
-Geofabrik file changes only the data's date.
+Geofabrik file changes only the data's date. The #33 re-bake (port, dock, depot, stadium and site-building layers) used
+the same BBBike file (same SHA-256) and a fresh Dairy Flat download; with the old script it reproduces the #32 bake
+byte for byte apart from that download's timestamp.
 
 ## Fallback
 
