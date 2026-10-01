@@ -107,6 +107,19 @@ taxiways, aprons, hangars, terminals and a levelled outline. `allFeatures('auckl
 (`Footprint.kind = 'poly'`), and the scenery builds `buildRealAirfield`. Without the file, the template airbase is
 laid on the same real runways. `tests/world-osm.test.ts` keeps the table and the bake in step.
 
+## Waterfront and strategic sites (OpenStreetMap)
+
+`src/world/scenery/aucklandSites.ts` builds from the same OSM file: the Ports of Auckland outline as a wharf deck (it
+includes the Fergusson reclamation the LINZ coastline predates), with its sheds, container stacks and procedural
+cranes on the real berth faces; every pier, pontoon and breakwater, with yachts along the marina pontoons; Devonport
+Naval Base (`AKL.naval_base`: buildings, Calliope Dock); the Wiri oil terminal (`AKL.wiri`); and stadiums with OSM
+stands (`AKL.eden_park`). Water tests use the LINZ coastline rasterised at 2 m, not the coarse terrain mesh. The
+houses and trees scatter keeps off these sites. Gameplay never reads the file: the moored ships' berths
+(`PORT_BERTHS` in `missions/runtime/shipping.ts`), the Wiri tanks (`WIRI_TANKS` in `src/core/sites.ts`) and the
+Harbour Bridge piers (`BRIDGE_PIERS_T`, which also set the fly-under span) are static tables that
+`tests/world-sites.test.ts` checks against it. Without the file the hand-placed port and marinas come back, and the
+Wiri tanks still stand.
+
 ## Frame / sim order (Game.ts)
 
 ```

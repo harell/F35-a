@@ -13,7 +13,7 @@
  * Format (little-endian): 'AKLO' | u32 version | f32 quantum (m) | u32 strings | u32 features | varint
  * attribution string | strings (u8 length + UTF-8; string 0 is empty) | features: u8 layer, u8 flags
  * (bit 0 area, bit 1 paved, bit 2 fuel tank), varint name, varint ref (runway designators / ICAO),
- * varint width (0.5 m), varint vertex count, vertices. Vertices are zig-zag varint deltas (in quanta)
+ * varint width (0.5 m; a site building's height), varint vertex count, vertices. Vertices are zig-zag varint deltas (in quanta)
  * from the previous vertex written (the first from the origin). Areas are outer rings, closed implicitly.
  */
 import osmUrl from './data/auckland-osm.bin?url';
@@ -41,6 +41,18 @@ export const OSM_MILITARY = 13;
 export const OSM_NAVAL = 14;
 /** Derived: an aerodrome's levelled core (runway strips, taxiways, aprons, hangars), see bake.py. */
 export const OSM_CORE = 15;
+/** Dry dock basin (`waterway=dock`): Calliope Dock at the naval base. */
+export const OSM_DOCK = 16;
+/** Fuel terminal (`industrial=oil`): the Wiri oil terminal. */
+export const OSM_DEPOT = 17;
+/** Stadium grounds ≥ 1 ha (`leisure=stadium`). */
+export const OSM_STADIUM = 18;
+/** Grandstands (`building=grandstand`). */
+export const OSM_GRANDSTAND = 19;
+/** Buildings inside the port, military / naval and fuel-terminal areas; `width` holds the height (m, 0 = untagged). */
+export const OSM_BUILDING = 20;
+/** Highest layer id in the file. */
+export const OSM_LAST_LAYER = OSM_BUILDING;
 
 export interface OsmFeature {
   layer: number;
@@ -53,7 +65,7 @@ export interface OsmFeature {
   name: string;
   /** Runway designators ("03/21"), or the ICAO code of an airfield core. */
   ref: string;
-  /** Width (m), 0 when unknown (runways / taxiways get a default in the bake). */
+  /** Width (m), 0 when unknown (runways / taxiways get a default in the bake). OSM_BUILDING: height (m). */
   width: number;
   /** Flat [x0, z0, x1, z1, ...] (m, game XZ). */
   pts: Float32Array;

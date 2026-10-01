@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // multi-minute real-sim runs: under a parallel full-suite run they exceed the 5 s default on a loaded box
 vi.setConfig({ testTimeout: 60_000 });
-import { AKL } from '../src/core/auckland';
+import { AKL, BRIDGE_SPAN_T } from '../src/core/auckland';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
 import { CAMPAIGN, MEDALS, TRAINING, buildInstantMissionSeeded, createMissionRunner, failStreak, recordResult, skipMission, wasSkipped } from '../src/missions';
@@ -404,7 +404,7 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     const p = h.world.player!;
     const S = AKL.bridge_s;
     const N = AKL.bridge_n;
-    const t = 0.64;
+    const t = BRIDGE_SPAN_T;
     const cx = S.x + (N.x - S.x) * t;
     const cz = S.z + (N.z - S.z) * t;
     let k = 0;

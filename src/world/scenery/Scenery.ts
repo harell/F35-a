@@ -15,6 +15,7 @@ import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
 import { buildAirbase, buildExtraRunway, buildRealAirfield } from './airbase';
 import { airfieldLayout } from './aucklandOsm';
+import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayout } from './aucklandSites';
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
@@ -181,6 +182,15 @@ export class Scenery {
       buildPort(port, lights, height, detail);
       buildMarinas(port, lights, height, detail);
       addMesh(port, 'akl-waterfront');
+      // strategic sites: Devonport Naval Base, the Wiri oil terminal, Eden Park (aucklandSites.ts)
+      const sites = new GeometryBuilder();
+      const layout = siteLayout();
+      if (layout) {
+        buildNavalBase(sites, lights, height, layout);
+        buildStadiums(sites, lights, height, layout);
+      }
+      buildWiriTerminal(sites, lights, height, layout);
+      addMesh(sites, 'akl-sites');
     }
 
     // Decal meshes
@@ -290,7 +300,10 @@ export class Scenery {
     const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry(snowy)];
     this.geometries.push(...treeGeoms);
     const roadsRef = this.roads;
-    const offRoad = roadsRef ? (x: number, z: number, m: number) => roadsRef.near(x, z, m) : null;
+    // nothing grows or is built on the roads or inside the port, the naval base, the oil terminal or a stadium
+    const onSite = o.theater === 'auckland' ? siteBlocker() : null;
+    const offRoad =
+      roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
       new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd),
       [

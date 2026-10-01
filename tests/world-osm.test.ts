@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { OSM_BYTES, OSM_GZ } from './linz-setup';
 import { AKL } from '../src/core/auckland';
 import { AIRFIELD_IDS, AIRFIELDS, airfieldFeature, airfieldNear, airfieldRotation, mainRunway, runwaysOf, type AirfieldId } from '../src/core/airfields';
-import { airfieldLayout, aucklandOsm, decodeOsm, OSM_AERODROME, OSM_APRON, OSM_CORE, OSM_PIER, OSM_RUNWAY, OSM_TANK, OSM_TAXIWAY, pointInRing, setAucklandOsm } from '../src/world/scenery/aucklandOsm';
+import { airfieldLayout, aucklandOsm, decodeOsm, OSM_AERODROME, OSM_APRON, OSM_LAST_LAYER, OSM_PIER, OSM_RUNWAY, OSM_TANK, OSM_TAXIWAY, pointInRing, setAucklandOsm } from '../src/world/scenery/aucklandOsm';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { airfieldOf, footprintOf, footprintWeight, runwayLengthFor } from '../src/world/terrain/features';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
@@ -40,7 +40,7 @@ describe('OSM data file', () => {
     expect(count(OSM_APRON)).toBeGreaterThan(20);
     expect(count(OSM_PIER)).toBeGreaterThan(100); // Open data 2: wharves, marinas
     expect(count(OSM_TANK)).toBeGreaterThan(20); // Open data 2: Wiri terminal (farm water tanks dropped)
-    expect(Math.max(...d.features.map((f) => f.layer))).toBeLessThanOrEqual(OSM_CORE);
+    expect(Math.max(...d.features.map((f) => f.layer))).toBeLessThanOrEqual(OSM_LAST_LAYER);
     // every vertex inside the world (±44 km) — the bake clips to the world box
     for (const f of d.features) for (let i = 0; i < f.pts.length; i++) expect(Math.abs(f.pts[i])).toBeLessThan(50_000);
   });

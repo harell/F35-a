@@ -17,7 +17,7 @@
  */
 import { Vector3 } from 'three';
 import type { CreateMissionRunner, MissionDef, MissionResult, MissionRunnerApi, ObjectiveStatus, Waypoint } from '../core/contracts';
-import { AKL } from '../core/auckland';
+import { AKL, BRIDGE_SPAN_T } from '../core/auckland';
 import type { LoadoutId } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import type { Action } from './schema';
@@ -50,8 +50,11 @@ const DEFAULT_PAR = 480;
 /** Seconds before a patrolling enemy fighter group is vectored onto the player. */
 const DEFAULT_COMMIT = 150;
 
-/** Harbour Bridge navigation span (fraction along the south → north abutment line) and clearance. */
-const BRIDGE_SPAN = { t0: 0.55, t1: 0.74, maxAlt: 41, minAlt: 2, bonus: 250 };
+/**
+ * Harbour Bridge navigation span (fraction along the south → north abutment line, ±71 m round its centre:
+ * ≥ 48 m clear of the piers either side) and clearance.
+ */
+const BRIDGE_SPAN = { t0: BRIDGE_SPAN_T - 0.07, t1: BRIDGE_SPAN_T + 0.07, maxAlt: 41, minAlt: 2, bonus: 250 };
 
 /** Seconds the mission-title banner shows on its own before the opening radio call. */
 export const OPENING_DELAY = 2.5;

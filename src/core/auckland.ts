@@ -38,6 +38,9 @@ export type AklLandmarkKind =
   | 'range'
   | 'lake'
   | 'coast'
+  | 'naval'
+  | 'fuel'
+  | 'stadium'
   | 'landmark';
 
 export interface AklLandmark {
@@ -68,12 +71,13 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'viaduct', name: 'Viaduct Harbour', kind: 'marina', lat: -36.8440, lon: 174.7575, radius: 250 },
   { id: 'wynyard', name: 'Wynyard Quarter', kind: 'port', lat: -36.8400, lon: 174.7550, radius: 350 },
   { id: 'westhaven', name: 'Westhaven Marina', kind: 'marina', lat: -36.8385, lon: 174.7490, radius: 400, site: 'water' },
-  { id: 'port', name: 'Ports of Auckland (Fergusson Container Terminal)', kind: 'port', lat: -36.8438, lon: 174.7857, radius: 600, note: 'Container cranes, wharves projecting ~600 m north into the harbour' },
+  { id: 'port', name: 'Ports of Auckland (Fergusson Container Terminal)', kind: 'port', lat: -36.8438, lon: 174.7857, radius: 600, note: 'Container cranes, wharves projecting ~600 m north into the harbour. Wharf outlines from OpenStreetMap (scenery/aucklandSites.ts)' },
   // abutments: on the LINZ SH1 bridge centreline, where the motorway ribbons meet the model. The north one is the end of the
   // LINZ bridge section; the section's south end is 11 m out over Westhaven, so the abutment is 40 m further back along the
   // deck, on the St Marys Bay shore (≈ 25 m inland, like Northcote Point's ≈ 16 m). Deck length ≈ 1,020 m, as built.
   { id: 'bridge_s', name: 'Harbour Bridge (south abutment, St Marys Bay)', kind: 'bridge', lat: -36.83536, lon: 174.74254, site: 'shore' },
   { id: 'bridge_n', name: 'Harbour Bridge (north abutment, Northcote Point)', kind: 'bridge', lat: -36.82724, lon: 174.74786, note: 'Steel truss, ~1,020 m, main span 243 m, 43 m clearance over the water', site: 'shore' },
+  { id: 'eden_park', name: 'Eden Park (Ngā Ana Wai)', kind: 'stadium', lat: -36.87491, lon: 174.74469, radius: 200, note: "New Zealand's national stadium; stands from OpenStreetMap" },
   { id: 'domain', name: 'Auckland Domain (Pukekawa) & War Memorial Museum', kind: 'landmark', lat: -36.8600, lon: 174.7780 },
   { id: 'ponsonby', name: 'Ponsonby / Herne Bay', kind: 'suburb', lat: -36.8480, lon: 174.7400 },
   { id: 'parnell', name: 'Parnell', kind: 'suburb', lat: -36.8560, lon: 174.7800 },
@@ -84,6 +88,7 @@ export const AKL_LANDMARKS: AklLandmark[] = [
 
   // North Shore
   { id: 'devonport', name: 'Devonport', kind: 'suburb', lat: -36.8310, lon: 174.7960 },
+  { id: 'naval_base', name: 'Devonport Naval Base (HMNZS Philomel)', kind: 'naval', lat: -36.82939, lon: 174.78746, radius: 450, note: 'RNZN home base: Calliope Wharf and Calliope Dock (dry dock) on the Waitematā; outline, wharves and buildings from OpenStreetMap' },
   { id: 'north_head', name: 'North Head (Maungauika)', kind: 'volcano', lat: -36.8276, lon: 174.8121, height: 64, radius: 450 },
   { id: 'mt_victoria_dp', name: 'Mt Victoria (Takarunga)', kind: 'volcano', lat: -36.8266, lon: 174.7990, height: 82, radius: 350 },
   { id: 'northcote', name: 'Northcote', kind: 'suburb', lat: -36.8050, lon: 174.7480 },
@@ -138,11 +143,20 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'piha', name: 'Piha (west coast, Lion Rock)', kind: 'coast', lat: -36.9530, lon: 174.4700 },
   { id: 'muriwai', name: 'Muriwai Beach (west coast)', kind: 'coast', lat: -36.8292, lon: 174.4268, note: 'Long straight black-sand beach running north' },
   { id: 'hunua', name: 'Hunua Ranges', kind: 'range', lat: -37.0600, lon: 175.1000, height: 688, radius: 9000 },
+  // Strategic sites
+  { id: 'wiri', name: 'Wiri oil terminal', kind: 'fuel', lat: -37.0069, lon: 174.85167, radius: 400, note: "Auckland's fuel terminal at the end of the Marsden Point pipeline (jet fuel on to the airport); storage tanks from OpenStreetMap, WIRI_TANKS in core/sites.ts" },
   { id: 'beachlands', name: 'Beachlands / Maraetai (Tāmaki Strait south shore)', kind: 'coast', lat: -36.8850, lon: 175.0000 },
 ];
 
-/** Centre of the Harbour Bridge's 243 m navigation span, as a fraction of the deck from bridge_s to bridge_n. */
-export const BRIDGE_SPAN_T = 0.64;
+/**
+ * Harbour Bridge piers in the water, as fractions of the deck from bridge_s to bridge_n: the OpenStreetMap
+ * `bridge:support=pier` outlines (ways 1000929555–1000929560, read from the OSM API on 2026-10-01), each within
+ * 3.2 m of the bridge_s → bridge_n line. The steel truss starts at 0.456; 0.644 → 0.881 is the 241 m main span.
+ */
+export const BRIDGE_PIERS_T: readonly number[] = [0.115, 0.216, 0.332, 0.456, 0.644, 0.881];
+
+/** Centre of the Harbour Bridge's 243 m navigation span (between the last two piers), as a fraction of the deck from bridge_s to bridge_n. */
+export const BRIDGE_SPAN_T = (BRIDGE_PIERS_T[4] + BRIDGE_PIERS_T[5]) / 2;
 
 /** World-space lookup: AKL.skytower → { x, z, height?, radius? }. */
 export const AKL: Record<string, { x: number; z: number; height?: number; radius?: number; name: string }> = Object.fromEntries(
