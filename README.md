@@ -59,10 +59,11 @@ npm run typecheck    # tsc --noEmit
 npm test             # vitest unit tests (flight model, missiles, radar, SAMs, AI, missions, terrain, HUD...)
 npm run build        # production build to dist/
 npm run e2e          # mission smoke test (headless Chromium)
+node e2e/hd-terrain.mjs  # HD terrain download scope per quality tier (against `vite preview --port 4173`)
 npm run voices       # regenerate voice clips (needs a local TTS + ffmpeg, see tools/)
 ```
 
-Handy URL parameters: `?mission=c01&autostart=1&view=chase&difficulty=veteran&quality=high&fps=1`.
+Handy URL parameters: `?mission=c01&autostart=1&view=chase&difficulty=veteran&quality=high&fps=1` (`&hdterrain=0` turns off the high tier's HD terrain download).
 Missions: `c01`–`c12`, `t01`–`t03`, and Instant Action ids like `ia_dogfight_auckland`.
 
 Architecture, conventions and module ownership are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Developer labs for models,

@@ -54,6 +54,7 @@ export function detectQualityLevel(gl?: WebGLRenderingContext | WebGL2RenderingC
 export function resolveQuality(s: Settings, gl?: WebGLRenderingContext | WebGL2RenderingContext | null): QualitySettings {
   const level = s.quality === 'auto' ? detectQualityLevel(gl) : s.quality;
   const q = { ...QUALITY_PRESETS[level] };
+  q.hdTerrain = q.hdTerrain && s.hdTerrain !== false;
   q.pixelRatio = Math.min(q.pixelRatio, window.devicePixelRatio || 1);
   return q;
 }

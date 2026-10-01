@@ -35,6 +35,7 @@ import { coastUniforms, TerrainRenderer, type CoastMaskInfo } from './terrain/Te
 import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask, WHENUAPAI_CROSS } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
+import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
 import { footprintOf } from './terrain/features';
@@ -72,9 +73,12 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // ── 1. Heightfield (worker pool when available, else time-sliced on the main thread) ──
   report(0, 'Generating terrain');
   await yieldToEventLoop();
-  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads };
+  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain };
   // Real coastline + terrain heights, road centrelines and CBD buildings (LINZ); each falls back to
-  // the hand-traced map / roads or the procedural CBD if unavailable.
+  // the hand-traced map / roads or the procedural CBD if unavailable. The high tier also fetches the
+  // real 2048² detail (≈ 1.2 MB; low / medium never request it): only finishTerrain (this thread)
+  // reads it, so its download overlaps the workers' base generation.
+  const hdLoad = opts.theater === 'auckland' && cfg.hdTerrain ? loadAucklandLinzHd() : null;
   if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings()]);
   let pool = TerrainWorkerPool.create();
   if (pool && opts.theater === 'auckland') {
@@ -103,13 +107,17 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       base.data.set(res.data);
       base.mat.set(res.mat);
       base.aux.set(res.aux);
+      await hdLoad;
       hf = await runSliced(finishTerrain(base, spec, anchors, 0), (f) => report(0.45 + f * 0.1, 'Shaping terrain'));
     } catch (err) {
       console.warn('[world] terrain workers failed, falling back to main thread', err);
       hf = null;
     }
   }
-  if (!hf) hf = await runSliced(generateTerrain(spec), (f) => report(f * 0.55, 'Generating terrain'));
+  if (!hf) {
+    await hdLoad;
+    hf = await runSliced(generateTerrain(spec), (f) => report(f * 0.55, 'Generating terrain'));
+  }
   const terrainQuery = new TerrainQueryImpl(hf);
   const genMs = performance.now() - t0;
 
