@@ -38,6 +38,7 @@ import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitia
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { SurvivalDirector } from './runtime/survival';
 import { CivilTraffic } from './runtime/civil';
+import { CivilShipping } from './runtime/shipping';
 import { LandmarkWatch } from './runtime/landmarks';
 
 /** Mission logic evaluation period (s). */
@@ -71,6 +72,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly withdrawal: WithdrawalMonitor;
   /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
   private readonly civil: CivilTraffic | null;
+  /** Neutral container ships and cruise liners (Auckland theatre only, gated with the airliners). */
+  private readonly shipping: CivilShipping | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
   private finalResult: MissionResult | null = null;
@@ -112,7 +115,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.hints = new HintSystem(this.s, this.rearm);
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
     this.survival = def.script.survival ? new SurvivalDirector(this.s) : null;
-    this.civil = def.theater === 'auckland' && deps.civilTraffic !== false ? new CivilTraffic(this.s) : null;
+    const civilTraffic = def.theater === 'auckland' && deps.civilTraffic !== false;
+    this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
+    this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
   }
 
@@ -164,6 +169,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const p = spawnPlayer(s, loadout);
     spawnInitial(s);
     this.civil?.setup();
+    this.shipping?.setup();
     this.landmarks.setup();
     this.rearm.init(p, loadout);
     this.callouts.attach();
@@ -272,6 +278,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     (r as MissionResultExt).teamKills = team;
     (r as MissionResultExt).playerShare = sc.playerShare;
     if (s.civilianKills > 0) (r as MissionResultExt).civilianKills = s.civilianKills;
+    if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
     const towerDown = this.landmarks.downHeading;
     if (towerDown !== null) (r as MissionResultExt).skyTowerDown = { fallHeading: towerDown };
     r.tips = buildTips(s, r);

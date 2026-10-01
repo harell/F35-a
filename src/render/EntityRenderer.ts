@@ -201,7 +201,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       for (const g of world.ground) {
         let tr = grounds.get(g.id);
         if (!tr) {
-          const v = new GroundVisual(getGroundPrototype(g.type, palette));
+          const v = new GroundVisual(getGroundPrototype(g.type, palette, g.vessel));
           group.add(v.root);
           tr = { v, seen: frame };
           grounds.set(g.id, tr);

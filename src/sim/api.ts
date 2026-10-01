@@ -13,6 +13,7 @@ import type {
   MunitionId,
   SamType,
   Team,
+  VesselClass,
   WeaponId,
 } from '../core/types';
 import type {
@@ -195,6 +196,8 @@ export interface GroundSpawn {
   speed?: number;
   loopPath?: boolean;
   health?: number;
+  /** Civil merchant ship class (type 'ship'): hull size and hit points from VESSEL_DATA. */
+  vessel?: VesselClass;
 }
 
 /* ───────────────────────── Sim world (implemented by SIM-CORE agent) ───────────────────────── */

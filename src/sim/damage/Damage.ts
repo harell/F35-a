@@ -12,6 +12,7 @@ import { isHostile, type DifficultyParams, type MunitionId, type WeaponId } from
 import { AircraftEntity, type AnyEntity, type GroundTargetEntity, type SamSiteEntity } from '../entities';
 import { ensureSimState, makeWreck } from '../flight/FlightModel';
 import { GROUND_TARGET_DATA, SAM_SITE_DATA, aircraftExplosion } from './tables';
+import { isCivilVessel } from '../civil/vessels';
 
 export type DamageWeapon = WeaponId | MunitionId | 'gun' | 'collision' | 'flak';
 export type DownReason = 'crash' | 'shot' | 'collision' | 'fuel';
@@ -192,9 +193,11 @@ export class DamageSystem {
 
   private damageStructure(t: SamSiteEntity | GroundTargetEntity, amount: number, attackerId: number | null, weapon: DamageWeapon): void {
     const host = this.host;
+    // civil merchant ship: one bomb / missile hit sinks it (arcade rule); gun damage accumulates
+    if (isCivilVessel(t) && weapon !== 'gun' && weapon !== 'flak' && weapon !== 'collision') amount = Math.max(amount, t.health);
     t.health -= amount;
     const attacker = host.getEntity(attackerId);
-    const hostileAttacker = attacker instanceof AircraftEntity && attacker.team !== t.team;
+    const hostileAttacker = attacker instanceof AircraftEntity && isHostile(attacker.team, t.team);
     host.events.emit('damage', { target: t, amount, attackerId, weapon });
     if (t.health > 0) return;
 

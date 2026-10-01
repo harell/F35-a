@@ -36,7 +36,7 @@ import type { FlightEnv } from './flight/env';
 import { ensureSimState, initFlight, stepFlight } from './flight/FlightModel';
 import { CollisionSystem } from './damage/Collisions';
 import { DamageSystem, type DamageWeapon } from './damage/Damage';
-import { GROUND_TARGET_DATA, SAM_SITE_DATA } from './damage/tables';
+import { GROUND_TARGET_DATA, SAM_SITE_DATA, VESSEL_DATA } from './damage/tables';
 import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
@@ -254,11 +254,14 @@ class SimWorldImpl implements SimWorld {
 
   spawnGround(spec: GroundSpawn): GroundTargetEntity {
     const data = GROUND_TARGET_DATA[spec.type];
+    // civil merchant ship: hull size / hit points of its class (bounding radius = half its length)
+    const vessel = spec.type === 'ship' && spec.vessel ? VESSEL_DATA[spec.vessel] : null;
     const e = new GroundTargetEntity(this.nextId(), spec.type, spec.team, {
       name: spec.name ?? GROUND_NAMES[spec.type],
-      radius: data.radius,
-      health: spec.health ?? data.health,
+      radius: vessel ? vessel.length / 2 : data.radius,
+      health: spec.health ?? vessel?.health ?? data.health,
     });
+    if (vessel) e.vessel = spec.vessel!;
     e.emitter = data.emitter;
     e.groupId = spec.groupId ?? '';
     const x = spec.position.x;

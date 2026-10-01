@@ -109,7 +109,7 @@ export const WARNING_INFO: Record<WarningId, WarningInfo> = {
   chaff_low: { label: 'CHAFF LOW', level: 0, order: 14, detail: 'Chaff low' },
 };
 
-/** Short HMD label of an entity ("MIG-29", "SA-6", "SHIP"). */
+/** Short HMD label of an entity ("MIG-29", "SA-6", "SHIP", "CIV" for a civil ship). */
 export function entityLabel(e: AnyEntity | null | undefined): string {
   if (!e) return '';
   switch (e.kind) {
@@ -118,6 +118,7 @@ export function entityLabel(e: AnyEntity | null | undefined): string {
     case 'sam':
       return SAM_LABEL[e.type] ?? e.type.toUpperCase();
     case 'ground':
+      if (e.team === 'neutral') return 'CIV'; // civil ship
       return GROUND_LABEL[e.type] ?? e.type.toUpperCase();
     case 'missile':
       return e.def.short;

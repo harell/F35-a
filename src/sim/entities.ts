@@ -17,6 +17,7 @@ import type {
   MunitionId,
   SamType,
   Team,
+  VesselClass,
   WarningId,
   WeaponId,
 } from '../core/types';
@@ -485,6 +486,11 @@ export class GroundTargetEntity implements Entity {
   emitter = false;
   groupId = '';
   known = true;
+  /**
+   * Civil merchant ship ('ship' type, neutral team): container ship or cruise liner. Its hull is a
+   * capsule along the heading (sim/civil/vessels.ts), and one bomb / missile hit sinks it.
+   */
+  vessel: VesselClass | null = null;
 
   constructor(
     readonly id: number,

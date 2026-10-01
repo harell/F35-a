@@ -34,6 +34,16 @@ export interface DebriefContext {
 /** Offer "Retry on Recruit" after this many failures in a row (not already on Recruit). */
 export const RECRUIT_OFFER_AFTER = 2;
 
+/** Debrief stat rows for civil losses: airliners downed and civil ships destroyed (only when > 0). */
+export function civilLossRows(r: MissionResultExt): [string, string, string][] {
+  const ships = r.civilianShipKills ?? 0;
+  const airliners = (r.civilianKills ?? 0) - ships;
+  const rows: [string, string, string][] = [];
+  if (airliners > 0) rows.push(['skull', 'Civil airliners downed', String(airliners)]);
+  if (ships > 0) rows.push(['skull', 'Civil ships destroyed', String(ships)]);
+  return rows;
+}
+
 export async function showDebrief(host: UiHost, r: MissionResult, hasNext: boolean, ctx?: DebriefContext): Promise<'next' | 'retry' | 'menu'> {
   let fresh: string[] = [];
   try {
@@ -89,7 +99,7 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
     // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
     const ext = r as MissionResultExt;
     for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
-    if (ext.civilianKills) stats.push(['skull', 'Civil airliners downed', String(ext.civilianKills)]);
+    stats.push(...civilLossRows(ext));
     if (ext.playerShare !== undefined && (ext.teamKills ?? []).some((t) => t.flight && t.kills > 0)) stats.push(['star', 'Your share', formatPercent(ext.playerShare)]);
     const grid = h('div', { class: 'db-stats' });
     stats.forEach(([ic, k, v], i) => {
