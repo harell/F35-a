@@ -5,7 +5,7 @@
  * collisions, ground movers and the player's ICAWS warnings. Step order (fixed 60 Hz):
  *
  *   AI brains (20 Hz, staggered) → flight model (120 Hz sub-steps) → combat.update →
- *   ground movers → collisions → damage over time → warnings → cleanup
+ *   ground movers → collisions (+ landmark collapses) → damage over time → warnings → cleanup
  */
 import { Vector3 } from 'three';
 import type { EventBus } from '../core/events';
@@ -39,6 +39,7 @@ import { DamageSystem, type DamageWeapon } from './damage/Damage';
 import { GROUND_TARGET_DATA, SAM_SITE_DATA } from './damage/tables';
 import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
+import { stepLandmarks, type LandmarkEntity } from './landmarks';
 
 /** Size of the pooled bullet / shell array. */
 export const PROJECTILE_POOL_SIZE = 800;
@@ -94,6 +95,7 @@ class SimWorldImpl implements SimWorld {
   readonly sams: SamSiteEntity[] = [];
   readonly ground: GroundTargetEntity[] = [];
   readonly decoys: DecoyEntity[] = [];
+  readonly landmarks: LandmarkEntity[] = [];
   readonly projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
 
@@ -359,8 +361,9 @@ class SimWorldImpl implements SimWorld {
     // 4. Ground movers
     this.updateMovers(dt);
 
-    // 5. Collisions (terrain / sea, mid-air)
-    this.collisions.update(aircraft, dt);
+    // 5. Collisions (terrain / sea, mid-air, landmarks) and landmark collapses
+    this.collisions.update(aircraft, dt, this.landmarks);
+    if (this.landmarks.length) stepLandmarks(this.landmarks, this.time, this.events, (x, z) => this.terrain.surfaceHeightAt(x, z));
 
     // 6. Fire damage over time, overstress
     this.damage.update(aircraft, dt);
@@ -486,6 +489,7 @@ class SimWorldImpl implements SimWorld {
     this.sams.length = 0;
     this.ground.length = 0;
     this.decoys.length = 0;
+    this.landmarks.length = 0;
     for (const p of this.projectiles) p.active = false;
     this.byId.clear();
     this.player = null;

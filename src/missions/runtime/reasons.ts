@@ -10,6 +10,7 @@ export const REASONS = {
   ao: 'Left the area of operations',
   time: 'Out of time',
   aborted: 'Mission aborted',
+  skytower: 'Destroyed the Sky Tower',
 } as const;
 
 const DEATH_WORDS = ['shot down', 'crashed', 'collision', 'out of fuel'];

@@ -62,7 +62,7 @@ export interface AklLandmark {
 /** Key places (lat/lon WGS84, approx; volcano summits snapped to the LINZ LiDAR DEM). Use AKL[id] for world coordinates. */
 export const AKL_LANDMARKS: AklLandmark[] = [
   // CBD & waterfront
-  { id: 'skytower', name: 'Sky Tower', kind: 'tower', lat: -36.8485, lon: 174.7622, height: 328, note: 'Tallest free-standing structure in the southern hemisphere; needle with pod at ~190-220 m' },
+  { id: 'skytower', name: 'Sky Tower', kind: 'tower', lat: -36.848471, lon: 174.762188, height: 328, note: 'Tallest free-standing structure in the southern hemisphere; shaft axis from OpenStreetMap (≈3 m from the world origin). Shape in core/skyTower.ts' },
   { id: 'cbd', name: 'Auckland CBD', kind: 'cbd', lat: -36.8470, lon: 174.7650, radius: 900, note: 'High-rise cluster (towers to ~180 m) between Viaduct, Britomart, Albert Park and Karangahape Rd' },
   { id: 'britomart', name: 'Britomart / Queens Wharf', kind: 'landmark', lat: -36.8440, lon: 174.7680 },
   { id: 'viaduct', name: 'Viaduct Harbour', kind: 'marina', lat: -36.8440, lon: 174.7575, radius: 250 },

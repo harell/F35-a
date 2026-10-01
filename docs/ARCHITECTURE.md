@@ -86,12 +86,22 @@ No per-frame allocations in hot loops: reuse module-level scratch `Vector3`/`Qua
 | Touch/tilt/keyboard/gamepad input, menus, PWA | UI | `src/input/**`, `src/ui/**`, `public/manifest.webmanifest`, `public/sw.js`, `public/icons/**`, `tools/gen-icons.mjs` | `createInput`, `createUi` |
 | Missions, campaign, scoring | MISSIONS | `src/missions/**`, `tests/missions-*.test.ts` | `CAMPAIGN`, `TRAINING`, `buildInstantMission`, `createMissionRunner`, progress fns, `terrainPadsFor` |
 
+## Protected landmarks (the Sky Tower)
+
+The Sky Tower is a sim **landmark** (`src/sim/landmarks.ts`, `SimWorld.landmarks`), not an entity: it is never in
+`aircraft` / `sams` / `ground`, so sensors, TGT cycling, AI, objectives and scoring never see it. Its shape (OpenStreetMap
+building parts) and its scripted collapse are pure data and functions in `src/core/skyTower.ts`, shared by the sim (hit
+volume, collisions, collapse explosions) and the renderer (`src/world/scenery/skyTower.ts`, posed from sim time). One hit
+from the player's bomb, AGM or AAM destroys it (`landmark:destroyed`), and the mission runner fails the sortie
+(`src/missions/runtime/landmarks.ts`). The ruin persists through `skyTowerRuin()` in `src/missions/progress.ts`, the one
+place that decides how long it stays down.
+
 ## Frame / sim order (Game.ts)
 
 ```
 input.update → player.input = controls
 fixed 60 Hz: world.step(dt) { AI brains (20 Hz) → flight model (sub-steps) → combat.update → movers
-                              → collisions → warnings → cleanup }  →  missionRunner.update
+                              → collisions (+ landmark collapses) → warnings → cleanup }  →  missionRunner.update
 render: env.update → entities.update → cameraRig.update → effects.update → cockpit.update
         renderer.render(scene, camera) → cockpit.render (2nd pass, depth cleared) → hud.update (2D canvas) → audio.update
 ```

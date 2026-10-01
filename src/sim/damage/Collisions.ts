@@ -1,16 +1,20 @@
 /**
- * F35-A — collision detection (SIM-CORE): aircraft vs terrain / sea (crash, wreck impact) and
- * mid-air collisions between aircraft (swept closest-approach test over the last step).
+ * F35-A — collision detection (SIM-CORE): aircraft vs terrain / sea (crash, wreck impact),
+ * mid-air collisions between aircraft (swept closest-approach test over the last step) and
+ * aircraft vs landmarks (the Sky Tower: crashes the aircraft, the tower is unharmed).
  */
 import { Vector3 } from 'three';
 import type { TerrainQuery } from '../api';
 import type { AircraftEntity } from '../entities';
+import { firstLandmarkHit, type LandmarkEntity } from '../landmarks';
 import type { DamageSystem } from './Damage';
 
 /** Height of the aircraft centre above the surface at which it touches down (m). */
 const CONTACT_HEIGHT = 1.5;
 /** Fraction of the summed bounding radii that counts as a collision (radii are generous). */
 const MIDAIR_FACTOR = 0.55;
+/** Fraction of an aircraft's bounding radius that pads a landmark's hit volume. */
+const LANDMARK_FACTOR = 0.4;
 
 const _mid = new Vector3();
 const _p = new Vector3();
@@ -22,9 +26,25 @@ export class CollisionSystem {
     private readonly damage: DamageSystem,
   ) {}
 
-  update(aircraft: readonly AircraftEntity[], dt: number): void {
+  update(aircraft: readonly AircraftEntity[], dt: number, landmarks?: readonly LandmarkEntity[]): void {
     this.terrainImpacts(aircraft, dt);
     this.midAir(aircraft, dt);
+    if (landmarks?.length) this.landmarkImpacts(aircraft, dt, landmarks);
+  }
+
+  /** Flying into a standing landmark: the aircraft is destroyed (a wreck tumbles down from there). */
+  private landmarkImpacts(aircraft: readonly AircraftEntity[], dt: number, landmarks: readonly LandmarkEntity[]): void {
+    for (let i = 0; i < aircraft.length; i++) {
+      const ac = aircraft[i];
+      if (!ac.alive || ac.crashed) continue;
+      _mid.copy(ac.position).addScaledVector(ac.velocity, -dt);
+      const hit = firstLandmarkHit(landmarks, _mid, ac.position, ac.radius * LANDMARK_FACTOR);
+      if (!hit) continue;
+      ac.position.lerpVectors(_mid, ac.position, hit.s);
+      this.damage.destroyAircraft(ac, null, 'collision', 'crash');
+      // the structure stops it dead: the wreck drops from the impact point
+      ac.velocity.multiplyScalar(-0.08);
+    }
   }
 
   private terrainImpacts(aircraft: readonly AircraftEntity[], dt: number): void {

@@ -18,6 +18,7 @@ import { isCombatMissile, orientAlong } from './missile';
 import { radio } from './context';
 import { pointDefensePk } from '../sam/SamSystem';
 import { SAM_INFO } from '../../core/data';
+import { STRUCTURAL_BLAST_FRACTION, destroyLandmark, firstLandmarkHit, landmarkDistance } from '../landmarks';
 
 type EndReason = 'hit' | 'proximity' | 'ground' | 'water' | 'selfdestruct' | 'decoyed';
 
@@ -214,6 +215,16 @@ function stepMissile(ctx: CombatCtx, m: CombatMissile, dt: number): void {
     return;
   }
 
+  // ── structures: a munition that flies into a landmark (the Sky Tower) goes off against it ──
+  if (world.landmarks.length) {
+    const hit = firstLandmarkHit(world.landmarks, _p0, m.position);
+    if (hit) {
+      m.position.lerpVectors(_p0, m.position, hit.s);
+      structureImpact(ctx, m);
+      return;
+    }
+  }
+
   const armed = m.age >= def.armTime;
   const target = world.getEntity(m.targetId);
 
@@ -397,7 +408,23 @@ function applyBlast(ctx: CombatCtx, m: CombatMissile, point: Vector3, primary: A
     for (const g of world.ground) hurt(g, 0.6);
   }
   if (hitHostile && shooter && shooter.kind === 'aircraft') shooter.hits++;
+  // protected landmarks: one hit from the player's bomb / AGM / AAM whose blast reaches the
+  // structure brings it down (the gun, SAMs and other aircraft's munitions do not)
+  if (world.landmarks.length && def.category !== 'sam' && shooter && shooter.kind === 'aircraft' && shooter.isPlayer) {
+    const reach = def.blastRadius * STRUCTURAL_BLAST_FRACTION;
+    for (const lm of world.landmarks) {
+      if (lm.alive && landmarkDistance(lm, point) < reach) destroyLandmark(lm, world.events, ctx.time, point, m.shooterId, def.id, shooter.position);
+    }
+  }
   return hitPrimary;
+}
+
+/** A munition flew into a structure: it goes off there if armed (bombs always do). */
+function structureImpact(ctx: CombatCtx, m: CombatMissile): void {
+  const armed = m.age >= m.cdef.armTime || m.cdef.category === 'bomb';
+  const target = ctx.world.getEntity(m.targetId);
+  const hitPrimary = armed ? applyBlast(ctx, m, m.position, target) : false;
+  finish(ctx, m, m.position, hitPrimary ? 'hit' : 'ground', 'air', armed ? m.cdef.blast : 'tiny');
 }
 
 function groundImpact(ctx: CombatCtx, m: CombatMissile, water: boolean): void {

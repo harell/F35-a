@@ -1,5 +1,5 @@
 /**
- * Auckland landmarks (primary theatre): Sky Tower, Harbour Bridge, CBD high-rise cluster, Ports of
+ * Auckland landmarks (primary theatre): SkyCity (the Sky Tower is in skyTower.ts), Harbour Bridge, CBD high-rise cluster, Ports of
  * Auckland container terminal, Westhaven & Viaduct marinas, Auckland War Memorial Museum, One Tree
  * Hill obelisk. Positions come from src/core/auckland.ts (origin = Sky Tower). The CBD's buildings are
  * the real ones (LINZ outlines + LiDAR heights) when that data is installed, else procedural towers
@@ -33,37 +33,13 @@ export function isDuplicateOfAuckland(f: SceneryFeature): boolean {
   return false;
 }
 
-/** The Sky Tower; `podium` adds a stand-in SkyCity block (the LINZ buildings have the real one). */
-export function buildSkyTower(B: GeometryBuilder, lights: LightList, height: HeightFn, podium = true): void {
+/**
+ * Stand-in SkyCity block at the foot of the Sky Tower, for the procedural CBD (the LINZ buildings
+ * have the real one). The tower itself is its own mesh (skyTower.ts).
+ */
+export function buildSkyCityPodium(B: GeometryBuilder, height: HeightFn): void {
   const { x, z } = AKL.skytower;
-  const g = height(x, z) - 2;
-  const concrete = 0xd9d7d0;
-  const glass = 0x3c5664;
-  // Podium (SkyCity) and flared base
-  if (podium) B.box(IDENT, x + 10, g, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
-  B.cylinder(IDENT, x, g, z, 11, 6.2, 16, 12, concrete, WIN_NONE, false);
-  // Shaft
-  B.cylinder(IDENT, x, g + 16, z, 6.2, 5.4, 172, 12, concrete, WIN_NONE, false);
-  // Pod: flare, observation deck, restaurant, sky deck
-  B.cylinder(IDENT, x, g + 188, z, 5.4, 16.5, 5, 16, concrete, WIN_NONE, false);
-  B.cylinder(IDENT, x, g + 193, z, 16.5, 17.5, 8, 16, glass, WIN_GLOW, false);
-  B.cylinder(IDENT, x, g + 201, z, 17.5, 19.5, 2, 16, concrete, WIN_NONE, false);
-  B.cylinder(IDENT, x, g + 203, z, 19.5, 19.5, 7, 16, glass, WIN_GLOW, false);
-  B.cylinder(IDENT, x, g + 210, z, 19.5, 11, 5, 16, concrete, WIN_NONE, true);
-  B.cylinder(IDENT, x, g + 215, z, 10, 9.5, 6, 16, glass, WIN_GLOW, false);
-  B.cylinder(IDENT, x, g + 221, z, 9.5, 4, 4, 12, concrete, WIN_NONE, true);
-  // Mast
-  B.cylinder(IDENT, x, g + 225, z, 3.2, 1.8, 75, 8, 0xe6e6e2, WIN_NONE, false);
-  B.cylinder(IDENT, x, g + 300, z, 1.2, 0.35, 30, 6, 0xf0f0ee, WIN_NONE, true);
-  // Night: aviation lights, pod ring, shaft floodlights
-  lights.add(x, g + 330, z, 0xff2a18, 5, 0.1);
-  lights.add(x, g + 300, z, 0xff2a18, 4, 0.6);
-  lights.add(x, g + 262, z, 0xffffff, 4, 0.35);
-  for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    lights.add(x + Math.cos(a) * 20.5, g + 206, z + Math.sin(a) * 20.5, 0x9fd0ff, 3);
-  }
-  for (let y = 30; y < 185; y += 30) lights.add(x, g + y, z - 8, 0xaec8ff, 5);
+  B.box(IDENT, x + 10, height(x, z) - 2, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
 }
 
 /** Auckland Harbour Bridge: 1 km, eight spans, steel truss hump over the 43 m navigation span. */

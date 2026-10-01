@@ -19,6 +19,7 @@ import {
 } from '../src/sim/entities';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { TYPE_IR, TYPE_RCS } from '../src/sim/sensors/signatures';
+import type { LandmarkEntity } from '../src/sim/landmarks';
 
 export const DT = 1 / 60;
 
@@ -68,6 +69,7 @@ export class FakeWorld implements SimWorld {
   sams: SamSiteEntity[] = [];
   ground: GroundTargetEntity[] = [];
   decoys: DecoyEntity[] = [];
+  landmarks: LandmarkEntity[] = [];
   projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
   controllers = new Map<number, Controller>();

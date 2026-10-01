@@ -8,6 +8,7 @@
 import type { Vector3 } from 'three';
 import type { ExplosionSize, MunitionId, Team, VoiceId, WarningId, WeaponId } from './types';
 import type { AircraftEntity, AnyEntity, DecoyEntity, MissileEntity, RwrContact } from '../sim/entities';
+import type { LandmarkEntity } from '../sim/landmarks';
 
 export interface GameEventMap {
   /** A missile/bomb left the rail/bay. */
@@ -55,6 +56,10 @@ export interface GameEventMap {
   'mission:end': { success: boolean; reason: string };
   /** Player took a hit (screen flash, shake, haptics). */
   'player:hit': { amount: number; direction: Vector3 | null };
+  /** A protected landmark (the Sky Tower) was destroyed: its collapse starts now. */
+  'landmark:destroyed': { landmark: LandmarkEntity; attackerId: number | null; weapon: MunitionId | null; position: Vector3 };
+  /** The falling landmark's upper section hit the ground (dust wall, rumble). `heading` = fall heading (rad). */
+  'landmark:impact': { landmark: LandmarkEntity; position: Vector3; heading: number };
   /** Player was destroyed (crash / shot down). */
   'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' };
 }

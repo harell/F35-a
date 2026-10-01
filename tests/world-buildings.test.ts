@@ -6,7 +6,7 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { GeometryBuilder, WIN_OFFICE } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
-import { buildCBD, buildSkyTower, simplifyRing } from '../src/world/scenery/auckland';
+import { buildCBD, simplifyRing } from '../src/world/scenery/auckland';
 import { aucklandRoadPaths, RoadNetwork } from '../src/world/scenery/motorways';
 import { aucklandBuildings, decodeBuildings, encodeBuildings, ringArea, ringCentroid, roofHeight, setAucklandBuildings, type BuildingPrism } from '../src/world/scenery/aucklandBuildings';
 import { aucklandStreets, pointInRing, type CbdStreets } from '../src/world/scenery/cbdStreets';
@@ -245,14 +245,6 @@ describe('the CBD built from the LINZ buildings', () => {
     });
     expect(lamps).toBeGreaterThan(600);
     expect(beacons).toBeGreaterThanOrEqual(12);
-  });
-
-  it('the Sky Tower model leaves SkyCity to the real buildings', () => {
-    const a = new GeometryBuilder();
-    const b = new GeometryBuilder();
-    buildSkyTower(a, new LightList(), height, true);
-    buildSkyTower(b, new LightList(), height, false);
-    expect(a.triangleCount - b.triangleCount).toBe(10); // the stand-in podium box
   });
 
   it('falls back to the procedural towers on the real streets without the building data', () => {

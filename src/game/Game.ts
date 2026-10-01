@@ -57,13 +57,19 @@ import {
   missionById,
   saveProgress,
   terrainPadsFor,
+  markSkyTowerDown,
+  skyTowerRuin,
 } from '../missions';
+import { COLLAPSE } from '../core/skyTower';
+import { destroyLandmark } from '../sim/landmarks';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
 /** Seconds the mission keeps running after success/failure before the debrief. */
 const END_DELAY_SUCCESS = 6;
 const END_DELAY_FAILED = 5;
+/** …or until the Sky Tower's collapse has played out (it fails the mission the moment it is hit). */
+const END_DELAY_COLLAPSE = COLLAPSE.ruinsAt + 2.6;
 
 type MissionOutcome = 'next' | 'retry' | 'menu';
 
@@ -275,6 +281,8 @@ export class Game {
 
     const scene = new Scene();
     const pads = terrainPadsFor(def);
+    // the Sky Tower stays down once destroyed (progress.ts decides for how long)
+    const towerRuin = def.theater === 'auckland' ? skyTowerRuin(this.progress) : null;
     const env = await createEnvironment(scene, this.renderer, {
       theater: def.theater,
       timeOfDay: def.timeOfDay,
@@ -284,13 +292,14 @@ export class Game {
       pads,
       quality: this.quality,
       onProgress: (f, label) => this.ui.showLoading(0.05 + f * 0.75, label),
+      skyTowerRuin: towerRuin,
     });
     this.ui.showLoading(0.82, 'Spawning forces');
     await nextFrame();
 
     const combat = createCombatSystem();
     const world = createSimWorld({ terrain: env.terrain, difficulty, events: this.events, combat });
-    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events });
+    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events, skyTowerDown: !!towerRuin });
     runner.setup(world, loadout);
 
     this.ui.showLoading(0.9, 'Arming weapons');
@@ -480,6 +489,13 @@ export class Game {
     e.on('gun:state', ({ shooterId, firing }) => {
       if (firing && isPlayer(shooterId)) buzz(15);
     });
+    // the Sky Tower stays down: save it at once (quitting before the debrief must not undo it)
+    e.on('landmark:destroyed', ({ landmark }) => {
+      if (!this.session || !this.session.world.landmarks.includes(landmark)) return;
+      this.progress = markSkyTowerDown(this.progress, landmark.fallHeading);
+      saveProgress(this.progress);
+      buzz([80, 40, 200]);
+    });
   }
 
   private openPauseMenu(): void {
@@ -565,7 +581,10 @@ export class Game {
 
       // Mission end handling
       if (s.runner.state !== 'running') {
-        if (s.endTimer < 0) s.endTimer = s.runner.state === 'success' ? END_DELAY_SUCCESS : END_DELAY_FAILED;
+        if (s.endTimer < 0) {
+          const collapse = s.world.landmarks.some((l) => !l.alive);
+          s.endTimer = s.runner.state === 'success' ? END_DELAY_SUCCESS : collapse ? END_DELAY_COLLAPSE : END_DELAY_FAILED;
+        }
         s.endTimer -= dt;
         if (s.endTimer <= 0) {
           s.resolve('ended');
@@ -736,6 +755,7 @@ export class Game {
                 ground: s.world.ground.filter((m) => m.alive).length,
               }
             : null,
+          skyTower: s ? (s.world.landmarks.find((l) => l.id === 'skytower')?.alive ?? null) : null,
           objectives: s?.runner.objectives ?? [],
           renderer: { calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles },
         };
@@ -788,6 +808,15 @@ export class Game {
       /** Override (merge) player controls, e.g. {pitch: 1, throttle: 1}; null clears. */
       controls: (c: Partial<ControlInput> | null) => {
         this.controlOverride = c;
+      },
+      /** Knock the Sky Tower down as if the player's JDAM hit it at height `y` (m above its base, from the east). */
+      destroySkyTower: (y = 120) => {
+        const s = this.session;
+        const lm = s?.world.landmarks.find((l) => l.id === 'skytower');
+        const p = s?.world.player;
+        if (!s || !lm || !p) return false;
+        destroyLandmark(lm, this.events, s.world.time, new Vector3(lm.base.x + 12, lm.base.y + y, lm.base.z), p.id, 'gbu31', p.position);
+        return true;
       },
       /** Target camera (PiP) state: window rect, target shown, last rendered target. */
       targetCam: () => ({

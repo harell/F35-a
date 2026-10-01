@@ -95,6 +95,7 @@ const world = {
   sams: [] as SamSiteEntity[],
   ground: [] as GroundTargetEntity[],
   decoys: [] as DecoyEntity[],
+  landmarks: [],
   projectiles: [] as Projectile[],
   player: null as AircraftEntity | null,
   nextId: () => idSeq++,

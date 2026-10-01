@@ -7,21 +7,40 @@
  */
 import type { CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
 import { isDeathReason } from './runtime/reasons';
+import type { MissionResultExt } from './runtime/resultExt';
 import { gradeRank } from './runtime/scoring';
 
 export const PROGRESS_KEY = 'f35a.progress.v1';
 
 /**
  * Extra, optional progress data kept inside the saved object (outside the CampaignProgress
- * contract): consecutive failures per campaign mission and missions skipped with skipMission().
- * The UI reads them through failStreak() / wasSkipped() — e.g. to offer "Retry on Recruit" /
- * "Skip mission" after repeated failures.
+ * contract): consecutive failures per campaign mission, missions skipped with skipMission() and
+ * the destroyed Sky Tower. The UI reads them through failStreak() / wasSkipped() — e.g. to offer
+ * "Retry on Recruit" / "Skip mission" after repeated failures — and the game through skyTowerRuin().
  */
 export interface ProgressExtras {
   failStreak?: Record<string, number>;
   skipped?: string[];
+  /** The player brought the Sky Tower down (fall heading, rad): Auckland sorties show its ruin. */
+  skyTowerDown?: { fallHeading: number };
 }
 type Ext = CampaignProgress & ProgressExtras;
+
+/**
+ * The Sky Tower's ruin, if it is down in this save (else null). This is the one place that decides
+ * how long it stays down — currently for good (issue #16, option (a)): only a fresh save brings it
+ * back. A "the city rebuilds" rule would clear the flag here (or in applyResult).
+ */
+export function skyTowerRuin(p: CampaignProgress): { fallHeading: number } | null {
+  const d = (p as Ext).skyTowerDown;
+  return d && typeof d.fallHeading === 'number' && isFinite(d.fallHeading) ? { fallHeading: d.fallHeading } : null;
+}
+
+/** Record the Sky Tower as destroyed (returns a new object; a tower already down keeps its first ruin). */
+export function markSkyTowerDown(p: CampaignProgress, fallHeading: number): CampaignProgress {
+  if (skyTowerRuin(p)) return p;
+  return { ...(p as Ext), skyTowerDown: { fallHeading } } as Ext;
+}
 
 /** Consecutive failed attempts at a mission (0 after a success). */
 export function failStreak(p: CampaignProgress, missionId: string): number {
@@ -43,6 +62,7 @@ export function skipMission(p: CampaignProgress, missionId: string, campaign: Mi
   const i = campaign.findIndex((m) => m.id === missionId);
   if (i >= 0 && i + 1 < campaign.length && !next.unlocked.includes(campaign[i + 1].id)) next.unlocked.push(campaign[i + 1].id);
   if (!next.skipped!.includes(missionId)) next.skipped!.push(missionId);
+  if (src.skyTowerDown) next.skyTowerDown = { ...src.skyTowerDown };
   return next;
 }
 
@@ -87,6 +107,8 @@ export function sanitizeProgress(raw: unknown, campaign: MissionDef[], training:
     for (const [id, n] of Object.entries(ext.failStreak)) if (num(n) > 0) out.failStreak[id] = num(n);
   }
   if (Array.isArray(ext.skipped)) out.skipped = ext.skipped.filter((id): id is string => typeof id === 'string');
+  const ruin = skyTowerRuin(raw as CampaignProgress);
+  if (ruin) out.skyTowerDown = ruin;
   return out;
 }
 
@@ -124,6 +146,9 @@ export function applyResult(p: CampaignProgress, r: MissionResult, campaign: Mis
     failStreak: { ...(src.failStreak ?? {}) },
   };
   if (src.skipped) next.skipped = [...src.skipped];
+  if (src.skyTowerDown) next.skyTowerDown = { ...src.skyTowerDown };
+  const towerDown = (r as MissionResultExt).skyTowerDown;
+  if (towerDown && !next.skyTowerDown) next.skyTowerDown = { fallHeading: towerDown.fallHeading };
   // consecutive failures (the UI can offer Recruit / skip after a few)
   if (r.success) delete next.failStreak![r.missionId];
   else next.failStreak![r.missionId] = (next.failStreak![r.missionId] ?? 0) + 1;

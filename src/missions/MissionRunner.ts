@@ -10,7 +10,8 @@
  *
  * Helper modules live in ./runtime (state, spawner, conditions, objectives, awacs, hints,
  * callouts, survival, scoring, rearm (Winchester / Whenuapai rearm point), withdrawal (bandits
- * that bug out count as driven off), debrief (tips, medals)).
+ * that bug out count as driven off), debrief (tips, medals), landmarks (the Sky Tower: destroying
+ * it fails the mission)).
  * dispose(): detaches every event handler and drops the world / entity references (Game calls it
  * on teardown — restarts must not leak the previous session).
  */
@@ -37,6 +38,7 @@ import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitia
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { SurvivalDirector } from './runtime/survival';
 import { CivilTraffic } from './runtime/civil';
+import { LandmarkWatch } from './runtime/landmarks';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
@@ -69,6 +71,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly withdrawal: WithdrawalMonitor;
   /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
   private readonly civil: CivilTraffic | null;
+  /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
+  private readonly landmarks: LandmarkWatch;
   private finalResult: MissionResult | null = null;
   private evalAcc = 0;
   private outsideAo = 0;
@@ -109,6 +113,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
     this.survival = def.script.survival ? new SurvivalDirector(this.s) : null;
     this.civil = def.theater === 'auckland' && deps.civilTraffic !== false ? new CivilTraffic(this.s) : null;
+    this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
   }
 
   /* ───────────────────────────── API ───────────────────────────── */
@@ -139,6 +144,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.disposed) return;
     s.disposed = true;
     this.callouts.detach();
+    this.landmarks.detach();
     s.radio.clear();
     this.hints.clear();
     s.world = null as unknown as SimWorld;
@@ -158,6 +164,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const p = spawnPlayer(s, loadout);
     spawnInitial(s);
     this.civil?.setup();
+    this.landmarks.setup();
     this.rearm.init(p, loadout);
     this.callouts.attach();
     // ground-level steering for target waypoints without an explicit altitude
@@ -265,6 +272,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     (r as MissionResultExt).teamKills = team;
     (r as MissionResultExt).playerShare = sc.playerShare;
     if (s.civilianKills > 0) (r as MissionResultExt).civilianKills = s.civilianKills;
+    const towerDown = this.landmarks.downHeading;
+    if (towerDown !== null) (r as MissionResultExt).skyTowerDown = { fallHeading: towerDown };
     r.tips = buildTips(s, r);
     r.medals = awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
