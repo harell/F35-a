@@ -6,7 +6,8 @@
  * Threshold positions are the runway centrelines' end vertices in OpenStreetMap (© OpenStreetMap
  * contributors, ODbL 1.0; extract of 2026-09-25, see tools/osm/README.md). tests/world-osm.test.ts checks
  * them against the baked file, so a re-bake that moves a runway fails until this table follows it. Widths
- * and surfaces are the published (AIP) values where OSM has none or tags the runway strip instead.
+ * are OSM's except where it has none or tags the runway strip (Ardmore's 110 m): those (Ardmore 30 m,
+ * North Shore 18 m sealed / 30 m grass) are approximate and not yet checked against the AIP.
  * Taxiways, aprons, hangars and the levelled outline come from the baked layer (src/world/scenery/aucklandOsm.ts).
  *
  * `a` is the threshold of the first designator (an aircraft landing on "03" crosses `a` first and rolls
@@ -88,7 +89,7 @@ const defs: Omit<AirfieldDef, 'x' | 'z'>[] = [
     name: 'Ardmore Airport',
     icao: 'NZAR',
     style: 'civil',
-    // OSM tags the 110 m runway strip; the sealed runway is 30 m wide (AIP NZ)
+    // OSM tags the 110 m runway strip; the sealed runway is ≈ 30 m wide (approximate, see above)
     runways: [{ ref: '03/21', a: [-37.035224, 174.968933], b: [-37.026499, 174.980047], width: 30, paved: true }],
     apronSide: 'right',
   },
