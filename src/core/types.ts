@@ -23,7 +23,7 @@
  */
 
 /**
- * 'neutral' = civilian traffic (airliners). Neither side treats neutrals as hostile: AI, SAMs and
+ * 'neutral' = civilian traffic (airliners, merchant ships). Neither side treats neutrals as hostile: AI, SAMs and
  * sensors' threat logic ignore them, but the human player can still designate, lock and shoot them.
  */
 export type Team = 'blue' | 'red' | 'neutral';
@@ -80,6 +80,12 @@ export type GroundTargetType =
   | 'ship' // corvette / frigate (can move)
   | 'factory' // industrial building
   | 'bridge'; // bridge span
+
+/**
+ * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):
+ * picks the model, hull size and callouts. Military ships (corvettes, landing ships) have none.
+ */
+export type VesselClass = 'container' | 'cruise';
 
 export type WeaponId =
   | 'gun' // GAU-22/A 25 mm, 180 rds

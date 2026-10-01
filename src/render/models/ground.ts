@@ -1,13 +1,15 @@
 /**
  * Ground target prototypes: EWR (rotating array on a mast), command bunker, fuel farm, hardened
- * aircraft shelter, parked jet, truck, tank, corvette (with wake), factory, bridge.
+ * aircraft shelter, parked jet, truck, tank, corvette (with wake), factory, bridge, plus the civil
+ * container ship and cruise liner (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  *  'span:mid' bridge middle span (drops when destroyed)
  *  'wake'     ship wake (scaled with speed)
  */
 import { BufferGeometry, Float32BufferAttribute, Group, Mesh, Object3D } from 'three';
-import type { GroundTargetType } from '../../core/types';
+import type { GroundTargetType, VesselClass } from '../../core/types';
+import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
 import { loftRings, prismX, prismZ } from './geom/loft';
 import { capsuleRing } from './aircraft/parts';
@@ -29,7 +31,8 @@ export interface GroundPrototype {
 
 const cache = new Map<string, GroundPrototype>();
 
-function build(type: GroundTargetType, pal: Palette): GroundPrototype {
+function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null = null): GroundPrototype {
+  if (type === 'ship' && vessel) return buildMerchant(vessel);
   const root = new Group();
   root.name = `ground:${type}`;
   const statics: BufferGeometry[] = [];
@@ -250,15 +253,111 @@ function build(type: GroundTargetType, pal: Palette): GroundPrototype {
   return { type, root, spinners, wreck, radius, farScale };
 }
 
+/**
+ * Civil merchant ship, waterline at y = 0, bow at -Z: a lofted hull, then container bays and the
+ * aft accommodation block (container ship) or the stacked white decks of a cruise liner, a funnel,
+ * a radar on the mast ('spin:0') and a wake. Sizes match VESSEL_DATA (sim hit volume).
+ */
+function buildMerchant(vessel: VesselClass): GroundPrototype {
+  const root = new Group();
+  root.name = `ground:ship:${vessel}`;
+  const statics: BufferGeometry[] = [];
+  const cruise = vessel === 'cruise';
+  const L = cruise ? 290 : 270;
+  const B = cruise ? 36 : 34;
+  const F = cruise ? 14 : 12; // freeboard: main deck height above the waterline
+  const hullCol = cruise ? 0xeef0ee : 0x22303f;
+  // hull: fine bow at -Z (with a little sheer), full body, transom stern at +Z
+  const hw = B / 2;
+  const hull = loftRings(
+    [
+      [-L / 2, 0.06, 1.12],
+      [-L / 2 + 10, 0.4, 1.08],
+      [-L / 2 + 34, 0.82, 1.03],
+      [-L / 2 + 70, 1, 1],
+      [L / 2 - 30, 1, 1],
+      [L / 2 - 6, 0.92, 1.02],
+      [L / 2, 0.86, 1.03],
+    ].map(([z, k, sh]) => {
+      const w = hw * k;
+      const top = F * sh;
+      return { z, ring: [0, -3, w * 0.8, -2.4, w, 0, w, top, 0, top + 0.3, -w, top, -w, 0, -w * 0.8, -2.4] };
+    }),
+    { capEnd: true, creases: [2, 3, 5, 6], color: hullCol },
+  );
+  statics.push(hull);
+  // red boot-topping just above the waterline
+  statics.push(place(box(B * 1.004, 1.2, L * 0.86, 0x8a2a22), [0, 0.4, 6]));
+  // main deck
+  statics.push(place(box(B * 0.98, 0.4, L * 0.84, cruise ? 0x9a8a72 : 0x5c6064), [0, F + 0.2, 8]));
+  const spin = new Object3D();
+  spin.name = 'spin:0';
+  let funnel: [number, number];
+  if (!cruise) {
+    // container bays forward of the accommodation block (deterministic colours)
+    const rnd = mulberry32(270);
+    const colors = [0xb03a2e, 0x2e5a9a, 0x2f7a4a, 0xd87a2a, 0xe8e6e0, 0x6a6e72, 0x1f3f6a, 0x8a6a3a, 0x3a8a9a];
+    for (let z = -L / 2 + 30; z < L / 2 - 52; z += 13.6) {
+      const tiers = 3 + ((rnd() * 4) | 0);
+      for (const sx of [-1, 1]) statics.push(place(box(B * 0.45, 2.6 * tiers, 12.4, colors[(rnd() * colors.length) | 0]), [sx * B * 0.235, F + 1.3 * tiers, z]));
+    }
+    // accommodation block, bridge wings, funnel
+    const za = L / 2 - 40;
+    statics.push(place(box(B * 0.7, 22, 14, 0xf0f0ec), [0, F + 11, za]));
+    statics.push(place(box(B * 1.04, 3, 9, 0xf0f0ec), [0, F + 23.5, za - 2]), place(box(B * 0.8, 1.2, 0.3, 0x1c2328), [0, F + 23.6, za - 6.6]));
+    statics.push(place(box(5, 9, 3, 0xf0f0ec), [0, F + 29, za]));
+    funnel = [F + 10, za + 16];
+    spin.position.set(0, F + 34, za);
+    // forecastle
+    statics.push(place(box(B * 0.6, 3, 16, hullCol), [0, F + 1.5, -L / 2 + 16]));
+  } else {
+    // stacked superstructure: white decks with dark window / balcony bands, stepped in fore and aft
+    for (let t = 0; t < 7; t++) {
+      const len = L * (0.8 - t * 0.045);
+      const w = B * (0.96 - t * 0.03);
+      const zc = 18 + t * 2;
+      const y = F + t * 3.4;
+      // recessed window / balcony band, then the white deck above it (white deck tops)
+      statics.push(place(box(w * 0.97, 1.1, len * 0.97, t < 2 ? 0x30404e : 0x41566a), [0, y + 0.55, zc]));
+      statics.push(place(box(w, 2.3, len, 0xf6f6f2), [0, y + 2.25, zc]));
+    }
+    const top = F + 7 * 3.4;
+    // bridge at the front of the top deck, lifeboats along both sides of deck 2
+    statics.push(place(box(B * 1.02, 3.2, 10, 0xf6f6f2), [0, top - 2, -L * 0.24]), place(box(B * 0.9, 1, 0.3, 0x1c2328), [0, top - 1.6, -L * 0.24 - 5.1]));
+    for (let z = -L * 0.2; z < L * 0.25; z += 13) for (const sx of [-1, 1]) statics.push(place(box(3, 2.4, 9, 0xf08a1a), [sx * (B * 0.5 + 0.8), F + 5.6, z]));
+    statics.push(place(box(B * 0.5, 3, 30, 0x2a6a9a), [0, top + 1.5, 30])); // pool deck / lido roof
+    funnel = [top + 1, 60];
+    spin.position.set(0, top + 10, -L * 0.2);
+    statics.push(place(box(1.2, 10, 1.2, 0xd8dcdc), [0, top + 5, -L * 0.2]));
+  }
+  // funnel: company colours (blue with a white band and a black top)
+  const [fy, fz] = funnel;
+  const fH = cruise ? 12 : 14;
+  statics.push(place(box(cruise ? 9 : 6.5, fH, cruise ? 14 : 8, 0x1f4f8a), [0, fy + fH / 2, fz]));
+  statics.push(place(box(cruise ? 9.1 : 6.6, 1.6, cruise ? 14.1 : 8.1, 0xf2f2ee), [0, fy + fH * 0.62, fz]), place(box(cruise ? 9.2 : 6.7, 1.4, cruise ? 14.2 : 8.2, 0x161a1c), [0, fy + fH + 0.7, fz]));
+  // mast + rotating radar
+  spin.add(meshFrom(panel(5, 0.7, 0.3, 0x3a3e40), 'building'));
+  root.add(spin);
+  const spinners = [{ name: 'spin:0', rate: 2.2 }];
+  const wake = new Mesh(makeWake(L, B / 2, 260), getMaterial('wake'));
+  wake.name = 'wake';
+  wake.renderOrder = 2;
+  root.add(wake);
+  const body = meshFrom(statics, 'building');
+  body.name = 'static';
+  root.add(body);
+  return { type: 'ship', root, spinners, wreck: 'ship', radius: L / 2, farScale: 3.5 };
+}
+
 /** Flat V-shaped wake strip on the water behind the stern (+Z), vertex colour fading to black (additive). */
-function makeWake(L: number): BufferGeometry {
+function makeWake(L: number, halfBeam = 5, len = 140): BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const N = 8;
-  const len = 140;
+  const spread = (34 * len) / 140;
   const at = (i: number) => {
     const t = i / N;
-    return { z: L / 2 - 4 + t * len, w: 5 + t * 34, k: Math.pow(1 - t, 1.6) * 0.9 };
+    return { z: L / 2 - 4 + t * len, w: halfBeam + t * spread, k: Math.pow(1 - t, 1.6) * 0.9 };
   };
   for (let i = 0; i < N; i++) {
     const a = at(i);
@@ -286,11 +385,11 @@ function makeWake(L: number): BufferGeometry {
   return g;
 }
 
-export function getGroundPrototype(type: GroundTargetType, palette: PaletteId = 'green'): GroundPrototype {
-  const key = `${type}:${palette}`;
+export function getGroundPrototype(type: GroundTargetType, palette: PaletteId = 'green', vessel: VesselClass | null = null): GroundPrototype {
+  const key = type === 'ship' && vessel ? `ship:${vessel}` : `${type}:${palette}`;
   let p = cache.get(key);
   if (!p) {
-    p = build(type, PALETTES[palette]);
+    p = build(type, PALETTES[palette], vessel);
     cache.set(key, p);
   }
   return p;

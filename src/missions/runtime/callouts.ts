@@ -115,13 +115,22 @@ export class Callouts {
 
     // neutral civil traffic: never a kill — a player shoot-down is a civilian loss
     if (entity.team === 'neutral') {
-      const flight = entity.kind === 'aircraft' ? entity.callsign : entity.name;
+      const ship = entity.kind === 'ground' && entity.type === 'ship';
+      const who = entity.kind === 'aircraft' ? entity.callsign : entity.name;
       if (byPlayer) {
-        if (running) s.civilianKills++;
-        s.hud('CIVILIAN AIRLINER DOWN', 'bad', 3.5);
-        s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${flight}!`, priority: 4 });
+        if (running) {
+          s.civilianKills++;
+          if (ship) s.civilianShipKills++;
+        }
+        if (ship) {
+          s.hud('CIVILIAN SHIP DESTROYED', 'bad', 3.5);
+          s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian vessel ${who}!`, priority: 4 });
+        } else {
+          s.hud('CIVILIAN AIRLINER DOWN', 'bad', 3.5);
+          s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${who}!`, priority: 4 });
+        }
       } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {
-        s.hud(`CIVIL ${flight} DOWN`, 'bad', 2.5);
+        s.hud(ship ? `CIVIL SHIP ${who.toUpperCase()} DESTROYED` : `CIVIL ${who} DOWN`, 'bad', 2.5);
       }
       return;
     }

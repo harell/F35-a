@@ -57,7 +57,7 @@ function hostileAircraft(e: AnyEntity | null, ac: AircraftEntity): e is Aircraft
 function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number; maxRange: number }, requested: number | null): AnyEntity | null {
   const world = ctx.world;
   const pick = world.getEntity(requested ?? ac.radar.designatedId);
-  if (pick && pick.alive && pick.team !== ac.team) {
+  if (pick && pick.alive && pick.team !== ac.team && pick.team !== 'neutral') {
     if (pick.kind === 'sam' && (pick.radarOn || pick.known)) return pick;
     if (pick.kind === 'ground' && pick.emitter) return pick;
   }
@@ -66,7 +66,7 @@ function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number;
   let best: AnyEntity | null = null;
   let bestCos = cosFov;
   const consider = (e: AnyEntity, emitting: boolean): void => {
-    if (!e.alive || e.team === ac.team || !emitting) return;
+    if (!e.alive || e.team === ac.team || e.team === 'neutral' || !emitting) return; // emitters only, never civil traffic
     _rel.subVectors(e.position, ac.position);
     const d = _rel.length();
     if (d > def.maxRange * 1.3 || d < 1) return;

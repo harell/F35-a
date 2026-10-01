@@ -5,7 +5,7 @@
  *   kills (air 100, SAM 150, ground 75) + objective bonuses (500 primary / 250 secondary)
  *   + time bonus (success only, up to 300) + accuracy bonus (up to 250)
  *   + stunt bonus (Harbour Bridge) − damage penalty (2 per HP lost) − 150 per friendly loss
- *   − 500 per civil airliner the player shot down,
+ *   − 500 per civil airliner or ship the player destroyed,
  *   all × difficulty.scoreMultiplier, floored at 0.
  *
  * Grade: from a 0..1 performance rating that is independent of mission size (objective
@@ -30,7 +30,7 @@ export const POINTS = {
   accuracyMax: 250,
   damagePerHp: 2,
   friendlyLoss: 150,
-  /** Civil airliner shot down by the player. */
+  /** Civil airliner or ship destroyed by the player. */
   civilian: 500,
   /** Survival: points per wave cleared. */
   wave: 300,
@@ -58,7 +58,7 @@ export interface ScoreInput {
   /** Player HP lost (0..100). */
   damageTaken: number;
   friendlyLosses: number;
-  /** Neutral airliners the player shot down. */
+  /** Neutral civil traffic (airliners + ships) the player destroyed. */
   civilianKills?: number;
   /** Extra stunt points (flying under the Harbour Bridge…). */
   bonus: number;

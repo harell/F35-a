@@ -48,7 +48,7 @@ export const NATO_SAM: Record<SamType, string> = {
 
 export type PipTone = 'main' | 'warn' | 'danger' | 'dim' | 'good' | 'civil';
 
-/** Civil traffic (neutral airliners): drawn in white like the HMD's CIV boxes, never as a threat. */
+/** Civil traffic (neutral airliners, ships): drawn in white like the HMD's CIV boxes, never as a threat. */
 export function isCivil(t: AnyEntity): boolean {
   return t.team === 'neutral';
 }
@@ -73,6 +73,7 @@ export function pipName(t: AnyEntity, short = false): string {
     const cs = (t.callsign || t.name).toUpperCase();
     return short ? cs : `${cs} ${AIRCRAFT_LABEL[t.type] ?? ''}`.trim();
   }
+  if (t.kind === 'ground' && isCivil(t)) return t.name.toUpperCase(); // civil ship: its name
   if (short && t.kind === 'aircraft') return AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase();
   if (short && t.kind === 'sam') return SAM_LABEL[t.type] ?? t.type.toUpperCase();
   if (t.kind === 'aircraft') return `${AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase()} ${NATO_AIR[t.type] ?? ''}`.trim();
@@ -88,8 +89,9 @@ export function pipName(t: AnyEntity, short = false): string {
  */
 export function pipStatus(t: AnyEntity, playerPos: { x: number; y: number; z: number }, locked = false): { text: string; tone: PipTone } {
   if (isCivil(t)) {
-    if (!t.alive) return { text: 'DOWN', tone: 'danger' };
+    if (!t.alive) return { text: t.kind === 'ground' ? 'SINKING' : 'DOWN', tone: 'danger' };
     if (locked) return { text: 'CHECK FIRE', tone: 'warn' };
+    if (t.kind === 'ground') return { text: t.velocity.lengthSq() > 0.25 ? 'UNDERWAY' : 'CIVIL', tone: 'civil' };
     const phase = t.kind === 'aircraft' ? t.civil?.phase : undefined;
     return { text: phase ? CIVIL_PHASE[phase] : 'CIVIL', tone: 'civil' };
   }

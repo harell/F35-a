@@ -44,8 +44,10 @@ describe('MissionRunner: setup', () => {
 
   it('applies ground spawns: ships, pop-up SAMs, known flags', () => {
     const h = harness(byId('c06'));
-    expect(h.world.ground.filter((g) => g.type === 'ship')).toHaveLength(3);
-    const moving = h.world.ground.filter((g) => g.path);
+    // the mission's own (hostile) ships; neutral civil shipping is spawned on top of them
+    const own = h.world.ground.filter((g) => g.team !== 'neutral');
+    expect(own.filter((g) => g.type === 'ship')).toHaveLength(3);
+    const moving = own.filter((g) => g.path);
     expect(moving).toHaveLength(2);
     const pop = harness(byId('c03'), 'veteran').world.sams.find((s) => s.type === 'sa15')!;
     expect(pop.state).toBe('emcon');

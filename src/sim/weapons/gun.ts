@@ -8,10 +8,11 @@
 import { Vector3 } from 'three';
 import { G, clamp, forwardOf } from '../../core/math';
 import { atmosphere } from '../../core/atmosphere';
-import type { Team } from '../../core/types';
+import { isHostile, type Team } from '../../core/types';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, Projectile, SamSiteEntity } from '../entities';
 import type { LaunchZone } from '../api';
 import { firstLandmarkHit } from '../landmarks';
+import { vesselSegmentHit } from '../civil/vessels';
 import type { AcCombatState, CombatCtx } from './context';
 import { gaussian, radio } from './context';
 import { GUNS, type GunDef } from './defs';
@@ -240,7 +241,7 @@ function hitTest(ctx: CombatCtx, p: Projectile, dt: number): boolean {
       const weapon = p.flak ? 'flak' : 'gun';
       world.applyDamage(ac, p.damage * roundEnergyFactor(p), p.shooterId, weapon, p.position);
       const shooter = world.getEntity(p.shooterId);
-      if (shooter && shooter.kind === 'aircraft') markBurstHit(shooter);
+      if (shooter && shooter.kind === 'aircraft' && isHostile(shooter.team, ac.team)) markBurstHit(shooter);
       impact(ctx, p, 'target', ac.id);
       return true;
     }
@@ -276,13 +277,18 @@ function strafeHit(ctx: CombatCtx, p: Projectile, shooter: AircraftEntity, list:
     const dx = g.position.x - p.position.x;
     const dz = g.position.z - p.position.z;
     if (dx * dx + dz * dz > (stepLen + g.radius) ** 2) continue;
-    _rel0.subVectors(p.prevPosition, g.position);
-    _rel1.subVectors(p.position, g.position);
-    const r = segDistToOrigin(_rel0, _rel1);
-    if (r.d <= g.radius * 0.6) {
-      p.position.lerpVectors(p.prevPosition, p.position, r.s);
+    let s = -1;
+    if (g.kind === 'ground' && g.vessel) s = vesselSegmentHit(g, p.prevPosition, p.position); // long hull, not a sphere
+    else {
+      _rel0.subVectors(p.prevPosition, g.position);
+      _rel1.subVectors(p.position, g.position);
+      const r = segDistToOrigin(_rel0, _rel1);
+      if (r.d <= g.radius * 0.6) s = r.s;
+    }
+    if (s >= 0) {
+      p.position.lerpVectors(p.prevPosition, p.position, s);
       ctx.world.applyDamage(g, p.damage * roundEnergyFactor(p), p.shooterId, 'gun', p.position);
-      markBurstHit(shooter);
+      if (isHostile(shooter.team, g.team)) markBurstHit(shooter); // civil traffic is no "hit" for accuracy
       impact(ctx, p, 'target', g.id);
       return true;
     }

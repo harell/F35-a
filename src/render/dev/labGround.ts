@@ -1,10 +1,11 @@
 /**
- * DEV ONLY — SAM site / ground target preview for the models lab (sam:<type>, gt:<type>).
+ * DEV ONLY — SAM site / ground target preview for the models lab (sam:<type>, gt:<type>,
+ * gt:ship:container / gt:ship:cruise for the civil merchant ships).
  * Animates radars/launchers with fake entity state; &dead=1 shows the wreck; &pal=desert|grey.
  */
 import { Group, Scene, Vector3 } from 'three';
 import { GroundTargetEntity, SamSiteEntity } from '../../sim/entities';
-import type { GroundTargetType, SamType } from '../../core/types';
+import type { GroundTargetType, SamType, VesselClass } from '../../core/types';
 import { getSamPrototype } from '../models/sams';
 import { getGroundPrototype } from '../models/ground';
 import { GroundVisual, SamVisual } from '../visuals/SiteVisuals';
@@ -32,11 +33,12 @@ export function buildLabGround(id: string, _scene: Scene, onUpdate: (fn: (t: num
     });
     return { object: holder, radius: v.proto.radius * 1.1 };
   }
-  const type = id.slice(3) as GroundTargetType;
-  const e = new GroundTargetEntity(1, type, 'red');
+  const [type, vessel] = id.slice(3).split(':') as [GroundTargetType, VesselClass | undefined];
+  const e = new GroundTargetEntity(1, type, vessel ? 'neutral' : 'red');
+  e.vessel = vessel ?? null;
   e.alive = !dead;
   if (type === 'ship') e.velocity.set(0, 0, -10);
-  const v = new GroundVisual(getGroundPrototype(type, pal));
+  const v = new GroundVisual(getGroundPrototype(type, pal, e.vessel));
   holder.add(v.root);
   onUpdate((t, dt) => {
     v.update(e, t, dt, cam.set(0, 0, 100), 1e9);

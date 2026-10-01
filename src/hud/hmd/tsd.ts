@@ -236,11 +236,12 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     if (sam.id === des || sam.id === lock) ringHighlight(pen, x, y, s, c, sam.id === lock);
   }
   for (const gt of world.ground) {
-    if (!gt.alive || gt.team === p.team || !gt.known) continue;
+    if (!gt.alive || gt.team === p.team || (!gt.known && !tracked(p, gt.id))) continue;
     map(gt.position.x, gt.position.z);
     pen.begin();
     pen.rect(pt.x - 3.2 * s, pt.y - 3.2 * s, 6.4 * s, 6.4 * s);
-    pen.strokePlain(c.ground, 1.3 * lw);
+    // civil ships (sensor tracks only): neutral (text) colour, like civil air traffic
+    pen.strokePlain(gt.team === 'neutral' ? c.text : c.ground, 1.3 * lw);
     if (gt.id === des || gt.id === lock) ringHighlight(pen, pt.x, pt.y, s, c, gt.id === lock);
   }
 
@@ -329,6 +330,13 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
 
   g.restore();
   pen.reset();
+}
+
+/** Is `id` in the ownship's sensor picture? */
+function tracked(p: AircraftEntity, id: number): boolean {
+  const cs = p.radar.contacts;
+  for (let i = 0; i < cs.length; i++) if (cs[i].id === id) return true;
+  return false;
 }
 
 function ringHighlight(pen: Pen, x: number, y: number, s: number, c: TsdColors, locked: boolean): void {
