@@ -52,7 +52,7 @@ export interface AklLandmark {
   note?: string;
 }
 
-/** Key places (lat/lon WGS84, approx). Use AKL[id] for world coordinates. */
+/** Key places (lat/lon WGS84, approx; volcano summits snapped to the LINZ LiDAR DEM). Use AKL[id] for world coordinates. */
 export const AKL_LANDMARKS: AklLandmark[] = [
   // CBD & waterfront
   { id: 'skytower', name: 'Sky Tower', kind: 'tower', lat: -36.8485, lon: 174.7622, height: 328, note: 'Tallest free-standing structure in the southern hemisphere; needle with pod at ~190-220 m' },
@@ -74,8 +74,8 @@ export const AKL_LANDMARKS: AklLandmark[] = [
 
   // North Shore
   { id: 'devonport', name: 'Devonport', kind: 'suburb', lat: -36.8310, lon: 174.7960 },
-  { id: 'north_head', name: 'North Head (Maungauika)', kind: 'volcano', lat: -36.8270, lon: 174.8110, height: 65, radius: 450 },
-  { id: 'mt_victoria_dp', name: 'Mt Victoria (Takarunga)', kind: 'volcano', lat: -36.8285, lon: 174.7980, height: 87, radius: 350 },
+  { id: 'north_head', name: 'North Head (Maungauika)', kind: 'volcano', lat: -36.8276, lon: 174.8121, height: 64, radius: 450 },
+  { id: 'mt_victoria_dp', name: 'Mt Victoria (Takarunga)', kind: 'volcano', lat: -36.8266, lon: 174.7990, height: 82, radius: 350 },
   { id: 'northcote', name: 'Northcote', kind: 'suburb', lat: -36.8050, lon: 174.7480 },
   { id: 'takapuna', name: 'Takapuna', kind: 'suburb', lat: -36.7880, lon: 174.7700 },
   { id: 'pupuke', name: 'Lake Pupuke', kind: 'lake', lat: -36.7810, lon: 174.7650, radius: 550, note: 'Crater lake' },
@@ -85,23 +85,23 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'tiritiri', name: 'Tiritiri Matangi Island', kind: 'island', lat: -36.6010, lon: 174.8910, radius: 1300, height: 90 },
 
   // Hauraki Gulf islands (enemy-held in the campaign fiction)
-  { id: 'rangitoto', name: 'Rangitoto Island', kind: 'volcano', lat: -36.7870, lon: 174.8600, height: 260, radius: 2800, note: 'Near-perfectly symmetric basalt shield volcano, dark bush-covered lava fields, summit craters' },
+  { id: 'rangitoto', name: 'Rangitoto Island', kind: 'volcano', lat: -36.7867, lon: 174.8584, height: 259, radius: 2800, note: 'Near-perfectly symmetric basalt shield volcano, dark bush-covered lava fields, summit craters' },
   { id: 'motutapu', name: 'Motutapu Island', kind: 'island', lat: -36.7700, lon: 174.9050, height: 120, radius: 2600, note: 'Grassy rolling farmland, joined to Rangitoto by a causeway at the NW' },
-  { id: 'browns_is', name: 'Browns Island (Motukorea)', kind: 'volcano', lat: -36.8330, lon: 174.8950, height: 68, radius: 600 },
+  { id: 'browns_is', name: 'Browns Island (Motukorea)', kind: 'volcano', lat: -36.8291, lon: 174.8955, height: 65, radius: 600 },
   { id: 'waiheke_w', name: 'Waiheke Island (Oneroa, west)', kind: 'island', lat: -36.7850, lon: 175.0100 },
   { id: 'waiheke', name: 'Waiheke Island (centre)', kind: 'island', lat: -36.8000, lon: 175.0700, radius: 9000, height: 230, note: '~19 km E-W, 2-9 km N-S, deeply indented bays, vineyards' },
   { id: 'waiheke_e', name: 'Waiheke Island (east end)', kind: 'island', lat: -36.8300, lon: 175.1600 },
-  { id: 'rakino', name: 'Rakino Island', kind: 'island', lat: -36.7250, lon: 174.9500, radius: 800 },
-  { id: 'motuihe', name: 'Motuihe Island', kind: 'island', lat: -36.8100, lon: 174.9400, radius: 1100 },
+  { id: 'rakino', name: 'Rakino Island', kind: 'island', lat: -36.7237, lon: 174.9497, radius: 800 },
+  { id: 'motuihe', name: 'Motuihe Island', kind: 'island', lat: -36.8080, lon: 174.9437, radius: 1100 },
 
   // Isthmus volcanic cones
-  { id: 'mt_eden', name: 'Mt Eden (Maungawhau)', kind: 'volcano', lat: -36.8765, lon: 174.7640, height: 196, radius: 600, note: 'Deep 50 m summit crater' },
-  { id: 'one_tree_hill', name: 'One Tree Hill (Maungakiekie)', kind: 'volcano', lat: -36.9000, lon: 174.7830, height: 182, radius: 700, note: 'Obelisk on the summit' },
-  { id: 'mt_albert', name: 'Mt Albert (Ōwairaka)', kind: 'volcano', lat: -36.8880, lon: 174.7200, height: 135, radius: 450 },
-  { id: 'mt_hobson', name: 'Mt Hobson (Ōhinerau)', kind: 'volcano', lat: -36.8810, lon: 174.7870, height: 143, radius: 400 },
-  { id: 'mt_wellington', name: 'Mt Wellington (Maungarei)', kind: 'volcano', lat: -36.8930, lon: 174.8450, height: 135, radius: 600 },
-  { id: 'mt_roskill', name: 'Mt Roskill (Puketāpapa)', kind: 'volcano', lat: -36.9120, lon: 174.7370, height: 110, radius: 400 },
-  { id: 'mangere_mtn', name: 'Māngere Mountain', kind: 'volcano', lat: -36.9460, lon: 174.7810, height: 106, radius: 600 },
+  { id: 'mt_eden', name: 'Mt Eden (Maungawhau)', kind: 'volcano', lat: -36.8775, lon: 174.7644, height: 194, radius: 600, note: 'Deep 50 m summit crater' },
+  { id: 'one_tree_hill', name: 'One Tree Hill (Maungakiekie)', kind: 'volcano', lat: -36.8998, lon: 174.7830, height: 180, radius: 700, note: 'Obelisk on the summit' },
+  { id: 'mt_albert', name: 'Mt Albert (Ōwairaka)', kind: 'volcano', lat: -36.8910, lon: 174.7198, height: 133, radius: 450 },
+  { id: 'mt_hobson', name: 'Mt Hobson (Ōhinerau)', kind: 'volcano', lat: -36.8781, lon: 174.7870, height: 142, radius: 400 },
+  { id: 'mt_wellington', name: 'Mt Wellington (Maungarei)', kind: 'volcano', lat: -36.8925, lon: 174.8471, height: 134, radius: 600 },
+  { id: 'mt_roskill', name: 'Mt Roskill (Puketāpapa)', kind: 'volcano', lat: -36.9124, lon: 174.7371, height: 106, radius: 400 },
+  { id: 'mangere_mtn', name: 'Māngere Mountain', kind: 'volcano', lat: -36.9486, lon: 174.7820, height: 104, radius: 600 },
 
   // Harbours, rivers & isthmus
   { id: 'tamaki_mouth', name: 'Tāmaki River mouth', kind: 'coast', lat: -36.8470, lon: 174.8830, note: 'Estuary runs south ~9 km to Panmure/Ōtāhuhu' },
@@ -118,7 +118,7 @@ export const AKL_LANDMARKS: AklLandmark[] = [
 
   // Air bases (player operates from Whenuapai)
   { id: 'whenuapai', name: 'RNZAF Base Auckland (Whenuapai)', kind: 'airbase', lat: -36.7880, lon: 174.6300, note: 'Main runway 03/21 (~2,000 m) + cross runway 08/26' },
-  { id: 'akl_airport', name: 'Auckland Airport (Māngere)', kind: 'airport', lat: -37.0080, lon: 174.7920, note: 'Runway 05R/23L, 3,635 m, heading ~050°/230°, on the Manukau shore' },
+  { id: 'akl_airport', name: 'Auckland Airport (Māngere)', kind: 'airport', lat: -37.0122, lon: 174.7863, note: 'Runway 05R/23L, 3,635 m, ~070°/250° true, along the Manukau shore of the Māngere promontory (fitted to the LINZ coastline / LiDAR)' },
 
   // Ranges & coasts
   { id: 'waitakere', name: 'Waitākere Ranges', kind: 'range', lat: -36.9500, lon: 174.5400, height: 474, radius: 9000, note: 'Bush-clad hills 250-474 m, dropping in cliffs to the Tasman coast' },

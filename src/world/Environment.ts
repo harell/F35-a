@@ -34,6 +34,7 @@ import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
 import { coastUniforms, TerrainRenderer, type CoastMaskInfo } from './terrain/TerrainRenderer';
 import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask, WHENUAPAI_CROSS } from './terrain/theaters/auckland';
+import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { footprintOf } from './terrain/features';
 import type { SceneryFeature } from '../core/contracts';
 import { bakeColorRows, bakeSunVisibility, bakeSurface, dilateLandColour } from './terrain/bake';
@@ -70,7 +71,18 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   report(0, 'Generating terrain');
   await yieldToEventLoop();
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads };
-  const pool = TerrainWorkerPool.create();
+  // Real coastline + terrain heights (LINZ); falls back to the hand-traced map if unavailable.
+  if (opts.theater === 'auckland') await loadAucklandLinz();
+  let pool = TerrainWorkerPool.create();
+  if (pool && opts.theater === 'auckland') {
+    try {
+      await pool.setLinz(aucklandLinzBytes());
+    } catch (err) {
+      console.warn('[world] terrain workers failed, falling back to main thread', err);
+      pool.dispose();
+      pool = null;
+    }
+  }
   const workerCount = pool?.size ?? 0;
   // High-resolution coast mask (Auckland): 15 m signed coast distance over the central 32 km,
   // baked on the workers alongside the heightfield.

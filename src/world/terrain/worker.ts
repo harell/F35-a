@@ -5,6 +5,7 @@
 import { createTheaterGenerator, generateBaseRows } from './generate';
 import { bakeColorRows, type HfView } from './bake';
 import { bakeAucklandCoastMask } from './theaters/auckland';
+import { aucklandLinzVersion, setAucklandLinz } from './theaters/aucklandLinz';
 import type { Anchor, TheaterGenerator } from './types';
 import type { TheaterId } from '../../core/types';
 import type { SceneryFeature } from '../../core/contracts';
@@ -12,6 +13,7 @@ import type { SceneryFeature } from '../../core/contracts';
 export type WorkerJob =
   | { id: number; kind: 'base'; theater: TheaterId; seed: number; anchors: Anchor[]; n: number; z0: number; z1: number }
   | { id: number; kind: 'hf'; hf: HfView }
+  | { id: number; kind: 'linz'; bytes: Uint8Array | null }
   | { id: number; kind: 'color'; theater: TheaterId; seed: number; features: SceneryFeature[]; m: number; j0: number; j1: number }
   | { id: number; kind: 'coast'; seed: number; n: number; extent: number; j0: number; j1: number };
 
@@ -36,7 +38,7 @@ scope.onmessage = (e) => {
   const job = e.data;
   try {
     if (job.kind === 'base') {
-      const key = `${job.theater}|${job.seed}|${JSON.stringify(job.anchors)}`;
+      const key = `${job.theater}|${job.seed}|${aucklandLinzVersion()}|${JSON.stringify(job.anchors)}`;
       if (key !== cacheKey || !cached) {
         cached = createTheaterGenerator({ theater: job.theater, seed: job.seed }, job.anchors);
         cacheKey = key;
@@ -50,6 +52,9 @@ scope.onmessage = (e) => {
     } else if (job.kind === 'coast') {
       const data = bakeAucklandCoastMask(job.seed, job.n, job.extent, job.j0, job.j1);
       scope.postMessage({ id: job.id, kind: 'coast', j0: job.j0, j1: job.j1, data }, [data.buffer]);
+    } else if (job.kind === 'linz') {
+      setAucklandLinz(job.bytes);
+      scope.postMessage({ id: job.id, kind: 'ok' });
     } else if (job.kind === 'hf') {
       hfView = job.hf;
       scope.postMessage({ id: job.id, kind: 'ok' });

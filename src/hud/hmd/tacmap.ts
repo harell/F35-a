@@ -11,6 +11,7 @@
  */
 import { toFeet, toNm } from '../../core/math';
 import { AKL } from '../../core/auckland';
+import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/aucklandLinz';
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
 import type { AnyEntity } from '../../sim/entities';
 import { AIRCRAFT_LABEL, GROUND_LABEL, NumText, SAM_LABEL } from './format';
@@ -94,8 +95,11 @@ export interface Chart {
   islands: Path2D;
   lakes: Path2D;
   urban: Path2D;
+  /** Fill rule for `water` (the LINZ coastline is a set of nested rings: even–odd). */
+  rule: CanvasFillRule;
 }
 let chart: Chart | null | undefined;
+let chartVersion = -1;
 
 function polyInto(p: Path2D, pts: number[]): void {
   if (pts.length < 6) return;
@@ -106,7 +110,8 @@ function polyInto(p: Path2D, pts: number[]): void {
 
 /** Auckland chart paths (km, +z south), built once and shared with the TSD. */
 export function chartPaths(): Chart | null {
-  if (chart !== undefined) return chart;
+  if (chart !== undefined && chartVersion === aucklandLinzVersion()) return chart;
+  chartVersion = aucklandLinzVersion();
   chart = null;
   try {
     if (typeof Path2D === 'undefined') return null;
@@ -136,7 +141,18 @@ export function chartPaths(): Chart | null {
     }
     const urban = new Path2D();
     for (const u of m.AKL_URBAN ?? []) if (Array.isArray(u)) polyInto(urban, u);
-    chart = { water, islands, lakes, urban };
+    const linz = aucklandLinz();
+    if (linz) {
+      // Real (LINZ) coastline: water = everything outside an odd number of rings.
+      const real = new Path2D();
+      real.rect(-80, -80, 160, 160);
+      for (const ring of linz.rings) {
+        const km: number[] = [];
+        for (let i = 0; i < ring.length; i++) km.push(ring[i] / 1000);
+        polyInto(real, km);
+      }
+      chart = { water: real, islands: new Path2D(), lakes, urban, rule: 'evenodd' };
+    } else chart = { water, islands, lakes, urban, rule: 'nonzero' };
   } catch {
     chart = null;
   }
@@ -295,7 +311,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     g.lineWidth = 2.4 / s;
     g.stroke(ch.water);
     g.fillStyle = '#07141f';
-    g.fill(ch.water);
+    g.fill(ch.water, ch.rule);
     g.stroke(ch.islands);
     g.fillStyle = C.land;
     g.fill(ch.islands);

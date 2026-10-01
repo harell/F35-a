@@ -1,7 +1,7 @@
 # F35-A — Credits & licences
 
 F35-A is built almost entirely from procedural content: aircraft, SAM and ground models are generated from code,
-textures are painted onto canvases at runtime, terrain comes from noise plus a hand-traced map of Auckland, and every
+textures are painted onto canvases at runtime, Auckland's coastline and terrain come from LINZ open data (below), and every
 sound effect and the music are synthesized with Web Audio. The third-party assets below are the only exceptions.
 
 | What | Source | Licence | Details |
@@ -13,9 +13,12 @@ sound effect and the music are synthesized with Web Audio. The third-party asset
 | Pilot, wingman and AWACS voices (`p_*`, `a_*`, `s_*`, `h_*` clips) | Piper TTS `en-us-libritts-high` (LibriTTS speakers) | CC BY 4.0: LibriTTS (openslr.org/60), derived from LibriVox public-domain recordings | [audio](credits/audio.md) |
 | Piper TTS engine (build-time only) | https://github.com/rhasspy/piper | MIT | [audio](credits/audio.md) |
 | Shader hash `hash12` | Dave Hoskins, *Hash without Sine* | MIT | [world](credits/world.md) |
+| Auckland coastline + terrain heights (`src/world/terrain/data/auckland-linz.bin`) | Toitū Te Whenua Land Information New Zealand (LINZ): [NZ LiDAR 1m DEM](https://data.linz.govt.nz/layer/121859-new-zealand-lidar-1m-dem/), NZ Contour-Interpolated 8m DEM (from [NZ Contours Topo 1:50k](https://data.linz.govt.nz/layer/50768)), via the LINZ Data Service / [nz-elevation](https://github.com/linz/elevation) open data | CC BY 4.0 — *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.* | [tools/linz](../tools/linz/README.md) |
 
-**Geography.** The Auckland coastline, volcanic cones, motorways, arterial roads and landmark positions are hand-traced,
-stylised reconstructions (roughly 100–400 m accuracy). No map data was imported.
+**Geography.** The Auckland coastline (mean high water, ±10–20 m) and terrain heights (LiDAR, resampled to 86 m) are
+real LINZ data, and the volcanic cones are snapped to the LiDAR summits. Motorways, arterial roads, the CBD street grid and
+most landmark positions are still hand-placed (roughly 100–400 m accuracy); the hand-traced map remains as an offline
+fallback and still names the harbours for the procedural bathymetry.
 
 **Inspiration.** NovaLogic's *F-22 Raptor* (1997).
 

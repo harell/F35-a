@@ -128,23 +128,26 @@ export const AKL_RELIEF: { e: [number, number, number, number, number]; h: numbe
   { e: [37.2, 2.4, 1.5, 0.9, 0.6], h: 120, rough: 0.4 }, // Ponui
 ];
 
-/** Volcanic cones: centre (km), summit (m), radius (m), crater radius (m), crater depth (m). */
+/**
+ * Volcanic cones: centre (km), summit (m), radius (m), crater radius (m), crater depth (m). Centres and
+ * summits snapped to the LINZ LiDAR DEM (tools/linz/cones.py: centroid of the summit area).
+ */
 export const AKL_CONES: { x: number; z: number; h: number; r: number; cr: number; cd: number }[] = [
-  { x: 0.16, z: 3.11, h: 196, r: 650, cr: 150, cd: 50 }, // Mt Eden (Maungawhau)
-  { x: 1.85, z: 5.71, h: 182, r: 750, cr: 120, cd: 18 }, // One Tree Hill (Maungakiekie)
-  { x: -3.76, z: 4.38, h: 135, r: 480, cr: 90, cd: 15 }, // Mt Albert
-  { x: 2.21, z: 3.61, h: 143, r: 430, cr: 80, cd: 20 }, // Mt Hobson
-  { x: 1.23, z: 3.23, h: 126, r: 320, cr: 70, cd: 20 }, // Mt St John
-  { x: 7.38, z: 4.94, h: 135, r: 620, cr: 110, cd: 25 }, // Mt Wellington
-  { x: -2.25, z: 7.05, h: 110, r: 420, cr: 70, cd: 12 }, // Mt Roskill
-  { x: 1.68, z: 10.82, h: 106, r: 620, cr: 100, cd: 20 }, // Māngere Mountain
-  { x: 4.35, z: -2.39, h: 65, r: 460, cr: 0, cd: 0 }, // North Head
-  { x: 3.19, z: -2.22, h: 87, r: 360, cr: 60, cd: 10 }, // Mt Victoria (Devonport)
-  { x: 11.83, z: -1.72, h: 68, r: 560, cr: 150, cd: 20 }, // Browns Island
+  { x: 0.19, z: 3.22, h: 194, r: 650, cr: 150, cd: 50 }, // Mt Eden (Maungawhau)
+  { x: 1.85, z: 5.69, h: 180, r: 750, cr: 120, cd: 18 }, // One Tree Hill (Maungakiekie)
+  { x: -3.77, z: 4.72, h: 133, r: 480, cr: 90, cd: 15 }, // Mt Albert
+  { x: 2.21, z: 3.28, h: 142, r: 430, cr: 80, cd: 20 }, // Mt Hobson
+  { x: 1.61, z: 3.88, h: 124, r: 320, cr: 70, cd: 20 }, // Mt St John
+  { x: 7.56, z: 4.88, h: 134, r: 620, cr: 110, cd: 25 }, // Mt Wellington
+  { x: -2.23, z: 7.09, h: 106, r: 420, cr: 70, cd: 12 }, // Mt Roskill
+  { x: 1.76, z: 11.11, h: 104, r: 620, cr: 100, cd: 20 }, // Māngere Mountain
+  { x: 4.45, z: -2.32, h: 64, r: 460, cr: 0, cd: 0 }, // North Head
+  { x: 3.28, z: -2.43, h: 82, r: 360, cr: 60, cd: 10 }, // Mt Victoria (Devonport)
+  { x: 11.87, z: -2.16, h: 65, r: 560, cr: 150, cd: 20 }, // Browns Island
 ];
 
 /** Rangitoto shield volcano. */
-export const AKL_RANGITOTO = { x: 8.7, z: -6.85, h: 260, r: 2750, cr: 130, cd: 55 };
+export const AKL_RANGITOTO = { x: 8.57, z: -6.86, h: 259, r: 2750, cr: 130, cd: 55 };
 
 /** Urban footprint polygons (km); only applied on land. */
 export const AKL_URBAN: number[][] = [
@@ -177,7 +180,7 @@ export const AKL_PARKS: [number, number, number][] = [
 
 /** Non-urban zones inside the urban footprint (km, radius km): airport, Ihumātao, Waitākere foothills. */
 export const AKL_RURAL: [number, number, number][] = [
-  [2.66, 17.7, 2.6], // Auckland Airport (Māngere)
+  [2.15, 18.17, 2.6], // Auckland Airport (Māngere)
   [0.2, 14.8, 1.1], // Ihumātao / Ōtuataua stonefields
   [-12.5, 7.0, 1.6], // Waitākere foothills
 ];

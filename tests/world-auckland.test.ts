@@ -30,7 +30,7 @@ describe('Auckland theatre geography', () => {
     expect(q.isWater(5000, -1200)).toBe(true);
     // Manukau harbour, Tāmaki estuary, Hauraki Gulf, Tasman Sea
     expect(q.isWater(-8000, 14_000)).toBe(true);
-    expect(q.isWater(10_000, 3500)).toBe(true);
+    expect(q.isWater(11_000, 3500)).toBe(true); // Tāmaki estuary (LINZ coast: water x ≈ 10.3–12 km here)
     expect(q.isWater(20_000, -20_000)).toBe(true);
     expect(q.isWater(-35_000, 0)).toBe(true);
     // Lake Pupuke crater lake

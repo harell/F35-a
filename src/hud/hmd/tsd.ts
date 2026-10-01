@@ -130,7 +130,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
       g.globalAlpha *= 0.55;
       g.lineJoin = 'round';
       g.fillStyle = 'rgba(40,110,150,0.16)';
-      g.fill(ch.water);
+      g.fill(ch.water, ch.rule);
       g.strokeStyle = c.coast ?? 'rgba(120,180,200,0.7)';
       g.lineWidth = (1.6 * lw) / k;
       g.stroke(ch.water);

@@ -42,7 +42,7 @@ function features(): { features: SceneryFeature[]; pads: { x: number; z: number;
     return {
       features: [
         { type: 'airbase', x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 },
-        { type: 'airbase', x: 26_500, z: -6200, rotation: 80, size: 0.8 },
+        { type: 'airbase', x: 26_900, z: -6600, rotation: 90, size: 0.8 }, // campaign Waiheke strip (FEATURES.waihekeStrip)
         { type: 'industrial', x: 13_300, z: -9800, size: 0.6 },
       ],
       pads: [

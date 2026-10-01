@@ -103,14 +103,19 @@ describe('real arterial roads and softer volcanic cones', () => {
     const arterials = paths.filter((p) => p.width < 20);
     expect(arterials.length).toBeGreaterThanOrEqual(8);
     for (const p of arterials) {
-      let wet = 0;
+      // Only short river / creek bridges (the builder raises a deck there), e.g. Great North Rd over
+      // the Whau at Avondale on the real (LINZ) coastline — never a run along the harbour.
+      let run = 0;
+      let longest = 0;
       let urban = 0;
       for (let i = 0; i < p.x.length; i++) {
-        if (hf.heightAt(p.x[i], p.z[i]) < 0.6) wet++;
+        const wet = hf.heightAt(p.x[i], p.z[i]) < 0.6;
+        run = wet && i > 0 ? run + Math.hypot(p.x[i] - p.x[i - 1], p.z[i] - p.z[i - 1]) : 0;
+        longest = Math.max(longest, run);
         const k = Math.round((p.z[i] - hf.origin) / hf.cell) * hf.n + Math.round((p.x[i] - hf.origin) / hf.cell);
         if (hf.mat[k] === MAT_URBAN) urban++;
       }
-      expect(wet, `${p.name} crosses water`).toBe(0);
+      expect(longest, `${p.name} runs over water`).toBeLessThan(300); // Whau bridge incl. shore ramps ≈ 270 m
       expect(urban / p.x.length, `${p.name} runs through the suburbs`).toBeGreaterThan(0.6);
     }
     // motorway-only list still available

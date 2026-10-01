@@ -17,5 +17,7 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    // The game always loads the LINZ Auckland terrain; tests run on the same data.
+    setupFiles: ['tests/linz-setup.ts'],
   },
 } as any);

@@ -7,6 +7,11 @@
  * the shore, and the height is a CONTINUOUS function of it (≈ 2–3 % shelving beaches, steeper on
  * rocky shores), so the bilinear heightfield contour — and the 15 m shader coast mask baked from the
  * same function — are smooth instead of following an 86 m raster staircase.
+ *
+ * With the LINZ data loaded (aucklandLinz.ts — the normal case) the coastline is the real
+ * mean-high-water line and land heights are the LiDAR DEM: the hand-traced polygons then only name
+ * the water bodies (for the bathymetry) and the procedural relief / cones / coast noise are off.
+ * Without it (offline, old browser) everything below falls back to the hand-traced map.
  */
 import { Noise2D, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
@@ -14,6 +19,7 @@ import { GridSampler, labelAt, signedDistance, type GridSpec } from '../raster';
 import {
   COAST_MASK_RANGE,
   LAND_LABEL,
+  classify,
   encodeCoast,
   ellipsePolygon,
   extractCoastSegments,
@@ -48,6 +54,7 @@ import {
   AKL_WATER,
 } from './aucklandMap';
 import { AKL } from '../../../core/auckland';
+import { aucklandLinz, aucklandLinzVersion, fillLinzLand, linzCoastSegments, linzHeight, linzIsLand, type LinzData } from './aucklandLinz';
 
 const AKL_WHENUAPAI_X = { x: AKL.whenuapai.x, z: AKL.whenuapai.z };
 
@@ -63,10 +70,18 @@ export interface AucklandMapData {
   n: number;
   /** Land/water boundary pieces [x0, z0, x1, z1, ...] (m). */
   segments: Float32Array;
+  /** Procedural map: every polygon in painting order. LINZ map: the lakes only. */
   polys: CoastPolygon[];
+  /** Real LINZ coastline/heights in use (null: hand-traced fallback). */
+  linz: LinzData | null;
+  /** Land test at a point (same rule as the rasters). */
+  isLand: (x: number, z: number) => boolean;
+  /** Write LAND_LABEL (land) / anything else (water) for rows [0, rows) of grid `g` into `labels`. */
+  fillLand: (labels: Uint8Array, g: SampleGrid, rows: number) => void;
 }
 
 let cached: AucklandMapData | null = null;
+let cachedVersion = -1;
 
 /** Water / island / lake polygons (m) in painting order over a land base. */
 export function aucklandPolygons(): CoastPolygon[] {
@@ -86,13 +101,41 @@ export function aucklandPolygons(): CoastPolygon[] {
 
 /** Rasterised map (labels + coast / urban signed distance). Cached: it doesn't depend on the seed. */
 export function aucklandMapData(): AucklandMapData {
-  if (cached) return cached;
+  if (cached && cachedVersion === aucklandLinzVersion()) return cached;
+  cachedVersion = aucklandLinzVersion();
   const g: GridSpec = { n: MAP_N, extent: HF_EXTENT };
   const sg: SampleGrid = { n: MAP_N, x0: -HF_EXTENT / 2, z0: -HF_EXTENT / 2, cell: HF_EXTENT / MAP_N };
-  const polys = aucklandPolygons();
+  const handPolys = aucklandPolygons();
   const labels = new Uint8Array(MAP_N * MAP_N).fill(AKL_LABEL.land);
-  for (const p of polys) fillPolygonGrid(labels, sg, p, p.label);
-  const segments = extractCoastSegments(polys, 30, LAND_LABEL);
+  for (const p of handPolys) fillPolygonGrid(labels, sg, p, p.label);
+  const linz = aucklandLinz();
+  let polys = handPolys;
+  let segments: Float32Array;
+  let isLand: AucklandMapData['isLand'];
+  let fillLand: AucklandMapData['fillLand'];
+  if (linz) {
+    // Real coastline; lakes (not in the coastline data) stay as the hand-placed crater lakes.
+    polys = handPolys.filter((p) => p.label === AKL_LABEL.lake);
+    relabelWithLinz(labels, linz, sg);
+    const lakeSegs = extractCoastSegments(polys, 30, LAND_LABEL);
+    const coastSegs = linzCoastSegments(linz, 30);
+    segments = new Float32Array(coastSegs.length + lakeSegs.length);
+    segments.set(coastSegs);
+    segments.set(lakeSegs, coastSegs.length);
+    isLand = (x, z) => linzIsLand(linz, x, z) && classify(polys, x, z) === LAND_LABEL;
+    fillLand = (out, grid, rows) => {
+      out.fill(0, 0, rows * grid.n);
+      fillLinzLand(linz, out, grid, rows, AKL_LABEL.land);
+      for (const p of polys) fillPolygonGridRows(out, grid, rows, p, p.label);
+    };
+  } else {
+    segments = extractCoastSegments(polys, 30, LAND_LABEL);
+    isLand = (x, z) => classify(polys, x, z) === LAND_LABEL;
+    fillLand = (out, grid, rows) => {
+      out.fill(AKL_LABEL.land, 0, rows * grid.n);
+      for (const p of polys) fillPolygonGridRows(out, grid, rows, p, p.label);
+    };
+  }
   // Raster EDT for the far field (bathymetry, inland ramps) …
   const sdf = signedDistance(labels, g, (l) => l === AKL_LABEL.land);
   // … exact vector distance near the shore (blended into the raster value at the band edge).
@@ -113,8 +156,42 @@ export function aucklandMapData(): AucklandMapData {
   const urbanLabels = new Uint8Array(UN * UN);
   for (const poly of AKL_URBAN) fillPolygonGrid(urbanLabels, ug, makePolygon(poly.map((v) => v * KM), 1), 1);
   const urban = new GridSampler(signedDistance(urbanLabels, { n: UN, extent: HF_EXTENT }, (l) => l === 1), UN, HF_EXTENT);
-  cached = { labels, coast, urban, n: MAP_N, segments, polys };
+  cached = { labels, coast, urban, n: MAP_N, segments, polys, linz, isLand, fillLand };
   return cached;
+}
+
+/**
+ * Replace the hand-traced land/water split of `labels` (painted from the hand polygons) with the
+ * LINZ coastline, keeping the hand map's water-body names (they drive the bathymetry): water that
+ * was land on the hand map takes the nearest hand-map water body; hand-placed lakes are kept.
+ */
+function relabelWithLinz(labels: Uint8Array, linz: LinzData, sg: SampleGrid): void {
+  const n = sg.n;
+  const real = new Uint8Array(n * n);
+  fillLinzLand(linz, real, sg, n, 1);
+  const queue = new Int32Array(n * n);
+  let head = 0;
+  let tail = 0;
+  for (let k = 0; k < n * n; k++) {
+    const old = labels[k];
+    if (old === AKL_LABEL.lake) continue;
+    if (real[k]) labels[k] = AKL_LABEL.land;
+    else if (old === AKL_LABEL.land) labels[k] = 0; // water, body unknown yet
+    else queue[tail++] = k;
+  }
+  // Multi-source BFS: unnamed water takes the label of the nearest named water.
+  while (head < tail) {
+    const k = queue[head++];
+    const i = k % n;
+    const l = labels[k];
+    const nb = [i > 0 ? k - 1 : -1, i < n - 1 ? k + 1 : -1, k - n, k + n];
+    for (const m of nb) {
+      if (m < 0 || m >= n * n || labels[m] !== 0) continue;
+      labels[m] = l;
+      queue[tail++] = m;
+    }
+  }
+  for (let k = 0; k < n * n; k++) if (labels[k] === 0) labels[k] = AKL_LABEL.gulf;
 }
 
 /**
@@ -122,6 +199,8 @@ export function aucklandMapData(): AucklandMapData {
  * small coves (±28 m). Shared by the heightfield and the shader coast mask so both agree.
  */
 export function aucklandCoastPerturbation(seed: number): (x: number, z: number) => number {
+  // The real coastline is used as is.
+  if (aucklandLinz()) return () => 0;
   const nA = new Noise2D(seed * 29 + 1);
   const nD = new Noise2D(seed * 29 + 4);
   const coastNoise = new CoarseField((x, z) => 110 * nA.fbm(x / 2200, z / 2200, 3));
@@ -141,10 +220,11 @@ export function bakeAucklandCoastMask(seed: number, n: number, extent: number, j
   const rows = j1 - j0;
   // Land/water at texel centres (band of rows).
   const bandGrid: SampleGrid = { n, x0: g.x0, z0: g.z0 + j0 * cell, cell };
-  const labels = new Uint8Array(n * rows).fill(AKL_LABEL.land);
-  for (const p of map.polys) fillPolygonGridRows(labels, bandGrid, rows, p, p.label);
-  // |perturbation| ≤ 138 m, so exact distances are needed within RANGE + 140 m of the polygons.
-  const R = COAST_MASK_RANGE + 176;
+  const labels = new Uint8Array(n * rows);
+  map.fillLand(labels, bandGrid, rows);
+  // |perturbation| ≤ 138 m (none on the LINZ coast), so exact distances are needed within
+  // RANGE + 140 m of the polygons.
+  const R = COAST_MASK_RANGE + (map.linz ? 8 : 176);
   const dist = new Float32Array(n * rows).fill(R);
   splatDistance(map.segments, g, R, dist, j0, j1, j0);
   const out = new Uint8Array(n * rows);
@@ -256,6 +336,7 @@ export function createAuckland(seed: number): TheaterGenerator {
   const parks = AKL_PARKS.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const rural = AKL_RURAL.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const cbd = { x: AKL_CBD.x * KM, z: AKL_CBD.z * KM, r: AKL_CBD.r * KM };
+  const linz = map.linz;
 
   /** Water depth by water body (all negative), continuous (→ 0⁻) at the shoreline. */
   const waterHeight = (x: number, z: number, d: number): number => {
@@ -327,15 +408,21 @@ export function createAuckland(seed: number): TheaterGenerator {
       }
 
       // ── Land ──
-      const R = regionH.at(x, z);
-      const ramp = sstep(0, K > 0.3 ? 140 : 380, d);
       const hills = nD.eroded(x / 3200, z / 3200, 5);
-      let h = 1.0 + ramp * R * (0.6 + 0.4 * hills);
-      if (K > 0.12) {
-        const r = nC.ridged(x / 4800 + 3.3, z / 4800 - 1.7, 5);
-        h += ramp * K * R * (r - 0.35) * 0.9;
+      let h: number;
+      if (linz) {
+        // Real ground (LiDAR DEM); a few metres of dry land along the shore like the procedural map.
+        h = Math.max(linzHeight(linz, x, z), 0.6 + 2.4 * sstep(0, 120, d));
+      } else {
+        const R = regionH.at(x, z);
+        const ramp = sstep(0, K > 0.3 ? 140 : 380, d);
+        h = 1.0 + ramp * R * (0.6 + 0.4 * hills);
+        if (K > 0.12) {
+          const r = nC.ridged(x / 4800 + 3.3, z / 4800 - 1.7, 5);
+          h += ramp * K * R * (r - 0.35) * 0.9;
+        }
+        h = Math.max(h, 0.6 + 2.4 * sstep(0, 120, d));
       }
-      h = Math.max(h, 0.6 + 2.4 * sstep(0, 120, d));
       const rocky = nB.noise(x / 1800 + 2.2, z / 1800) <= 0.05 && x > -18_000;
 
       // Beaches (patchy): black sand on the Tasman coast, golden elsewhere; the rest is rocky/cliffy
@@ -380,6 +467,14 @@ export function createAuckland(seed: number): TheaterGenerator {
         if (dx > c.r || dx < -c.r || dz > c.r || dz < -c.r) continue;
         const cd = Math.sqrt(dx * dx + dz * dz);
         if (cd >= c.r) continue;
+        if (linz) {
+          // Real cone in the DEM: only the grassy-park material.
+          if (cd < c.r * 0.85) {
+            out.mat = MAT_CONE;
+            out.aux = 0;
+          }
+          continue;
+        }
         let ch: number;
         if (c.cr > 0 && cd < c.cr) ch = c.h - c.cd * (1 - (cd / c.cr) * (cd / c.cr));
         else ch = c.h * Math.pow(1 - (cd - c.cr) / (c.r - c.cr), 1.15);
@@ -409,7 +504,7 @@ export function createAuckland(seed: number): TheaterGenerator {
           const s2 = sx * sx + sz * sz;
           if (s2 < 70 * 70) sh -= 18 * (1 - s2 / (70 * 70));
           sh += 4 * nB.noise(x / 300, z / 300) * (1 - t);
-          if (sh > h) h = sh;
+          if (sh > h && !linz) h = sh;
           out.mat = MAT_VOLCANIC;
           // aux: bush cover (lava fields show through in lobes running down the flanks)
           const lobes = nA.noise(x / 700, z / 700) * 0.6 + nA.noise(x / 230 + 4.1, z / 230) * 0.4;

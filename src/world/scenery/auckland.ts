@@ -17,7 +17,8 @@ const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
 /** Always-present Auckland features the terrain must flatten (airport). */
 export function aucklandBuiltinFeatures(): SceneryFeature[] {
-  return [{ type: 'airbase', x: AKL.akl_airport.x, z: AKL.akl_airport.z, rotation: 50, size: 1 }];
+  // Rotation 250: runway 05R/23L along the shore, terminal / apron (right of the heading) to the north.
+  return [{ type: 'airbase', x: AKL.akl_airport.x, z: AKL.akl_airport.z, rotation: 250, size: 1 }];
 }
 
 /** Features of this type near Auckland's own landmarks are skipped (the city already has them). */

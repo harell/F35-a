@@ -243,9 +243,10 @@ function liftAnchor(hf: Heightfield, a: Anchor): void {
 
 /**
  * Blend terrain towards a flat level inside a footprint (target = mean core height). With
- * `keepCoast`, the blend zone fades out over the first 4 m above sea level so the (continuous,
- * mapped) shoreline is not pushed into the water; the core is always levelled. Samples levelled
- * above 60 % get material `mat`.
+ * `keepCoast` (mapped coastline), the blend zone fades out over the first 4 m above sea level so the
+ * shoreline is not pushed into the water, and samples below sea level are never raised (a footprint
+ * reaching past the real shore must not grow land into the harbour). Samples levelled above 60 %
+ * get material `mat`.
  */
 export function flatten(hf: Heightfield, footprint: Footprint, keepCoast = false, mat = MAT_NONE, level?: number): number {
   // Grow the core by 1.5 cells so every grid cell touching the footprint is fully flat
@@ -284,7 +285,10 @@ export function flatten(hf: Heightfield, footprint: Footprint, keepCoast = false
       let w = footprintWeight(fp, hf.pos(i), z);
       if (w <= 0) continue;
       const k = j * hf.n + i;
-      if (keepCoast && w < fp.strength) w *= sstep(0, 4, hf.data[k]);
+      if (keepCoast) {
+        if (hf.data[k] < 0) continue;
+        if (w < fp.strength) w *= sstep(0, 4, hf.data[k]);
+      }
       hf.data[k] += (target - hf.data[k]) * w;
       // Material: special pads (clearings) only inside the original, unpadded core; mapped theatres
       // keep suburbs right up to the levelled core.

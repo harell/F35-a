@@ -37,7 +37,7 @@ const PADS = [
 const hf = runSync(generateTerrain({ theater: 'auckland', seed: 1840, resolution: 1024, features: allFeatures('auckland', MISSION), pads: PADS }));
 const map = aucklandMapData();
 const perturb = aucklandCoastPerturbation(1840);
-const exactD = (x: number, z: number) => (classify(map.polys, x, z) === LAND_LABEL ? 1 : -1) * segmentDistance(map.segments, x, z) + perturb(x, z);
+const exactD = (x: number, z: number) => (map.isLand(x, z) ? 1 : -1) * segmentDistance(map.segments, x, z) + perturb(x, z);
 
 /** Zero crossings of the bilinear heightfield along rows (central ±13 km), every `step` rows. */
 function contourPoints(data: Float32Array, n: number, origin: number, cell: number, step: number): { x: number; z: number }[] {
@@ -142,7 +142,10 @@ describe('Auckland heightfield coastline (reviewer: saw-tooth coast at 86 m)', (
     expect(pts.length).toBeGreaterThan(300);
     const errs = pts.map((p) => Math.abs(exactD(p.x, p.z)));
     expect(quantile(errs, 0.5)).toBeLessThan(2);
-    expect(quantile(errs, 0.9)).toBeLessThan(8);
+    // The real (LINZ) coast has coves and creeks narrower than an 86 m cell that a bilinear contour
+    // cannot follow (the hand-traced polygons were smooth: < 8 m); the visible shoreline is drawn
+    // from the 15 m shader coast mask, checked below.
+    expect(quantile(errs, 0.9)).toBeLessThan(15);
   });
 
   it('height is continuous across the waterline (no ±1 m step between neighbours)', () => {

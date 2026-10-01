@@ -166,6 +166,8 @@ describe('Auckland signature details', () => {
         const z = c.z + Math.sin(a) * r;
         const h = hf.heightAt(x, z);
         if (h <= 0.5) continue;
+        // material is per sample: skip points whose nearest sample is already in the sea (real shore)
+        if (hf.data[Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell)] <= 0) continue;
         land++;
         expect(matAt(x, z)).toBe(MAT_VOLCANIC);
         const mm = matAt(x, z);
@@ -173,10 +175,10 @@ describe('Auckland signature details', () => {
         expect(veg.density(x, z, h, hf.slopeAt(x, z), mm, aux)).toBeGreaterThanOrEqual(0.3);
       }
     expect(land).toBeGreaterThan(200);
-    // symmetric shield: summit ≈ 260 m, similar heights on all sides at 1.5 km
+    // near-symmetric shield: summit ≈ 260 m, similar heights on all sides at 1.5 km (LiDAR: 35–61 m)
     expect(hf.heightAt(c.x, c.z)).toBeGreaterThan(190);
     const ring = [0, 1, 2, 3, 4, 5].map((k) => hf.heightAt(c.x + Math.cos(k) * 1500, c.z + Math.sin(k) * 1500));
-    expect(Math.max(...ring) - Math.min(...ring)).toBeLessThan(25);
+    expect(Math.max(...ring) - Math.min(...ring)).toBeLessThan(35);
   });
 
   it('the shore strip continues the land colour (no sandy ring round Rangitoto)', () => {
@@ -193,8 +195,10 @@ describe('Auckland signature details', () => {
         const i = Math.round((x - hf.origin) / (hf.extent / m));
         const j = Math.round((z - hf.origin) / (hf.extent / m));
         if (view.data[j * m + i] > 0) continue;
+        // facing Motutapu across Islington Bay the shore strip continues Motutapu's pasture instead
+        if (Math.hypot(x - AKL.motutapu.x, z - AKL.motutapu.z) < 2600) break;
         const k = (j * m + i) * 4;
-        expect(0.2126 * rgba[k] + 0.7152 * rgba[k + 1] + 0.0722 * rgba[k + 2]).toBeLessThan(95); // dark lava/bush, not sand (≈ 185)
+        expect(0.2126 * rgba[k] + 0.7152 * rgba[k + 1] + 0.0722 * rgba[k + 2]).toBeLessThan(110); // dark lava/bush (real shoreline: up to ≈ 97), not sand (≈ 185)
         n++;
         break;
       }
@@ -244,7 +248,7 @@ describe('volcanic cones (i1 re-check: Mt Eden crater invisible at 86 m heightfi
   it('the terrain shader gets every Auckland cone with its crater; Mt Eden 150 m wide, 50 m deep', () => {
     expect(cones.length).toBeGreaterThanOrEqual(12);
     expect(cones.length).toBeLessThanOrEqual(MAX_CONES);
-    const eden = cones.find((c) => Math.hypot(c.x - 160, c.z - 3110) < 50)!;
+    const eden = cones.find((c) => Math.hypot(c.x - 190, c.z - 3220) < 50)!; // LiDAR summit centroid
     expect(eden).toBeDefined();
     expect(eden.craterR).toBe(150);
     expect(eden.craterDepth).toBe(50);
@@ -252,7 +256,7 @@ describe('volcanic cones (i1 re-check: Mt Eden crater invisible at 86 m heightfi
     // the heightfield alone cannot hold it: the crater spans < 3.5 cells of 86 m
     expect((2 * eden.craterR) / hf.cell).toBeLessThan(3.6);
     // Rangitoto's summit craters are shaded too, without pā terraces
-    const rg = cones.filter((c) => Math.hypot(c.x - 8700, c.z + 6850) < 300);
+    const rg = cones.filter((c) => Math.hypot(c.x - 8570, c.z + 6860) < 300);
     expect(rg.length).toBe(2);
     for (const c of rg) expect(c.terraces).toBe(false);
   });

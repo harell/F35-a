@@ -50,17 +50,18 @@ export const P = {
   rangW: { x: 7000, z: -7400 },
   // Motutapu (grassy island NE of Rangitoto)
   motutapu: { x: 12800, z: -9000 },
-  motuN: { x: 12900, z: -10500 },
+  motuN: { x: 12910, z: -10430 },
   motuE: { x: 13700, z: -8700 },
   motuS: { x: 12700, z: -7700 },
-  // Small islands
-  motuihe: { x: 15800, z: -4300 },
+  // Small islands (sites ≥ 150–250 m inside the LINZ coastline)
+  motuihe: { x: 16170, z: -4490 },
   brownsIs: { x: 11830, z: -1720 },
-  rakino: { x: 16700, z: -13700 },
+  rakino: { x: 16700, z: -13850 },
   tiritiri: { x: 11480, z: -27460 },
   // Waiheke (16 km E–W)
-  waiW: { x: 22500, z: -6400 },
-  waiAirstrip: { x: 26500, z: -6200 },
+  waiW: { x: 22610, z: -6700 },
+  // fictional enemy strip, laid along the flat ground between Oneroa and Onetangi (fits the real coast)
+  waiAirstrip: { x: 26900, z: -6600 },
   waiC: { x: 28600, z: -5300 },
   waiS: { x: 26300, z: -4400 },
   waiE: { x: 32000, z: -3700 },
@@ -72,7 +73,7 @@ export const P = {
 } as const;
 
 /** Waiheke enemy airstrip runway heading (deg). */
-export const WAIHEKE_RUNWAY_HDG = 80;
+export const WAIHEKE_RUNWAY_HDG = 90;
 
 /** Home base + enemy forward airstrip + the Motutapu logistics site (terrain flattening). */
 export const FEATURES = {

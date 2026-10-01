@@ -128,6 +128,11 @@ export class TerrainWorkerPool {
     return out;
   }
 
+  /** Install the decompressed LINZ Auckland data (or null) on every worker. */
+  async setLinz(bytes: Uint8Array | null): Promise<void> {
+    await Promise.all(this.workers.map((_w, i) => this.runOn(i, { kind: 'linz', bytes })));
+  }
+
   /** Auckland coast mask (n × n bytes over `extent`), rows split over the workers. */
   async bakeCoast(seed: number, n: number, extent: number): Promise<Uint8Array> {
     const out = new Uint8Array(n * n);
