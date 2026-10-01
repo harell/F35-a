@@ -6,7 +6,9 @@ argument-hint: <issue number or URL>
 
 # Implement an issue
 
-Input: an issue number (`29`, `#29`) or URL (`https://github.com/harell/F35-a/issues/29`). If the URL points to another repository, stop and say so; this skill only covers `harell/F35-a`.
+Run as `/implement-issue <number or URL>`. Issue: $ARGUMENTS
+
+Input: an issue number (`29`, `#29`) or URL (`https://github.com/harell/F35-a/issues/29`). If none was given, ask for one and stop. If the URL points to another repository, stop and say so; this skill only covers `harell/F35-a`.
 
 The result is a PR that implements the issue, proves it with tests, and is linked to the issue so that merging it into `master` closes the issue.
 

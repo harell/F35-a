@@ -1,9 +1,15 @@
 ---
 name: cultivate-backlog
 description: Cultivate (groom, tidy, triage, organise) the GitHub issue backlog of harell/F35-a. It closes issues that are done, duplicated or no longer relevant, groups related issues under epics as sub-issues, sets "blocked by" dependencies, fixes contradictions between issue bodies, and works out the order and what can run in parallel. Use when asked to cultivate, groom, tidy, triage or organise the backlog or issues.
+argument-hint: "[epic number to limit the run to] [apply]"
 ---
 
 # Cultivate the backlog
+
+Run as `/cultivate-backlog`. Arguments: $ARGUMENTS
+- With no arguments, it covers the whole backlog.
+- A number limits the run to that epic and its sub-issues, plus anything they depend on or block.
+- `apply` means the user has already approved: apply the plan without waiting (section 0).
 
 The goal is a backlog where every open issue is still wanted, says one consistent thing, sits under the right epic, and declares what it waits on. Then anyone can pick up a "ready" issue cold and in the right order.
 
