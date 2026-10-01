@@ -100,7 +100,7 @@ describe('real arterial roads and softer volcanic cones', () => {
     const paths = aucklandRoadPaths();
     const names = paths.map((p) => p.name);
     for (const n of ['Dominion Rd', 'Great North Rd', 'Lake Rd', 'Onewa Rd', 'Manukau Rd', 'Mt Eden Rd']) expect(names).toContain(n);
-    const arterials = paths.filter((p) => p.width < 20);
+    const arterials = paths.filter((p) => p.kind === 'arterial');
     expect(arterials.length).toBeGreaterThanOrEqual(8);
     for (const p of arterials) {
       // Only short river / creek bridges (the builder raises a deck there), e.g. Great North Rd over
@@ -119,7 +119,7 @@ describe('real arterial roads and softer volcanic cones', () => {
       expect(urban / p.x.length, `${p.name} runs through the suburbs`).toBeGreaterThan(0.6);
     }
     // motorway-only list still available
-    expect(aucklandRoadPaths(false).every((p) => p.width >= 20)).toBe(true);
+    expect(aucklandRoadPaths(false).every((p) => p.kind === 'motorway')).toBe(true);
   });
 
   it('cones are blended by slope with noise, not one flat categorical colour', () => {

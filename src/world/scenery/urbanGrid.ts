@@ -4,6 +4,8 @@
  * 4 × 2 lots. Float32 arithmetic is emulated so 3D houses / towers land on the same lots (and get
  * the same roof colours) the shader paints from altitude. Node-safe.
  */
+import type { CbdStreets } from './cbdStreets';
+
 const f32 = Math.fround;
 const K = f32(0.1031);
 const C33 = f32(33.33);
@@ -32,6 +34,8 @@ export const LOTS_Z = 2;
 export const ROAD_HALF = 3.5;
 
 export interface District {
+  /** Inside the CBD region with real (LINZ) streets: no procedural blocks or lots (cbdStreets.ts). */
+  real: boolean;
   cx: number;
   cz: number;
   hash: number;
@@ -44,23 +48,42 @@ export interface District {
 }
 
 /**
- * A fixed street grid overriding the Voronoi districts inside a circle (Auckland CBD: one grid
- * roughly aligned with Queen Street). `hash` sets the grid angle (hash · 6.2831 rad, like the
- * shader) and seeds the block / lot hashes. Must match the terrain shader's uCbd uniform.
+ * The CBD's streets. With `streets` (the LINZ street map, cbdStreets.ts) the CBD region uses
+ * Auckland's real streets and the region border acts as a district border for the procedural grid
+ * outside it (terrain shader: uStreets / uStreetRect). Without it (no LINZ road data) a fixed street
+ * grid overrides the Voronoi districts inside a circle (one grid roughly aligned with Queen Street):
+ * `hash` sets the grid angle (hash · 6.2831 rad, like the shader) and seeds the block / lot hashes.
+ * Must match the terrain shader's uCbd uniform.
  */
 export interface CbdGrid {
   x: number;
   z: number;
   radius: number;
   hash: number;
+  streets?: CbdStreets | null;
 }
 
-/** Voronoi district containing (x, z) (matches GLSL urbanDistrict() / district()). */
+/** Voronoi district containing (x, z) (matches GLSL urbanDistrict() / district() and urbanPattern()). */
 export function districtAt(x: number, z: number, size = DISTRICT_SIZE, out?: District, cbd?: CbdGrid | null): District {
+  if (cbd?.streets && size === DISTRICT_SIZE) {
+    const reg = cbd.streets.regionSD(x, z);
+    if (reg > 0) {
+      const o = out ?? ({} as District);
+      o.real = true;
+      o.cx = o.cz = o.hash = o.angle = o.sin = 0;
+      o.cos = 1;
+      o.border = reg;
+      return o;
+    }
+    const o = districtAt(x, z, size, out, null);
+    o.border = Math.min(o.border, -reg);
+    return o;
+  }
   if (cbd && size === DISTRICT_SIZE) {
     const r = Math.hypot(x - cbd.x, z - cbd.z);
     if (r < cbd.radius) {
       const o = out ?? ({} as District);
+      o.real = false;
       o.cx = cbd.x;
       o.cz = cbd.z;
       o.hash = f32(cbd.hash);
@@ -101,6 +124,7 @@ export function districtAt(x: number, z: number, size = DISTRICT_SIZE, out?: Dis
   }
   const angle = f32(h * 6.2831);
   const o = out ?? ({} as District);
+  o.real = false;
   o.cx = cx;
   o.cz = cz;
   o.hash = h;

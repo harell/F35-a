@@ -34,7 +34,8 @@ Iteration 1 additions (all procedural, no new assets or dependencies):
   Vero Centre, Pacifica, Metropolis, ANZ Centre, …; heights from public knowledge), suburban town
   centres, the port with ships at berth, and the motorway network (SH1, SH16, SH18, SH20)
   hand-traced from memory at ~100–200 m accuracy (`src/world/scenery/motorways.ts`). No map data
-  files were imported.
+  files were imported. (LINZ phase 2a replaced the CBD grid, the motorways and the arterials with
+  LINZ road centrelines; the hand-traced roads are the offline fallback. See tools/linz/README.md.)
 * Motorway surface texture, window / street-light LODs, harbour light reflections and the city
   light carpet are generated in code.
 * Volcanic cone crater bowls and pā terraces are shaded in the terrain shader from the cone list

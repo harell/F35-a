@@ -61,6 +61,20 @@ export function setAucklandLinz(bytes: Uint8Array | null): void {
 
 const GZIP = (b: Uint8Array) => b.length > 2 && b[0] === 0x1f && b[1] === 0x8b;
 
+/** Fetch a (usually gzip) binary asset and return the decompressed bytes. Throws on failure. */
+export async function fetchMaybeGzip(url: string): Promise<Uint8Array> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  let bytes = new Uint8Array(await res.arrayBuffer());
+  // The file is gzip; a host that already decoded it (Content-Encoding) hands back the raw bytes.
+  if (GZIP(bytes)) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('no DecompressionStream');
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  return bytes;
+}
+
 /**
  * Fetch, decompress and install the data. Resolves to false (and leaves the procedural fallback in
  * place) on any failure. Safe to call repeatedly: the first successful load is reused.
@@ -68,16 +82,7 @@ const GZIP = (b: Uint8Array) => b.length > 2 && b[0] === 0x1f && b[1] === 0x8b;
 export async function loadAucklandLinz(url = LINZ_URL): Promise<boolean> {
   if (current) return true;
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    let bytes = new Uint8Array(await res.arrayBuffer());
-    // The file is gzip; a host that already decoded it (Content-Encoding) hands back the raw bytes.
-    if (GZIP(bytes)) {
-      if (typeof DecompressionStream === 'undefined') throw new Error('no DecompressionStream');
-      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-    }
-    setAucklandLinz(bytes);
+    setAucklandLinz(await fetchMaybeGzip(url));
     return true;
   } catch (err) {
     console.warn('[world] LINZ Auckland data unavailable, using the procedural map', err);

@@ -31,7 +31,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
     items: [
       ['Procedural', 'Aircraft, terrain, clouds, cockpit, HMD symbology, menus, icons and the Auckland chart are generated in code.'],
       ['Textures', 'Water normals, lens flare and moon textures from the three.js examples (MIT). See docs/CREDITS.md.'],
-      ['Map data', 'Auckland coastline and terrain: sourced from the LINZ Data Service (Toitū Te Whenua Land Information New Zealand — NZ LiDAR 1m DEM, NZ Contour-Interpolated 8m DEM) and licensed for reuse under CC BY 4.0. Roads and landmarks hand-placed from public geography.'],
+      ['Map data', 'Auckland coastline, terrain and roads: sourced from the LINZ Data Service (Toitū Te Whenua Land Information New Zealand — NZ LiDAR 1m DEM, NZ Contour-Interpolated 8m DEM, NZ Addresses: Road Sections, NZ Tunnel Centrelines) and licensed for reuse under CC BY 4.0. Landmarks hand-placed from public geography.'],
     ],
   },
   {

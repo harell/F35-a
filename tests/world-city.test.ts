@@ -232,13 +232,15 @@ describe('Auckland signature details', () => {
     expect(OVERCAST_DECK.cover).toBeGreaterThan(0.95);
   });
 
-  it('terrain style: Auckland has a vineyard region on Waiheke, a CBD grid, and a shore band', () => {
+  it('terrain style: Auckland has a vineyard region on Waiheke, the CBD streets, and a shore band', () => {
     const st = terrainStyle('auckland');
     expect(st.vineyard).not.toBeNull();
     const [vx, vz, rx, rz] = st.vineyard!;
     const w = AKL.waiheke;
     expect(((w.x - vx) / rx) ** 2 + ((w.z - vz) / rz) ** 2).toBeLessThan(1);
-    expect(st.cbd).toEqual(AKL_CBD_GRID);
+    // the real (LINZ) CBD streets, with the fixed grid's parameters kept for the fallback
+    expect(st.cbd).toMatchObject(AKL_CBD_GRID);
+    expect(st.cbd?.streets).toBeTruthy();
     expect(st.roofs.length).toBe(6);
   });
 });
