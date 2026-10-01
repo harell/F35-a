@@ -257,7 +257,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     const y = pt.y;
     mapDir(vel.x, vel.z, dv);
     const lead = 30 * scale; // 30 s leader
-    const col = c.hostile;
+    const col = e.team === 'neutral' ? c.text : c.hostile; // civil traffic: neutral (text) colour
     pen.setDash(stale ? 'dash' : 'solid');
     pen.begin();
     // hostile: red half-diamond (chevron)

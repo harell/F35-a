@@ -82,7 +82,7 @@ export function tsdNeed(p: AircraftEntity, ctx: FrameContext): number {
   if (t && t.alive) return Math.max(need, t.position.distanceTo(p.position) * 1.1);
   let nearest = Infinity;
   for (const c of p.radar.contacts) {
-    if (c.team === p.team) continue;
+    if (c.team === p.team || c.team === 'neutral') continue;
     const e = ctx.world.getEntity(c.id);
     if (!e || !e.alive || e.kind !== 'aircraft') continue;
     nearest = Math.min(nearest, Math.hypot(c.position.x - p.position.x, c.position.z - p.position.z));
@@ -149,7 +149,7 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   // range: fit the farthest hostile air contact
   let far = 15_000;
   for (const c of p.radar.contacts) {
-    if (c.team === p.team) continue;
+    if (c.team === p.team || c.team === 'neutral') continue;
     far = Math.max(far, c.position.distanceTo(p.position));
   }
   rdrRange = autoTsdRange(rdrRange, Math.min(far * 1.1, 150_000), RDR_RANGES);
@@ -191,7 +191,7 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
     const cx = px + ((b + az) / (2 * az)) * pw;
     const cy = bottom - (r / rdrRange) * ph;
     const friend = e.team === p.team;
-    const col = friend ? PC.blue : PC.red;
+    const col = friend ? PC.blue : e.team === 'neutral' ? PC.value : PC.red;
     pen.begin();
     if (friend) pen.circle(cx, cy, 9);
     else pen.rect(cx - 9, cy - 9, 18, 18);

@@ -74,6 +74,7 @@ const ENEMY_LOADOUTS: Partial<Record<AircraftType, DefaultLoadout>> = {
   },
   tu22m: { stores: [], gunAmmo: 0, flares: 48, chaff: 48 },
   a50: { stores: [], gunAmmo: 0, flares: 48, chaff: 48 },
+  a320: { stores: [], gunAmmo: 0, flares: 0, chaff: 0 },
 };
 
 /** Gun fitted to an aircraft type (null = none). */

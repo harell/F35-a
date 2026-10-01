@@ -5,7 +5,7 @@
 import { Vector3 } from 'three';
 import { AIRCRAFT_INFO } from '../../core/data';
 import { DEG, clamp } from '../../core/math';
-import type { DifficultyParams, LoadoutId } from '../../core/types';
+import { isHostile, type DifficultyParams, type LoadoutId, type Team } from '../../core/types';
 import type { AiTask } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
@@ -117,7 +117,7 @@ function clampXZ(v: Vector3): Vector3 {
 }
 
 /** Resolve a mission task to an AiTask (null = none / unresolvable). */
-export function resolveTask(task: TaskDef | undefined, s: MissionState, forTeam: 'blue' | 'red' = 'red'): AiTask | undefined {
+export function resolveTask(task: TaskDef | undefined, s: MissionState, forTeam: Team = 'red'): AiTask | undefined {
   if (!task) return undefined;
   switch (task.kind) {
     case 'patrol':
@@ -130,7 +130,7 @@ export function resolveTask(task: TaskDef | undefined, s: MissionState, forTeam:
       const t = firstAlive(s.groups.get(task.group));
       if (t) return { kind: 'attack', targetId: t.id };
       // nothing to attack (not spawned / all dead): hostiles go for the player, friendlies idle
-      return s.player && forTeam !== s.player.team ? { kind: 'attack', targetId: s.player.id } : undefined;
+      return s.player && isHostile(forTeam, s.player.team) ? { kind: 'attack', targetId: s.player.id } : undefined;
     }
     case 'escort_group': {
       const t = firstAlive(s.groups.get(task.group));

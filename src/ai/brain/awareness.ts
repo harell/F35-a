@@ -16,6 +16,7 @@ import { Vector3 } from 'three';
 import type { SimWorld } from '../../sim/api';
 import type { AircraftEntity, IncomingMissile } from '../../sim/entities';
 import type { PilotSkill } from '../skill';
+import { isHostile } from '../../core/types';
 
 export interface Bandit {
   id: number;
@@ -83,7 +84,7 @@ export class Awareness {
     const contacts = ac.radar.contacts;
     for (let i = 0; i < contacts.length; i++) {
       const c = contacts[i] as (typeof contacts)[number] & { entityKind?: string; ownTime?: number };
-      if (c.team === ac.team) continue;
+      if (!isHostile(ac.team, c.team)) continue;
       if (c.entityKind !== undefined && c.entityKind !== 'aircraft') continue;
       const e = world.getEntity(c.id);
       if (!e || e.kind !== 'aircraft' || !e.alive) continue;
@@ -111,7 +112,7 @@ export class Awareness {
     const all = world.aircraft;
     for (let i = 0; i < all.length; i++) {
       const e = all[i];
-      if (!e.alive || e.team === ac.team) continue;
+      if (!e.alive || !isHostile(ac.team, e.team)) continue;
       const d2 = e.position.distanceToSquared(ac.position);
       if (d2 > vis * vis) continue;
       if (!this.lineOfSight(ac, e, world, now)) continue;

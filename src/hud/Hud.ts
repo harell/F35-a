@@ -127,6 +127,7 @@ export const createHud: CreateHud = (canvas, events) => {
     }),
     events.on('destroyed', ({ entity, attackerId }) => {
       if (entity.kind === 'missile' || entity.kind === 'decoy' || isPlayer(entity.id)) return;
+      if (entity.team === 'neutral') return; // civil losses: the mission callouts announce them
       if (isPlayer(attackerId) && entity.team !== playerTeam) {
         const t = killText(entity);
         if (t) st.kills.push(t, 'good');

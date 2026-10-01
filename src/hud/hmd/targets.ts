@@ -91,7 +91,9 @@ export function drawContacts(f: HudFrame): void {
     const e = world.getEntity(c.id);
     if (!e || !e.alive || e.team === p.team) continue;
     if (e.kind !== 'aircraft') continue; // ground / SAM tracks are drawn by drawGroundAndSams
-    const labelled = c.position.distanceToSquared(p.position) <= d2;
+    // civil traffic: white box, always labelled CIV so it is never mistaken for a bandit
+    const civil = e.team === 'neutral';
+    const labelled = civil || c.position.distanceToSquared(p.position) <= d2;
     const stale = now - c.lastSeen > 1.5;
     if (stale) f.proj.point(c.position, f.sp);
     else project(f, e);
@@ -101,14 +103,14 @@ export function drawContacts(f: HudFrame): void {
     pen.setDash(stale ? 'dash' : 'solid');
     pen.begin();
     pen.rect(sp.x - h, sp.y - h, h * 2, h * 2);
-    pen.strokeGlow(stale ? pal.dim : pal.main, 1.4);
+    pen.strokeGlow(civil ? pal.white : stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
     const lbl = labelled ? AIRCRAFT_SHORT[e.type] ?? '' : '';
     if (lbl) {
       const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
       const ly = sp.y + h + 8 * u;
       if (!f.occ.hits(sp.x - lw, ly - 6 * u, sp.x + lw, ly + 6 * u)) {
-        pen.text(lbl, sp.x, ly, pal.dim, 10.5);
+        pen.text(lbl, sp.x, ly, civil ? pal.white : pal.dim, 10.5);
         f.occ.add(sp.x - lw, ly - 6 * u, sp.x + lw, ly + 6 * u);
       }
     }

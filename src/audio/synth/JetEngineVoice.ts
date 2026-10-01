@@ -37,6 +37,8 @@ export const ENGINE_PROFILES: Record<AircraftType, EngineProfile> = {
   su57: { whine: 0.95, fan: 0.95, roar: 1.05, rumble: 1.05, ref: 32, maxDist: 5500 },
   tu22m: { whine: 0.72, fan: 0.78, roar: 1.3, rumble: 1.45, ref: 70, maxDist: 9000 },
   a50: { whine: 0.66, fan: 0.7, roar: 0.8, rumble: 1.25, ref: 70, maxDist: 8000 },
+  // high-bypass LEAP / PW1100G: fan whine and buzz-saw, little jet roar
+  a320: { whine: 0.8, fan: 0.85, roar: 0.6, rumble: 1.0, ref: 55, maxDist: 6000 },
 };
 
 export interface EngineDrive {
