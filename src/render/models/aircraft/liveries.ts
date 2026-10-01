@@ -330,7 +330,7 @@ function paintCamo(p: AtlasPainter, c: CamoSpec): void {
 /* ───────────────────────── civil airliner ───────────────────────── */
 
 /**
- * Air New Zealand style A320neo: white fuselage, black fin that sweeps down over the rear fuselage
+ * AeroFlop A320neo (fictional airline in Air NZ-inspired colours): white fuselage, black fin that sweeps down over the rear fuselage
  * with a white koru (unfurling fern frond) on it, black titles, grey wings, dark window row.
  * `z0` is the model z of the nose tip.
  */
@@ -343,8 +343,8 @@ export function registerAirlinerMaterials(key: string, b: AtlasBounds, z0: numbe
   });
 }
 
-const AIRLINE_TITLE = 'AIR NEW ZEALAND';
-const AIRLINE_REG = 'ZK-NHA';
+const AIRLINE_TITLE = 'AeroFlop';
+const AIRLINE_REG = 'ZK-FLP';
 const TAIL_BLACK = '#101113';
 
 function paintAirliner(p: AtlasPainter, z0: number): void {
@@ -392,7 +392,7 @@ function paintAirliner(p: AtlasPainter, z0: number): void {
       koru(ctx, S(34.0), 4.75, 1.55, '#f5f6f7', !mirror);
       // titles, registration
       // (side faces only reach ~y 1.05 on the 1.95 m fuselage; above that the atlas maps to 'top')
-      AtlasPainter.text(ctx, AIRLINE_TITLE, S(12.5), 0.7, 0.44, TAIL_BLACK, mirror);
+      AtlasPainter.text(ctx, AIRLINE_TITLE, S(12.0), 0.68, 0.62, TAIL_BLACK, mirror);
       AtlasPainter.text(ctx, AIRLINE_REG, S(29.0), -0.55, 0.28, 'rgba(60,64,68,0.9)', mirror);
       // cockpit windscreen + side windows
       poly(ctx, [

@@ -1,5 +1,6 @@
 /**
- * Civil air traffic around Auckland Airport (Auckland theatre only): neutral Air New Zealand A320s
+ * Civil air traffic around Auckland Airport (Auckland theatre only): neutral AeroFlop A320s
+ * (a fictional airline in Air NZ-inspired black-and-white colours)
  * landing on and departing from runway 05R/23L in a single flow direction per sortie.
  *
  * Neutral traffic is ignored by both sides' AI and SAMs; only the human player can (deliberately)
@@ -93,7 +94,7 @@ export class CivilTraffic {
       heading: f.heading,
       speed: Math.max(60, f.speed),
       name: 'A320neo',
-      callsign: `NZ${n}`,
+      callsign: `AeroFlop ${n}`,
       ai: null,
       groupId: 'civil',
       fuel: 0.6,

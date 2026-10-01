@@ -1,5 +1,5 @@
 /**
- * Neutral civil traffic (Air NZ A320s at Auckland Airport): the 'neutral' team, the scripted
+ * Neutral civil traffic (AeroFlop A320s at Auckland Airport): the 'neutral' team, the scripted
  * arrival / departure profiles, AI and SAMs ignoring airliners, and the player being able to
  * designate, shoot and destroy one (a civilian loss, never a kill).
  */
@@ -40,7 +40,7 @@ const RUNWAY: Runway = { x: 0, z: 0, heading: 250 * DEG, length: 3_600, elevatio
 
 function spawnCivil(world: SimWorld, kind: 'arrival' | 'departure', distance = 12_000): AircraftEntity {
   const f = kind === 'arrival' ? createArrival(RUNWAY, distance, A320_GEAR_HEIGHT) : createDeparture(RUNWAY, 195 * DEG, 7_000, A320_GEAR_HEIGHT);
-  const ac = world.spawnAircraft({ type: 'a320', team: 'neutral', position: new Vector3(0, 500, 0), heading: f.heading, speed: 70, callsign: 'NZ421', ai: null });
+  const ac = world.spawnAircraft({ type: 'a320', team: 'neutral', position: new Vector3(0, 500, 0), heading: f.heading, speed: 70, callsign: 'AeroFlop 421', ai: null });
   placeCivil(ac, f);
   return ac;
 }
@@ -207,7 +207,7 @@ describe('civil traffic in missions', () => {
       expect(a.type).toBe('a320');
       expect(a.team).toBe('neutral');
       expect(a.ai).toBeNull();
-      expect(a.callsign).toMatch(/^NZ\d+$/);
+      expect(a.callsign).toMatch(/^AeroFlop \d+$/);
     }
     akl.tick(60); // the opening departure lines up behind the arrival
     expect(akl.world.aircraft.some((a) => a.civil?.kind === 'departure')).toBe(true);
