@@ -26,6 +26,7 @@ const browser = await chromium.launch({
 });
 const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 
+// strike loadout: a bomb is selected, so the radar is in ground mode (ships are ground-mode contacts)
 /** Put the player 4 km off the ship, 1,500 m up, heading at it, and designate it. */
 async function designate(page, vessel) {
   return page.evaluate((vessel) => {
@@ -56,7 +57,7 @@ async function fly(mission) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await page.goto(`${base}?mission=${mission}&autostart=1&view=cockpit&quality=${quality}&fps=1`, { waitUntil: 'load' });
+  await page.goto(`${base}?mission=${mission}&autostart=1&view=cockpit&quality=${quality}&fps=1&loadout=strike_stealth`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 90000 });
   await page.waitForTimeout(3000);
   return { page, errors };
@@ -85,7 +86,12 @@ for (const [mission, tod] of [
     // sinking stages: kill the designated ship, then (within the PiP hold) show the pose T s in
     for (const T of [2, 20, 40, 60]) {
       const s = await designate(page, 'container');
-      await page.waitForTimeout(2500);
+      // keep it designated until the PiP shows it (the radar may auto-designate something else)
+      for (let i = 0; i < 6; i++) {
+        await designate(page, 'container');
+        await page.waitForTimeout(1000);
+        if ((await page.evaluate(() => window.__f35.targetCam())).rendered === s.id) break;
+      }
       await page.evaluate(
         ({ id, T }) => {
           const w = window.__f35.game.session.world;
