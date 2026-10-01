@@ -23,6 +23,13 @@ import type { HudLayout } from './layout';
 
 /** Seconds a destroyed target stays in the window. */
 export const PIP_DESTROYED_HOLD = 3;
+/** …a ship (it burns, lists and starts to settle — the sinking itself takes 60–90 s). */
+export const PIP_SHIP_HOLD = 6;
+
+/** How long the window holds on `t` after it is destroyed (s). */
+export function pipHold(t: AnyEntity): number {
+  return t.kind === 'ground' && t.type === 'ship' ? PIP_SHIP_HOLD : PIP_DESTROYED_HOLD;
+}
 /** Open / close animation time (s). */
 const OPEN_TIME = 0.22;
 
@@ -73,7 +80,11 @@ export function pipName(t: AnyEntity, short = false): string {
     const cs = (t.callsign || t.name).toUpperCase();
     return short ? cs : `${cs} ${AIRCRAFT_LABEL[t.type] ?? ''}`.trim();
   }
-  if (t.kind === 'ground' && isCivil(t)) return t.name.toUpperCase(); // civil ship: its name
+  if (t.kind === 'ground' && isCivil(t)) {
+    // civil ship: its name ("MV KŌTUKU TRADER"; narrow window: "KŌTUKU TRADER")
+    const n = t.name.toUpperCase();
+    return short ? n.replace(/^(MV|MS|MSC|SS) /, '') : n;
+  }
   if (short && t.kind === 'aircraft') return AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase();
   if (short && t.kind === 'sam') return SAM_LABEL[t.type] ?? t.type.toUpperCase();
   if (t.kind === 'aircraft') return `${AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase()} ${NATO_AIR[t.type] ?? ''}`.trim();
@@ -85,13 +96,13 @@ export function pipName(t: AnyEntity, short = false): string {
 /**
  * Status pill. SAM: what its radar is doing. Aircraft: aspect relative to the player (HOT = pointing at
  * us, FLANK = beaming, COLD = running). Civil airliner: its flight phase, or CHECK FIRE once the player
- * has locked it. Ground: TGT.
+ * has locked it. Civil ship: UNDERWAY / ANCHORED / MOORED (CHECK FIRE when locked). Ground: TGT.
  */
 export function pipStatus(t: AnyEntity, playerPos: { x: number; y: number; z: number }, locked = false): { text: string; tone: PipTone } {
   if (isCivil(t)) {
     if (!t.alive) return { text: t.kind === 'ground' ? 'SINKING' : 'DOWN', tone: 'danger' };
     if (locked) return { text: 'CHECK FIRE', tone: 'warn' };
-    if (t.kind === 'ground') return { text: t.velocity.lengthSq() > 0.25 ? 'UNDERWAY' : 'CIVIL', tone: 'civil' };
+    if (t.kind === 'ground') return { text: t.velocity.lengthSq() > 0.25 ? 'UNDERWAY' : t.anchored ? 'ANCHORED' : 'MOORED', tone: 'civil' };
     const phase = t.kind === 'aircraft' ? t.civil?.phase : undefined;
     return { text: phase ? CIVIL_PHASE[phase] : 'CIVIL', tone: 'civil' };
   }
@@ -180,7 +191,7 @@ export function stepPip(L: HudLayout, target: AnyEntity | null, lookup: (id: num
   // the target on screen just died: hold the shot for the explosion, even when the radar has already
   // moved on to the next target (the cut to it follows the hold)
   const prev = track.id !== null && (!target || target.id !== track.id) ? lookup(track.id) : null;
-  if (prev && !prev.alive && track.deadAge < PIP_DESTROYED_HOLD) {
+  if (prev && !prev.alive && track.deadAge < pipHold(prev)) {
     track.deadAge += dt;
     show = prev;
   } else if (target) {
@@ -223,6 +234,9 @@ const STATUS_SHORT: Record<string, string> = {
   APPROACH: 'APPR',
   TAKEOFF: 'T/O',
   LANDING: 'LDG',
+  UNDERWAY: 'U/W',
+  ANCHORED: 'ANCH',
+  MOORED: 'MRD',
 };
 
 let rangeKey = -1;
@@ -273,8 +287,14 @@ export function drawPip(f: HudFrame, t: AnyEntity | null): void {
   // name (top left) + lock tag (top right)
   const tag = civil ? (locked ? 'LOCK' : 'CIV') : locked ? 'LOCK' : '';
   const tagW = tag ? pen.textWidth(tag, 9) + 8 * u : 0;
+  const room = w - 12 * u - tagW;
   let name = pipName(t);
-  if (pen.textWidth(name, 10) > w - 12 * u - tagW) name = pipName(t, true);
+  if (pen.textWidth(name, 10) > room) name = pipName(t, true);
+  // still too long (a long ship name in a narrow window): clip it rather than overprint the tag
+  if (pen.textWidth(name, 10) > room) {
+    while (name.length > 3 && pen.textWidth(`${name}…`, 10) > room) name = name.slice(0, -1).trimEnd();
+    name = `${name}…`;
+  }
   pen.text(name, x + 6 * u, y + 9 * u, pal.white, 10, 'left');
   if (tag) pen.text(tag, x + w - 6 * u, y + 9 * u, civil ? (locked ? pal.warn : pal.white) : pal.bright, 9, 'right');
   // bottom strip: threat icon, range, status pill

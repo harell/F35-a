@@ -262,6 +262,7 @@ class SimWorldImpl implements SimWorld {
       health: spec.health ?? vessel?.health ?? data.health,
     });
     if (vessel) e.vessel = spec.vessel!;
+    e.anchored = !!spec.anchored && !spec.path;
     e.emitter = data.emitter;
     e.groupId = spec.groupId ?? '';
     const x = spec.position.x;

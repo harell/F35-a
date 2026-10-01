@@ -32,12 +32,14 @@ export class TargetCam {
   /** Last rendered target (debug / tests). */
   lastTargetId: number | null = null;
   private readonly surfaceAt: (x: number, z: number) => number;
+  private readonly waterAt: (x: number, z: number) => boolean;
 
   constructor(
     private readonly world: SimWorld,
     private readonly entities: EntityRendererApi,
   ) {
     this.surfaceAt = (x, z) => world.terrain.surfaceHeightAt(x, z);
+    this.waterAt = (x, z) => world.terrain.isWater(x, z);
   }
 
   /**
@@ -51,7 +53,7 @@ export class TargetCam {
     const t = this.world.getEntity(rect.targetId);
     if (!t || t.kind === 'missile' || t.kind === 'decoy') return false;
     const cam = this.camera;
-    targetCamPose(t as CamTarget, this.world.time, this.pose, this.surfaceAt);
+    targetCamPose(t as CamTarget, this.world.time, this.pose, this.surfaceAt, this.waterAt);
     cam.position.copy(this.pose.position);
     cam.up.copy(this.pose.up);
     cam.lookAt(this.pose.look);
