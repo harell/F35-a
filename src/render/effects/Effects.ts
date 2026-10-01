@@ -3,15 +3,16 @@
  * (flash, fireball, smoke, sparks, debris, ground shockwave, water splash columns), burning wrecks &
  * tall smoke columns, falling-wreck fire trails, gun tracers, muzzle flashes, bullet impacts, flares
  * (burning cores + smoke arcs), chaff glitter, contrails, wingtip vortices, LEX vapour, transonic
- * vapour cones and damage smoke.
+ * vapour cones, damage smoke, ship funnel exhaust and the fires riding a sinking hull down.
  *
  * Budgets: particle capacities and emission rates scale with QualitySettings.particleScale and with
  * distance to the camera. Everything is pooled; the per-frame path allocates nothing.
  */
-import { Color, Group, Vector3 } from 'three';
+import { Color, Group, Matrix4, Vector3 } from 'three';
 import type { CreateEffects, EffectsApi, FrameContext } from '../../core/contracts';
 import type { ExplosionSize } from '../../core/types';
-import type { AircraftEntity, MissileEntity, MunitionDef } from '../../sim/entities';
+import type { AircraftEntity, GroundTargetEntity, MissileEntity, MunitionDef } from '../../sim/entities';
+import { shipDims, shipMatrix } from '../visuals/shipMotion';
 import { AIRCRAFT_SPECS, type AircraftSpec } from '../models/specs';
 import { GpuParticles, resetSpawn, spawnParams, type ParticleSpawn } from './GpuParticles';
 import { Ribbons, type RibbonStyle } from './Ribbons';
@@ -110,6 +111,15 @@ interface FireFx {
   fAcc: number;
   sAcc: number;
 }
+/** A sinking ship: fires on its deck that ride the hull down (shipMotion.shipMatrix). */
+interface ShipFx {
+  ship: GroundTargetEntity | null;
+  /** Fire points (local, bow at -Z) and their sizes. */
+  pts: Vector3[];
+  sizes: number[];
+  fAcc: number;
+  sAcc: number;
+}
 interface Delayed {
   active: boolean;
   t: number;
@@ -126,6 +136,10 @@ interface Pending {
 }
 
 const _v = new Vector3();
+const _sm = new Matrix4();
+/** Funnel exhaust: puffs per second per ship (× particleScale × distance LOD), drawn out to this range (m). */
+const FUNNEL_SMOKE_RATE = 1.6;
+const FUNNEL_SMOKE_FAR = 8000;
 const _w = new Vector3();
 const _f = new Vector3();
 
@@ -162,6 +176,9 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const recent: { pos: Vector3; t: number }[] = Array.from({ length: 16 }, () => ({ pos: new Vector3(), t: -99 }));
   let recentHead = 0;
   const aaa = new Map<number, { firing: boolean; pos: Vector3 }>();
+  const shipFx: ShipFx[] = Array.from({ length: 8 }, () => ({ ship: null, pts: [new Vector3(), new Vector3(), new Vector3()], sizes: [0, 0, 0], fAcc: 0, sAcc: 0 }));
+  /** Funnel smoke emission accumulators (per live ship id). */
+  const funnelAcc = new Map<number, number>();
   const trailStyles = new Map<string, RibbonStyle | null>();
 
   const now = () => world.time;
@@ -729,6 +746,140 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     }
   }
 
+  /**
+   * Ship kill: a fire pillar off the deck, secondaries along the hull, then fires on the fore deck,
+   * amidships and aft that keep burning (and feed one tall smoke column) while the hull lists,
+   * settles and goes under (updateShips). A burning oil slick marks the spot afterwards.
+   */
+  function shipKill(g: GroundTargetEntity): void {
+    const dims = shipDims(g.vessel);
+    const L = dims.length;
+    const k = Math.max(0.6, Math.min(1.6, L / 180));
+    shipMatrix(g, now(), _sm);
+    _v.set(0, dims.deck, 0).applyMatrix4(_sm);
+    groundPillar(_v.x, _v.y, _v.z, 1.6 * k);
+    for (let i = 0; i < 4; i++) {
+      _v.set((rnd() - 0.5) * dims.beam * 0.6, dims.deck + 2, (rnd() - 0.5) * L * 0.8).applyMatrix4(_sm);
+      schedule(0.5 + rnd() * 2.5 * (i + 1), _v.x, _v.y, _v.z, i === 0 ? 'huge' : i === 1 ? 'large' : 'medium', 'ground');
+    }
+    funnelAcc.delete(g.id);
+    const fx = shipFx.find((f) => !f.ship) ?? shipFx[0];
+    fx.ship = g;
+    fx.fAcc = fx.sAcc = 0;
+    fx.pts[0].set(0, dims.deck + 2, -L * 0.28);
+    fx.pts[1].set(dims.beam * 0.15, dims.deck + 4, L * 0.02);
+    fx.pts[2].set(0, dims.deck + 6, L * 0.3);
+    fx.sizes[0] = 2.2 * k;
+    fx.sizes[1] = 1.8 * k;
+    fx.sizes[2] = 2.6 * k;
+  }
+
+  function updateShips(t: number, dt: number): void {
+    // sinking ships
+    for (const fx of shipFx) {
+      const g = fx.ship;
+      if (!g) continue;
+      const sink = shipMatrix(g, t, _sm);
+      if (sink.progress >= 1) {
+        // gone: a last gasp of steam and a burning slick where she went down
+        _v.set(0, 0, 0).applyMatrix4(_sm);
+        for (let i = 0; i < count(10, distCam(_v.x, 0, _v.z)); i++)
+          smallPuff(_v.x + (rnd() - 0.5) * 60, 1, _v.z + (rnd() - 0.5) * 60, 0, 6 + rnd() * 6, 0, C.steam, 0.6, 8, 40, 7);
+        startFire(g.position.x, 0.3, g.position.z, 1.3, 60);
+        fx.ship = null;
+        continue;
+      }
+      const flame = 1 - smooth(0.6, 0.95, sink.progress);
+      for (let i = 0; i < fx.pts.length; i++) {
+        _v.copy(fx.pts[i]).applyMatrix4(_sm);
+        const d = distCam(_v.x, _v.y, _v.z);
+        const size = fx.sizes[i];
+        if (_v.y < 0.6) {
+          // flooded: steam where the fire meets the sea
+          if (_v.y > -8 && rnd() < dt * 2 * ps) smallPuff(_v.x, 1, _v.z, 0, 4, 0, C.steam, 0.5, 5, 26, 5);
+          continue;
+        }
+        fx.fAcc += dt * 14 * size * flame * ps * lodK(d);
+        while (fx.fAcc >= 1) {
+          fx.fAcc -= 1;
+          const r = 3 * size;
+          fireLick(_v.x + (rnd() - 0.5) * r * 2, _v.y + rnd() * 2, _v.z + (rnd() - 0.5) * r * 2, (rnd() - 0.5) * 2, 3 + rnd() * 5, (rnd() - 0.5) * 2, (3 + rnd() * 3.5) * size, 0.7 + rnd() * 0.5, 1, 2);
+        }
+      }
+      // one tall smoke column from amidships (fed by all the fires)
+      _v.copy(fx.pts[1]).applyMatrix4(_sm);
+      if (_v.y < 0) _v.y = 0;
+      const d = distCam(_v.x, _v.y, _v.z);
+      const k = fx.sizes[1];
+      fx.sAcc += dt * (1.6 + 1.6 * k) * ps * Math.max(0.5, lodK(d)) * (0.4 + 0.6 * flame);
+      while (fx.sAcc >= 1) {
+        fx.sAcc -= 1;
+        resetSpawn(P);
+        P.x = _v.x + (rnd() - 0.5) * 30;
+        P.y = _v.y + 4 + rnd() * 6;
+        P.z = _v.z + (rnd() - 0.5) * 30;
+        P.vx = (rnd() - 0.5) * 3;
+        P.vy = 9 + rnd() * 6;
+        P.vz = (rnd() - 0.5) * 3;
+        P.drag = 0.28;
+        P.grav = 4.2;
+        P.size0 = 9 * k;
+        P.size1 = (45 + rnd() * 40) * k;
+        P.sizeCurve = 1.6;
+        P.life = 20 + rnd() * 10;
+        P.rot = rnd() * 6.28;
+        P.rotSpeed = (rnd() - 0.5) * 0.15;
+        P.variant = (rnd() * 4) | 0;
+        col0(P, flame > 0.3 ? C.smokeDark : C.smokeMid, 0.85 * (0.5 + 0.5 * flame));
+        col1(P, C.smokeGrey, 0);
+        P.fadeIn = 0.04;
+        P.minPx = 3;
+        smoke.spawn(P, t);
+      }
+    }
+    // living ships: a thin plume from the funnel (low rate, scaled by particleScale and distance)
+    for (const g of world.ground) {
+      if (g.type !== 'ship' || !g.alive || !g.vessel) continue;
+      const funnel = shipDims(g.vessel).funnel!;
+      const d = distCam(g.position.x, 40, g.position.z);
+      if (d > FUNNEL_SMOKE_FAR) {
+        funnelAcc.delete(g.id);
+        continue;
+      }
+      let acc = (funnelAcc.get(g.id) ?? rnd()) + dt * FUNNEL_SMOKE_RATE * ps * lodK(d);
+      if (acc >= 1) {
+        shipMatrix(g, t, _sm);
+        _v.set(funnel[0], funnel[1] + 1.5, funnel[2]).applyMatrix4(_sm);
+        const v = g.velocity;
+        while (acc >= 1) {
+          acc -= 1;
+          resetSpawn(P);
+          P.x = _v.x + (rnd() - 0.5) * 2;
+          P.y = _v.y;
+          P.z = _v.z + (rnd() - 0.5) * 2;
+          P.vx = v.x * 0.8 + (rnd() - 0.5);
+          P.vy = 3 + rnd() * 2;
+          P.vz = v.z * 0.8 + (rnd() - 0.5);
+          P.drag = 0.5;
+          P.grav = 1;
+          P.size0 = 3.5;
+          P.size1 = 22 + rnd() * 12;
+          P.sizeCurve = 1.6;
+          P.life = 9 + rnd() * 4;
+          P.rot = rnd() * 6.28;
+          P.rotSpeed = (rnd() - 0.5) * 0.3;
+          P.variant = (rnd() * 4) | 0;
+          col0(P, C.smokeMid, 0.42);
+          col1(P, C.smokeGrey, 0);
+          P.fadeIn = 0.15;
+          P.minPx = 1.5;
+          smoke.spawn(P, t);
+        }
+      }
+      funnelAcc.set(g.id, acc);
+    }
+  }
+
   function schedule(delay: number, x: number, y: number, z: number, size: ExplosionSize, surface: 'air' | 'ground' | 'water'): void {
     const d = delayed.find((e) => !e.active);
     if (!d) return;
@@ -812,17 +963,18 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       if (entity.kind === 'aircraft') {
         const spec = AIRCRAFT_SPECS[(entity as AircraftEntity).type];
         airKill(p, entity.velocity, spec ? spec.length : 17);
+      } else if (entity.kind === 'ground' && entity.type === 'ship') {
+        shipKill(entity);
       } else if (entity.kind === 'sam' || entity.kind === 'ground') {
         const type = (entity as { type: string }).type;
-        const bigFire = type === 'fuel' || type === 'ship' || type === 'factory' || type === 'sa10';
-        const water = world.terrain.isWater(p.x, p.z) && type === 'ship';
-        const gy = water ? 0 : groundAt(p.x, p.z);
+        const bigFire = type === 'fuel' || type === 'factory' || type === 'sa10';
+        const gy = groundAt(p.x, p.z);
         // tall, long-lived fire + smoke column readable from several km
         startFire(p.x, gy, p.z, bigFire ? 2.8 : 1.7, bigFire ? 170 : 120);
-        if (!water) groundPillar(p.x, gy, p.z, bigFire ? 1.6 : 1);
+        groundPillar(p.x, gy, p.z, bigFire ? 1.6 : 1);
         const n = bigFire ? 4 : 3;
         for (let i = 0; i < n; i++)
-          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', water ? 'water' : 'ground');
+          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', 'ground');
       }
     }),
     events.on('landmark:destroyed', ({ landmark }) => {
@@ -1338,6 +1490,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         scanAircraft(t, dt);
         scanDecoys(t, dt);
         updateFires(t, dt);
+        updateShips(t, dt);
         debris.update(dt, groundAt, debrisTrail);
         pulses.update(dt);
       }

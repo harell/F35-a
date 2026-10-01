@@ -21,6 +21,9 @@ import { GroundVisual, SamVisual } from './visuals/SiteVisuals';
 import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
 
 const _p = new Vector3();
+/** Ship nav lights are drawn out to this range (m); cabin / deck lights closer in. */
+const SHIP_LIGHTS_FAR = 16_000;
+const SHIP_DECK_LIGHTS_FAR = 7_000;
 const eyeCache = new Map<AircraftType, Vector3>();
 
 function paletteFor(theater: TheaterId | undefined): PaletteId {
@@ -56,7 +59,8 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   const missilePool = new Map<MunitionId, MissileVisual[]>();
   const sams = new Map<number, Tracked<SamVisual>>();
   const grounds = new Map<number, Tracked<GroundVisual>>();
-  const lights = new SpriteBatch(256);
+  // aircraft nav lights / strobes + civil ships' night lights (a cruise liner has ~100 cabin lights)
+  const lights = new SpriteBatch(1024);
   group.add(lights.mesh);
 
   let playerVisible = true;
@@ -99,6 +103,28 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       } else lights.add(_p.x, _p.y, _p.z, r * 1.6 * k, g * 1.6 * k, b * 1.6 * k, 1, 0.6, night ? 3.5 : 2);
     }
   };
+  /** Civil ships at night: nav lights by COLREGS state, cabin / deck lights up close. */
+  const shipLightsFor = (tr: Tracked<GroundVisual>): void => {
+    const v = tr.v;
+    const mode = v.lightMode;
+    if (!mode || !v.root.visible) return;
+    const ctx = fctx!;
+    const d2 = v.root.position.distanceToSquared(ctx.camera.position);
+    if (d2 > SHIP_LIGHTS_FAR * SHIP_LIGHTS_FAR) return;
+    const deck = d2 < SHIP_DECK_LIGHTS_FAR * SHIP_DECK_LIGHTS_FAR;
+    v.root.updateMatrix();
+    const m = v.root.matrix; // the entities group sits at the origin
+    const L = v.proto.lights;
+    for (let i = 0; i < L.length; i++) {
+      const l = L[i];
+      if (l.kind === 'deck' ? !deck : l.kind === 'anchor' ? mode !== 2 : mode !== 1) continue;
+      _p.copy(l.pos).applyMatrix4(m);
+      if (_p.y < 0.3) continue; // flooded (sinking ships are not lit anyway)
+      const c = l.color;
+      const k = l.kind === 'deck' ? 1.3 : 2.2;
+      if (!lights.add(_p.x, _p.y, _p.z, (((c >> 16) & 255) / 255) * k, (((c >> 8) & 255) / 255) * k, ((c & 255) / 255) * k, 1, l.size, l.kind === 'deck' ? 1.2 : 2.5)) return;
+    }
+  };
   const sweepAircraft = (tr: Tracked<AircraftVisual>, id: number): void => {
     if (tr.seen !== frame) {
       tr.v.dispose();
@@ -132,7 +158,10 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
     lights.begin(pixelScale(ctx.camera.fov, ctx.screen.height));
     // tactical view: the HUD draws its own north-up 2D map (contacts, SAM rings, route) over the
     // faint 3D background, so no 3D markers are drawn there (they would not match the map scale)
-    if (ctx.viewMode !== 'tactical') aircraft.forEach(lightFor);
+    if (ctx.viewMode !== 'tactical') {
+      aircraft.forEach(lightFor);
+      if (env.isNight) grounds.forEach(shipLightsFor);
+    }
     lights.end();
   }
 

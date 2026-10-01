@@ -1,7 +1,8 @@
 /**
  * DEV ONLY — SAM site / ground target preview for the models lab (sam:<type>, gt:<type>,
  * gt:ship:container / gt:ship:cruise for the civil merchant ships).
- * Animates radars/launchers with fake entity state; &dead=1 shows the wreck; &pal=desert|grey.
+ * Animates radars/launchers with fake entity state; &dead=1 shows the wreck (a ship sinks from t = 0;
+ * &anchored=1 swings it at anchor); &pal=desert|grey.
  */
 import { Group, Scene, Vector3 } from 'three';
 import { GroundTargetEntity, SamSiteEntity } from '../../sim/entities';
@@ -37,7 +38,9 @@ export function buildLabGround(id: string, _scene: Scene, onUpdate: (fn: (t: num
   const e = new GroundTargetEntity(1, type, vessel ? 'neutral' : 'red');
   e.vessel = vessel ?? null;
   e.alive = !dead;
-  if (type === 'ship') e.velocity.set(0, 0, -10);
+  if (dead) e.destroyedAt = 0;
+  e.anchored = q.get('anchored') === '1';
+  if (type === 'ship' && !e.anchored) e.velocity.set(0, 0, -10);
   const v = new GroundVisual(getGroundPrototype(type, pal, e.vessel));
   holder.add(v.root);
   onUpdate((t, dt) => {

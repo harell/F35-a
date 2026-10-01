@@ -198,6 +198,8 @@ export interface GroundSpawn {
   health?: number;
   /** Civil merchant ship class (type 'ship'): hull size and hit points from VESSEL_DATA. */
   vessel?: VesselClass;
+  /** Riding at anchor (civil ship, no path): the visual swings about the bow. */
+  anchored?: boolean;
 }
 
 /* ───────────────────────── Sim world (implemented by SIM-CORE agent) ───────────────────────── */

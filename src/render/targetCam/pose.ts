@@ -10,11 +10,16 @@
  *    behind it as it manoeuvres.
  *  - SAM sites / ground targets: a slow orbit at low elevation around the site (radars spin, launchers
  *    slew — SiteVisuals animates them in the shared scene), never below the terrain.
+ *  - ships: a wide, slow orbit (~1.65× the hull length, 8–15° up) looking at mid-superstructure, so
+ *    the whole 270–290 m hull, its smoke and the swell read in the small window. Where land (or the
+ *    wharf a ship is moored at) blocks part of the circle, the camera swings to and fro over the
+ *    widest stretch of open water instead of flying through the city.
  *
  * Everything here is allocation-free and three.js-math only so it can be unit tested without WebGL.
  */
 import { Quaternion, Vector3 } from 'three';
-import type { AircraftType, GroundTargetType, SamType } from '../../core/types';
+import type { AircraftType, GroundTargetType, SamType, VesselClass } from '../../core/types';
+import { shipDims } from '../visuals/shipMotion';
 
 /** Vertical field of view of the target camera (deg). */
 export const TARGET_CAM_FOV = 32;
@@ -50,7 +55,21 @@ const SAM_FRAMING: Record<SamType, { dist: number; lookY: number }> = {
 };
 
 /** Ground target framing scale (× entity radius) and limits. */
-const GROUND_SCALE: Partial<Record<GroundTargetType, number>> = { ship: 2.6, bridge: 1.6, factory: 1.9, hangar: 2.2 };
+const GROUND_SCALE: Partial<Record<GroundTargetType, number>> = { bridge: 1.6, factory: 1.9, hangar: 2.2 };
+
+/**
+ * Ship framing: orbit distance (× hull length), look-at height (fraction of the way from the
+ * waterline up to the top of the superstructure), elevation band (rad) and orbit rate (rad/s).
+ */
+export const SHIP_FRAMING = {
+  distK: 1.65,
+  lookK: 0.55,
+  elMin: (8 * Math.PI) / 180,
+  elMax: (15 * Math.PI) / 180,
+  rate: (2 * Math.PI) / 150,
+};
+/** Directions sampled around a ship to find open water for the orbit. */
+const SHIP_RING = 32;
 
 /** Minimal entity shape the pose needs (aircraft / SAM / ground). */
 export interface CamTarget {
@@ -60,6 +79,8 @@ export interface CamTarget {
   readonly position: Vector3;
   readonly quaternion: Quaternion;
   readonly radius: number;
+  /** Civil merchant ship class (ground 'ship'); null / absent for the corvette and everything else. */
+  readonly vessel?: VesselClass | null;
 }
 
 export interface CamPose {
@@ -81,8 +102,57 @@ export function framingDistance(t: CamTarget): number {
     return span * 1.7;
   }
   if (t.kind === 'sam') return SAM_FRAMING[t.type as SamType]?.dist ?? 30;
+  if (isShip(t)) return shipDims(t.vessel).length * SHIP_FRAMING.distK;
   const k = GROUND_SCALE[t.type as GroundTargetType] ?? 2.2;
   return Math.max(16, Math.min(260, t.radius * k));
+}
+
+function isShip(t: CamTarget): boolean {
+  return t.kind === 'ground' && t.type === 'ship';
+}
+
+/** Look-at height (m above the waterline) for a ship: mid-superstructure. */
+export function shipLookY(t: CamTarget): number {
+  const d = shipDims(t.vessel);
+  return d.deck + (d.height - d.deck) * SHIP_FRAMING.lookK;
+}
+
+/**
+ * Orbit azimuth around a ship at `time`. With no water test (or water all round) it is a plain slow
+ * orbit; otherwise the camera ping-pongs across the widest arc of the ring that is over water.
+ */
+export function shipOrbitAngle(t: CamTarget, time: number, d: number, waterAt?: (x: number, z: number) => boolean): number {
+  const phase = time * SHIP_FRAMING.rate + t.id * 1.7;
+  if (!waterAt) return phase;
+  const step = (Math.PI * 2) / SHIP_RING;
+  const px = t.position.x;
+  const pz = t.position.z;
+  // longest run of water samples around the (circular) ring: walk it twice so a run across the
+  // start is seen whole
+  let bestStart = -1;
+  let bestLen = 0;
+  let runStart = -1;
+  let runLen = 0;
+  for (let i = 0; i < SHIP_RING * 2; i++) {
+    const k = i % SHIP_RING;
+    const a = k * step;
+    if (waterAt(px + Math.sin(a) * d, pz + Math.cos(a) * d)) {
+      if (runLen === 0) runStart = i;
+      runLen++;
+      if (runLen >= SHIP_RING) return phase; // open water all round: full orbit
+      if (runLen > bestLen) {
+        bestLen = runLen;
+        bestStart = runStart;
+      }
+    } else runLen = 0;
+  }
+  if (bestLen === 0) return phase; // no water anywhere at this range (should not happen for a ship)
+  // swing to and fro (eased ends) over the arc, a margin inside its edges
+  const a0 = bestStart * step;
+  const span = Math.max(0, (bestLen - 1) * step);
+  const margin = Math.min(span * 0.15, step);
+  const s = 0.5 - 0.5 * Math.cos(phase);
+  return a0 + margin + (span - 2 * margin) * s;
 }
 
 const _off = new Vector3();
@@ -93,8 +163,15 @@ const _right = new Vector3();
 /**
  * Compute the camera pose for `t` at time `time` (s).
  * @param surfaceAt  ground / sea surface height (m) at (x, z) — keeps the camera above the terrain
+ * @param waterAt    is (x, z) open water? — keeps a ship's orbit off the land
  */
-export function targetCamPose(t: CamTarget, time: number, out: CamPose, surfaceAt?: (x: number, z: number) => number): CamPose {
+export function targetCamPose(
+  t: CamTarget,
+  time: number,
+  out: CamPose,
+  surfaceAt?: (x: number, z: number) => number,
+  waterAt?: (x: number, z: number) => boolean,
+): CamPose {
   const d = framingDistance(t);
   if (t.kind === 'aircraft') {
     // In front of the nose, measured in a LEVEL frame: horizontally ~13° off the nose heading, ~10°
@@ -123,6 +200,14 @@ export function targetCamPose(t: CamTarget, time: number, out: CamPose, surfaceA
     out.up.set(0, 1, 0).lerp(_bodyUp, AIR_ROLL_FOLLOW);
     if (out.up.lengthSq() < 1e-6) out.up.set(0, 1, 0);
     out.up.normalize();
+  } else if (isShip(t)) {
+    const lookY = shipLookY(t);
+    const ang = shipOrbitAngle(t, time, d, waterAt);
+    const mid = (SHIP_FRAMING.elMin + SHIP_FRAMING.elMax) / 2;
+    const el = mid + ((SHIP_FRAMING.elMax - SHIP_FRAMING.elMin) / 2) * Math.sin(time * 0.071 + t.id);
+    out.look.set(t.position.x, t.position.y + lookY, t.position.z);
+    out.position.set(t.position.x + Math.sin(ang) * Math.cos(el) * d, t.position.y + lookY + Math.sin(el) * d, t.position.z + Math.cos(ang) * Math.cos(el) * d);
+    out.up.set(0, 1, 0);
   } else {
     // slow orbit (one lap ≈ 70 s), phase from the id so two sites never look identical
     const lookY = t.kind === 'sam' ? (SAM_FRAMING[t.type as SamType]?.lookY ?? 2.5) : Math.min(12, Math.max(1.5, t.radius * 0.18));

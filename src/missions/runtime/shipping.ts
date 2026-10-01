@@ -99,7 +99,7 @@ export class CivilShipping {
   }
 
   setup(): void {
-    for (const b of PORT_BERTHS) this.spawnAt(b, b.heading);
+    for (const b of PORT_BERTHS) this.spawnAt(b, b.heading, false);
     // 2–4 at anchor, 1–2 under way, never more than 8 ships in all
     const anchored = 2 + Math.floor(this.rng() * 3);
     const moving = anchored < 4 && this.rng() < 0.5 ? 2 : 1;
@@ -108,7 +108,7 @@ export class CivilShipping {
       const j = Math.floor(this.rng() * (i + 1));
       [slots[i], slots[j]] = [slots[j], slots[i]];
     }
-    for (const b of slots.slice(0, anchored)) this.spawnAt(b, b.heading + (this.rng() - 0.5) * 30);
+    for (const b of slots.slice(0, anchored)) this.spawnAt(b, b.heading + (this.rng() - 0.5) * 30, true);
     for (const r of SHIP_ROUTES.slice(0, moving)) this.spawnOnRoute(r);
   }
 
@@ -117,13 +117,14 @@ export class CivilShipping {
     return list[this.nameIdx[v]++ % list.length];
   }
 
-  private spawnAt(b: ShipBerth, headingDeg: number): GroundTargetEntity {
+  private spawnAt(b: ShipBerth, headingDeg: number, anchored: boolean): GroundTargetEntity {
     const e = this.s.world.spawnGround({
       type: 'ship',
       team: 'neutral',
       vessel: b.vessel,
       position: new Vector3(b.x, 0, b.z),
       heading: headingDeg * DEG,
+      anchored,
       name: this.nextName(b.vessel),
       groupId: 'civil-ship',
     });
