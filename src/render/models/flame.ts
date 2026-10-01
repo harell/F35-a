@@ -379,6 +379,8 @@ export class Flame {
   dryGlow = 1;
   /** Night look (saturated orange, brighter interior). */
   night = false;
+  /** Nozzle exit radius relative to the constructor radius (variable-area nozzle). */
+  exitScale = 1;
   private prevAb = Number.NaN;
   private lightT = -1e9;
   private cutting = false;
@@ -442,7 +444,7 @@ export class Flame {
    * @param rpm engine 0..1.05 (dry glow)
    */
   update(time: number, ab: number, rpm: number, visible = true, far = false): void {
-    const r = this.radius;
+    const r = this.radius * this.exitScale;
     const dry = clamp01((rpm - 0.6) / 0.4);
     const u = this.mOuter.uniforms;
     const c = this.mCore.uniforms;
@@ -479,6 +481,7 @@ export class Flame {
     // hot nozzle interior: dull red at MIL, orange in AB, stronger at night
     const night = this.night ? 1 : 0;
     const inner = this.inner!;
+    inner.scale.x = inner.scale.y = r * 0.9;
     const hot = this.mHot!.uniforms;
     const hotK = dry * (0.22 + 0.4 * night) + abK * (0.75 + 0.35 * night) * (1 + pop * AB_POP.flash);
     inner.visible = visible && !far && hotK > 0.01;

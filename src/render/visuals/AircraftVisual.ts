@@ -6,7 +6,7 @@
 import { Group, Material, Mesh, Object3D, Vector3 } from 'three';
 import type { AircraftEntity } from '../../sim/entities';
 import type { MunitionId, WeaponId } from '../../core/types';
-import type { AircraftPrototype, DriveDef, StoreSlot } from '../models/aircraft/types';
+import { nozzleOpening, type AircraftPrototype, type DriveDef, type StoreSlot } from '../models/aircraft/types';
 import type { AircraftSpec } from '../models/specs';
 import { MUNITION_DIMS } from '../models/specs';
 import { Flame } from '../models/flame';
@@ -44,6 +44,9 @@ export class AircraftVisual {
   private wreck = false;
   private originalMats = new Map<Mesh, Material | Material[]>();
   private sweep = 0;
+  /** Variable-area nozzle: smoothed opening 0..1 (NaN until the first update snaps it). */
+  private nozzleOpen = Number.NaN;
+  private readonly nozzle: { mesh: Mesh; def: DriveDef } | null = null;
   private lodLevel = -1;
   /** World-space light anchors (updated by the renderer). */
   readonly lightLocal: { pos: Vector3; color: number; kind: 'nav' | 'strobe' | 'tail' }[];
@@ -61,7 +64,10 @@ export class AircraftVisual {
     for (const def of proto.drives) {
       const pivot = this.lod0.getObjectByName(`pivot:${def.part}`);
       const part = pivot?.getObjectByName(`part:${def.part}`);
-      if (part) this.drives.push({ obj: part, def });
+      if (!part) continue;
+      // the nozzle morphs instead of rotating (clone(true) gave this instance its own influences)
+      if (def.kind === 'nozzle') this.nozzle = { mesh: part as Mesh, def };
+      else this.drives.push({ obj: part, def });
     }
     this.lod0.children.forEach((c) => {
       if (c.name.startsWith('pivot:pylon')) {
@@ -206,6 +212,26 @@ export class AircraftVisual {
     }
   }
 
+  /**
+   * Variable-area nozzle: follow the rpm/AB schedule with an actuator lag, set the morph and keep
+   * the flame (plume, hot interior, glow) sized to the exit. LOD1 is merged at the closed pose.
+   */
+  private updateNozzle(ac: AircraftEntity, dt: number, level: number): void {
+    const nz = this.nozzle;
+    if (!nz) return;
+    // a wreck's nozzle stays where it was
+    const cur = this.nozzleOpen === this.nozzleOpen ? this.nozzleOpen : 0;
+    const target = ac.alive ? nozzleOpening(ac.flight.engineRpm, ac.flight.afterburner) : cur;
+    if (this.nozzleOpen !== this.nozzleOpen) this.nozzleOpen = target;
+    // ~0.5 s actuator time constant
+    else this.nozzleOpen += (target - this.nozzleOpen) * Math.min(1, dt * 2);
+    const k = level === 0 ? this.nozzleOpen : 0;
+    const inf = nz.mesh.morphTargetInfluences;
+    if (inf) inf[0] = k;
+    const scale = (nz.def.extra ?? 1) + (nz.def.max - (nz.def.extra ?? 1)) * k;
+    for (const f of this.flames) f.exitScale = scale;
+  }
+
   /** Swap every mesh to the charred material (or back). */
   private setWreck(on: boolean): void {
     if (on === this.wreck) return;
@@ -241,6 +267,7 @@ export class AircraftVisual {
       this.lod1.visible = level === 1;
     }
     this.setWreck(!ac.alive);
+    this.updateNozzle(ac, dt, level);
     if (level === 0) {
       this.applyDrives(ac, time, dt);
       this.updateStores(ac);

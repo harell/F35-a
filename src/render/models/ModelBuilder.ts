@@ -6,16 +6,25 @@
  *  - For trailing-edge surfaces the hinge axis points to the RIGHT (+X-ish) → positive = TE down.
  *  - For rudders the hinge axis points UP → positive = TE to the right (nose-right yaw).
  *  - For doors the axis is chosen per door; see openAngle in the part metadata.
+ * Parts may also carry relative morph targets (e.g. a variable-area nozzle); they are kept in LOD0
+ * and dropped from the rest-pose LOD1 merge.
+ *
+ * Optional baked AO (`ao`): the airframe is ray-cast against its static pieces once at build time
+ * and the result multiplied into the vertex colours. Animated parts never cast it (so nothing goes
+ * dark when a surface deflects or a door opens) and receive it in their rest pose unless excluded.
  */
-import { BufferGeometry, Group, Matrix4, Mesh, Object3D, Quaternion, Vector3, type Material } from 'three';
+import { BufferAttribute, BufferGeometry, Group, Matrix3, Matrix4, Mesh, Object3D, Quaternion, Vector3, type Material } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { applyAtlasUVs, type AtlasBounds } from './geom/atlas';
+import { bakeVertexAO, type AoOptions } from './geom/ao';
 import { setColor } from './geom/core';
 import { getMaterial, getVariant } from './materials';
 
 interface Piece {
   geo: BufferGeometry;
   mat: string;
+  /** Unrefined stand-in for the merged LOD1 mesh (set when the AO bake refined `geo`). */
+  lod1?: BufferGeometry;
 }
 
 interface PartDef {
@@ -44,6 +53,8 @@ export class ModelBuilder {
   private noLod1 = new Set<string>();
   /** Vertex tint used for canopy glass in the single-material LOD1 mesh. */
   glassTint = 0x1c2229;
+  /** Bake ambient occlusion into the vertex colours (null = off); see bakeAO(). */
+  ao: (AoOptions & { skip?: string[]; skipParts?: string[] }) | null = null;
 
   constructor(
     /** Maps logical material names ('skin', 'dark', ...) to cache keys ('f35.skin'). */
@@ -84,7 +95,9 @@ export class ModelBuilder {
   }
 
   private uv(p: Piece): void {
-    if (this.atlas && this.atlasMats.has(p.mat)) applyAtlasUVs(p.geo, this.atlas);
+    if (!this.atlas || !this.atlasMats.has(p.mat)) return;
+    applyAtlasUVs(p.geo, this.atlas);
+    if (p.lod1) applyAtlasUVs(p.lod1, this.atlas);
   }
 
   /** Merge pieces by material into one mesh with groups. */
@@ -106,6 +119,8 @@ export class ModelBuilder {
     if (perMat.length === 1) {
       geo.clearGroups();
     }
+    // mergeGeometries checks but does not copy this flag; absolute morphs would collapse the base
+    geo.morphTargetsRelative = pieces[0].geo.morphTargetsRelative;
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
     const mats: Material[] = keys.map((k) => getMaterial(k));
@@ -113,15 +128,52 @@ export class ModelBuilder {
     return mesh;
   }
 
+  /**
+   * Static pieces and animated parts (in their rest pose) receive AO, except `skip` materials and
+   * `skipParts`; only the statics occlude. Hinged surfaces keep their roots against the airframe at
+   * any deflection, so a rest-pose bake stays valid; doors, whose closed pose seals a cavity, don't.
+   */
+  private bakeAO(): void {
+    if (!this.ao) return;
+    const skip = new Set(this.ao.skip ?? []);
+    const skipParts = new Set(this.ao.skipParts ?? []);
+    const receivers = this.statics.filter((p) => !skip.has(p.mat));
+    for (const d of this.parts.values()) if (!skipParts.has(d.name)) receivers.push(...d.pieces.filter((p) => !skip.has(p.mat)));
+    const { fine, coarse } = bakeVertexAO(
+      receivers.map((p) => p.geo),
+      this.statics.map((p) => p.geo),
+      this.ao,
+    );
+    // refined geometry draws in LOD0; LOD1 keeps the original triangle count
+    receivers.forEach((p, i) => {
+      if (fine[i] !== coarse[i]) p.lod1 = coarse[i];
+      p.geo = fine[i];
+    });
+  }
+
+  /** Apply `m` to a part piece, including its relative morph deltas (linear part only). */
+  private static transformPiece(geo: BufferGeometry, m: Matrix4): BufferGeometry {
+    geo.applyMatrix4(m);
+    const morph = geo.morphAttributes;
+    if (morph.position || morph.normal) {
+      const lin = new Matrix3().setFromMatrix4(m);
+      const nrm = new Matrix3().getNormalMatrix(m);
+      for (const a of morph.position ?? []) (a as BufferAttribute).applyMatrix3(lin);
+      for (const a of morph.normal ?? []) (a as BufferAttribute).applyMatrix3(nrm);
+    }
+    return geo;
+  }
+
   build(): BuiltModel {
     const resolve = this.resolve;
+    this.bakeAO();
     this.statics.forEach((p) => this.uv(p));
     this.parts.forEach((d) => d.pieces.forEach((p) => this.uv(p)));
 
     // LOD1: everything in rest pose (clone geometry so LOD0 keeps its own buffers)
-    const all: Piece[] = [...this.statics];
+    const all: Piece[] = this.statics.map((p) => ({ geo: p.lod1 ?? p.geo, mat: p.mat }));
     this.parts.forEach((d) => {
-      if (!this.noLod1.has(d.name)) d.pieces.forEach((p) => all.push({ geo: p.geo, mat: p.mat }));
+      if (!this.noLod1.has(d.name)) d.pieces.forEach((p) => all.push({ geo: p.lod1 ?? p.geo, mat: p.mat }));
     });
     const lod1 = new Group();
     lod1.name = 'lod1';
@@ -132,7 +184,7 @@ export class ModelBuilder {
       const atlas = this.atlas;
       const skinKey = resolve('skin');
       const pieces = all.map((p) => {
-        const g = p.geo.clone();
+        const g = restPose(p.geo.clone());
         if (!this.atlasMats.has(p.mat)) applyAtlasUVs(g, atlas);
         if (p.mat === 'glass') setColor(g, this.glassTint);
         return { geo: g, mat: 'skin' };
@@ -145,7 +197,7 @@ export class ModelBuilder {
       });
     } else {
       m1 = ModelBuilder.meshOf(
-        all.map((p) => ({ geo: p.geo.clone(), mat: p.mat })),
+        all.map((p) => ({ geo: restPose(p.geo.clone()), mat: p.mat })),
         resolve,
       );
     }
@@ -173,7 +225,7 @@ export class ModelBuilder {
       pivot.quaternion.copy(q);
       pm.compose(d.pivot, q, new Vector3(1, 1, 1));
       inv.copy(pm).invert();
-      const local = d.pieces.map((p) => ({ geo: p.geo.applyMatrix4(inv), mat: p.mat }));
+      const local = d.pieces.map((p) => ({ geo: ModelBuilder.transformPiece(p.geo, inv), mat: p.mat }));
       const mesh = ModelBuilder.meshOf(local, resolve);
       if (mesh) {
         mesh.name = `part:${d.name}`;
@@ -188,4 +240,11 @@ export class ModelBuilder {
     });
     return { lod0, lod1, triangles };
   }
+}
+
+/** Drop morph targets (LOD1 is a single rest-pose merge; base positions are the rest pose). */
+function restPose(g: BufferGeometry): BufferGeometry {
+  g.morphAttributes = {};
+  g.morphTargetsRelative = false;
+  return g;
 }
