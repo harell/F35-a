@@ -1,15 +1,17 @@
 /**
  * Auckland landmarks (primary theatre): SkyCity (the Sky Tower is in skyTower.ts), Harbour Bridge, CBD high-rise cluster, Ports of
- * Auckland container terminal, Westhaven & Viaduct marinas, Auckland War Memorial Museum, One Tree
+ * Auckland container terminal, Westhaven & Viaduct marinas (both from OpenStreetMap when loaded: aucklandSites.ts,
+ * which also has the naval base, the Wiri terminal and Eden Park), Auckland War Memorial Museum, One Tree
  * Hill obelisk. Positions come from src/core/auckland.ts (origin = Sky Tower). The CBD's buildings are
  * the real ones (LINZ outlines + LiDAR heights) when that data is installed, else procedural towers
  * on the streets the terrain shader paints (the real LINZ streets, or the urbanGrid.ts block grid).
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
-import { AKL, BRIDGE_SPAN_T } from '../../core/auckland';
+import { AKL, BRIDGE_PIERS_T, BRIDGE_SPAN_T } from '../../core/auckland';
 import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfields';
 import { airfieldLayout } from './aucklandOsm';
+import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import { LightList, type HeightFn } from './builders';
@@ -53,7 +55,7 @@ export function buildSkyCityPodium(B: GeometryBuilder, height: HeightFn): void {
   B.box(IDENT, x + 10, height(x, z) - 2, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
 }
 
-/** Auckland Harbour Bridge: 1 km, eight spans, steel truss hump over the 43 m navigation span. */
+/** Auckland Harbour Bridge: 1 km, piers where OpenStreetMap has them, steel truss hump over the 43 m navigation span. */
 export function buildHarbourBridge(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
   const S = AKL.bridge_s;
   const N = AKL.bridge_n;
@@ -94,15 +96,15 @@ export function buildHarbourBridge(B: GeometryBuilder, lights: LightList, height
     B.quad(f, [-halfW, y0 - thick, -s0, -halfW, y1 - thick, -s1, halfW, y1 - thick, -s1, halfW, y0 - thick, -s0], girder);
   }
   // Piers (concrete, founded on the harbour floor)
-  const piers = [0.085, 0.17, 0.26, 0.35, 0.44, 0.535, 0.745, 0.85, 0.94].map((t) => t * len);
+  const piers = BRIDGE_PIERS_T.map((t) => t * len);
   for (const s of piers) {
     const [wx, wz] = at(s);
     const gy = Math.min(0, height(wx, wz)) - 2;
     const top = deck(s) - thick;
     B.box(f, 0, gy, -s, 24, top - gy, 9, pierCol, pierCol);
   }
-  // Steel truss over the central spans (two trusses under the old four-lane deck)
-  const t0 = 0.46 * len;
+  // Steel truss from its first pier to the north abutment (two trusses under the old four-lane deck)
+  const t0 = BRIDGE_PIERS_T[3] * len;
   const t1 = 0.98 * len;
   const top = (s: number) => {
     const main = Math.max(0, 1 - Math.abs(s - sm) / (0.21 * len));
@@ -866,10 +868,16 @@ export function buildCentres(B: GeometryBuilder, lights: LightList, height: Heig
 }
 
 /**
- * Fergusson / Bledisloe container terminal on reclaimed wharves. The ships at berth (and the cruise
- * liner at Princes Wharf) are sim entities, not scenery: missions/runtime/shipping.ts PORT_BERTHS.
+ * Fergusson / Bledisloe container terminal: the real wharves from OpenStreetMap (aucklandSites.ts), else a
+ * hand-placed stand-in. The ships at berth (and the cruise liner at Princes Wharf) are sim entities, not
+ * scenery: missions/runtime/shipping.ts PORT_BERTHS.
  */
 export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number): void {
+  const sites = siteLayout();
+  if (sites?.port.length) {
+    buildRealPort(B, lights, height, detail, sites);
+    return;
+  }
   const rnd = mulberry32(99);
   // wharf platforms (world axis-aligned; the harbour polygon carved water under them)
   const decks = [
@@ -928,8 +936,16 @@ export function buildPort(B: GeometryBuilder, lights: LightList, height: HeightF
   }
 }
 
-/** Westhaven and Viaduct marinas: pontoons with rows of yachts (8 triangles each). */
+/**
+ * Piers, pontoons, breakwaters and the marinas' yachts (8 triangles each): the real ones from OpenStreetMap
+ * (aucklandSites.ts), else hand-placed pontoons at Westhaven and the Viaduct.
+ */
 export function buildMarinas(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number): void {
+  const sites = siteLayout();
+  if (sites?.piers.length) {
+    buildRealWaterside(B, lights, height, detail, sites);
+    return;
+  }
   const rnd = mulberry32(7);
   const hull = new Color(0xf2f2ee);
   const hullSide = new Color(0xd8d8d2);

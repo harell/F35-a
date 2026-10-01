@@ -26,11 +26,16 @@ export interface ShipBerth {
   vessel: VesselClass;
 }
 
-/** Ships alongside in port (where buildPort used to draw static hulls). */
+/**
+ * Ships alongside in port, on the real berth faces: the Ports of Auckland outline from OpenStreetMap
+ * (aucklandOsm.ts OSM_PORT, which also has the new Fergusson reclamation the LINZ coastline lacks) and
+ * the Princes Wharf cruise terminal. Each hull lies along its face, fully on the LINZ water and clear
+ * of the port outline (tests/civil-shipping.test.ts, tests/world-sites.test.ts).
+ */
 export const PORT_BERTHS: readonly ShipBerth[] = [
-  { x: 1530, z: -1394, heading: 90, vessel: 'container' }, // Fergusson, north face
-  { x: 1995, z: -1110, heading: 0, vessel: 'container' }, // Bledisloe, east face
-  { x: 250, z: -1100, heading: 0, vessel: 'cruise' }, // Princes Wharf
+  { x: 2017, z: -971, heading: 276, vessel: 'container' }, // Fergusson North
+  { x: 1849, z: -799, heading: 348, vessel: 'container' }, // Fergusson West, bow out of the basin
+  { x: 361, z: -923, heading: 18, vessel: 'cruise' }, // Princes Wharf, east side
 ];
 
 /**

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { CAMPAIGN, TRAINING, buildInstantMissionSeeded } from '../src/missions';
 import { harness, killGroup, shieldPlayer } from './missions-helpers';
-import { AKL } from '../src/core/auckland';
+import { AKL, BRIDGE_SPAN_T } from '../src/core/auckland';
 
 const byId = (id: string) => [...CAMPAIGN, ...TRAINING].find((m) => m.id === id)!;
 
@@ -259,7 +259,7 @@ describe('MissionRunner: presentation', () => {
     const p = h.world.player!;
     const S = AKL.bridge_s;
     const N = AKL.bridge_n;
-    const t = 0.64;
+    const t = BRIDGE_SPAN_T;
     const cx = S.x + (N.x - S.x) * t;
     const cz = S.z + (N.z - S.z) * t;
     // fly across the bridge line, west → east, at 30 m
