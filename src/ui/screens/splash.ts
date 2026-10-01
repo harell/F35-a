@@ -7,7 +7,7 @@ import { logoBlock } from '../art/logo';
 import { h } from '../dom';
 import type { UiHost } from '../host';
 
-export function showSplash(host: UiHost, version: string): Promise<void> {
+export function showSplash(host: UiHost, build: string): Promise<void> {
   return new Promise((resolve) => {
     const el = h('section', { class: 'scr-splash', dataset: { bg: '1' }, attrs: { 'data-click': '', role: 'button', 'aria-label': 'Tap to start' } });
     el.innerHTML =
@@ -15,7 +15,7 @@ export function showSplash(host: UiHost, version: string): Promise<void> {
       `<div class="spl-op">OPERATION SOUTHERN CROSS <span>·</span> AUCKLAND, NZ</div>` +
       `<div class="spl-start"><span class="spl-start-line"></span><span class="spl-start-text">TAP TO START</span><span class="spl-start-line"></span></div></div>` +
       `<div class="spl-foot"><span class="spl-note">${icon('headphones')} Best with headphones <i>·</i> ${icon('rotate')} Landscape</span>` +
-      `<span class="spl-ver mono">v${version}</span></div>`;
+      `<span class="spl-ver mono">Build ${build}</span></div>`;
     let done = false;
     const finish = () => {
       if (done) return;

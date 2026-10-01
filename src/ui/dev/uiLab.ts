@@ -23,7 +23,7 @@ const out = (v: unknown) => {
 const bg = q.get('bg');
 if (bg) (document.getElementById('game') as HTMLDivElement).style.backgroundImage = `url(${bg})`;
 
-const ui = createUi(document.getElementById('ui') as HTMLElement, { uiClick: () => undefined, version: '1.0.0' });
+const ui = createUi(document.getElementById('ui') as HTMLElement, { uiClick: () => undefined, build: 'dev' });
 (window as unknown as { __ui: unknown }).__ui = ui;
 
 const progress: CampaignProgress = {
