@@ -46,6 +46,7 @@ import { createCockpit } from '../hud/Cockpit';
 import { createAudio } from '../audio/AudioSystem';
 import { createInput } from '../input/Input';
 import { createUi } from '../ui/Ui';
+import { tag as analyticsTag, track, upgrade } from '../analytics/clarity';
 import {
   CAMPAIGN,
   TRAINING,
@@ -177,6 +178,15 @@ export class Game {
     this.renderer.setAnimationLoop(() => this.frame());
 
     (window as unknown as { __f35: unknown }).__f35 = this.debugApi();
+    this.tagSettings();
+  }
+
+  /** Session tags describing how this player has the game set up (Clarity filters). */
+  private tagSettings(): void {
+    analyticsTag('difficulty', this.settings.difficulty);
+    analyticsTag('quality', this.quality.level);
+    analyticsTag('quality_setting', this.settings.quality);
+    analyticsTag('control_scheme', this.settings.controlScheme);
   }
 
   /* ─────────────────────────── App flow ─────────────────────────── */
@@ -215,6 +225,7 @@ export class Game {
   private async mainMenu(): Promise<never> {
     for (;;) {
       const choice = await this.ui.showMainMenu();
+      track(`menu_${choice}`);
       // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
       this.progress = loadProgress();
       if (choice === 'campaign') {
@@ -258,16 +269,31 @@ export class Game {
   private async playMission(def: MissionDef, loadout: LoadoutId): Promise<MissionOutcome> {
     for (;;) {
       const end = await this.runSession(def, loadout);
-      if (end === 'restart') continue;
+      if (end === 'restart') {
+        track('mission_restart');
+        continue;
+      }
       if (end === 'quit') {
+        track('mission_quit');
         this.teardownSession();
         return 'menu';
       }
       const result = this.finishSession();
       if (!result) return 'menu';
+      this.trackResult(result);
       const hasNext = result.success && def.kind === 'campaign' && !!nextMissionAfter(def.id);
       const choice = await this.ui.showDebrief(result, hasNext);
       return choice;
+    }
+  }
+
+  private trackResult(result: MissionResult): void {
+    track(result.success ? 'mission_success' : 'mission_failed');
+    analyticsTag('mission_result', `${result.missionId}:${result.success ? 'success' : 'failed'}`);
+    analyticsTag('mission_grade', `${result.missionId}:${result.grade}`);
+    if (result.campaignComplete) {
+      track('campaign_complete');
+      upgrade('campaign_complete');
     }
   }
 
@@ -352,6 +378,12 @@ export class Game {
     this.lastFrame = performance.now();
     this.ui.showLoading(1, 'Ready');
     this.ui.hideLoading();
+    track('mission_start');
+    track(`mission_start_${def.kind}`);
+    analyticsTag('mission', def.id);
+    analyticsTag('mission_kind', def.kind);
+    analyticsTag('loadout', loadout);
+    analyticsTag('difficulty', this.settings.difficulty);
     void this.requestWakeLock();
     this.audio.setPaused(false);
     return endPromise;
@@ -465,7 +497,8 @@ export class Game {
       this.session?.rig.shake(Math.min(1, 0.3 + amount / 60));
       buzz([60, 30, 90]);
     });
-    e.on('player:down', () => {
+    e.on('player:down', ({ reason }) => {
+      track(`player_down_${reason}`);
       this.session?.rig.shake(1);
       buzz(300);
     });
