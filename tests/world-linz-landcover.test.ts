@@ -1,6 +1,6 @@
 /**
  * #7: the Auckland terrain re-bake with real land cover (LINZ Topo50 native / exotic / scrub polygons) and real
- * bathymetry (NIWA 250 m grid + the LiDAR DEM's intertidal flats), baked by tools/linz/bake.py into version 2 of
+ * bathymetry (LINZ ENC depth areas, chart datum moved to mean high water), baked by tools/linz/bake.py into version 2 of
  * auckland-linz.bin. Checks the bush, forests and water depth against published geography, that the coastline
  * and land heights are untouched, the download budget, and the hand-traced fallback.
  */
@@ -127,7 +127,7 @@ describe('real bush and forest (Topo50 polygons)', () => {
   });
 });
 
-describe('real bathymetry (NIWA 250 m + LiDAR flats)', () => {
+describe('real bathymetry (LINZ chart depth areas)', () => {
   it('cuts the Rangitoto Channel deep between North Head and Rangitoto', () => {
     const p = geoToWorld(-36.8125, 174.8265);
     expect(linzDepth(data, p.x, p.z)).toBeGreaterThan(9);
@@ -137,8 +137,14 @@ describe('real bathymetry (NIWA 250 m + LiDAR flats)', () => {
   });
 
   it('keeps the Manukau flats shallow and its channels deep', () => {
-    expect(meanHeight(-37.0, 174.7, 500)).toBeGreaterThan(-3);
-    expect(meanHeight(-36.98, 174.66, 500)).toBeGreaterThan(-3);
+    // drying flats (charted 4.2 m drying height; MHW ≈ 4 m above chart datum there): a few metres at high water
+    for (const [lat, lon] of [
+      [-36.9936, 174.7217],
+      [-37.0866, 174.7622],
+      [-36.9785, 174.6628],
+    ]) {
+      expect(meanHeight(lat, lon, 200), `${lat}, ${lon}`).toBeGreaterThan(-4);
+    }
     expect(meanHeight(-37.035, 174.55, 300), 'Manukau Heads').toBeLessThan(-15);
   });
 

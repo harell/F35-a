@@ -6,7 +6,7 @@ Inputs (from fetch.py, NZTM2000 / EPSG:2193 mosaics at 16 m):
   dem8m_16.npz  national contour 8 m DEM at 16 m                     -> land/sea mask (MHW coast)
 and (from landcover.py):
   veg-50306.json / veg-50267.json / veg-50339.json   Topo50 native / exotic / scrub polygons -> land cover
-  niwa250.tif   NIWA 250 m bathymetry (+ the LiDAR DEM's intertidal flats)                   -> water depth
+  depare-*.json ENC depth area polygons (Hydro) at four chart scales                            -> water depth
 Outputs (gzip):
   src/world/terrain/data/auckland-linz.bin     (decoded by src/world/terrain/theaters/aucklandLinz.ts, every tier)
     - coastline rings in game metres (even-odd: land = inside an odd number of rings)
@@ -18,7 +18,6 @@ Outputs (gzip):
 Game coordinates: origin = Sky Tower, +X east, +Z south, equirectangular (src/core/auckland.ts).
 """
 import gzip, json, sys, numpy as np
-import rasterio
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
 from pyproj import Transformer
@@ -134,7 +133,7 @@ for N in (1024,):
     print(N, 'max', v.max(), 'gz', len(gzip.compress(grids[N].tobytes(), 9)))
 
 # ── Land cover and bathymetry on a 512² grid (the 1024 grid's even samples; the game interpolates) ──
-# 172 m cells keep both under ≈ 90 kB gzip (1024² would cost ≈ 105 + 130 kB): the NIWA grid is 250 m anyway,
+# 172 m cells keep both under ≈ 90 kB gzip (1024² would cost ≈ 105 + 130 kB): the charts are drawn for 1:22k+,
 # and interpolated tree cover still puts a forest edge within a fraction of a cell.
 N = 1024
 NA = 512
@@ -162,31 +161,55 @@ cov = np.stack(cov)
 cq = np.round(np.minimum(cov.sum(0), 1) * 7).astype(np.uint8)
 cover = np.where((cq > 0) & ~water, ((np.argmax(cov, 0) + 1) << 3) | cq, 0).astype(np.uint8)
 
-# Bathymetry, game datum (y = 0 is the coastline's mean high water): the NIWA 250 m grid (charts + surveys,
-# metres re. mean sea level, drying flats > 0) blended with the LiDAR DEM where it measured the intertidal
-# flats (its offshore fill, flat blocks of one value per survey, is ignored). MHW ≈ 1.5 m above NZVD2016
-# (≈ MSL) in the Waitematā / Manukau: the median LiDAR ground along the coastline is 1.6 m.
-MHW = 1.5
+# Bathymetry, game datum (y = 0 is the coastline's mean high water), from the ENC depth areas: each polygon is a
+# depth band [drval1, drval2] below chart datum (≈ lowest tide; drval1 < 0 = a drying flat's height above it).
+# On a 32 m grid the finest chart scale available wins; inside a band the depth runs from drval1 at the edge
+# shared with shallower water (or the shore) to drval2 at the edge shared with deeper water, in proportion to the
+# distances to the two. Chart datum lies a tide range below MHW: the highest drying height near each point
+# (≈ MHWS: 4.2 m in the Manukau, 3.1-3.3 m in the Waitematā) less 0.3 m.
 SQ = 0.1                                        # quantum of √depth: ±0.1 m at 1 m, ±0.5 m at 25 m
-with rasterio.open(f'{D}/niwa250.tif') as src:
-    niwa_img, nt = src.read(1).astype(np.float32), src.transform
-assert niwa_img.min() > -11000, 'NIWA nodata inside the world box'
-t3851 = Transformer.from_crs(4326, 3851, always_xy=True)
-E3, N3 = t3851.transform(O_LON + hx / M_LON, O_LAT - hz / M_LAT)
-niwa = map_coordinates(niwa_img, [(N3 - nt.f) / nt.e - 0.5, (E3 - nt.c) / nt.a - 0.5], order=1, mode='nearest')
-a = np.nan_to_num(h1).astype(np.float64)
-mean = uniform_filter(a, 3)
-flat = (uniform_filter(a * a, 3) - mean * mean < 1e-6) | (uniform_filter(np.isnan(h1).astype(np.float32), 3) > 0)
-flats = ~land & ~np.isnan(h1) & ~flat           # measured seabed below the MHW coastline
-wf = sample(uniform_filter(flats.astype(np.float32), box), hx, hz)
-lid = sample(uniform_filter(np.where(flats, a, 0).astype(np.float32), box), hx, hz) / np.maximum(wf, 1e-6)
-w_lid = sstep(0.25, 0.6, wf)
-depth = np.maximum(MHW - (niwa + (lid - niwa) * w_lid), 0.3)
+DR = 2 * R                                      # depth raster cell (32 m), aligned with the mosaics
+dshape = ((h1.shape[0] + 1) // 2, (h1.shape[1] + 1) // 2)
+T32 = from_origin(X0, Y1, DR, DR)
+d1 = np.full(dshape, np.nan, np.float32)
+d2 = np.full(dshape, np.nan, np.float32)
+for layer in (50852, 50447, 50553, 50671):      # coarse to fine: finer charts paint over coarser ones
+    feats = [f for f in json.load(open(f'{D}/depare-{layer}.json'))['features'] if f['geometry'] and f['properties']['drval2'] is not None]
+    for k, arr in (('drval1', d1), ('drval2', d2)):
+        v = rasterize(((f['geometry'], float(f['properties'][k])) for f in feats), out_shape=dshape, transform=T32, fill=np.nan, dtype='float32')
+        arr[~np.isnan(v)] = v[~np.isnan(v)]
+land32 = land[::2, ::2][:dshape[0], :dshape[1]]
+charted = ~np.isnan(d1) & ~land32
+cd = np.full(dshape, np.nan, np.float32)
+for lv in np.unique(d1[charted]):
+    m = charted & (d1 == lv)
+    shallower = land32 | (charted & (d1 < lv))
+    deeper = charted & (d1 > lv)
+    ds = distance_transform_edt(~shallower) * DR
+    dd = distance_transform_edt(~deeper) * DR if deeper.any() else np.full(dshape, np.inf)
+    t = np.where(np.isfinite(dd), ds / np.maximum(ds + dd, 1e-6), np.minimum(1, ds / 1500))
+    cd[m] = (d1 + (d2 - d1) * t)[m]
+# chart datum -> MHW: the nearest drying flat's height limit
+dry = charted & (d1 < 0)
+_, (di, dj) = distance_transform_edt(~dry, return_indices=True)
+mhw_cd = -d1[di, dj] - 0.3
+sea32 = ~land32
+_, (ci, cj) = distance_transform_edt(~charted, return_indices=True)
+depth32 = np.where(charted, cd, cd[ci, cj]) + mhw_cd   # uncharted water (creeks): the nearest charted depth
+depth32 = np.where(sea32, np.maximum(depth32, 0.3), 0).astype(np.float32)
+print('charted', round(float(charted.sum() / sea32.sum()) * 100, 1), '% of the water; MHW above CD',
+      np.percentile(mhw_cd[sea32], [5, 50, 95]).round(2))
+
+def sample32(img, x, z):
+    E, Nn = tr.transform(O_LON + x / M_LON, O_LAT - z / M_LAT)
+    return map_coordinates(img, [(Y1 - Nn) / DR - 0.5, (E - X0) / DR - 0.5], order=1, mode='nearest')
+
+wsum = sample32(uniform_filter(sea32.astype(np.float32), 5), hx, hz)
+depth = sample32(uniform_filter(depth32, 5), hx, hz) / np.maximum(wsum, 1e-6)   # mean over the water in a cell
 # land samples within 2 cells of the water take the nearest water depth (bilinear lookups along the shore)
 dist, (ii, jj) = distance_transform_edt(~water, return_indices=True)
-depth = np.where(water, depth, np.where(dist <= 2, depth[ii, jj], 0.0))
-print('depth: water samples', int(water.sum()), 'lidar flats', int((water & (w_lid > 0.5)).sum()),
-      'pct', np.percentile(depth[water], [1, 25, 50, 75, 99]).round(1))
+depth = np.where(water, np.maximum(depth, 0.3), np.where(dist <= 2, np.maximum(depth[ii, jj], 0.3), 0.0))
+print('depth: water samples', int(water.sum()), 'pct', np.percentile(depth[water], [1, 25, 50, 75, 99]).round(1))
 cover_bytes = cover.tobytes()
 depth_bytes = encode_heights(np.sqrt(depth) * (HQ / SQ)).tobytes()   # encode_heights quantises by HQ
 print('cover gz', len(gzip.compress(cover_bytes, 9)), 'depth gz', len(gzip.compress(depth_bytes, 9)))

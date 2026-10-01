@@ -4,9 +4,9 @@
  * src/world/terrain/data/auckland-linz.bin is baked offline by tools/linz/bake.py from Toitū Te Whenua LINZ
  * open data (CC BY 4.0): the mean-high-water coastline of the NZ contour 8 m DEM traced as vector
  * rings, the NZ LiDAR 1 m DEM resampled to the 1024² heightfield grid, and (version 2) a 512² land cover
- * grid (Topo50 native / exotic / scrub polygons) and water depth grid (NIWA 250 m bathymetry, CC BY 4.0, plus
- * the LiDAR DEM's intertidal flats). It is one gzip file
- * (≈ 594 kB, emitted by Vite as a content-hashed asset, so browsers may cache it for good) fetched
+ * grid (Topo50 native / exotic / scrub polygons) and water depth grid (ENC depth areas of the LINZ charts,
+ * moved from chart datum to mean high water). It is one gzip file
+ * (≈ 590 kB, emitted by Vite as a content-hashed asset, so browsers may cache it for good) fetched
  * once per page load and decompressed in the browser; the main thread hands the
  * decompressed bytes to the terrain workers, so it is never downloaded twice.
  *
