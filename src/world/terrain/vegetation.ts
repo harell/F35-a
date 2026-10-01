@@ -21,6 +21,7 @@ import {
   MAT_URBAN,
   MAT_CONE,
   MAT_CLEARING,
+  MAT_PINE,
 } from './types';
 import { footprintOf, footprintReach, footprintWeight } from './features';
 import type { Footprint } from './types';
@@ -86,9 +87,8 @@ export function createVegetation(theater: TheaterId, seed: number, features: Sce
         if (mat === MAT_URBAN || mat === MAT_BEACH || mat === MAT_CLEARING) return 0;
         // scoria cones: grass with clumps of trees on the lower slopes
         if (mat === MAT_CONE) return 0.14 * sstep(0.1, 0.45, patch) * (1 - sstep(0.5, 0.9, slope));
-        // Riverhead pine plantation
-        const pine = 1 - sstep(3500, 6000, Math.hypot(x + 16_000, z + 14_500));
-        if (pine > 0) return Math.max(0.85 * pine * sstep(-0.6, -0.2, patch), 0.3 * sstep(0.15, 0.45, patch));
+        // Pine plantations (Woodhill, Riverhead, …): dense, even stands
+        if (mat === MAT_PINE) return (aux / 255) * (1 - sstep(0.8, 1.2, slope));
         return 0.32 * sstep(0.12, 0.45, patch) * (1 - sstep(0.6, 1.0, slope));
       }
       case 'desert': {
@@ -129,7 +129,7 @@ export function createVegetation(theater: TheaterId, seed: number, features: Sce
     species(h, mat, r, x = 0, z = 0) {
       switch (theater) {
         case 'auckland': {
-          if (Math.hypot(x + 16_000, z + 14_500) < 6000) return r < 0.85 ? TREE_CONIFER : TREE_BROADLEAF;
+          if (mat === MAT_PINE) return r < 0.92 ? TREE_CONIFER : TREE_BROADLEAF;
           if (mat === MAT_BEACH || h < 4) return r < 0.5 ? TREE_PALM : TREE_BROADLEAF;
           return r < 0.06 ? TREE_PALM : r < 0.14 ? TREE_CONIFER : TREE_BROADLEAF;
         }

@@ -4,18 +4,25 @@ Bake LINZ elevation into compact game data for the Auckland theatre.
 Inputs (from fetch.py, NZTM2000 / EPSG:2193 mosaics at 16 m):
   dem1m_16.npz  national 1 m LiDAR DEM, read at its 16 m overview  -> land heights
   dem8m_16.npz  national contour 8 m DEM at 16 m                     -> land/sea mask (MHW coast)
+and (from landcover.py):
+  veg-50306.json / veg-50267.json / veg-50339.json   Topo50 native / exotic / scrub polygons -> land cover
+  niwa250.tif   NIWA 250 m bathymetry (+ the LiDAR DEM's intertidal flats)                   -> water depth
 Outputs (gzip):
   src/world/terrain/data/auckland-linz.bin     (decoded by src/world/terrain/theaters/aucklandLinz.ts, every tier)
     - coastline rings in game metres (even-odd: land = inside an odd number of rings)
     - 1024² height grid sampled at the exact Heightfield sample positions
+    - 512² land cover (class + tree cover) and water depth grids at the 1024 grid's even samples (version 2)
   src/world/terrain/data/auckland-linz-hd.bin  (decoded by src/world/terrain/theaters/aucklandLinzHd.ts, high tier only)
     - 2048² detail: the real 2048 grid minus the Catmull-Rom upsample of the 1024 grid (what generate.ts's
       upsample2x reconstructs), so the high tier gets the real 43 m terrain instead of procedural noise
 Game coordinates: origin = Sky Tower, +X east, +Z south, equirectangular (src/core/auckland.ts).
 """
-import gzip, sys, numpy as np
+import gzip, json, sys, numpy as np
+import rasterio
+from rasterio.features import rasterize
+from rasterio.transform import from_origin
 from pyproj import Transformer
-from scipy.ndimage import map_coordinates, gaussian_filter, binary_fill_holes, label, maximum_filter
+from scipy.ndimage import map_coordinates, gaussian_filter, binary_fill_holes, label, maximum_filter, uniform_filter, distance_transform_edt
 from skimage.measure import find_contours
 from shapely.geometry import Polygon
 
@@ -126,16 +133,76 @@ for N in (1024,):
     grids[N] = encode_heights(v)
     print(N, 'max', v.max(), 'gz', len(gzip.compress(grids[N].tobytes(), 9)))
 
+# ── Land cover and bathymetry on a 512² grid (the 1024 grid's even samples; the game interpolates) ──
+# 172 m cells keep both under ≈ 90 kB gzip (1024² would cost ≈ 105 + 130 kB): the NIWA grid is 250 m anyway,
+# and interpolated tree cover still puts a forest edge within a fraction of a cell.
+N = 1024
+NA = 512
+cell = HF_EXTENT / NA
+pos = -HF_EXTENT / 2 + np.arange(NA) * cell
+hx, hz = np.meshgrid(pos, pos)
+water = sample(landf, hx, hz) < 0.5             # the coastline's side of every sample (rings = landf 0.5 contour)
+box = int(round(cell / R)) | 1                  # 11 mosaic cells ≈ one 172 m grid cell
+
+def sstep(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
+
+# Land cover: the share of each cell covered by the Topo50 polygons of each class (rasterised on the 16 m NZTM
+# mosaic grid, box-averaged over one cell). Byte = class << 3 | total cover in 0..7, class = the largest share.
+VEG = (50306, 50267, 50339)                     # class 1 native bush, 2 exotic forest (pines), 3 scrub
+T16 = from_origin(X0, Y1, R, R)
+cov = []
+for layer in VEG:
+    feats = json.load(open(f'{D}/veg-{layer}.json'))['features']
+    m = rasterize(((f['geometry'], 1) for f in feats if f['geometry']), out_shape=h1.shape, transform=T16, dtype='uint8')
+    cov.append(sample(uniform_filter(m.astype(np.float32), box), hx, hz))
+    print('cover', layer, len(feats), 'polygons', round(float((cov[-1] > 0.5).mean()) * 100, 2), '% of the grid')
+cov = np.stack(cov)
+cq = np.round(np.minimum(cov.sum(0), 1) * 7).astype(np.uint8)
+cover = np.where((cq > 0) & ~water, ((np.argmax(cov, 0) + 1) << 3) | cq, 0).astype(np.uint8)
+
+# Bathymetry, game datum (y = 0 is the coastline's mean high water): the NIWA 250 m grid (charts + surveys,
+# metres re. mean sea level, drying flats > 0) blended with the LiDAR DEM where it measured the intertidal
+# flats (its offshore fill, flat blocks of one value per survey, is ignored). MHW ≈ 1.5 m above NZVD2016
+# (≈ MSL) in the Waitematā / Manukau: the median LiDAR ground along the coastline is 1.6 m.
+MHW = 1.5
+SQ = 0.1                                        # quantum of √depth: ±0.1 m at 1 m, ±0.5 m at 25 m
+with rasterio.open(f'{D}/niwa250.tif') as src:
+    niwa_img, nt = src.read(1).astype(np.float32), src.transform
+assert niwa_img.min() > -11000, 'NIWA nodata inside the world box'
+t3851 = Transformer.from_crs(4326, 3851, always_xy=True)
+E3, N3 = t3851.transform(O_LON + hx / M_LON, O_LAT - hz / M_LAT)
+niwa = map_coordinates(niwa_img, [(N3 - nt.f) / nt.e - 0.5, (E3 - nt.c) / nt.a - 0.5], order=1, mode='nearest')
+a = np.nan_to_num(h1).astype(np.float64)
+mean = uniform_filter(a, 3)
+flat = (uniform_filter(a * a, 3) - mean * mean < 1e-6) | (uniform_filter(np.isnan(h1).astype(np.float32), 3) > 0)
+flats = ~land & ~np.isnan(h1) & ~flat           # measured seabed below the MHW coastline
+wf = sample(uniform_filter(flats.astype(np.float32), box), hx, hz)
+lid = sample(uniform_filter(np.where(flats, a, 0).astype(np.float32), box), hx, hz) / np.maximum(wf, 1e-6)
+w_lid = sstep(0.25, 0.6, wf)
+depth = np.maximum(MHW - (niwa + (lid - niwa) * w_lid), 0.3)
+# land samples within 2 cells of the water take the nearest water depth (bilinear lookups along the shore)
+dist, (ii, jj) = distance_transform_edt(~water, return_indices=True)
+depth = np.where(water, depth, np.where(dist <= 2, depth[ii, jj], 0.0))
+print('depth: water samples', int(water.sum()), 'lidar flats', int((water & (w_lid > 0.5)).sum()),
+      'pct', np.percentile(depth[water], [1, 25, 50, 75, 99]).round(1))
+cover_bytes = cover.tobytes()
+depth_bytes = encode_heights(np.sqrt(depth) * (HQ / SQ)).tobytes()   # encode_heights quantises by HQ
+print('cover gz', len(gzip.compress(cover_bytes, 9)), 'depth gz', len(gzip.compress(depth_bytes, 9)))
+
 # ── Pack: one gzip-compressed binary, fetched once by the game (Vite-hashed asset) ──
-#   'AKLZ' | u32 version | f32 coast quantum | f32 height quantum | u32 rings | u32 vertices
-#   | u32 grid n | f32 grid extent | u32[rings] ring sizes | i16[2·vertices] x,z | residual bytes
+#   'AKLZ' | u32 version (2) | f32 coast quantum | f32 height quantum | u32 rings | u32 vertices
+#   | u32 grid n | f32 grid extent | u32[rings] ring sizes | i16[2·vertices] x,z | height residual bytes
+#   | u32 aux grid n | u8[aux n²] land cover (class << 3 | cover 0..7) | f32 √depth quantum
+#   | √depth residual bytes (same coder; depth > 0 below the waterline, 0 inland)
 import struct
 ring_hdr = np.array([len(r) for r in rings], '<u4')
 ring_xy = np.concatenate(rings)
 assert np.abs(ring_xy).max() < 32767
-N = 1024
-body = (b'AKLZ' + struct.pack('<IffIIIf', 1, Q, HQ, len(rings), nv, N, HF_EXTENT)
-        + ring_hdr.tobytes() + ring_xy.astype('<i2').tobytes() + grids[N].tobytes())
+body = (b'AKLZ' + struct.pack('<IffIIIf', 2, Q, HQ, len(rings), nv, N, HF_EXTENT)
+        + ring_hdr.tobytes() + ring_xy.astype('<i2').tobytes() + grids[N].tobytes()
+        + struct.pack('<I', NA) + cover_bytes + struct.pack('<f', SQ) + depth_bytes)
 data = gzip.compress(body, 9, mtime=0)
 open(OUT, 'wb').write(data)
 print('wrote', OUT, len(body), 'bytes raw,', len(data), 'gzip')

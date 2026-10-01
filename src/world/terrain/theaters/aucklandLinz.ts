@@ -3,8 +3,10 @@
  *
  * src/world/terrain/data/auckland-linz.bin is baked offline by tools/linz/bake.py from Toitū Te Whenua LINZ
  * open data (CC BY 4.0): the mean-high-water coastline of the NZ contour 8 m DEM traced as vector
- * rings, and the NZ LiDAR 1 m DEM resampled to the 1024² heightfield grid. It is one gzip file
- * (≈ 510 kB, emitted by Vite as a content-hashed asset, so browsers may cache it for good) fetched
+ * rings, the NZ LiDAR 1 m DEM resampled to the 1024² heightfield grid, and (version 2) a 512² land cover
+ * grid (Topo50 native / exotic / scrub polygons) and water depth grid (NIWA 250 m bathymetry, CC BY 4.0, plus
+ * the LiDAR DEM's intertidal flats). It is one gzip file
+ * (≈ 594 kB, emitted by Vite as a content-hashed asset, so browsers may cache it for good) fetched
  * once per page load and decompressed in the browser; the main thread hands the
  * decompressed bytes to the terrain workers, so it is never downloaded twice.
  *
@@ -15,6 +17,8 @@
  * Format (little-endian): 'AKLZ' | u32 version | f32 coast quantum | f32 height quantum | u32 rings
  * | u32 vertices | u32 grid n | f32 grid extent | u32[rings] ring sizes | i16[2·vertices] x,z
  * | height residuals (planar predictor left + up − upleft, zig-zag; one byte each, 255 = u16 follows).
+ * Version 2 appends: u32 aux grid n | u8[aux n²] land cover (class << 3 | cover 0..7) | f32 √depth quantum
+ * | √depth residuals (same coder). The aux grid samples the 1024 grid's even positions.
  */
 import type { SampleGrid } from '../coastline';
 import linzUrl from '../data/auckland-linz.bin?url';
@@ -31,7 +35,18 @@ export interface LinzData {
   heights: Float32Array;
   n: number;
   extent: number;
+  /** Version 2 data (null in a version 1 file): land cover and water depth on an `auxN`² grid over `extent`. */
+  cover: Uint8Array | null;
+  /** Water depth (m, > 0) below the coastline's mean high water; 0 inland beyond a 2-sample shore margin. */
+  depth: Float32Array | null;
+  auxN: number;
 }
+
+/** Land cover classes (`LinzData.cover` byte >> 3; the low 3 bits are the tree cover share 0..7). */
+export const COVER_NONE = 0;
+export const COVER_NATIVE = 1; // native bush / forest (Topo50 "native")
+export const COVER_EXOTIC = 2; // plantation forest, pines (Topo50 "exotic")
+export const COVER_SCRUB = 3; // scrub (Topo50 "scrub")
 
 let current: LinzData | null = null;
 let currentBytes: Uint8Array | null = null;
@@ -93,7 +108,8 @@ export async function loadAucklandLinz(url = LINZ_URL): Promise<boolean> {
 export function decodeLinz(bytes: Uint8Array): LinzData {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
-  if (magic !== 'AKLZ' || dv.getUint32(4, true) !== 1) throw new Error('bad LINZ data header');
+  const ver = dv.getUint32(4, true);
+  if (magic !== 'AKLZ' || (ver !== 1 && ver !== 2)) throw new Error('bad LINZ data header');
   const cq = dv.getFloat32(8, true);
   const hq = dv.getFloat32(12, true);
   const nRings = dv.getUint32(16, true);
@@ -125,11 +141,38 @@ export function decodeLinz(bytes: Uint8Array): LinzData {
     bounds.set([minX, minZ, maxX, maxZ], r * 4);
   }
   if (o - 32 - nRings * 4 !== nVerts * 4) throw new Error('bad LINZ data size');
-  // Heights: undo the zig-zag residuals of the planar predictor.
   const q = new Int32Array(n * n);
+  o = decodeResiduals(bytes, o, q, n);
+  const heights = new Float32Array(n * n);
+  for (let k = 0; k < q.length; k++) heights[k] = q[k] * hq;
+  let cover: Uint8Array | null = null;
+  let depth: Float32Array | null = null;
+  let auxN = 0;
+  if (ver >= 2) {
+    auxN = dv.getUint32(o, true);
+    o += 4;
+    cover = bytes.slice(o, o + auxN * auxN);
+    o += auxN * auxN;
+    const sq = dv.getFloat32(o, true);
+    o += 4;
+    const qd = new Int32Array(auxN * auxN);
+    o = decodeResiduals(bytes, o, qd, auxN);
+    depth = new Float32Array(auxN * auxN);
+    for (let k = 0; k < qd.length; k++) {
+      const s = qd[k] * sq;
+      depth[k] = s * s;
+    }
+  }
+  if (o !== bytes.length) throw new Error('bad LINZ data size');
+  return { rings, bounds, heights, n, extent, cover, depth, auxN };
+}
+
+/** Undo the zig-zag residuals of the planar predictor (left + up − upleft) into `q` (n × n); returns the new offset. */
+function decodeResiduals(bytes: Uint8Array, o: number, q: Int32Array, n: number): number {
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = j * n + i;
+      if (o >= bytes.length) throw new Error('bad LINZ data size');
       let z = bytes[o++];
       if (z === 255) {
         z = bytes[o] | (bytes[o + 1] << 8);
@@ -144,10 +187,7 @@ export function decodeLinz(bytes: Uint8Array): LinzData {
       q[k] = p + r;
     }
   }
-  if (o !== bytes.length) throw new Error('bad LINZ data size');
-  const heights = new Float32Array(n * n);
-  for (let k = 0; k < q.length; k++) heights[k] = q[k] * hq;
-  return { rings, bounds, heights, n, extent };
+  return o;
 }
 
 /** Coast segments (every ring edge — rings never overlap, so every edge separates land and water). */
@@ -261,4 +301,77 @@ export function linzHeight(d: LinzData, x: number, z: number): number {
   const a = h[k] + (h[k + 1] - h[k]) * fx;
   const b = h[k + n] + (h[k + n + 1] - h[k + n]) * fx;
   return a + (b - a) * fz;
+}
+
+/** Aux grid lookup scratch: base index and bilinear fractions (set by `auxCell`). */
+let auxK = 0;
+let auxFx = 0;
+let auxFz = 0;
+
+function auxCell(d: LinzData, x: number, z: number): void {
+  const n = d.auxN;
+  const cell = d.extent / n;
+  let gx = (x + d.extent / 2) / cell;
+  let gz = (z + d.extent / 2) / cell;
+  gx = gx < 0 ? 0 : gx > n - 1.001 ? n - 1.001 : gx;
+  gz = gz < 0 ? 0 : gz > n - 1.001 ? n - 1.001 : gz;
+  const ix = gx | 0;
+  const iz = gz | 0;
+  auxK = iz * n + ix;
+  auxFx = gx - ix;
+  auxFz = gz - iz;
+}
+
+/** Bilinear water depth (m, ≥ 0) at a world point, or null without version 2 data. */
+export function linzDepth(d: LinzData, x: number, z: number): number | null {
+  const a = d.depth;
+  if (!a) return null;
+  auxCell(d, x, z);
+  const k = auxK;
+  const n = d.auxN;
+  const t = a[k] + (a[k + 1] - a[k]) * auxFx;
+  const b = a[k + n] + (a[k + n + 1] - a[k + n]) * auxFx;
+  return t + (b - t) * auxFz;
+}
+
+export interface CoverSample {
+  /** COVER_* class with the largest interpolated share. */
+  cls: number;
+  /** Interpolated tree cover share of that class (0..1). */
+  cover: number;
+}
+
+const share = new Float32Array(4);
+
+/**
+ * Land cover at a world point: the four surrounding aux samples' cover shares interpolated per class,
+ * so an edge between two samples falls where the polygons' share crosses ½. False without version 2 data.
+ */
+export function linzCover(d: LinzData, x: number, z: number, out: CoverSample): boolean {
+  const c = d.cover;
+  if (!c) return false;
+  auxCell(d, x, z);
+  const k = auxK;
+  const n = d.auxN;
+  const fx = auxFx;
+  const fz = auxFz;
+  share.fill(0);
+  let v = c[k];
+  share[v >> 3] += (1 - fx) * (1 - fz) * (v & 7);
+  v = c[k + 1];
+  share[v >> 3] += fx * (1 - fz) * (v & 7);
+  v = c[k + n];
+  share[v >> 3] += (1 - fx) * fz * (v & 7);
+  v = c[k + n + 1];
+  share[v >> 3] += fx * fz * (v & 7);
+  out.cls = COVER_NONE;
+  out.cover = 0;
+  for (let cls = 1; cls < 4; cls++) {
+    if (share[cls] > out.cover) {
+      out.cls = cls;
+      out.cover = share[cls];
+    }
+  }
+  out.cover /= 7;
+  return true;
 }
