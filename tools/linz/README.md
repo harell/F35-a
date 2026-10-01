@@ -41,3 +41,43 @@ the same products and the vector layers (building outlines, roads) for later pha
 
 Coordinates: game origin = Sky Tower, +X east, +Z south, the equirectangular projection of `src/core/auckland.ts`
 (reprojected from NZTM2000 / EPSG:2193 with pyproj). Heights are NZVD2016 (≈ mean sea level; the game's y = 0).
+
+# Phase 2a: roads (CBD streets, motorways, arterials)
+
+`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 19 kB gzip), fetched next to
+the terrain data (`src/world/scenery/aucklandRoads.ts`). Same licence and attribution as above.
+
+| Product | LDS layer | Used for |
+|---|---|---|
+| NZ Addresses: Road Sections | 123109 | CBD streets (every section in the CBD box), all motorway / state-highway carriageways and ramps in the theatre, the main arterials by name |
+| NZ Tunnel Centrelines (Topo, 1:50k) | 50366 | motorway runs in a tunnel (Waterview) |
+
+```sh
+export LINZ_API_KEY=…            # free key from https://data.linz.govt.nz (never commit it)
+npx vite-node tools/linz/roads.ts <work> [preview.svg]
+```
+
+The WFS downloads (curl) are cached as GeoJSON in `<work>`; delete them to refresh. `preview.svg` draws the result
+over the LINZ coastline (`SVG_BOX="x0,z0,x1,z1"` picks another view, e.g. the whole motorway network). The bake runs
+under vite-node so it reprojects with the game's own `geoToWorld` (WGS84 requested from the WFS; NZGD2000 ≈ WGS84).
+
+What comes out:
+
+- **CBD region**: a polygon traced along the real road graph (Dijkstra over the LINZ sections): down the SH1
+  carriageways from St Marys Bay, round the Central Motorway Junction, up SH16 Grafton Gully, along Stanley St / Beach Rd
+  / Quay St to the west edge of the port's wharves, then through the harbour round Queens Wharf and the Wynyard Quarter.
+  Inside it the terrain shader paints the real streets instead of the procedural Voronoi grid and `buildCBD` places the
+  buildings along them; the hand-over to the procedural suburbs happens under a motorway, along a street or over water.
+- **Streets**: the sections within 60 m of the region, chained into polylines (Douglas–Peucker 0.6 m) with a width
+  class: 19 m main streets (Queen St, Customs St, Symonds St, K Rd, …), 12 m streets, 7 m lanes; steps, walks, arcades
+  and marina accessways are left out.
+- **Motorways**: one 13 m ribbon per carriageway / ramp (DP 1.5 m), cut over the water beside the Harbour Bridge model
+  (its abutments are the ends of the LINZ bridge section). Runs along a vehicle tunnel are flagged: within 22 m of short
+  tunnels (Victoria Park, where the address data has only the viaduct), anywhere between the portals of tunnels over
+  1 km (Waterview, where the address centreline is schematic). Runs under 150 m are dropped.
+- **Arterials**: Dominion Rd, Mt Eden Rd, Manukau Rd, Remuera Rd, Sandringham Rd, New North Rd, Lake Rd, Onewa Rd and East
+  Coast Rd along their hand-traced corridors (± 700 m), Great North Rd by suburb from Grey Lynn over the Whau to New Lynn;
+  the parts inside the CBD region are left to the street map.
+
+At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over the region (kerb distance, region
+distance, parks, motorway verges); the shader and the JS placement code read the same texels.

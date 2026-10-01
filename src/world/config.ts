@@ -5,14 +5,21 @@ import { Color } from 'three';
 import type { QualitySettings, TheaterId } from '../core/types';
 import type { TerrainStyle } from './terrain/TerrainRenderer';
 import type { CbdGrid } from './scenery/urbanGrid';
+import { aucklandStreets } from './scenery/cbdStreets';
 import { AKL_CONES, AKL_RANGITOTO } from './terrain/theaters/aucklandMap';
 
 /**
- * Auckland CBD street grid: one grid (blocks 105 m N–S × 76 m E–W, Queen Street ≈ 8° west of
- * south) over the city centre instead of Voronoi districts; shared by the terrain shader and the
- * CBD / house builders.
+ * Auckland CBD street grid (fallback without LINZ road data): one grid (blocks 105 m N–S × 76 m E–W,
+ * Queen Street ≈ 8° west of south) over the city centre instead of Voronoi districts; shared by the
+ * terrain shader and the CBD / house builders.
  */
 export const AKL_CBD_GRID: CbdGrid = { x: 200, z: -100, radius: 1150, hash: 0.2722 };
+
+/** Auckland's CBD: the real (LINZ) streets when the road data is installed, else AKL_CBD_GRID. */
+export function aucklandCbd(): CbdGrid {
+  const streets = aucklandStreets();
+  return streets ? { ...AKL_CBD_GRID, streets } : AKL_CBD_GRID;
+}
 
 export interface WorldConfig {
   /** Heightfield samples per side. */
@@ -92,7 +99,7 @@ export function terrainStyle(theater: TheaterId): TerrainStyle {
         // Waiheke vineyards (Oneroa → Onetangi)
         vineyard: [27_500, -5_200, 8_500, 3_000],
         sink: true,
-        cbd: AKL_CBD_GRID,
+        cbd: aucklandCbd(),
         cones: aucklandCones(),
       };
   }

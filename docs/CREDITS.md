@@ -14,11 +14,13 @@ sound effect and the music are synthesized with Web Audio. The third-party asset
 | Piper TTS engine (build-time only) | https://github.com/rhasspy/piper | MIT | [audio](credits/audio.md) |
 | Shader hash `hash12` | Dave Hoskins, *Hash without Sine* | MIT | [world](credits/world.md) |
 | Auckland coastline + terrain heights (`src/world/terrain/data/auckland-linz.bin`) | Toitū Te Whenua Land Information New Zealand (LINZ): [NZ LiDAR 1m DEM](https://data.linz.govt.nz/layer/121859-new-zealand-lidar-1m-dem/), NZ Contour-Interpolated 8m DEM (from [NZ Contours Topo 1:50k](https://data.linz.govt.nz/layer/50768)), via the LINZ Data Service / [nz-elevation](https://github.com/linz/elevation) open data | CC BY 4.0 — *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.* | [tools/linz](../tools/linz/README.md) |
+| Auckland roads: CBD streets, motorways, arterials (`src/world/terrain/data/auckland-roads.bin`) | Toitū Te Whenua Land Information New Zealand (LINZ): [NZ Addresses: Road Sections](https://data.linz.govt.nz/layer/123109) and [NZ Tunnel Centrelines (Topo, 1:50k)](https://data.linz.govt.nz/layer/50366), via the LINZ Data Service | CC BY 4.0 — *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.* | [tools/linz](../tools/linz/README.md) |
 
 **Geography.** The Auckland coastline (mean high water, ±10–20 m) and terrain heights (LiDAR, resampled to 86 m) are
-real LINZ data, and the volcanic cones are snapped to the LiDAR summits. Motorways, arterial roads, the CBD street grid and
-most landmark positions are still hand-placed (roughly 100–400 m accuracy); the hand-traced map remains as an offline
-fallback and still names the harbours for the procedural bathymetry.
+real LINZ data, and the volcanic cones are snapped to the LiDAR summits. The CBD streets, the motorway carriageways and the
+main arterials are LINZ road centrelines (the Harbour Bridge abutments snapped to them); the suburbs' street grid is
+procedural and most other landmark positions are still hand-placed (roughly 100–400 m accuracy). The hand-traced map and
+roads remain as an offline fallback; the map still names the harbours for the procedural bathymetry.
 
 **Inspiration.** NovaLogic's *F-22 Raptor* (1997).
 

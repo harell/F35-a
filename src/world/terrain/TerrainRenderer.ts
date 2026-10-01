@@ -26,6 +26,10 @@ import {
   Vector3,
   Vector4,
   Box3,
+  ClampToEdgeWrapping,
+  LinearFilter,
+  RGBAFormat,
+  UnsignedByteType,
   type Camera,
   type Texture,
 } from 'three';
@@ -33,6 +37,8 @@ import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
+import type { CbdGrid } from '../scenery/urbanGrid';
+import type { CbdStreets } from '../scenery/cbdStreets';
 
 export interface TerrainStyle {
   rockColor: Color;
@@ -55,8 +61,8 @@ export interface TerrainStyle {
   vineyard: [number, number, number, number] | null;
   /** Sink low coastal land under the water plane (terrain with a coast mask / linear shores). */
   sink: boolean;
-  /** Fixed CBD street grid (see urbanGrid.ts CbdGrid) or null. */
-  cbd: { x: number; z: number; radius: number; hash: number } | null;
+  /** CBD streets (see urbanGrid.ts CbdGrid: the LINZ street map, else a fixed grid) or null. */
+  cbd: CbdGrid | null;
   /** Volcanic cones (≤ MAX_CONES): crater bowls shaded below heightfield resolution, flank terraces. */
   cones?: ConeShading[];
 }
@@ -112,6 +118,8 @@ const MORPH_START = 0.68;
 export class TerrainRenderer {
   readonly mesh: Mesh;
   readonly heightTexture: DataTexture;
+  /** CBD street map texture (null without LINZ road data). */
+  readonly streetTexture: DataTexture | null;
   private readonly geometry: InstancedBufferGeometry;
   private readonly material: ShaderMaterial;
   private readonly patchAttr: InstancedBufferAttribute;
@@ -270,6 +278,7 @@ export class TerrainRenderer {
     // The coarsest level never morphs (nothing coarser is drawn next to it).
     morph[this.maxLod].set(1e9, 0);
 
+    this.streetTexture = o.style.cbd?.streets ? createStreetTexture(o.style.cbd.streets) : null;
     this.material = new ShaderMaterial({
       name: 'TerrainCDLOD',
       vertexShader: terrainVertexShader,
@@ -303,7 +312,9 @@ export class TerrainRenderer {
         uBlackSandX: { value: o.style.blackSandX },
         uVineyard: { value: o.style.vineyard ? new Vector4(...o.style.vineyard) : new Vector4(0, 0, 0, 0) },
         uSink: { value: o.style.sink ? 1 : 0 },
-        uCbd: { value: o.style.cbd ? new Vector4(o.style.cbd.x, o.style.cbd.z, o.style.cbd.radius, o.style.cbd.hash) : new Vector4(0, 0, 0, 0) },
+        // the circle grid is the fallback for the real CBD streets
+        uCbd: { value: o.style.cbd && !o.style.cbd.streets ? new Vector4(o.style.cbd.x, o.style.cbd.z, o.style.cbd.radius, o.style.cbd.hash) : new Vector4(0, 0, 0, 0) },
+        ...streetUniforms(o.style.cbd?.streets ?? null, this.streetTexture, o.dummy),
         ...coastUniforms(o.coast, o.dummy),
         ...noFieldUniforms(o.noFields ?? []),
         ...coneUniforms(o.style.cones ?? []),
@@ -436,6 +447,7 @@ export class TerrainRenderer {
     this.geometry.dispose();
     this.material.dispose();
     this.heightTexture.dispose();
+    this.streetTexture?.dispose();
   }
 }
 
@@ -463,6 +475,25 @@ export function coneUniforms(list: ConeShading[]): { uConeA: { value: Vector4[] 
   }
   if (!list.length) box.set(0, 0, -1, -1); // empty: nothing inside
   return { uConeA: { value: a }, uConeB: { value: b }, uConeBox: { value: box } };
+}
+
+/** RGBA8 texture of the CBD street map (LINEAR, CLAMP_TO_EDGE: what CbdStreets' samplers replicate). */
+export function createStreetTexture(st: CbdStreets): DataTexture {
+  const t = new DataTexture(st.data, st.cols, st.rows, RGBAFormat, UnsignedByteType);
+  t.wrapS = t.wrapT = ClampToEdgeWrapping;
+  t.magFilter = LinearFilter;
+  t.minFilter = LinearFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Uniforms of the terrain shader's streetMap(). */
+export function streetUniforms(st: CbdStreets | null, tex: Texture | null, dummy: Texture): { uStreets: { value: Texture }; uStreetRect: { value: Vector4 } } {
+  return {
+    uStreets: { value: st && tex ? tex : dummy },
+    uStreetRect: { value: st && tex ? new Vector4(st.x0, st.z0, 1 / (st.cols * st.cell), 1 / (st.rows * st.cell)) : new Vector4(0, 0, 0, 0) },
+  };
 }
 
 /** Uniforms of COAST_GLSL (shared by terrain and water). */

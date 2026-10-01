@@ -12,6 +12,7 @@ import { frameFromHeading, GeometryBuilder, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, 
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
+import { FOOTPATH, type CbdStreets } from './cbdStreets';
 
 const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
@@ -156,7 +157,7 @@ const CBD_LANDMARKS: { x: number; z: number; h: number; style: TowerStyle; col: 
   { x: 392, z: -433, h: 180, style: 'wedge', col: 0x7f949c, name: 'PwC Tower (Commercial Bay)' },
   { x: 445, z: -277, h: 170, style: 'round', col: 0x4f7478, name: 'Vero Centre' },
   { x: 650, z: -300, h: 187, style: 'slab', col: 0xd6d2c8, name: 'Pacifica' },
-  { x: 499, z: 125, h: 155, style: 'round', col: 0xcfc9bb, name: 'Metropolis' },
+  { x: 440, z: -10, h: 155, style: 'round', col: 0xcfc9bb, name: 'Metropolis' }, // 1 Courthouse Lane (LINZ), by Albert Park
   { x: 294, z: -144, h: 143, style: 'box', col: 0x33495a, name: 'ANZ Centre' },
   { x: 560, z: -180, h: 130, style: 'setback', col: 0x5e7884, name: 'Lumley Centre' },
   { x: 294, z: -322, h: 120, style: 'box', col: 0x4a6a80, name: 'Deloitte Centre' },
@@ -218,12 +219,33 @@ function tower(B: GeometryBuilder, fr: Frame, style: TowerStyle, tw: number, td:
   if (h > 95) lights.add(top.x, top.y + h + 4, top.z, 0xff2a18, 3.5, rnd());
 }
 
+/** A CBD building's footprint (m, world): centre, width along `angle`, depth across it, height. */
+export interface Footprint {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+  /** Rotation (rad) of the width axis: (cos, sin) in world XZ (frameFromHeading's heading). */
+  angle: number;
+  h: number;
+}
+
+export interface CbdStats {
+  /** Buildings over 60 m. */
+  towers: number;
+  tallest: number;
+  heights: number[];
+  footprints: Footprint[];
+}
+
 /**
  * Auckland CBD: ~100 high-rises (a dozen named towers at their real positions, tallest 187 m) and
- * dense mid-rise blocks on the CBD street grid (AKL_CBD_GRID, painted by the terrain shader),
- * densest around Queen / Shortland / Customs Street, thinning towards Karangahape Road.
+ * dense mid-rise blocks, densest around Queen / Shortland / Customs Street, thinning towards
+ * Karangahape Road. Built along Auckland's real streets when the LINZ street map is installed
+ * (buildRealCBD), else on the fixed CBD grid (AKL_CBD_GRID, painted by the terrain shader).
  */
-export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null): { towers: number; tallest: number; heights: number[] } {
+export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null): CbdStats {
+  if (cbd.streets) return buildRealCBD(B, lights, height, detail, cbd.streets, roads);
   const rnd = mulberry32(2024);
   const core = { x: 400, z: -300 };
   const minX = -620;
@@ -271,6 +293,7 @@ export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn
   let towers = 0;
   let tallest = 0;
   const heights: number[] = [];
+  const footprints: Footprint[] = [];
   const place = (sl: Slot, h: number, style: TowerStyle, col: number) => {
     used.add(sl);
     const g = height(sl.x, sl.z) - 3;
@@ -284,6 +307,7 @@ export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn
     if (h > 60) towers++;
     heights.push(h);
     tallest = Math.max(tallest, h);
+    footprints.push({ x: sl.x, z: sl.z, w: podium ? sl.w - 1 : tw, d: podium ? sl.dd - 2 : td, angle: d.angle, h });
   };
   // 1) named towers on the half-block nearest their real position
   for (const L of CBD_LANDMARKS) {
@@ -327,10 +351,260 @@ export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn
         // flat roofs: grey concrete / membrane with a hint of the facade colour
         B.box(fr, 0, 0, off, bw, h, bdd, col, new Color(0x7c7b77).lerp(new Color(col), 0.2).multiplyScalar(0.8 + rnd() * 0.3), WIN_OFFICE);
         if (detail > 0.5 && rnd() < 0.4) B.box(fr, bw * 0.2, h, off - bdd * 0.15, bw * 0.3, 3, bdd * 0.3, 0x8a8a88, 0x6a6a68);
+        const [ox, oz] = toWorld({ ...d, cx: sl.x, cz: sl.z }, 0, off);
+        footprints.push({ x: ox, z: oz, w: bw, d: bdd, angle: d.angle, h });
       }
     }
   }
-  return { towers, tallest, heights };
+  return { towers, tallest, heights, footprints };
+}
+
+/**
+ * The CBD on Auckland's real streets (LINZ street map, cbdStreets.ts). Every building stands behind
+ * the footpath of the street it faces and is turned to it:
+ *  1. the named towers at their real positions, aligned with their nearest street;
+ *  2. a frontage of buildings along both sides of every street (main streets first), towers most
+ *     likely near the Queen / Shortland / Customs St core;
+ *  3. low infill in what is left of the deeper blocks.
+ * Footprints keep off every street (≥ FOOTPATH + 0.8 m from the kerb), the motorways, the parks, the
+ * water, the Sky Tower / SkyCity and each other. Street lamps line the streets.
+ */
+function buildRealCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, roads: RoadNetwork | null): CbdStats {
+  const rnd = mulberry32(2024);
+  const core = { x: 400, z: -300 };
+  const SET = FOOTPATH + 0.8; // building line: behind the footpath
+  // occupancy (2 m cells) over the region
+  const OC = 2;
+  const ox0 = st.bounds.minX;
+  const oz0 = st.bounds.minZ;
+  const ocols = Math.ceil((st.bounds.maxX - ox0) / OC) + 1;
+  const orows = Math.ceil((st.bounds.maxZ - oz0) / OC) + 1;
+  const occ = new Uint8Array(ocols * orows);
+  const cellOf = (x: number, z: number) => {
+    const i = Math.floor((x - ox0) / OC);
+    const j = Math.floor((z - oz0) / OC);
+    return i < 0 || j < 0 || i >= ocols || j >= orows ? -1 : j * ocols + i;
+  };
+  /** Visit points of a footprint on a lattice of ≤ step m (edges included). */
+  const lattice = (x: number, z: number, ux: number, uz: number, w: number, d: number, step: number, f: (px: number, pz: number) => boolean) => {
+    const na = Math.max(1, Math.ceil(w / step));
+    const nb = Math.max(1, Math.ceil(d / step));
+    for (let a = 0; a <= na; a++)
+      for (let b = 0; b <= nb; b++) {
+        const sa = (a / na - 0.5) * w;
+        const sb = (b / nb - 0.5) * d;
+        if (!f(x + ux * sa - uz * sb, z + uz * sa + ux * sb)) return false;
+      }
+    return true;
+  };
+  // the motorways (+ 4 m) are blocked up front: one stamp instead of a query per lattice point
+  if (roads) {
+    for (const rp of roads.paths) {
+      const hw = rp.width / 2 + 4;
+      for (let i = 0; i + 1 < rp.x.length; i++) {
+        if (rp.tunnel[i]) continue;
+        const ax = rp.x[i];
+        const az = rp.z[i];
+        const bx = rp.x[i + 1];
+        const bz = rp.z[i + 1];
+        if (Math.max(ax, bx) < ox0 - hw || Math.min(ax, bx) > ox0 + ocols * OC + hw || Math.max(az, bz) < oz0 - hw || Math.min(az, bz) > oz0 + orows * OC + hw) continue;
+        const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - hw - ox0) / OC));
+        const i1 = Math.min(ocols - 1, Math.floor((Math.max(ax, bx) + hw - ox0) / OC));
+        const j0 = Math.max(0, Math.floor((Math.min(az, bz) - hw - oz0) / OC));
+        const j1 = Math.min(orows - 1, Math.floor((Math.max(az, bz) + hw - oz0) / OC));
+        const dx = bx - ax;
+        const dz = bz - az;
+        const l2 = dx * dx + dz * dz || 1;
+        for (let j = j0; j <= j1; j++)
+          for (let ii = i0; ii <= i1; ii++) {
+            // any point of the cell within hw: test its centre against hw + half the cell diagonal
+            const cx = ox0 + (ii + 0.5) * OC;
+            const cz = oz0 + (j + 0.5) * OC;
+            const t = Math.max(0, Math.min(1, ((cx - ax) * dx + (cz - az) * dz) / l2));
+            if (Math.hypot(ax + dx * t - cx, az + dz * t - cz) < hw + OC * 0.71) occ[j * ocols + ii] = 1;
+          }
+      }
+    }
+  }
+  const free = (px: number, pz: number) => {
+    const k = cellOf(px, pz);
+    if (k < 0 || occ[k]) return false;
+    if (st.regionSD(px, pz) < 2 || st.park(px, pz) > 0.05 || Math.hypot(px - 10, pz - 25) < 75) return false;
+    // painted kerb distance first (cheap), the exact one near the streets: the kerb distance is
+    // 1-Lipschitz, so ≥ SET at lattice points 4 m apart keeps every point of the footprint ≥ SET − 2
+    const painted = st.streetSD(px, pz);
+    if (painted < SET - 1) return false;
+    if (painted < SET + 4 && st.kerbDistance(px, pz) < SET) return false;
+    if (height(px, pz) < 1.5) return false;
+    return true;
+  };
+  /** Occupancy along the outline every OC m (rectangles overlap at their outlines, or one holds the other: the lattice). */
+  const outlineFree = (x: number, z: number, ux: number, uz: number, w: number, d: number) => {
+    for (const [a, b, len] of [[1, 0, w], [0, 1, d]] as const) {
+      const n = Math.max(1, Math.ceil(len / OC));
+      for (let k = 0; k <= n; k++) {
+        const t = (k / n - 0.5) * len;
+        for (const sgn of [-0.5, 0.5]) {
+          const sa = a ? t : sgn * w;
+          const sb = b ? t : sgn * d;
+          const c = cellOf(x + ux * sa - uz * sb, z + uz * sa + ux * sb);
+          if (c < 0 || occ[c]) return false;
+        }
+      }
+    }
+    return true;
+  };
+  const fits = (x: number, z: number, ux: number, uz: number, w: number, d: number) => outlineFree(x, z, ux, uz, w, d) && lattice(x, z, ux, uz, w, d, 4, free);
+  const claim = (x: number, z: number, ux: number, uz: number, w: number, d: number) =>
+    lattice(x, z, ux, uz, w + 2, d + 2, OC / 2, (px, pz) => {
+      const k = cellOf(px, pz);
+      if (k >= 0) occ[k] = 1;
+      return true;
+    });
+
+  let towers = 0;
+  let tallest = 0;
+  const heights: number[] = [];
+  const footprints: Footprint[] = [];
+  const styles: TowerStyle[] = ['box', 'box', 'setback', 'slab', 'wedge', 'round', 'box', 'slab'];
+  const placeTower = (x: number, z: number, ux: number, uz: number, w: number, d: number, h: number, style: TowerStyle, col: number) => {
+    claim(x, z, ux, uz, w, d);
+    const angle = Math.atan2(uz, ux);
+    const g = height(x, z) - 3;
+    const fr = frameFromHeading(x, g, z, angle);
+    const podium = h > 70 && rnd() < 0.7;
+    if (podium) B.box(fr, 0, 0, 0, w, 10 + rnd() * 12, d, STONE[(rnd() * STONE.length) | 0], 0x6c6a66, WIN_OFFICE);
+    const tw = style === 'slab' ? Math.min(w, 20 + rnd() * 6) : Math.min(w - 2, 24 + rnd() * 14);
+    const td = style === 'slab' ? Math.min(d - 2, 36 + rnd() * 10) : Math.min(d - 2, 24 + rnd() * 16);
+    tower(B, fr, style, tw, td, h, col, rnd, lights, { x, y: g, z });
+    if (h > 60) towers++;
+    heights.push(h);
+    tallest = Math.max(tallest, h);
+    footprints.push({ x, z, w: podium ? w : tw, d: podium ? d : td, angle, h });
+  };
+  const placeMid = (x: number, z: number, ux: number, uz: number, w: number, d: number, fall: number) => {
+    claim(x, z, ux, uz, w, d);
+    const angle = Math.atan2(uz, ux);
+    const g = height(x, z) - 3;
+    const fr = frameFromHeading(x, g, z, angle);
+    const h = 9 + 30 * Math.pow(rnd(), 1.6) * (0.35 + 0.65 * fall);
+    const heritage = h < 22 && rnd() < 0.35;
+    const col = heritage ? HERITAGE[(rnd() * HERITAGE.length) | 0] : rnd() < 0.3 ? GLASS[(rnd() * GLASS.length) | 0] : STONE[(rnd() * STONE.length) | 0];
+    B.box(fr, 0, 0, 0, w, h, d, col, new Color(0x7c7b77).lerp(new Color(col), 0.2).multiplyScalar(0.8 + rnd() * 0.3), WIN_OFFICE);
+    if (detail > 0.5 && rnd() < 0.4) B.box(fr, w * 0.2, h, -d * 0.15, w * 0.3, 3, d * 0.3, 0x8a8a88, 0x6a6a68);
+    heights.push(h);
+    footprints.push({ x, z, w, d, angle, h });
+  };
+  const fallAt = (x: number, z: number, r: number) => Math.exp(-((Math.hypot(x - core.x, z - core.z) / r) ** 2));
+
+  // 1) named towers at the nearest spot to their (approximate) positions that fits, turned to their
+  //    street: some of the hand-placed points fall on a street or in Albert Park
+  const spiral: [number, number][] = [];
+  for (let dz = -72; dz <= 72; dz += 4) for (let dx = -72; dx <= 72; dx += 4) if (Math.hypot(dx, dz) <= 72) spiral.push([dx, dz]);
+  spiral.sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
+  for (const L of CBD_LANDMARKS) {
+    search: for (const size of [32, 26, 20]) {
+      for (const [dx, dz] of spiral) {
+        const x = L.x + dx;
+        const z = L.z + dz;
+        const n = st.nearest(x, z);
+        if (!n || n.kerb < SET + size / 2 - 1) continue;
+        if (fits(x, z, n.dx, n.dz, size, size)) {
+          placeTower(x, z, n.dx, n.dz, size, size, L.h, L.style, L.col);
+          break search;
+        }
+      }
+    }
+  }
+
+  // 2) frontages along both sides of every street, main streets first
+  const lines = st.streets.slice().sort((a, b) => b.width - a.width);
+  for (const l of lines) {
+    const p = l.pts;
+    const hw = l.width / 2;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const ax = p[i];
+      const az = p[i + 1];
+      const len = Math.hypot(p[i + 2] - ax, p[i + 3] - az);
+      if (len < 12) continue;
+      const ux = (p[i + 2] - ax) / len;
+      const uz = (p[i + 3] - az) / len;
+      for (const side of [1, -1]) {
+        const nx = -uz * side;
+        const nz = ux * side;
+        for (let t = 2; t < len - 6; ) {
+          const mx = ax + ux * t;
+          const mz = az + uz * t;
+          const fall = fallAt(mx, mz, 560);
+          const tower = rnd() < 0.02 + 0.24 * fall;
+          let placed = false;
+          // CBD lots run deep and wall to wall: try a full-depth building, then shallower ones
+          const fw0 = tower ? 30 + rnd() * 12 : 16 + rnd() * 20;
+          const fd0 = tower ? 28 + rnd() * 12 : 22 + rnd() * 16;
+          const tries = tower ? [[fw0, fd0], [26, 26], [fw0 * 0.6, fd0 * 0.6]] : [[fw0, fd0], [fw0, fd0 * 0.6], [fw0 * 0.6, 14], [10, 10]];
+          for (const [fw, fd] of tries) {
+            if (t + fw > len + 4) continue;
+            const off = hw + SET + fd / 2 + 0.3;
+            const x = mx + ux * (fw / 2) + nx * off;
+            const z = mz + uz * (fw / 2) + nz * off;
+            if (!fits(x, z, ux, uz, fw, fd)) continue;
+            if (tower && fw >= 24) {
+              const f = fallAt(x, z, 560);
+              const h = 62 + 96 * Math.pow(rnd(), 1.25) * (0.3 + 0.7 * f);
+              const style = styles[(rnd() * styles.length) | 0];
+              placeTower(x, z, ux, uz, fw, fd, h, style, style === 'slab' ? STONE[(rnd() * STONE.length) | 0] : GLASS[(rnd() * GLASS.length) | 0]);
+            } else placeMid(x, z, ux, uz, fw, fd, fallAt(x, z, 700));
+            t += fw + 0.6 + rnd() * 1.2;
+            placed = true;
+            break;
+          }
+          if (!placed) t += 4;
+        }
+      }
+    }
+  }
+
+  // 3) infill: lower buildings in the deeper blocks, turned to the nearest street
+  if (detail > 0.3) {
+    for (let z = st.bounds.minZ; z < st.bounds.maxZ; z += 9) {
+      for (let x = st.bounds.minX; x < st.bounds.maxX; x += 9) {
+        const n = st.nearest(x, z);
+        if (!n || n.kerb < SET + 6) continue;
+        for (const sz of [30, 22, 15]) {
+          const w = sz * (0.8 + rnd() * 0.4);
+          if (!fits(x, z, n.dx, n.dz, w, sz)) continue;
+          placeMid(x, z, n.dx, n.dz, w, sz, fallAt(x, z, 700) * 0.6);
+          break;
+        }
+      }
+    }
+  }
+
+  // street lamps: every ≈ 34 m, alternating sides, on streets of the region (not the lanes)
+  for (const l of st.streets) {
+    if (l.width < 10) continue;
+    const p = l.pts;
+    let next = 10;
+    let s = 0;
+    let k = 0;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const len = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+      const ux = (p[i + 2] - p[i]) / (len || 1);
+      const uz = (p[i + 3] - p[i + 1]) / (len || 1);
+      while (next <= s + len) {
+        const t = next - s;
+        const side = k++ % 2 === 0 ? 1 : -1;
+        const x = p[i] + ux * t - uz * side * (l.width / 2 + 0.6);
+        const z = p[i + 1] + uz * t + ux * side * (l.width / 2 + 0.6);
+        // not where the footpath runs into a side street (intersections)
+        const kerb = st.kerbDistance(x, z);
+        if (st.inRegion(x, z) && height(x, z) > 0.5 && kerb > 0.3 && kerb < FOOTPATH) lights.add(x, height(x, z) + 8, z, 0xffd9a8, 3.6);
+        next += 34;
+      }
+      s += len;
+    }
+  }
+  return { towers, tallest, heights, footprints };
 }
 
 interface Centre {
@@ -385,6 +659,7 @@ export function buildCentres(B: GeometryBuilder, lights: LightList, height: Heig
         const rr = Math.hypot(x - cx, z - cz);
         if (rr > c.r) continue;
         const d = districtAt(x, z, undefined, undefined, cbd);
+        if (d.real) continue; // CBD region: built along the real streets (buildRealCBD)
         const [px, pz] = toLocal(d, x, z);
         const bx = Math.floor(px / BLOCK_W);
         const bz = Math.floor(pz / BLOCK_D);

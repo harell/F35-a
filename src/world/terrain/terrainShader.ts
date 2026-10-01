@@ -12,6 +12,7 @@
  */
 import { ATMOSPHERE_GLSL } from '../sky/atmosphere';
 import { COAST_MASK_RANGE } from './coastline';
+import { FOOTPATH } from '../scenery/cbdStreets';
 
 export const MAX_TERRAIN_LODS = 16;
 /** Volcanic cones the fragment shader can shade (crater bowls, flank terraces). */
@@ -129,6 +130,8 @@ uniform vec3 uSeaShallow; // the water shader's shallow-water colour
 uniform float uBlackSandX; // black sand west of this x (m)
 uniform vec4 uVineyard; // ellipse centre x, z, radii x, z (m); radius 0 = none
 uniform vec4 uCbd; // CBD street grid: centre x, z, radius (m), hash (angle = hash · 2π); radius 0 = none
+uniform sampler2D uStreets; // CBD street map (cbdStreets.ts): kerb distance, region distance, park, motorway verge
+uniform vec4 uStreetRect; // x0, z0, 1/width, 1/height (m); 1/width 0 = none
 uniform vec4 uNoFieldA[6]; // airfield rects: centre x, z, cos / sin heading
 uniform vec4 uNoFieldB[6]; // half width, half length, blend (m); 0 = unused
 uniform vec4 uConeA[${MAX_CONES}]; // x, z, crater radius, crater depth (m)
@@ -181,6 +184,16 @@ vec4 district(vec2 wp, float size) {
   return vec4(res, 0.5 * (sqrt(b2) - sqrt(b1)));
 }
 
+// CBD street map (cbdStreets.ts): x = distance to the nearest kerb (m, + off the street), y = signed
+// distance to the CBD region border (m, + inside), z = park, w = motorway verge. Far outside the
+// region: (32, −32, 0, 0).
+vec4 streetMap(vec2 wp) {
+  vec2 uv = (wp - uStreetRect.xy) * uStreetRect.zw;
+  if (uStreetRect.z <= 0.0 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(32.0, -32.0, 0.0, 0.0);
+  vec4 s = texture2D(uStreets, uv);
+  return vec4((s.r * 255.0 - 128.0) * 0.25, (s.g * 255.0 - 128.0) * 0.25, s.b, s.a);
+}
+
 // Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts).
 vec4 urbanDistrict(vec2 wp) {
   if (uCbd.z > 0.0) {
@@ -198,6 +211,76 @@ vec3 roofColor(float lh) {
   return uRoofs[k] * (0.85 + 0.3 * fract(lh * 7.3));
 }
 
+// Canopy share of a dense built-up neighbourhood (urbanPattern's treeFrac for apartments).
+float denseTreeFrac(float leafy) {
+  return mix(0.3, 0.46, leafy) * 0.7 * 0.4;
+}
+
+// Auckland CBD with its real streets (inside the region of the LINZ street map, sm = streetMap()):
+// asphalt carriageways and footpaths from the kerb distance field, paved / flat-roofed block interiors
+// (the 3D buildings of buildCBD stand on them), lawns and trees in the parks. The far colour is the
+// suburbs' dense-city average, so nothing changes at the region border from altitude.
+vec3 cbdPattern(vec2 wp, float mpp, vec4 sm, out vec3 emissive) {
+  vec3 asphalt = vec3(0.085, 0.086, 0.09);
+  vec3 paving = vec3(0.28, 0.275, 0.26);
+  vec3 flatAvg = vec3(0.3, 0.29, 0.27);
+  float aa = max(mpp, 0.05);
+  float kerb = sm.x;
+  float leafy = smoothstep(0.2, 0.8, texture2D(uDetail, wp * (1.0 / 1730.0)).a);
+  float off = smoothstep(${FOOTPATH.toFixed(1)}, ${(FOOTPATH + 2).toFixed(1)}, kerb);
+  // parks, and the grassy embankments along the motorways (fewer trees)
+  float verge = smoothstep(0.35, 0.65, sm.w) * off;
+  float park = max(smoothstep(0.35, 0.65, sm.z) * off, verge);
+  vec3 far = flatAvg * 0.6 + uCanopy * denseTreeFrac(leafy) + mix(asphalt, paving, 0.5) * 0.25;
+  vec3 lawn = uGarden * 0.75 + uCanopy * 0.35;
+  far = mix(far, lawn, park);
+  // block interiors: plazas, car parks and flat roofs in ≈ 9 m patches
+  float h = hash12(floor(wp / 9.0) + 71.3);
+  vec3 block = mix(paving * (0.9 + 0.25 * h), flatAvg * (0.75 + 0.5 * fract(h * 3.7)), step(0.45, h));
+  vec3 blockAvg = mix(paving * 1.02, flatAvg, 0.55);
+  // mid range: the streets as coverage-weighted lines (fraction of the pixel footprint on asphalt)
+  float w = max(mpp, 1.0);
+  float roadCov = clamp((w * 0.5 - kerb) / w, 0.0, 1.0);
+  float footCov = clamp((w * 0.5 - abs(kerb - ${(FOOTPATH / 2).toFixed(1)})) / w, 0.0, 1.0) * ${FOOTPATH.toFixed(1)} / max(w, ${FOOTPATH.toFixed(1)});
+  vec3 mid = mix(mix(blockAvg, lawn, park), paving * 1.15, footCov * 0.8);
+  mid = mix(mid, asphalt, roadCov * 0.9);
+  vec3 col = mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp));
+  if (mpp < 8.0) {
+    // park lawns with tree crowns (one per 14 m cell) and their shadows
+    vec2 tc = floor(wp / 14.0);
+    float th = hash12(tc + 5.7);
+    vec2 tp = (tc + 0.3 + 0.4 * vec2(th, fract(th * 7.9))) * 14.0;
+    float tr = 3.0 + 1.6 * fract(th * 3.3);
+    vec2 tv = wp - tp;
+    vec2 shOff = clamp(-uSunDir.xz / max(uSunDir.y, 0.18) * 5.5, -18.0, 18.0);
+    float hasTree = step(fract(th * 11.3), 0.55 - 0.3 * verge) * park;
+    float tree = hasTree * (1.0 - smoothstep(tr - aa * 0.6, tr + aa * 0.6, length(tv)));
+    float tshadow = hasTree * (1.0 - smoothstep(tr - aa, tr + aa, length(tv - shOff * 0.8))) * (1.0 - tree);
+    float tlit = mix(clamp(0.8 + 0.5 * dot(tv / tr, normalize(uSunDir.xz + 1e-4)), 0.5, 1.35), 0.95, smoothstep(2.0, 6.0, mpp));
+    vec3 grass = uGarden * (0.84 + 0.2 * hash12(floor(wp / 3.0)));
+    vec3 near = mix(block, grass * (1.0 - 0.45 * tshadow), park);
+    near = mix(near, uCanopy * tlit, tree);
+    float foot = 1.0 - smoothstep(${FOOTPATH.toFixed(1)} - aa * 0.5, ${FOOTPATH.toFixed(1)} + aa * 0.5, kerb);
+    near = mix(near, paving * 1.15 * (0.95 + 0.1 * hash12(floor(wp / 1.5))), foot);
+    // kerb line, then asphalt
+    near = mix(near, paving * 0.75, (1.0 - smoothstep(0.0, aa + 0.3, abs(kerb - 0.15))) * (1.0 - smoothstep(2.0, 5.0, mpp)));
+    float road = 1.0 - smoothstep(-aa * 0.5, aa * 0.5, kerb);
+    near = mix(near, asphalt, road);
+    col = mix(near, col, smoothstep(4.5, 8.0, mpp));
+  }
+  emissive = vec3(0.0);
+  if (uNight > 0.0) {
+    // street lamps are fixtures (buildCBD); here: lit shopfronts along the footpaths up close and the
+    // area-average glow of the city centre further out
+    float shop = (1.0 - smoothstep(${FOOTPATH.toFixed(1)}, ${(FOOTPATH + 4).toFixed(1)}, kerb)) * step(0.0, kerb) * (1.0 - park) * step(0.5, fract(h * 5.3));
+    float shopGlow = shop * 0.12 * (1.0 - smoothstep(3.0, 10.0, mpp));
+    float avg = 0.06 * (0.6 + 0.8 * h) * 1.1 * (1.0 - park * 0.8);
+    float glow = mix(shopGlow, avg, smoothstep(3.0, 18.0, mpp));
+    emissive = (vec3(1.0, 0.86, 0.66) * glow + vec3(1.0, 0.72, 0.42) * 0.03 * smoothstep(4.0, 12.0, mpp)) * uNight;
+  }
+  return col;
+}
+
 // Suburbs / city seen from the air. The street grid (Voronoi districts, 105 × 76 m blocks, 6 × 2
 // lots) matches urbanGrid.ts / sources.ts, so the instanced 3D houses stand exactly on the painted
 // ones and the transition between them is invisible.
@@ -208,10 +291,14 @@ vec3 roofColor(float lh) {
 //  mid  (8–40 m/px): one mixed colour per lot + coverage-weighted street lines
 //  far  (> 16 m/px): fading into area-weighted roofs + canopy + paving (reads as city, not green fields)
 // At night: street lamps along the roads, glowing windows, and a far-field average glow.
-vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, out vec3 emissive) {
+vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 emissive) {
   const vec2 BLOCK = vec2(105.0, 76.0);
   const vec2 LOT = vec2(17.5, 38.0);
+  // CBD region: Auckland's real streets (the whole region is built up, whatever the colour map says)
+  if (sm.y > 0.0) return cbdPattern(wp, mpp, sm, emissive);
   vec4 dist = urbanDistrict(wp);
+  // the CBD region border is a district border (a street under the motorway that runs along it)
+  dist.w = min(dist.w, -sm.y);
   float ang = dist.z * 6.2831;
   mat2 R = rot2(ang);
   vec2 p = R * (wp - dist.xy);
@@ -441,6 +528,12 @@ void main() {
   vec3 albedo = c.rgb;
   float forest = c.a < 0.5 ? c.a * 2.0 : 0.0;
   float urban = c.a >= 0.5 ? clamp(c.a * 2.0 - 1.0, 0.0, 1.0) : 0.0;
+  // the CBD region (real streets) is built up throughout: no rock, paddocks or beaches there
+  vec4 sm = streetMap(wp);
+  if (sm.y > 0.0) {
+    urban = 1.0;
+    forest = 0.0;
+  }
 
   // Past the heightfield the (clamped) colour map would streak: fade to a flat outside colour.
   float outside = smoothstep(uOutside - 3000.0, uOutside, max(abs(wp.x), abs(wp.y)));
@@ -459,7 +552,7 @@ void main() {
     if (fw > 0.01) albedo = mix(albedo, fieldPattern(albedo, wp, mpp), fw);
   }
   vec3 emissive = vec3(0.0);
-  if (urban > 0.01) albedo = urbanPattern(albedo, wp, urban, mpp, emissive);
+  if (urban > 0.01) albedo = urbanPattern(albedo, wp, urban, mpp, sm, emissive);
 
   float rockW = smoothstep(uRockSlope, uRockSlope + 0.09, slope + (dA.b - 0.5) * 0.12 + (dB.g - 0.5) * 0.05 * nearB) * natural;
   vec3 rock = uRockColor * (0.68 + 0.6 * mix(dA.b, dB.b, nearB * 0.7));

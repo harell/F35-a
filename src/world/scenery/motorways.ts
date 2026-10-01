@@ -3,18 +3,23 @@
  * of the CBD into the Central Motorway Junction ("Spaghetti Junction") and south through Newmarket
  * to Manukau; SH16 west along the harbour (Waterview, the Te Atatū causeway, Westgate) and east down
  * Grafton Gully to the port; SH20 from Waterview over the Māngere Bridge; SH18 over the upper
- * harbour; SH1 up the North Shore to Albany. Hand-traced from memory at ~100–200 m accuracy.
+ * harbour; SH1 up the North Shore to Albany; plus the main arterials.
  *
- * `RoadNetwork` smooths the polylines, answers "is this point on a road?" (so houses, trees and
+ * The geometry comes from the LINZ road centrelines (aucklandRoads.ts: one line per carriageway and
+ * ramp, the Waterview tunnel bores flagged) when they are installed. The hand-traced polylines below
+ * (from memory, ~100 m – 2 km off) are the fallback when that data is unavailable.
+ *
+ * `RoadNetwork` holds the polylines, answers "is this point on a road?" (so houses, trees and
  * towers keep off the carriageway) and builds one textured ribbon mesh (terrain-following, raised
  * onto causeways / bridge decks over water) plus lamp posts for the night lights.
  */
 import { BufferAttribute, BufferGeometry } from 'three';
 import { geoToWorld } from '../../core/auckland';
+import { aucklandRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_STREET, type RoadData } from './aucklandRoads';
 import { frameFromHeading, type GeometryBuilder } from './GeometryBuilder';
 import type { HeightFn, LightList } from './builders';
 
-interface MotorwayDef {
+export interface MotorwayDef {
   name: string;
   /** Carriageway width (m, both directions). */
   width: number;
@@ -24,7 +29,7 @@ interface MotorwayDef {
   tunnels?: number[];
 }
 
-const MOTORWAYS: MotorwayDef[] = [
+export const HAND_MOTORWAYS: MotorwayDef[] = [
   {
     name: 'SH1 North Shore',
     width: 30,
@@ -94,7 +99,7 @@ const MOTORWAYS: MotorwayDef[] = [
  * network from altitude instead of lines painted along every procedural district border.
  * Hand-traced from memory (~100-200 m accuracy), all on land.
  */
-const ARTERIALS: MotorwayDef[] = [
+export const HAND_ARTERIALS: MotorwayDef[] = [
   { name: 'Dominion Rd', width: 15, ll: [[-36.8655, 174.7572], [-36.8760, 174.7532], [-36.8860, 174.7488], [-36.8960, 174.7448], [-36.9060, 174.7415], [-36.9150, 174.7390]] },
   { name: 'Mt Eden Rd', width: 14, ll: [[-36.8660, 174.7625], [-36.8760, 174.7612], [-36.8860, 174.7600], [-36.8960, 174.7605], [-36.9040, 174.7615]] },
   { name: 'Manukau Rd', width: 15, ll: [[-36.8705, 174.7775], [-36.8800, 174.7768], [-36.8900, 174.7760], [-36.9000, 174.7752], [-36.9095, 174.7742]] },
@@ -109,7 +114,11 @@ const ARTERIALS: MotorwayDef[] = [
 
 export interface RoadPath {
   name: string;
+  kind: 'motorway' | 'arterial';
+  /** Ribbon width (m): both carriageways (hand-traced) or one carriageway (LINZ). */
   width: number;
+  /** Texture span across the ribbon: 1 = both directions, 0.5 = one carriageway (edge line to median). */
+  span: number;
   /** Resampled points (world m), with per-point tunnel flag. */
   x: Float32Array;
   z: Float32Array;
@@ -150,15 +159,61 @@ export function resamplePath(pts: { x: number; z: number }[], tunnels: number[] 
   return { x: xs, z: zs, tunnel: tn };
 }
 
-/** Motorways plus (by default) the main arterial roads. */
+/** Motorways plus (by default) the main arterial roads: LINZ centrelines when installed, else hand-traced. */
 export function aucklandRoadPaths(arterials = true): RoadPath[] {
-  return (arterials ? MOTORWAYS.concat(ARTERIALS) : MOTORWAYS).map((m) => {
+  const linz = aucklandRoads();
+  return linz ? linzRoadPaths(linz, arterials) : handRoadPaths(arterials);
+}
+
+/** The hand-traced fallback (no LINZ road data). */
+export function handRoadPaths(arterials = true): RoadPath[] {
+  const defs: [MotorwayDef, RoadPath['kind']][] = HAND_MOTORWAYS.map((m) => [m, 'motorway']);
+  if (arterials) for (const m of HAND_ARTERIALS) defs.push([m, 'arterial']);
+  return defs.map(([m, kind]) => {
     const r = resamplePath(
       m.ll.map(([lat, lon]) => geoToWorld(lat, lon)),
       m.tunnels,
     );
-    return { name: m.name, width: m.width, x: Float32Array.from(r.x), z: Float32Array.from(r.z), tunnel: Uint8Array.from(r.tunnel) };
+    return { name: m.name, kind, width: m.width, span: 1, x: Float32Array.from(r.x), z: Float32Array.from(r.z), tunnel: Uint8Array.from(r.tunnel) };
   });
+}
+
+/**
+ * LINZ motorway carriageways (one ribbon each, half the motorway texture) and arterials. Real
+ * vertices are kept (no smoothing: the data already follows the curves), long segments split to
+ * ≤ SAMPLE m so the ribbons follow the terrain.
+ */
+export function linzRoadPaths(d: RoadData, arterials = true): RoadPath[] {
+  const out: RoadPath[] = [];
+  for (const l of d.lines) {
+    if (l.kind === ROAD_STREET || (l.kind === ROAD_ARTERIAL && !arterials)) continue;
+    const xs: number[] = [];
+    const zs: number[] = [];
+    const p = l.pts;
+    for (let i = 0; i < p.length; i += 2) {
+      if (i > 0) {
+        const n = Math.ceil(Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]) / SAMPLE);
+        for (let k = 1; k < n; k++) {
+          xs.push(p[i - 2] + ((p[i] - p[i - 2]) * k) / n);
+          zs.push(p[i - 1] + ((p[i + 1] - p[i - 1]) * k) / n);
+        }
+      }
+      xs.push(p[i]);
+      zs.push(p[i + 1]);
+    }
+    const motorway = l.kind === ROAD_MOTORWAY;
+    out.push({
+      name: l.name,
+      kind: motorway ? 'motorway' : 'arterial',
+      width: l.width,
+      span: motorway ? 0.5 : 1,
+      x: Float32Array.from(xs),
+      z: Float32Array.from(zs),
+      // a tunnel line is a tunnel from end to end (the bake splits the runs at the portals)
+      tunnel: new Uint8Array(xs.length).fill(l.tunnel ? 1 : 0),
+    });
+  }
+  return out;
 }
 
 /** Spatially hashed road segments for "is this point on / next to a motorway?" queries. */
@@ -243,6 +298,12 @@ export class RoadNetwork {
       }
       let s = 0;
       let run = -1;
+      // lamp posts every 60 m alternating sides (one carriageway: every 80 m; arterials: every 120 m),
+      // bridge piers every ~60 m (by distance: LINZ vertices are not evenly spaced)
+      const lampStep = p.kind === 'arterial' ? 120 : p.span < 1 ? 80 : 60;
+      let nextLamp = 0;
+      let lampN = 0;
+      let nextPier = 0;
       for (let i = 0; i < n; i++) {
         const i0 = Math.max(0, i - 1);
         const i1 = Math.min(n - 1, i + 1);
@@ -268,13 +329,15 @@ export class RoadNetwork {
           const g = height(x, z) + 0.45;
           const y = deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
           pos.push(x, y, z);
-          uv.push(k / 2, s / 40);
+          uv.push((k / 2) * p.span, s / 40);
         }
         if (run >= 0) {
+          // counter-clockwise seen from above (the road material is front-side only: the old
+          // b-before-a+1 order faced down and every ribbon was culled)
           for (let k = 0; k < 2; k++) {
             const a = run + k;
             const b = base + k;
-            idx.push(a, b, a + 1, a + 1, b, b + 1);
+            idx.push(a, a + 1, b, a + 1, b + 1, b);
           }
         }
         run = base;
@@ -288,15 +351,15 @@ export class RoadNetwork {
             const oz = nz * hw * side;
             B.beam(frameFromHeading(0, 0, 0, 0), p.x[i] + ox, y - 1.8, p.z[i] + oz, x2 + ox, y - 1.8, z2 + oz, 1.6, deckCol);
           }
-          if (i % 2 === 0 && wet[i]) {
+          if (s >= nextPier && wet[i]) {
+            nextPier = s + 60;
             const f = frameFromHeading(p.x[i], Math.min(0, height(p.x[i], p.z[i])) - 2, p.z[i], Math.atan2(tx, -tz));
             B.box(f, 0, 0, 0, p.width * 0.8, y - 2 - (Math.min(0, height(p.x[i], p.z[i])) - 2), 3, 0xa8a59c, 0xa8a59c);
           }
         }
-        // Lamp posts (alternating sides, every 60 m)
-        // (arterials: every 120 m)
-        if (lamps && i % (p.width < 20 ? 4 : 2) === 0) {
-          const side = (i >> 1) % 2 === 0 ? 1 : -1;
+        if (lamps && s >= nextLamp) {
+          nextLamp = s + lampStep;
+          const side = lampN++ % 2 === 0 ? 1 : -1;
           const x = p.x[i] + nx * (hw + 1) * side;
           const z = p.z[i] + nz * (hw + 1) * side;
           lights.add(x, height(x, z) * (1 - deck[i]) + deckY * deck[i] + 11, z, 0xffd9a8, 4.5);

@@ -2,7 +2,8 @@
  * Scatter sources:
  *  - TreeSource: jittered-grid candidates accepted by the baked forest density (colour map alpha),
  *    plus garden/street trees in suburbs; species by theatre/altitude
- *  - HouseSource: houses / apartment blocks on the exact lots the terrain shader paints (urbanGrid)
+ *  - HouseSource: houses / apartment blocks on the exact lots the terrain shader paints (urbanGrid;
+ *    none inside the CBD region with real streets, whose buildings come from buildCBD)
  */
 import { Color } from 'three';
 import type { TheaterId } from '../../core/types';
@@ -54,10 +55,12 @@ export class ColorMapSampler {
 
 const _c = new Color();
 
-/** True on (or within 2 m of) a street of the urban grid the terrain shader paints (district borders
- *  are ordinary streets now, not arterials: real arterials are road ribbons, see motorways.ts). */
+/** True on (or within 2 m of) a street the terrain shader paints: the procedural grid (district
+ *  borders are ordinary streets now, not arterials: real arterials are road ribbons, see motorways.ts)
+ *  or, inside the CBD region, Auckland's real streets (cbdStreets.ts). */
 export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: District): boolean {
   const d = districtAt(x, z, undefined, scratch, cbd);
+  if (d.real) return cbd!.streets!.streetSD(x, z) < 2;
   if (d.border < ROAD_HALF + 2) return true;
   const [px, pz] = toLocal(d, x, z);
   const fx = ((px % BLOCK_W) + BLOCK_W) % BLOCK_W;
@@ -106,6 +109,9 @@ export class TreeSource implements ScatterSource {
         if (this.blocked && this.blocked(x, z, 3)) continue;
         // garden / street trees stay off the painted streets and arterials
         if (urban > 0.05 && onStreet(x, z, this.cbd, this.dist)) continue;
+        // CBD (real streets): the blocks are built up (auckland.ts buildCBD); trees only in the parks
+        const st = this.cbd?.streets;
+        if (st && st.regionSD(x, z) > -2 && (st.park(x, z) < 0.6 || st.streetSD(x, z) < 2)) continue;
         const slope = hf.slopeAt(x, z);
         if (slope > 0.9) continue;
         const mi = Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell);
@@ -160,7 +166,8 @@ export class HouseSource implements ScatterSource {
     for (let j = 0; j <= 2; j++)
       for (let i = 0; i <= 2; i++) {
         const d = districtAt(x0 + (size * i) / 2, z0 + (size * j) / 2, undefined, undefined, this.cbd);
-        if (!seen.some((s) => s.cx === d.cx && s.cz === d.cz)) seen.push(d);
+        // the CBD region has no procedural lots (its buildings follow the real streets: buildCBD)
+        if (!d.real && !seen.some((s) => s.cx === d.cx && s.cz === d.cz)) seen.push(d);
       }
     const lotW = BLOCK_W / LOTS_X;
     const lotD = BLOCK_D / LOTS_Z;
@@ -184,7 +191,7 @@ export class HouseSource implements ScatterSource {
           const [cwx, cwz] = toWorld(d, (lx + 0.5) * lotW, (lz + 0.5) * lotD);
           if (cwx < x0 || cwx >= x0 + size || cwz < z0 || cwz >= z0 + size) continue;
           const own = districtAt(cwx, cwz, undefined, this.dist, this.cbd);
-          if (own.cx !== d.cx || own.cz !== d.cz || own.border < 9) continue;
+          if (own.real || own.cx !== d.cx || own.cz !== d.cz || own.border < 9) continue;
           const dens = this.cmap.urban(cwx, cwz);
           if (dens < 0.08) continue;
           const bx = Math.floor(lx / LOTS_X);
