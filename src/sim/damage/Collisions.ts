@@ -31,7 +31,8 @@ export class CollisionSystem {
     const terrain = this.terrain;
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
-      if (ac.crashed) continue;
+      // live civil traffic flies a scripted profile (incl. the landing roll on its gear)
+      if (ac.crashed || (ac.civil && ac.alive)) continue;
       const pos = ac.position;
       let ground = terrain.surfaceHeightAt(pos.x, pos.z);
       let hit = pos.y - ground <= CONTACT_HEIGHT;

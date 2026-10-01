@@ -326,3 +326,138 @@ function paintCamo(p: AtlasPainter, c: CamoSpec): void {
     });
   }
 }
+
+/* ───────────────────────── civil airliner ───────────────────────── */
+
+/**
+ * Air New Zealand style A320neo: white fuselage, black fin that sweeps down over the rear fuselage
+ * with a white koru (unfurling fern frond) on it, black titles, grey wings, dark window row.
+ * `z0` is the model z of the nose tip.
+ */
+export function registerAirlinerMaterials(key: string, b: AtlasBounds, z0: number): void {
+  makeSkin(key, b, Math.min(2048, modelQuality.textureSize), (p) => paintAirliner(p, z0), {
+    roughness: 0.4,
+    metalness: 0.05,
+    env: 0.55,
+    fallback: 0xe9ecee,
+  });
+}
+
+const AIRLINE_TITLE = 'AIR NEW ZEALAND';
+const AIRLINE_REG = 'ZK-NHA';
+const TAIL_BLACK = '#101113';
+
+function paintAirliner(p: AtlasPainter, z0: number): void {
+  const b = p.b;
+  const S = (s: number) => z0 + s;
+  p.fillAll('#f3f4f5');
+  p.mottle(41, 80, 0.025, 0.01, 0.05);
+  // wings / tailplane: Airbus light grey; fuselage strip stays white
+  for (const region of ['top', 'bottom'] as const) {
+    p.with(region, (ctx) => {
+      ctx.fillStyle = region === 'top' ? '#cfd3d7' : '#c3c8cc';
+      ctx.fillRect(2.0, b.zMin, b.xMax, b.zMax - b.zMin);
+      // wing panel lines
+      for (let x = 3; x < b.xMax; x += 1.6) line(ctx, [[x, S(13)], [x, S(23)]], 'rgba(40,45,50,0.18)', 0.02);
+    });
+  }
+  // black rear fuselage top + belly fairing grey
+  p.with('top', (ctx) => {
+    ctx.fillStyle = TAIL_BLACK;
+    ctx.fillRect(0, S(29.5), 1.9, b.zMax - S(29.5));
+    // windscreen seen from above
+    ctx.fillStyle = '#15191e';
+    ctx.fillRect(0, S(1.8), 0.85, 0.8);
+  });
+  p.with('bottom', (ctx) => {
+    ctx.fillStyle = '#dfe2e5';
+    ctx.fillRect(0, S(11), 2.0, 11);
+  });
+
+  for (const region of ['left', 'right'] as const) {
+    const mirror = region === 'right';
+    p.with(region, (ctx) => {
+      // tail: black fin sweeping down over the rear fuselage
+      ctx.fillStyle = TAIL_BLACK;
+      ctx.beginPath();
+      ctx.moveTo(S(27.2), b.yMax);
+      ctx.lineTo(S(27.2), 2.2);
+      ctx.quadraticCurveTo(S(29.5), 1.6, S(31.5), -0.4);
+      ctx.quadraticCurveTo(S(33.0), -1.6, S(35.0), -1.4);
+      ctx.lineTo(b.zMax, -1.0);
+      ctx.lineTo(b.zMax, b.yMax);
+      ctx.closePath();
+      ctx.fill();
+      // koru on the fin
+      koru(ctx, S(34.0), 4.75, 1.55, '#f5f6f7', !mirror);
+      // titles, registration
+      // (side faces only reach ~y 1.05 on the 1.95 m fuselage; above that the atlas maps to 'top')
+      AtlasPainter.text(ctx, AIRLINE_TITLE, S(12.5), 0.7, 0.44, TAIL_BLACK, mirror);
+      AtlasPainter.text(ctx, AIRLINE_REG, S(29.0), -0.55, 0.28, 'rgba(60,64,68,0.9)', mirror);
+      // cockpit windscreen + side windows
+      poly(ctx, [
+        [S(1.55), 0.3],
+        [S(2.35), 0.95],
+        [S(3.75), 1.05],
+        [S(3.85), 0.42],
+      ], '#15191e');
+      // passenger windows (gaps at the doors and overwing exits)
+      ctx.fillStyle = '#1b2026';
+      for (let s = 6.4; s < 31.2; s += 0.53) {
+        if (Math.abs(s - 14.3) < 0.45 || Math.abs(s - 15.0) < 0.2) continue;
+        ctx.fillRect(S(s), 0.05, 0.22, 0.3);
+      }
+      // doors (outline)
+      for (const s of [4.4, 32.8]) {
+        ctx.strokeStyle = 'rgba(60,66,72,0.55)';
+        ctx.lineWidth = 0.035;
+        ctx.strokeRect(S(s), -0.75, 0.82, 1.9);
+      }
+      for (const s of [14.2, 14.95]) {
+        ctx.strokeStyle = 'rgba(60,66,72,0.45)';
+        ctx.lineWidth = 0.03;
+        ctx.strokeRect(S(s), -0.35, 0.5, 0.95);
+      }
+      // cheat line of panel seams
+      line(ctx, [[S(4), -0.95], [S(30), -0.95]], 'rgba(60,66,72,0.12)', 0.02);
+    });
+  }
+  p.grain(42, 0.03, 0.02);
+}
+
+/**
+ * Koru: an unfurling fern frond — a tapering spiral ending in a round bud — centred at (a, c) with
+ * outer radius r. `forward` makes the frond curl towards the nose (-a).
+ */
+function koru(ctx: Ctx2D, a: number, c: number, r: number, fill: string, forward: boolean): void {
+  ctx.save();
+  ctx.translate(a, c);
+  if (!forward) ctx.scale(-1, 1);
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = fill;
+  ctx.lineCap = 'round';
+  // stem rising from the lower aft corner into the spiral
+  const turns = 1.35;
+  const steps = 60;
+  for (let i = 0; i < steps; i++) {
+    const t0 = i / steps;
+    const t1 = (i + 1) / steps;
+    const pt = (t: number): [number, number] => {
+      const ang = -Math.PI * 0.25 + t * turns * Math.PI * 2;
+      const rad = r * (1 - 0.78 * t);
+      return [-Math.cos(ang) * rad * 0.82, Math.sin(ang) * rad];
+    };
+    const [x0, y0] = pt(t0);
+    const [x1, y1] = pt(t1);
+    ctx.lineWidth = r * (0.34 - 0.2 * t0);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+  // bud at the heart of the spiral
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.05, r * 0.02, r * 0.2, r * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}

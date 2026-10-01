@@ -4,7 +4,8 @@
  * Score (points shown in the debrief):
  *   kills (air 100, SAM 150, ground 75) + objective bonuses (500 primary / 250 secondary)
  *   + time bonus (success only, up to 300) + accuracy bonus (up to 250)
- *   + stunt bonus (Harbour Bridge) − damage penalty (2 per HP lost) − 150 per friendly loss,
+ *   + stunt bonus (Harbour Bridge) − damage penalty (2 per HP lost) − 150 per friendly loss
+ *   − 500 per civil airliner the player shot down,
  *   all × difficulty.scoreMultiplier, floored at 0.
  *
  * Grade: from a 0..1 performance rating that is independent of mission size (objective
@@ -29,6 +30,8 @@ export const POINTS = {
   accuracyMax: 250,
   damagePerHp: 2,
   friendlyLoss: 150,
+  /** Civil airliner shot down by the player. */
+  civilian: 500,
   /** Survival: points per wave cleared. */
   wave: 300,
 } as const;
@@ -55,6 +58,8 @@ export interface ScoreInput {
   /** Player HP lost (0..100). */
   damageTaken: number;
   friendlyLosses: number;
+  /** Neutral airliners the player shot down. */
+  civilianKills?: number;
   /** Extra stunt points (flying under the Harbour Bridge…). */
   bonus: number;
   scoreMultiplier: number;
@@ -122,7 +127,7 @@ export function computeScore(i: ScoreInput): ScoreOutput {
   const accPts = i.shotsFired >= 2 ? Math.round(accuracy * POINTS.accuracyMax) : 0;
   const dmg = Math.max(0, Math.min(100, i.damageTaken));
   const dmgPts = -Math.round(dmg * POINTS.damagePerHp);
-  const friendlyPts = -i.friendlyLosses * POINTS.friendlyLoss;
+  const friendlyPts = -i.friendlyLosses * POINTS.friendlyLoss - (i.civilianKills ?? 0) * POINTS.civilian;
   const wavePts = (i.waves ?? 0) * POINTS.wave;
   const raw = killPts + i.objectiveBonus + timePts + accPts + dmgPts + friendlyPts + i.bonus + wavePts;
   const score = Math.max(0, Math.round(raw * i.scoreMultiplier));
@@ -143,7 +148,7 @@ export function computeScore(i: ScoreInput): ScoreOutput {
     0.1 * (i.success ? tf : 0) +
     0.1 * accShare +
     0.1 * (1 - dmg / 100);
-  rating -= 0.06 * i.friendlyLosses;
+  rating -= 0.06 * i.friendlyLosses + 0.15 * (i.civilianKills ?? 0);
   if (i.bonus > 0) rating += 0.03;
   rating = clamp01(rating);
 

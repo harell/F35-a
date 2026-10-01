@@ -22,7 +22,16 @@
  *  Display units: knots, feet, feet/min (like the real HMD). Internals are SI.
  */
 
-export type Team = 'blue' | 'red';
+/**
+ * 'neutral' = civilian traffic (airliners). Neither side treats neutrals as hostile: AI, SAMs and
+ * sensors' threat logic ignore them, but the human player can still designate, lock and shoot them.
+ */
+export type Team = 'blue' | 'red' | 'neutral';
+
+/** Would `a` engage `b` on its own? Same side and anything involving neutrals is never hostile. */
+export function isHostile(a: Team, b: Team): boolean {
+  return a !== b && a !== 'neutral' && b !== 'neutral';
+}
 
 export type Difficulty = 'recruit' | 'pilot' | 'veteran' | 'ace';
 export type QualityLevel = 'low' | 'medium' | 'high';
@@ -49,7 +58,8 @@ export type AircraftType =
   | 'su35' // Su-35 Flanker-E
   | 'su57' // Su-57 Felon (low observable)
   | 'tu22m' // Tu-22M3 Backfire bomber (intercept target)
-  | 'a50'; // A-50 Mainstay AEW&C (high value target)
+  | 'a50' // A-50 Mainstay AEW&C (high value target)
+  | 'a320'; // Airbus A320neo airliner (neutral civilian traffic)
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles

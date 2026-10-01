@@ -231,6 +231,34 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     chase: { dist: 85, height: 16 },
     abLength: 0,
   },
+  a320: {
+    type: 'a320',
+    length: 37.6,
+    span: 35.8,
+    height: 11.8,
+    eye: [0, 0.75, -16.0],
+    engines: [
+      { pos: [-5.75, -2.1, -2.4], radius: 0.45 },
+      { pos: [5.75, -2.1, -2.4], radius: 0.45 },
+    ],
+    wingtips: [
+      [-17.4, 1.6, 3.4],
+      [17.4, 1.6, 3.4],
+    ],
+    lex: [],
+    gun: null,
+    lights: [
+      { pos: [-17.4, 0.3, 2.2], color: RED, kind: 'nav' },
+      { pos: [17.4, 0.3, 2.2], color: GREEN, kind: 'nav' },
+      { pos: [0, 1.3, 18.8], color: WHITE, kind: 'tail' },
+      { pos: [0, -2.1, 0], color: RED, kind: 'strobe' },
+      { pos: [0, 2.05, 2], color: RED, kind: 'strobe' },
+      { pos: [-17.6, 1.9, 3.6], color: WHITE, kind: 'strobe' },
+      { pos: [17.6, 1.9, 3.6], color: WHITE, kind: 'strobe' },
+    ],
+    chase: { dist: 70, height: 14 },
+    abLength: 0,
+  },
 };
 
 /** Default munition dimensions (m) used to build models; instances are rescaled to def.length/diameter. */

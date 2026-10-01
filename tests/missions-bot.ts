@@ -20,7 +20,7 @@ import { AKL } from '../src/core/auckland';
 import { DIFFICULTIES } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import type { MissionDef, MissionResult, MissionRunnerApi } from '../src/core/contracts';
-import type { Difficulty, LoadoutId, WeaponId } from '../src/core/types';
+import { isHostile, type Difficulty, type LoadoutId, type WeaponId } from '../src/core/types';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import type { AircraftEntity, AnyEntity } from '../src/sim/entities';
 import { createSimWorld } from '../src/sim/World';
@@ -170,7 +170,7 @@ export class MissionBot {
     let best: AircraftEntity | null = null;
     let bestD = Infinity;
     for (const c of this.p.radar.contacts) {
-      if (c.team === this.p.team) continue;
+      if (!isHostile(this.p.team, c.team)) continue;
       const e = this.world.getEntity(c.id);
       if (!e || e.kind !== 'aircraft' || !e.alive) continue;
       const d = c.position.distanceTo(this.p.position);
@@ -228,7 +228,7 @@ export class MissionBot {
     const raider = aa > 0 ? this.raidTarget() : null;
     let fighterNear = false;
     for (const c of p.radar.contacts) {
-      if (c.team === p.team) continue;
+      if (!isHostile(p.team, c.team)) continue;
       const e = this.world.getEntity(c.id);
       if (e && e.alive && e.kind === 'aircraft' && e.type !== 'tu22m' && e.type !== 'a50' && c.position.distanceTo(p.position) < 20_000) fighterNear = true;
     }
@@ -291,7 +291,7 @@ export class MissionBot {
       const o = this.runner.def.script.objectives.find((x) => x.id === st.id);
       if (!o || o.kind !== 'intercept') continue;
       for (const a of this.world.aircraft) {
-        if (!a.alive || a.team === p.team || !a.groupId || !o.groups.includes(a.groupId)) continue;
+        if (!a.alive || !isHostile(p.team, a.team) || !a.groupId || !o.groups.includes(a.groupId)) continue;
         const d = a.position.distanceTo(p.position);
         if (d < bestD) {
           bestD = d;
@@ -661,7 +661,7 @@ export function runPlaythrough(
   const jitterRed = () => {
     if (opts.jitter === false) return;
     for (const a of world.aircraft) {
-      if (a.team === p.team || jittered.has(a.id)) continue;
+      if (!isHostile(p.team, a.team) || jittered.has(a.id)) continue; // (civil traffic flies its own profile)
       jittered.add(a.id);
       a.position.x += (jit() - 0.5) * 5_000;
       a.position.z += (jit() - 0.5) * 5_000;
@@ -682,7 +682,7 @@ export function runPlaythrough(
   events.on('destroyed', (e) => {
     const ent = e.entity;
     if (ent.kind === 'missile' || ent.kind === 'decoy') return;
-    if (e.attackerId === p.id && ent.team !== p.team) playerKills++;
+    if (e.attackerId === p.id && isHostile(p.team, ent.team)) playerKills++;
     if (ent.kind === 'aircraft' && ent.team === p.team && ent !== p) friendlyLost++;
     if (opts.log) log.push(`${T()} DESTROYED ${ent.kind === 'aircraft' ? ent.callsign : (ent as { type: string }).type} by ${e.attackerId === p.id ? 'PLAYER' : e.attackerId}`);
   });

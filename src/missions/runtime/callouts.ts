@@ -113,6 +113,19 @@ export class Callouts {
     const attacker = s.world.getEntity(attackerId);
     const byPlayer = attackerId !== null && attackerId === p.id;
 
+    // neutral civil traffic: never a kill — a player shoot-down is a civilian loss
+    if (entity.team === 'neutral') {
+      const flight = entity.kind === 'aircraft' ? entity.callsign : entity.name;
+      if (byPlayer) {
+        if (running) s.civilianKills++;
+        s.hud('CIVILIAN AIRLINER DOWN', 'bad', 3.5);
+        s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${flight}!`, priority: 4 });
+      } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {
+        s.hud(`CIVIL ${flight} DOWN`, 'bad', 2.5);
+      }
+      return;
+    }
+
     if (entity.team !== p.team) {
       if (byPlayer) {
         if (entity.kind === 'aircraft' && running && weapon === 'gun') s.stats.gunKills++;

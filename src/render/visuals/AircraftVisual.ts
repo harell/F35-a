@@ -195,6 +195,12 @@ export class AircraftVisual {
         case 'canard':
           a = -s.elevator * def.max;
           break;
+        case 'gear': {
+          const down = ac.gear ?? 0;
+          a = (1 - down) * def.max;
+          obj.visible = down > 0.02;
+          break;
+        }
       }
       obj.rotation.x = a;
     }

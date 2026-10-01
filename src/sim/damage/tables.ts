@@ -46,5 +46,5 @@ export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
 
 /** Explosion for an aircraft blowing up (in the air or on impact). */
 export function aircraftExplosion(type: AircraftType): ExplosionSize {
-  return type === 'tu22m' || type === 'a50' ? 'huge' : 'large';
+  return type === 'tu22m' || type === 'a50' || type === 'a320' ? 'huge' : 'large';
 }

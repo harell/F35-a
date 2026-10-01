@@ -17,8 +17,9 @@ import type { V3 } from '../specs';
  *  sweep     variable-geometry wing: −side·sweepFromSpeed (max = full sweep delta)
  *  radome    continuous rotation at `max` rad/s
  *  canard    −elevator·max (foreplane, opposite sense)
+ *  gear      landing gear leg: (1 − gear)·max (folded = retracted; hidden once fully up)
  */
-export type DriveKind = 'stab' | 'flaperon' | 'aileron' | 'lef' | 'rudder' | 'airbrake' | 'door' | 'sweep' | 'radome' | 'canard';
+export type DriveKind = 'stab' | 'flaperon' | 'aileron' | 'lef' | 'rudder' | 'airbrake' | 'door' | 'sweep' | 'radome' | 'canard' | 'gear';
 
 export interface DriveDef {
   part: string;

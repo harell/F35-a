@@ -16,6 +16,8 @@ export interface RunnerDeps {
   createAi: CreateAiBrain;
   difficulty: DifficultyParams;
   events: EventBus;
+  /** Civil airliner traffic in the Auckland theatre (default on). */
+  civilTraffic?: boolean;
 }
 
 /** Runtime of a mission group (aircraft flight, SAM battery, target compound…). */
@@ -155,6 +157,8 @@ export class MissionState {
   samEngaged = false;
   /** Stunt bonus points (Harbour Bridge). */
   bonus = 0;
+  /** Neutral civil airliners the player shot down. */
+  civilianKills = 0;
   /** Survival waves cleared. */
   waves = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */

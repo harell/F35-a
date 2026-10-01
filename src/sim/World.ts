@@ -38,6 +38,7 @@ import { CollisionSystem } from './damage/Collisions';
 import { DamageSystem, type DamageWeapon } from './damage/Damage';
 import { GROUND_TARGET_DATA, SAM_SITE_DATA } from './damage/tables';
 import { WarningSystem } from './Warnings';
+import { stepCivil } from './civil/route';
 
 /** Size of the pooled bullet / shell array. */
 export const PROJECTILE_POOL_SIZE = 800;
@@ -154,6 +155,7 @@ class SimWorldImpl implements SimWorld {
    */
   hostilesOf(team: Team): AnyEntity[] {
     if (this.hostileDirty) this.rebuildHostiles();
+    if (team === 'neutral') return [];
     return team === 'blue' ? this.hostileOfBlue : this.hostileOfRed;
   }
 
@@ -171,13 +173,13 @@ class SimWorldImpl implements SimWorld {
     this.hostileOfRed = ofRed;
   }
 
-  /** Append live entities to the list of the team they are hostile to. */
+  /** Append live entities to the list of the team they are hostile to (neutrals: neither). */
   private sortByTeam(list: readonly AnyEntity[], ofBlue: AnyEntity[], ofRed: AnyEntity[]): void {
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       if (!e.alive) continue;
       if (e.team === 'red') ofBlue.push(e);
-      else ofRed.push(e);
+      else if (e.team === 'blue') ofRed.push(e);
     }
   }
 
@@ -340,8 +342,12 @@ class SimWorldImpl implements SimWorld {
       }
     }
 
-    // 2. Flight model (player, AI and falling wrecks)
-    for (let i = 0; i < aircraft.length; i++) stepFlight(aircraft[i], dt, this.env);
+    // 2. Flight model (player, AI and falling wrecks); live civil traffic flies its scripted profile
+    for (let i = 0; i < aircraft.length; i++) {
+      const ac = aircraft[i];
+      if (ac.civil && ac.alive) stepCivil(ac, dt, this.terrain, this.player);
+      else stepFlight(ac, dt, this.env);
+    }
 
     // 3. Weapons, sensors, SAMs
     try {
@@ -437,7 +443,8 @@ class SimWorldImpl implements SimWorld {
     let w = 0;
     for (let i = 0; i < aircraft.length; i++) {
       const a = aircraft[i];
-      let remove = false;
+      // civil traffic that landed and vacated / left the area
+      let remove = a.alive && !!a.civil?.despawn;
       if (!a.alive && !a.isPlayer) {
         const st = a.sim;
         const landed = a.crashed && st && st.crashTime >= 0 && this.time - st.crashTime > WRECK_GROUND_TIME;

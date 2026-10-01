@@ -24,6 +24,7 @@ export const TYPE_RCS: Record<AircraftType, number> = {
   su57: 0.1,
   tu22m: 40,
   a50: 60,
+  a320: 40,
 };
 
 /** Default IR signature scale by type (1 = typical fighter at MIL power). */
@@ -35,6 +36,7 @@ export const TYPE_IR: Record<AircraftType, number> = {
   su57: 0.9,
   tu22m: 2.5,
   a50: 2,
+  a320: 1.8,
 };
 
 export interface FighterRadarSpec {
@@ -66,6 +68,8 @@ export const FIGHTER_RADAR: Record<AircraftType, FighterRadarSpec> = {
   tu22m: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
   // A-50 AEW&C: 360° rotodome, strong look-down radar (feeds the red datalink)
   a50: { range: 110_000, gimbal: Math.PI, lpi: false, irst: 0, notchResistance: 0.5 },
+  // airliner: weather radar only, no fire control
+  a320: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
 };
 
 /** Early-warning radar (ground, VHF): long range and better against stealth shaping. */

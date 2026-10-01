@@ -15,6 +15,7 @@ import { munitionForRelease } from '../weapons/dlz';
 import { remaining } from '../weapons/loadouts';
 import { irIntensity } from './signatures';
 import { lineOfSight } from './los';
+import { isHostile } from '../../core/types';
 
 const _fwd = new Vector3();
 const _rel = new Vector3();
@@ -22,7 +23,8 @@ const BORESIGHT_COS = Math.cos((25 * Math.PI) / 180);
 
 /** Can the IR seeker of `def`, carried by `ac`, see `t`? Returns the cosine off-boresight or -2. */
 export function irSeekerSees(ctx: CombatCtx, def: CombatMunitionDef, ac: AircraftEntity, t: AircraftEntity, minCos: number): number {
-  if (!t.alive || t.team === ac.team) return -2;
+  // the human player may shoot anything that isn't on their side; AI seekers ignore civil traffic
+  if (!t.alive || t.team === ac.team || (!ac.isPlayer && !isHostile(ac.team, t.team))) return -2;
   _rel.subVectors(t.position, ac.position);
   const d = _rel.length();
   if (d < 150) return -2;

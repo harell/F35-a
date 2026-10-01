@@ -10,6 +10,7 @@ import { buildFlanker } from './flanker';
 import { buildSu57 } from './su57';
 import { buildTu22m } from './tu22m';
 import { buildA50 } from './a50';
+import { buildA320 } from './a320';
 
 const cache = new Map<AircraftType, AircraftPrototype>();
 
@@ -21,6 +22,7 @@ const BUILDERS: Record<AircraftType, () => AircraftPrototype> = {
   su57: buildSu57,
   tu22m: buildTu22m,
   a50: buildA50,
+  a320: buildA320,
 };
 
 export function getAircraftPrototype(type: AircraftType): AircraftPrototype {
