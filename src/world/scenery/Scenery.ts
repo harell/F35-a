@@ -15,9 +15,10 @@ import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
 import { buildAirbase, buildExtraRunway } from './airbase';
 import { buildSettlement } from './settlements';
-import { aucklandBuiltinFeatures, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyTower, isDuplicateOfAuckland } from './auckland';
+import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyTower, isDuplicateOfAuckland } from './auckland';
 import { aucklandRoadPaths, RoadNetwork } from './motorways';
-import { buildCityLightPoints, type ReflectionSource } from './nightLights';
+import { aucklandBuildings } from './aucklandBuildings';
+import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { WHENUAPAI_CROSS } from '../terrain/theaters/auckland';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
@@ -64,7 +65,7 @@ export class Scenery {
   private readonly houseRadius: number;
   /** Auckland motorway network (null elsewhere). */
   roads: RoadNetwork | null = null;
-  cbdStats: { towers: number; tallest: number; heights: number[] } | null = null;
+  cbdStats: CbdStats | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
   stats = { meshes: 0, lights: 0 };
@@ -135,9 +136,11 @@ export class Scenery {
       const roads = new RoadNetwork(aucklandRoadPaths());
       this.roads = roads;
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
+      // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
+      const buildings = cbd.streets ? aucklandBuildings() : null;
       const city = new GeometryBuilder();
-      buildSkyTower(city, lights, height);
-      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads);
+      buildSkyTower(city, lights, height, !buildings);
+      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
       buildMuseumAndObelisk(city, lights, height);
       addMesh(city, 'akl-cbd');
       const centres = new GeometryBuilder();
@@ -214,7 +217,11 @@ export class Scenery {
       }
       const city = new LightList();
       const maxCity = o.quality.level === 'low' ? 14_000 : o.quality.level === 'medium' ? 30_000 : 48_000;
-      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city);
+      // the real CBD buildings: lit windows on their facades instead of the carpet inside the CBD region
+      const real = this.cbdStats?.prisms.length ? this.cbdStats.prisms : null;
+      const region = real ? o.style.cbd?.streets ?? null : null;
+      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, region ? (x, z) => region.inRegion(x, z) : undefined);
+      if (real) buildFacadeLightPoints(real, o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
       const cityMat = createLightsMaterial(o.atmo);
       cityMat.uniforms.uIntensity.value = o.lights;
       cityMat.uniforms.uNearFade.value = 1600;
@@ -242,10 +249,12 @@ export class Scenery {
       });
       let every = 0;
       city.forEach((x, y, z, r, g, b) => {
+        // (the lit windows of the real waterfront buildings: their ground is near sea level)
         if (height(x, z) > 5 || every++ % 3 !== 0) return;
         refl.push({ x, y, z, color: tmpC.setRGB(r, g, b).getHex(), intensity: 0.7 });
       });
-      if (o.theater === 'auckland') {
+      if (o.theater === 'auckland' && !real) {
+        // stand-in lit CBD waterfront (procedural CBD)
         for (let x = -560; x <= 960; x += 40) {
           const z = -660 + ((x * 7) % 50);
           if (height(x, z) < 1) continue;

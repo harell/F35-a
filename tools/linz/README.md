@@ -81,3 +81,49 @@ What comes out:
 
 At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over the region (kerb distance, region
 distance, parks, motorway verges); the shader and the JS placement code read the same texels.
+
+# Phase 2b: CBD buildings (outlines + LiDAR heights)
+
+`buildings.py` and `buildings.ts` bake the CBD's real buildings into `src/world/terrain/data/auckland-buildings.bin`
+(≈ 37 kB gzip), fetched next to the road data (`src/world/scenery/aucklandBuildings.ts`). Same licence and attribution.
+
+| Product | Source | Used for |
+|---|---|---|
+| NZ Building Outlines | LDS layer 101290 (the current outlines, not *All Sources* 101292) | footprints |
+| Auckland Part 1 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-1_2024/{dsm,dem}_1m/2193/` (sheets BA31_10000_0405, BA32_10000_0401) | heights (DSM − DEM) |
+
+```sh
+pip install numpy scipy rasterio pyproj shapely
+export LINZ_API_KEY=…            # free key from https://data.linz.govt.nz (never commit it)
+python3 tools/linz/buildings.py <work>                       # outlines + heights → <work>/buildings.json (+ spotchecks.json)
+npx vite-node tools/linz/buildings.ts <work> [preview.svg]   # → auckland-buildings.bin, tests/fixtures/linz-buildings-spotchecks.json
+```
+
+The WFS download (`outlines.json`) and the 1 m LiDAR window over the CBD box (`lidar.npz`, ≈ 40 MB, two Cloud-Optimised
+GeoTIFF window reads per product) are cached in `<work>`. The DEM is the one of the same 2024 survey, not the national
+mosaic: same epoch and ground classification as the DSM.
+
+How it works:
+
+- **Heights**: nDSM = DSM − DEM on the pixels ≥ 1 m inside each footprint (no edge mixing). When a roof's heights fall into
+  two classes (Otsu threshold, classes ≥ 8 m and 20 % apart) the upper pixels' connected components become their own prisms
+  (convex hull ∩ footprint), split again in turn, up to three levels: towers on podiums, setbacks, crowns. A level keeps the
+  90th percentile of its pixels (the 75th for a podium around a tower); a roof that is clearly one tilted plane (least-squares
+  fit, residual < 35 % of the spread, slope 0.1–1.2) keeps the plane. The Sky Tower's shaft and pod (hand-built) are ignored.
+- **2017 outlines vs 2024 LiDAR**: the outlines come from the 2017 aerial photos. Outlines with nothing ≥ 2.5 m standing on
+  them in 2024 are dropped (demolished, building sites: 170 of 3165). Buildings completed since (PwC Tower, Pacifica, …) are
+  traced from the LiDAR: ≥ 8 m above the ground outside every outline, compact, and either ≥ 30 m tall or smooth and
+  straight-edged below that (trees are rough at 1 m and their outlines wander); `buildings.ts` also drops traced
+  footprints over a street, a motorway or a park (street trees, viaducts).
+- **Footprints**: courtyards filled (invisible from the air, half the triangles), Douglas–Peucker 0.5 m, < 30 m² dropped.
+- **Kept**: the buildings whose footprint centroid is inside the CBD region (phase 2a), ≈ 1050 buildings / 1350 prisms.
+  Outside it the procedural suburbs and their street grid stay (the real outlines would clash with them).
+- **Spot checks**: `buildings.py` measures the raw LiDAR (median within 4 m) at the roofs of PwC Tower, Vero Centre, Pacifica,
+  ANZ Centre and Metropolis (the highest crane-free roof near each one's hand-placed position) and inside 40 random outlines;
+  `tests/world-buildings.test.ts` checks the baked roofs there to ±5 m.
+
+At runtime `buildCBD` (scenery/auckland.ts) extrudes every prism from the terrain at the building's lowest corner to its roof
+(the terrain at the centroid + the LiDAR height), into the city's single merged mesh. Facade colour and window style by height
+class; red obstruction lights on the towers over 95 m; at night `buildFacadeLightPoints` (nightLights.ts) lights their
+windows floor by floor, replacing the flat light carpet inside the CBD region. Medium tier: ≈ 45 k triangles (the procedural
+towers: ≈ 36 k), the same draw calls. Without the file the procedural towers on the real streets remain.

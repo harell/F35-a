@@ -236,7 +236,7 @@ describe('CBD streets painted by the terrain shader', () => {
   });
 });
 
-describe('CBD buildings on the real streets', () => {
+describe('CBD buildings on the real streets (procedural towers: the fallback without the LINZ buildings)', () => {
   const features = allFeatures('auckland', [{ type: 'airbase', x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 }]);
   const hf = runSync(generateTerrain({ theater: 'auckland', seed: 1840, resolution: 1024, features, pads: [] }));
   const height = (x: number, z: number) => hf.meshHeightAt(x, z);

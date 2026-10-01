@@ -1,8 +1,9 @@
 /**
  * Auckland landmarks (primary theatre): Sky Tower, Harbour Bridge, CBD high-rise cluster, Ports of
  * Auckland container terminal, Westhaven & Viaduct marinas, Auckland War Memorial Museum, One Tree
- * Hill obelisk. Positions come from src/core/auckland.ts (origin = Sky Tower). CBD towers are placed
- * on the same block grid the terrain shader paints (urbanGrid.ts), so streets line up.
+ * Hill obelisk. Positions come from src/core/auckland.ts (origin = Sky Tower). The CBD's buildings are
+ * the real ones (LINZ outlines + LiDAR heights) when that data is installed, else procedural towers
+ * on the streets the terrain shader paints (the real LINZ streets, or the urbanGrid.ts block grid).
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
@@ -12,7 +13,8 @@ import { frameFromHeading, GeometryBuilder, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, 
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
-import { FOOTPATH, type CbdStreets } from './cbdStreets';
+import { FOOTPATH, pointInRing, type CbdStreets } from './cbdStreets';
+import { ringArea, roofHeight, type Building, type BuildingPrism } from './aucklandBuildings';
 
 const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
@@ -31,13 +33,14 @@ export function isDuplicateOfAuckland(f: SceneryFeature): boolean {
   return false;
 }
 
-export function buildSkyTower(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
+/** The Sky Tower; `podium` adds a stand-in SkyCity block (the LINZ buildings have the real one). */
+export function buildSkyTower(B: GeometryBuilder, lights: LightList, height: HeightFn, podium = true): void {
   const { x, z } = AKL.skytower;
   const g = height(x, z) - 2;
   const concrete = 0xd9d7d0;
   const glass = 0x3c5664;
   // Podium (SkyCity) and flared base
-  B.box(IDENT, x + 10, g, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
+  if (podium) B.box(IDENT, x + 10, g, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
   B.cylinder(IDENT, x, g, z, 11, 6.2, 16, 12, concrete, WIN_NONE, false);
   // Shaft
   B.cylinder(IDENT, x, g + 16, z, 6.2, 5.4, 172, 12, concrete, WIN_NONE, false);
@@ -235,17 +238,26 @@ export interface CbdStats {
   towers: number;
   tallest: number;
   heights: number[];
+  /** Procedural buildings (rectangles); empty for the LINZ buildings (see prisms). */
   footprints: Footprint[];
+  /** LINZ buildings: every prism built (empty for the procedural CBD). */
+  prisms: BuiltPrism[];
+  /** Triangles added for the CBD (towers, buildings; not the Sky Tower). */
+  triangles: number;
 }
 
 /**
- * Auckland CBD: ~100 high-rises (a dozen named towers at their real positions, tallest 187 m) and
- * dense mid-rise blocks, densest around Queen / Shortland / Customs Street, thinning towards
- * Karangahape Road. Built along Auckland's real streets when the LINZ street map is installed
- * (buildRealCBD), else on the fixed CBD grid (AKL_CBD_GRID, painted by the terrain shader).
+ * Auckland CBD. With the LINZ street map and buildings installed: the real buildings, extruded from
+ * their outlines to their LiDAR heights (buildLinzCBD). Else ~100 procedural high-rises (a dozen
+ * named towers at their real positions, tallest 187 m) and dense mid-rise blocks, densest around
+ * Queen / Shortland / Customs Street, thinning towards Karangahape Road: along Auckland's real streets
+ * when the LINZ street map is installed (buildRealCBD), else on the fixed CBD grid (AKL_CBD_GRID,
+ * painted by the terrain shader).
  */
-export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null): CbdStats {
+export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null, buildings: Building[] | null = null): CbdStats {
+  if (cbd.streets && buildings && buildings.length) return buildLinzCBD(B, lights, height, detail, cbd.streets, buildings);
   if (cbd.streets) return buildRealCBD(B, lights, height, detail, cbd.streets, roads);
+  const t0 = B.triangleCount;
   const rnd = mulberry32(2024);
   const core = { x: 400, z: -300 };
   const minX = -620;
@@ -356,7 +368,7 @@ export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn
       }
     }
   }
-  return { towers, tallest, heights, footprints };
+  return { towers, tallest, heights, footprints, prisms: [], triangles: B.triangleCount - t0 };
 }
 
 /**
@@ -370,6 +382,7 @@ export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn
  * water, the Sky Tower / SkyCity and each other. Street lamps line the streets.
  */
 function buildRealCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, roads: RoadNetwork | null): CbdStats {
+  const t0 = B.triangleCount;
   const rnd = mulberry32(2024);
   const core = { x: 400, z: -300 };
   const SET = FOOTPATH + 0.8; // building line: behind the footpath
@@ -580,7 +593,15 @@ function buildRealCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     }
   }
 
-  // street lamps: every ≈ 34 m, alternating sides, on streets of the region (not the lanes)
+  streetLamps(st, lights, height, () => false);
+  return { towers, tallest, heights, footprints, prisms: [], triangles: B.triangleCount - t0 };
+}
+
+/**
+ * Street lamps: every ≈ 34 m, alternating sides, on the footpaths of the region's streets (not the
+ * lanes), not where the footpath runs into a side street, nor inside a building (`inside`).
+ */
+function streetLamps(st: CbdStreets, lights: LightList, height: HeightFn, inside: (x: number, z: number) => boolean): void {
   for (const l of st.streets) {
     if (l.width < 10) continue;
     const p = l.pts;
@@ -596,15 +617,168 @@ function buildRealCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
         const side = k++ % 2 === 0 ? 1 : -1;
         const x = p[i] + ux * t - uz * side * (l.width / 2 + 0.6);
         const z = p[i + 1] + uz * t + ux * side * (l.width / 2 + 0.6);
-        // not where the footpath runs into a side street (intersections)
         const kerb = st.kerbDistance(x, z);
-        if (st.inRegion(x, z) && height(x, z) > 0.5 && kerb > 0.3 && kerb < FOOTPATH) lights.add(x, height(x, z) + 8, z, 0xffd9a8, 3.6);
+        if (st.inRegion(x, z) && height(x, z) > 0.5 && kerb > 0.3 && kerb < FOOTPATH && !inside(x, z)) lights.add(x, height(x, z) + 8, z, 0xffd9a8, 3.6);
         next += 34;
       }
       s += len;
     }
   }
-  return { towers, tallest, heights, footprints };
+}
+
+/** A LINZ building prism as built: footprint, roof (m above its ground), and the world base / roof y. */
+export interface BuiltPrism extends BuildingPrism {
+  /** World y of the walls' foot and of the roof at the centroid. */
+  y0: number;
+  y1: number;
+}
+
+/** Douglas–Peucker on a closed ring (flat [x, z, ...]); keeps ≥ 3 vertices. */
+export function simplifyRing(r: Float32Array, tol: number): Float32Array {
+  const n = r.length / 2;
+  if (n <= 4 || tol <= 0) return r;
+  // split at the vertex farthest from the first one: two open chains
+  let far = 0;
+  let fd = -1;
+  for (let i = 1; i < n; i++) {
+    const d = Math.hypot(r[i * 2] - r[0], r[i * 2 + 1] - r[1]);
+    if (d > fd) {
+      fd = d;
+      far = i;
+    }
+  }
+  const keep = new Uint8Array(n);
+  keep[0] = keep[far] = 1;
+  const seg = (px: number, pz: number, a: number, b: number) => {
+    const ax = r[a * 2];
+    const az = r[a * 2 + 1];
+    const dx = r[(b % n) * 2] - ax;
+    const dz = r[(b % n) * 2 + 1] - az;
+    const l2 = dx * dx + dz * dz;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
+    return Math.hypot(ax + dx * t - px, az + dz * t - pz);
+  };
+  const stack: [number, number][] = [[0, far], [far, n]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    let best = -1;
+    let bd = tol;
+    for (let i = a + 1; i < b; i++) {
+      const d = seg(r[i * 2], r[i * 2 + 1], a, b);
+      if (d > bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    if (best >= 0) {
+      keep[best] = 1;
+      stack.push([a, best], [best, b]);
+    }
+  }
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(r[i * 2], r[i * 2 + 1]);
+  return out.length >= 6 ? Float32Array.from(out) : r;
+}
+
+/** Deterministic 0..1 hash of a footprint (stable colours across sessions and quality tiers). */
+const ringHash = (r: Float32Array) => {
+  let h = 2166136261;
+  for (let i = 0; i < Math.min(r.length, 8); i++) h = Math.imul(h ^ Math.round(r[i] * 4), 16777619);
+  return ((h >>> 0) % 100_000) / 100_000;
+};
+
+/**
+ * Auckland CBD from the LINZ building outlines and LiDAR heights (phase 2b, aucklandBuildings.ts):
+ * every building of the CBD region extruded from its real footprint to its measured roof, towers on
+ * their podiums as their own prisms, wedge crowns as tilted roofs. One merged mesh with the Sky Tower
+ * (the caller's builder). Facades by height class: glass towers, stone / glass mid-rise, brick and
+ * plaster low-rise (Victorian / Edwardian Queen St), warehouses on the wharves; red obstruction
+ * lights on the towers over 95 m; street lamps on the footpaths, never inside a building.
+ * The ground under each building is the terrain at its centroid; the walls reach down to its lowest
+ * corner (the CBD's streets climb 40 m from Quay St to K Rd).
+ *
+ * Mobile budget (`detail` = sceneryDensity): the medium tier simplifies the footprints by 0.5 m, the
+ * low tier by 1.5 m and drops the smallest prisms (< 60 m²).
+ */
+function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, bs: Building[]): CbdStats {
+  const tol = detail >= 0.9 ? 0 : detail >= 0.5 ? 0.5 : 1.5;
+  const minArea = detail >= 0.5 ? 0 : 60;
+  const t0 = B.triangleCount;
+  let towers = 0;
+  let tallest = 0;
+  const heights: number[] = [];
+  const prisms: BuiltPrism[] = [];
+  const tmp = new Color();
+  for (const b of bs) {
+    const base = b.prisms[0];
+    // ground: the terrain at the footprint's centroid; walls down to its lowest corner
+    const g = height(base.cx, base.cz);
+    let gMin = g;
+    for (const p of b.prisms) for (let i = 0; i < p.ring.length; i += 2) gMin = Math.min(gMin, height(p.ring[i], p.ring[i + 1]));
+    const y0 = gMin - 1.5;
+    const top = Math.max(...b.prisms.map((p) => p.h));
+    const area = Math.abs(ringArea(base.ring));
+    const hsh = ringHash(base.ring);
+    // facade by height class
+    let col: number;
+    let win: number;
+    if (top >= 60) {
+      col = hsh < 0.7 ? GLASS[Math.floor(hsh * 100) % GLASS.length] : STONE[Math.floor(hsh * 100) % STONE.length];
+      win = WIN_OFFICE;
+    } else if (top >= 20) {
+      col = hsh < 0.35 ? GLASS[Math.floor(hsh * 100) % GLASS.length] : STONE[Math.floor(hsh * 100) % STONE.length];
+      win = WIN_OFFICE;
+    } else if (area > 2500 && top < 16) {
+      col = 0xa9aaa4;
+      win = WIN_INDUSTRIAL; // wharf sheds, warehouses, the Viaduct's events centre
+    } else {
+      col = hsh < 0.35 ? HERITAGE[Math.floor(hsh * 100) % HERITAGE.length] : STONE[Math.floor(hsh * 100) % STONE.length];
+      win = top < 9 && area < 300 ? WIN_HOME : WIN_OFFICE;
+    }
+    const roofCol = top >= 60 ? tmp.setHex(col).multiplyScalar(0.62).getHex() : tmp.setHex(0x7c7b77).lerp(new Color(col), 0.2).multiplyScalar(0.8 + hsh * 0.3).getHex();
+    for (const p of b.prisms) {
+      if (minArea && Math.abs(ringArea(p.ring)) < minArea) continue;
+      const ring = simplifyRing(p.ring, tol);
+      const roof = (x: number, z: number) => g + roofHeight(p, x, z);
+      // towers on a podium: a little darker, the crown's roof the facade colour
+      const c = p === base ? col : tmp.setHex(col).multiplyScalar(0.92).getHex();
+      B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win);
+      prisms.push({ ...p, y0, y1: g + p.h });
+      heights.push(p.h);
+    }
+    tallest = Math.max(tallest, top);
+    if (top > 60) towers++;
+    if (top > 95) {
+      const t = b.prisms.reduce((a, p) => (p.h > a.h ? p : a));
+      lights.add(t.cx, g + roofHeight(t, t.cx, t.cz) + 4, t.cz, 0xff2a18, 3.5, hsh);
+    }
+  }
+  // street lamps, not inside a building: a 20 m bucket grid of the footprints
+  const grid = new Map<number, BuildingPrism[]>();
+  const key = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
+  for (const b of bs) {
+    const p = b.prisms[0];
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let z0 = Infinity;
+    let z1 = -Infinity;
+    for (let i = 0; i < p.ring.length; i += 2) {
+      x0 = Math.min(x0, p.ring[i]);
+      x1 = Math.max(x1, p.ring[i]);
+      z0 = Math.min(z0, p.ring[i + 1]);
+      z1 = Math.max(z1, p.ring[i + 1]);
+    }
+    for (let j = Math.floor(z0 / 20); j <= Math.floor(z1 / 20); j++)
+      for (let i = Math.floor(x0 / 20); i <= Math.floor(x1 / 20); i++) {
+        const k = key(i, j);
+        const l = grid.get(k);
+        if (l) l.push(p);
+        else grid.set(k, [p]);
+      }
+  }
+  const inside = (x: number, z: number) => (grid.get(key(Math.floor(x / 20), Math.floor(z / 20))) ?? []).some((p) => pointInRing(p.ring, x, z));
+  streetLamps(st, lights, height, inside);
+  return { towers, tallest, heights, footprints: [], prisms, triangles: B.triangleCount - t0 };
 }
 
 interface Centre {

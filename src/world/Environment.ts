@@ -36,6 +36,7 @@ import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask, WHENUAPAI_CROSS } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
+import { loadAucklandBuildings } from './scenery/aucklandBuildings';
 import { footprintOf } from './terrain/features';
 import type { SceneryFeature } from '../core/contracts';
 import { bakeColorRows, bakeSunVisibility, bakeSurface, dilateLandColour } from './terrain/bake';
@@ -72,9 +73,9 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   report(0, 'Generating terrain');
   await yieldToEventLoop();
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads };
-  // Real coastline + terrain heights and road centrelines (LINZ); each falls back to the hand-traced
-  // map / roads if unavailable.
-  if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads()]);
+  // Real coastline + terrain heights, road centrelines and CBD buildings (LINZ); each falls back to
+  // the hand-traced map / roads or the procedural CBD if unavailable.
+  if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings()]);
   let pool = TerrainWorkerPool.create();
   if (pool && opts.theater === 'auckland') {
     try {
