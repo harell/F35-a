@@ -69,7 +69,7 @@ export class AircraftVisual {
         c.visible = false;
       }
     });
-    // flames: one per engine, placed slightly inside the nozzle so the glow disc lights it
+    // flames: one per engine, origin slightly inside the nozzle so the hot interior sits in the tailpipe
     if (spec.abLength > 0) {
       spec.engines.forEach((e, i) => {
         const f = new Flame(e.radius, spec.abLength, 'afterburner', i * 13.7 + Math.random() * 50);
@@ -249,6 +249,7 @@ export class AircraftVisual {
     const far = level > 0 || dist > 1500;
     for (const f of this.flames) {
       f.dryGlow = night ? 3 : 1;
+      f.night = night;
       f.update(time, ac.flight.afterburner, ac.flight.engineRpm, flameOn, far);
     }
     this.root.updateMatrixWorld();
