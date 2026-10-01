@@ -284,4 +284,6 @@ export interface Settings {
   showFps: boolean;
   /** Default camera when a mission starts. */
   defaultView: 'cockpit' | 'hud' | 'chase';
+  /** Target camera: small picture-in-picture view of the designated / locked target. */
+  targetCam: boolean;
 }

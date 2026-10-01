@@ -39,6 +39,8 @@ import { createEnvironment } from '../world/Environment';
 import { createEntityRenderer } from '../render/EntityRenderer';
 import { createEffects } from '../render/effects/Effects';
 import { createCameraRig } from '../render/CameraRig';
+import { TargetCam } from '../render/TargetCam';
+import { pipView } from '../hud/hmd/pip';
 import { createHud } from '../hud/Hud';
 import { createCockpit } from '../hud/Cockpit';
 import { createAudio } from '../audio/AudioSystem';
@@ -76,6 +78,7 @@ interface Session {
   effects: EffectsApi;
   rig: CameraRigApi;
   cockpit: CockpitApi;
+  targetCam: TargetCam;
   endTimer: number;
   lastViewMode: CameraMode | null;
   unsubscribers: (() => void)[];
@@ -311,6 +314,7 @@ export class Game {
         effects,
         rig,
         cockpit,
+        targetCam: new TargetCam(world, entities),
         endTimer: -1,
         lastViewMode: null,
         unsubscribers: [],
@@ -584,6 +588,8 @@ export class Game {
     this.renderer.info.reset();
     this.renderer.render(s.scene, s.rig.camera);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
+    // target camera window (rect + target from the HUD's last frame; the HUD draws its chrome next)
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far);
     this.hud.update(ctx2);
     this.audio.update(ctx2);
   }
@@ -781,6 +787,15 @@ export class Game {
       controls: (c: Partial<ControlInput> | null) => {
         this.controlOverride = c;
       },
+      /** Target camera (PiP) state: window rect, target shown, last rendered target. */
+      targetCam: () => ({
+        open: pipView.open,
+        anim: pipView.anim,
+        targetId: pipView.targetId,
+        rect: [pipView.vx, pipView.vy, pipView.vw, pipView.vh],
+        rendered: this.session?.targetCam.lastTargetId ?? null,
+        camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,
+      }),
       missions: () => [...CAMPAIGN, ...TRAINING].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
     };

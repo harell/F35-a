@@ -16,6 +16,7 @@ import { installPath2D, makeFakeCanvas, overlaps, textBox, type Box, type TextRe
 import { pcdZoom } from '../src/hud/cockpit/zoom';
 import { pcdScreenRect } from '../src/hud/cockpit/geometry';
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
+import { pipView } from '../src/hud/hmd/pip';
 import { Projector } from '../src/hud/hmd/projector';
 import { computeTouchLayout } from '../src/input/touch/layout';
 import { MissileEntity } from '../src/sim/entities';
@@ -199,7 +200,11 @@ describe('HUD text zones: nothing piles up over the FPM / target box (i1-pres-la
     const splash = find(texts, 'SPLASH MIG-29');
     expect(splash.length).toBe(1);
     expect(splash[0].align).toBe('right');
-    expect(splash[0].y).toBeLessThan(80);
+    // a target is designated: the target camera window owns the top-right corner, the feed sits right
+    // under it (left of the DLZ scale)
+    expect(pipView.vh).toBeGreaterThan(0);
+    expect(splash[0].y).toBeGreaterThan(pipView.y + pipView.h);
+    expect(splash[0].y).toBeLessThan(pipView.y + pipView.h + 40);
     expect(splash[0].x).toBeGreaterThan(r.W * 0.6);
     for (let i = 0; i < 4; i++) r.mock.events.emit('hud:message', { text: `HAMMER ${i}: SPLASH SU-27`, tone: 'info', duration: 2.5 });
     texts = r.run(1);
@@ -207,6 +212,17 @@ describe('HUD text zones: nothing piles up over the FPM / target box (i1-pres-la
     expect(feed.length).toBe(3);
     // none of them in the centre of the screen
     for (const t of find(texts, /SPLASH|DESTROYED/)) expect(Math.abs(t.y - r.H / 2) > 60 || t.x < r.W * 0.35).toBe(true);
+  });
+
+  it('kill feed stays in the top-right corner with the target camera off', () => {
+    const r = rig('aa', 'hud', 844, 390, { targetCam: false });
+    r.run(0.1);
+    r.mock.events.emit('hud:message', { text: 'SPLASH MIG-29', tone: 'good', duration: 2.5 });
+    const splash = find(r.run(0.1), 'SPLASH MIG-29');
+    expect(splash.length).toBe(1);
+    expect(pipView.vh).toBe(0);
+    expect(splash[0].y).toBeLessThan(80);
+    expect(splash[0].x).toBeGreaterThan(r.W * 0.6);
   });
 
   it('the mission title is a short top-band banner, never over the target box (i1-pres-c01-hud-t12 "DAWN PATROL")', () => {

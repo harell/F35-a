@@ -71,6 +71,8 @@ export function reserveFixedZones(f: HudFrame): void {
     // radar inset
     occ.add(L.insetCx - L.insetR - 4 * u, L.insetCy - L.insetR - 4 * u, L.insetCx + L.insetR + 4 * u, L.insetCy + L.insetR + 12 * u);
   }
+  // target camera window (PiP)
+  if (L.pipW > 0) occ.add(L.pipX - 4 * u, L.pipY - 4 * u, L.pipX + L.pipW + 4 * u, L.pipY + L.pipH + 4 * u);
   // top-left column (objectives / damage / hint), as drawn last frame
   if (Number.isFinite(zoneExt.colBottom)) occ.add(L.colX - 6 * u, L.colY - 10 * u, L.colX + L.colW, zoneExt.colBottom);
   // kill feed (top right)

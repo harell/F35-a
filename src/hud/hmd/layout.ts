@@ -107,6 +107,11 @@ export interface HudLayout {
   /** External-view info block. */
   extX: number;
   extY: number;
+  /** Target camera window (PiP, see pip.ts); pipW = 0 when there is no room / it is off. */
+  pipX: number;
+  pipY: number;
+  pipW: number;
+  pipH: number;
 }
 
 export function makeLayout(): HudLayout {
@@ -115,7 +120,7 @@ export function makeLayout(): HudLayout {
     ctlTop: 1, cockpitTop: 1, tapeY: 0, tapeHalfW: 1, spdRight: 0, altLeft: 0, boxY: 0, line: 15, dlzX: 0, dlzTop: 0, dlzBottom: 0,
     wpnX: 0, wpnY: 0, warnY: 0, row2Y: 0, cueY: 0, stackY: 0, msgY: 0, msgFloor: 1, radioX0: 0, radioX1: 1, radioY: 0, radioTop: false, radioLines: 2,
     colX: 0, colY: 0, colW: 1, colBottom: 1, hintY: 0, killX: 0, killY: 0, objX: 0, objY: 0, edgeCx: 0, edgeCy: 0, edgeRx: 1, edgeRy: 1,
-    insetCx: 0, insetCy: 0, insetR: 1, extX: 0, extY: 0,
+    insetCx: 0, insetCy: 0, insetR: 1, extX: 0, extY: 0, pipX: 0, pipY: 0, pipW: 0, pipH: 0,
   };
 }
 
@@ -143,6 +148,11 @@ export interface LayoutOptions {
    * down the screen when looking up and up when looking down; conformal symbology stays above it.
    */
   headPitch?: number;
+  /**
+   * Reserve the target camera window (PiP). HMD views: top right, the DLZ scale starts below it and the
+   * kill feed moves under it, left of the DLZ. External views: under the radar inset.
+   */
+  pip?: boolean;
 }
 
 /* live touch layout (cached: computeTouchLayout allocates) */
@@ -312,5 +322,47 @@ export function computeLayout(
   out.insetCy = out.top + out.insetR + 4;
   out.extX = out.left + 4;
   out.extY = out.top + 4;
+
+  pipLayout(out, external, !!opts.pip);
   return out;
+}
+
+/** PiP aspect ratio (w / h). */
+export const PIP_ASPECT = 16 / 9;
+
+/** Target camera window rect (and the blocks that make room for it). */
+function pipLayout(out: HudLayout, external: boolean, on: boolean): void {
+  out.pipX = out.pipY = out.pipW = out.pipH = 0;
+  if (!on) return;
+  const u = out.u;
+  let w = Math.min(168 * u, out.W * 0.24);
+  let y: number;
+  let maxBottom: number;
+  if (!external) {
+    // top right, clear of the heading tape (and its caret band) on the left; a little smaller than in
+    // the external views so three kill-feed lines still fit under it, above the centre band
+    w = Math.min(146 * u, out.W * 0.24, out.right - (out.cx + out.tapeHalfW + 14 * u));
+    y = out.top + 2;
+    maxBottom = out.boxY - 40 * u;
+  } else {
+    y = out.insetCy + out.insetR + 18 * u;
+    maxBottom = out.ctlTop - 14 * u;
+  }
+  let h = w / PIP_ASPECT;
+  if (y + h > maxBottom) {
+    h = maxBottom - y;
+    w = h * PIP_ASPECT;
+  }
+  if (w < 96 || h < 54) return; // no room on this screen
+  out.pipW = Math.round(w);
+  out.pipH = Math.round(h);
+  out.pipX = Math.round(out.right - out.pipW);
+  out.pipY = Math.round(y);
+  if (!external) {
+    const bottom = out.pipY + out.pipH;
+    out.dlzTop = Math.max(out.dlzTop, bottom + 20 * u);
+    // kill feed: under the window, right-aligned just left of the DLZ scale
+    out.killX = Math.min(out.killX, out.dlzX - 16 * u);
+    out.killY = bottom + 10 * u;
+  }
 }

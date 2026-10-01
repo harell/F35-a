@@ -139,6 +139,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   const api: EntityRendererApi = {
     update(ctx: FrameContext) {
       frame++;
+      fctx = ctx;
       const cam = ctx.camera.position;
       const t = ctx.time;
       const dt = ctx.paused ? 0 : ctx.dt;
@@ -229,6 +230,19 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
 
     setPlayerVisible(visible: boolean) {
       playerVisible = visible;
+    },
+
+    prepareView(camPos: Vector3) {
+      const ctx = fctx;
+      if (!ctx) return;
+      const t = ctx.time;
+      for (const ac of world.aircraft) {
+        const tr = aircraft.get(ac.id);
+        if (tr) tr.v.root.visible = tr.v.update(ac, t, 0, camPos, lodCfg, env.isNight);
+      }
+      for (const m of world.missiles) missiles.get(m.id)?.v.update(m, t, camPos);
+      for (const s of world.sams) sams.get(s.id)?.v.update(s, t, 0, camPos, s.type === 'sa10' ? groundFar * 1.4 : groundFar);
+      for (const g of world.ground) grounds.get(g.id)?.v.update(g, t, 0, camPos, groundFar);
     },
 
     dispose() {
