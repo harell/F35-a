@@ -84,7 +84,7 @@ export function routePoints(r: ShipRoute, n = ROUTE_POINTS): Vector3[] {
 }
 
 const CONTAINER_NAMES = ['MV Kōtuku Trader', 'MV Tasman Kererū', 'MV Hauraki Pride', 'MV Pacific Tūī', 'MV Aotea Express', 'MV Rangatira Star', 'MV Moana Carrier'];
-const CRUISE_NAMES = ['Southern Aurora', 'Pacific Serenade', 'Coral Majesty'];
+const CRUISE_NAMES = ['Southern Barnacle', 'Pacific Interislander', 'SuperGold Majesty'];
 
 export class CivilShipping {
   private readonly rng: () => number;

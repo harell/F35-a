@@ -312,11 +312,11 @@ describe('civil ship damage', () => {
     const a = spawnShip(w, 'container', 0, -2000);
     w.applyDamage(a, 3, p.id, 'gbu39');
     expect(a.alive).toBe(false);
-    const b = spawnShip(w, 'cruise', 2000, -2000, 0, 'Southern Aurora');
+    const b = spawnShip(w, 'cruise', 2000, -2000, 0, 'Southern Barnacle');
     w.applyDamage(b, 5, p.id, 'aargm');
     expect(b.alive).toBe(false);
 
-    const c = spawnShip(w, 'cruise', 4000, -2000, 0, 'Pacific Serenade');
+    const c = spawnShip(w, 'cruise', 4000, -2000, 0, 'Pacific Interislander');
     // one full GAU-22 pass: ~1.5 s at 55 rds/s, ~1,300–1,400 damage on the hull (measured below)
     const pass = () => {
       for (let i = 0; i < 70; i++) w.applyDamage(c, 20, p.id, 'gun');
@@ -358,7 +358,7 @@ describe('civil ship damage', () => {
 
   it('real strafing passes: the gun only wears a cruise liner down, ~2–3 full passes to sink it', () => {
     const w = seaWorld(2);
-    const ship = spawnShip(w, 'cruise', 0, -1_500, 0, 'Southern Aurora');
+    const ship = spawnShip(w, 'cruise', 0, -1_500, 0, 'Southern Barnacle');
     const target = new Vector3(0, 15, -1_500);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 200, 0), heading: 0, speed: 200, loadout: 'a2a_stealth' });
     p.gunAmmo = 10_000; // ammo is not what this measures
@@ -419,7 +419,7 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
   it('with the corvette dead the ship can still be cycled to, but is never auto-designated', () => {
     const w = seaWorld(7);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 5_000, 0), heading: 0, speed: 240, loadout: 'strike_stealth' });
-    const ship = spawnShip(w, 'cruise', 0, -9_000, 90, 'Southern Aurora');
+    const ship = spawnShip(w, 'cruise', 0, -9_000, 90, 'Southern Barnacle');
     run(w, 2);
     expect(p.radar.contacts.some((c) => c.id === ship.id)).toBe(true);
     expect(p.radar.designatedId).toBeNull();
@@ -441,11 +441,11 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
 
   it('HUD labels: CIV on the HMD, the ship name and status in the PiP', () => {
     const w = seaWorld();
-    const ship = spawnShip(w, 'cruise', 0, -9_000, 90, 'Southern Aurora');
+    const ship = spawnShip(w, 'cruise', 0, -9_000, 90, 'Southern Barnacle');
     const corvette = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, -16_000) });
     expect(entityLabel(ship)).toBe('CIV');
     expect(entityLabel(corvette)).toBe('SHIP');
-    expect(pipName(ship)).toBe('SOUTHERN AURORA');
+    expect(pipName(ship)).toBe('SOUTHERN BARNACLE');
     expect(pipStatus(ship, new Vector3()).text).toBe('CIVIL');
     expect(pipStatus(ship, new Vector3(), true).text).toBe('CHECK FIRE');
   });
