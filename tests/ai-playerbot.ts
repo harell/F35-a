@@ -19,7 +19,7 @@ import { Vector3 } from 'three';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
-import type { Difficulty, LoadoutId } from '../src/core/types';
+import { isHostile, type Difficulty, type LoadoutId } from '../src/core/types';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
@@ -205,7 +205,7 @@ export class PlayerBot {
     let tgt: AircraftEntity | null = null;
     let best = Infinity;
     for (const c of p.radar.contacts) {
-      if (c.team === p.team) continue;
+      if (!isHostile(p.team, c.team)) continue; // a competent pilot never engages civil traffic
       const e = world.getEntity(c.id);
       if (!e || e.kind !== 'aircraft' || !e.alive) continue;
       const d = c.position.distanceTo(p.position);

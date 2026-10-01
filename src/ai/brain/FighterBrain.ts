@@ -23,7 +23,7 @@ import { Vector3 } from 'three';
 import { forwardOf } from '../../core/math';
 import type { AiRole, AiTask, SimWorld } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
-import type { WeaponId } from '../../core/types';
+import { isHostile, type WeaponId } from '../../core/types';
 import { isStealthy } from '../../sim/sensors/signatures';
 import { gammaForAltitude, type FlightIntent } from '../pilot/Autopilot';
 import { FormationKeeper, SLOT_ESCORT, SLOT_FIGHTING_WING, SLOT_FINGERTIP } from '../pilot/formation';
@@ -615,7 +615,7 @@ export class FighterBrain extends Brain {
       // scramble / ace-level GCI support: vectors onto the closest hostile aircraft
       let bestD = Infinity;
       for (const e of world.aircraft) {
-        if (!e.alive || e.team === ac.team) continue;
+        if (!e.alive || !isHostile(ac.team, e.team)) continue;
         const d = e.position.distanceToSquared(ac.position);
         if (d < bestD) {
           bestD = d;

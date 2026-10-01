@@ -46,7 +46,7 @@ export function masterMode(f: HudFrame): 'A-A' | 'A-G' | 'NAV' {
   if (WEAPON_IS_AG[p.selectedWeapon]) return 'A-G';
   if (f.target) return 'A-A';
   for (const c of p.radar.contacts) {
-    if (c.team === p.team) continue;
+    if (c.team === p.team || c.team === 'neutral') continue;
     const e = f.world.getEntity(c.id);
     if (e && e.alive && e.kind === 'aircraft') return 'A-A';
   }

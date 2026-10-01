@@ -36,6 +36,7 @@ import { DAS_LAUNCH_RANGE } from '../sensors/Sensors';
 import { SAM_DATA, VISUAL_RANGE, type SamTypeData } from './samData';
 import { updateAaa, type AaaState } from './aaa';
 import { registerRound, updateEndgame } from './endgame';
+import { isHostile } from '../../core/types';
 
 /** Seconds between detection scans. */
 export const SCAN_PERIOD = 0.2;
@@ -279,7 +280,7 @@ function acquire(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData): AircraftE
   let bestScore = Infinity;
   const maxR = Math.max(s.detectRange ?? data.detectRange, VISUAL_RANGE) * 1.05;
   for (const t of ctx.world.aircraft) {
-    if (!t.alive || t.team === s.team) continue;
+    if (!t.alive || !isHostile(s.team, t.team)) continue;
     const d = t.position.distanceTo(s.position);
     if (d > maxR) continue;
     if (!detects(ctx, s, data, t, false)) continue;
@@ -575,7 +576,7 @@ function handleEmcon(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: Sa
   if (si.ambush) {
     const wake = (s.engageRange ?? data.engageMax) * 0.6;
     for (const t of world.aircraft) {
-      if (t.alive && t.team !== s.team && t.position.distanceTo(s.position) < wake) {
+      if (t.alive && isHostile(s.team, t.team) && t.position.distanceTo(s.position) < wake) {
         si.ambush = false;
         s.radarOn = true;
         s.state = 'search';

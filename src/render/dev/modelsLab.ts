@@ -100,10 +100,11 @@ function flightFromParams(ac: AircraftEntity): void {
   f.surfaces.airbrake = num('brake', 0);
   ac.bayDoors = num('bay', 0);
   ac.alive = q.get('dead') !== '1';
+  ac.gear = num('gear', 1);
 }
 
 function addAircraft(type: AircraftType, pos = new Vector3()): AircraftVisual {
-  const ac = new AircraftEntity(1, type, type === 'f35a' ? 'blue' : 'red');
+  const ac = new AircraftEntity(1, type, type === 'f35a' ? 'blue' : type === 'a320' ? 'neutral' : 'red');
   const lo = (q.get('loadout') ?? 'a2a_stealth') as LoadoutId;
   if (type === 'f35a') ac.stores = LOADOUTS[lo].stores.map((s) => ({ ...s }));
   flightFromParams(ac);
@@ -126,7 +127,7 @@ function addAircraft(type: AircraftType, pos = new Vector3()): AircraftVisual {
 
 function build(): void {
   if (modelId === 'all') {
-    const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50'];
+    const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50', 'a320'];
     let x = -60;
     for (const t of types) {
       const s = AIRCRAFT_SPECS[t];

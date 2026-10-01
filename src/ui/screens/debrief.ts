@@ -89,6 +89,7 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
     // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
     const ext = r as MissionResultExt;
     for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
+    if (ext.civilianKills) stats.push(['skull', 'Civil airliners downed', String(ext.civilianKills)]);
     if (ext.playerShare !== undefined && (ext.teamKills ?? []).some((t) => t.flight && t.kills > 0)) stats.push(['star', 'Your share', formatPercent(ext.playerShare)]);
     const grid = h('div', { class: 'db-stats' });
     stats.forEach(([ic, k, v], i) => {

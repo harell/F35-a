@@ -12,7 +12,7 @@
  * Texts stay short; the HUD decides visibility (Settings.hints).
  */
 import { WEAPON_INFO } from '../../core/data';
-import type { WeaponId } from '../../core/types';
+import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { evalCondition } from './conditions';
 import { currentControlPrefs, formatControls } from './controlsText';
@@ -52,7 +52,7 @@ function remaining(p: AircraftEntity, w: WeaponId): number {
 
 function hostileDesignated(p: AircraftEntity, s: MissionState): AnyEntity | null {
   const e = s.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
-  return e && e.alive && e.team !== p.team ? e : null;
+  return e && e.alive && isHostile(p.team, e.team) ? e : null;
 }
 
 /** Target within ±30° of the nose (the player's lock cone). */
@@ -173,7 +173,7 @@ const AUTO: AutoHint[] = [
       const e = hostileDesignated(p, s);
       if (!e || e.kind !== 'aircraft') {
         for (const c of p.radar.contacts) {
-          if (c.team === p.team) continue;
+          if (!isHostile(p.team, c.team)) continue;
           const t = s.world.getEntity(c.id);
           if (t && t.alive && t.kind === 'aircraft') return `Tap the TD box (or TGT) to lock the ${aircraftHudName(t.type)}`;
         }

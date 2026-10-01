@@ -13,7 +13,7 @@
  * Also: designation (cycle / nearest-to / direct / auto), radar lock, ground designation point.
  */
 import { Vector3 } from 'three';
-import type { Team } from '../../core/types';
+import { isHostile, type Team } from '../../core/types';
 import { forwardOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, SamSiteEntity } from '../entities';
 import type { AcCombatState, CombatCtx, TrackContact } from '../weapons/context';
@@ -33,7 +33,7 @@ export const SAR_RANGE = 40_000;
 export const ACM_RANGE = 18_500;
 export const KNOWN_TARGET_RANGE = 100_000;
 
-const TEAMS: readonly Team[] = ['blue', 'red'];
+const TEAMS: readonly Team[] = ['blue', 'red', 'neutral'];
 const SOURCE_PRIORITY = { radar: 3, eots: 2, das: 2, datalink: 1 } as const;
 type Source = keyof typeof SOURCE_PRIORITY;
 
@@ -58,7 +58,7 @@ export interface SensorShared {
 }
 
 export function createSensorShared(): SensorShared {
-  return { pictures: { blue: new Map(), red: new Map() }, pool: [] };
+  return { pictures: { blue: new Map(), red: new Map(), neutral: new Map() }, pool: [] };
 }
 
 function pictureAdd(sh: SensorShared, team: Team, e: AnyEntity, time: number): void {
@@ -106,7 +106,7 @@ function buildTeamPictures(ctx: CombatCtx, sh: SensorShared): void {
     _eye.copy(g.position);
     _eye.y += 20;
     for (const t of world.aircraft) {
-      if (!t.alive || t.team === g.team) continue;
+      if (!t.alive || !isHostile(g.team, t.team)) continue;
       const d = t.position.distanceTo(g.position);
       if (d > EWR_RANGE * 1.6) continue;
       const sigma = aircraftRcs(t, g.position) * (isStealthy(t) ? EWR_STEALTH_BONUS : 1);
@@ -174,6 +174,7 @@ function upsert(st: AcCombatState, e: AnyEntity, source: Source, now: number, po
 function radarHolds(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, t: AircraftEntity, now: number, sdt: number, resistance: number): boolean {
   const c = st.contacts.get(t.id);
   if (c && c.notchNeed === Infinity) return true; // this radar/track isn't fooled by the notch
+  if (t.team === 'neutral') return true; // airliners fly straight and level: never notch
   const depth = notchDepth(ctx, ac.position, t);
   if (!c || c.radarTime < now - 1) return depth < 0.5;
   if (c.notchNeed < 0) c.notchNeed = rollNotchNeed(ctx, resistance, cmFactor(ctx, ac.team, t));
@@ -203,6 +204,8 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
       upsert(st, t, 'datalink', now, null, null, now); // friendly positions via datalink
       continue;
     }
+    // civil traffic only matters to the human player (AI crews and their datalink ignore it)
+    if (t.team === 'neutral' && !ac.isPlayer) continue;
     _rel.subVectors(t.position, ac.position);
     const d = _rel.length();
     if (d < 1) continue;
@@ -373,6 +376,8 @@ function threatRank(ctx: CombatCtx, ac: AircraftEntity, id: number): number {
  * A/A: threat to us › in front (±60°) › range. A/G: (emitting, with AARGM) › in front › range.
  * Requires _fwd = nose of `ac`.
  */
+const NEUTRAL_RANK_PENALTY = 1e12;
+
 function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): number {
   if (c.team === ac.team) return NaN;
   const air = isAirMode(ac);
@@ -380,7 +385,8 @@ function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): numb
   _rel.subVectors(c.position, ac.position);
   const d = Math.max(1, _rel.length());
   const inFront = _fwd.dot(_rel) / d >= (air ? 0.5 : 0.7) ? 1 : 0;
-  if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d;
+  // civil traffic can be designated (tap or TGT cycling) but always ranks behind every hostile
+  if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d - (c.team === 'neutral' ? NEUTRAL_RANK_PENALTY : 0);
   const e = ctx.world.getEntity(c.id);
   const emitting = e && ((e.kind === 'sam' && e.radarOn) || (e.kind === 'ground' && e.emitter)) ? 1 : 0;
   return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 - d;
@@ -475,6 +481,7 @@ function autoDesignate(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): v
   let c: TrackContact | null = null;
   let best = -Infinity;
   for (const k of st.contacts.values()) {
+    if (k.team === 'neutral') continue; // never box an airliner on our own
     const key = candidateKey(ctx, ac, k);
     if (key > best) {
       best = key;

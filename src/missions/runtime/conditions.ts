@@ -2,6 +2,7 @@
  * F35-A — mission condition evaluation (spawn triggers, objective activation, triggers, hints).
  */
 import type { Condition } from '../schema';
+import { isHostile } from '../../core/types';
 import { deadCount, defeatedCount, type MissionState } from './state';
 
 /** Horizontal distance² between an entity-ish position and a point. */
@@ -87,7 +88,7 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       if (!p || !p.alive) return false;
       const id = c.state === 'locked' ? p.radar.lockedId : p.radar.designatedId;
       const e = s.world.getEntity(id);
-      if (!e || !e.alive || e.kind !== 'aircraft' || e.team === p.team) return false;
+      if (!e || !e.alive || e.kind !== 'aircraft' || !isHostile(p.team, e.team)) return false;
       return c.state === 'locked' || p.radar.lockedId !== id;
     }
     case 'all':

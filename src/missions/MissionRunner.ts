@@ -36,6 +36,7 @@ import { attemptSeed, nextAttempt } from './runtime/variation';
 import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { SurvivalDirector } from './runtime/survival';
+import { CivilTraffic } from './runtime/civil';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
@@ -66,6 +67,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly survival: SurvivalDirector | null;
   private readonly rearm: RearmController;
   private readonly withdrawal: WithdrawalMonitor;
+  /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
+  private readonly civil: CivilTraffic | null;
   private finalResult: MissionResult | null = null;
   private evalAcc = 0;
   private outsideAo = 0;
@@ -105,6 +108,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.hints = new HintSystem(this.s, this.rearm);
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
     this.survival = def.script.survival ? new SurvivalDirector(this.s) : null;
+    this.civil = def.theater === 'auckland' && deps.civilTraffic !== false ? new CivilTraffic(this.s) : null;
   }
 
   /* ───────────────────────────── API ───────────────────────────── */
@@ -153,6 +157,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     buildGroups(s);
     const p = spawnPlayer(s, loadout);
     spawnInitial(s);
+    this.civil?.setup();
     this.rearm.init(p, loadout);
     this.callouts.attach();
     // ground-level steering for target waypoints without an explicit altitude
@@ -196,6 +201,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.rearm.update(edt);
     this.awacs.update();
     this.survival?.update();
+    this.civil?.update();
     this.checkEnd();
     this.hints.update();
   }
@@ -228,6 +234,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       hits,
       damageTaken,
       friendlyLosses: s.friendlyLosses,
+      civilianKills: s.civilianKills,
       bonus: s.bonus,
       scoreMultiplier: s.difficulty.scoreMultiplier,
       flightKills: s.flightKills,
@@ -257,6 +264,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     team.sort((a, b) => b.kills - a.kills);
     (r as MissionResultExt).teamKills = team;
     (r as MissionResultExt).playerShare = sc.playerShare;
+    if (s.civilianKills > 0) (r as MissionResultExt).civilianKills = s.civilianKills;
     r.tips = buildTips(s, r);
     r.medals = awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;

@@ -8,7 +8,7 @@
  */
 import { Quaternion, Vector3 } from 'three';
 import type { EventBus } from '../../core/events';
-import type { DifficultyParams, MunitionId, WeaponId } from '../../core/types';
+import { isHostile, type DifficultyParams, type MunitionId, type WeaponId } from '../../core/types';
 import { AircraftEntity, type AnyEntity, type GroundTargetEntity, type SamSiteEntity } from '../entities';
 import { ensureSimState, makeWreck } from '../flight/FlightModel';
 import { GROUND_TARGET_DATA, SAM_SITE_DATA, aircraftExplosion } from './tables';
@@ -152,7 +152,7 @@ export class DamageSystem {
     this.explode(ac.position, aircraftExplosion(ac.type), surface);
 
     const attacker = host.getEntity(attackerId);
-    if (attacker instanceof AircraftEntity && attacker !== ac && attacker.team !== ac.team) attacker.kills++;
+    if (attacker instanceof AircraftEntity && attacker !== ac && isHostile(attacker.team, ac.team)) attacker.kills++;
     host.events.emit('destroyed', { entity: ac, attackerId, weapon });
     if (ac.isPlayer) host.events.emit('player:down', { reason });
     host.onEntityDestroyed(ac);

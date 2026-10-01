@@ -17,4 +17,6 @@ export type MissionResultExt = MissionResult & {
   teamKills?: TeamKill[];
   /** Player kills / (player kills + own-flight kills), 0..1. */
   playerShare?: number;
+  /** Civil airliners the player shot down. */
+  civilianKills?: number;
 };

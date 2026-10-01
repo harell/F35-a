@@ -257,7 +257,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     else {
       let nearest = Infinity;
       for (const c of p.radar.contacts) {
-        if (c.team === p.team) continue;
+        if (c.team === p.team || c.team === 'neutral') continue;
         const e = world.getEntity(c.id);
         if (!e || !e.alive || e.kind !== 'aircraft') continue;
         nearest = Math.min(nearest, Math.hypot(c.position.x - p.position.x, c.position.z - p.position.z));
@@ -481,6 +481,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     if (c.team === p.team) continue;
     const e = world.getEntity(c.id);
     if (!e || !e.alive || e.kind !== 'aircraft') continue;
+    const col = e.team === 'neutral' ? pal.white : pal.danger; // civil traffic in white
     const stale = now - c.lastSeen > 1.5;
     const pos = stale ? c.position : e.position;
     const vel = stale ? c.velocity : e.velocity;
@@ -498,13 +499,13 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
       const ey = proj.cy + uy * (R - 4 * u);
       pen.begin();
       pen.arrow(ex, ey, ux, uy, 13 * u, 6 * u);
-      pen.strokeGlow(pal.danger, 1.4);
-      pen.fillPlain(withAlpha(pal.danger, lock || des ? 1 : 0.6));
+      pen.strokeGlow(col, 1.4);
+      pen.fillPlain(withAlpha(col, lock || des ? 1 : 0.6));
       const lbl = AIRCRAFT_LABEL[e.type] ?? '';
       const tx = ex - ux * 22 * u;
       const ty = ey - uy * 18 * u;
-      pen.text(lbl, tx, ty, pal.danger, 9.5);
-      pen.text(edgeRange.get(toNm(Math.hypot(pos.x - p.position.x, pos.z - p.position.z))), tx, ty + 11 * u, withAlpha(pal.danger, 0.8), 9);
+      pen.text(lbl, tx, ty, col, 9.5);
+      pen.text(edgeRange.get(toNm(Math.hypot(pos.x - p.position.x, pos.z - p.position.z))), tx, ty + 11 * u, withAlpha(col, 0.8), 9);
       occ.add(tx - 24 * u, ty - 7 * u, tx + 24 * u, ty + 17 * u);
       picks.add(e.id, ex, ey, 10 * u);
       continue;
@@ -516,7 +517,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     g.lineTo(pt.x, pt.y - s);
     g.lineTo(pt.x + s, pt.y + s * 0.3);
     pen.line(pt.x, pt.y - s, pt.x + vel.x * lead * k, pt.y - s + vel.z * lead * k);
-    pen.strokeGlow(pal.danger, 1.8);
+    pen.strokeGlow(col, 1.8);
     pen.setDash('solid');
     if (lock) {
       pen.begin();
@@ -524,13 +525,13 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
       g.lineTo(pt.x, pt.y - s);
       g.lineTo(pt.x + s, pt.y + s * 0.3);
       g.closePath();
-      pen.fillPlain(pal.danger);
+      pen.fillPlain(col);
     }
     if (des || lock) highlight(f, pt.x, pt.y - 2 * u, 11 * u, lock);
     occ.addBox(pt.x, pt.y, s + 3 * u, s + 3 * u);
     // (the label goes on the side away from its own velocity leader)
     occLine(f, pt.x, pt.y - s, pt.x + vel.x * lead * k, pt.y - s + vel.z * lead * k);
-    labelNear(f, airLabel(AIRCRAFT_LABEL[e.type] ?? 'BANDIT', pos.y), pt.x, pt.y, pal.danger);
+    labelNear(f, airLabel(AIRCRAFT_LABEL[e.type] ?? 'BANDIT', pos.y), pt.x, pt.y, col);
     picks.add(e.id, pt.x, pt.y, 10 * u);
   }
 

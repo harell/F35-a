@@ -250,6 +250,14 @@ export class AircraftEntity implements Entity {
    * g stress (tunnel vision builds towards 1), exactly 1 while unconscious (black out; stick ignored).
    */
   gloc?: number;
+  /** (civil) Landing gear extension 0 (up) .. 1 (down) — airliners animate it; others leave it unset. */
+  gear?: number;
+  /**
+   * (civil) Scripted civil flight (neutral airliner traffic, see sim/civil). While alive the jet
+   * follows its route kinematically instead of running the flight model; once destroyed it becomes
+   * an ordinary falling wreck.
+   */
+  civil?: import('./civil/route').CivilFlight;
 
   constructor(
     readonly id: number,
