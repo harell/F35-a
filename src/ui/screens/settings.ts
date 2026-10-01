@@ -214,6 +214,7 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
         sw.appendChild(b);
       }
       page.appendChild(settingRow('Symbology colour', null, sw, 'row-stack'));
+      page.appendChild(settingRow('Target camera', 'Small live view of your designated target (costs some frame rate)', toggle(s.targetCam, (v) => (s.targetCam = v), 'Target camera')));
       page.appendChild(settingRow('Field of view', 'Wider shows more; narrower makes targets bigger', slider({ min: 45, max: 90, step: 1, value: s.fov, label: 'Field of view', format: (v) => `${Math.round(v)}°`, onInput: (v) => (s.fov = v) })));
       page.appendChild(
         settingRow(

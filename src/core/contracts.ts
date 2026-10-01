@@ -96,6 +96,12 @@ export interface EntityRendererApi {
   getObject(entityId: number): Object3D | null;
   /** Hide the player's own jet (cockpit views). */
   setPlayerVisible(visible: boolean): void;
+  /**
+   * Re-evaluate every visual's LOD / visibility for a second viewpoint (the target camera) right before
+   * rendering it: the target and its neighbours get their close-up models, the player's jet is shown.
+   * The next update() restores everything for the main camera.
+   */
+  prepareView?(camPos: Vector3): void;
   dispose(): void;
 }
 /** src/render/EntityRenderer.ts → export const createEntityRenderer: CreateEntityRenderer */

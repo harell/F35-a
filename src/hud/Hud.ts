@@ -28,6 +28,7 @@ import { computeLayout, makeLayout } from './hmd/layout';
 import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
+import { drawPip, pipView, resetPip, stepPip } from './hmd/pip';
 import { Pen } from './hmd/pen';
 import { PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
@@ -68,7 +69,8 @@ export const createHud: CreateHud = (canvas, events) => {
   const f = makeFrame(pen, proj, picks, st, L, paletteFor('green'));
   const vignettes = new Vignettes();
   const tac = new TacMapState();
-  const layoutOpts: { external: boolean; leftHanded: boolean; headPitch: number } = { external: false, leftHanded: false, headPitch: 0 };
+  const layoutOpts: { external: boolean; leftHanded: boolean; headPitch: number; pip: boolean } = { external: false, leftHanded: false, headPitch: 0, pip: false };
+  const lookupEntity = (id: number) => curWorld?.getEntity(id) ?? null;
 
   let visible = true;
   let W = Math.max(1, canvas.clientWidth || 1);
@@ -226,6 +228,7 @@ export const createHud: CreateHud = (canvas, events) => {
           st.playerId = null;
         }
         tac.active = false;
+        resetPip();
         picks.begin();
         return;
       }
@@ -246,6 +249,7 @@ export const createHud: CreateHud = (canvas, events) => {
       lastMode = mode;
       if (mode !== 'tactical') tac.active = false;
       if (!visible && mode !== 'tactical') {
+        resetPip();
         picks.begin();
         return;
       }
@@ -267,6 +271,11 @@ export const createHud: CreateHud = (canvas, events) => {
       layoutOpts.external = mode !== 'hmd';
       layoutOpts.leftHanded = !!ctx.settings.leftHanded;
       layoutOpts.headPitch = headPitch;
+      // target camera window: only in views with room for it, and only while there is something to show
+      const v = ctx.viewMode;
+      const pipAllowed =
+        ctx.settings.targetCam !== false && p?.alive === true && (v === 'cockpit' || v === 'hud' || v === 'chase' || v === 'orbit' || v === 'flyby') && !(cockpit && pcdZoom.open);
+      layoutOpts.pip = pipAllowed && (pipView.open || pipView.anim > 0 || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null);
       computeLayout(L, W, H, ctx.screen.safe, proj.tanHalfV, cockpit, layoutOpts);
       pen.fontScale = L.u;
       picks.begin();
@@ -280,6 +289,7 @@ export const createHud: CreateHud = (canvas, events) => {
       f.declutter = 1;
 
       if (!p || !p.alive) {
+        resetPip();
         // player down: keep the feeds (mission messages, radio, kills)
         reserveMessage(f, L.msgY);
         drawMessages(f);
@@ -299,6 +309,8 @@ export const createHud: CreateHud = (canvas, events) => {
       } catch {
         f.zone = null;
       }
+
+      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt);
 
       if (mode === 'tactical') {
         reserveRadio(f);
@@ -419,6 +431,9 @@ export const createHud: CreateHud = (canvas, events) => {
       } else colY = drawDamage(f, L.colX, colY);
       zoneExt.colBottom = colY > colTop + 1 ? colY : NaN;
 
+      // target camera window chrome (the 3D view itself is rendered by Game → TargetCam)
+      drawPip(f, pipTarget);
+
       // PCD zoom overlay (cockpit): above the symbology, below the warning band and radio
       if (zoomed) drawPcdZoom(f);
 
@@ -466,6 +481,7 @@ export const createHud: CreateHud = (canvas, events) => {
     },
 
     dispose() {
+      resetPip();
       for (const off of offs) off();
       offs.length = 0;
       clear();

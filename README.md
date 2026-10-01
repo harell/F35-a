@@ -33,7 +33,7 @@ Inspired by NovaLogic's *F-22 Raptor* (1997). Built with three.js (WebGL 2), Typ
 | **Threats** | SA-6, SA-8, SA-10, SA-15, SA-18 MANPADS and ZSU-23-4 with search → track → launch → guide. RWR, DAS missile warning, flares and chaff, beam-notching, terrain masking, EMCON pop-up ambushes, point defence, SEAD with AARGM and SDB |
 | **Enemies** | MiG-29, Su-27, Su-35, Su-57, Tu-22M3 and A-50 flown by AI that uses its own sensors, flies BVR/BFM, defends against missiles and bugs out |
 | **Cockpit** | F-35 HMD symbology plus a 3D cockpit with a panoramic display (TSD, SMS, FUEL, ENG, RWR, ICAWS, radar pages; tap to zoom) |
-| **Views** | Cockpit, HMD-only, chase, orbit, padlock/target, missile cam, flyby and tactical map |
+| **Views** | Cockpit, HMD-only, chase, orbit, padlock/target, missile cam, flyby and tactical map, plus a picture-in-picture target camera: a live head-on shot of the bandit or a slow orbit of the SAM site (radars spinning) with name, range and radar state / aspect |
 | **Sound** | Synthesized F135 roar and afterburner, gun, missile launches, explosions delayed by distance, RWR search/lock/launch tones, AIM-9 growl, "Bitching Betty" voice warnings, radio chatter, adaptive music |
 | **Auckland** | Map-driven terrain: Waitematā and Manukau harbours, Hauraki Gulf islands, volcanic cones, a CBD skyline with the Sky Tower, the Harbour Bridge, the port, Whenuapai and the airport |
 | **Campaign** | *Operation Southern Cross*: 12 missions (CAP, raid intercepts, SEAD, strike, ship strike, AWACS hunt, escort, night defence, Su-57 finale), 3 training missions, Instant Action (dogfight, SAM gauntlet, strike, survival) in 5 theatres, medals and debrief tips |

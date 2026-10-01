@@ -165,6 +165,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fov: 60,
   showFps: false,
   defaultView: 'cockpit',
+  targetCam: true,
 };
 
 export interface LoadoutDef {
