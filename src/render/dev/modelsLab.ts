@@ -116,7 +116,7 @@ function addAircraft(type: AircraftType, pos = new Vector3()): AircraftVisual {
   const forceLod1 = q.get('lod') === '1';
   update = (t, dt) => {
     prev(t, dt);
-    vis.update(ac, t, dt, camera.position, forceLod1 ? { lod0: 0, far: 1e9 } : lodCfg);
+    vis.update(ac, t, dt, camera.position, forceLod1 ? { lod0: 0, far: 1e9 } : lodCfg, night);
     if (forceLod1) {
       (vis.root.children[0] as Object3D).visible = false;
       (vis.root.children[1] as Object3D).visible = true;
