@@ -96,6 +96,17 @@ from the player's bomb, AGM or AAM destroys it (`landmark:destroyed`), and the m
 (`src/missions/runtime/landmarks.ts`). The ruin persists through `skyTowerRuin()` in `src/missions/progress.ts`, the one
 place that decides how long it stays down.
 
+## Real airfields (OpenStreetMap)
+
+Whenuapai, Auckland Airport, Ardmore and North Shore (Dairy Flat) come in two layers. **`src/core/airfields.ts`** holds
+their runway thresholds (from OSM), synchronous and always present. Gameplay reads only this table: the home base
+`FEATURES.whenuapai`, the `AKL` landmarks at the runway centres, the rearm point, and the civil traffic on 05R/23L.
+**`src/world/scenery/data/auckland-osm.bin`** (baked by `tools/osm`, ODbL, loaded by `aucklandOsm.ts`) adds the
+taxiways, aprons, hangars, terminals and a levelled outline. `allFeatures('auckland', …)` always adds the four airfields
+(a mission airbase within 2.5 km of one is dropped as a duplicate). Each gets an `outline` the terrain levels
+(`Footprint.kind = 'poly'`), and the scenery builds `buildRealAirfield`. Without the file, the template airbase is
+laid on the same real runways. `tests/world-osm.test.ts` keeps the table and the bake in step.
+
 ## Frame / sim order (Game.ts)
 
 ```

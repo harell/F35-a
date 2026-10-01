@@ -21,6 +21,7 @@ import { streetUniforms } from '../src/world/terrain/TerrainRenderer';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { aucklandLinz, linzIsLand } from '../src/world/terrain/theaters/aucklandLinz';
 import { AKL } from '../src/core/auckland';
+import { airfieldFeature } from '../src/core/airfields';
 import { ROADS_BYTES, ROADS_GZ } from './linz-setup';
 
 const st = aucklandStreets() as CbdStreets;
@@ -237,7 +238,7 @@ describe('CBD streets painted by the terrain shader', () => {
 });
 
 describe('CBD buildings on the real streets (procedural towers: the fallback without the LINZ buildings)', () => {
-  const features = allFeatures('auckland', [{ type: 'airbase', x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 }]);
+  const features = allFeatures('auckland', [airfieldFeature('whenuapai')]);
   const hf = runSync(generateTerrain({ theater: 'auckland', seed: 1840, resolution: 1024, features, pads: [] }));
   const height = (x: number, z: number) => hf.meshHeightAt(x, z);
   const lights = new LightList();

@@ -3,6 +3,7 @@ import { Vector3 } from 'three';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { AKL } from '../src/core/auckland';
+import { airfieldFeature } from '../src/core/airfields';
 import { MAT_URBAN } from '../src/world/terrain/types';
 import { runwayLengthFor } from '../src/world/terrain/features';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -10,7 +11,7 @@ import type { SceneryFeature } from '../src/core/contracts';
 
 // Same features the campaign uses (Whenuapai home base, Waiheke enemy strip, Motutapu depot).
 const MISSION: SceneryFeature[] = [
-  { type: 'airbase', x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 },
+  airfieldFeature('whenuapai'),
   { type: 'airbase', x: 26_500, z: -6200, rotation: 80, size: 0.8 },
   { type: 'industrial', x: 13_300, z: -9800, size: 0.6 },
 ];

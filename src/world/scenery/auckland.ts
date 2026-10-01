@@ -8,6 +8,8 @@
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
 import { AKL, BRIDGE_SPAN_T } from '../../core/auckland';
+import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfields';
+import { airfieldLayout } from './aucklandOsm';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import { LightList, type HeightFn } from './builders';
@@ -18,10 +20,18 @@ import { ringArea, roofHeight, type Building, type BuildingPrism } from './auckl
 
 const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
-/** Always-present Auckland features the terrain must flatten (airport). */
+/**
+ * Always-present Auckland features the terrain must flatten: the real airfields (Whenuapai, Auckland
+ * Airport, Ardmore, North Shore at Dairy Flat), each levelled along its OpenStreetMap outline when the
+ * OSM layer is loaded (aucklandOsm.ts), else along the template strip on its real main runway.
+ */
 export function aucklandBuiltinFeatures(): SceneryFeature[] {
-  // Rotation 250: runway 05R/23L along the shore, terminal / apron (right of the heading) to the north.
-  return [{ type: 'airbase', x: AKL.akl_airport.x, z: AKL.akl_airport.z, rotation: 250, size: 1 }];
+  return AIRFIELD_IDS.map((id) => {
+    const f = airfieldFeature(id);
+    const lay = airfieldLayout(id);
+    if (lay) f.outline = Array.from(lay.core);
+    return f;
+  });
 }
 
 /** Features of this type near Auckland's own landmarks are skipped (the city already has them). */
@@ -29,7 +39,8 @@ export function isDuplicateOfAuckland(f: SceneryFeature): boolean {
   const near = (id: string, r: number) => Math.hypot(f.x - AKL[id].x, f.z - AKL[id].z) < r;
   if ((f.type === 'city' || f.type === 'town') && near('cbd', 2500)) return true;
   if (f.type === 'port' && near('port', 1500)) return true;
-  if (f.type === 'airbase' && near('akl_airport', 2500)) return true;
+  // a mission's airbase on a real airfield (FEATURES.whenuapai) is the built-in one
+  if (f.type === 'airbase' && airfieldNear(f.x, f.z, 2500)) return true;
   return false;
 }
 

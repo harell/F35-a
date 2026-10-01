@@ -7,16 +7,18 @@
  * designate and shoot an airliner — the Callouts module handles the consequences.
  */
 import { Vector3 } from 'three';
-import { AKL } from '../../core/auckland';
+import { mainRunway } from '../../core/airfields';
 import { mulberry32 } from '../../core/math';
 import type { AircraftEntity } from '../../sim/entities';
 import { A320_GEAR_HEIGHT, createArrival, createDeparture, placeCivil, type CivilFlight, type Runway } from '../../sim/civil/route';
 import type { MissionState } from './state';
 
 const DEG = Math.PI / 180;
-/** Auckland Airport runway 05R/23L (true heading ≈ 070° / 250°; matches the scenery's airbase feature). */
-const RUNWAY_AXIS = 250 * DEG;
-const RUNWAY_LENGTH = 3_600;
+/** Auckland Airport runway 05R/23L: its real thresholds (src/core/airfields.ts, the scenery's runway). */
+const AKL_05R = mainRunway('akl_airport');
+/** Landing on 23L (≈ 251° true); 05R is the reverse. */
+const RUNWAY_AXIS = AKL_05R.heading + Math.PI;
+const RUNWAY_LENGTH = AKL_05R.length;
 /** Most airliners in the air / on the runway at once. */
 const MAX_CIVIL = 3;
 /** Final approach length at spawn (m from the aim point). */
@@ -40,7 +42,7 @@ export class CivilTraffic {
   constructor(private readonly s: MissionState) {
     this.rng = mulberry32(((s.def.seed ?? 1) * 7919 + 17) >>> 0);
     const heading = this.rng() < 0.5 ? RUNWAY_AXIS : RUNWAY_AXIS - Math.PI; // 23L or 05R flow
-    const { x, z } = AKL.akl_airport;
+    const { x, z } = AKL_05R;
     this.runway = { x, z, heading, length: RUNWAY_LENGTH, elevation: 0 };
   }
 

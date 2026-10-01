@@ -10,7 +10,9 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { geoToWorld, AKL } from '../src/core/auckland';
 import { allFeatures } from '../src/world/scenery/Scenery';
-import { footprintOf, runwayLengthFor } from '../src/world/terrain/features';
+import { airfieldOf, footprintOf, runwayLengthFor } from '../src/world/terrain/features';
+import { runwaysOf } from '../src/core/airfields';
+import { airfieldLayout } from '../src/world/scenery/aucklandOsm';
 import { segmentDistance } from '../src/world/terrain/coastline';
 import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
 import { aucklandLinz, decodeLinz, linzIsLand, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
@@ -111,20 +113,30 @@ describe('mission content fits the real coast', () => {
   });
 
   it('runways, taxiways and aprons of every Auckland airfield are on land', () => {
-    const fields = [...allFeatures('auckland', []), ...Object.values(FEATURES)].filter((f) => f.type === 'airbase');
-    expect(fields.length).toBe(3); // Auckland Airport, Whenuapai, the Waiheke strip
+    const fields = allFeatures('auckland', Object.values(FEATURES)).filter((f) => f.type === 'airbase');
+    expect(fields.length).toBe(5); // Whenuapai, Auckland Airport, Ardmore, North Shore (OSM), the fictional Waiheke strip
     for (const f of fields) {
-      const h = ((f.rotation ?? 0) * Math.PI) / 180;
-      const L = runwayLengthFor(f);
-      // runway edge, centre line and parallel taxiway along the whole strip; apron (u ≈ 250–420) mid-field
+      const id = airfieldOf(f);
       const pts: [number, number][] = [];
-      for (let v = -L / 2; v <= L / 2; v += 50) for (const u of [-30, 0, 190]) pts.push([v, u]);
-      for (let v = -400; v <= 400; v += 50) for (const u of [260, 340, 410]) pts.push([v, u]);
-      for (const [v, u] of pts) {
-        const x = f.x + Math.sin(h) * v + Math.cos(h) * u;
-        const z = f.z - Math.cos(h) * v + Math.sin(h) * u;
-        expect(coastDist(x, z), `${f.x},${f.z} v=${v} u=${u}`).toBeGreaterThan(20);
-        expect(hf.heightAt(x, z)).toBeGreaterThan(2);
+      if (id) {
+        // the real layout: runway centrelines, taxiway and apron vertices (OpenStreetMap)
+        const lay = airfieldLayout(id)!;
+        expect(lay, id).not.toBeNull();
+        for (const rw of runwaysOf(id)) for (let t = 0; t <= 1; t += 0.05) pts.push([rw.ax + (rw.bx - rw.ax) * t, rw.az + (rw.bz - rw.az) * t]);
+        for (const g of [...lay.taxiways, ...lay.aprons]) for (let i = 0; i < g.pts.length; i += 2) pts.push([g.pts[i], g.pts[i + 1]]);
+      } else {
+        const h = ((f.rotation ?? 0) * Math.PI) / 180;
+        const L = runwayLengthFor(f);
+        // runway edge, centre line and parallel taxiway along the whole strip; apron (u ≈ 250–420) mid-field
+        const local: [number, number][] = [];
+        for (let v = -L / 2; v <= L / 2; v += 50) for (const u of [-30, 0, 190]) local.push([v, u]);
+        for (let v = -400; v <= 400; v += 50) for (const u of [260, 340, 410]) local.push([v, u]);
+        for (const [v, u] of local) pts.push([f.x + Math.sin(h) * v + Math.cos(h) * u, f.z - Math.cos(h) * v + Math.sin(h) * u]);
+      }
+      for (const [x, z] of pts) {
+        // Auckland Airport's taxiways run to the seawall: 8 m on the 15 m coast grid is "on land"
+        expect(coastDist(x, z), `${id ?? 'waiheke'} ${x.toFixed(0)},${z.toFixed(0)}`).toBeGreaterThan(id ? -8 : 20);
+        expect(hf.heightAt(x, z), `${id ?? 'waiheke'} ${x.toFixed(0)},${z.toFixed(0)}`).toBeGreaterThan(2);
       }
     }
   });

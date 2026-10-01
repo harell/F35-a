@@ -22,7 +22,7 @@ import {
   MAT_CONE,
   MAT_CLEARING,
 } from './types';
-import { footprintOf, footprintWeight } from './features';
+import { footprintOf, footprintReach, footprintWeight } from './features';
 import type { Footprint } from './types';
 
 export const TREE_PALM = 0;
@@ -48,7 +48,7 @@ export function createVegetation(theater: TheaterId, seed: number, features: Sce
   const nL = new Noise2D(seed * 19 + 5);
   const masks: FeatureMask[] = features.map((f) => {
     const fp = footprintOf(f);
-    const reach = (fp.kind === 'rect' ? Math.hypot(fp.halfW, fp.halfL) : fp.radius) + fp.blend + 400;
+    const reach = footprintReach(fp) + 400;
     return { fp, clear: { ...fp, strength: 1, blend: fp.blend * 0.6 }, type: f.type, reach };
   });
 

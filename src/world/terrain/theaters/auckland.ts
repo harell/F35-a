@@ -56,7 +56,6 @@ import {
 import { AKL } from '../../../core/auckland';
 import { aucklandLinz, aucklandLinzVersion, fillLinzLand, linzCoastSegments, linzHeight, linzIsLand, type LinzData } from './aucklandLinz';
 
-const AKL_WHENUAPAI_X = { x: AKL.whenuapai.x, z: AKL.whenuapai.z };
 
 const KM = 1000;
 const MAP_N = 1024;
@@ -283,27 +282,6 @@ function ellipseDist(e: Relief, x: number, z: number): number {
 const SHORE_GENTLE = 0.03;
 const SHORE_ROCKY = 0.14;
 const SHORE_CLIFF = 0.3;
-
-/**
- * Whenuapai cross runway 08/26 (the mission airbase feature is the main 03/21 runway at
- * AKL.whenuapai, heading 30°): 1,600 m from the main runway 300 m NE of its centre, running WSW.
- * Levelled to the base's own flatten height (generate.ts) and drawn by the scenery builder.
- */
-export const WHENUAPAI_CROSS = (() => {
-  const h30 = (30 * Math.PI) / 180;
-  const h80 = (80 * Math.PI) / 180;
-  const ex = AKL_WHENUAPAI_X.x + Math.sin(h30) * 300;
-  const ez = AKL_WHENUAPAI_X.z - Math.cos(h30) * 300;
-  const len = 1600;
-  return {
-    /** Centre (m) and heading (rad, 80° = 08/26). */
-    x: ex - Math.sin(h80) * (len / 2 - 40),
-    z: ez + Math.cos(h80) * (len / 2 - 40),
-    heading: h80,
-    length: len,
-    width: 45,
-  };
-})();
 
 export function createAuckland(seed: number): TheaterGenerator {
   const map = aucklandMapData();

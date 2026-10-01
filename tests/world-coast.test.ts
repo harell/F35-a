@@ -22,10 +22,11 @@ import {
 import { signedDistance, GridSampler } from '../src/world/terrain/raster';
 import { fillPolygonGrid } from '../src/world/terrain/coastline';
 import { AKL } from '../src/core/auckland';
+import { airfieldFeature } from '../src/core/airfields';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 
 const MISSION = [
-  { type: 'airbase' as const, x: AKL.whenuapai.x, z: AKL.whenuapai.z, rotation: 30 },
+  airfieldFeature('whenuapai'),
   { type: 'airbase' as const, x: 26_500, z: -6200, rotation: 80, size: 0.8 },
 ];
 // SAM pads on Rangitoto / Motutapu like the campaign's (used to grow land aprons into the sea)
