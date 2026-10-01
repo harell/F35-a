@@ -3,7 +3,7 @@
  */
 import { Game } from './game/Game';
 import { initAnalytics, track } from './analytics/clarity';
-import { GAME_VERSION } from './core/data';
+import { GAME_BUILD } from './core/data';
 
 function displayMode(): string {
   if (matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone) return 'installed';
@@ -11,7 +11,7 @@ function displayMode(): string {
 }
 
 initAnalytics({
-  game_version: GAME_VERSION,
+  build: GAME_BUILD,
   display_mode: displayMode(),
   pointer: matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse',
 });

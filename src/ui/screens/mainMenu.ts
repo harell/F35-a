@@ -27,15 +27,15 @@ export interface MainMenuContext {
   progress: () => CampaignProgress | null;
 }
 
-export async function showMainMenu(host: UiHost, version: string, ctx: MainMenuContext): Promise<MainMenuChoice> {
+export async function showMainMenu(host: UiHost, build: string, ctx: MainMenuContext): Promise<MainMenuChoice> {
   for (;;) {
-    const choice = await menuOnce(host, version, ctx);
+    const choice = await menuOnce(host, build, ctx);
     if (choice !== 'record') return choice;
     await showServiceRecord(host, ctx.progress());
   }
 }
 
-function menuOnce(host: UiHost, version: string, ctx: MainMenuContext): Promise<MainMenuChoice | 'record'> {
+function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<MainMenuChoice | 'record'> {
   return new Promise((resolve) => {
     const el = h('section', { class: 'scr-main' });
     let done = false;
@@ -57,7 +57,7 @@ function menuOnce(host: UiHost, version: string, ctx: MainMenuContext): Promise<
       `<div class="mm-th-t">Auckland, New Zealand</div>` +
       `<div class="mm-th-s">Hostile forces hold the Hauraki Gulf islands. Fly from RNZAF Base Auckland (Whenuapai) and defend the city.</div>` +
       `</div>` +
-      `<div class="mm-ver mono">v${version}</div>`;
+      `<div class="mm-ver mono">Build ${build}</div>`;
 
     // pilot card: rank → service record; difficulty chip → settings
     const pilot = h('div', { class: 'mm-pilot' });

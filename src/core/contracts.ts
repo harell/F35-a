@@ -387,4 +387,4 @@ export interface UiApi {
   hideAll(): void;
 }
 /** src/ui/Ui.ts → export const createUi: CreateUi */
-export type CreateUi = (root: HTMLElement, deps: { uiClick: () => void; version: string }) => UiApi;
+export type CreateUi = (root: HTMLElement, deps: { uiClick: () => void; build: string }) => UiApi;

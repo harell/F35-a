@@ -19,7 +19,12 @@ import type {
 } from './types';
 
 export const GAME_TITLE = 'F35-A';
-export const GAME_VERSION = '1.0.0';
+/**
+ * Build number: the GitHub Actions run number of the deploy workflow (GITHUB_RUN_NUMBER, passed in as
+ * VITE_BUILD_NUMBER by .github/workflows/deploy.yml). Find the deployment as run #N under Actions →
+ * "Build & deploy F35-A". Local and dev builds have no run, so they show "dev".
+ */
+export const GAME_BUILD: string = (import.meta.env.VITE_BUILD_NUMBER as string | undefined) || 'dev';
 
 export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   recruit: {

@@ -74,10 +74,10 @@ export const createUi: CreateUi = (root, deps) => {
   };
 
   const ui: UiApi = {
-    showSplash: () => showSplash(host, deps.version),
+    showSplash: () => showSplash(host, deps.build),
     showLoading: (fraction, label) => loading.show(fraction, label),
     hideLoading: () => loading.hide(),
-    showMainMenu: () => showMainMenu(host, deps.version, { settings: liveSettings, progress: readProgress }),
+    showMainMenu: () => showMainMenu(host, deps.build, { settings: liveSettings, progress: readProgress }),
     showCampaign: (missions, progress) => showCampaign(host, missions, progress, toast),
     showTraining: (missions, progress) => showTraining(host, missions, progress, toast),
     showInstantAction: () => showInstantAction(host),
@@ -104,7 +104,7 @@ export const createUi: CreateUi = (root, deps) => {
       const p = readProgress();
       return showDebrief(host, result, hasNext, { settings: liveSettings, failStreak: p ? failStreak(p, result.missionId) : 0 });
     },
-    showCredits: () => showCredits(host, deps.version),
+    showCredits: () => showCredits(host, deps.build),
     setRotateHint: (visible) => rotate.set(visible),
     toast,
     hideAll: () => {
