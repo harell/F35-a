@@ -1,7 +1,7 @@
 # F35-A — Credits & licences
 
 F35-A is built almost entirely from procedural content: aircraft, SAM and ground models are generated from code,
-textures are painted onto canvases at runtime, Auckland's coastline and terrain come from LINZ open data (below), and every
+textures are painted onto canvases at runtime, Auckland's coastline, terrain, roads and CBD buildings come from LINZ open data (below), and every
 sound effect and the music are synthesized with Web Audio. The third-party assets below are the only exceptions.
 
 | What | Source | Licence | Details |
@@ -15,12 +15,15 @@ sound effect and the music are synthesized with Web Audio. The third-party asset
 | Shader hash `hash12` | Dave Hoskins, *Hash without Sine* | MIT | [world](credits/world.md) |
 | Auckland coastline + terrain heights (`src/world/terrain/data/auckland-linz.bin`) | Toitū Te Whenua Land Information New Zealand (LINZ): [NZ LiDAR 1m DEM](https://data.linz.govt.nz/layer/121859-new-zealand-lidar-1m-dem/), NZ Contour-Interpolated 8m DEM (from [NZ Contours Topo 1:50k](https://data.linz.govt.nz/layer/50768)), via the LINZ Data Service / [nz-elevation](https://github.com/linz/elevation) open data | CC BY 4.0 — *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.* | [tools/linz](../tools/linz/README.md) |
 | Auckland roads: CBD streets, motorways, arterials (`src/world/terrain/data/auckland-roads.bin`) | Toitū Te Whenua Land Information New Zealand (LINZ): [NZ Addresses: Road Sections](https://data.linz.govt.nz/layer/123109) and [NZ Tunnel Centrelines (Topo, 1:50k)](https://data.linz.govt.nz/layer/50366), via the LINZ Data Service | CC BY 4.0 — *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.* | [tools/linz](../tools/linz/README.md) |
+| Auckland CBD buildings: footprints + heights (`src/world/terrain/data/auckland-buildings.bin`) | Toitū Te Whenua Land Information New Zealand (LINZ): [NZ Building Outlines](https://data.linz.govt.nz/layer/101290-nz-building-outlines/) via the LINZ Data Service, and the Auckland Part 1 LiDAR 1m DSM and DEM (2024) from the [nz-elevation](https://github.com/linz/elevation) open data (`s3://nz-elevation/auckland/auckland-part-1_2024/`) | CC BY 4.0 — *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.* | [tools/linz](../tools/linz/README.md) |
 
 **Geography.** The Auckland coastline (mean high water, ±10–20 m) and terrain heights (LiDAR, resampled to 86 m) are
 real LINZ data, and the volcanic cones are snapped to the LiDAR summits. The CBD streets, the motorway carriageways and the
-main arterials are LINZ road centrelines (the Harbour Bridge abutments snapped to them); the suburbs' street grid is
+main arterials are LINZ road centrelines (the Harbour Bridge abutments snapped to them). The CBD's buildings are the LINZ
+outlines extruded to their 2024 LiDAR heights (±5 m), plus the towers completed since the outlines were captured (2017),
+traced from the LiDAR; the Sky Tower and Harbour Bridge remain hand-built models. The suburbs' street grid and houses are
 procedural and most other landmark positions are still hand-placed (roughly 100–400 m accuracy). The hand-traced map and
-roads remain as an offline fallback; the map still names the harbours for the procedural bathymetry.
+roads and the procedural CBD remain as an offline fallback; the map still names the harbours for the procedural bathymetry.
 
 **Inspiration.** NovaLogic's *F-22 Raptor* (1997).
 

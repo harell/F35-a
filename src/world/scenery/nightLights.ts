@@ -5,6 +5,9 @@
  *    baked colour map (≈ 1–3 lights per 86 m urban texel), drawn as one Points object that fades in
  *    beyond ~1 km (closer in, the terrain shader's lamp grid and lit windows take over), so the city
  *    still reads as a glowing grid of lights from 20+ km.
+ *  - `buildFacadeLightPoints`: where the real CBD buildings stand (LINZ), lit windows on their
+ *    facades instead (same far-field Points), floor by floor up to each roof, so the night skyline
+ *    from the harbour has the towers' real heights and outlines.
  *  - `LightReflections`: vertical light streaks on the harbour for bright lights near the water
  *    (waterfront, Harbour Bridge, port floodlights, ships, the Sky Tower and CBD towers): one quad
  *    per light laid on the water plane along the camera's view direction, sized from the view
@@ -37,7 +40,7 @@ export interface UrbanMapView {
  * Add far-field city lights to `out` (a LightList drawn with a near-fade material). Returns the
  * number of lights. `maxLights` caps the total (thinned uniformly when exceeded).
  */
-export function buildCityLightPoints(map: UrbanMapView, groundAt: (x: number, z: number) => number, seed: number, maxLights: number, out: LightList): number {
+export function buildCityLightPoints(map: UrbanMapView, groundAt: (x: number, z: number) => number, seed: number, maxLights: number, out: LightList, skip?: (x: number, z: number) => boolean): number {
   const n = map.size;
   const cell = map.extent / n;
   // First pass: expected count, to thin uniformly to the cap.
@@ -59,6 +62,7 @@ export function buildCityLightPoints(map: UrbanMapView, groundAt: (x: number, z:
       for (let k = 0; k < nLights; k++) {
         const x = map.origin + (i + hash2(i * 7 + k, j, seed + 11) - 0.5) * cell;
         const z = map.origin + (j + hash2(i, j * 7 + k, seed + 13) - 0.5) * cell;
+        if (skip?.(x, z)) continue;
         const g = groundAt(x, z);
         if (g < 0.5) continue;
         const h = hash2(i + k * 31, j, seed + 17);
@@ -68,6 +72,64 @@ export function buildCityLightPoints(map: UrbanMapView, groundAt: (x: number, z:
       }
     }
   }
+  return count;
+}
+
+/** A building prism for the facade lights: footprint (flat [x, z, ...], either winding), foot and roof y. */
+export interface FacadePrism {
+  ring: ArrayLike<number>;
+  y0: number;
+  y1: number;
+}
+
+/** Window bays: ≈ 9 m along a facade, 3.6 m floors; the share lit at night. */
+const BAY = 9;
+const FLOOR = 3.6;
+const LIT = 0.35;
+
+/**
+ * Add lit windows on the facades of `prisms` (≥ 10 m tall) to `out`: one light per lit bay, 0.6 m
+ * out from the wall, from the second floor to just under the roof. `maxLights` caps the total
+ * (thinned uniformly). Returns the number of lights.
+ */
+export function buildFacadeLightPoints(prisms: FacadePrism[], seed: number, maxLights: number, out: LightList): number {
+  const tall = prisms.filter((p) => p.y1 - p.y0 >= 10);
+  /** Visit every window bay: prism index, edge, bay, floor, position. */
+  const bays = (f: (pi: number, i: number, b: number, fl: number, x: number, y: number, z: number) => void) =>
+    tall.forEach((p, pi) => {
+      const r = p.ring;
+      const n = r.length / 2;
+      let area = 0;
+      for (let i = 0, j = n - 1; i < n; j = i++) area += r[j * 2] * r[i * 2 + 1] - r[i * 2] * r[j * 2 + 1];
+      const sgn = area > 0 ? 1 : -1;
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const ax = r[i * 2];
+        const az = r[i * 2 + 1];
+        const dx = r[j * 2] - ax;
+        const dz = r[j * 2 + 1] - az;
+        const len = Math.hypot(dx, dz);
+        if (len < 3) continue;
+        // outward normal: right of a → b for a positive shoelace area (x, z)
+        const nx = (sgn * dz) / len;
+        const nz = (-sgn * dx) / len;
+        const nb = Math.max(1, Math.round(len / BAY));
+        for (let b = 0; b < nb; b++) {
+          const t = (b + 0.5) / nb;
+          for (let y = p.y0 + 6, fl = 0; y < p.y1 - 1; y += FLOOR, fl++) f(pi, i, b, fl, ax + dx * t + nx * 0.6, y, az + dz * t + nz * 0.6);
+        }
+      }
+    });
+  let slots = 0;
+  bays(() => slots++);
+  const lit = LIT * Math.min(1, maxLights / Math.max(1, slots * LIT));
+  let count = 0;
+  bays((pi, i, b, fl, x, y, z) => {
+    if (hash2(pi * 131 + i, b * 977 + fl, seed + 23) >= lit) return;
+    const h = hash2(pi + fl, i * 31 + b, seed + 29);
+    out.add(x, y, z, h < 0.6 ? 0xffe2b8 : h < 0.85 ? 0xfff4e0 : 0xcfe0ff, 2.6);
+    count++;
+  });
   return count;
 }
 

@@ -3,7 +3,7 @@
  * BufferGeometry with per-vertex colour and a window-style attribute, so every scenery feature is a
  * single draw call. Local frames: yaw θ about +Y (three.js convention); θ = −heading.
  */
-import { BufferAttribute, BufferGeometry, Color } from 'three';
+import { BufferAttribute, BufferGeometry, Color, ShapeUtils, Vector2 } from 'three';
 
 export interface Frame {
   ox: number;
@@ -18,6 +18,9 @@ export function frameFromHeading(x: number, y: number, z: number, heading: numbe
   const th = -heading;
   return { ox: x, oy: y, oz: z, c: Math.cos(th), s: Math.sin(th) };
 }
+
+/** World frame (local = world). */
+export const IDENT_FRAME: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
 /** Window styles for the building shader (aWin). */
 export const WIN_NONE = 0;
@@ -36,6 +39,10 @@ export class GeometryBuilder {
 
   get vertexCount(): number {
     return this.pos.length / 3;
+  }
+
+  get triangleCount(): number {
+    return this.idx.length / 3;
   }
 
   private wx(f: Frame, lx: number, lz: number): number {
@@ -149,6 +156,43 @@ export class GeometryBuilder {
       this.tri(f, [cx, y0, z1, xa, ya, z1, xb, yb, z1], color);
       this.tri(f, [cx, y0, z0, xb, yb, z0, xa, ya, z0], doorColor);
     }
+  }
+
+  /**
+   * Vertical prism over a footprint polygon in world XZ (flat [x0, z0, ...], either winding): walls from
+   * y0 up to the roof, roof triangulated (earcut). `roof(x, z)` gives the roof height at a vertex (a
+   * tilted plane for a sloped crown). Bottom face omitted. Returns the triangle count.
+   */
+  prism(ring: ArrayLike<number>, y0: number, roof: (x: number, z: number) => number, color: Color | number, roofColor: Color | number, win = WIN_NONE): number {
+    const n = ring.length / 2;
+    if (n < 3) return 0;
+    const t0 = this.triangleCount;
+    let area = 0;
+    for (let i = 0, j = n - 1; i < n; j = i++) area += ring[j * 2] * ring[i * 2 + 1] - ring[i * 2] * ring[j * 2 + 1];
+    const colr = typeof color === 'number' ? new Color(color) : color.clone();
+    const top: number[] = [];
+    for (let i = 0; i < n; i++) top.push(roof(ring[i * 2], ring[i * 2 + 1]));
+    // walls face out: with a positive shoelace area (x, z) the outside is on the right of a → b, so
+    // the quad runs b → a (quad's normal = (p1 − p0) × (p3 − p0))
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const [a, b] = area > 0 ? [j, i] : [i, j];
+      const ax = ring[a * 2];
+      const az = ring[a * 2 + 1];
+      const bx = ring[b * 2];
+      const bz = ring[b * 2 + 1];
+      if (ax === bx && az === bz) continue;
+      this.quad(IDENT_FRAME, [ax, y0, az, bx, y0, bz, bx, top[b], bz, ax, top[a], az], colr, win);
+    }
+    const pts: Vector2[] = [];
+    for (let i = 0; i < n; i++) pts.push(new Vector2(ring[i * 2], ring[i * 2 + 1]));
+    for (const [a, b, c] of ShapeUtils.triangulateShape(pts, [])) {
+      const p = (k: number) => [ring[k * 2], top[k], ring[k * 2 + 1]];
+      // upward normal: (p1 − p0) × (p2 − p0) has y = Δz1·Δx2 − Δx1·Δz2 > 0
+      const up = (ring[b * 2 + 1] - ring[a * 2 + 1]) * (ring[c * 2] - ring[a * 2]) - (ring[b * 2] - ring[a * 2]) * (ring[c * 2 + 1] - ring[a * 2 + 1]) > 0;
+      this.tri(IDENT_FRAME, up ? [...p(a), ...p(b), ...p(c)] : [...p(a), ...p(c), ...p(b)], roofColor, WIN_NONE);
+    }
+    return this.triangleCount - t0;
   }
 
   /** Oriented box between two local points (beams, truss members, masts). */
