@@ -3,12 +3,13 @@
  *
  * Built from lofted chined fuselage sections, caret/DSI intakes, a single-piece bubble canopy,
  * diamond-airfoil trapezoidal wings with LE flaps + flaperons, canted twin tails with rudders,
- * all-moving stabilators, a serrated F135 nozzle, EOTS window, internal bays with animated doors,
- * beast-mode pylons, and a pilot. Nose = -Z, up = +Y, right = +X, origin ≈ CG.
+ * all-moving stabilators, a serrated variable-area F135 nozzle, EOTS window, internal bays with
+ * animated doors, beast-mode pylons, and a pilot; ambient occlusion is baked into the vertex colours.
+ * Nose = -Z, up = +Y, right = +X, origin ≈ CG.
  *
  * Stations: `s` = metres aft of the nose tip; model z = Z0 + s.
  */
-import { Vector3 } from 'three';
+import { Float32BufferAttribute, Vector3 } from 'three';
 import { ModelBuilder } from '../ModelBuilder';
 import { box, ellipsoid, flatNormals, merge, mirrorX, place, setColor } from '../geom/core';
 import { bandBetween, latheZ, liftingSurface, loftRings, prismX, superRing, type LoftStation, type SurfaceSection } from '../geom/loft';
@@ -24,6 +25,12 @@ const Y_CEIL = -0.27; // weapons bay ceiling
 const BAY_S0 = 8.1;
 const BAY_S1 = 11.9;
 const DOOR_Y = -0.8;
+
+/**
+ * AO bake tuning for the F-35A airframe (see geom/ao.ts): ~75 ms on a desktop CPU, once per session
+ * behind the loading screen; one refinement pass adds ~10% LOD0 triangles (LOD1 is unchanged).
+ */
+export const F35_AO = { rays: 16, cell: 0.12, maxDist: 1.0, strength: 1, floor: 0.3, refine: 1, splitLen: 1.0, splitDelta: 0.35 };
 
 export const F35_ATLAS: AtlasBounds = { xMax: 5.6, zMin: -8.45, zMax: 7.45, yMin: -1.1, yMax: 2.65 };
 
@@ -176,7 +183,7 @@ function lipZ(x: number, y: number): number {
   return Z0 + LIP_S + 0.45 * ((top - y) / (top - bot)) + 0.22 * ((x - 0.62) / 0.5);
 }
 
-interface Piece {
+export interface Piece {
   geo: BufferGeometry;
   mat: string;
 }
@@ -269,6 +276,72 @@ function finPoint(u: number, f: number): Vector3 {
   return p.add(FIN_ROOT);
 }
 
+/* ───────────── F135 variable-area nozzle ───────────── */
+
+const NZ = 28;
+/** Hinge ring: the petals pivot here, so it never moves and the joint to the fuselage stays closed. */
+const NOZZLE_HINGE_Z = 5.9;
+/** Exit radius (outer shell) closed at MIL and fully open in max AB: 13% of the open diameter. */
+export const NOZZLE_EXIT_R = { closed: 0.52, open: 0.6 };
+/** Exit radius the flame (spec engine radius) was tuned against; flames scale relative to it. */
+const NOZZLE_NOMINAL_R = 0.555;
+const NOZZLE_EXIT_ZS = Array.from({ length: NZ }, (_, j) => (j % 2 === 0 ? 7.02 : 6.84));
+
+function nozzleRing(r: number): number[] {
+  const ring: number[] = [];
+  for (let j = 0; j < NZ; j++) {
+    const a = (j / NZ) * Math.PI * 2;
+    ring.push(Math.cos(a) * r, 0.03 + Math.sin(a) * r);
+  }
+  return ring;
+}
+
+/** Outer shell (metal) + interior liner (dark) at opening k (0 = closed / MIL, 1 = open / max AB). */
+function nozzleAt(k: number): Piece[] {
+  const exit = lerp(NOZZLE_EXIT_R.closed, NOZZLE_EXIT_R.open, k);
+  const mid = lerp(0.61, 0.645, k);
+  const shell = loftRings([
+    { z: 5.3, ring: nozzleRing(0.7) },
+    { z: NOZZLE_HINGE_Z, ring: nozzleRing(0.68) },
+    { z: 6.45, ring: nozzleRing(mid) },
+    { z: 0, ring: nozzleRing(exit), zs: NOZZLE_EXIT_ZS },
+  ]);
+  setColor(shell, 0x4d5053);
+  // interior + turbine face: follows the exit, 15 mm inside the shell
+  const liner = loftRings(
+    [
+      { z: 6.2, ring: nozzleRing(0.5) },
+      { z: 0, ring: nozzleRing(exit - 0.015), zs: NOZZLE_EXIT_ZS.map((z) => z - 0.01) },
+    ],
+    { inward: true, capStart: true, color: 0x252322 },
+  );
+  return [
+    { geo: shell, mat: 'metal' },
+    { geo: liner, mat: 'dark' },
+  ];
+}
+
+/**
+ * Nozzle at its closed (MIL) pose with one relative morph target that opens it fully. The two poses
+ * come from the same builder, so vertex order matches and the hinge ring has a zero delta.
+ */
+export function f35Nozzle(): Piece[] {
+  const closed = nozzleAt(0);
+  const open = nozzleAt(1);
+  return closed.map((p, i) => {
+    const g = p.geo;
+    const delta = (name: 'position' | 'normal') => {
+      const a = g.attributes[name].array as Float32Array;
+      const b = open[i].geo.attributes[name].array as Float32Array;
+      return new Float32BufferAttribute(b.map((v, j) => v - a[j]), 3);
+    };
+    g.morphAttributes.position = [delta('position')];
+    g.morphAttributes.normal = [delta('normal')];
+    g.morphTargetsRelative = true;
+    return p;
+  });
+}
+
 /* ───────────── model ───────────── */
 
 export function buildF35(): AircraftPrototype {
@@ -282,6 +355,9 @@ export function buildF35(): AircraftPrototype {
     ['skin'],
   );
   b.glassTint = 0x3a2c14;
+  // baked AO (rest pose); the canopy glass (no vertex colours) only casts it, and the bay doors
+  // are left out: closed, their inner faces would bake as dark as the sealed cavity
+  b.ao = { ...F35_AO, skip: ['glass'], skipParts: ['doorOR', 'doorIR', 'doorOL', 'doorIL'] };
   const drives: DriveDef[] = [];
 
   // Fuselage + canopy
@@ -375,33 +451,9 @@ export function buildF35(): AircraftPrototype {
   b.add(boom, 'skin');
   b.add(mirrorX(boom), 'skin');
 
-  // F135 nozzle: tapered with serrated (sawtooth) trailing edge
-  const NZ = 28;
-  const nozzleRing = (r: number) => {
-    const ring: number[] = [];
-    for (let j = 0; j < NZ; j++) {
-      const a = (j / NZ) * Math.PI * 2;
-      ring.push(Math.cos(a) * r, 0.03 + Math.sin(a) * r);
-    }
-    return ring;
-  };
-  const exitZs = Array.from({ length: NZ }, (_, j) => (j % 2 === 0 ? 7.02 : 6.84));
-  const nozzle = loftRings([
-    { z: 5.3, ring: nozzleRing(0.7) },
-    { z: 5.9, ring: nozzleRing(0.68) },
-    { z: 6.45, ring: nozzleRing(0.625) },
-    { z: 0, ring: nozzleRing(0.555), zs: exitZs },
-  ]);
-  b.add(setColor(nozzle, 0x4d5053), 'metal');
-  // nozzle interior + turbine face
-  const nIn = loftRings(
-    [
-      { z: 6.2, ring: nozzleRing(0.5) },
-      { z: 0, ring: nozzleRing(0.54), zs: exitZs.map((z) => z - 0.01) },
-    ],
-    { inward: true, capStart: true, color: 0x252322 },
-  );
-  b.add(nIn, 'dark');
+  // F135 variable-area nozzle (serrated exit), its own animated part: see f35Nozzle()
+  for (const p of f35Nozzle()) b.addPart('nozzle', p.geo, p.mat, new Vector3(0, 0, 0), new Vector3(1, 0, 0));
+  drives.push({ part: 'nozzle', kind: 'nozzle', side: 0, max: NOZZLE_EXIT_R.open / NOZZLE_NOMINAL_R, extra: NOZZLE_EXIT_R.closed / NOZZLE_NOMINAL_R });
 
   // EOTS faceted window under the nose
   {

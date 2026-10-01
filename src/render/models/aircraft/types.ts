@@ -18,8 +18,23 @@ import type { V3 } from '../specs';
  *  radome    continuous rotation at `max` rad/s
  *  canard    −elevator·max (foreplane, opposite sense)
  *  gear      landing gear leg: (1 − gear)·max (folded = retracted; hidden once fully up)
+ *  nozzle    variable-area exhaust nozzle: not a rotation — morph target 0 (closed → open) is set
+ *            to nozzleOpening(rpm, ab); flames scale their exit radius from `extra` (closed) to
+ *            `max` (open), both relative to the spec engine radius
  */
-export type DriveKind = 'stab' | 'flaperon' | 'aileron' | 'lef' | 'rudder' | 'airbrake' | 'door' | 'sweep' | 'radome' | 'canard' | 'gear';
+export type DriveKind =
+  | 'stab'
+  | 'flaperon'
+  | 'aileron'
+  | 'lef'
+  | 'rudder'
+  | 'airbrake'
+  | 'door'
+  | 'sweep'
+  | 'radome'
+  | 'canard'
+  | 'gear'
+  | 'nozzle';
 
 export interface DriveDef {
   part: string;
@@ -27,6 +42,22 @@ export interface DriveDef {
   side: -1 | 0 | 1;
   max: number;
   extra?: number;
+}
+
+/** Nozzle opening at ground/flight idle (petals partly open to dump idle thrust). */
+export const NOZZLE_IDLE_OPEN = 0.65;
+const RPM_IDLE = 0.63;
+const RPM_MIL = 1.0;
+
+/**
+ * Variable-area nozzle schedule (F119/F135 style): open at idle, closing to the minimum exit area
+ * at MIL, then opening again with afterburner. 0 = closed (MIL), 1 = fully open (max AB).
+ */
+export function nozzleOpening(rpm: number, ab: number): number {
+  const t = Math.min(1, Math.max(0, (rpm - RPM_IDLE) / (RPM_MIL - RPM_IDLE)));
+  const dry = NOZZLE_IDLE_OPEN * (1 - t * t * (3 - 2 * t));
+  const a = Math.min(1, Math.max(0, ab));
+  return dry + (1 - dry) * a;
 }
 
 /** A position where a store can be displayed. */

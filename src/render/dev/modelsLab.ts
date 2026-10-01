@@ -5,6 +5,9 @@
  *   model = <aircraft type> | m:<munition id> | sam:<sam type> | gt:<ground target type> | all
  *   view  = front | side | top | bottom | rear | 34 | 34b | 34l | low
  *   flight: ab, rpm, bay, elev, ail, rud, flaps, brake, alpha, mach   dead=1   night=1   spin=1   zoom=1
+ *   debug=ao  unlit vertex colours only (inspect the baked ambient occlusion)
+ *   aoopt=refine:0,strength:0.9,...  override the F-35 AO bake settings (F35_AO) before the build
+ *   focus=x,y,z  aim point in model metres (e.g. focus=0,0,6.9&zoom=4 for an F-35 nozzle close-up)
  */
 import {
   ACESFilmicToneMapping,
@@ -16,6 +19,7 @@ import {
   Group,
   HemisphereLight,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
   PerspectiveCamera,
@@ -30,11 +34,16 @@ import { AircraftEntity } from '../../sim/entities';
 import { LOADOUTS } from '../../core/data';
 import type { AircraftType, GroundTargetType, LoadoutId, MunitionId, SamType } from '../../core/types';
 import { getAircraftPrototype } from '../models/aircraft';
+import { F35_AO } from '../models/aircraft/f35a';
 import { AIRCRAFT_SPECS } from '../models/specs';
 import { AircraftVisual } from '../visuals/AircraftVisual';
 import { munitionMesh } from '../models/munitions';
 
 const q = new URLSearchParams(location.search);
+for (const kv of (q.get('aoopt') ?? '').split(',').filter(Boolean)) {
+  const [k, v] = kv.split(':');
+  (F35_AO as Record<string, number>)[k] = Number(v);
+}
 const num = (k: string, d: number) => (q.has(k) ? Number(q.get(k)) : d);
 const modelId = q.get('model') ?? 'f35a';
 const view = q.get('view') ?? '34';
@@ -111,6 +120,13 @@ function addAircraft(type: AircraftType, pos = new Vector3()): AircraftVisual {
   const vis = new AircraftVisual(getAircraftPrototype(type), AIRCRAFT_SPECS[type], true, true);
   ac.position.copy(pos);
   holder.add(vis.root);
+  if (q.get('debug') === 'ao') {
+    const flat = new MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+    vis.root.traverse((o) => {
+      const m = o as Mesh;
+      if (m.isMesh && !m.name.startsWith('flame:')) m.material = flat;
+    });
+  }
   const lodCfg = { lod0: 1e9, far: 1e9 };
   const prev = update;
   const forceLod1 = q.get('lod') === '1';
@@ -190,8 +206,9 @@ function place(v: string = view): void {
   const dir = new Vector3(...(VIEWS[v] ?? VIEWS['34'])).normalize();
   const fovR = (camera.fov * Math.PI) / 180;
   const d = (focusRadius / Math.sin(fovR / 2)) * 0.62 / num('zoom', 1);
-  camera.position.copy(dir.multiplyScalar(d));
-  camera.lookAt(0, 0, 0);
+  const focus = new Vector3(...((q.get('focus') ?? '0,0,0').split(',').map(Number) as [number, number, number]));
+  camera.position.copy(dir.multiplyScalar(d)).add(focus);
+  camera.lookAt(focus);
   if (!modelId.startsWith('sam:') && !modelId.startsWith('gt:')) ground.position.y = v === 'bottom' ? -1e4 : groundY;
 }
 

@@ -24,7 +24,7 @@ function makeSkin(
   bounds: AtlasBounds,
   size: number,
   paint: (p: AtlasPainter) => void,
-  mat: { roughness: number; metalness: number; env: number; fallback: number },
+  mat: { roughness: number; metalness: number; env: number; fallback: number; vertexColors?: boolean },
   rough?: RoughSpec,
 ): void {
   registerMaterial(key, () => {
@@ -51,6 +51,8 @@ function makeSkin(
       metalness: mat.metalness,
       envMapIntensity: mat.env,
       envMap: getEnvCube(),
+      // baked AO lives in the vertex colours (white where unoccluded)
+      vertexColors: mat.vertexColors ?? false,
     });
     return m;
   });
@@ -82,7 +84,7 @@ export function registerF35Materials(b: AtlasBounds): void {
     b,
     Math.min(2048, modelQuality.textureSize),
     paintF35,
-    { roughness: F35_PAINT.roughness, metalness: F35_PAINT.metalness, env: F35_PAINT.env, fallback: F35_PAINT.fallback },
+    { roughness: F35_PAINT.roughness, metalness: F35_PAINT.metalness, env: F35_PAINT.env, fallback: F35_PAINT.fallback, vertexColors: true },
     { size: f35RoughSize(modelQuality.textureSize), paint: paintF35Roughness },
   );
 }
