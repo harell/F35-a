@@ -24,6 +24,13 @@ Inspired by NovaLogic's *F-22 Raptor* (1997). Built with three.js (WebGL 2), Typ
   It then runs full-screen in landscape and works offline.
 * Runs in iOS Safari 15+, Android Chrome and desktop Chrome, Edge, Firefox and Safari.
 
+
+## Analytics
+
+The GitHub Pages build reports anonymous usage to [Microsoft Clarity](https://clarity.microsoft.com) (project `yr2ioa8r88`, see `src/analytics/clarity.ts`).
+It is off in dev, on localhost, inside the embedded artifact build and under Playwright. Build with `VITE_CLARITY_ID=` (empty) to disable it, or set it to another project id.
+Clarity can't see inside the WebGL canvas, so the useful data is the custom events (`mission_start`, `mission_success`, `mission_failed`, `mission_quit`, `player_down_*`, `menu_*`, …) and session tags (`mission`, `loadout`, `difficulty`, `quality`, `control_scheme`, `display_mode`, `game_version`).
+
 ## Features
 
 | | |

@@ -2,6 +2,19 @@
  * F35-A — entry point.
  */
 import { Game } from './game/Game';
+import { initAnalytics, track } from './analytics/clarity';
+import { GAME_VERSION } from './core/data';
+
+function displayMode(): string {
+  if (matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone) return 'installed';
+  return 'browser';
+}
+
+initAnalytics({
+  game_version: GAME_VERSION,
+  display_mode: displayMode(),
+  pointer: matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse',
+});
 
 function showFatal(msg: string): void {
   const el = document.getElementById('fatal');
@@ -9,6 +22,7 @@ function showFatal(msg: string): void {
     el.textContent = msg;
     el.style.display = 'flex';
   }
+  track('fatal_error');
 }
 
 function webgl2Available(): boolean {
@@ -20,6 +34,7 @@ function webgl2Available(): boolean {
 }
 
 if (!webgl2Available()) {
+  track('no_webgl2');
   showFatal('F35-A needs WebGL 2. Please use an up-to-date Chrome, Safari (iOS 15+) or Firefox.');
 } else {
   const game = new Game(document.getElementById('app')!);
