@@ -60,6 +60,11 @@ export interface TerrainSpec {
   resolution: number;
   features: SceneryFeature[];
   pads: { x: number; z: number; radius: number }[];
+  /**
+   * Auckland at 2048²: refine the upsampled base with the real LiDAR detail (aucklandLinzHd.ts)
+   * instead of procedural noise, when that data is loaded and matches the installed 1024 grid.
+   */
+  hdTerrain?: boolean;
 }
 
 /** Flatten footprint of a scenery feature (local frame: +Z along `rotation` heading). */

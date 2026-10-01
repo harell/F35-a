@@ -5,7 +5,8 @@
  *    older f35a-* caches are deleted on activate
  *  - install: precache '/', index.html, the manifest and icons, then read index.html to discover the
  *    hashed bundle files (Vite writes them there) and precache those; voice clips are precached if
- *    present (missing clips are skipped)
+ *    present (missing clips are skipped). Large optional assets only some devices use (ON_DEMAND: the
+ *    high tier's HD terrain) are never precached; they are cached on first use like other hashed files
  *  - navigation requests: network-first (fresh deploys win), falling back to the cached shell
  *  - hashed bundle files (assets/*-<hash>.*): cache-first, filled on demand (the URL changes with the content)
  *  - un-hashed public files (audio/…, textures/…, icons/…, the manifest): stale-while-revalidate — served
@@ -43,6 +44,9 @@ const VOICES = [
   'a_objective_complete', 'a_rtb', 'a_eject', 'a_friendly_down',
 ];
 
+/** Large optional assets (high quality tier only): never precached, so low / medium devices never download them. */
+const ON_DEMAND = /\/auckland-linz-hd-[\w-]+\.bin$/;
+
 const scopeUrl = (p) => new URL(p, self.registration.scope).href;
 
 /** Relative asset URLs referenced by the built index.html (script src, modulepreload / stylesheet href). */
@@ -61,6 +65,7 @@ function bundleAssets(html) {
 /**
  * Asset URLs referenced from inside a JS/CSS bundle: public paths ("textures/…", "audio/…") and
  * files emitted next to the bundle via `new URL('name-hash.ext', import.meta.url)` (workers, fonts).
+ * ON_DEMAND assets are left out (they are cached on first use instead).
  */
 function referencedAssets(code, bundleUrl) {
   const out = new Set();
@@ -70,7 +75,7 @@ function referencedAssets(code, bundleUrl) {
   let m;
   while ((m = pub.exec(code))) out.add(scopeUrl(m[1]));
   while ((m = rel.exec(code))) out.add(new URL(m[1], bundleUrl).href);
-  return [...out];
+  return [...out].filter((u) => !ON_DEMAND.test(new URL(u).pathname));
 }
 
 async function addAll(cache, urls) {

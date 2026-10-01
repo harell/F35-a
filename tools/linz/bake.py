@@ -4,20 +4,24 @@ Bake LINZ elevation into compact game data for the Auckland theatre.
 Inputs (from fetch.py, NZTM2000 / EPSG:2193 mosaics at 16 m):
   dem1m_16.npz  national 1 m LiDAR DEM, read at its 16 m overview  -> land heights
   dem8m_16.npz  national contour 8 m DEM at 16 m                     -> land/sea mask (MHW coast)
-Output: src/world/terrain/data/auckland-linz.bin (gzip; decoded by src/world/terrain/theaters/aucklandLinz.ts)
-  - coastline rings in game metres (even-odd: land = inside an odd number of rings)
-  - 1024² height grid sampled at the exact Heightfield sample positions (all quality tiers; the
-    2048 tier upsamples it — a real 2048 grid would add ~1.5 MB to every page load)
+Outputs (gzip):
+  src/world/terrain/data/auckland-linz.bin     (decoded by src/world/terrain/theaters/aucklandLinz.ts, every tier)
+    - coastline rings in game metres (even-odd: land = inside an odd number of rings)
+    - 1024² height grid sampled at the exact Heightfield sample positions
+  src/world/terrain/data/auckland-linz-hd.bin  (decoded by src/world/terrain/theaters/aucklandLinzHd.ts, high tier only)
+    - 2048² detail: the real 2048 grid minus the Catmull-Rom upsample of the 1024 grid (what generate.ts's
+      upsample2x reconstructs), so the high tier gets the real 43 m terrain instead of procedural noise
 Game coordinates: origin = Sky Tower, +X east, +Z south, equirectangular (src/core/auckland.ts).
 """
 import gzip, sys, numpy as np
 from pyproj import Transformer
-from scipy.ndimage import map_coordinates, gaussian_filter, binary_fill_holes, label
+from scipy.ndimage import map_coordinates, gaussian_filter, binary_fill_holes, label, maximum_filter
 from skimage.measure import find_contours
 from shapely.geometry import Polygon
 
 D = sys.argv[1] if len(sys.argv) > 1 else '.'
 OUT = sys.argv[2] if len(sys.argv) > 2 else '../../src/world/terrain/data/auckland-linz.bin'
+OUT_HD = sys.argv[3] if len(sys.argv) > 3 else '../../src/world/terrain/data/auckland-linz-hd.bin'
 O_LAT, O_LON = -36.8485, 174.7622
 M_LAT = 110_950.0
 M_LON = 111_320.0 * np.cos(np.radians(O_LAT))
@@ -135,3 +139,64 @@ body = (b'AKLZ' + struct.pack('<IffIIIf', 1, Q, HQ, len(rings), nv, N, HF_EXTENT
 data = gzip.compress(body, 9, mtime=0)
 open(OUT, 'wb').write(data)
 print('wrote', OUT, len(body), 'bytes raw,', len(data), 'gzip')
+
+# ── HD detail (high quality tier): real 2048² grid as a residual over the upsampled 1024² grid ──
+# Same σ = 0.25-cell pre-filter as the 1024 grid; at the grid's local maxima the sample takes the source
+# maximum within one cell, so narrow summits (Browns Island, Māngere) that fall between 43 m samples
+# keep their LiDAR height (all cones within ≈ ±1 %, vs −8 % with plain sampling).
+def cr_upsample(b):
+    """2× Catmull-Rom upsample, exactly as upsample2x in src/world/terrain/generate.ts (clamped edges)."""
+    n = b.shape[0]
+    i = np.arange(n)
+    def up1(a):
+        c = lambda k: a[:, np.clip(k, 0, n - 1)]
+        o = np.empty((a.shape[0], 2 * n))
+        o[:, 0::2] = a
+        o[:, 1::2] = (-c(i - 1) + 9 * c(i) + 9 * c(i + 1) - c(i + 2)) * 0.0625
+        return o
+    return up1(up1(b.astype(np.float64)).T).T
+
+def zigzag_bytes(r):
+    """Zig-zag residuals, one byte each; 255 escapes a u16."""
+    z = np.where(r >= 0, 2 * r, -2 * r - 1).ravel()
+    assert z.max() < 65536
+    out = bytearray()
+    prev = 0
+    for e in np.flatnonzero(z >= 255):
+        out += z[prev:e].astype(np.uint8).tobytes() + bytes([255]) + int(z[e]).to_bytes(2, 'little')
+        prev = e + 1
+    out += z[prev:].astype(np.uint8).tobytes()
+    return bytes(out)
+
+def fnv1a(b):
+    """FNV-1a 32 of a byte string (ties the HD file to the 1024 grid it was baked against)."""
+    hsh = 0x811C9DC5
+    for x in np.frombuffer(b, np.uint8).tolist():
+        hsh = ((hsh ^ x) * 0x01000193) & 0xFFFFFFFF
+    return hsh
+
+NH = 2048
+cell = HF_EXTENT / NH
+pos = -HF_EXTENT / 2 + np.arange(NH) * cell
+hx, hz = np.meshgrid(pos, pos)
+v = sample(gaussian_filter(h, 0.25 * cell / R), hx, hz)
+v[sample(landf, hx, hz) < 0.02] = 0.0
+peak = (v == maximum_filter(v, size=3)) & (v > 5)
+vmax = sample(maximum_filter(h, size=int(np.ceil(cell / R)) | 1), hx, hz)
+v = np.where(peak, np.maximum(v, vmax), v)
+# the 1024 grid as the game decodes it (0.5 m steps)
+cell1 = HF_EXTENT / N
+pos1 = -HF_EXTENT / 2 + np.arange(N) * cell1
+hx1, hz1 = np.meshgrid(pos1, pos1)
+v1 = sample(gaussian_filter(h, 0.25 * cell1 / R), hx1, hz1)
+v1[sample(landf, hx1, hz1) < 0.02] = 0.0
+q1 = np.round(v1 / HQ).astype(np.int32)
+res = np.round((v - cr_upsample(q1 * HQ)) / HQ).astype(np.int32)
+print('hd residual max', np.abs(res).max(), 'peaks snapped', int(peak.sum()))
+#   'AKLH' | u32 version | f32 height quantum | u32 grid n | f32 grid extent | u32 base n
+#   | u32 FNV-1a of the base grid's quantised heights (i32 LE) | residual bytes
+body = (b'AKLH' + struct.pack('<IfIfII', 1, HQ, NH, HF_EXTENT, N, fnv1a(q1.astype('<i4').tobytes()))
+        + zigzag_bytes(res))
+data = gzip.compress(body, 9, mtime=0)
+open(OUT_HD, 'wb').write(data)
+print('wrote', OUT_HD, len(body), 'bytes raw,', len(data), 'gzip')

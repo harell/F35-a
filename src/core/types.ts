@@ -242,6 +242,11 @@ export interface QualitySettings {
   drawDistance: number;
   /** 0 = coarse, 1 = normal, 2 = fine terrain mesh. */
   terrainDetail: 0 | 1 | 2;
+  /**
+   * Real 43 m LiDAR terrain detail (Auckland, a lazily loaded ≈ 1.2 MB download). Only takes effect
+   * with terrainDetail 2 (the 2048² heightfield); low / medium never download it.
+   */
+  hdTerrain: boolean;
   /** Number of cloud billboards/puffs. */
   cloudCount: number;
   /** Multiplier on particle budgets (smoke, sparks, debris). */
@@ -286,4 +291,6 @@ export interface Settings {
   defaultView: 'cockpit' | 'hud' | 'chase';
   /** Target camera: small picture-in-picture view of the designated / locked target. */
   targetCam: boolean;
+  /** HD terrain on the high quality tier (see QualitySettings.hdTerrain). Off: procedural detail, no download. */
+  hdTerrain: boolean;
 }

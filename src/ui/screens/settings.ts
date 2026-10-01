@@ -250,6 +250,13 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
           'row-stack',
         ),
       );
+      page.appendChild(
+        settingRow(
+          'HD terrain',
+          'High quality only: real 43 m LiDAR terrain over Auckland (≈ 1.2 MB download, cached)',
+          toggle(s.hdTerrain, (v) => (s.hdTerrain = v), 'HD terrain'),
+        ),
+      );
       page.appendChild(settingRow('FPS counter', 'Frame rate, draw calls and triangles', toggle(s.showFps, (v) => (s.showFps = v), 'FPS counter')));
       return page;
     }

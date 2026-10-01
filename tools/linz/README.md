@@ -1,7 +1,9 @@
 # LINZ terrain pipeline (Auckland theatre)
 
 Bakes Toitū Te Whenua LINZ open elevation data into `src/world/terrain/data/auckland-linz.bin`
-(≈ 510 kB gzip), which the game fetches once per page load (`src/world/terrain/theaters/aucklandLinz.ts`).
+(≈ 510 kB gzip), which the game fetches once per page load (`src/world/terrain/theaters/aucklandLinz.ts`), and
+`auckland-linz-hd.bin` (≈ 1.24 MB gzip), the real 2048² detail fetched only by the high quality tier
+(`src/world/terrain/theaters/aucklandLinzHd.ts`).
 
 Data is licensed CC BY 4.0: *Sourced from the LINZ Data Service and licensed for reuse under the CC BY 4.0 licence.*
 
@@ -24,7 +26,7 @@ python3 stac.py https://nz-elevation.s3.ap-southeast-2.amazonaws.com/new-zealand
 python3 stac.py https://nz-elevation.s3.ap-southeast-2.amazonaws.com/new-zealand/new-zealand-contour/dem_8m/2193 dem8m.json
 python3 fetch.py dem1m.json new-zealand/new-zealand/dem_1m/2193 16 <work>/dem1m_16.npz
 python3 fetch.py dem8m.json new-zealand/new-zealand-contour/dem_8m/2193 16 <work>/dem8m_16.npz
-python3 bake.py <work>            # writes ../../src/world/terrain/data/auckland-linz.bin
+python3 bake.py <work>            # writes ../../src/world/terrain/data/auckland-linz.bin and auckland-linz-hd.bin
 python3 cones.py <work>           # prints LiDAR-snapped cone centres for aucklandMap.ts / core/auckland.ts
 ```
 
@@ -37,7 +39,32 @@ the same products and the vector layers (building outlines, roads) for later pha
   2 m vertex quantum, even–odd (land = inside an odd number of rings). ≈ 100 rings, 25 k vertices.
 - **Heights**: a 1024² grid at the exact `Heightfield` sample positions (86 m), Gaussian pre-filter σ = 0.25 cell
   (keeps cone summits within ≈ 2–12 m of the LiDAR maximum), 0.5 m steps, planar-predicted zig-zag residuals.
-  The 2048 (high quality) tier upsamples it: a real 2048 grid would add ≈ 1.5 MB to every page load.
+- **HD detail** (high tier only, `auckland-linz-hd.bin`): the 2048² grid (43 m) with the same σ = 0.25-cell pre-filter;
+  at its local maxima the sample takes the source maximum within one cell, so narrow summits that fall between
+  samples keep their LiDAR height. Stored as the residual over the Catmull-Rom upsample of the decoded 1024 grid
+  (what `upsample2x` in `generate.ts` reconstructs), zig-zag bytes, plus an FNV-1a hash of the 1024 grid so a
+  stale pair is rejected. Always re-bake both files together.
+
+## HD terrain (high quality tier)
+
+On the high tier (2048² heightfield) `finishTerrain` blends the upsampled base to the real 2048 heights instead
+of adding procedural noise: weight 0 below 3 m rising to 1 at 12 m of upsampled height (the shoreline and the
+base's shore ramp at the waterline stay put; headlands inside the ramp, like North Head, still reach their real
+summits), faded out with the border fade, never below 3 m on land.
+
+| | procedural detail | real detail |
+|---|---|---|
+| cone summits vs LiDAR (12 cones) | −4 … −28 % (Browns Island 47 m vs 65 m) | within ±1.7 % |
+| download | – | ≈ 1.24 MB gzip once (content-hashed, browser-cached); ≈ 2.3 s at 10 Mbit/s, overlapping the workers' base generation |
+| `finishTerrain` at 2048 (node) | ≈ 0.9 s | ≈ 0.7 s |
+
+Only the high tier with the *HD terrain* setting on (default; `?hdterrain=0` turns it off) requests the file;
+low / medium never do, and the service worker never precaches it (`ON_DEMAND` in `public/sw.js`).
+`tests/world-linz-hd.test.ts` checks the summits, the absence of seeded noise on land, the shoreline and the
+tier gating; `e2e/hd-terrain.mjs` checks the real network and service-worker caches per tier.
+
+Measured alternative: shipping the residual only within 15 km of the CBD would cut the file to ≈ 134 kB (25 km:
+≈ 366 kB), but leaves the Waitākere and Hunua ranges smoothed, so the whole grid is shipped.
 
 Coordinates: game origin = Sky Tower, +X east, +Z south, the equirectangular projection of `src/core/auckland.ts`
 (reprojected from NZTM2000 / EPSG:2193 with pyproj). Heights are NZVD2016 (≈ mean sea level; the game's y = 0).

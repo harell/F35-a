@@ -122,6 +122,8 @@ export class Game {
     const pq = this.params.get('quality');
     if (pq && pq in QUALITY_PRESETS) this.settings.quality = pq as QualityLevel;
     if (this.params.get('fps') === '1') this.settings.showFps = true;
+    const ph = this.params.get('hdterrain');
+    if (ph === '0' || ph === '1') this.settings.hdTerrain = ph === '1';
 
     const glCanvas = root.querySelector<HTMLCanvasElement>('#gl')!;
     const hudCanvas = root.querySelector<HTMLCanvasElement>('#hud')!;

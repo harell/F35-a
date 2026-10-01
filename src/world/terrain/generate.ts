@@ -6,7 +6,8 @@
  * animating on phones.
  *
  * Pipeline: theatre base terrain (≤1024², with a border fade to a smooth outside profile)
- *   → optional 2× Catmull-Rom upsample + fine detail octaves (2048² on high quality)
+ *   → optional 2× Catmull-Rom upsample + fine detail (2048² on high quality): procedural octaves, or
+ *     on Auckland with `spec.hdTerrain` a blend to the real 2048 LiDAR heights (aucklandLinzHd.ts)
  *   → keep feature/pad anchors dry → flatten features (airfields, towns…) and pads (SAM sites).
  */
 import { Heightfield } from './Heightfield';
@@ -18,6 +19,8 @@ import { createMountains } from './theaters/mountains';
 import { createArctic } from './theaters/arctic';
 import { createAuckland, WHENUAPAI_CROSS } from './theaters/auckland';
 import { AKL } from '../../core/auckland';
+import { aucklandLinz } from './theaters/aucklandLinz';
+import { aucklandLinzHd, linzHdHeights, linzHdMatches } from './theaters/aucklandLinzHd';
 import {
   EDGE_FADE_END,
   EDGE_FADE_START,
@@ -61,6 +64,9 @@ export function edgeRadius(x: number, z: number): number {
 
 export const BASE_MAX = 1024;
 
+/** Inside max(|x|, |z|) < EDGE_SAFE the border fade is 0 (super-ellipse radius ≤ 2^(1/6)·max(|x|,|z|)). */
+const EDGE_SAFE = EDGE_FADE_START / 1.1225;
+
 /**
  * Fill rows [z0, z1) of an n×n base heightfield (HF_EXTENT wide) into band arrays. Shared by the
  * main-thread path and the generation workers.
@@ -77,14 +83,13 @@ export function generateBaseRows(
   const cell = HF_EXTENT / n;
   const origin = -HF_EXTENT / 2;
   const out: SampleOut = { mat: 0, aux: 0 };
-  const safe = EDGE_FADE_START / 1.1225; // super-ellipse radius ≤ 2^(1/6)·max(|x|,|z|)
   for (let iz = z0; iz < z1; iz++) {
     const z = origin + iz * cell;
     const row = (iz - z0) * n;
     for (let ix = 0; ix < n; ix++) {
       const x = origin + ix * cell;
       const m = Math.max(Math.abs(x), Math.abs(z));
-      const fade = m < safe ? 0 : sstep(EDGE_FADE_START, EDGE_FADE_END, edgeRadius(x, z));
+      const fade = m < EDGE_SAFE ? 0 : sstep(EDGE_FADE_START, EDGE_FADE_END, edgeRadius(x, z));
       let h: number;
       if (fade >= 1) {
         h = gen.edge(x, z);
@@ -130,7 +135,7 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
   let hf = base;
   if (spec.resolution > base.n) {
     hf = new Heightfield(base.n * 2, HF_EXTENT);
-    yield* upsample2x(base, hf, spec.seed, p0, 0.9);
+    yield* upsample2x(base, hf, spec.seed, p0, 0.9, realDetail(spec, hf.n));
   }
 
   // 3) Keep anchors dry (features / pads never end up in the sea). Auckland's coast is mapped and its
@@ -170,8 +175,33 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
   return hf;
 }
 
-/** 2× Catmull-Rom upsample of `src` into `dst` plus two octaves of relief-scaled detail. */
-function* upsample2x(src: Heightfield, dst: Heightfield, seed: number, p0: number, p1: number): Generator<number, void, void> {
+/** The real Auckland n × n heights, when asked for, loaded and baked against the installed base grid. */
+function realDetail(spec: TerrainSpec, n: number): Float32Array | null {
+  if (spec.theater !== 'auckland' || !spec.hdTerrain) return null;
+  const base = aucklandLinz();
+  const hd = aucklandLinzHd();
+  if (!base || !hd) return null;
+  if (!linzHdMatches(hd, base, n)) {
+    console.warn('[world] LINZ HD terrain does not match the installed 1024 grid, using procedural detail');
+    return null;
+  }
+  return linzHdHeights(hd, base);
+}
+
+/** Land below this (m) keeps the base height's shore ramp: no real detail at the waterline. */
+const REAL_SHORE_LO = 3;
+/** Real detail at full strength above this height (m). */
+const REAL_SHORE_HI = 12;
+
+/**
+ * 2× Catmull-Rom upsample of `src` into `dst` plus fine detail: two octaves of relief-scaled noise,
+ * or with `real` (the real LiDAR heights at the dst samples) a blend to them. The blend weight rises
+ * from REAL_SHORE_LO to REAL_SHORE_HI of upsampled height, so the shoreline and the base's
+ * continuous shore ramp at the waterline stay put, while headlands inside the ramp (North Head)
+ * still reach their real summits; it fades out with the border fade like the base terrain, and
+ * never takes land below REAL_SHORE_LO.
+ */
+function* upsample2x(src: Heightfield, dst: Heightfield, seed: number, p0: number, p1: number, real: Float32Array | null = null): Generator<number, void, void> {
   const n = dst.n;
   const sn = src.n;
   const s = src.data;
@@ -197,7 +227,15 @@ function* upsample2x(src: Heightfield, dst: Heightfield, seed: number, p0: numbe
         h = cr(r0, r1, r2, r3);
       }
       const si = sz * sn + sx;
-      if (h > 2) {
+      if (real) {
+        if (h > REAL_SHORE_LO) {
+          const x = dst.pos(ix);
+          const z = dst.pos(iz);
+          const m = Math.max(Math.abs(x), Math.abs(z));
+          const w = sstep(REAL_SHORE_LO, REAL_SHORE_HI, h) * (m < EDGE_SAFE ? 1 : 1 - sstep(EDGE_FADE_START, EDGE_FADE_END, edgeRadius(x, z)));
+          h = Math.max(h + (real[iz * n + ix] - h) * w, REAL_SHORE_LO);
+        }
+      } else if (h > 2) {
         // Relief-scaled fine detail (none on flats / beaches so coastlines stay put)
         const gx = at(sx + 1, sz) - at(sx - 1, sz);
         const gz = at(sx, sz + 1) - at(sx, sz - 1);
