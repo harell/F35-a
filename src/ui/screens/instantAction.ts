@@ -1,12 +1,13 @@
 /**
- * F35-A UI — Instant Action setup: mode cards + theatre / time / weather / enemy / count pickers.
+ * F35-A UI — Instant Action setup: mode cards + city / time / weather / enemy / count pickers.
  * Remembers the last setup in localStorage (per device convenience).
  */
 import type { InstantActionOptions } from '../../core/contracts';
-import { AIRCRAFT_INFO, DIFFICULTIES, THEATER_INFO } from '../../core/data';
+import { AIRCRAFT_INFO, DIFFICULTIES } from '../../core/data';
 import { DIFFICULTY_ORDER } from '../career';
 import type { AircraftType, TheaterId, TimeOfDay, Weather } from '../../core/types';
 import { icon } from '../art/icons';
+import { landmark, type LandmarkId } from '../art/landmarks';
 import { h } from '../dom';
 import type { UiHost } from '../host';
 import { screenHeader, segmented, settingRow, stagger } from '../widgets';
@@ -20,8 +21,16 @@ const MODES: { id: InstantActionOptions['mode']; title: string; desc: string; ic
   { id: 'survival', title: 'Survival', desc: 'Endless waves — how long can you last?', icon: 'waves' },
 ];
 
-const THEATERS: TheaterId[] = ['auckland', 'desert', 'islands', 'mountains', 'arctic'];
-const THEATER_SHORT: Record<TheaterId, string> = { auckland: 'Auckland', desert: 'Desert', islands: 'Islands', mountains: 'Mountains', arctic: 'Arctic' };
+/**
+ * Cities on offer. Only those with a theatre are playable; the rest are shown locked ("Coming soon")
+ * to gauge interest before they are built. The other theatres stay in the engine for career/missions.
+ */
+const CITIES: { name: string; tagline: string; art: LandmarkId; theater?: TheaterId }[] = [
+  { name: 'Auckland', tagline: 'Latte, Traffic, Repeat', art: 'skyTower', theater: 'auckland' },
+  { name: 'Wellington', tagline: "Can't Beat Today", art: 'beehive' },
+  { name: 'Christchurch', tagline: 'Which High School?', art: 'cathedral' },
+];
+const PLAYABLE: TheaterId[] = CITIES.flatMap((c) => (c.theater ? [c.theater] : []));
 const ENEMIES: (AircraftType | 'mixed')[] = ['mixed', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50'];
 
 const DEFAULTS: InstantActionOptions = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 };
@@ -31,7 +40,7 @@ function load(): InstantActionOptions {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const v = { ...DEFAULTS, ...JSON.parse(raw) } as InstantActionOptions;
-      if (!THEATERS.includes(v.theater)) v.theater = 'auckland';
+      if (!PLAYABLE.includes(v.theater)) v.theater = 'auckland';
       v.enemyCount = Math.max(1, Math.min(8, Math.round(v.enemyCount) || 4));
       return v;
     }
@@ -90,17 +99,12 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     const opts = h('div', { class: 'ia-opts ui-panel ui-scroll' });
     opts.appendChild(
       settingRow(
-        'Theatre',
+        'City',
         null,
-        segmented(
-          THEATERS.map((t) => ({ value: t, label: THEATER_SHORT[t], title: `${THEATER_INFO[t].region}` })),
-          o.theater,
-          (v) => {
-            o.theater = v;
-            updateSummary();
-          },
-          'seg-wrap',
-        ),
+        cityPicker(o.theater, (v) => {
+          o.theater = v;
+          updateSummary();
+        }),
         'row-stack',
       ),
     );
@@ -183,7 +187,7 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     const updateSummary = () => {
       const mode = MODES.find((m) => m.id === o.mode);
       const enemy = o.enemyType === 'mixed' ? 'mixed bandits' : `${AIRCRAFT_INFO[o.enemyType].name}s`;
-      summary.innerHTML = `<b>${mode?.title ?? ''}</b> · ${THEATER_SHORT[o.theater]} · ${o.timeOfDay} · ${o.enemyCount}× ${enemy}`;
+      summary.innerHTML = `<b>${mode?.title ?? ''}</b> · ${CITIES.find((c) => c.theater === o.theater)?.name ?? ''} · ${o.timeOfDay} · ${o.enemyCount}× ${enemy}`;
     };
     const start = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `${icon('play')}<span>Start</span>` });
     start.addEventListener('click', () => finish({ ...o }));
@@ -192,6 +196,44 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     setCount(o.enemyCount);
     host.present(el, { bg: true, back: () => finish(null), focus: start });
   });
+}
+
+/** City chips: landmark emblem + name + tagline; cities without a theatre are disabled with a lock. */
+function cityPicker(value: TheaterId, onChange: (v: TheaterId) => void): HTMLElement {
+  const wrap = h('div', { class: 'ia-cities', attrs: { role: 'radiogroup', 'aria-label': 'City' } });
+  const buttons: HTMLButtonElement[] = [];
+  let cur = value;
+  const sync = () => {
+    for (const b of buttons) {
+      if (b.disabled) continue;
+      const on = b.dataset.value === cur;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-checked', String(on));
+    }
+  };
+  for (const c of CITIES) {
+    const locked = !c.theater;
+    const b = h('button', {
+      class: 'ia-city',
+      attrs: { type: 'button', role: 'radio', 'aria-checked': 'false', 'aria-label': locked ? `${c.name}, coming soon` : c.name, title: locked ? `${c.name} — coming soon` : c.name },
+      dataset: { value: c.theater ?? '' },
+      html:
+        `<span class="ia-city-emb"><span class="ia-city-disc">${landmark(c.art)}</span>${locked ? `<span class="ia-city-lock">${icon('lock')}</span>` : ''}</span>` +
+        `<span class="ia-city-t"><span class="ia-city-n">${c.name}</span><span class="ia-city-m">${c.tagline}</span></span>`,
+    });
+    if (locked) b.disabled = true;
+    else
+      b.addEventListener('click', () => {
+        if (!c.theater || cur === c.theater) return;
+        cur = c.theater;
+        sync();
+        onChange(c.theater);
+      });
+    buttons.push(b);
+    wrap.appendChild(b);
+  }
+  sync();
+  return wrap;
 }
 
 /**
