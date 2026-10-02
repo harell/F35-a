@@ -17,6 +17,7 @@ import type { SynthEnv } from '../synth/build';
 import { ENGINE_PROFILES, JetEngineVoice, makeEngineDrive, type EngineDrive } from '../synth/JetEngineVoice';
 import type { NoiseBank } from '../synth/NoiseBank';
 import { abLightOff, sonicBoom } from '../synth/recipes';
+import { isBuzzing } from './DroneSounds';
 
 const _fwd = new Vector3();
 const _rel = new Vector3();
@@ -187,7 +188,8 @@ export class JetSounds {
     cand.length = 0;
     cd.length = 0;
     for (const ac of list) {
-      if (!ac.alive || ac === p) continue;
+      // drones buzz (DroneSounds): they never take a jet voice
+      if (!ac.alive || ac === p || isBuzzing(ac)) continue;
       const prof = ENGINE_PROFILES[ac.type] ?? ENGINE_PROFILES.f35a;
       const dist = ac.position.distanceTo(L.pos);
       if (dist > prof.maxDist * 1.2) continue;
