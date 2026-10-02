@@ -28,7 +28,7 @@ def fetch(path, url):
     if os.path.exists(path):
         print('cached', path)
         return
-    print('get', url.split('?')[0])
+    print('get', path)  # not the URL: the API key is in its path
     with urllib.request.urlopen(url, timeout=600) as r:
         data = r.read()
     open(path, 'wb').write(data)
