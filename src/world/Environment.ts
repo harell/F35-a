@@ -305,7 +305,6 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     colorSize,
     style,
     lights: preset.lights,
-    skyTowerRuin: opts.skyTowerRuin?.fallHeading ?? null,
     aerial,
   });
   scene.add(scenery.group);

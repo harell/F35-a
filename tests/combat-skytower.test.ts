@@ -2,6 +2,8 @@
  * The Sky Tower as a protected landmark (issue #16): hit volume, one-hit kill by the player's
  * bombs / AGMs / AAMs (not the gun, not anybody else), rounds and munitions stopped by it,
  * aircraft crashing into it, the collapse timeline, and sensors never seeing it.
+ * Issue #75: enemy hits (hitLandmark / hitSkyTower) damage it once and collapse it on the second;
+ * the player's munition still brings it down at once, damaged or not.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -11,7 +13,7 @@ import { AKL } from '../src/core/auckland';
 import { COLLAPSE, POD_HEIGHT, SKY_TOWER_HEIGHT, collapsePose, fallHeading, towerAxisPoint } from '../src/core/skyTower';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
-import { createSkyTower, destroyLandmark, firstLandmarkHit, landmarkDistance, landmarkSegmentHit, STRUCTURAL_BLAST_FRACTION } from '../src/sim/landmarks';
+import { DEFAULT_HIT_HEIGHT, createSkyTower, destroyLandmark, firstLandmarkHit, hitLandmark, hitSkyTower, landmarkDistance, landmarkSegmentHit, STRUCTURAL_BLAST_FRACTION } from '../src/sim/landmarks';
 import { MUNITIONS } from '../src/sim/weapons/defs';
 import { DT, FakeWorld, FlatTerrain } from './combat-helpers';
 
@@ -113,6 +115,7 @@ describe('Sky Tower: one hit from the player destroys it', () => {
     expect(ends).toHaveLength(1);
     expect(landmarkDistance(tower, ends[0].position)).toBeLessThan(MUNITIONS.aim120.blastRadius * STRUCTURAL_BLAST_FRACTION);
     expect(tower.alive).toBe(true);
+    expect(tower.hits).toBe(0); // nor does it count as an enemy hit
   });
 
   function jdamOnTruck(dx: number) {
@@ -167,6 +170,94 @@ describe('the gun cannot bring it down', () => {
     expect(onTower.length).toBeGreaterThan(0);
     // nothing got through: no round landed beyond the tower
     expect(impacts.every((e) => e.position.x > TX - 8)).toBe(true);
+  });
+});
+
+describe('Sky Tower: enemy hits (issue #75)', () => {
+  it('one enemy hit: damaged and burning on its face, not collapsed', () => {
+    const { w, tower } = towerWorld();
+    const damaged = w.record('landmark:damaged');
+    const destroyed = w.record('landmark:destroyed');
+    const booms = w.record('explosion');
+    w.run(1);
+    expect(hitLandmark(tower, w.events, w.time, { attackerId: 77 })).toBe(1);
+    expect(tower.alive).toBe(true);
+    expect(tower.hits).toBe(1);
+    expect(tower.damagedAt).toBeCloseTo(w.time, 6);
+    // default: the east face at DEFAULT_HIT_HEIGHT (shaft, r 6.1)
+    expect(tower.damagePoint.x).toBeCloseTo(TX + 6.1, 5);
+    expect(tower.damagePoint.y).toBeCloseTo(GROUND + DEFAULT_HIT_HEIGHT, 5);
+    expect(tower.damagePoint.z).toBeCloseTo(TZ, 5);
+    expect(damaged).toHaveLength(1);
+    expect(damaged[0].hits).toBe(1);
+    expect(damaged[0].attackerId).toBe(77);
+    expect(booms).toHaveLength(1);
+    expect(booms[0].size).toBe('large');
+    expect(destroyed).toHaveLength(0);
+    w.run(20);
+    expect(tower.alive).toBe(true);
+  });
+
+  it('the hit lands where the attacker came in, snapped onto the face', () => {
+    const { w, tower } = towerWorld();
+    hitLandmark(tower, w.events, w.time, { point: at(0, 190, -40) }); // from the north, level with the pod
+    expect(tower.damagePoint.x).toBeCloseTo(TX, 5);
+    expect(tower.damagePoint.z).toBeCloseTo(TZ - 16.6, 5);
+    expect(tower.damagePoint.y).toBeCloseTo(GROUND + 190, 5);
+    expect(landmarkDistance(tower, tower.damagePoint)).toBeCloseTo(0, 5);
+  });
+
+  it('the second enemy hit brings it down (cause: enemy), falling away from the hit', () => {
+    const events = new EventBus();
+    const world = createSimWorld({ terrain: new FlatTerrain(GROUND), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
+    const tower = createSkyTower(GROUND);
+    world.landmarks.push(tower);
+    const destroyed: GameEventMap['landmark:destroyed'][] = [];
+    const damaged: GameEventMap['landmark:damaged'][] = [];
+    const impacts: unknown[] = [];
+    events.on('landmark:destroyed', (e) => destroyed.push(e));
+    events.on('landmark:damaged', (e) => damaged.push(e));
+    events.on('landmark:impact', (e) => impacts.push(e));
+    expect(hitSkyTower(world, { attackerId: 5 })).toBe(1);
+    for (let i = 0; i < 120; i++) world.step(DT);
+    expect(tower.alive).toBe(true);
+    expect(hitSkyTower(world, { attackerId: 6, point: at(-40, 120, 0) })).toBe(2); // from the west
+    expect(tower.alive).toBe(false);
+    expect(tower.cause).toBe('enemy');
+    expect(damaged).toHaveLength(1);
+    expect(destroyed).toHaveLength(1);
+    expect(destroyed[0]).toMatchObject({ attackerId: 6, weapon: null, cause: 'enemy' });
+    expect(tower.fallHeading).toBeCloseTo(Math.PI / 2, 3); // falls east
+    // the existing scripted collapse plays out
+    for (let i = 0; i < Math.ceil((COLLAPSE.impactAt + 1) / DT); i++) world.step(DT);
+    expect(impacts).toHaveLength(1);
+    // a fallen tower takes no more hits
+    expect(hitSkyTower(world)).toBe(0);
+    expect(destroyed).toHaveLength(1);
+  });
+
+  it('hitSkyTower on a sortie without a tower does nothing', () => {
+    const w = new FakeWorld({ terrain: new FlatTerrain(GROUND), seed: 3 });
+    const booms = w.record('explosion');
+    expect(hitSkyTower(w)).toBe(0);
+    expect(booms).toHaveLength(0);
+  });
+
+  it('the player’s AIM-120 still brings a damaged tower down at once (cause: player)', () => {
+    const { w, tower } = towerWorld();
+    hitLandmark(tower, w.events, w.time);
+    expect(tower.hits).toBe(1);
+    const destroyed = w.record('landmark:destroyed');
+    const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: at(6000, 200, 0), heading: WEST, speed: 250, isPlayer: true, loadout: 'a2a_beast' });
+    const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: at(19, 196, 0), heading: 0, speed: 0.01 });
+    w.run(0.5);
+    w.combat.designate(f35, mig.id, w);
+    expect(w.combat.fire(f35, w, 'aim120', mig.id)).not.toBeNull();
+    w.run(30, () => !tower.alive);
+    expect(tower.alive).toBe(false);
+    expect(tower.hits).toBe(1); // the player's hit is not an enemy hit
+    expect(destroyed).toHaveLength(1);
+    expect(destroyed[0]).toMatchObject({ attackerId: f35.id, weapon: 'aim120', cause: 'player' });
   });
 });
 

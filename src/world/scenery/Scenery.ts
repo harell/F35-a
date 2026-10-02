@@ -49,8 +49,6 @@ export interface SceneryOptions {
   style: TerrainStyle;
   /** 0 = day … 1 = night (light intensity). */
   lights: number;
-  /** Auckland: the Sky Tower is already down in this save (its fall heading, rad) — build the ruin. */
-  skyTowerRuin?: number | null;
   /**
    * Auckland's aerial photo (the terrain's): the wharf decks and the naval base take it on their top
    * faces, and no houses or trees are scattered where it covers the ground (it shows the real ones).
@@ -164,7 +162,7 @@ export class Scenery {
       const buildings = cbd.streets ? aucklandBuildings() : null;
       const city = new GeometryBuilder();
       if (!buildings) buildSkyCityPodium(city, height);
-      this.skyTower = new SkyTowerVisual(buildingMat, o.lights > 0.01 ? this.lightsMat : null, height, o.skyTowerRuin ?? null);
+      this.skyTower = new SkyTowerVisual(buildingMat, o.lights > 0.01 ? this.lightsMat : null, height);
       this.group.add(this.skyTower.group);
       this.stats.meshes++;
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);

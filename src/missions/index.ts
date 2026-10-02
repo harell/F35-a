@@ -18,7 +18,7 @@ import { CAMPAIGN_PART2 } from './content/campaign2';
 import { TRAINING_MISSIONS } from './content/training';
 import { applyResult, loadProgressFrom, saveProgressTo, skipMission as skipMissionIn } from './progress';
 
-export { failStreak, markSkyTowerDown, skyTowerRuin, wasSkipped, type ProgressExtras } from './progress';
+export { failStreak, wasSkipped, type ProgressExtras } from './progress';
 
 export { createMissionRunner } from './MissionRunner';
 /** Hints and mission texts follow the scheme Input is actually flying (Game reports it every frame). */

@@ -11,6 +11,8 @@ export const REASONS = {
   time: 'Out of time',
   aborted: 'Mission aborted',
   skytower: 'Destroyed the Sky Tower',
+  /** Enemy hits brought the Sky Tower down (sim/landmarks.ts hitLandmark). */
+  skytowerLost: 'The Sky Tower fell',
 } as const;
 
 const DEATH_WORDS = ['shot down', 'crashed', 'collision', 'out of fuel'];

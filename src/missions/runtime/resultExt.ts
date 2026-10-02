@@ -23,6 +23,4 @@ export type MissionResultExt = MissionResult & {
   civilianShipKills?: number;
   /** Protect objectives with a debrief tally: how many of the group survived ("Fuel tanks saved 7/9"). */
   saved?: { label: string; saved: number; total: number }[];
-  /** The player brought the Sky Tower down this sortie (fall heading, rad): progress keeps the ruin. */
-  skyTowerDown?: { fallHeading: number };
 };

@@ -1,13 +1,14 @@
 /**
  * The Sky Tower model (issue #16): shape from the OSM profile (heights ±2 m, radii ±1 m against
  * the issue's table), its own meshes and lights, the collapse driven by the sim landmark, and the
- * ruin (built straight away for a save where it is already down).
+ * ruin. Issue #75: every scene builds it standing (it is never down for good), and an enemy hit
+ * leaves the meshes standing (the damage is fire and smoke, drawn by the effects).
  */
 import { describe, expect, it } from 'vitest';
 import { MeshBasicMaterial, PointsMaterial, Vector3, type Mesh } from 'three';
 import { AKL } from '../src/core/auckland';
 import { COLLAPSE, SKY_TOWER_BANDS, SKY_TOWER_HEIGHT, SKY_TOWER_LEGS, headingDir } from '../src/core/skyTower';
-import { createSkyTower, destroyLandmark } from '../src/sim/landmarks';
+import { createSkyTower, destroyLandmark, hitLandmark } from '../src/sim/landmarks';
 import { EventBus } from '../src/core/events';
 import type { SimWorld } from '../src/sim/api';
 import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
@@ -106,7 +107,7 @@ describe('Sky Tower visual', () => {
   const lightsMat = new PointsMaterial();
 
   it('is its own group of meshes with its own lights and pod reflections', () => {
-    const v = new SkyTowerVisual(mat, lightsMat, height, null);
+    const v = new SkyTowerVisual(mat, lightsMat, height);
     expect(v.group.name).toBe('akl-skytower');
     const names: string[] = [];
     v.group.traverse((o) => names.push(o.name));
@@ -114,12 +115,12 @@ describe('Sky Tower visual', () => {
     expect(v.reflectionSources.length).toBeGreaterThan(0);
     expect(v.state).toBe('standing');
     // daytime: no lights at all
-    const day = new SkyTowerVisual(mat, null, height, null);
+    const day = new SkyTowerVisual(mat, null, height);
     day.group.traverse((o) => expect(o.name).not.toBe('akl-skytower-lights'));
   });
 
   it('follows the sim: lights out on the break, topples, then the ruin under the dust', () => {
-    const v = new SkyTowerVisual(mat, lightsMat, height, null);
+    const v = new SkyTowerVisual(mat, lightsMat, height);
     const reflections = { visible: true };
     v.setReflections(reflections as never);
     const lm = createSkyTower(GROUND);
@@ -152,15 +153,33 @@ describe('Sky Tower visual', () => {
     expect(find('akl-skytower-ruin')).toBeTruthy();
   });
 
-  it('a save with the tower down builds only the ruin: no lights, no reflections, no tower', () => {
-    const v = new SkyTowerVisual(mat, lightsMat, height, Math.PI / 2);
-    expect(v.state).toBe('ruin');
-    expect(v.reflectionSources).toEqual([]);
+  it('a damaged tower (one enemy hit) stays standing with its lights on; the second hit topples it', () => {
+    const v = new SkyTowerVisual(mat, lightsMat, height);
+    const lm = createSkyTower(GROUND);
+    const world = fakeWorld(10, [lm]);
+    const events = new EventBus();
+    hitLandmark(lm, events, 10);
+    (world as { time: number }).time = 30;
+    v.update(world);
+    expect(v.state).toBe('standing');
+    let lights: Mesh | null = null;
+    v.group.traverse((o) => {
+      if (o.name === 'akl-skytower-lights') lights = o as Mesh;
+    });
+    expect((lights as unknown as Mesh).visible).toBe(true);
+    hitLandmark(lm, events, 30);
+    (world as { time: number }).time = 30 + COLLAPSE.impactAt * 0.5;
+    v.update(world);
+    expect(v.state).toBe('falling');
+  });
+
+  it('a new scene always builds the tower standing, with no ruin (never destroyed for good)', () => {
+    const v = new SkyTowerVisual(mat, lightsMat, height);
+    expect(v.state).toBe('standing');
     const names: string[] = [];
     v.group.traverse((o) => names.push(o.name));
-    expect(names).toEqual(['akl-skytower', 'akl-skytower-ruin']);
-    v.update(fakeWorld(5, []));
-    expect(v.state).toBe('ruin');
+    expect(names).not.toContain('akl-skytower-ruin');
+    expect(names).toContain('akl-skytower-upper');
   });
 
   it('the ruin: a stump below the break and rubble out along the fall line', () => {
