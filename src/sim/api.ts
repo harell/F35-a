@@ -108,6 +108,18 @@ export interface LaunchZone {
   timeOfFlight: number;
 }
 
+/** The bomb release cue (CombatSystemApi.bombImpactPoint). */
+export interface BombCue {
+  point: Vector3;
+  inRange: boolean;
+  timeToRelease: number;
+  offAxis: boolean;
+  /** Way to turn for a target off the release cone: +1 right, −1 left, 0 not off axis. */
+  steer: -1 | 0 | 1;
+  /** One of the jet's own guided bombs is still flying to the designated target. */
+  bombAway: boolean;
+}
+
 export interface CombatSystemApi {
   /** Munition database (all player, enemy and SAM munitions). */
   readonly munitions: Record<MunitionId, MunitionDef>;
@@ -160,9 +172,11 @@ export interface CombatSystemApi {
   /**
    * CCIP / release cue for bombs: predicted impact point + whether release is valid. GPS / glide
    * bombs: `inRange` only within the reach and with the target where the bomb can turn to,
-   * `offAxis` when it is outside the release cone around the ground track (steer toward it).
+   * `offAxis` when it is outside the release cone around the ground track (steer toward it: `steer`
+   * +1 right, −1 left, 0 when not off axis), `bombAway` while one of `ac`'s own guided bombs is still
+   * flying to the designated target.
    */
-  bombImpactPoint(ac: AircraftEntity, world: SimWorld): { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null;
+  bombImpactPoint(ac: AircraftEntity, world: SimWorld): BombCue | null;
 }
 
 /* ───────────────────────── Spawning ───────────────────────── */

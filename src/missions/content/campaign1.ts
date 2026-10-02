@@ -448,7 +448,7 @@ export const C06: MissionDef = mission({
   briefing: [
     'Two enemy corvettes are escorting a supply ship through the Tāmaki Strait, between Waiheke and the eastern suburbs, bringing fuel and missiles to the island garrisons.',
     'Sink both corvettes. An SA-15 Tor on Motuihe Island and an SA-8 on the south shore of Waiheke cover the strait, a Shilka sits on Browns Island at the mouth of the Tāmaki River, and a pair of Flankers is holding CAP overhead.',
-    "The corvettes are creeping along a patrol line at two knots. A JDAM flies to where the ship was when you let it go — release the moment IN RANGE shows from 25,000 ft and the blast does the rest (STEER instead means the ship is outside the bomb's turn: point the nose at it). Fly to the IP south of Beachlands and run in northbound: up there you are above the Tor and the SA-8 (both top out below 20,000 ft) and well outside their reach. Viper 2 will take on the Flankers.",
+    "The corvettes are creeping along a patrol line at two knots. A JDAM flies to where the ship was when you let it go — release the moment IN RANGE shows from 25,000 ft and the blast does the rest (STEER LEFT or STEER RIGHT instead means the ship is outside the bomb's turn: turn that way). Fly to the IP south of Beachlands and run in northbound: up there you are above the Tor and the SA-8 (both top out below 20,000 ft) and well outside their reach. Viper 2 will take on the Flankers.",
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
@@ -468,7 +468,10 @@ export const C06: MissionDef = mission({
     ],
     ground: [
       // slow patrol line (≈2 kn): a JDAM flies to where the ship was at release, so a fast ship
-    // would sail out of the blast during a long glide
+      // would sail out of the blast during a long glide. Issue #65 weighed one corvette at 5–8 m/s
+      // so the StormBreaker's tracking shows; not done: a JDAM released on IN RANGE from 25,000 ft
+      // (56 s fall) sinks a 1 m/s corvette but misses one at 3 m/s or more, so the recommended
+      // 2-JDAM load could no longer sink both
       target('cv1', 'fleet', 'ship', { x: 24000, z: 1000 }, { name: 'Corvette 531', path: [{ x: 17000, z: -500 }, { x: 24000, z: 1000 }], loop: true, speed: 1 }),
       target('cv2', 'fleet', 'ship', { x: 25500, z: 1800 }, { name: 'Corvette 532', path: [{ x: 18500, z: 300 }, { x: 25500, z: 1800 }], loop: true, speed: 1 }),
       target('supply', 'supply', 'ship', { x: 20500, z: -2300 }, { name: 'Supply Ship' }),

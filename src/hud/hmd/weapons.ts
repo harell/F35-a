@@ -7,6 +7,7 @@
 import { DEG, G, dirFromHeadingPitch, forwardOf, rightOf, toKnots, upOf } from '../../core/math';
 import type { Vector3 } from 'three';
 import type { WeaponId } from '../../core/types';
+import type { BombCue } from '../../sim/api';
 import { dlzLayout, makeDlzGeometry } from './dlz';
 import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
@@ -209,8 +210,11 @@ export function planCues(f: HudFrame): number {
     if (bi) {
       if (p.radar.groundPoint) {
         if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
-        else if (bi.offAxis) addCue('STEER', 17, pal.warn, 0); // target outside the bomb's release cone
         else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
+        // our bomb is still guiding onto it: nothing to steer for (STEER read as "turn back for the bomb")
+        else if (bi.bombAway) addCue('BOMB AWAY', 15, pal.main, 0);
+        // target outside the bomb's release cone: which way to turn
+        else if (bi.offAxis) addCue(bi.steer < 0 ? 'STEER LEFT' : 'STEER RIGHT', 17, pal.warn, 0);
         else addCue('OUT OF RANGE', 15, pal.warn, 0);
       } else if (f.mode === 'hmd') {
         if (!bombOnScreen) addCue('CCIP', 13, pal.dim, 0);
@@ -408,9 +412,9 @@ export function drawGun(f: HudFrame): void {
 
 let bombOnScreen = false;
 let biFrame = -1;
-let biCache: { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null = null;
+let biCache: BombCue | null = null;
 /** Bomb impact / release info for this frame (cached: planCues + drawAirToGround both need it). */
-function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null {
+function bombInfo(f: HudFrame): BombCue | null {
   if (biFrame === f.st.frame) return biCache;
   biFrame = f.st.frame;
   try {

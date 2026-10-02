@@ -8,6 +8,8 @@
  *  AIM-9X / R-73          IR seeker must have a target within the HMD off-boresight limit
  *  JDAM / SDB             GPS attack on the designated ground point (envelope-checked), else CCIP drop
  *  SDB II (GBU-53)        needs a designated surface target inside the glide envelope; no CCIP
+ *                         (GPS / SDB II: the range only, not the HUD cue's cone or turn circle; a
+ *                         player JDAM may go 1.1 × past it on Recruit / Pilot, see gpsReleasePad)
  *  AARGM-ER               needs an emitting radar in its seeker field (or a designated known SAM)
  * Internal stores: bay doors open first (0 → 1 over ~0.35 s, release at > 0.9, close ~1.5 s
  * after) — the authentic F-35 release delay. External pylons release immediately.
@@ -20,6 +22,7 @@ import type { AircraftEntity, AnyEntity, MissileEntity } from '../entities';
 import type { AcCombatState, CombatCtx } from './context';
 import { acState, radio } from './context';
 import { ccipPoint, gpsMaxRange, launchZoneFor, munitionForRelease, type ZoneHooks } from './dlz';
+import type { CombatMunitionDef } from './defs';
 import { autoReselect, pickStation, stationMunition, totalStores } from './loadouts';
 import { launchMunition, type CombatMissile } from './missile';
 import { irSeekerSees } from '../sensors/irSeeker';
@@ -49,6 +52,18 @@ const _pt = new Vector3();
 function deny(ctx: CombatCtx, ac: AircraftEntity, weapon: WeaponId, reason: string): null {
   if (ac.isPlayer) ctx.world.events.emit('weapon:denied', { ownerId: ac.id, weapon, reason });
   return null;
+}
+
+/**
+ * How far past the cue's range (gpsMaxRange) a GPS / glide bomb release is still allowed. The release
+ * reads the range only, for the player as for the AI: it doesn't follow the HUD cue's cone or turn
+ * circle, since from altitude the bombs turn onto targets well off the cone and inside that circle
+ * (issue #65, measured). On the generous-cue difficulties (Recruit, Pilot) a player JDAM may go 1.1 ×
+ * past the cue, where it still reaches; a winged glide bomb (SDB, StormBreaker) gets no pad, since
+ * from 7,000 m it falls short there (dead ahead at 1.09 ×, 45° off the nose at 1.05 ×).
+ */
+function gpsReleasePad(ctx: CombatCtx, ac: AircraftEntity, def: CombatMunitionDef): number {
+  return ac.isPlayer && ctx.world.difficulty.generousShootCues && def.glideRatio < 3 ? 1.1 : 1;
 }
 
 function hostileAircraft(e: AnyEntity | null, ac: AircraftEntity): e is AircraftEntity {
@@ -164,7 +179,7 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
         const gp = ac.radar.groundPoint;
         const horiz = Math.hypot(gp.x - ac.position.x, gp.z - ac.position.z);
         const rMax = gpsMaxRange(def, ac.position.y - gp.y, ac.velocity.length(), gp.y);
-        if (horiz > rMax * (ac.isPlayer && world.difficulty.generousShootCues ? 1.1 : 1)) return deny(ctx, ac, weapon, 'OUT OF RANGE');
+        if (horiz > rMax * gpsReleasePad(ctx, ac, def)) return deny(ctx, ac, weapon, 'OUT OF RANGE');
         target = t;
         groundPoint = gp;
       } else if (designated && t) {
@@ -184,7 +199,7 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
       if (!t || !t.alive || (t.kind !== 'ground' && t.kind !== 'sam') || t.team === ac.team) return deny(ctx, ac, weapon, 'NO TARGET');
       const horiz = Math.hypot(t.position.x - ac.position.x, t.position.z - ac.position.z);
       const rMax = gpsMaxRange(def, ac.position.y - t.position.y, ac.velocity.length(), t.position.y);
-      if (horiz > rMax * (ac.isPlayer && world.difficulty.generousShootCues ? 1.1 : 1)) return deny(ctx, ac, weapon, 'OUT OF RANGE');
+      if (horiz > rMax * gpsReleasePad(ctx, ac, def)) return deny(ctx, ac, weapon, 'OUT OF RANGE');
       target = t;
       // launch estimate comes from the launcher's track (position + velocity), see launchMunition;
       // the point is only kept for a release that sequences through the bay doors

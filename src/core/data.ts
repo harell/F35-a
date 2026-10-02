@@ -261,7 +261,7 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
   strike_sdb2: {
     id: 'strike_sdb2',
     name: 'Precision Strike (Stealth)',
-    description: '4× GBU-53/B StormBreaker + 2× AIM-120D internal. Datalinked glide bombs that chase moving ships and vehicles.',
+    description: '4× GBU-53/B StormBreaker + 2× AIM-120D internal. Datalinked glide bombs that chase moving ships and vehicles. No anti-radiation missile: against a long-range SAM, take SEAD.',
     rcsMultiplier: 1,
     stores: [
       { weapon: 'gbu53', count: 4, internal: true },

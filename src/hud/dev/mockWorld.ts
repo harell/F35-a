@@ -291,8 +291,8 @@ export function buildMock(scene: Scenario): MockSetup {
         : { state: 'search' as const, targetId: null, direction: null },
     gunLeadPoint: () => (scene === 'gun' ? mig.position.clone().addScaledVector(mig.velocity, 0.75).add(new Vector3(0, 12, 0)) : null),
     bombImpactPoint: () => {
-      if (scene === 'ag') return { point: ship.position.clone(), inRange: false, timeToRelease: Math.max(0, 14 - time), offAxis: false };
-      if (scene === 'ccip') return { point: at(4200, 150, -player.position.y).setY(0), inRange: true, timeToRelease: 0, offAxis: false };
+      if (scene === 'ag') return { point: ship.position.clone(), inRange: false, timeToRelease: Math.max(0, 14 - time), offAxis: false, steer: 0, bombAway: false };
+      if (scene === 'ccip') return { point: at(4200, 150, -player.position.y).setY(0), inRange: true, timeToRelease: 0, offAxis: false, steer: 0, bombAway: false };
       return null;
     },
   } as unknown as CombatSystemApi;

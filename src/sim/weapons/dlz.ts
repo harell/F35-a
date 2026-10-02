@@ -275,22 +275,29 @@ export function gpsReleaseCone(def: CombatMunitionDef): number {
  * around the ground track (else `offAxis`: steer toward it) and outside the bomb's horizontal turn
  * circle: a point nearer than 2·r·sin θ (θ off the ground track, r the bomb's turn radius at release)
  * can't be turned onto, as when the jet has run past a target it tossed at from low level. Gravity
- * does the turn down, so only the horizontal turn counts.
+ * does the turn down, so only the horizontal turn counts. `side` is the way to turn toward the
+ * point: +1 right of the ground track, −1 left, 0 dead ahead or straight below (issue #65: STEER
+ * gives a direction). This drives the HUD cue only: from altitude the fall gives the bomb time to
+ * turn onto many points this calls off the cone or unreachable, so the release reads the range
+ * only (release.ts, gpsReleasePad).
  */
-export function gpsReleaseGeometry(def: CombatMunitionDef, ac: AircraftEntity, point: Vector3): { offAxis: boolean; reachable: boolean } {
+export function gpsReleaseGeometry(def: CombatMunitionDef, ac: AircraftEntity, point: Vector3): { offAxis: boolean; reachable: boolean; side: -1 | 0 | 1 } {
   const dx = point.x - ac.position.x;
   const dz = point.z - ac.position.z;
   const horiz = Math.hypot(dx, dz);
   const vh = Math.hypot(ac.velocity.x, ac.velocity.z);
   // (straight below the jet the bearing means nothing: no cone)
-  if (horiz < 50 || vh < 1) return { offAxis: false, reachable: true };
+  if (horiz < 50 || vh < 1) return { offAxis: false, reachable: true, side: 0 };
   const cos = (ac.velocity.x * dx + ac.velocity.z * dz) / (vh * horiz);
   const offAxis = cos < Math.cos(gpsReleaseCone(def));
+  // x east, z south, y up: track × bearing > 0 means the point is right of the track
+  const cross = ac.velocity.x * dz - ac.velocity.z * dx;
+  const side = cross > 0 ? 1 : cross < 0 ? -1 : 0;
   const v = ac.velocity.length();
   const q = 0.5 * airDensity(ac.position.y) * v * v;
   const r = (v * v) / Math.max(1, def.maxG * G * Math.min(1, q / def.fullGQ));
   const sin = Math.sqrt(Math.max(0, 1 - cos * cos));
-  return { offAxis, reachable: !offAxis && horiz >= 2 * r * sin * TURN_MARGIN };
+  return { offAxis, reachable: !offAxis && horiz >= 2 * r * sin * TURN_MARGIN, side };
 }
 /** Margin on the bomb's turn circle (autopilot lag, lift lost to the turn). */
 const TURN_MARGIN = 1.15;

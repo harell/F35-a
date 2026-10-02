@@ -97,7 +97,7 @@ export const C08: MissionDef = mission({
   features: [FEATURES.whenuapai, FEATURES.waihekeStrip, FEATURES.motutapuDepot],
   briefing: [
     'The enemy has brought an SA-10 Grumble onto Motutapu. At medium altitude it can kill anything over Auckland, and under its umbrella landing ships in the Rangitoto Channel are loading troops from Rangitoto Wharf for a push onto the North Shore.',
-    'We cannot touch the SA-10 yet. So we go under it. Rangitoto rises 260 metres out of the harbour: stay below 300 feet in the harbour and the Rangitoto Channel and the volcano hides you from Motutapu. Climb above 1,500 feet, or stray north or east of the island, and the Grumble sees you.',
+    'We cannot touch the SA-10 yet. So we go under it. Rangitoto rises 260 metres out of the harbour: stay below 300 feet in the harbour and the Rangitoto Channel and the volcano hides you from Motutapu. Climb above 1,500 feet, or stray north or east of the island, and the Grumble sees you. The StormBreaker load carries no anti-radiation missile, so nothing on it can reach the Grumble: with it, staying low is the only defence.',
     'Fly the harbour at wave-top height — under the Harbour Bridge if you have the nerve — pass North Head and turn north into the channel. Pop up to about 800 feet only for the release: the GBU-39 small diameter bombs glide 1.5 km from there, so let them go the moment IN RANGE shows, then get straight back down. One SDB sinks a landing ship. MANPADS guard the Rangitoto shore: flares ready.',
   ],
   recommendedLoadout: 'sead_stealth',
