@@ -3,7 +3,8 @@
  * (flash, fireball, smoke, sparks, debris, ground shockwave, water splash columns), burning wrecks &
  * tall smoke columns, falling-wreck fire trails, gun tracers, muzzle flashes, bullet impacts, flares
  * (burning cores + smoke arcs), chaff glitter, contrails, wingtip vortices, LEX vapour, transonic
- * vapour cones, damage smoke, ship funnel exhaust and the fires riding a sinking hull down.
+ * vapour cones, damage smoke, ship funnel exhaust, the fires riding a sinking hull down and the fire
+ * burning on a damaged Sky Tower.
  *
  * Budgets: particle capacities and emission rates scale with QualitySettings.particleScale and with
  * distance to the camera. Everything is pooled; the per-frame path allocates nothing.
@@ -50,6 +51,20 @@ const WRECK_SMOKE = ribbon(0x1f1d1b, 5.5, 5.0, 26, 0.9, 0, 18, 0.07);
 const FLARE_SMOKE = ribbon(0xe2e2e0, 1.2, 2.0, 5, 0.7, 0, 5, 0.06);
 
 const SIZE_M: Record<ExplosionSize, number> = { tiny: 3, small: 9, medium: 16, large: 30, huge: 55 };
+
+/**
+ * A damaged landmark (the Sky Tower after an enemy hit, sim/landmarks.ts hitLandmark): flames on its
+ * face at the hit height and a thick dark plume drifting downwind, readable from 10+ km, for as long
+ * as it stands damaged (the collapse brings its own fires). Rates per second (× particleScale × LOD,
+ * never below `minLod`, so the plume is not thinned out at range); minimum sizes in device pixels.
+ */
+export const LANDMARK_FIRE = {
+  flamesPerSec: 34,
+  smokePerSec: 6,
+  minLod: 0.5,
+  flameMinPx: 2.5,
+  smokeMinPx: 3,
+};
 
 /**
  * Air-kill payoff tuning (i1 review: kills were 1-3 px at BVR ranges). Minimum on-screen sizes are
@@ -179,6 +194,8 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const shipFx: ShipFx[] = Array.from({ length: 8 }, () => ({ ship: null, pts: [new Vector3(), new Vector3(), new Vector3()], sizes: [0, 0, 0], fAcc: 0, sAcc: 0 }));
   /** Funnel smoke emission accumulators (per live ship id). */
   const funnelAcc = new Map<number, number>();
+  /** Damaged-landmark fire emission accumulators (flames, smoke). */
+  const landmarkAcc = new Map<object, { f: number; s: number }>();
   const trailStyles = new Map<string, RibbonStyle | null>();
 
   const now = () => world.time;
@@ -1385,6 +1402,57 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     }
   }
 
+  /** Fire and smoke on every damaged, still standing landmark (driven by the sim state, not a pooled fire slot). */
+  function updateLandmarkDamage(t: number, dt: number): void {
+    const list = world.landmarks;
+    if (!list?.length) return;
+    for (const lm of list) {
+      if (!lm.alive || lm.hits <= 0) continue;
+      let acc = landmarkAcc.get(lm);
+      if (!acc) landmarkAcc.set(lm, (acc = { f: 0, s: 0 }));
+      const p = lm.damagePoint;
+      // outward normal of the face that was hit
+      let nx = p.x - lm.base.x;
+      let nz = p.z - lm.base.z;
+      const nl = Math.sqrt(nx * nx + nz * nz) || 1;
+      nx /= nl;
+      nz /= nl;
+      const lod = Math.max(LANDMARK_FIRE.minLod, lodK(distCam(p.x, p.y, p.z)));
+      acc.f += dt * LANDMARK_FIRE.flamesPerSec * ps * lod;
+      while (acc.f >= 1) {
+        acc.f -= 1;
+        const out = 0.5 + rnd() * 3;
+        const side = (rnd() - 0.5) * 10;
+        fireLick(p.x + nx * out - nz * side, p.y + (rnd() - 0.6) * 7, p.z + nz * out + nx * side, nx * 2.5, 3 + rnd() * 5, nz * 2.5, 3.5 + rnd() * 4, 0.7 + rnd() * 0.6, 1, LANDMARK_FIRE.flameMinPx);
+      }
+      acc.s += dt * LANDMARK_FIRE.smokePerSec * ps * lod;
+      while (acc.s >= 1) {
+        acc.s -= 1;
+        resetSpawn(P);
+        P.x = p.x + nx * (2 + rnd() * 4) + (rnd() - 0.5) * 6;
+        P.y = p.y + 2 + rnd() * 4;
+        P.z = p.z + nz * (2 + rnd() * 4) + (rnd() - 0.5) * 6;
+        P.vx = nx * 3 + (rnd() - 0.5) * 2;
+        P.vy = 6 + rnd() * 5;
+        P.vz = nz * 3 + (rnd() - 0.5) * 2;
+        P.drag = 0.3;
+        P.grav = 3.6;
+        P.size0 = 10;
+        P.size1 = 70 + rnd() * 50;
+        P.sizeCurve = 1.6;
+        P.life = 22 + rnd() * 10;
+        P.rot = rnd() * 6.28;
+        P.rotSpeed = (rnd() - 0.5) * 0.15;
+        P.variant = (rnd() * 4) | 0;
+        col0(P, C.smokeDark, 0.9);
+        col1(P, C.smokeMid, 0);
+        P.fadeIn = 0.04;
+        P.minPx = LANDMARK_FIRE.smokeMinPx;
+        smoke.spawn(P, t);
+      }
+    }
+  }
+
   function runDelayed(t: number): void {
     for (const e of delayed) {
       if (!e.active || t < e.t) continue;
@@ -1458,6 +1526,13 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       const k = flame * (night ? 1 : 0.35) * (0.85 + 0.15 * Math.sin(t * 13 + f.t0));
       sprites.add(f.pos.x, f.pos.y + 9 * f.size, f.pos.z, 3.5 * k, 1.5 * k, 0.4 * k, 1, 13 * f.size, night ? 8 : 3);
     }
+    // a damaged landmark's fire glow
+    for (const lm of world.landmarks ?? []) {
+      if (!lm.alive || lm.hits <= 0) continue;
+      const p = lm.damagePoint;
+      const k = (night ? 1 : 0.4) * (0.85 + 0.15 * Math.sin(t * 11));
+      sprites.add(p.x, p.y, p.z, 3.5 * k, 1.5 * k, 0.4 * k, 1, 26, night ? 9 : 4);
+    }
     sprites.end();
   }
   const drawAaa = (e: { firing: boolean; pos: Vector3 }) => {
@@ -1490,6 +1565,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         scanAircraft(t, dt);
         scanDecoys(t, dt);
         updateFires(t, dt);
+        updateLandmarkDamage(t, dt);
         updateShips(t, dt);
         debris.update(dt, groundAt, debrisTrail);
         pulses.update(dt);

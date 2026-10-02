@@ -4,12 +4,16 @@
  * A landmark is not an Entity: it is never in `aircraft` / `sams` / `ground`, so sensors, target
  * cycling, AI, objectives and scoring never see it. It is a static structure with a vertical
  * cylinder-stack hit volume (core/skyTower.ts) that
- *  - the player's bombs, AGMs and AAMs destroy with one hit whose blast reaches it (the gun and
- *    everybody else's munitions do not),
+ *  - the player's bombs, AGMs and AAMs destroy with one hit whose blast reaches it, whatever
+ *    damage it already has (the gun and everybody else's munitions do not),
+ *  - enemy attacks (a one-way drone diving into it, a mission script) hit through hitLandmark() /
+ *    hitSkyTower(): the first hit leaves it damaged and burning ('landmark:damaged'), the second
+ *    (LANDMARK_COLLAPSE_HITS) brings it down,
  *  - stops munitions and gun rounds that fly into it,
  *  - crashes aircraft that fly into it (without hurting it).
  * Once destroyed it plays the scripted collapse (explosions on the timeline in core/skyTower.ts)
  * and emits 'landmark:destroyed' (the mission fails) and 'landmark:impact' (the pod hits the ground).
+ * It is never destroyed for good: every sortie stands up a new, intact one.
  */
 import { Vector3 } from 'three';
 import type { EventBus } from '../core/events';
@@ -19,8 +23,25 @@ import { AKL } from '../core/auckland';
 
 export type LandmarkId = 'skytower';
 
+/** Who brought a landmark down: the player's own munition, or enemy hits (hitLandmark). */
+export type LandmarkCollapseCause = 'player' | 'enemy';
+
 /** A blast reaches the structure (and destroys it) inside this fraction of the warhead's blast radius. */
 export const STRUCTURAL_BLAST_FRACTION = 0.3;
+
+/** Enemy hits that bring a landmark down (the ones before leave it damaged and burning). */
+export const LANDMARK_COLLAPSE_HITS = 2;
+
+/** Where an enemy hit lands when the caller gives no point: the east face, this high (m above the base). */
+export const DEFAULT_HIT_HEIGHT = 150;
+
+/** An enemy hit on a landmark (hitLandmark / hitSkyTower). */
+export interface LandmarkHit {
+  /** Who hit it (entity id; null = a scripted hit). */
+  attackerId?: number | null;
+  /** Where it hit (world): snapped onto the structure's face. Default: the east face at DEFAULT_HIT_HEIGHT. */
+  point?: Vector3;
+}
 
 export class LandmarkEntity {
   readonly kind = 'landmark' as const;
@@ -31,7 +52,15 @@ export class LandmarkEntity {
   fallHeading = 0;
   attackerId: number | null = null;
   weapon: MunitionId | null = null;
+  /** Who brought it down (null = standing). */
+  cause: LandmarkCollapseCause | null = null;
   readonly hitPoint = new Vector3();
+  /** Enemy hits taken (0 = intact, 1 = damaged and burning; LANDMARK_COLLAPSE_HITS collapses it). */
+  hits = 0;
+  /** Sim time of the first enemy hit (-1 = intact). */
+  damagedAt = -1;
+  /** Where the damage burns: the first hit's point on the structure's face. */
+  readonly damagePoint = new Vector3();
   /** Index of the next collapse event to emit. */
   collapseStep = 0;
   /** Horizontal bounding radius (m) of the hit volume. */
@@ -155,7 +184,11 @@ export function firstLandmarkHit(list: readonly LandmarkEntity[] | undefined, a:
   return best;
 }
 
-/** Destroy a landmark (one hit kills): records who did it and the fall heading; emits 'landmark:destroyed'. */
+/**
+ * Destroy a landmark at once: records who did it and the fall heading; emits 'landmark:destroyed'.
+ * The player's munitions call it directly (one hit kills, whatever the hit count); enemy hits go
+ * through hitLandmark(), which calls it with cause 'enemy' on the collapsing hit.
+ */
 export function destroyLandmark(
   lm: LandmarkEntity,
   events: EventBus,
@@ -164,16 +197,73 @@ export function destroyLandmark(
   attackerId: number | null,
   weapon: MunitionId | null,
   attackerPos?: Vector3,
+  cause: LandmarkCollapseCause = 'player',
 ): void {
   if (!lm.alive) return;
   lm.alive = false;
   lm.destroyedAt = time;
   lm.attackerId = attackerId;
   lm.weapon = weapon;
+  lm.cause = cause;
   lm.hitPoint.copy(point);
   lm.fallHeading = fallHeading(lm.base.x, lm.base.z, point.x, point.z, attackerPos?.x, attackerPos?.z);
   lm.collapseStep = 0;
-  events.emit('landmark:destroyed', { landmark: lm, attackerId, weapon, position: lm.hitPoint });
+  events.emit('landmark:destroyed', { landmark: lm, attackerId, weapon, position: lm.hitPoint, cause });
+}
+
+/**
+ * The point on the structure's face nearest `p` (same height, clamped to the structure; a point on
+ * the axis goes to the east face).
+ */
+export function landmarkSurfacePoint(lm: LandmarkEntity, p: Vector3, out: Vector3 = new Vector3()): Vector3 {
+  const y = Math.min(lm.height - 1, Math.max(1, p.y - lm.base.y));
+  let dx = p.x - lm.base.x;
+  let dz = p.z - lm.base.z;
+  const rho = Math.sqrt(dx * dx + dz * dz);
+  if (rho < 1e-3) {
+    dx = 1;
+    dz = 0;
+  } else {
+    dx /= rho;
+    dz /= rho;
+  }
+  let r = 0;
+  for (const part of lm.parts) if (y >= part.y0 && y <= part.y1) r = Math.max(r, part.r);
+  return out.set(lm.base.x + dx * r, lm.base.y + y, lm.base.z + dz * r);
+}
+
+const _hp = new Vector3();
+
+/**
+ * An enemy hit on a landmark (a one-way drone diving into it, a scripted strike): the warhead goes
+ * off on its face; the first hit leaves it damaged and burning there ('landmark:damaged'), the
+ * LANDMARK_COLLAPSE_HITS-th brings it down (destroyLandmark, cause 'enemy'). What a hit means for the
+ * sortie is the mission's call (missions/runtime/landmarks.ts). Returns the hit count (0 if it was
+ * already down).
+ */
+export function hitLandmark(lm: LandmarkEntity, events: EventBus, time: number, hit: LandmarkHit = {}): number {
+  if (!lm.alive) return 0;
+  const attackerId = hit.attackerId ?? null;
+  const from = hit.point ?? _hp.set(lm.base.x + lm.reach, lm.base.y + DEFAULT_HIT_HEIGHT, lm.base.z);
+  const point = landmarkSurfacePoint(lm, from, new Vector3());
+  lm.hits++;
+  events.emit('explosion', { position: point, size: 'large', surface: 'air' });
+  if (lm.hits >= LANDMARK_COLLAPSE_HITS) {
+    destroyLandmark(lm, events, time, point, attackerId, null, undefined, 'enemy');
+    return lm.hits;
+  }
+  if (lm.damagedAt < 0) {
+    lm.damagedAt = time;
+    lm.damagePoint.copy(point);
+  }
+  events.emit('landmark:damaged', { landmark: lm, hits: lm.hits, attackerId, position: point });
+  return lm.hits;
+}
+
+/** hitLandmark() on the Sky Tower of this sortie (if it has one standing): the hit count, or 0. */
+export function hitSkyTower(world: { readonly landmarks: readonly LandmarkEntity[]; readonly events: EventBus; readonly time: number }, hit?: LandmarkHit): number {
+  const lm = world.landmarks.find((l) => l.id === 'skytower');
+  return lm ? hitLandmark(lm, world.events, world.time, hit) : 0;
 }
 
 const _ev = new Vector3();
