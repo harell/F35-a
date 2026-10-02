@@ -1,11 +1,18 @@
 /**
  * MISSIONS — pacing (#59): no campaign mission goes quiet for more than 90 s. A dead stretch is mission
  * time with no radio call, HUD message, launch, kill or objective change (tests/missions-pacing.ts),
- * read from the bot's event log.
+ * read from the bot's event log. The playtest of 2026-10-02 (1.1-i) measured c11 at 131 s; on this
+ * code c11 Pilot seed 0 was 112 s (143–255 s) and seed 2 was 169 s.
  * Measure any mission: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=pilot --seeds=1 --log
  */
 import { describe, expect, it } from 'vitest';
-import { deadStretchText, deadStretches, longestDeadStretch, pacingEventTimes } from './missions-pacing';
+import { missionById, terrainPadsFor } from '../src/missions';
+import { generateTerrain, runSync } from '../src/world/terrain/generate';
+import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
+import { allFeatures } from '../src/world/scenery/Scenery';
+import type { TerrainQuery } from '../src/sim/api';
+import { runPlaythrough } from './missions-bot';
+import { MAX_DEAD_STRETCH, deadStretchText, deadStretches, longestDeadStretch, pacingEventTimes } from './missions-pacing';
 
 describe('pacing: dead stretches in the bot event log (#59)', () => {
   const log = [
@@ -39,4 +46,32 @@ describe('pacing: dead stretches in the bot event log (#59)', () => {
     expect(longestDeadStretch([], 0).length).toBe(0);
     expect(deadStretchText(longestDeadStretch(log, 200))).toBe('125 s (75–200)');
   });
+});
+
+describe('pacing: c11 Grumble has no dead stretch over 90 s (#59)', () => {
+  let terrain: TerrainQuery | null = null;
+  const terrainFor = (id: string): TerrainQuery => {
+    if (!terrain) {
+      const def = missionById(id)!;
+      terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
+    }
+    return terrain;
+  };
+
+  // async, yielding after every playthrough: a long synchronous stretch starves vitest's worker RPC
+  // (see tests/missions-instant-balance.test.ts)
+  it('logged Pilot runs, seeds 0–2 (seed 0 was 112 s waiting on a GBU-39, seed 2 169 s before the reserve scrambled)', { timeout: 300_000 }, async () => {
+    for (const seed of [0, 1, 2]) {
+      const r = runPlaythrough('c11', 'pilot', seed, terrainFor('c11'), { maxT: 900, log: true });
+      const worst = longestDeadStretch(r.events, r.t);
+      expect(worst.length, `c11 pilot seed ${seed}: ${r.state}@${r.t}s, longest dead stretch ${deadStretchText(worst)}`).toBeLessThanOrEqual(MAX_DEAD_STRETCH);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  });
+
+  // Re-measure once the layers that are rewriting these missions land (#57 c02, #58 c04, #65 c08).
+  // Pilot seed 0 on this code: c02 124 s (131–255), c04 141 s (86–227), c08 95 s (7–102).
+  it.todo('c02: no dead stretch over 90 s on Pilot seed 0 (after #57; the rearm trip is gone with #63)');
+  it.todo('c04: no dead stretch over 90 s on Pilot seed 0 (after #58)');
+  it.todo('c08: no dead stretch over 90 s on Pilot seed 0 (after #65)');
 });

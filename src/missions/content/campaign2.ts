@@ -576,6 +576,25 @@ export const C11: MissionDef = mission({
         delay: 2,
         actions: [{ kind: 'radio', from: 'Weasel 1', text: 'Weasel 1, two-ship, pushing on the Tor. Magnum in about a minute — Viper 1, time your shots on the Grumble with ours.', priority: 2 }],
       },
+      // Pacing (#59): once the CAP fight is over, the wait for a glide bomb or a low run-in to the
+      // Grumble went silent for 100–200 s (playtest 2026-10-02, 1.1-i). While the Grumble lives,
+      // Darkstar counts down to the reserve's 330 s scramble, so nothing is quiet for more than
+      // ~70 s between the CAP fight and the reserve's pop-up call. (A dead Grumble ends the mission.)
+      {
+        id: 't_pace_up',
+        when: { kind: 'all', of: [{ kind: 'time', t: 130 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa10', state: 'complete' } }] },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Grumble is still up and searching. Every release opens your bays: fire, then beam and descend.', priority: 2 }],
+      },
+      {
+        id: 't_pace_engines',
+        when: { kind: 'all', of: [{ kind: 'time', t: 200 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa10', state: 'complete' } }] },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Their reserve Su-35s are starting engines. Two minutes and they launch, Grumble or not.', priority: 2 }],
+      },
+      {
+        id: 't_pace_taxi',
+        when: { kind: 'all', of: [{ kind: 'time', t: 270 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa10', state: 'complete' } }] },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The reserve Su-35s are taxiing. One minute.', priority: 2 }],
+      },
       {
         id: 't_dead',
         when: { kind: 'objective', id: 'o_sa10', state: 'complete' },
