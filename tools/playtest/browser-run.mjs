@@ -8,7 +8,7 @@
  *   npx vite --config vite.e2e.config.ts --port 5190 &      # test hooks are on in dev
  *   node tools/playtest/browser-run.mjs --mission=c09 [--at=0,30,120,300] [--view=chase|cockpit|hud|...]
  *       [--missions=c01,c02,ia_defend_auckland] [--loadout=strike_sdb2] [--shots=0] [--text]
- *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}']
+ *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}'] [--seed=7]
  *       [--device=phone|desktop] [--base=http://localhost:5190/] [--out=e2e/screenshots/playtest]
  *
  * --at: game-time checkpoints in seconds (default 0,60,180). Output: <out>/<mission>-<t>s.png per
@@ -17,9 +17,13 @@
  * --missions: several missions in ONE page (the first by URL, the rest with window.__f35.fly), about
  * 2× faster than a page load each. --shots=0 skips the screenshots (state and draw calls only).
  * State is read after five rendered frames (two weren't enough for a settled `renderer` read), and
- * even then draw calls vary ±10–20 % frame to frame (the target camera PiP alone adds 20–55 calls):
- * compare runs, not single reads. A mission that fails to start is reported and skipped; the run
- * exits 1 at the end.
+ * even then draw calls vary ±10–20 % frame to frame. `state.renderer.pip` says whether the target
+ * camera window was open and drawn in that frame and what its pass cost (`calls`, `triangles`): compare
+ * reads with the same PiP state. A mission that fails to start is reported and skipped; the run exits 1
+ * at the end.
+ * --seed: a fixed combat RNG seed (`?seed=`), and the sim clock held at t = 0 until each simulate(), so
+ * two runs of the same mission read the same game time and the same draw calls (#66). Without it every
+ * run rolls its own seed and the real-time loop runs a few frames first.
  * --text: also record every string the HUD draws (canvas fillText) over 8 frames at each checkpoint, as
  * `hudText`, so a blinking cue (IN RANGE, SHOOT) is caught even when a screenshot lands on its off phase.
  * Exit code 1 on page errors or if a mission never starts.
@@ -92,6 +96,7 @@ for (const [k, mission] of missions.entries()) {
     const q = new URLSearchParams({ mission, autostart: '1', view, quality: args.quality || 'low' });
     if (args.difficulty) q.set('difficulty', args.difficulty);
     if (args.loadout) q.set('loadout', args.loadout);
+    if (args.seed !== undefined) q.set('seed', String(args.seed));
     await page.goto(`${base}?${q}`, { waitUntil: 'load' });
   }
   try {
