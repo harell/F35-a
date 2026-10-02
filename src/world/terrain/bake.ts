@@ -27,6 +27,7 @@ import {
   MAT_BUSH,
   MAT_CONE,
   MAT_CLEARING,
+  MAT_PINE,
 } from './types';
 import { createVegetation } from './vegetation';
 
@@ -155,6 +156,9 @@ const PAL = {
     paddockC: hex(0x9cae62),
     bush: hex(0x2d4a27),
     bushLight: hex(0x3c5c30),
+    pine: hex(0x223a2c),
+    pineLight: hex(0x2c4733),
+    pineForest: hex(0x233b2e),
     urban: hex(0x86837a),
     urbanGreen: hex(0x66705a),
     beach: hex(0xd2bf92),
@@ -351,6 +355,11 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
               mix(tmp, p.bush, p.bushLight, sstep(-0.3, 0.5, n2));
               blendInto(col, tmp, 0.5 + 0.5 * aux);
               break;
+            case MAT_PINE:
+              // plantation: darker, bluer and more even than the native bush
+              mix(tmp, p.pine, p.pineLight, sstep(-0.2, 0.6, n2));
+              blendInto(col, tmp, 0.45 + 0.55 * aux);
+              break;
             case MAT_VOLCANIC:
               // Rangitoto: black basalt lava fields under pōhutukawa bush — no pasture underneath
               mix(col, p.lava, p.lavaBush, sstep(0.35, 0.75, aux + 0.12 * n2));
@@ -532,6 +541,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
         const pal = P[theater] as Record<string, RGB>;
         let fc = pal.forest;
         if (theater === 'mountains' && h > 1100) fc = P.mountains.conifer;
+        else if (mat === MAT_PINE) fc = P.auckland.pineForest;
         blendInto(col, fc, forest * (theater === 'arctic' ? 0.55 : 0.8));
       }
 

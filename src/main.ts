@@ -26,17 +26,28 @@ function showFatal(msg: string): void {
   track('fatal_error');
 }
 
-function webgl2Available(): boolean {
+/** Can this browser create a context of `kind` right now? The probe context is released straight away. */
+function contextAvailable(kind: 'webgl2' | 'webgl'): boolean {
   try {
-    return !!document.createElement('canvas').getContext('webgl2');
+    const gl = document.createElement('canvas').getContext(kind) as WebGLRenderingContext | WebGL2RenderingContext | null;
+    (gl?.getExtension('WEBGL_lose_context') as { loseContext?: () => void } | null)?.loseContext?.();
+    return !!gl;
   } catch {
     return false;
   }
 }
 
-if (!webgl2Available()) {
+if (!contextAvailable('webgl2')) {
+  // Usually not an old browser: WebGL is switched off by disabled hardware acceleration, a blocklisted
+  // GPU/driver, or the browser turning it off after a GPU crash (which a browser restart clears).
+  // WebGL 1 still working narrows it to WebGL 2 alone (blocklist, or a pre-15 Safari).
   track('no_webgl2');
-  showFatal('F35-A needs WebGL 2. Please use an up-to-date Chrome, Safari (iOS 15+) or Firefox.');
+  track(contextAvailable('webgl') ? 'webgl1_only' : 'no_webgl');
+  showFatal(
+    'F35-A could not start WebGL 2 graphics. Fully quit and reopen the browser, and check that ' +
+      'hardware (graphics) acceleration is turned on in its settings. ' +
+      'If it still fails, use an up-to-date Chrome, Safari (iOS 15+) or Firefox.',
+  );
 } else {
   const game = new Game(document.getElementById('app')!);
   // the real coastline for the menu chart (and the first mission): fetched once the page is idle

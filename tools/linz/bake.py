@@ -4,18 +4,24 @@ Bake LINZ elevation into compact game data for the Auckland theatre.
 Inputs (from fetch.py, NZTM2000 / EPSG:2193 mosaics at 16 m):
   dem1m_16.npz  national 1 m LiDAR DEM, read at its 16 m overview  -> land heights
   dem8m_16.npz  national contour 8 m DEM at 16 m                     -> land/sea mask (MHW coast)
+and (from landcover.py):
+  veg-50306.json / veg-50267.json / veg-50339.json   Topo50 native / exotic / scrub polygons -> land cover
+  depare-*.json ENC depth area polygons (Hydro) at four chart scales                            -> water depth
 Outputs (gzip):
   src/world/terrain/data/auckland-linz.bin     (decoded by src/world/terrain/theaters/aucklandLinz.ts, every tier)
     - coastline rings in game metres (even-odd: land = inside an odd number of rings)
     - 1024² height grid sampled at the exact Heightfield sample positions
+    - 512² land cover (class + tree cover) and water depth grids at the 1024 grid's even samples (version 2)
   src/world/terrain/data/auckland-linz-hd.bin  (decoded by src/world/terrain/theaters/aucklandLinzHd.ts, high tier only)
     - 2048² detail: the real 2048 grid minus the Catmull-Rom upsample of the 1024 grid (what generate.ts's
       upsample2x reconstructs), so the high tier gets the real 43 m terrain instead of procedural noise
 Game coordinates: origin = Sky Tower, +X east, +Z south, equirectangular (src/core/auckland.ts).
 """
-import gzip, sys, numpy as np
+import gzip, json, sys, numpy as np
+from rasterio.features import rasterize
+from rasterio.transform import from_origin
 from pyproj import Transformer
-from scipy.ndimage import map_coordinates, gaussian_filter, binary_fill_holes, label, maximum_filter
+from scipy.ndimage import map_coordinates, gaussian_filter, binary_fill_holes, label, maximum_filter, uniform_filter, distance_transform_edt
 from skimage.measure import find_contours
 from shapely.geometry import Polygon
 
@@ -126,16 +132,106 @@ for N in (1024,):
     grids[N] = encode_heights(v)
     print(N, 'max', v.max(), 'gz', len(gzip.compress(grids[N].tobytes(), 9)))
 
+# ── Land cover and bathymetry on a 512² grid (the 1024 grid's even samples; the game interpolates) ──
+# 172 m cells keep both under ≈ 90 kB gzip (1024² would cost ≈ 105 + 130 kB): the charts are drawn for 1:22k+,
+# and interpolated tree cover still puts a forest edge within a fraction of a cell.
+N = 1024
+NA = 512
+cell = HF_EXTENT / NA
+pos = -HF_EXTENT / 2 + np.arange(NA) * cell
+hx, hz = np.meshgrid(pos, pos)
+water = sample(landf, hx, hz) < 0.5             # the coastline's side of every sample (rings = landf 0.5 contour)
+box = int(round(cell / R)) | 1                  # 11 mosaic cells ≈ one 172 m grid cell
+
+def sstep(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
+
+# Land cover: the share of each cell covered by the Topo50 polygons of each class (rasterised on the 16 m NZTM
+# mosaic grid, box-averaged over one cell). Byte = class << 3 | total cover in 0..7, class = the largest share.
+VEG = (50306, 50267, 50339)                     # class 1 native bush, 2 exotic forest (pines), 3 scrub
+T16 = from_origin(X0, Y1, R, R)
+cov = []
+for layer in VEG:
+    feats = json.load(open(f'{D}/veg-{layer}.json'))['features']
+    m = rasterize(((f['geometry'], 1) for f in feats if f['geometry']), out_shape=h1.shape, transform=T16, dtype='uint8')
+    cov.append(sample(uniform_filter(m.astype(np.float32), box), hx, hz))
+    print('cover', layer, len(feats), 'polygons', round(float((cov[-1] > 0.5).mean()) * 100, 2), '% of the grid')
+cov = np.stack(cov)
+cq = np.round(np.minimum(cov.sum(0), 1) * 7).astype(np.uint8)
+cover = np.where((cq > 0) & ~water, ((np.argmax(cov, 0) + 1) << 3) | cq, 0).astype(np.uint8)
+
+# Bathymetry, game datum (y = 0 is the coastline's mean high water), from the ENC depth areas: each polygon is a
+# depth band [drval1, drval2] below chart datum (≈ lowest tide; drval1 < 0 = a drying flat's height above it).
+# On a 32 m grid the finest chart scale available wins; inside a band the depth runs from drval1 at the edge
+# shared with shallower water (or the shore) to drval2 at the edge shared with deeper water, in proportion to the
+# distances to the two. Drying flats are the exception (below). Chart datum lies a tide range below MHW: the highest drying height near each point
+# (≈ MHWS: 4.2 m in the Manukau, 3.1-3.3 m in the Waitematā) less 0.3 m.
+SQ = 0.1                                        # quantum of √depth: ±0.1 m at 1 m, ±0.5 m at 25 m
+DR = 2 * R                                      # depth raster cell (32 m), aligned with the mosaics
+dshape = ((h1.shape[0] + 1) // 2, (h1.shape[1] + 1) // 2)
+T32 = from_origin(X0, Y1, DR, DR)
+d1 = np.full(dshape, np.nan, np.float32)
+d2 = np.full(dshape, np.nan, np.float32)
+for layer in (50852, 50447, 50553, 50671):      # coarse to fine: finer charts paint over coarser ones
+    feats = [f for f in json.load(open(f'{D}/depare-{layer}.json'))['features'] if f['geometry'] and f['properties']['drval2'] is not None]
+    for k, arr in (('drval1', d1), ('drval2', d2)):
+        v = rasterize(((f['geometry'], float(f['properties'][k])) for f in feats), out_shape=dshape, transform=T32, fill=np.nan, dtype='float32')
+        arr[~np.isnan(v)] = v[~np.isnan(v)]
+land32 = land[::2, ::2][:dshape[0], :dshape[1]]
+charted = ~np.isnan(d1) & ~land32
+cd = np.full(dshape, np.nan, np.float32)
+for lv in np.unique(d1[charted]):
+    m = charted & (d1 == lv)
+    shallower = land32 | (charted & (d1 < lv))
+    deeper = charted & (d1 > lv)
+    ds = distance_transform_edt(~shallower) * DR
+    dd = distance_transform_edt(~deeper) * DR if deeper.any() else np.full(dshape, np.inf)
+    if lv < 0:
+        # drying flat: banks stay near mid-tide level (≈ 55 % of the highest drying height ≈ mean sea level)
+        # and fall off to chart datum only within 400 m of deeper water
+        top = 0.55 * lv
+        cd[m] = (top + (d2 - top) * np.maximum(0, 1 - dd / 400))[m]
+        continue
+    t = np.where(np.isfinite(dd), ds / np.maximum(ds + dd, 1e-6), np.minimum(1, ds / 1500))
+    cd[m] = (d1 + (d2 - d1) * t)[m]
+# chart datum -> MHW: the nearest drying flat's height limit
+dry = charted & (d1 < 0)
+_, (di, dj) = distance_transform_edt(~dry, return_indices=True)
+mhw_cd = -d1[di, dj] - 0.3
+sea32 = ~land32
+_, (ci, cj) = distance_transform_edt(~charted, return_indices=True)
+depth32 = np.where(charted, cd, cd[ci, cj]) + mhw_cd   # uncharted water (creeks): the nearest charted depth
+depth32 = np.where(sea32, np.maximum(depth32, 0.3), 0).astype(np.float32)
+print('charted', round(float(charted.sum() / sea32.sum()) * 100, 1), '% of the water; MHW above CD',
+      np.percentile(mhw_cd[sea32], [5, 50, 95]).round(2))
+
+def sample32(img, x, z):
+    E, Nn = tr.transform(O_LON + x / M_LON, O_LAT - z / M_LAT)
+    return map_coordinates(img, [(Y1 - Nn) / DR - 0.5, (E - X0) / DR - 0.5], order=1, mode='nearest')
+
+wsum = sample32(uniform_filter(sea32.astype(np.float32), 5), hx, hz)
+depth = sample32(uniform_filter(depth32, 5), hx, hz) / np.maximum(wsum, 1e-6)   # mean over the water in a cell
+# land samples within 2 cells of the water take the nearest water depth (bilinear lookups along the shore)
+dist, (ii, jj) = distance_transform_edt(~water, return_indices=True)
+depth = np.where(water, np.maximum(depth, 0.3), np.where(dist <= 2, np.maximum(depth[ii, jj], 0.3), 0.0))
+print('depth: water samples', int(water.sum()), 'pct', np.percentile(depth[water], [1, 25, 50, 75, 99]).round(1))
+cover_bytes = cover.tobytes()
+depth_bytes = encode_heights(np.sqrt(depth) * (HQ / SQ)).tobytes()   # encode_heights quantises by HQ
+print('cover gz', len(gzip.compress(cover_bytes, 9)), 'depth gz', len(gzip.compress(depth_bytes, 9)))
+
 # ── Pack: one gzip-compressed binary, fetched once by the game (Vite-hashed asset) ──
-#   'AKLZ' | u32 version | f32 coast quantum | f32 height quantum | u32 rings | u32 vertices
-#   | u32 grid n | f32 grid extent | u32[rings] ring sizes | i16[2·vertices] x,z | residual bytes
+#   'AKLZ' | u32 version (2) | f32 coast quantum | f32 height quantum | u32 rings | u32 vertices
+#   | u32 grid n | f32 grid extent | u32[rings] ring sizes | i16[2·vertices] x,z | height residual bytes
+#   | u32 aux grid n | u8[aux n²] land cover (class << 3 | cover 0..7) | f32 √depth quantum
+#   | √depth residual bytes (same coder; depth > 0 below the waterline, 0 inland)
 import struct
 ring_hdr = np.array([len(r) for r in rings], '<u4')
 ring_xy = np.concatenate(rings)
 assert np.abs(ring_xy).max() < 32767
-N = 1024
-body = (b'AKLZ' + struct.pack('<IffIIIf', 1, Q, HQ, len(rings), nv, N, HF_EXTENT)
-        + ring_hdr.tobytes() + ring_xy.astype('<i2').tobytes() + grids[N].tobytes())
+body = (b'AKLZ' + struct.pack('<IffIIIf', 2, Q, HQ, len(rings), nv, N, HF_EXTENT)
+        + ring_hdr.tobytes() + ring_xy.astype('<i2').tobytes() + grids[N].tobytes()
+        + struct.pack('<I', NA) + cover_bytes + struct.pack('<f', SQ) + depth_bytes)
 data = gzip.compress(body, 9, mtime=0)
 open(OUT, 'wb').write(data)
 print('wrote', OUT, len(body), 'bytes raw,', len(data), 'gzip')
