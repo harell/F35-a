@@ -60,12 +60,10 @@ import {
   missionById,
   saveProgress,
   terrainPadsFor,
-  markSkyTowerDown,
-  skyTowerRuin,
   followActiveScheme,
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
-import { destroyLandmark } from '../sim/landmarks';
+import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { FlowInterrupt } from './flow';
 
 const FIXED_DT = 1 / 60;
@@ -351,8 +349,7 @@ export class Game {
 
     const scene = new Scene();
     const pads = terrainPadsFor(def);
-    // the Sky Tower stays down once destroyed (progress.ts decides for how long)
-    const towerRuin = def.theater === 'auckland' ? skyTowerRuin(this.progress) : null;
+    // (the Sky Tower is never destroyed for good: every start and restart builds it intact)
     const env = await createEnvironment(scene, this.renderer, {
       theater: def.theater,
       timeOfDay: def.timeOfDay,
@@ -362,14 +359,13 @@ export class Game {
       pads,
       quality: this.quality,
       onProgress: (f, label) => this.ui.showLoading(0.05 + f * 0.75, label),
-      skyTowerRuin: towerRuin,
     });
     this.ui.showLoading(0.82, 'Spawning forces');
     await nextFrame();
 
     const combat = createCombatSystem();
     const world = createSimWorld({ terrain: env.terrain, difficulty, events: this.events, combat });
-    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events, skyTowerDown: !!towerRuin });
+    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events });
     runner.setup(world, loadout);
 
     this.ui.showLoading(0.9, 'Arming weapons');
@@ -573,12 +569,12 @@ export class Game {
     e.on('gun:state', ({ shooterId, firing }) => {
       if (firing && isPlayer(shooterId)) buzz(15);
     });
-    // the Sky Tower stays down: save it at once (quitting before the debrief must not undo it)
+    // the Sky Tower (it is never saved: the next sortie stands it up again)
+    e.on('landmark:damaged', ({ landmark }) => {
+      if (this.session?.world.landmarks.includes(landmark)) buzz([60, 40, 60]);
+    });
     e.on('landmark:destroyed', ({ landmark }) => {
-      if (!this.session || !this.session.world.landmarks.includes(landmark)) return;
-      this.progress = markSkyTowerDown(this.progress, landmark.fallHeading);
-      saveProgress(this.progress);
-      buzz([80, 40, 200]);
+      if (this.session?.world.landmarks.includes(landmark)) buzz([80, 40, 200]);
     });
   }
 
@@ -862,6 +858,8 @@ export class Game {
               }
             : null,
           skyTower: s ? (s.world.landmarks.find((l) => l.id === 'skytower')?.alive ?? null) : null,
+          /** Enemy hits on the Sky Tower (0 intact, 1 damaged; null = no tower this sortie). */
+          skyTowerHits: s ? (s.world.landmarks.find((l) => l.id === 'skytower')?.hits ?? null) : null,
           objectives: s?.runner.objectives ?? [],
           renderer: { calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles },
         };
@@ -964,6 +962,13 @@ export class Game {
         if (!s || !lm || !p) return false;
         destroyLandmark(lm, this.events, s.world.time, new Vector3(lm.base.x + 12, lm.base.y + y, lm.base.z), p.id, 'gbu31', p.position);
         return true;
+      },
+      /** An enemy hit on the Sky Tower at height `y` (m above its base, from the east): the first damages it, the second collapses it. Returns the hit count (0 = no tower standing). */
+      hitSkyTower: (y = 150) => {
+        const s = this.session;
+        const lm = s?.world.landmarks.find((l) => l.id === 'skytower');
+        if (!s || !lm) return 0;
+        return hitSkyTower(s.world, { point: new Vector3(lm.base.x + 30, lm.base.y + y, lm.base.z) });
       },
       /** Target camera (PiP) state: window rect, target shown, last rendered target. */
       targetCam: () => ({

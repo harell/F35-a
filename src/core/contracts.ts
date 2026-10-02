@@ -79,8 +79,6 @@ export interface EnvironmentOptions {
   pads: { x: number; z: number; radius: number }[];
   quality: QualitySettings;
   onProgress?: (fraction: number, label: string) => void;
-  /** Auckland: the Sky Tower is already down in this save — show its ruin (fall heading, rad). */
-  skyTowerRuin?: { fallHeading: number } | null;
 }
 
 export interface EnvironmentApi {
@@ -357,8 +355,6 @@ export type CreateMissionRunner = (
     createAi: CreateAiBrain;
     difficulty: DifficultyParams;
     events: EventBus;
-    /** The Sky Tower is already down in this save (no tower to stand up). */
-    skyTowerDown?: boolean;
   },
 ) => MissionRunnerApi;
 

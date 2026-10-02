@@ -8,7 +8,8 @@
  *  - Collapse: SkyTowerVisual follows the sim's Sky Tower landmark. Once it is destroyed the lights
  *    go out and the upper section / mast are posed from collapsePose(world time − destroyedAt), then
  *    swapped for the ruin (jagged stump + rubble along the fall line) under the impact dust.
- *  - Already down (saved progress): only the ruin is built.
+ *  - It is never down at the start of a sortie (issue #75): every scene builds it standing. An enemy
+ *    hit's fire and smoke are effects (render/effects/Effects.ts), not geometry.
  */
 import { Color, Group, Mesh, Quaternion, Vector3, type Material, type Object3D, type Points } from 'three';
 import { AKL } from '../../core/auckland';
@@ -248,7 +249,7 @@ export class SkyTowerVisual {
   readonly group = new Group();
   /** Bright tower lights near / above the water, for the harbour reflections (empty when down). */
   readonly reflectionSources: ReflectionSource[] = [];
-  private readonly pieces: Pieces | null = null;
+  private readonly pieces: Pieces;
   private ruin: Mesh | null = null;
   private reflections: Object3D | null = null;
   private broken = false;
@@ -259,16 +260,9 @@ export class SkyTowerVisual {
     private readonly material: Material,
     lightsMaterial: Material | null,
     private readonly height: HeightFn,
-    /** Already down in this save: build the ruin only. */
-    ruinHeading: number | null,
   ) {
     this.group.name = 'akl-skytower';
     this.g = skyTowerGround(height);
-    if (ruinHeading !== null) {
-      this.buildRuin(ruinHeading);
-      this.broken = true;
-      return;
-    }
     const { x, z } = AKL.skytower;
     const C = COLLAPSE;
     const mesh = (b: GeometryBuilder, name: string): Mesh => {
@@ -317,7 +311,7 @@ export class SkyTowerVisual {
   /** Follow the sim's Sky Tower (if this sortie has one). */
   update(world: SimWorld | null | undefined): void {
     const p = this.pieces;
-    if (!p || !world?.landmarks) return;
+    if (!world?.landmarks) return;
     let lm: LandmarkEntity | null = null;
     for (const l of world.landmarks) if (l.id === 'skytower') lm = l;
     if (!lm || lm.alive) return;

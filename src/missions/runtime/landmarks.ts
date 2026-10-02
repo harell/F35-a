@@ -1,13 +1,16 @@
 /**
  * F35-A — protected landmarks in the mission runtime: the Auckland Sky Tower.
  *
- * Every Auckland sortie stands the tower up as a sim landmark (unless the save says it is already
- * down: then the scenery shows the stump and rubble and there is nothing to hit). The player
- * bringing it down is an immediate mission failure in every mode (survival ends the run): AWACS
- * calls check fire, the HUD flags it, and the runner fails with REASONS.skytower while the
- * collapse plays on.
+ * Every Auckland sortie stands up a new, intact tower as a sim landmark: it is never destroyed for
+ * good (issue #75), so a start or restart always finds it standing, whatever happened before.
+ *  - An enemy hit (sim/landmarks.ts hitSkyTower) leaves it damaged and burning: AWACS calls it, the
+ *    HUD flags it, and the sortie goes on.
+ *  - The second enemy hit brings it down: the mission fails with REASONS.skytowerLost.
+ *  - The player bringing it down (one bomb or missile, whatever its damage) is an immediate failure
+ *    in every mode (survival ends the run): AWACS calls check fire, the HUD flags it, and the runner
+ *    fails with REASONS.skytower while the collapse plays on.
  */
-import { createSkyTower, type LandmarkEntity } from '../../sim/landmarks';
+import { createSkyTower, type LandmarkCollapseCause, type LandmarkEntity } from '../../sim/landmarks';
 import { AKL } from '../../core/auckland';
 import { URGENT_PRIORITY } from './radio';
 import { REASONS } from './reasons';
@@ -15,7 +18,7 @@ import type { MissionState } from './state';
 
 export class LandmarkWatch {
   private unsubs: (() => void)[] = [];
-  /** The tower this sortie stood up (null outside Auckland / already down). */
+  /** The tower this sortie stood up (null outside Auckland). */
   tower: LandmarkEntity | null = null;
 
   constructor(
@@ -26,20 +29,18 @@ export class LandmarkWatch {
 
   setup(): void {
     const s = this.s;
-    if (s.def.theater !== 'auckland' || s.deps.skyTowerDown) return;
+    if (s.def.theater !== 'auckland') return;
     const { x, z } = AKL.skytower;
     this.tower = createSkyTower(s.world.terrain.surfaceHeightAt(x, z));
     s.world.landmarks.push(this.tower);
     this.unsubs.push(
-      s.events.on('landmark:destroyed', ({ landmark }) => {
-        if (landmark === this.tower && !s.disposed) this.onDestroyed();
+      s.events.on('landmark:damaged', ({ landmark }) => {
+        if (landmark === this.tower && !s.disposed) this.onDamaged();
+      }),
+      s.events.on('landmark:destroyed', ({ landmark, cause }) => {
+        if (landmark === this.tower && !s.disposed) this.onDestroyed(cause);
       }),
     );
-  }
-
-  /** Fall heading (rad) if the tower came down this sortie, else null. */
-  get downHeading(): number | null {
-    return this.tower && !this.tower.alive ? this.tower.fallHeading : null;
   }
 
   detach(): void {
@@ -47,14 +48,27 @@ export class LandmarkWatch {
     this.unsubs = [];
   }
 
-  private onDestroyed(): void {
+  private onDamaged(): void {
     const s = this.s;
-    s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, the Sky Tower is coming down!`, priority: URGENT_PRIORITY });
+    if (s.state !== 'running') return;
+    s.radio.push({ from: s.awacsCallsign, text: `Sky Tower is hit! ${s.callsign}, it's burning. It won't take another one!`, priority: URGENT_PRIORITY });
+    s.hud('SKY TOWER HIT', 'warn', 4);
+  }
+
+  private onDestroyed(cause: LandmarkCollapseCause): void {
+    const s = this.s;
+    const byPlayer = cause === 'player';
+    s.radio.push({
+      from: s.awacsCallsign,
+      text: byPlayer ? `Check fire, check fire! ${s.callsign}, the Sky Tower is coming down!` : `The Sky Tower is coming down! ${s.callsign}, we've lost the Sky Tower.`,
+      priority: URGENT_PRIORITY,
+    });
     s.hud('SKY TOWER DESTROYED', 'bad', 4);
     if (s.state !== 'running') return;
+    const reason = byPlayer ? REASONS.skytower : REASONS.skytowerLost;
     if (s.script.survival) {
       const n = s.waves;
-      this.fail(`${REASONS.skytower} — survived ${n} wave${n === 1 ? '' : 's'}`);
-    } else this.fail(REASONS.skytower);
+      this.fail(`${reason} — survived ${n} wave${n === 1 ? '' : 's'}`);
+    } else this.fail(reason);
   }
 }

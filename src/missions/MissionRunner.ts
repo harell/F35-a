@@ -10,8 +10,8 @@
  *
  * Helper modules live in ./runtime (state, spawner, conditions, objectives, awacs, hints,
  * callouts, survival, scoring, rearm (Winchester / Whenuapai rearm point), withdrawal (bandits
- * that bug out count as driven off), debrief (tips, medals), landmarks (the Sky Tower: destroying
- * it fails the mission)).
+ * that bug out count as driven off), debrief (tips, medals), landmarks (the Sky Tower: an enemy hit
+ * damages it, a second or the player's own munition brings it down and fails the mission)).
  * dispose(): detaches every event handler and drops the world / entity references (Game calls it
  * on teardown — restarts must not leak the previous session).
  */
@@ -290,8 +290,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
-    const towerDown = this.landmarks.downHeading;
-    if (towerDown !== null) (r as MissionResultExt).skyTowerDown = { fallHeading: towerDown };
     r.tips = buildTips(s, r);
     r.medals = awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
