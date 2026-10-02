@@ -1,12 +1,14 @@
 /**
  * LINZ road centrelines for the Auckland theatre (phase 2a: the real CBD street layout).
  *
- * src/world/terrain/data/auckland-roads.bin is baked offline by tools/linz/roads.ts from Toitū Te Whenua
- * LINZ open data (CC BY 4.0): NZ Addresses road sections (layer 123109) and Topo50 tunnel
- * centrelines (layer 50366), reprojected to game XZ with geoToWorld (src/core/auckland.ts). It holds
+ * src/world/terrain/data/auckland-roads.bin is baked offline by tools/linz/roads.ts (and the railways by
+ * tools/linz/railways.ts) from Toitū Te Whenua LINZ open data (CC BY 4.0): NZ Addresses road sections
+ * (layer 123109), Topo50 railway centrelines (layer 50319) and tunnel centrelines (layer 50366),
+ * reprojected to game XZ with geoToWorld (src/core/auckland.ts). It holds
  *  - every street inside the CBD region (painted by the terrain shader, see cbdStreets.ts),
  *  - the motorway carriageways of the whole theatre (road ribbons, motorways.ts),
  *  - the main arterials (road ribbons),
+ *  - the railway lines (kind ROAD_RAIL, ballast-and-track ribbons, width = the formation),
  *  - the CBD region polygon: the area that uses the real streets instead of the procedural grid.
  *    Its border runs along the SH1 / SH16 carriageways, Stanley St / Beach Rd and out into the
  *    harbour, so the hand-over to the procedural suburbs happens under a motorway, not across a block.
@@ -27,7 +29,9 @@ export const ROADS_URL: string = roadsUrl;
 export const ROAD_STREET = 0;
 export const ROAD_MOTORWAY = 1;
 export const ROAD_ARTERIAL = 2;
-export type RoadKind = typeof ROAD_STREET | typeof ROAD_MOTORWAY | typeof ROAD_ARTERIAL;
+/** Railway lines (Topo50 railway centrelines, baked by tools/linz/railways.ts). */
+export const ROAD_RAIL = 3;
+export type RoadKind = typeof ROAD_STREET | typeof ROAD_MOTORWAY | typeof ROAD_ARTERIAL | typeof ROAD_RAIL;
 
 export interface RoadLine {
   name: string;
