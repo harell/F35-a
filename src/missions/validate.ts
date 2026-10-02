@@ -154,6 +154,7 @@ export function validateMission(def: MissionDef): string[] {
       if (!(g.speed >= 30)) err(`${where} drone speed below 30 m/s`);
       inWorld(g.oneWay.targetX, g.oneWay.targetZ, `${where} drone target`);
       g.oneWay.route?.forEach((q, i) => inWorld(q.x, q.z, `${where} drone route ${i}`));
+      if (g.oneWay.stagger !== undefined && !(g.oneWay.stagger >= 0 && g.oneWay.stagger <= 500)) err(`${where} drone stagger outside 0–500 m`);
     } else if (!(g.speed >= 100)) err(`${where} speed below 100 m/s`);
     checkCond(g.spawn, where);
     checkTask(g.task, where);

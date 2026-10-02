@@ -135,6 +135,13 @@ export interface OneWayDef {
   targetY?: number;
   /** Waypoints flown before the dive (m). */
   route?: { x: number; z: number }[];
+  /**
+   * Each member flies this much further back than the one before it (m), on top of its formation
+   * slot (default 0). Drones converging on one target from a row abreast close up into a bunch over
+   * the last kilometre, where one missile can take several; staggered, every drone has its own
+   * place along the track, so the swarm funnels into single file at least this far apart.
+   */
+  stagger?: number;
 }
 
 export interface AircraftGroupDef {

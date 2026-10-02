@@ -40,6 +40,13 @@ export const G01_SWARM = {
   lastLeg: 1200,
   /** Distance between drones (m): rows 80 m apart, 80 m between the drones of a row. */
   spacing: 80,
+  /**
+   * Each drone flies this much further back than the one before it (m): each row is stepped back
+   * like an echelon. Converging on the tower, the swarm funnels into single file instead of each
+   * row closing up into a bunch, so one missile never takes two drones (an AIM-120 kills a Shahed
+   * out to about 25 m) and a gun pass from behind can walk through two in a row.
+   */
+  stagger: 65,
   count: 10,
 } as const;
 
@@ -83,6 +90,7 @@ export const G01: MissionDef = mission({
         callsign: 'Shahed',
         noun: 'Shaheds',
         oneWay: {
+          stagger: G01_SWARM.stagger,
           targetX: TOWER.x,
           targetZ: TOWER.z,
           targetY: G01_SWARM.targetY,

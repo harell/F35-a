@@ -18,6 +18,8 @@ import { createAiBrain } from '../src/ai';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { MUNITIONS } from '../src/sim/weapons/defs';
+import { AIRCRAFT_HEALTH } from '../src/sim/damage/tables';
+import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import type { AircraftEntity } from '../src/sim/entities';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
@@ -27,6 +29,15 @@ import { MissionBot, type MissionBotOptions } from './missions-bot';
 
 const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
 const AAMS = ['aim120', 'aim9x'] as const;
+
+/**
+ * Farthest from a Shahed that one air-to-air missile's burst kills it outright (m): the blast falls
+ * off linearly from the hull (sim/weapons/flight.ts applyBlast). About 25 m for the AIM-120.
+ */
+const SHAHED_HP = AIRCRAFT_HEALTH.shahed136 ?? 0;
+const SHAHED_KILL_RADIUS = Math.max(
+  ...AAMS.map((w) => MUNITIONS[w].blastRadius * Math.max(0, 1 - SHAHED_HP / MUNITIONS[w].damage) + 0.5 * AIRCRAFT_PERF.shahed136.radius),
+);
 
 const drones = (h: Harness): AircraftEntity[] => h.world.aircraft.filter((a) => a.groupId === 'shaheds');
 const tower = (h: Harness) => h.world.landmarks.find((l) => l.id === 'skytower')!;
@@ -56,6 +67,9 @@ describe('g01 Buzz Kill: content', () => {
     expect(campaignOf('g01')?.id).toBe('irgc');
     expect(validateMission(G01)).toEqual([]);
     expect(G01.theater).toBe('auckland');
+    // a drone stagger has to be a distance behind, not in front
+    const bad = { ...G01, script: { ...G01.script, groups: G01.script.groups.map((g) => ({ ...g, oneWay: { ...g.oneWay!, stagger: -65 } })) } };
+    expect(validateMission(bad).some((e) => e.includes('stagger'))).toBe(true);
   });
 
   it('10 dumb Shaheds in a triangle, 10–12 km from the Sky Tower over the suburbs; no SAMs, no fighters, no wingmen', () => {
@@ -100,20 +114,22 @@ describe('g01 Buzz Kill: content', () => {
     for (let i = 1; i < rounds.length; i++) expect(rounds[i]).toBeLessThanOrEqual(rounds[i - 1]);
   });
 
-  it('missiles alone can\'t win: more drones than missiles, and one missile can\'t take two drones in formation', () => {
+  it('missiles alone can\'t win: more drones than missiles, and the drones are spaced so one missile can\'t take two', () => {
     for (const lo of G01.allowedLoadouts) {
       const missiles = LOADOUTS[lo].stores.filter((s) => (AAMS as readonly string[]).includes(s.weapon)).reduce((n, s) => n + s.count, 0);
       expect(missiles, lo).toBeLessThanOrEqual(8);
       expect(missiles, lo).toBeLessThan(G01_SWARM.count);
     }
-    // nearest neighbours in the triangle are `spacing` apart (same row): wider than any AAM blast
-    const blast = Math.max(...AAMS.map((w) => MUNITIONS[w].blastRadius));
-    expect(G01_SWARM.spacing).toBeGreaterThan(2 * blast);
+    // over the suburbs nearest neighbours are `spacing` apart; converging on the tower they close up
+    // into single file `stagger` apart: both wider than two kill radii (the runtime test below flies it)
+    expect(G01_SWARM.spacing).toBeGreaterThan(2 * SHAHED_KILL_RADIUS);
+    expect(G01_SWARM.stagger).toBeGreaterThan(2 * SHAHED_KILL_RADIUS);
   });
 });
 
 describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
-  it('spawns all 10 drones on every difficulty, in rows of 1, 2, 3, 4 with the nose on the Sky Tower', () => {
+  it('spawns all 10 drones on every difficulty, in rows of 1, 2, 3, 4 (each stepped back, so no two abreast) with the nose on the Sky Tower', () => {
+    const { spacing, stagger } = G01_SWARM;
     for (const diff of DIFFS) {
       const h = harness(G01, diff);
       const ds = drones(h);
@@ -121,14 +137,29 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
       const lead = ds[0];
       const heading = Math.atan2(AKL.skytower.x - lead.position.x, -(AKL.skytower.z - lead.position.z));
       const fwd = new Vector3(Math.sin(heading), 0, -Math.cos(heading));
-      const rows = new Map<number, number>();
+      const right = new Vector3(Math.cos(heading), 0, Math.sin(heading));
       for (const d of ds) {
         expect(d.oneWay).not.toBeNull();
         expect(Math.abs(Math.atan2(Math.sin(d.flight.heading - heading), Math.cos(d.flight.heading - heading)))).toBeLessThan(0.01);
-        const row = Math.round(-d.position.clone().sub(lead.position).dot(fwd) / G01_SWARM.spacing);
-        rows.set(row, (rows.get(row) ?? 0) + 1);
       }
-      expect([0, 1, 2, 3].map((r) => rows.get(r))).toEqual([1, 2, 3, 4]);
+      // front to back: every drone has its own place along the track, at least `stagger` behind the
+      // one ahead; a row ends where the gap opens up by the row spacing
+      const slots = ds
+        .map((d) => ({ aft: -d.position.clone().sub(lead.position).dot(fwd), right: d.position.clone().sub(lead.position).dot(right) }))
+        .sort((a, b) => a.aft - b.aft);
+      const rows: (typeof slots)[] = [[slots[0]]];
+      for (let i = 1; i < slots.length; i++) {
+        const gap = slots[i].aft - slots[i - 1].aft;
+        expect(gap, diff).toBeGreaterThan(stagger - 1);
+        if (gap > stagger + spacing / 2) rows.push([]);
+        rows[rows.length - 1].push(slots[i]);
+      }
+      expect(rows.map((r) => r.length), diff).toEqual([1, 2, 3, 4]);
+      // each row spread across the lead's track, `spacing` apart: a triangle seen from above
+      rows.forEach((row, r) => {
+        const xs = row.map((q) => q.right).sort((a, b) => a - b);
+        xs.forEach((x, j) => expect(x).toBeCloseTo((j - r / 2) * spacing, 0));
+      });
     }
   });
 
@@ -158,6 +189,31 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
     expect(tower(h).alive).toBe(false);
     expect(h.runner.state).toBe('failed');
     expect(h.of('mission:end')).toEqual([{ success: false, reason: REASONS.skytowerLost }]);
+  });
+
+  it('one missile never takes two drones: live drones stay more than two missile kill radii apart all the way into the tower', { timeout: 60_000 }, () => {
+    const h = harness(G01);
+    const ds = drones(h);
+    expect(ds[0].maxHealth).toBe(SHAHED_HP);
+    expect(ds[0].radius).toBe(AIRCRAFT_PERF.shahed136.radius);
+    let closest = Infinity;
+    let where = '';
+    runParked(h, 300, () => {
+      const live = ds.filter((d) => d.alive);
+      for (let a = 0; a < live.length; a++) {
+        for (let b = a + 1; b < live.length; b++) {
+          const sep = live[a].position.distanceTo(live[b].position);
+          if (sep < closest) {
+            closest = sep;
+            const toTower = Math.round(Math.hypot(live[a].position.x - AKL.skytower.x, live[a].position.z - AKL.skytower.z));
+            where = `${live[a].callsign} / ${live[b].callsign}, ${toTower} m from the tower at t=${h.world.time.toFixed(1)} s`;
+          }
+        }
+      }
+      return live.length === 0; // past the mission's end: every drone flies on into its target
+    });
+    expect(ds.every((d) => d.oneWay?.impacted), 'every drone flew all the way in').toBe(true);
+    expect(closest, `closest pair ${closest.toFixed(1)} m: ${where}`).toBeGreaterThan(2 * SHAHED_KILL_RADIUS);
   });
 
   it('one drone reaches the tower → damaged and burning, the mission goes on and is still winnable', { timeout: 60_000 }, () => {
