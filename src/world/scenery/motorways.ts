@@ -9,13 +9,17 @@
  * ramp, the Waterview tunnel bores flagged) when they are installed. The hand-traced polylines below
  * (from memory, ~100 m – 2 km off) are the fallback when that data is unavailable.
  *
- * `RoadNetwork` holds the polylines, answers "is this point on a road?" (so houses, trees and
- * towers keep off the carriageway) and builds one textured ribbon mesh (terrain-following, raised
- * onto causeways / bridge decks over water) plus lamp posts for the night lights.
+ * The railway lines (NIMT, Western, Eastern, Onehunga, …) come from the same LINZ file (kind
+ * ROAD_RAIL); they have no hand-traced fallback.
+ *
+ * `RoadNetwork` holds the polylines, answers "is this point on a road or a railway?" (so houses,
+ * trees and towers keep off the carriageway and the tracks) and builds textured ribbon meshes
+ * (terrain-following, raised onto causeways / bridge decks over water) plus lamp posts for the night
+ * lights.
  */
 import { BufferAttribute, BufferGeometry } from 'three';
 import { geoToWorld } from '../../core/auckland';
-import { aucklandRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_STREET, type RoadData } from './aucklandRoads';
+import { aucklandRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_RAIL, ROAD_STREET, type RoadData, type RoadLine } from './aucklandRoads';
 import { frameFromHeading, type GeometryBuilder } from './GeometryBuilder';
 import type { HeightFn, LightList } from './builders';
 
@@ -114,10 +118,13 @@ export const HAND_ARTERIALS: MotorwayDef[] = [
 
 export interface RoadPath {
   name: string;
-  kind: 'motorway' | 'arterial';
-  /** Ribbon width (m): both carriageways (hand-traced) or one carriageway (LINZ). */
+  kind: 'motorway' | 'arterial' | 'rail';
+  /** Ribbon width (m): both carriageways (hand-traced) or one carriageway (LINZ); a railway's formation. */
   width: number;
-  /** Texture span across the ribbon: 1 = both directions, 0.5 = one carriageway (edge line to median). */
+  /**
+   * Texture span across the ribbon: 1 = both directions, 0.5 = one carriageway (edge line to median).
+   * Railways: 1 = double track, 0.5 = single track.
+   */
   span: number;
   /** Resampled points (world m), with per-point tunnel flag. */
   x: Float32Array;
@@ -186,34 +193,47 @@ export function handRoadPaths(arterials = true): RoadPath[] {
 export function linzRoadPaths(d: RoadData, arterials = true): RoadPath[] {
   const out: RoadPath[] = [];
   for (const l of d.lines) {
-    if (l.kind === ROAD_STREET || (l.kind === ROAD_ARTERIAL && !arterials)) continue;
-    const xs: number[] = [];
-    const zs: number[] = [];
-    const p = l.pts;
-    for (let i = 0; i < p.length; i += 2) {
-      if (i > 0) {
-        const n = Math.ceil(Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]) / SAMPLE);
-        for (let k = 1; k < n; k++) {
-          xs.push(p[i - 2] + ((p[i] - p[i - 2]) * k) / n);
-          zs.push(p[i - 1] + ((p[i + 1] - p[i - 1]) * k) / n);
-        }
-      }
-      xs.push(p[i]);
-      zs.push(p[i + 1]);
-    }
+    if (l.kind === ROAD_STREET || l.kind === ROAD_RAIL || (l.kind === ROAD_ARTERIAL && !arterials)) continue;
     const motorway = l.kind === ROAD_MOTORWAY;
-    out.push({
-      name: l.name,
-      kind: motorway ? 'motorway' : 'arterial',
-      width: l.width,
-      span: motorway ? 0.5 : 1,
-      x: Float32Array.from(xs),
-      z: Float32Array.from(zs),
-      // a tunnel line is a tunnel from end to end (the bake splits the runs at the portals)
-      tunnel: new Uint8Array(xs.length).fill(l.tunnel ? 1 : 0),
-    });
+    out.push(linzPath(l, motorway ? 'motorway' : 'arterial', motorway ? 0.5 : 1));
   }
   return out;
+}
+
+/** Width (m) above which a LINZ railway line is a double track (the bake writes 6 m single, 11 m multiple). */
+const DOUBLE_TRACK = 8;
+
+/** The LINZ railway lines (none without the LINZ road data: there is no hand-traced fallback). */
+export function aucklandRailPaths(d: RoadData | null = aucklandRoads()): RoadPath[] {
+  if (!d) return [];
+  return d.lines.filter((l) => l.kind === ROAD_RAIL).map((l) => linzPath(l, 'rail', l.width > DOUBLE_TRACK ? 1 : 0.5));
+}
+
+function linzPath(l: RoadLine, kind: RoadPath['kind'], span: number): RoadPath {
+  const xs: number[] = [];
+  const zs: number[] = [];
+  const p = l.pts;
+  for (let i = 0; i < p.length; i += 2) {
+    if (i > 0) {
+      const n = Math.ceil(Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]) / SAMPLE);
+      for (let k = 1; k < n; k++) {
+        xs.push(p[i - 2] + ((p[i] - p[i - 2]) * k) / n);
+        zs.push(p[i - 1] + ((p[i + 1] - p[i - 1]) * k) / n);
+      }
+    }
+    xs.push(p[i]);
+    zs.push(p[i + 1]);
+  }
+  return {
+    name: l.name,
+    kind,
+    width: l.width,
+    span,
+    x: Float32Array.from(xs),
+    z: Float32Array.from(zs),
+    // a tunnel line is a tunnel from end to end (the bake splits the runs at the portals)
+    tunnel: new Uint8Array(xs.length).fill(l.tunnel ? 1 : 0),
+  };
 }
 
 /** Spatially hashed road segments for "is this point on / next to a motorway?" queries. */
@@ -274,14 +294,15 @@ export class RoadNetwork {
   /**
    * Ribbon geometry (position + uv: u across 0..1, v along in 40 m units) following the terrain,
    * raised onto causeways / bridges over water; bridge decks, piers and barriers go into `B`,
-   * lamp posts into `lights`.
+   * lamp posts into `lights`. `only` picks the paths (one mesh per texture: roads, railways).
    */
-  buildRibbons(height: HeightFn, B: GeometryBuilder, lights: LightList, lamps: boolean): BufferGeometry {
+  buildRibbons(height: HeightFn, B: GeometryBuilder, lights: LightList, lamps: boolean, only: (p: RoadPath) => boolean = () => true): BufferGeometry {
     const pos: number[] = [];
     const uv: number[] = [];
     const idx: number[] = [];
     const deckCol = 0x8c8b86;
     for (const p of this.paths) {
+      if (!only(p)) continue;
       const n = p.x.length;
       // Water under the centre line → deck height profile (smoothed ramps).
       const wet = new Float32Array(n);
@@ -357,7 +378,7 @@ export class RoadNetwork {
             B.box(f, 0, 0, 0, p.width * 0.8, y - 2 - (Math.min(0, height(p.x[i], p.z[i])) - 2), 3, 0xa8a59c, 0xa8a59c);
           }
         }
-        if (lamps && s >= nextLamp) {
+        if (lamps && p.kind !== 'rail' && s >= nextLamp) {
           nextLamp = s + lampStep;
           const side = lampN++ % 2 === 0 ? 1 : -1;
           const x = p.x[i] + nx * (hw + 1) * side;

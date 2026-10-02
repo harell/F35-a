@@ -20,13 +20,13 @@ import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayo
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
-import { aucklandRoadPaths, RoadNetwork } from './motorways';
+import { aucklandRailPaths, aucklandRoadPaths, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
-import { createConcreteTexture, createMotorwayTexture } from '../textures/procedural';
+import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
 import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, TreeSource } from './sources';
 import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry } from './archetypes';
@@ -74,7 +74,7 @@ export class Scenery {
   private readonly lightsMat: ShaderMaterial;
   private readonly treeRadius: number;
   private readonly houseRadius: number;
-  /** Auckland motorway network (null elsewhere). */
+  /** Auckland motorway network, plus the railways when the quality tier draws them (null elsewhere). */
   roads: RoadNetwork | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
@@ -156,7 +156,9 @@ export class Scenery {
 
     // ── Auckland landmarks ──
     if (o.theater === 'auckland') {
-      const roads = new RoadNetwork(aucklandRoadPaths());
+      // the railways join the network so houses, trees and towers keep off the tracks too
+      const rails = o.quality.railways ? aucklandRailPaths() : [];
+      const roads = new RoadNetwork([...aucklandRoadPaths(), ...rails]);
       this.roads = roads;
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
@@ -172,7 +174,9 @@ export class Scenery {
       const centres = new GeometryBuilder();
       buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? aerialCovers : null);
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
-      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01);
+      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail');
+      // railway ribbons (+ bridges over the water): one more draw call
+      const railGeo = rails.length ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'rail') : null;
       addMesh(centres, 'akl-centres');
       const roadTex = createMotorwayTexture();
       roadTex.anisotropy = o.cfg.anisotropy;
@@ -185,6 +189,19 @@ export class Scenery {
       roadMesh.renderOrder = -4;
       roadMesh.matrixAutoUpdate = false;
       this.group.add(roadMesh);
+      if (railGeo) {
+        const railTex = createRailTexture();
+        railTex.anisotropy = o.cfg.anisotropy;
+        this.textures.push(railTex);
+        const railMat = createRoadMaterial(o.atmo, railTex);
+        this.materials.push(railMat);
+        this.geometries.push(railGeo);
+        const railMesh = new Mesh(railGeo, railMat);
+        railMesh.name = 'akl-railways';
+        railMesh.renderOrder = -4;
+        railMesh.matrixAutoUpdate = false;
+        this.group.add(railMesh);
+      }
       const bridge = new GeometryBuilder();
       buildHarbourBridge(bridge, lights, height);
       addMesh(bridge, 'akl-harbour-bridge');

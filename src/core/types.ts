@@ -274,6 +274,8 @@ export interface QualitySettings {
   wakes: boolean;
   /** Visual-only harbour ferries (Auckland), 0 = none; capped by the fleet size (render/traffic/ferryRoutes.ts). */
   ferries: number;
+  /** LINZ railway lines (Auckland) as ballast-and-track ribbons (one draw call); off = no tracks drawn. */
+  railways: boolean;
 }
 
 export type ControlScheme = 'stick' | 'tilt';
