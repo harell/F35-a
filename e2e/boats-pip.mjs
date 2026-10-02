@@ -3,7 +3,7 @@
  * suicide boat, a missile boat and an air-defence boat on open water near a civil ship, designates
  * each in turn and screenshots the PiP (full frame + a crop of the PiP) to e2e/screenshots/boats/.
  *
- *   npx vite --config vite.e2e.config.ts --port 5190 &  node e2e/boats-pip.mjs [--base=http://localhost:5190/] [--quality=medium]
+ *   npx vite --config vite.e2e.config.ts --port 5190 &  node e2e/boats-pip.mjs [--base=http://localhost:5190/] [--quality=medium] [--only=suicide|missile|ad]
  */
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -78,6 +78,7 @@ async function shot(name) {
 
 const report = [];
 for (const [kind, id] of Object.entries(ids)) {
+  if (args.only && args.only !== kind) continue; // one boat: a shorter browser session
   let b = await designate(id);
   for (let i = 0; i < 6; i++) {
     b = await designate(id);

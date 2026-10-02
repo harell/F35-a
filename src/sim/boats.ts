@@ -6,7 +6,8 @@
  *    tracking. Contact with the ship's hull = one hit on her (applyDamage(…, 'collision') from a
  *    ground entity, which Damage counts as a ship hit), and the boat blows up.
  *  - Missile boat (`'missile_boat'` ground target, BoatState.strike): closes to `range` of its
- *    target ship, stops there and COUNTS DOWN (`countdown` s), then launches a Kowsar. The Kowsar is
+ *    target ship with clear water and line of sight to her, stops there and COUNTS DOWN
+ *    (`countdown` s), then launches a Kowsar (one by default). The Kowsar is
  *    a visual missile flown here, never by the CombatSystem: a sea-skimming pursuit that always
  *    reaches its ship and scores one hit. Missiles are never sensor contacts, so the only defence
  *    is killing the boat before the countdown ends. Every countdown is announced (radio call with
