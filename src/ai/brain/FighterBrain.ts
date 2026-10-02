@@ -101,9 +101,7 @@ export class FighterBrain extends Brain {
   private engageAlt = -1;
   /** Player's designation at the last check (friendly wingman support). */
   private lastPlayerDes: number | null = null;
-  /** Most rounds + stores the player has carried so far (orders.holdFireUntilPlayerFires), -1 = not seen yet. */
-  private playerAmmoMax = -1;
-  /** The player has fired something (latched): a holding wingman is weapons free from then on. */
+  /** The player has engaged a bandit (latched): a holding wingman is weapons free from then on. */
   private playerFired = false;
   /** Sim time of the last engagement tick (for quick mid-fight re-targeting). */
   private lastEngageTime = -99;
@@ -262,23 +260,33 @@ export class FighterBrain extends Brain {
   }
 
   /**
-   * orders.holdFireUntilPlayerFires: weapons hold until the player's rounds + stores drop below
-   * the most it has carried (a missile, a bomb or a gun burst). Latched: once the player has opened
-   * fire the wingman fights normally for the rest of the mission.
+   * orders.holdFireUntilPlayerFires: weapons hold until the player engages a bandit, i.e. a player
+   * missile is (or was) in flight at a hostile aircraft, or a live hostile aircraft has taken damage
+   * (only the player can hit one while the wingman holds). A gun burst into empty sky or a launch
+   * with no target doesn't count (issue #60 review: one stray round used to hand the wingman the
+   * fight). Latched: once the player is in the fight the wingman fights normally.
    */
-  private holdingFire(world: SimWorld): boolean {
+  private holdingFire(ac: AircraftEntity, world: SimWorld): boolean {
     if (!this.orders.holdFireUntilPlayerFires || this.playerFired) return false;
     const p = world.player;
     if (!p) return true;
-    let ammo = p.gunAmmo;
-    for (const st of p.stores) ammo += st.count;
-    if (ammo < this.playerAmmoMax) this.playerFired = true;
-    else this.playerAmmoMax = ammo;
+    const hostile = (id: number | null): boolean => {
+      const e = world.getEntity(id);
+      return !!e && e.kind === 'aircraft' && e.team !== ac.team;
+    };
+    for (const m of world.missiles) {
+      if (m.shooterId === p.id && hostile(m.targetId)) this.playerFired = true;
+    }
+    if (!this.playerFired) {
+      for (const b of world.aircraft) {
+        if (b.alive && b.team !== ac.team && b.health < b.maxHealth) this.playerFired = true;
+      }
+    }
     return !this.playerFired;
   }
 
   private chooseTarget(ac: AircraftEntity, world: SimWorld): void {
-    if (this.holdingFire(world)) {
+    if (this.holdingFire(ac, world)) {
       // weapons hold: stay on the wing (missile defence still runs), no target, no shots
       this.targetId = null;
       this.engagedId = null;

@@ -80,7 +80,7 @@ export type AiTask =
  * player, it can't win the mission for a player who never fires).
  */
 export interface WingmanOrders {
-  /** Weapons hold until the player has fired something (a missile, a bomb or the gun). */
+  /** Weapons hold until the player engages a bandit (a missile at a hostile aircraft, or a hit on one); a stray gun burst doesn't count. */
   holdFireUntilPlayerFires?: boolean;
   /** Never engage these groups (AircraftEntity.groupId), e.g. Defend's strikers: the player's job. */
   ignoreGroups?: string[];
