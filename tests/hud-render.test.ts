@@ -942,6 +942,24 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     }
   });
 
+  it('STEER RIGHT fits on the 844x390 screen, clear of the jet in chase', () => {
+    for (const v of ['hud', 'chase'] as const) {
+      const r = rig('ag', v);
+      const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+      const bi = { point: ship.position.clone(), inRange: false, timeToRelease: -1, offAxis: true, steer: 1, bombAway: false };
+      (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => bi;
+      const box = textBox(find(textsOver(r, 0.5), 'STEER RIGHT')[0]);
+      expect(box.x0, v).toBeGreaterThan(0);
+      expect(box.x1, v).toBeLessThan(r.W);
+      if (v !== 'chase') continue;
+      const proj = new Projector();
+      proj.update(r.camera, r.W, r.H);
+      const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+      proj.point(r.mock.player.position, sp);
+      expect(overlaps(box, { x0: sp.x - 60, y0: sp.y - 25, x1: sp.x + 60, y1: sp.y + 15 })).toBe(false);
+    }
+  });
+
   it('while our own bomb is still guiding onto the target it reads BOMB AWAY, not STEER or OUT OF RANGE', () => {
     const off = cueTexts({ offAxis: true, steer: -1, bombAway: true });
     expect(off).toContain('BOMB AWAY');
