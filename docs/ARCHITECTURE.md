@@ -92,9 +92,12 @@ The Sky Tower is a sim **landmark** (`src/sim/landmarks.ts`, `SimWorld.landmarks
 `aircraft` / `sams` / `ground`, so sensors, TGT cycling, AI, objectives and scoring never see it. Its shape (OpenStreetMap
 building parts) and its scripted collapse are pure data and functions in `src/core/skyTower.ts`, shared by the sim (hit
 volume, collisions, collapse explosions) and the renderer (`src/world/scenery/skyTower.ts`, posed from sim time). One hit
-from the player's bomb, AGM or AAM destroys it (`landmark:destroyed`), and the mission runner fails the sortie
-(`src/missions/runtime/landmarks.ts`). The ruin persists through `skyTowerRuin()` in `src/missions/progress.ts`, the one
-place that decides how long it stays down.
+from the player's bomb, AGM or AAM destroys it at once, damaged or not (`landmark:destroyed`, cause `player`). Enemy
+attacks register through `hitSkyTower()` / `hitLandmark()` in `src/sim/landmarks.ts`: the first hit leaves it damaged
+(`landmark:damaged`; fire and smoke on its face from `src/render/effects/Effects.ts`), the second brings it down (cause
+`enemy`). The mission runner (`src/missions/runtime/landmarks.ts`) makes the radio and HUD calls and fails the sortie on a
+collapse, with a different reason for each cause. The tower is **never destroyed for good**: nothing about it is saved,
+so every mission start and restart builds it intact, and old saves' `skyTowerDown` is dropped on load.
 
 ## Real airfields (OpenStreetMap)
 

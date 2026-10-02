@@ -41,7 +41,8 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Skip ahead N seconds of game time | `window.__f35.simulate(N)` (fixed 60 Hz steps, no rendering; stops when the mission ends) | ~0.4 s per game minute |
 | Start another mission in the same page | `window.__f35.fly('c05', loadout?)`: works from any screen, menu or mission; quitting it returns to the main menu, and a `pause()` right after it opens once the mission is ready | *est.* a few s |
 | Change camera | `window.__f35.setView('cockpit')` (also `hud`, `chase`, `orbit`, …) or `&view=` | free |
-| Check the Sky Tower collapse | `window.__f35.destroySkyTower(y)` | free (writes the ruin to that browser context's save) |
+| Check the Sky Tower collapse | `window.__f35.destroySkyTower(y)` (the player's bomb at height `y`) | free (nothing is saved: the next start or restart has the tower standing) |
+| Damage the Sky Tower as an enemy would | `window.__f35.hitSkyTower(y)` (an enemy hit at height `y`, default 150 m: the first damages it, the second collapses it; returns the hit count). `state().skyTowerHits` reads it | free |
 | Keep the player alive through a scripted run | `window.__f35.invulnerable(true)` (weapons only; crashing still kills; per mission) | free |
 | Force an event (a tank lost, a group dead, an objective done) | `window.__f35.destroy(entityId)` or `destroy('groupId', byPlayer?)` (credited as an AIM-120 kill, so debrief stats after it are skewed) | free |
 | Reach the debrief after `simulate()` ended the mission | `window.__f35.skipOutro()` (the outro counts render frames, so headless it takes ~60 s otherwise) | free |
