@@ -51,6 +51,11 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
       expect(difficultyAtLeast('veteran', sa15.minDifficulty)).toBe(true);
     }
   });
+  it('c12: the Motutapu SA-15 is Pilot+, so the Recruit finale is forgiving (playtest 2026-10-02, 3.2-b: Recruit 4/8 → 7/8)', () => {
+    const sa15 = missionById('c12')!.script.sams.find((s) => s.id === 'sa15')!;
+    expect(difficultyAtLeast('recruit', sa15.minDifficulty)).toBe(false);
+    expect(difficultyAtLeast('pilot', sa15.minDifficulty)).toBe(true);
+  });
   it('c10: the Flanker sweep is Veteran+ and the eastern raid leaves time for the northern one', () => {
     const def = missionById('c10')!;
     const sweep = def.script.groups.find((g) => g.id === 'sweep')!;

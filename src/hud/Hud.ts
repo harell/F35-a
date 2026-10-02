@@ -293,11 +293,11 @@ export const createHud: CreateHud = (canvas, events) => {
 
       if (!p || !p.alive) {
         resetPip();
-        // player down: keep the feeds (mission messages, radio, kills)
+        // player down: keep the feeds (mission messages, radio, kills); the message makes way for the radio
+        reserveRadio(f);
         reserveMessage(f, L.msgY);
         drawMessages(f);
         drawKillFeed(f, L.killX, L.killY);
-        reserveRadio(f);
         drawRadio(f);
         return;
       }
@@ -349,6 +349,8 @@ export const createHud: CreateHud = (canvas, events) => {
         g2.clip();
         pen.reset();
       }
+      // 0) the radio pill first: the target box labels and the centre message make way for it (3.3-a/b)
+      reserveRadio(f);
       // 1) protected symbols (they register in the occupancy pass): FPM, pipper / seeker, target box
       drawFpm(f);
       if (hmd) {
@@ -371,7 +373,6 @@ export const createHud: CreateHud = (canvas, events) => {
         if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));
         else clearMessagePlan();
       } else clearMessagePlan();
-      reserveRadio(f);
       // 3) everything else: secondary labels make way for the reserved text
       g2.globalAlpha = declutter;
       if (hmd) drawLockCone(f);

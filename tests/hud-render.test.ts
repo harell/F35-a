@@ -671,6 +671,75 @@ describe('bomb release cue in every view (playtest 1.3-a: none in the default ch
   });
 });
 
+describe('the radio pill is reserved before the target box labels and the centre message (playtest 3.3-a / 3.3-b)', () => {
+  const call = 'Viper 1, Darkstar, single group, bullseye zero four five, 13 miles, hot, closing on the ship.';
+
+  /** The radio pill's text rows (head + body lines), as one box; null without a call up. */
+  function pillBox(texts: TextRec[]): Box | null {
+    const rows = texts.filter((x) => x.text === '[DARKSTAR]' || (x.size <= 12.5 && x.align === 'left' && /[a-z]/.test(x.text) && x.color.startsWith('rgba(240')));
+    if (!rows.length) return null;
+    const b = rows.map(textBox);
+    return { x0: Math.min(...b.map((k) => k.x0)), y0: Math.min(...b.map((k) => k.y0)), x1: Math.max(...b.map((k) => k.x1)), y1: Math.max(...b.map((k) => k.y1)) };
+  }
+
+  it('hud: a target box low on screen moves its range / TTI labels off the radio pill (3.3-a)', () => {
+    const r = rig('ag', 'hud');
+    r.mock.events.emit('radio', { from: 'DARKSTAR', text: call, priority: 1, team: 'blue' });
+    const pill0 = pillBox(r.run(0.1));
+    expect(pill0).not.toBeNull();
+    // the ship just above the pill (a bomb run-in): its labels below the box would print into the call
+    const p = r.mock.player;
+    const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+    const ty = pill0!.y0 - 22;
+    const at = new Vector3(0, -((ty / r.H) * 2 - 1), 0.5).unproject(r.camera);
+    const pos = r.camera.position.clone().add(at.sub(r.camera.position).normalize().multiplyScalar(9000));
+    const def = { ...((r.mock.world.missiles[0] ?? { def: null }).def ?? {}), id: 'gbu53', name: 'GBU-53/B', short: 'GBU-53', category: 'bomb', guidance: 'tri_mode' } as MissileEntity['def'];
+    const m = new MissileEntity(901, def, 'blue', p.id, ship.id);
+    (r.mock.world.missiles as MissileEntity[]).push(m);
+    const proj = new Projector();
+    proj.update(r.camera, r.W, r.H);
+    const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+    let seen = 0;
+    for (let i = 0; i < 10; i++) {
+      ship.position.copy(pos);
+      m.position.copy(pos).add(new Vector3(0, 3000, 0)).addScaledVector(new Vector3().subVectors(p.position, pos).setY(0).normalize(), 8500);
+      m.velocity.subVectors(pos, m.position).setLength(190);
+      const texts = r.run(1 / 30);
+      const pill = pillBox(texts);
+      expect(pill).not.toBeNull();
+      proj.point(ship.position, sp);
+      expect(Math.abs(sp.y - ty)).toBeLessThan(2);
+      const labels = [...find(texts, /^TTI \d+$/), ...texts.filter((t) => /^\d+(\.\d)?$/.test(t.text) && t.size === 12.5 && Math.abs(t.x - sp.x) < 1)];
+      expect(labels.length).toBe(2);
+      for (const t of labels) {
+        seen++;
+        expect(overlaps(textBox(t), pill!), t.text).toBe(false);
+      }
+    }
+    expect(seen).toBe(20);
+  });
+
+  it('chase: OBJECTIVE COMPLETE never prints on the rows of the radio pill (3.3-b)', () => {
+    for (const scene of ['aa', 'ag', 'nav'] as const) {
+      const r = rig(scene, 'chase');
+      r.run(0.1);
+      r.mock.events.emit('radio', { from: 'DARKSTAR', text: call, priority: 1, team: 'blue' });
+      r.mock.events.emit('hud:message', { text: 'OBJECTIVE COMPLETE', tone: 'good', duration: 4 });
+      let seen = 0;
+      for (let i = 0; i < 15; i++) {
+        const texts = r.run(1 / 30);
+        const pill = pillBox(texts);
+        expect(pill, scene).not.toBeNull();
+        for (const t of find(texts, /OBJECTIVE|COMPLETE/)) {
+          seen++;
+          expect(overlaps(textBox(t), pill!), `${scene}: ${t.text}`).toBe(false);
+        }
+      }
+      expect(seen, scene).toBeGreaterThan(0);
+    }
+  });
+});
+
 /** Defend-style mission on the mock: friendly fuel tanks ahead and a protect objective on them. */
 function addDefendSite(r: Rig, ahead = 20_000, right = 0, n = 9): GroundTargetEntity[] {
   const p = r.mock.player;

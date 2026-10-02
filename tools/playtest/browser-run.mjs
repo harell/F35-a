@@ -16,7 +16,10 @@
  * caller can see where the wall-clock went (page load vs simulation vs screenshots).
  * --missions: several missions in ONE page (the first by URL, the rest with window.__f35.fly), about
  * 2× faster than a page load each. --shots=0 skips the screenshots (state and draw calls only).
- * State is read after two rendered frames, so `renderer` (draw calls, triangles) is never stale.
+ * State is read after five rendered frames (two weren't enough for a settled `renderer` read), and
+ * even then draw calls vary ±10–20 % frame to frame (the target camera PiP alone adds 20–55 calls):
+ * compare runs, not single reads. A mission that fails to start is reported and skipped; the run
+ * exits 1 at the end.
  * --text: also record every string the HUD draws (canvas fillText) over 8 frames at each checkpoint, as
  * `hudText`, so a blinking cue (IN RANGE, SHOOT) is caught even when a screenshot lands on its off phase.
  * Exit code 1 on page errors or if a mission never starts.
@@ -82,22 +85,29 @@ const hudText = async () => {
   return page.evaluate(() => [...new Set(window.__f35text.map((t) => t.trim()).filter(Boolean))]);
 };
 
+let failed = 0;
 for (const [k, mission] of missions.entries()) {
+  const errors0 = errors.length;
   if (k === 0) {
     const q = new URLSearchParams({ mission, autostart: '1', view, quality: args.quality || 'low' });
     if (args.difficulty) q.set('difficulty', args.difficulty);
     if (args.loadout) q.set('loadout', args.loadout);
     await page.goto(`${base}?${q}`, { waitUntil: 'load' });
-  } else {
-    await page.evaluate(({ id, loadout }) => window.__f35.fly(id, loadout || undefined), { id: mission, loadout: args.loadout });
   }
   try {
+    if (k > 0) await page.evaluate(({ id, loadout }) => window.__f35.fly(id, loadout || undefined), { id: mission, loadout: args.loadout });
     await page.waitForFunction((id) => window.__f35?.state().inMission && window.__f35.state().mission === id && window.__f35.state().missionState === 'running', mission, { timeout: 90_000 });
-  } catch {
+  } catch (e) {
     const hooks = await page.evaluate(() => !!window.__f35).catch(() => false);
-    console.error(hooks ? `${mission}: mission did not start within 90 s` : 'no window.__f35: not a dev server / VITE_TEST_HOOKS=1 build');
-    await browser.close();
-    process.exit(1);
+    if (!hooks) {
+      console.error('no window.__f35: not a dev server / VITE_TEST_HOOKS=1 build');
+      await browser.close();
+      process.exit(1);
+    }
+    failed++;
+    console.log(JSON.stringify({ mission, error: String(e?.message ?? e).split('\n')[0].slice(0, 200) }));
+    lap('load');
+    continue;
   }
   lap('load');
 
@@ -118,7 +128,7 @@ for (const [k, mission] of missions.entries()) {
       lap('simulate');
       if (state?.missionState !== 'running') console.error(`${mission}: mission ${state?.missionState} at ${state?.time?.toFixed(0)} s`);
     }
-    await frames();
+    await frames(5);
     let file = null;
     if (shots) {
       file = `${out}/${mission}-${target}s.png`;
@@ -127,10 +137,11 @@ for (const [k, mission] of missions.entries()) {
     }
     const text = await hudText();
     const state = await page.evaluate(() => window.__f35.state());
-    console.log(JSON.stringify({ mission, checkpoint: target, file, state, hudText: text, errors: errors.length }));
+    console.log(JSON.stringify({ mission, checkpoint: target, file, state, hudText: text, errors: errors.slice(errors0) }));
+    lap('read');
     if (state.missionState !== 'running') break;
   }
 }
 await browser.close();
 console.log(JSON.stringify({ timingMs: timing, errors }));
-process.exit(errors.some((e) => e.startsWith('pageerror')) ? 1 : 0);
+process.exit(failed > 0 || errors.some((e) => e.startsWith('pageerror')) ? 1 : 0);

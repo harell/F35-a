@@ -394,19 +394,27 @@ export function drawDesignated(f: HudFrame): void {
     pen.arc(x, y, h * 1.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, lp));
     pen.strokeGlow(pal.main, 2.2);
   }
-  // labels: type above, range below, missile TOF / PITBULL below that
+  // labels: type above, range below, missile TOF / PITBULL below that; range + TOF stack above the
+  // type label instead when they would print into reserved text under a low box (the radio pill, 3.3-a)
   const label = entityLabel(t);
-  pen.text(label, x, y - h - 9 * u, col, 12);
-  let ly = y + h + 10 * u;
-  pen.text(rangeLabel(dist), x, ly, col, 12.5);
-  ly += 14 * u;
   const m = ownMissileOn(f, t.id);
+  const pit = !!m && m.seekerLocked && (m.def.guidance === 'active_radar' || m.def.guidance === 'anti_radiation');
+  const tof = m && !pit ? impactLabel(f, m, t) : '';
+  const lw = Math.max(h * 1.5, (pen.textWidth(label, 12) / 2) + 2 * u, pen.textWidth('88.8', 12.5) / 2);
+  const sw = Math.max(lw, pen.textWidth(pit ? 'PITBULL' : tof, 11.5) / 2);
+  const typeY = y - h - 9 * u;
+  const below = y + h + 10 * u;
+  const span = (m ? 14 : 0) * u;
+  const up = occ.hits(x - sw, below - 7 * u, x + sw, below + span + 7 * u, 0, 0) && !occ.hits(x - sw, typeY - 21 * u - span, x + sw, typeY - 7 * u, 0, 0);
+  const dy = up ? -14 * u : 14 * u;
+  pen.text(label, x, typeY, col, 12);
+  let ly = up ? typeY - 14 * u : below;
+  pen.text(rangeLabel(dist), x, ly, col, 12.5);
   if (m) {
-    const pit = m.seekerLocked && (m.def.guidance === 'active_radar' || m.def.guidance === 'anti_radiation');
+    ly += dy;
     if (pit) {
       if (blink(f, 3, 0.75)) pen.text('PITBULL', x, ly, pal.bright, 11.5);
-    } else pen.text(impactLabel(f, m, t), x, ly, pal.main, 11.5);
-    ly += 14 * u;
+    } else pen.text(tof, x, ly, pal.main, 11.5);
   }
   // right of the box: "LOCK" flash after the lock event, LOCKING while it builds, NOSE ON when the
   // commanded lock can't build because the target is outside the ±30° lock cone
@@ -434,8 +442,9 @@ export function drawDesignated(f: HudFrame): void {
   const rx = rLeft ? x - side : x + side;
   if (label2 && show2) pen.text(label2, rx, y, col2, size2, rLeft ? 'right' : 'left');
   // protected: the box, its ring and every label (text zones never cover it)
-  const lw = Math.max(h * 1.5, (pen.textWidth(label, 12) / 2) + 2 * u, pen.textWidth('88.8', 12.5) / 2);
-  occ.add(Math.min(x - lw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity), y - h - 17 * u, Math.max(x + lw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0), ly - 6 * u, 1);
+  const top = up ? ly - 8 * u : typeY - 8 * u;
+  const bottom = up ? y + (building ? h * 1.5 : h) + 3 * u : ly + 8 * u;
+  occ.add(Math.min(x - lw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity), top, Math.max(x + lw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0), bottom, 1);
   picks.add(t.id, x, y, h);
 }
 

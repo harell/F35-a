@@ -599,7 +599,7 @@ export const C12: MissionDef = mission({
       }),
     ],
     sams: [
-      site('sa15', 'motu_sams', 'sa15', P.motuE),
+      site('sa15', 'motu_sams', 'sa15', P.motuE, { minDifficulty: 'pilot' }),
       site('zsu1', 'motu_sams', 'zsu23', { x: 12200, z: -8500 }),
       site('zsu2', 'motu_sams', 'zsu23', { x: 13300, z: -9600 }, { minDifficulty: 'pilot' }),
       site('manpads', 'motu_sams', 'sa18', P.motuS, { minDifficulty: 'pilot' }),
