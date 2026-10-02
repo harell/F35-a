@@ -317,6 +317,9 @@ export class Game {
   /** Builds the world for a mission and resolves when it ends (or the player restarts/quits). */
   private async runSession(def: MissionDef, loadout: LoadoutId): Promise<'ended' | 'restart' | 'quit'> {
     this.teardownSession();
+    // test hooks (autopilot, controls override) belong to one mission: never leak into the next
+    this.autopilot = false;
+    this.controlOverride = null;
     const difficulty = DIFFICULTIES[this.settings.difficulty];
     this.ui.hideAll();
     this.ui.showLoading(0, 'Preparing mission');
@@ -883,6 +886,7 @@ export class Game {
         rig.update = pos
           ? () => {
               rig.camera.position.set(pos[0], pos[1], pos[2]);
+              rig.camera.up.set(0, 1, 0); // level: the rig may have left a banked up vector
               rig.camera.lookAt(look[0], look[1], look[2]);
               rig.camera.updateMatrixWorld();
             }
