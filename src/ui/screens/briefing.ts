@@ -11,6 +11,7 @@ import { storesDiagramSvg } from '../art/storesDiagram';
 import { escapeHtml, h } from '../dom';
 import { missionGunAmmo } from '../../missions';
 import { formatTime, pad2, stealthRating, storeLines } from '../format';
+import { hangarLoadouts } from '../hangar';
 import type { UiHost } from '../host';
 import { screenHeader } from '../widgets';
 import { openDifficultySheet } from './difficultySheet';
@@ -26,8 +27,8 @@ type Tab = 'brief' | 'obj' | 'hangar';
 export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): Promise<{ loadout: LoadoutId } | null> {
   return new Promise((resolve) => {
     let done = false;
-    const allowed = (m.allowedLoadouts?.length ? m.allowedLoadouts : [m.recommendedLoadout]).filter((id) => LOADOUTS[id]);
-    let loadout: LoadoutId = allowed.includes(m.recommendedLoadout) ? m.recommendedLoadout : allowed[0] ?? 'a2a_stealth';
+    const { cards: allowed, initial } = hangarLoadouts(m);
+    let loadout: LoadoutId = initial;
     const el = h('section', { class: 'scr-brief' });
     const finish = (v: { loadout: LoadoutId } | null) => {
       if (done) return;

@@ -266,6 +266,23 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'ag',
   },
+  // The real F-35A's full internal SDB II load: a BRU-61/A rack of four GBU-53/B and an AIM-120 in
+  // each bay. Offered only where a mission lists it (the boat swarm needs a bomb per moving boat), so
+  // the other missions keep their balance.
+  strike_sdb2_full: {
+    id: 'strike_sdb2_full',
+    name: 'Precision Strike (Full Bays)',
+    description: '8× GBU-53/B StormBreaker + 2× AIM-120D internal: four bombs and an AMRAAM in each bay. A datalinked bomb for every moving boat in a swarm.',
+    rcsMultiplier: 1,
+    stores: [
+      { weapon: 'gbu53', count: 8, internal: true },
+      { weapon: 'aim120', count: 2, internal: true },
+    ],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'ag',
+  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',

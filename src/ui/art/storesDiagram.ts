@@ -9,7 +9,7 @@ import { F35_STATIONS, finPath, frameFor, outlinePath } from './planform';
 type Store = Exclude<WeaponId, 'gun'>;
 
 /** Visual size (m, exaggerated for legibility): length, width. */
-const SIZE: Record<Store, [number, number]> = {
+export const STORE_SIZE: Record<Store, [number, number]> = {
   aim120: [3.1, 0.3],
   aim9x: [2.7, 0.26],
   gbu31: [3.6, 0.5],
@@ -27,10 +27,19 @@ interface Placed {
   internal: boolean;
 }
 
+/** Small-diameter bombs: short enough to sit two in a row, fore and aft, in a bay. */
+const SDB = new Set<Store>(['gbu39', 'gbu53']);
+/** More store columns than this in one bay and they overlap (the bay is 0.9 m wide). */
+const MAX_BAY_COLUMNS = 4;
+/** Fore / aft offset (m) of the two rows of a stacked SDB column. */
+const SDB_ROW = 0.95;
+
 /**
  * Distribute a loadout over symmetric stations. Each side has one internal bay (x ≈ 0.35…1.25 m):
- * A/G stores and ARMs outboard, AMRAAMs inboard, spread evenly across the bay. External stores go
- * to the wing pylons (heavy inboard, AMRAAM mid, AIM-9X outboard).
+ * A/G stores and ARMs outboard, AMRAAMs inboard, spread evenly across the bay. A bay with more than
+ * four columns (the full SDB II load, four GBU-53/B per bay) stacks its small bombs two to a column,
+ * fore and aft, like the BRU-61/A rack. External stores go to the wing pylons (heavy inboard, AMRAAM
+ * mid, AIM-9X outboard).
  */
 export function placeStores(l: LoadoutDef): Placed[] {
   const out: Placed[] = [];
@@ -39,11 +48,22 @@ export function placeStores(l: LoadoutDef): Placed[] {
   for (const s of l.stores) if (s.internal) for (let i = 0; i < Math.ceil(s.count / 2); i++) bay.push(s.weapon);
   // missiles inboard (small x), A/G outboard
   bay.sort((a, b) => Number(AG.has(a)) - Number(AG.has(b)));
-  const n = bay.length;
-  bay.forEach((wpn, j) => {
+  // columns across the bay: one store each, or two small bombs in a row when the bay is crowded
+  const columns: Store[][] = [];
+  const stack = bay.length > MAX_BAY_COLUMNS;
+  for (const wpn of bay) {
+    const last = columns[columns.length - 1];
+    if (stack && SDB.has(wpn) && last && last.length === 1 && last[0] === wpn) last.push(wpn);
+    else columns.push([wpn]);
+  }
+  const n = columns.length;
+  columns.forEach((col, j) => {
     const x = 0.35 + ((j + 0.5) * 0.9) / Math.max(1, n);
-    const y = (S.bayOuter[1] + S.bayInner[1]) / 2 + (wpn === 'gbu39' || wpn === 'gbu53' ? 0.6 : 0);
-    for (const side of [1, -1]) out.push({ weapon: wpn, x: side * x, y, internal: true });
+    col.forEach((wpn, k) => {
+      const row = col.length > 1 ? (k === 0 ? -SDB_ROW : SDB_ROW) : 0;
+      const y = (S.bayOuter[1] + S.bayInner[1]) / 2 + (SDB.has(wpn) ? 0.6 : 0) + row;
+      for (const side of [1, -1]) out.push({ weapon: wpn, x: side * x, y, internal: true });
+    });
   });
   const pylons: [number, number][] = [S.pylonIn, S.pylonMid, S.pylonOut];
   const taken = new Set<number>();
@@ -78,7 +98,7 @@ export function storesDiagramSvg(l: LoadoutDef, w = 120, h = 120): string {
     parts.push(`<rect x="${bx.toFixed(2)}" y="${Y(7.6)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="${(0.3 * f.k).toFixed(2)}" fill="rgba(0,0,0,0.35)" stroke="rgba(95,227,255,0.35)" stroke-dasharray="1.5 1.5" stroke-width="0.6"/>`);
   }
   for (const p of placeStores(l)) {
-    const [len, wid] = SIZE[p.weapon];
+    const [len, wid] = STORE_SIZE[p.weapon];
     const x = f.cx + p.x * f.k - (wid * f.k) / 2;
     const y = f.top + (p.y - len / 2) * f.k;
     const col = p.internal ? '#5fe3ff' : '#ffb13d';
