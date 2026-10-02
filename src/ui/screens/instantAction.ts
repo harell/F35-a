@@ -18,6 +18,7 @@ const MODES: { id: InstantActionOptions['mode']; title: string; desc: string; ic
   { id: 'dogfight', title: 'Dogfight', desc: 'Air-to-air brawl against enemy fighters', icon: 'dogfight' },
   { id: 'sam_gauntlet', title: 'SAM Gauntlet', desc: 'Punch through layered SAM belts', icon: 'sam' },
   { id: 'strike', title: 'Strike', desc: 'Hit defended ground targets and get home', icon: 'bomb' },
+  { id: 'defend', title: 'Defend', desc: 'Stop a strike on the Wiri fuel terminal', icon: 'shield' },
   { id: 'survival', title: 'Survival', desc: 'Endless waves — how long can you last?', icon: 'waves' },
 ];
 

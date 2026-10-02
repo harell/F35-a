@@ -48,6 +48,8 @@ export const P = {
   hobsonville: pt('hobsonville'),
   beachlands: pt('beachlands'),
   airport: pt('akl_airport'),
+  /** Wiri oil terminal (the storage tanks are WIRI_TANKS, core/sites.ts). */
+  wiri: pt('wiri'),
   // Rangitoto (shield volcano, centre 8.7/-6.85 km, radius 2.8 km)
   rangitoto: { x: 8700, z: -6850 },
   rangSW: { x: 7400, z: -5700 },

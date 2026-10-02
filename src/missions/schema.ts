@@ -90,7 +90,10 @@ export type TaskDef =
   | { kind: 'route'; points: XZA[]; loop?: boolean }
   /** Attack the player. */
   | { kind: 'attack_player' }
-  /** Attack the first live member of a group. */
+  /**
+   * Attack a group. Air groups: its first live member. Ground / SAM groups: the attackers spread
+   * over its live members and move on to another one when theirs is destroyed.
+   */
   | { kind: 'attack_group'; group: string }
   /** Escort the first live member of a group (bombers, AWACS, strike package). */
   | { kind: 'escort_group'; group: string }
@@ -162,6 +165,11 @@ export interface AircraftGroupDef {
   fuel?: number;
   /** Friendly F-35 loadout. */
   loadout?: LoadoutId;
+  /**
+   * Enemy stores: 'strike' arms the jets with KAB-500S guided bombs (and two R-73s) instead of
+   * their air-to-air fit. Pair it with an 'attack_group' task on a ground group.
+   */
+  enemyLoadout?: 'default' | 'strike';
 }
 
 export interface SamSiteDef {
@@ -206,6 +214,11 @@ export interface GroundTargetDef {
   minDifficulty?: Difficulty;
   /** Terrain flatten radius override (m). Ships and movers never get a pad. */
   pad?: number;
+  /**
+   * The world scenery already draws this target (the Wiri tanks, core/sites.ts): no entity model
+   * and no terrain pad; kill effects still play.
+   */
+  scenery?: boolean;
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */
@@ -234,7 +247,7 @@ export type ObjectiveDef = ObjectiveBase &
        * Keep a friendly group alive. Fails when fewer than `minSurvivors` (default 1) remain.
        * Completes when `until` is true, or automatically once every other primary is complete.
        */
-    { kind: 'protect'; group: string; minSurvivors?: number; until?: Condition }
+    { kind: 'protect'; group: string; minSurvivors?: number; until?: Condition; /** Debrief row counting the survivors, e.g. "Fuel tanks saved". */ tally?: string }
     | /**
        * Stop a raid: fails if any live member of the groups gets within `radius` of the point.
        * Completes when they are all destroyed — or once `abortFraction` of them is destroyed,

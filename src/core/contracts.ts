@@ -350,7 +350,7 @@ export type CreateMissionRunner = (
 ) => MissionRunnerApi;
 
 export interface InstantActionOptions {
-  mode: 'dogfight' | 'sam_gauntlet' | 'strike' | 'survival';
+  mode: 'dogfight' | 'sam_gauntlet' | 'strike' | 'defend' | 'survival';
   theater: TheaterId;
   timeOfDay: TimeOfDay;
   weather: Weather;

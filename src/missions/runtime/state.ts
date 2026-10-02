@@ -43,6 +43,8 @@ export interface GroupRt {
   task?: TaskDef;
   /** Entity id of the member currently leading the group (-1 = none yet). */
   leadId?: number;
+  /** 'attack_group' on a ground / SAM group: target entity id of each member (spawner.assignGroundAttack). */
+  strikeTargets?: Map<number, number>;
 }
 
 export interface ObjectiveRt {

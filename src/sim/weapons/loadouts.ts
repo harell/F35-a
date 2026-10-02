@@ -4,7 +4,8 @@
  * Store stations use the WeaponId "slots" of the shared contract. For enemy jets the slots
  * map to their own munitions: 'aim120' = radar BVR missile (R-27ER semi-active or R-77 active),
  * 'aim9x' = IR dogfight missile (R-73). The actual munition of each station is tracked here
- * (stationMunition) and is visible on launched missiles as `missile.def`.
+ * (stationMunition) and is visible on launched missiles as `missile.def`. Enemy strike jets carry
+ * the KAB-500S on the 'gbu31' (GPS bomb) slot.
  */
 import type { AircraftType, LoadoutId, MunitionId, WeaponId } from '../../core/types';
 import { LOADOUTS } from '../../core/data';
@@ -77,6 +78,35 @@ const ENEMY_LOADOUTS: Partial<Record<AircraftType, DefaultLoadout>> = {
   a320: { stores: [], gunAmmo: 0, flares: 0, chaff: 0 },
 };
 
+/**
+ * Enemy strike loadouts (applyDefaultLoadout with variant 'strike'): KAB-500S satellite-guided
+ * bombs on the 'gbu31' slot plus a pair of R-73s for self-defence. Types without an entry fall
+ * back to STRIKE_FALLBACK.
+ */
+const ENEMY_STRIKE_LOADOUTS: Partial<Record<AircraftType, DefaultLoadout>> = {
+  mig29: {
+    stores: [
+      { weapon: 'gbu31', munition: 'kab500', count: 2, internal: false },
+      { weapon: 'aim9x', munition: 'r73', count: 2, internal: false },
+    ],
+    gunAmmo: 150,
+    flares: 30,
+    chaff: 30,
+  },
+};
+const STRIKE_FALLBACK: DefaultLoadout = {
+  stores: [
+    { weapon: 'gbu31', munition: 'kab500', count: 4, internal: false },
+    { weapon: 'aim9x', munition: 'r73', count: 2, internal: false },
+  ],
+  gunAmmo: 150,
+  flares: 32,
+  chaff: 32,
+};
+
+/** Enemy loadout variant: the type's usual air-to-air fit, or air-to-ground ('strike'). */
+export type EnemyLoadout = 'default' | 'strike';
+
 /** Gun fitted to an aircraft type (null = none). */
 export function gunFor(ac: AircraftEntity): GunDef | null {
   if (ac.gunMaxAmmo <= 0 && ac.gunAmmo <= 0) return null;
@@ -94,6 +124,7 @@ export function defaultMunitionFor(ac: AircraftEntity, weapon: StoreWeapon): Mun
   if (ac.type === 'f35a') return weapon;
   if (weapon === 'aim120') return ac.type === 'mig29' ? 'r27' : 'r77';
   if (weapon === 'aim9x') return 'r73';
+  if (weapon === 'gbu31') return 'kab500';
   return weapon;
 }
 
@@ -217,10 +248,11 @@ export function applyLoadout(ac: AircraftEntity, id: LoadoutId, world: SimWorld 
 }
 
 /** Equip an AI aircraft with its typical weapons (by type). */
-export function applyDefaultLoadout(ac: AircraftEntity, world: SimWorld | null = null): void {
-  if (ac.type === 'f35a') return applyLoadout(ac, 'a2a_stealth', world);
+export function applyDefaultLoadout(ac: AircraftEntity, world: SimWorld | null = null, variant: EnemyLoadout = 'default'): void {
+  if (ac.type === 'f35a') return applyLoadout(ac, variant === 'strike' ? 'strike_stealth' : 'a2a_stealth', world);
   ensureSignatures(ac);
-  const def = ENEMY_LOADOUTS[ac.type] ?? { stores: [], gunAmmo: 150, flares: 30, chaff: 30 };
+  const def =
+    variant === 'strike' ? (ENEMY_STRIKE_LOADOUTS[ac.type] ?? STRIKE_FALLBACK) : (ENEMY_LOADOUTS[ac.type] ?? { stores: [], gunAmmo: 150, flares: 30, chaff: 30 });
   const st = acState(ac);
   ac.loadout = null;
   ac.stores = def.stores.map((s): StoreStation => ({ weapon: s.weapon, count: s.count, internal: s.internal }));
@@ -231,5 +263,5 @@ export function applyDefaultLoadout(ac: AircraftEntity, world: SimWorld | null =
   ac.chaff = def.chaff;
   ac.rcsMultiplier = st.rcsMultiplier = 1;
   ac.selectedWeapon = 'gun';
-  setSelected(ac, initialWeapon(ac, 'aa'), world);
+  setSelected(ac, initialWeapon(ac, variant === 'strike' ? 'ag' : 'aa'), world);
 }

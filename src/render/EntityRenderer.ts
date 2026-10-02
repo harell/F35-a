@@ -53,7 +53,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   // Pre-build prototypes for everything already spawned (missions spawn before this factory runs),
   // so the geometry/texture work happens behind the loading screen instead of on the first frame.
   for (const ac of world.aircraft) getAircraftPrototype(ac.type);
-  for (const id of ['aim120', 'aim9x', 'r73', 'r77', 'r27', 'gbu31', 'gbu39', 'gbu53', 'aargm'] as MunitionId[]) munitionGeometry(id);
+  for (const id of ['aim120', 'aim9x', 'r73', 'r77', 'r27', 'gbu31', 'kab500', 'gbu39', 'gbu53', 'aargm'] as MunitionId[]) munitionGeometry(id);
 
   // reflections: prefer the environment module's env map, else our procedural sky cube
   const envMap = scene.environment ?? getEnvCube();
@@ -250,6 +250,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
 
       // ground targets
       for (const g of world.ground) {
+        if (g.scenery) continue; // the world scenery draws it (Wiri tanks)
         let tr = grounds.get(g.id);
         if (!tr) {
           const v = new GroundVisual(getGroundPrototype(g.type, palette, g.vessel));

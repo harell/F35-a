@@ -174,6 +174,11 @@ export class Callouts {
       if (running) s.friendlyLosses++;
       s.hud('FRIENDLY DOWN', 'bad', 3);
       s.radio.push({ from: s.awacsCallsign, text: `Friendly down! ${entity.callsign} is down.`, voice: 'a_friendly_down', priority: 4 });
+    } else if (byPlayer) {
+      // friendly fire on a friendly site (the Wiri tanks): a loss, and DARKSTAR says so
+      if (running) s.friendlyLosses++;
+      s.hud(`FRIENDLY FIRE: ${killHudText(entity)}`, 'bad', 3.5);
+      s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, that was a friendly ${entity.name || 'target'}!`, priority: 4 });
     } else {
       s.hud(`FRIENDLY ${killHudText(entity)}`, 'bad', 3);
     }

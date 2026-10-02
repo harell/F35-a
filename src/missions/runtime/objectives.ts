@@ -258,3 +258,17 @@ export function objectiveSummary(s: MissionState): {
   }
   return { primaryTotal, primaryDone, primaryFailed, secondaryTotal, secondaryDone, bonus };
 }
+
+/** Debrief tallies of protect objectives that ask for one (`tally`): survivors of the group. */
+export function protectTallies(s: MissionState): { label: string; saved: number; total: number }[] {
+  const out: { label: string; saved: number; total: number }[] = [];
+  for (const o of s.objectives) {
+    const def = o.def;
+    if (def.kind !== 'protect' || !def.tally) continue;
+    const g = s.groups.get(def.group);
+    if (!g || g.expected <= 0) continue;
+    const saved = g.members.length < g.expected ? g.expected - deadCount(g) : aliveCount(g);
+    out.push({ label: def.tally, saved, total: g.expected });
+  }
+  return out;
+}

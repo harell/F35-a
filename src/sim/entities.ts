@@ -495,6 +495,11 @@ export class GroundTargetEntity implements Entity {
   anchored = false;
   /** Sim time it was destroyed (-1 = alive): paces the sinking / collapse animation. */
   destroyedAt = -1;
+  /**
+   * Drawn by the world scenery (a Wiri oil-terminal tank): the entity renderer adds no model, the
+   * kill effects (fire, smoke column) still play at its position.
+   */
+  scenery = false;
 
   constructor(
     readonly id: number,

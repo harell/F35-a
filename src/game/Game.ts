@@ -863,7 +863,8 @@ export class Game {
         rendered: this.session?.targetCam.lastTargetId ?? null,
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,
       }),
-      missions: () => [...CAMPAIGN, ...TRAINING].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
+      // + the Instant Action scenario built on a fixed site (Wiri defence) so the e2e sweep covers it
+      missions: () => [...CAMPAIGN, ...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
     };
   }

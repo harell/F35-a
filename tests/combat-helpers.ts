@@ -132,7 +132,7 @@ export class FakeWorld implements SimWorld {
     ac.flight.engineRpm = 0.9;
     this.updateFlight(ac);
     if (spec.loadout) this.combat.applyLoadout(ac, spec.loadout);
-    else this.combat.applyDefaultLoadout(ac);
+    else this.combat.applyDefaultLoadout(ac, spec.enemyLoadout);
     this.aircraft.push(ac);
     this.map.set(ac.id, ac);
     if (ac.isPlayer) this.player = ac;

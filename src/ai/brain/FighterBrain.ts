@@ -685,15 +685,23 @@ export class FighterBrain extends Brain {
     if (leader) {
       let slot = SLOT_FIGHTING_WING;
       let label = 'FORM';
+      let on = leader;
       if (this.cfg.escort) {
         slot = SLOT_ESCORT;
         label = 'ESCORT';
+        // an escort pair: the wingman flies fighting wing on its own element lead (both taking the
+        // escort slot on the escorted jet put them on top of each other — they collided)
+        const own = world.getEntity(ac.leaderId);
+        if (own && own.kind === 'aircraft' && own.alive && own !== ac && own.team === ac.team && own !== leader) {
+          on = own;
+          slot = SLOT_FIGHTING_WING;
+        }
       } else if (this.cfg.friendlyWing) {
         // close formation in peace, fighting wing when bandits are around
         const b = this.aw.closest(true);
         slot = b && b.range < 40_000 ? SLOT_FIGHTING_WING : SLOT_FINGERTIP;
       }
-      this.form.fly(it, ac, leader, slot, dt, this.skill.level, this.skill.maxG);
+      this.form.fly(it, ac, on, slot, dt, this.skill.level, this.skill.maxG);
       if (ac.radar.designatedId !== null && !this.cfg.friendlyWing) world.combat.designate(ac, null, world);
       this.setState(label);
       return;
