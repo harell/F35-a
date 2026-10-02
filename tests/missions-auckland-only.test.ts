@@ -17,7 +17,7 @@ import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { parseInstantSetup } from '../src/ui/screens/instantAction';
 
-const MODES: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
+const MODES: InstantActionOptions['mode'][] = ['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
 const REMOVED = ['desert', 'islands', 'mountains', 'arctic'];
 
 // node:fs without @types/node (the project doesn't ship node typings): the minimal surface used here

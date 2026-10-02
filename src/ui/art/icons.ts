@@ -22,6 +22,8 @@ const P: Record<string, string> = {
   sam: '<path d="M4 20h16M7 20l3-6h4l3 6M12 14V4M12 4l-2 3M12 4l2 3"/>',
   bomb: '<ellipse cx="12" cy="13" rx="4" ry="6.5"/><path d="M12 6.5V3M9 3h6M8.8 18.5L7 21M15.2 18.5L17 21"/>',
   shield: '<path d="M12 3l7 3v5.5c0 4.5-3 7.8-7 9.5-4-1.7-7-5-7-9.5V6z"/><path d="M9 12l2 2 4-4"/>',
+  // baby pram (A Stroll in the Park): hood, basket, push handle, two wheels
+  pram: '<path d="M4 11h11a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M4 11a5.5 5.5 0 0 1 5.5-5.5V11"/><path d="M15 11l2.5-5.5H20"/><circle cx="8" cy="19" r="1.8"/><circle cx="14" cy="19" r="1.8"/>',
   waves: '<path d="M3 9c3-3 6 3 9 0s6 3 9 0M3 15c3-3 6 3 9 0s6 3 9 0"/>',
   dogfight: '<path d="M4 20l6-6M10 14l1.5-4.5L16 8l-1.5 4.5zM20 4l-4 4"/><path d="M14 20l6-6M20 20l-3-3"/>',
   pin: '<path d="M12 21s-6.5-5.9-6.5-11a6.5 6.5 0 0 1 13 0c0 5.1-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',

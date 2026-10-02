@@ -480,6 +480,12 @@ export interface MissionScript {
   successText?: string;
   /** Last mission of the campaign: success sets MissionResult.campaignComplete (campaign ending). */
   campaignFinale?: boolean;
+  /**
+   * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
+   * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower
+   * down doesn't end the sortie.
+   */
+  freeFlight?: boolean;
 }
 
 /** Empty script (helper for builders). */

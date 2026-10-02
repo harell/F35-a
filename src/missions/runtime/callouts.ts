@@ -151,7 +151,8 @@ export class Callouts {
       const ship = entity.kind === 'ground' && entity.type === 'ship';
       const who = entity.kind === 'aircraft' ? entity.callsign : entity.name;
       if (byPlayer) {
-        if (running) {
+        // free flight: nothing counts against the player
+        if (running && !s.script.freeFlight) {
           s.civilianKills++;
           if (ship) s.civilianShipKills++;
         }

@@ -86,7 +86,7 @@ describe('missions: campaign & training content', () => {
 });
 
 describe('missions: instant action generator', () => {
-  const modes: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
+  const modes: InstantActionOptions['mode'][] = ['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
   const theaters: TheaterId[] = ['auckland'];
 
   it('builds a valid mission for every mode × size, in Auckland', () => {
