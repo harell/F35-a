@@ -46,6 +46,12 @@ export interface SamTypeData {
   armDiscipline: number;
   /** Antenna height for terrain line-of-sight (m). */
   mastHeight: number;
+  /**
+   * End-game miss distance against the target's height above the site (sam/endgame.ts): σ × `low`
+   * at `lowHeight` m or less, × `high` at `highHeight` m or more, smooth in between. null = × 1 at
+   * every height (radar SAMs: their fire-control error does not depend on the target's height).
+   */
+  heightMiss: { lowHeight: number; low: number; highHeight: number; high: number } | null;
   /** AAA: burst length / pause (s) and ammunition. */
   burst: number;
   burstPause: number;
@@ -72,6 +78,7 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
   lowAltFactor: 0.7,
   armDiscipline: 0.6,
   mastHeight: 8,
+  heightMiss: null,
   burst: 0,
   burstPause: 0,
   ammo: 0,
@@ -203,6 +210,10 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     lowAltFactor: 1,
     armDiscipline: 0,
     mastHeight: 2,
+    // design pillar 3 (MANPADS threaten low flight): against a low, close jet the round flies a
+    // short time with the motor still burning and the gunner's lead is easy; climbing to a jet at
+    // 1,500 m it burns out on the way and arrives slow, with little g left for the end game
+    heightMiss: { lowHeight: 300, low: 0.6, highHeight: 1_500, high: 1.8 },
   },
   // ZSU-23-4 Shilka: Gun Dish radar + optical backup, 4 × 23 mm
   zsu23: {
