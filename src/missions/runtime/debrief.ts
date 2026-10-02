@@ -6,6 +6,8 @@
 import type { MissionResult } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, SamType } from '../../core/types';
+import { CAMPAIGN_PART1 } from '../content/campaign1';
+import { CAMPAIGN_PART2 } from '../content/campaign2';
 import { fixedDifficulty } from '../difficulty';
 import type { MissionScript } from '../schema';
 import { REASONS } from './reasons';
@@ -150,11 +152,20 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   return tips;
 }
 
-/** Medals earned this sortie. */
-export function awardMedals(s: MissionState, r: MissionResult, finale: boolean): MedalDef[] {
+/**
+ * Operation Southern Cross's mission ids: CAMPAIGN in ../index.ts, which can't be imported here
+ * (index.ts imports this module through MissionRunner).
+ */
+const SOUTHERN_CROSS_IDS = new Set([...CAMPAIGN_PART1, ...CAMPAIGN_PART2].map((m) => m.id));
+
+/** Medals earned this sortie. `campaignFinale`: the sortie won a campaign's finale (any campaign). */
+export function awardMedals(s: MissionState, r: MissionResult, campaignFinale: boolean): MedalDef[] {
   const out: MedalDef[] = [];
   const give = (m: MedalDef) => out.push({ ...m });
   const campaign = s.def.kind === 'campaign';
+  // the Southern Cross medal is for Operation Southern Cross's finale only: the IRGC campaign's
+  // finale (#78 / #82) still completes its campaign, and needs a medal of its own
+  const finale = campaignFinale && SOUTHERN_CROSS_IDS.has(s.def.id);
   if (s.stats.bridge) give(MEDALS.bridge_runner);
   if (r.kills.air >= 5) give(MEDALS.ace_in_a_day);
   if (r.kills.sam >= 2) give(MEDALS.iron_hand);

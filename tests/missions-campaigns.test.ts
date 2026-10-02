@@ -4,14 +4,16 @@
  * finds missions in any campaign, and a save from the one-campaign days keeps its progress.
  *
  * The IRGC campaign has no missions until #78 lands, so this file swaps its content module for a
- * three-mission fixture (g01–g03, copies of c01–c03). The real, empty file is checked separately.
+ * three-mission fixture (g01–g03, copies of c01–c03; g03 is the campaign's finale). The real, empty
+ * file is checked separately.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CampaignDef, CampaignProgress, MissionResult } from '../src/core/contracts';
+import type { CampaignDef, CampaignProgress, MissionDef, MissionResult } from '../src/core/contracts';
 
 vi.mock('../src/missions/content/irgc', async () => {
   const { CAMPAIGN_PART1 } = await import('../src/missions/content/campaign1');
   const missions = CAMPAIGN_PART1.slice(0, 3).map((m, i) => ({ ...m, id: `g0${i + 1}`, index: i + 1, title: `Fixture g0${i + 1}` }));
+  missions[2] = { ...missions[2], script: { ...missions[2].script, campaignFinale: true } };
   const IRGC_CAMPAIGN: CampaignDef = { id: 'irgc', name: 'Fixture IRGC', description: 'Test fixture', missions };
   return { IRGC_CAMPAIGN, IRGC_CAMPAIGN_NAME: IRGC_CAMPAIGN.name };
 });
@@ -38,6 +40,7 @@ import { CAMPAIGN_PART2 } from '../src/missions/content/campaign2';
 import { PROGRESS_KEY } from '../src/missions/progress';
 import { campaignStatus } from '../src/ui/format';
 import { campaignEnding } from '../src/ui/screens/ending';
+import { harness, killGroup, shieldPlayer } from './missions-helpers';
 
 function result(missionId: string, over: Partial<MissionResult> = {}): MissionResult {
   return {
@@ -244,5 +247,29 @@ describe('campaigns', () => {
     expect(irgc.epilogue.join(' ')).toContain(`${IRGC().name} is complete`);
     expect(irgc.epilogue.join(' ')).not.toContain('Southern Cross');
     expect(irgc.roll[0]).toEqual(['Campaign', IRGC().name]);
+  });
+
+  it('a campaign finale completes its own campaign; only Southern Cross\'s earns the Southern Cross medal', () => {
+    /** Fly a c03-shaped mission (g03, or c03 marked as a finale) and win it: SA-6 and SA-8 dead. */
+    const win = (def: MissionDef) => {
+      const h = harness(def);
+      h.run(1, () => shieldPlayer(h));
+      killGroup(h, 'rangi_sa6');
+      killGroup(h, 'rangi_sa8');
+      h.run(2, () => shieldPlayer(h));
+      expect(h.runner.state).toBe('success');
+      return h.runner.result(h.world);
+    };
+    const medals = (r: MissionResult) => (r.medals ?? []).map((m) => m.id);
+    const g03 = IRGC().missions[2];
+    expect(g03.script.campaignFinale).toBe(true);
+    const irgc = win(g03);
+    expect(irgc.campaignComplete).toBe(true);
+    expect(medals(irgc)).not.toContain('southern_cross');
+    // the same mission as a Southern Cross finale does earn it
+    const c03 = CAMPAIGN_PART1[2];
+    const sc = win({ ...c03, script: { ...c03.script, campaignFinale: true } });
+    expect(sc.campaignComplete).toBe(true);
+    expect(medals(sc)).toContain('southern_cross');
   });
 });
