@@ -10,7 +10,7 @@
  *  Datalink            team picture (friendly own-sensor tracks, red GCI from EWRs/SAM radars,
  *                      A-50), friendly positions, known SAM sites / targets for blue
  *
- * Also: designation (cycle / nearest-to / direct / auto), radar lock, ground designation point.
+ * Also: designation (cycle / nearest-to / direct / auto / shoot list), radar lock, ground designation point.
  */
 import { Vector3 } from 'three';
 import { isHostile, type Team } from '../../core/types';
@@ -411,16 +411,43 @@ function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): Trac
   return list.map((x) => x.c);
 }
 
+/** A missile `ac` launched is still flying at contact `id` (the contact is already engaged). */
+export function engagedBy(ctx: CombatCtx, ac: AircraftEntity, id: number): boolean {
+  for (const m of ctx.world.missiles) if (m.alive && m.shooterId === ac.id && m.targetId === id) return true;
+  return false;
+}
+
+/**
+ * Shoot list (human player): after an air-to-air launch the TD box steps to the highest-priority
+ * fresh hostile air track with none of our missiles in flight at it, so the next FIRE goes at a
+ * new target (an AMRAAM leaves off the TWS track, no lock needed). The box is commanded, as a tap
+ * would be, so TGT steps on from it. Nothing left unengaged: the box stays where it is.
+ */
+export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: number | null): void {
+  if (!ac.isPlayer || !isAirMode(ac)) return;
+  const st = acState(ac);
+  for (const c of candidates(ctx, ac, st)) {
+    if (c.id === firedAt || c.team === 'neutral' || c.entityKind !== 'aircraft' || c.lastSeen < ctx.time - 1.5) continue;
+    if (engagedBy(ctx, ac, c.id)) continue;
+    setDesignation(ctx, ac, c.id, true);
+    return;
+  }
+}
+
 /**
  * TGT button (LOCK / NEXT): with an unlocked, un-commanded TD box (the auto-designated primary
  * threat) the press commands the lock on THAT contact. A press while locking / locked moves the
  * designation to the next candidate (dropping the lock) and commands a lock on it. With a single
- * candidate it toggles: locked / locking → break lock (back to a silent TWS track).
+ * candidate it toggles: locked / locking → break lock (back to a silent TWS track). NEXT skips
+ * contacts our missiles are already flying at, unless nothing else is left to step to.
  */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
-  const list = candidates(ctx, ac, st);
-  if (list.length === 0) return;
+  const all = candidates(ctx, ac, st);
+  if (all.length === 0) return;
+  const des = ac.radar.designatedId;
+  const free = all.filter((c) => c.id === des || !engagedBy(ctx, ac, c.id));
+  const list = free.some((c) => c.id !== des) ? free : all;
   const idx = list.findIndex((c) => c.id === ac.radar.designatedId);
   // TGT state machine: the first press with an un-commanded TD box (auto-designated primary)
   // LOCKS the boxed contact; only a press while locking / locked advances to the next one.

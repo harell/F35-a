@@ -26,7 +26,7 @@ import type { CombatMunitionDef } from './defs';
 import { autoReselect, pickStation, stationMunition, totalStores } from './loadouts';
 import { launchMunition, type CombatMissile } from './missile';
 import { irSeekerSees } from '../sensors/irSeeker';
-import { dasLaunchCue } from '../sensors/Sensors';
+import { dasLaunchCue, shootListStep } from '../sensors/Sensors';
 
 type StoreWeapon = Exclude<WeaponId, 'gun'>;
 
@@ -243,7 +243,10 @@ function release(
   const m = launchMunition(ctx, ac, mun, target, { internal: s.internal, targetPoint: point, guided });
   // active radar missile fired off a TWS track (no STT): silent, but coarser midcourse updates
   if (m.cdef.guidance === 'active_radar' && target && !(ac.radar.lockedId === target.id && ac.radar.emitting)) m.tws = true;
-  if (m.def.category === 'aam') dasLaunchCue(ctx, ac);
+  if (m.def.category === 'aam') {
+    dasLaunchCue(ctx, ac);
+    shootListStep(ctx, ac, target ? target.id : null);
+  }
   s.count--;
   ac.shotsFired++;
   if (s.internal) {
