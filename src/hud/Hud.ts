@@ -47,9 +47,12 @@ import {
   waypointBearing,
 } from './hmd/targets';
 import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
-import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
+import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
 import { clearBandExt, reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
+
+/** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit). */
+const GUN_DIR_CAM_RANGE = 120;
 
 const _q = new Quaternion();
 const _fwd = new Vector3();
@@ -369,8 +372,14 @@ export const createHud: CreateHud = (canvas, events) => {
       if (hmd) {
         drawAim9x(f);
         drawGun(f);
-      } else protectJet(ctx);
+      } else {
+        protectJet(ctx);
+        // the gun pass is flown from the chase view on a phone too (playtest 2.1-c): the pipper (a world
+        // point) from any outside camera, the funnel and gun cross (directions) only from one near the jet
+        if (ctx.viewMode !== 'missile') drawGun(f, ctx.camera.position.distanceToSquared(p.position) < GUN_DIR_CAM_RANGE * GUN_DIR_CAM_RANGE);
+      }
       drawDesignated(f);
+      drawGunCues(f);
       g2.globalAlpha = 1;
       // 1b) fixed text blocks (tape, columns, DLZ, weapon block, objectives / hint, kill feed, external
       // info block + inset): every label placed after this dodges them, the ladder knocks out under them

@@ -22,6 +22,7 @@ import { computeTouchLayout } from '../src/input/touch/layout';
 import { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
 import { paletteFor } from '../src/hud/hmd/palette';
 import { PLAYER_LOCK_CONE } from '../src/sim/sensors/Sensors';
+import { gunOvershoot } from '../src/hud/hmd/weapons';
 
 installPath2D();
 
@@ -1012,44 +1013,63 @@ describe('engaged marker: own missile in flight at a contact', () => {
 
 describe('gun closure cue', () => {
   const kt = 0.514444;
-  /** The gun cue's Vc (the altitude column has its own, at the right): the leftmost one, if two. */
-  const gunVc = (texts: TextRec[]) => {
-    const all = find(texts, /^Vc \d+$/);
-    return all.length < 2 ? null : all.reduce((a, b) => (b.x < a.x ? b : a));
+  /** The gun cue's Vc texts: those the gun adds (the altitude column / info block has its own). */
+  const gunVcs = (r: Rig) => {
+    const p = r.mock.player;
+    p.selectedWeapon = 'aim120';
+    const base = find(r.run(0.1), /^Vc \d+$/).map((t) => `${Math.round(t.x)},${Math.round(t.y)}`);
+    p.selectedWeapon = 'gun';
+    const texts = r.run(0.1);
+    return { texts, vc: find(texts, /^Vc \d+$/).filter((t) => !base.includes(`${Math.round(t.x)},${Math.round(t.y)}`)) };
   };
-  it('shows Vc (knots) by the gun cue inside 3 km of an air target, OVERSHOOT when closing > 150 kt inside 1.5 km', () => {
-    const r = rig('gun', 'hud');
+  /** Put the target `range` m dead ahead, a little high, closing at `closureKt`. */
+  const place = (r: Rig, range: number, closureKt: number) => {
     const p = r.mock.player;
     const mig = r.mock.world.getEntity(p.radar.lockedId)!;
-    expect(mig.kind).toBe('aircraft');
     const fwd = p.velocity.clone().normalize();
-    // a slow drone ahead, 100 kt closure: Vc only
-    mig.velocity.copy(p.velocity).addScaledVector(fwd, -100 * kt);
-    let texts = r.run(0.1);
-    const vc = gunVc(texts)!;
-    expect(vc).not.toBeNull();
-    expect(Math.abs(Number(vc.text.slice(3)) - 100)).toBeLessThanOrEqual(15);
-    expect(vc.x).toBeLessThan(r.W * 0.75);
-    expect(find(texts, 'OVERSHOOT').length).toBe(0);
-    for (const t of texts) if (t !== vc) expect(overlaps(textBox(vc), textBox(t)), `Vc over "${t.text}"`).toBe(false);
-    // 220 kt closure inside 1.5 km: OVERSHOOT, clear of every other text
-    mig.velocity.copy(p.velocity).addScaledVector(fwd, -220 * kt);
-    texts = r.run(0.1);
-    const os = one(texts, 'OVERSHOOT');
-    expect(Number(gunVc(texts)!.text.slice(3))).toBeGreaterThan(150);
-    for (const t of texts) if (t !== os) expect(overlaps(textBox(os), textBox(t)), `OVERSHOOT over "${t.text}"`).toBe(false);
-    // beyond 3 km: no closure cue (the column's Vc only)
-    mig.position.copy(p.position).addScaledVector(fwd, 4000);
-    texts = r.run(0.1);
-    expect(find(texts, /^Vc \d+$/).length).toBe(1);
-    expect(find(texts, 'OVERSHOOT').length).toBe(0);
+    mig.position.copy(p.position).addScaledVector(fwd, range).add(new Vector3(0, range * 0.06, 0));
+    mig.velocity.copy(p.velocity).addScaledVector(fwd, -closureKt * kt);
+    const c = p.radar.contacts.find((k) => k.id === mig.id);
+    if (c) c.position.copy(mig.position);
+    return mig;
+  };
+  const clear = (texts: TextRec[], t: TextRec) => {
+    for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
+  };
+
+  it('OVERSHOOT is a time-to-close cue: under 4 s to the 150 m break-off at the present closure', () => {
+    expect(gunOvershoot(600, 100 * kt)).toBe(false); // 8.8 s
+    expect(gunOvershoot(580, 154 * kt)).toBe(false); // 5.4 s (lit too early before: playtest 2.1-b)
+    expect(gunOvershoot(300, 154 * kt)).toBe(true); // 1.9 s
+    expect(gunOvershoot(300, -20)).toBe(false); // opening
   });
 
-  it('is gun-only', () => {
-    const r = rig('gun', 'hud');
-    r.mock.player.selectedWeapon = 'aim120';
-    expect(find(r.run(0.1), /^Vc \d+$/).length).toBe(1);
-  });
+  for (const view of ['hud', 'chase'] as const) {
+    it(`${view}: Vc (knots) by the gun cue inside 3 km of an air target, OVERSHOOT only when about to overshoot, clear of every text`, () => {
+      const r = rig('gun', view);
+      place(r, 600, 100);
+      let { texts, vc } = gunVcs(r);
+      expect(vc.length, 'gun Vc drawn').toBe(1);
+      expect(Math.abs(Number(vc[0].text.slice(3)) - 100)).toBeLessThanOrEqual(15);
+      expect(find(texts, 'OVERSHOOT').length).toBe(0);
+      clear(texts, vc[0]);
+      // 580 m at Vc 154: still time to pull the pipper on (no cue)
+      place(r, 580, 154);
+      ({ texts, vc } = gunVcs(r));
+      expect(vc.length).toBe(1);
+      expect(find(texts, 'OVERSHOOT').length).toBe(0);
+      // 300 m at Vc 154: OVERSHOOT, clear of the target's labels and every other text
+      place(r, 300, 154);
+      ({ texts, vc } = gunVcs(r));
+      clear(texts, one(texts, 'OVERSHOOT'));
+      clear(texts, vc[0]);
+      // beyond 3 km: no closure cue
+      place(r, 4000, 154);
+      ({ texts, vc } = gunVcs(r));
+      expect(vc.length).toBe(0);
+      expect(find(texts, 'OVERSHOOT').length).toBe(0);
+    });
+  }
 });
 
 describe('target waypoint labels with the bandits in reach', () => {

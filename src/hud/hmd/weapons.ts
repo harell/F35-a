@@ -340,13 +340,19 @@ const WINGSPAN = 11;
 /** The gun's closure cue ("Vc 140", knots) shows inside this range of a designated air target (m). */
 export const GUN_VC_RANGE = 3000;
 /**
- * OVERSHOOT (amber) when closing faster than this (kt) inside GUN_OVERSHOOT_RANGE: at 150 kt the jet
- * eats the 600 m between the gun's effective range (1,200 m) and a safe break-off in under 8 s — too
- * little time to settle the pipper and fire, and too fast to turn behind a slow target (a Shahed at
- * ~100 kt) once past it.
+ * OVERSHOOT (amber) is a time-to-close cue: lit when the jet will be inside GUN_OVERSHOOT_MIN (the
+ * warhead's reach, where it must break off) in under GUN_OVERSHOOT_TIME at the present closure — too
+ * little time to pull the pipper onto a slow target (a Shahed at ~100 kt) and fire. 600 m at Vc 100 kt
+ * is 8.8 s (no cue); 300 m at Vc 154 kt is 1.9 s (cue). (A closure-only threshold lit at 580 m, Vc 154,
+ * long before the pipper could reach the drone: playtest 2.1-b.)
  */
-export const GUN_OVERSHOOT_KT = 150;
-export const GUN_OVERSHOOT_RANGE = 1500;
+export const GUN_OVERSHOOT_TIME = 4;
+export const GUN_OVERSHOOT_MIN = 150;
+
+/** OVERSHOOT at `range` (m) closing at `closure` (m/s)? */
+export function gunOvershoot(range: number, closure: number): boolean {
+  return closure > 0 && (range - GUN_OVERSHOOT_MIN) / closure < GUN_OVERSHOOT_TIME;
+}
 const gunVcTxt = new NumText(0, 'Vc ');
 
 /** Closure rate (m/s, positive = closing) between the player and `t`. */
@@ -361,9 +367,9 @@ export function closureRate(p: { position: Vector3; velocity: Vector3 }, t: { po
 
 /**
  * Gun closure cue beside the anchor (the LCOS pipper, or the gun cross without one): "Vc 140", and
- * OVERSHOOT under it when closing too fast inside 1.5 km. Tries right, left, below, above the anchor
- * for a spot clear of the registered symbols / text and of the target box (drawn after this), then
- * registers itself as protected.
+ * OVERSHOOT under it when closing too fast (gunOvershoot). Drawn after the target box and its labels
+ * (drawGunCues), so it tries right, left, below, above the anchor for a spot clear of everything
+ * registered, them included (playtest 2.1-d: "Vc" into the drone's name), then registers itself.
  */
 function drawGunClosure(f: HudFrame, ax: number, ay: number, ar: number): void {
   const t = f.target;
@@ -372,8 +378,9 @@ function drawGunClosure(f: HudFrame, ax: number, ay: number, ar: number): void {
   const range = t.position.distanceTo(p.position);
   if (range > GUN_VC_RANGE) return;
   const u = L.u;
-  const kt = toKnots(closureRate(p, t));
-  const over = kt > GUN_OVERSHOOT_KT && range < GUN_OVERSHOOT_RANGE;
+  const closure = closureRate(p, t);
+  const kt = toKnots(closure);
+  const over = gunOvershoot(range, closure);
   const vc = gunVcTxt.get(kt);
   const lh = 12 * u;
   const w = Math.max(pen.textWidth(vc, 11), over ? pen.textWidth('OVERSHOOT', 11) : 0) + 2 * u;
@@ -403,10 +410,29 @@ function drawGunClosure(f: HudFrame, ax: number, ay: number, ar: number): void {
   f.occ.add(x0, y0, x0 + w, y0 + h, 1);
 }
 
-export function drawGun(f: HudFrame): void {
+/** Where drawGun left the closure cue's anchor this frame (the pipper, or the gun cross). */
+const gunAnchor = { frame: -1, x: 0, y: 0, r: 0 };
+
+/** The gun's closure cue (Vc / OVERSHOOT), once the target box and its labels are drawn. */
+export function drawGunCues(f: HudFrame): void {
+  if (f.p.selectedWeapon !== 'gun' || gunAnchor.frame !== f.st.frame) return;
+  drawGunClosure(f, gunAnchor.x, gunAnchor.y, gunAnchor.r);
+}
+
+/**
+ * Gun symbology: EEGS funnel, gun cross, LCOS pipper.
+ * @param dirs  draw the direction-projected symbols (funnel, gun cross): the HMD views and an external
+ *              camera close to the jet (chase); a far camera (flyby) gets the pipper only, which is a
+ *              world point and projects right from anywhere
+ */
+export function drawGun(f: HudFrame, dirs = true): void {
   if (f.p.selectedWeapon !== 'gun') return;
   const { pen, pal, L, proj, p } = f;
   const u = L.u;
+  if (!dirs) {
+    drawPipper(f, NaN, NaN);
+    return;
+  }
   // EEGS funnel: bullet stream lags the nose rotation and drops with gravity
   const fwd = forwardOf(p.quaternion, f.v1);
   const fx = fwd.x, fy = fwd.y, fz = fwd.z;
@@ -488,6 +514,14 @@ export function drawGun(f: HudFrame): void {
     crossY = sp.y - 8 * u;
   }
   // LCOS pipper at the lead point with a range bar
+  drawPipper(f, crossX, crossY);
+}
+
+/** LCOS pipper (and the closure cue's anchor: the pipper, else the gun cross at crossX / crossY). */
+function drawPipper(f: HudFrame, crossX: number, crossY: number): void {
+  const { pen, pal, L, proj, p } = f;
+  const u = L.u;
+  const sp = f.sp;
   let lead: ReturnType<typeof f.world.combat.gunLeadPoint> = null;
   try {
     lead = f.world.combat.gunLeadPoint(p, f.world);
@@ -495,7 +529,7 @@ export function drawGun(f: HudFrame): void {
     lead = null;
   }
   if (!lead || !proj.point(lead, sp) || !sp.onScreen) {
-    if (Number.isFinite(crossX)) drawGunClosure(f, crossX, crossY, 14 * u);
+    if (Number.isFinite(crossX)) setAnchor(f, crossX, crossY, 14 * u);
     return;
   }
   const x = sp.x;
@@ -522,7 +556,14 @@ export function drawGun(f: HudFrame): void {
   pen.begin();
   pen.line(x + Math.cos(ta) * (R + 1), y + Math.sin(ta) * (R + 1), x + Math.cos(ta) * (R + 6 * u), y + Math.sin(ta) * (R + 6 * u));
   pen.strokeGlow(pal.main, 1.4);
-  drawGunClosure(f, x, y, R + 7 * u);
+  setAnchor(f, x, y, R + 7 * u);
+}
+
+function setAnchor(f: HudFrame, x: number, y: number, r: number): void {
+  gunAnchor.frame = f.st.frame;
+  gunAnchor.x = x;
+  gunAnchor.y = y;
+  gunAnchor.r = r;
 }
 
 /* ───────────────────────── Air-to-ground ───────────────────────── */
