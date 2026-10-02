@@ -298,11 +298,14 @@ export const C04: MissionDef = mission({
       flight('cap', 'mig29', 2, { x: 26000, z: -12000 }, 5500, 250, 230, 'cap', { task: { kind: 'patrol', x: 26000, z: -11000, radius: 6000, altitude: 5500 } }),
       // Viper 2 flies top cover as a sweep ahead of the player, straight at the MiG CAP
       fighterSweep(1, { x: 7000, z: -3500 }, 7000, 75, 'cap'),
-      flight('scramble', 'mig29', 2, rw(-900, 0), 500, WAIHEKE_RUNWAY_HDG, 170, 'interceptor', {
+      // One Fulcrum scrambles (two on Ace, enemyCountScale 1.5), and only once the player is on the bomb
+      // run (11 km: the JDAM release is ~9.5 km out). A pair rolling at 16 km, while the player was still
+      // crossing the strait with his two AMRAAMs spent on the CAP, ran down the Veteran bot every time (#58)
+      flight('scramble', 'mig29', 1, rw(-900, 0), 500, WAIHEKE_RUNWAY_HDG, 170, 'interceptor', {
         spawn: {
           kind: 'all',
           of: [
-            { kind: 'area', x: strip.x, z: strip.z, radius: 16000 },
+            { kind: 'area', x: strip.x, z: strip.z, radius: 11000 },
             { kind: 'not', of: { kind: 'group_destroyed', group: 'parked' } },
           ],
         },
@@ -313,8 +316,10 @@ export const C04: MissionDef = mission({
       site('sa6', 'wai_sa6', 'sa6', P.waiW, { heading: 250 }),
       site('zsuW', 'wai_aaa', 'zsu23', rw(-700, 150), { minDifficulty: 'pilot' }),
       site('zsuE', 'wai_aaa', 'zsu23', rw(700, 150)),
-      // Recruit / Pilot: no Tor — its point defence shot the JDAMs down and made sortie 4 a wall (i2 review)
-      site('sa15', 'wai_sa15', 'sa15', P.waiC, { minDifficulty: 'veteran' }),
+      // Recruit / Pilot: no Tor — its point defence shot the JDAMs down and made sortie 4 a wall (i2 review).
+      // Veteran+: it guards the east end of the island, > 3 km (its point-defence bubble) from the parked
+      // jets, so the two JDAMs aren't shot down on the apron; it still covers the strip against a low pass (#58)
+      site('sa15', 'wai_sa15', 'sa15', P.waiE, { minDifficulty: 'veteran' }),
       site('manpads', 'wai_manpads', 'sa18', { x: 27300, z: -6900 }, { minDifficulty: 'veteran' }),
       // Recruit / Pilot: the Motutapu Osa is gone (a dogfight with the CAP drifts right into it)
       site('sa8', 'motu_sa8', 'sa8', P.motuN, { minDifficulty: 'veteran' }),
@@ -346,7 +351,7 @@ export const C04: MissionDef = mission({
       {
         id: 't_scramble',
         when: { kind: 'group_spawned', group: 'scramble' },
-        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two Fulcrums rolling on the Waiheke runway — scramble, scramble!', priority: 2 }],
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Scramble, scramble! Fulcrum rolling on the Waiheke runway.', priority: 2 }],
       },
       {
         id: 't_jets_dead',
