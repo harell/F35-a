@@ -66,6 +66,7 @@ import {
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark } from '../sim/landmarks';
+import { FlowInterrupt } from './flow';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -110,6 +111,14 @@ export class Game {
   private session: Session | null = null;
   private paused = false;
   private pauseMenuOpen = false;
+  /** runSession() is building a mission (the session isn't flying yet). */
+  private missionLoading = false;
+  /** Every screen the app flow waits on goes through `flow.ask()`, so fly() can take over from it. */
+  private readonly flow = new FlowInterrupt();
+  /** Test hooks: the mission fly() asked for, until the main menu loop starts it. */
+  private pendingFly: { def: MissionDef; loadout: LoadoutId } | null = null;
+  /** Test hooks: pause() came during a fly() hand-over or a load; open the menu once the mission is ready. */
+  private pauseWhenReady = false;
   private lastFrame = performance.now();
   private accumulator = 0;
   private frameTimes: number[] = [];
@@ -199,16 +208,15 @@ export class Game {
   async start(): Promise<void> {
     const autostart = TEST_HOOKS && this.params.get('autostart') === '1';
     if (!autostart) {
-      await this.ui.showSplash();
-      await this.onUserGesture();
+      // (a fly() over the splash skips the gesture: the main menu loop flies its mission)
+      if (await this.flow.run(() => this.flow.ask(this.ui.showSplash()))) await this.onUserGesture();
     }
     void this.audio.load();
     const missionId = TEST_HOOKS ? this.params.get('mission') : null;
-    if (missionId) {
+    if (missionId && !this.pendingFly) {
       const def = missionById(missionId) ?? CAMPAIGN[0];
       const loadout = (this.params.get('loadout') as LoadoutId | null) ?? def.recommendedLoadout;
-      if (autostart) await this.missionFlow(def, loadout);
-      else await this.missionFlow(def);
+      await this.flow.run(() => (autostart ? this.missionFlow(def, loadout) : this.missionFlow(def)));
     }
     await this.mainMenu();
   }
@@ -229,31 +237,44 @@ export class Game {
 
   private async mainMenu(): Promise<never> {
     for (;;) {
-      const choice = await this.ui.showMainMenu();
-      track(`menu_${choice}`);
-      // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
-      this.progress = loadProgress();
-      if (choice === 'campaign') {
-        await this.pickAndFly(() => this.ui.showCampaign(CAMPAIGN, this.progress));
-      } else if (choice === 'training') {
-        await this.pickAndFly(() => this.ui.showTraining(TRAINING, this.progress));
-      } else if (choice === 'instant') {
-        await this.pickAndFly(async () => {
-          const opts = await this.ui.showInstantAction();
-          return opts ? buildInstantMission(opts) : null;
-        });
-      } else if (choice === 'settings') {
-        await this.editSettings();
-      } else if (choice === 'credits') {
-        await this.ui.showCredits();
-      }
+      // a fly() that took over the flow (from any screen or mission) ends up here: fly its mission,
+      // and when that one is over the main menu comes back like after any other flight
+      await this.flow.run(() => this.mainMenuStep());
+    }
+  }
+
+  private async mainMenuStep(): Promise<void> {
+    const fly = this.pendingFly;
+    if (fly) {
+      this.pendingFly = null;
+      await this.missionFlow(fly.def, fly.loadout);
+      return;
+    }
+    this.pauseWhenReady = false;
+    const choice = await this.flow.ask(this.ui.showMainMenu());
+    track(`menu_${choice}`);
+    // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
+    this.progress = loadProgress();
+    if (choice === 'campaign') {
+      await this.pickAndFly(() => this.ui.showCampaign(CAMPAIGN, this.progress));
+    } else if (choice === 'training') {
+      await this.pickAndFly(() => this.ui.showTraining(TRAINING, this.progress));
+    } else if (choice === 'instant') {
+      await this.pickAndFly(async () => {
+        const opts = await this.ui.showInstantAction();
+        return opts ? buildInstantMission(opts) : null;
+      });
+    } else if (choice === 'settings') {
+      await this.editSettings();
+    } else if (choice === 'credits') {
+      await this.flow.ask(this.ui.showCredits());
     }
   }
 
   /** Mission list / Instant Action setup → missionFlow; Back on the briefing returns to that screen. */
   private async pickAndFly(pick: () => Promise<MissionDef | null>): Promise<void> {
     for (;;) {
-      const def = await pick();
+      const def = await this.flow.ask(pick());
       if (!def || (await this.missionFlow(def)) !== 'back') return;
       this.progress = loadProgress();
     }
@@ -268,7 +289,7 @@ export class Game {
     let loadout = presetLoadout ?? null;
     while (def) {
       if (!loadout) {
-        const brief = await this.ui.showBriefing(def, this.settings);
+        const brief = await this.flow.ask(this.ui.showBriefing(def, this.settings));
         if (!brief) return 'back';
         loadout = brief.loadout;
       }
@@ -301,7 +322,7 @@ export class Game {
       this.trackResult(result);
       // campaign → next mission, training → next lesson (T03 → the first campaign mission)
       const next = result.success ? nextMissionLabel(def.id) : null;
-      const choice = await this.ui.showDebrief(result, next);
+      const choice = await this.flow.ask(this.ui.showDebrief(result, next));
       return choice;
     }
   }
@@ -319,6 +340,7 @@ export class Game {
   /** Builds the world for a mission and resolves when it ends (or the player restarts/quits). */
   private async runSession(def: MissionDef, loadout: LoadoutId): Promise<'ended' | 'restart' | 'quit'> {
     this.teardownSession();
+    this.missionLoading = true;
     // test hooks (autopilot, controls override) belong to one mission: never leak into the next
     this.autopilot = false;
     this.controlOverride = null;
@@ -408,6 +430,13 @@ export class Game {
     analyticsTag('difficulty', this.settings.difficulty);
     void this.requestWakeLock();
     this.audio.setPaused(false);
+    this.missionLoading = false;
+    // test hooks: a fly() during the load replaces this mission; a pause() during it opens the menu now
+    if (this.pendingFly) this.session?.resolve('quit');
+    else if (this.pauseWhenReady) {
+      this.pauseWhenReady = false;
+      this.openPauseMenu();
+    }
     return endPromise;
   }
 
@@ -445,7 +474,7 @@ export class Game {
   }
 
   private async editSettings(): Promise<void> {
-    this.settings = await this.ui.showSettings({ ...this.settings });
+    this.settings = await this.flow.ask(this.ui.showSettings({ ...this.settings }));
     saveSettings(this.settings);
     this.applySettings();
   }
@@ -562,7 +591,7 @@ export class Game {
     this.audio.setPaused(true);
     const loop = async (): Promise<void> => {
       for (;;) {
-        const choice = await this.ui.showPause(s.runner);
+        const choice = await this.flow.ask(this.ui.showPause(s.runner));
         if (choice === 'settings') {
           await this.editSettings();
           continue;
@@ -579,7 +608,8 @@ export class Game {
         return;
       }
     };
-    void loop();
+    // a fly() that takes over closes the menu itself (see flyFromHook) and ends this loop
+    void this.flow.run(loop);
   }
 
   private applyViewMode(mode: CameraMode): void {
@@ -784,6 +814,19 @@ export class Game {
 
   /* ─────────────────────────── Test hooks ─────────────────────────── */
 
+  /**
+   * fly(): take over from whatever is up (a menu, briefing, debrief, the pause menu or a mission) and
+   * fly `def` from the main menu loop, so the app flow stays one loop: no screen is left waiting for an
+   * answer and quitting the new mission returns to the main menu (#71).
+   */
+  private flyFromHook(def: MissionDef, loadout: LoadoutId): void {
+    this.pendingFly = { def, loadout };
+    this.ui.hideAll();
+    this.pauseMenuOpen = false;
+    this.flow.abort(); // rejects the screen the flow (or the pause menu's loop) waits on
+    this.session?.resolve('quit'); // a running mission ends like a quit (no result recorded)
+  }
+
   private debugApi() {
     return {
       game: this,
@@ -823,12 +866,11 @@ export class Game {
           renderer: { calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles },
         };
       },
-      /** Programmatically start a mission (tests). */
+      /** Programmatically start a mission (tests), from any screen or mission; quitting it returns to the main menu. */
       fly: (id: string, loadout?: LoadoutId) => {
         const def = missionById(id);
         if (!def) throw new Error(`no mission ${id}`);
-        this.ui.hideAll();
-        void this.missionFlow(def, loadout ?? def.recommendedLoadout);
+        this.flyFromHook(def, loadout ?? def.recommendedLoadout);
       },
       setView: (mode: CameraMode) => {
         this.session?.rig.setMode(mode);
@@ -842,7 +884,11 @@ export class Game {
         if (cmd === 'cycleTarget') s.world.combat.cycleTarget(p, s.world);
         if (cmd === 'radar') s.world.combat.setRadarEmitting(p, !p.radar.emitting, s.world);
       },
-      pause: () => this.openPauseMenu(),
+      /** Open the pause menu; right after a fly() (or during a load) it opens once that mission is ready. */
+      pause: () => {
+        if (this.pendingFly || this.missionLoading) this.pauseWhenReady = true;
+        else this.openPauseMenu();
+      },
       /** Let an AI fighter brain fly the player's jet (for automated playtests). */
       autopilot: (on: boolean, role: 'fighter' | 'wingman' | 'interceptor' = 'fighter') => {
         const p = this.session?.world.player;

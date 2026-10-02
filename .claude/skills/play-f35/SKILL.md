@@ -39,7 +39,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Fly with scripted inputs (stall, high-g, low level) | `window.__f35.controls({pitch:1, throttle:1})`, `null` to clear; `autopilot(false)` first | free |
 | Let the AI fly the jet | `window.__f35.autopilot(true, role)` (role: `fighter`, `wingman`, `interceptor`) | free |
 | Skip ahead N seconds of game time | `window.__f35.simulate(N)` (fixed 60 Hz steps, no rendering; stops when the mission ends) | ~0.4 s per game minute |
-| Start another mission in the same page | `window.__f35.fly('c05', loadout?)` | *est.* a few s |
+| Start another mission in the same page | `window.__f35.fly('c05', loadout?)`: works from any screen, menu or mission; quitting it returns to the main menu, and a `pause()` right after it opens once the mission is ready | *est.* a few s |
 | Change camera | `window.__f35.setView('cockpit')` (also `hud`, `chase`, `orbit`, …) or `&view=` | free |
 | Check the Sky Tower collapse | `window.__f35.destroySkyTower(y)` | free (writes the ruin to that browser context's save) |
 | Keep the player alive through a scripted run | `window.__f35.invulnerable(true)` (weapons only; crashing still kills; per mission) | free |
@@ -91,3 +91,5 @@ npx vite --config vite.e2e.config.ts --port 5190 &       # stable dev server for
 - 2026-10-02: Exploit and "what if the player does X" probes are fastest headless. Build the mission with `createMissionRunner` + `createSimWorld` (as `realRun` in `tests/missions-defend.test.ts` does) and pin the player each step: 9 parked Defend runs took about a minute, against about a minute per run in the browser.
 - 2026-10-02: Scripts that pin the jet's position or velocity trip the flight model's overstress damage, which looks like a crash. `invulnerable()` covers weapons only, so filter overstress out or move the jet gently.
 - 2026-10-02: One page with `fly()` per mission smoked 24 missions in 559 s under load. A page load per mission took about 21 min.
+- 2026-10-02: The game reads taps (and polls input) once per rendered frame, and a SwiftShader frame takes 0.3–1 s. After a CDP tap wait for two `requestAnimationFrame`s (`settle()` in `e2e/ui-touch.mjs`) before reading the result, never a fixed 100 ms (#71).
+- 2026-10-02: Under SwiftShader a quick CDP tap on a long-press button (CAM) can fire its long press: the 480 ms timer is wall-clock and the touchEnd ack waits for a frame. Send such a tap as `pointerdown` + `pointerup` from one `page.evaluate` (ui-touch does for CAM), and set the view with `setView()` when a check needs a given view.
