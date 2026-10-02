@@ -20,7 +20,7 @@ import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayo
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
-import { aucklandRailPaths, aucklandRoadPaths, RoadNetwork } from './motorways';
+import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
@@ -153,8 +153,9 @@ export class Scenery {
 
     // ── Auckland landmarks ──
     if (o.theater === 'auckland') {
-      // the railways join the network so houses, trees and towers keep off the tracks too
-      const rails = o.quality.railways ? aucklandRailPaths() : [];
+      // the railways (clipped to the land model) join the network so houses, trees and towers keep off
+      // the tracks too
+      const rails = o.quality.railways ? clipRailToLand(aucklandRailPaths(), height) : [];
       const roads = new RoadNetwork([...aucklandRoadPaths(), ...rails]);
       this.roads = roads;
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
