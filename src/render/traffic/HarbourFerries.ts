@@ -3,8 +3,12 @@
  * every ferry is placed by its timetable (ferryRoutes.ts, a pure function of mission time), bobs a little,
  * leaves a wake in the shared WakeBatch and, at night, shows its nav and cabin lights through the entity
  * renderer's sprite batch. Not sim entities: not on radar, not targetable (strafing a ferry does nothing).
+ *
+ * At night (#61) the cabin windows glow (a second InstancedMesh of window bands sharing the hulls'
+ * instance matrices, unlit, drawn only at night) and the nav lights keep a few pixels wide, so a ferry
+ * reads from a kilometre up instead of vanishing into the dark water.
  */
-import { BufferGeometry, Euler, InstancedMesh, Matrix4, Quaternion, Vector3 } from 'three';
+import { BufferGeometry, Euler, InstancedMesh, Matrix4, MeshBasicMaterial, Quaternion, Vector3 } from 'three';
 import { box, boxUV, merge, place } from '../models/geom/core';
 import { getMaterial } from '../models/materials';
 import type { ShipLight } from '../models/ground';
@@ -19,6 +23,11 @@ const CABIN_LIGHTS_FAR = 5_000;
 const WHITE = 0xf1f2ee;
 const DARK = 0x26323c;
 const LIVERY = 0x17708c;
+/** Warm cabin lighting seen through the windows at night. */
+const WINDOW_GLOW = 0xffc98a;
+/** Minimum on-screen width (CSS px) of the nav lights and the cabin lights, so they read from ~1 km. */
+const NAV_MIN_PX = 3.4;
+const CABIN_MIN_PX = 1.8;
 
 /** A 34 m harbour catamaran, waterline at y = 0, bow at -Z (≈ 130 triangles). */
 export function ferryGeometry(): BufferGeometry {
@@ -44,6 +53,19 @@ export function ferryGeometry(): BufferGeometry {
   return geo;
 }
 
+/** The lit cabin windows at night: bands just proud of the dark window boxes of ferryGeometry(). */
+export function ferryWindowGeometry(): BufferGeometry {
+  const L = FERRY_LENGTH;
+  const B = FERRY_BEAM;
+  const geo = merge([
+    place(box(B + 0.3, 0.7, L - 10.4, WINDOW_GLOW), [0, 3.55, 2.5]),
+    place(box(B - 1.3, 0.55, 13.2, WINDOW_GLOW), [0, 5.9, 3]),
+    place(box(6.3, 0.5, 4.8, WINDOW_GLOW), [0, 7.9, -2.2]),
+  ])!;
+  geo.computeBoundingSphere();
+  return geo;
+}
+
 /** Nav lights (lit under way, mast and stern alongside too) and cabin windows (always at night). */
 export const FERRY_LIGHTS: readonly ShipLight[] = [
   { pos: new Vector3(0, 11.6, -1.2), color: 0xffffff, kind: 'way', size: 3 },
@@ -65,6 +87,8 @@ const _l = new Vector3();
 
 export class HarbourFerries {
   readonly mesh: InstancedMesh;
+  /** The lit windows (visible at night only, see setNight()). */
+  readonly windows: InstancedMesh;
   private readonly routes: FerryRoute[];
   private readonly fleet: readonly { route: number; k: number }[];
   private readonly st: FerryState[];
@@ -80,6 +104,18 @@ export class HarbourFerries {
     this.mesh.name = 'ferries';
     // the instances span the whole harbour; they are few and small, so skip culling
     this.mesh.frustumCulled = false;
+    // unlit, fogged, vertex colours carry the glow; same instances as the hulls
+    this.windows = new InstancedMesh(ferryWindowGeometry(), new MeshBasicMaterial({ vertexColors: true }), Math.max(1, this.fleet.length));
+    this.windows.instanceMatrix = this.mesh.instanceMatrix;
+    this.windows.count = this.fleet.length;
+    this.windows.name = 'ferry-windows';
+    this.windows.frustumCulled = false;
+    this.windows.visible = false;
+  }
+
+  /** Lit windows at night only (by day the hull's dark window boxes show). */
+  setNight(night: boolean): void {
+    this.windows.visible = night && this.fleet.length > 0;
   }
 
   get count(): number {
@@ -119,8 +155,8 @@ export class HarbourFerries {
         if (l.kind === 'deck' ? !cabins : l.kind === 'way' && l.color !== 0xffffff && s.dock >= 0) continue;
         _l.copy(l.pos).applyMatrix4(m);
         const c = l.color;
-        const k = l.kind === 'deck' ? 1.2 : 2.2;
-        if (!lights.add(_l.x, _l.y, _l.z, (((c >> 16) & 255) / 255) * k, (((c >> 8) & 255) / 255) * k, ((c & 255) / 255) * k, 1, l.size, l.kind === 'deck' ? 1.1 : 2.2)) return;
+        const k = l.kind === 'deck' ? 1.3 : 2.6;
+        if (!lights.add(_l.x, _l.y, _l.z, (((c >> 16) & 255) / 255) * k, (((c >> 8) & 255) / 255) * k, ((c & 255) / 255) * k, 1, l.size, l.kind === 'deck' ? CABIN_MIN_PX : NAV_MIN_PX)) return;
       }
     }
   }
@@ -129,5 +165,8 @@ export class HarbourFerries {
     this.mesh.removeFromParent();
     this.mesh.geometry.dispose();
     this.mesh.dispose();
+    this.windows.removeFromParent();
+    this.windows.geometry.dispose();
+    (this.windows.material as MeshBasicMaterial).dispose();
   }
 }
