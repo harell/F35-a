@@ -190,3 +190,49 @@ At runtime `buildCBD` (scenery/auckland.ts) extrudes every prism from the terrai
 class; red obstruction lights on the towers over 95 m; at night `buildFacadeLightPoints` (nightLights.ts) lights their
 windows floor by floor, replacing the flat light carpet inside the CBD region. Medium tier: ≈ 45 k triangles (the procedural
 towers: ≈ 36 k), the same draw calls. Without the file the procedural towers on the real streets remain.
+
+# Open data 4: CBD and waterfront aerial photo
+
+`aerial-mask.ts` and `aerial.py` bake the LINZ Auckland 0.075 m Urban Aerial Photos (2024–2025) into
+`src/world/terrain/data/auckland-aerial-2048.webp` (≈ 274 KiB, medium tier) and `auckland-aerial-4096.webp`
+(≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`. Same licence and attribution as above.
+
+| Product | Source | Used for |
+|---|---|---|
+| Auckland 0.075m Urban Aerial Photos (2024-2025), RGB | `s3://nz-imagery/auckland/auckland_2024_0.075m/rgb/2193/` (LDS layer 121752; public bucket, no API key). The tiles over the square were all flown in January 2024 | ground colour and wharf tops over the photo square |
+
+```sh
+pip install numpy scipy rasterio pyproj pillow
+npx vite-node tools/linz/aerial-mask.ts <work>     # coastline / OSM deck / CBD street masks on the photo grid
+python3 tools/linz/aerial.py <work>                # writes both .webp files and prints the alignment report
+```
+
+The first run reads every item of the STAC collection (≈ 17,700 JSONs, ≈ 10 min) to find the 154 tiles over the
+square; the list and the 0.6 m mosaic are cached in `<work>`. Then ≈ 1 min (the COGs' 1/8 overviews, ≈ 20 MB).
+
+- **Square**: `AERIAL_RECT`, x −1536 … 3584, z −3072 … 2048 (5.12 km): Westhaven to the Fergusson terminal, Devonport and
+  the naval base to the Domain, Grafton and Parnell. The issue's 4 × 4 km at 0.5–1 m in ≤ 500 KB is not reachable: the
+  4096² file at 1.25 m is ≈ 625 KiB even with the harbour masked out (the photo itself is ≈ 1 MB at that quality), so
+  the medium tier gets 2048² (2.5 m) for 274 KiB and the high tier 4096². GPU memory with mips: ≈ 22 MB / 89 MB.
+- **Reprojection**: NZTM2000 → game XZ (`geoToWorld`, equirectangular about the Sky Tower) with pyproj on a 129² lattice,
+  bilinear in between (an affine fit would be off by up to 0.8 m; grid convergence here is ≈ 1.06°), sampled at 0.625 m
+  and box-filtered to 1.25 m.
+- **Alignment** (printed by `aerial.py`): the photo's water against the game's LINZ coastline cross-correlates at
+  0 m offset over both the CBD waterfront and Devonport; overlays of the LINZ CBD carriageways and the OSM wharf
+  outlines on the photo agree to ≈ 1–2 m by eye. (The street cross-correlation peaks 9 m east, but that is the
+  building lean and cast shadows hiding one side of each street, not a shift: the coast and the wharf edges show none.)
+  The 7.5 cm photos are not true orthophotos: tall towers lean up to ≈ 25 m away from the frame centres, so the CBD's
+  3D towers keep their own roofs.
+- **Grade**: luminance pulled toward its 12 m neighbourhood in the log domain (dark side × 0.45, bright side × 0.75:
+  cast shadows and sunlit faces flatten, roofs and markings stay), the blue sky-lit chroma of the shadows moved 70 %
+  toward the neighbourhood's, then the land's median luminance set to the procedural suburbs' far albedo
+  (≈ 0.085 linear), so the photo carries no strong sun of its own and the fade at the square's edge does not jump.
+- **Alpha** = land ≥ 2 m inside the LINZ coastline (the game's shore band paints the last metres) or inside an OSM
+  wharf / pier / breakwater / dock outline; the open water is push-pull padded from the land colour.
+
+At runtime (medium / high tier, *Aerial photo* setting, `?aerial=0` to compare): the terrain shader mixes the photo
+over its procedural colour by alpha × a 320 m fade at the square's edge, skips the street / house / paddock patterns
+by day where it fully covers (at night they still run for their lamps and lit windows, over the dim photo), and keeps
+a trace of the shore band and a faint fine grain under 1.3 km. The wharf decks (`akl-waterfront`) and the naval base
+(`akl-sites`) take it on their upward faces. No scattered houses or trees and no procedural suburb-centre blocks
+stand where its fade is over ½. `e2e/aerial-shots.mjs` renders the before / after views.

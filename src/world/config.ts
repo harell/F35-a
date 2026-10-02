@@ -7,6 +7,7 @@ import type { TerrainStyle } from './terrain/TerrainRenderer';
 import type { CbdGrid } from './scenery/urbanGrid';
 import { aucklandStreets } from './scenery/cbdStreets';
 import { AKL_CONES, AKL_RANGITOTO } from './terrain/theaters/aucklandMap';
+import type { AerialSize } from './terrain/theaters/aucklandAerial';
 
 /**
  * Auckland CBD street grid (fallback without LINZ road data): one grid (blocks 105 m N–S × 76 m E–W,
@@ -26,6 +27,8 @@ export interface WorldConfig {
   hfResolution: number;
   /** Refine the 2048² heightfield with the real LiDAR detail (Auckland; downloads auckland-linz-hd.bin). */
   hdTerrain: boolean;
+  /** Auckland aerial photo texture size (0 = none; downloads auckland-aerial-<size>.webp). */
+  aerial: AerialSize;
   /** Quads per CDLOD patch side (even). */
   patchQuads: number;
   /** CDLOD range multiplier. */
@@ -44,11 +47,11 @@ export function worldConfig(q: QualitySettings): WorldConfig {
   const d = q.sceneryDensity;
   switch (q.terrainDetail) {
     case 0:
-      return { hfResolution: 1024, hdTerrain: false, patchQuads: 6, lodRange: 2.4, anisotropy: 2, treeRadius: 1600, treeMax: Math.round(1500 * (d / 0.35)), houseRadius: 1500, houseMax: 1800 };
+      return { hfResolution: 1024, hdTerrain: false, aerial: 0, patchQuads: 6, lodRange: 2.4, anisotropy: 2, treeRadius: 1600, treeMax: Math.round(1500 * (d / 0.35)), houseRadius: 1500, houseMax: 1800 };
     case 1:
-      return { hfResolution: 1024, hdTerrain: false, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 2400, houseMax: 3600 };
+      return { hfResolution: 1024, hdTerrain: false, aerial: q.aerialPhoto ? 2048 : 0, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 2400, houseMax: 3600 };
     default:
-      return { hfResolution: 2048, hdTerrain: q.hdTerrain, patchQuads: 16, lodRange: 2.6, anisotropy: 8, treeRadius: 3000, treeMax: Math.round(4500 * d), houseRadius: 3400, houseMax: 7500 };
+      return { hfResolution: 2048, hdTerrain: q.hdTerrain, aerial: q.aerialPhoto ? 4096 : 0, patchQuads: 16, lodRange: 2.6, anisotropy: 8, treeRadius: 3000, treeMax: Math.round(4500 * d), houseRadius: 3400, houseMax: 7500 };
   }
 }
 

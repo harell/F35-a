@@ -131,6 +131,8 @@ export class Game {
     if (this.params.get('fps') === '1') this.settings.showFps = true;
     const ph = this.params.get('hdterrain');
     if (ph === '0' || ph === '1') this.settings.hdTerrain = ph === '1';
+    const pa = this.params.get('aerial');
+    if (pa === '0' || pa === '1') this.settings.aerialPhoto = pa === '1';
 
     const glCanvas = root.querySelector<HTMLCanvasElement>('#gl')!;
     const hudCanvas = root.querySelector<HTMLCanvasElement>('#hud')!;

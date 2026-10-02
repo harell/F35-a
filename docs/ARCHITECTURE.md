@@ -120,6 +120,16 @@ Harbour Bridge piers (`BRIDGE_PIERS_T`, which also set the fly-under span) are s
 `tests/world-sites.test.ts` checks against it. Without the file the hand-placed port and marinas come back, and the
 Wiri tanks still stand.
 
+## Aerial photo (LINZ, CBD and waterfront)
+
+`src/world/terrain/theaters/aucklandAerial.ts` loads the LINZ 2024 aerial photo of a 5.12 km square over the CBD,
+the waterfront and Devonport (`AERIAL_RECT`; baked by `tools/linz/aerial.py`): 2048² on the medium tier, 4096² on
+high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial=0`). Its alpha marks land and the
+OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
+the wharf decks and the naval base take it on their top faces, and the house / tree scatter and the procedural
+suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
+procedural ground stays.
+
 ## Harbour ferries and wakes (render-only)
 
 The harbour ferries are not sim entities: no radar, no targeting, no sim cost. `src/render/traffic/ferryRoutes.ts`
