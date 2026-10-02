@@ -18,6 +18,9 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createHud } from '../src/hud/Hud';
 import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
+import { pcdRowSpan } from '../src/hud/cockpit/geometry';
+import { PCD_PORTALS, PCD_W, PORTAL_INSET, PcdDisplay } from '../src/hud/cockpit/pcd';
+import { computeTouchLayout, type Rect } from '../src/input/touch/layout';
 import { flatLand, harness, stubAi } from './missions-helpers';
 
 installPath2D();
@@ -139,4 +142,56 @@ describe("T01's first hint is visible for its whole duration (4.2-c)", () => {
     // the opening objectives summary still showed (before and after the hint)
     expect(objectivesSeen).toBeGreaterThan(10);
   });
+});
+
+describe('the cockpit stores page clears the touch controls (4.2-f)', () => {
+  const W = 844;
+  const H = 390;
+  const doc = globalThis as unknown as { document?: unknown };
+  for (const leftHanded of [false, true]) {
+    it(`844x390, ${leftHanded ? 'left' : 'right'}-handed: no control over the SMS portal on any visible row`, () => {
+      // which outer portal shows the stores page in this layout (PcdDisplay swaps them)
+      const prev = doc.document;
+      doc.document = { createElement: () => makeFakeCanvas(PCD_W, 256).canvas };
+      let portal: number;
+      try {
+        const pcd = new PcdDisplay({ ...QUALITY_PRESETS.medium });
+        pcd.setLeftHanded(leftHanded);
+        portal = pcd.pages().indexOf('SMS');
+      } finally {
+        doc.document = prev;
+      }
+      expect(portal).toBe(leftHanded ? 2 : 0);
+      const span = PCD_PORTALS[portal];
+      // the portal frame (3-texel stroke centred on the inset edge)
+      const u0 = span.x + PORTAL_INSET - 2;
+      const u1 = span.x + span.w - PORTAL_INSET + 2;
+      const t = computeTouchLayout(W, H, { top: 0, right: 0, bottom: 0, left: 0 }, { leftHanded });
+      const b = t.buttons;
+      const stick: Rect = { x: t.stickHome.x - t.stickRadius, y: t.stickHome.y - t.stickRadius, w: 2 * t.stickRadius, h: 2 * t.stickRadius };
+      const controls: [string, Rect][] = [
+        ['throttle', t.throttle],
+        ['fire', b.fire],
+        ['gun', b.gun],
+        ['cms', b.cms],
+        ['recenter', b.recenter],
+        ['stick', stick],
+      ];
+      let rows = 0;
+      for (let y = 0; y <= H; y++) {
+        const r = pcdRowSpan(60, W, H, y);
+        if (!r) continue;
+        rows++;
+        const k = (r.right - r.left) / PCD_W;
+        const x0 = r.left + u0 * k;
+        const x1 = r.left + u1 * k;
+        for (const [id, c] of controls) {
+          if (y < c.y || y > c.y + c.h) continue;
+          // 2 px clear of the control's box (its glow / shadow)
+          expect(c.x + c.w <= x0 - 2 || c.x >= x1 + 2, `${id} over the stores page at y=${y}`).toBe(true);
+        }
+      }
+      expect(rows).toBeGreaterThan(80); // ~60 % of the panel is in view
+    });
+  }
 });
