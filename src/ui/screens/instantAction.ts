@@ -23,8 +23,8 @@ const MODES: { id: InstantActionOptions['mode']; title: string; desc: string; ic
 ];
 
 /**
- * Cities on offer. Only those with a theatre are playable; the rest are shown locked ("Coming soon")
- * to gauge interest before they are built. The other theatres stay in the engine for career/missions.
+ * Cities on offer. Only those with a theatre (Auckland) are playable; the rest are shown locked
+ * ("Coming soon") to gauge interest before they are built.
  */
 const CITIES: { name: string; tagline: string; art: LandmarkId; theater?: TheaterId }[] = [
   { name: 'Auckland', tagline: 'Latte, Traffic, Repeat', art: 'skyTower', theater: 'auckland' },
@@ -36,9 +36,13 @@ const ENEMIES: (AircraftType | 'mixed')[] = ['mixed', 'mig29', 'su27', 'su35', '
 
 const DEFAULTS: InstantActionOptions = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 };
 
-function load(): InstantActionOptions {
+/**
+ * The Instant Action setup from its saved JSON (localStorage 'f35a.instant.v1'), else the defaults.
+ * A theatre that isn't playable (a locked city, or one of the procedural theatres older builds
+ * had) falls back to Auckland; a broken save to the defaults.
+ */
+export function parseInstantSetup(raw: string | null): InstantActionOptions {
   try {
-    const raw = localStorage.getItem(KEY);
     if (raw) {
       const v = { ...DEFAULTS, ...JSON.parse(raw) } as InstantActionOptions;
       if (!PLAYABLE.includes(v.theater)) v.theater = 'auckland';
@@ -49,6 +53,14 @@ function load(): InstantActionOptions {
     /* ignore */
   }
   return { ...DEFAULTS };
+}
+
+function load(): InstantActionOptions {
+  try {
+    return parseInstantSetup(localStorage.getItem(KEY));
+  } catch {
+    return { ...DEFAULTS };
+  }
 }
 
 function save(o: InstantActionOptions): void {
