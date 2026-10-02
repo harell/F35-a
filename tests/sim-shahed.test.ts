@@ -369,6 +369,9 @@ describe('Shahed-136: formation spawn', () => {
     h.events.on('drone:impact', (e) => impacts.push({ ...e, position: e.position.clone() }));
     h.run(400, () => drones.every((d) => !d.alive));
     expect(impacts).toHaveLength(10);
+    // a drone that reached its target got through: no "SHAHED-136 DOWN", no kill
+    expect(h.of('hud:message').filter((m) => /SHAHED/.test(m.text))).toEqual([]);
+    expect(h.world.player!.kills).toBe(0);
     for (const e of impacts) expect(Math.hypot(e.position.x - target.x, e.position.y - 60, e.position.z - target.z)).toBeLessThanOrEqual(IMPACT_RADIUS + 1e-6);
   });
 });
