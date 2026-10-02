@@ -10,6 +10,7 @@
  * Blocks whose height depends on their content (column, kill feed, external block) use the extent they
  * had on the previous frame (one frame of lag, no allocation, no double layout).
  */
+import { toFeet } from '../../core/math';
 import { reserveBankScale } from './flight';
 import { WEAPON_IS_BOMB } from './format';
 import type { HudFrame } from './frame';
@@ -58,9 +59,16 @@ export function speedColumnBottom(f: HudFrame): number {
   return L.boxY + 11 * L.u + L.line * (brake ? 6.2 : 5.2);
 }
 
-/** Bottom of the HMD altitude column: the box, radar altitude, VSI and closure. */
+/**
+ * Bottom of the HMD altitude column: the box, radar altitude (below 5000 ft AGL), VSI, and closure and
+ * aspect / angels with an air target designated. As drawAltColumn decides: with both the RALT row and
+ * a target, the aspect line is the 4th row (#62).
+ */
 export function altColumnBottom(f: HudFrame): number {
-  return f.L.boxY + 11 * f.L.u + f.L.line * 3.4;
+  const { L, p } = f;
+  const t = f.target;
+  const fourRows = !!p && !!t && t.kind === 'aircraft' && toFeet(p.flight.agl) < 5000;
+  return L.boxY + 11 * L.u + L.line * (fourRows ? 4.4 : 3.4);
 }
 
 /**
