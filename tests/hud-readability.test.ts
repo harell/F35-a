@@ -2,16 +2,20 @@
  * HUD and menu readability at 844×390 (issue #62, polish 4/5 of epic #84):
  *  - Defend: the strikers carry a STRK tag on every display (contacts, target box, TSD, tactical map),
  *    the escort doesn't, and the primary objective counts the strikers left ("STRIKERS n");
+ *  - a civil contact's CIV label never prints on the touch controls (GUN, CMS, FIRE, throttle, stick);
  *  - the cockpit PCD's TSD and RWR corner readouts ("10 NM", "BULL 005/6", "2 EMIT") are at least
  *    12 px tall on the 844×390 screen (they were 9–10 px, and look smaller on the tilted panel).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PerspectiveCamera, Quaternion } from 'three';
+import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { FrameContext } from '../src/core/contracts';
 import { DEFAULT_SETTINGS, QUALITY_PRESETS } from '../src/core/data';
 import { createCockpit } from '../src/hud/Cockpit';
+import { createHud } from '../src/hud/Hud';
+import type { CameraMode } from '../src/core/types';
+import { computeTouchLayout } from '../src/input/touch/layout';
 import { buildMock } from '../src/hud/dev/mockWorld';
-import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
+import { installPath2D, makeFakeCanvas, overlaps, textBox } from '../src/hud/dev/fakeCanvas';
 import { pcdScreenRect } from '../src/hud/cockpit/geometry';
 import { PCD_W } from '../src/hud/cockpit/pcd';
 import type { MissionDef } from '../src/core/contracts';
@@ -125,4 +129,69 @@ describe('cockpit PCD corner readouts at 844×390', () => {
       expect(t!.size * pxPerTexel, `${t!.text}: ${(t!.size * pxPerTexel).toFixed(1)} px`).toBeGreaterThanOrEqual(12);
     }
   });
+});
+
+describe('labels stay off the touch controls at 844×390', () => {
+  installPath2D();
+  for (const view of ['hud', 'chase'] as CameraMode[]) {
+    for (const button of ['gun', 'cms', 'fire'] as const) {
+      it(`${view}: a civil jet behind the ${button.toUpperCase()} button has no label on it`, () => {
+        const W = 844;
+        const H = 390;
+        const mock = buildMock('aa');
+        const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+        const hud = createHud(canvas, mock.events);
+        hud.resize(W, H, 1);
+        const p = mock.player;
+        const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+        if (view === 'hud') {
+          camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+          camera.quaternion.copy(p.quaternion);
+        } else {
+          camera.position.copy(p.position).add(new Vector3(0, 4.5, 20).applyQuaternion(p.quaternion));
+          camera.up.set(0, 1, 0).applyQuaternion(p.quaternion);
+          camera.lookAt(p.position.clone().add(new Vector3(0, 0, -40).applyQuaternion(p.quaternion)));
+        }
+        camera.updateMatrixWorld();
+        camera.updateProjectionMatrix();
+        const b = computeTouchLayout(W, H, { top: 0, right: 0, bottom: 0, left: 0 }, { leftHanded: false }).buttons[button];
+        // a civil airliner (the mock's Su-57, repainted) 8 km out, right behind the button's centre
+        const civ = mock.world.aircraft.find((a) => a.type === 'su57')!;
+        (civ as { type: string }).type = 'a320';
+        civ.team = 'neutral';
+        const place = () => {
+          const ndc = new Vector3(((b.x + b.w / 2) / W) * 2 - 1, -(((b.y + b.h / 2) / H) * 2 - 1), 0.5).unproject(camera);
+          civ.position.copy(camera.position).addScaledVector(ndc.sub(camera.position).normalize(), 8000);
+          const c = p.radar.contacts.find((x) => x.id === civ.id)!;
+          c.position.copy(civ.position);
+          c.team = 'neutral';
+          c.lastSeen = 0;
+        };
+        const ctx: FrameContext = {
+          dt: 1 / 30,
+          time: 0,
+          world: mock.world,
+          player: p,
+          camera,
+          viewMode: view,
+          focusId: p.id,
+          mission: mock.mission,
+          settings: { ...DEFAULT_SETTINGS },
+          quality: { ...QUALITY_PRESETS.medium },
+          paused: false,
+          screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+        };
+        for (let i = 0; i < 4; i++) {
+          fake.reset();
+          ctx.time += ctx.dt;
+          place();
+          hud.update(ctx);
+        }
+        const rect = { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+        // (the contact's box is a symbol and may sit there; no text may)
+        const on = fake.texts.filter((t) => t.text.trim() && overlaps(textBox(t), rect));
+        expect(on.map((t) => t.text)).toEqual([]);
+      });
+    }
+  }
 });

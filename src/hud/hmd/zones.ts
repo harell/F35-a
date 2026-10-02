@@ -13,6 +13,7 @@
 import { reserveBankScale } from './flight';
 import { WEAPON_IS_BOMB } from './format';
 import type { HudFrame } from './frame';
+import { controlRects } from './layout';
 
 /** Extents measured while drawing (previous frame). NaN = nothing drawn. */
 export const zoneExt = {
@@ -78,4 +79,7 @@ export function reserveFixedZones(f: HudFrame): void {
   if (Number.isFinite(zoneExt.colBottom)) occ.add(L.colX - 6 * u, L.colY - 10 * u, L.colX + L.colW, zoneExt.colBottom);
   // kill feed (top right)
   if (Number.isFinite(zoneExt.killBottom)) occ.add(zoneExt.killLeft - 4 * u, L.killY - 10 * u, L.killX + 4 * u, zoneExt.killBottom);
+  // the touch controls in the bottom band (throttle, FIRE, GUN, CMS, stick base): a contact's CIV or
+  // type label moves or drops rather than print under a thumb (#62)
+  for (const r of controlRects()) occ.add(r.x - 2 * u, r.y - 2 * u, r.x + r.w + 2 * u, r.y + r.h + 2 * u);
 }
