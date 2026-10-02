@@ -67,7 +67,7 @@ export function findMission(id: string): MissionDef | null {
   return CAMPAIGN.find((m) => m.id === id) ?? TRAINING.find((m) => m.id === id) ?? null;
 }
 
-const IA_MODES: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'survival'];
+const IA_MODES: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
 const THEATERS: TheaterId[] = ['auckland', 'desert', 'islands', 'mountains', 'arctic'];
 
 /**

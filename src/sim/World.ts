@@ -206,7 +206,7 @@ class SimWorldImpl implements SimWorld {
 
     try {
       if (spec.loadout) this.combat.applyLoadout(ac, spec.loadout);
-      else this.combat.applyDefaultLoadout(ac);
+      else this.combat.applyDefaultLoadout(ac, spec.enemyLoadout);
     } catch (err) {
       this.reportError('loadout', err);
     }
@@ -263,6 +263,7 @@ class SimWorldImpl implements SimWorld {
     });
     if (vessel) e.vessel = spec.vessel!;
     e.anchored = !!spec.anchored && !spec.path;
+    e.scenery = !!spec.scenery;
     e.emitter = data.emitter;
     e.groupId = spec.groupId ?? '';
     const x = spec.position.x;

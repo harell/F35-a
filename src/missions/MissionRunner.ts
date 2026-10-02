@@ -26,7 +26,7 @@ import { Callouts, sameFlight, type DownReason } from './runtime/callouts';
 import type { MissionResultExt, TeamKill } from './runtime/resultExt';
 import { evalCondition } from './runtime/conditions';
 import { HintSystem } from './runtime/hints';
-import { activateObjective, createObjectives, failOpenObjectives, objectiveSummary, updateObjectives } from './runtime/objectives';
+import { activateObjective, createObjectives, failOpenObjectives, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS } from './runtime/reasons';
 import { computeScore } from './runtime/scoring';
@@ -34,7 +34,7 @@ import { awardMedals, buildTips, deathReason } from './runtime/debrief';
 import { RearmController } from './runtime/rearm';
 import { WithdrawalMonitor } from './runtime/withdrawal';
 import { attemptSeed, nextAttempt } from './runtime/variation';
-import { buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
+import { assignGroundAttack, buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { SurvivalDirector } from './runtime/survival';
 import { CivilTraffic } from './runtime/civil';
@@ -205,7 +205,11 @@ class MissionRunnerImpl implements MissionRunnerApi {
       return;
     }
     this.updateSpawns();
-    for (const g of s.groups.values()) if (g.air && g.spawnedAt >= 0) updateGroupLead(s, g);
+    for (const g of s.groups.values()) {
+      if (!g.air || g.spawnedAt < 0) continue;
+      updateGroupLead(s, g);
+      assignGroundAttack(s, g);
+    }
     this.updateCommits();
     this.updateTriggers();
     updateObjectives(s, edt);
@@ -282,6 +286,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     (r as MissionResultExt).playerShare = sc.playerShare;
     if (s.civilianKills > 0) (r as MissionResultExt).civilianKills = s.civilianKills;
     if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
+    const saved = protectTallies(s);
+    if (saved.length) (r as MissionResultExt).saved = saved;
     const towerDown = this.landmarks.downHeading;
     if (towerDown !== null) (r as MissionResultExt).skyTowerDown = { fallHeading: towerDown };
     r.tips = buildTips(s, r);

@@ -102,6 +102,7 @@ export type MunitionId =
   | 'r73' // AA-11 Archer, IR
   | 'r27' // AA-10 Alamo, semi-active radar (launcher must keep lock)
   | 'r77' // AA-12 Adder, active radar
+  | 'kab500' // KAB-500S-E, satellite-guided 500 kg bomb (enemy strike jets, carried on the 'gbu31' slot)
   | 'm_3m9' // SA-6 missile, semi-active radar
   | 'm_9m33' // SA-8 missile, command guided
   | 'm_48n6' // SA-10 missile, track-via-missile / command

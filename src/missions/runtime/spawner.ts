@@ -7,7 +7,7 @@ import { AIRCRAFT_INFO } from '../../core/data';
 import { DEG, clamp } from '../../core/math';
 import { isHostile, type DifficultyParams, type LoadoutId, type Team } from '../../core/types';
 import type { AiTask } from '../../sim/api';
-import type { AircraftEntity } from '../../sim/entities';
+import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
 import { difficultyAtLeast, firstAlive, type GroupRt, type MissionState } from './state';
 import { JITTER_HDG, JITTER_POS, jitter } from './variation';
@@ -238,6 +238,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
       groupId: g.id,
       fuel: def.fuel ?? 0.8,
       loadout: def.team === 'blue' && type === 'f35a' ? (def.loadout ?? 'a2a_stealth') : undefined,
+      enemyLoadout: def.enemyLoadout,
     });
     if (i === 0) {
       leadId = ac.id;
@@ -246,6 +247,56 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
     if (def.unarmed) disarm(ac);
     g.members.push(ac);
     if (def.team === 'red') s.enemiesSpawned++;
+  }
+  assignGroundAttack(s, g, true);
+}
+
+/** The ground / SAM group an 'attack_group' task points at (null for air groups and other tasks). */
+function groundAttackTargets(s: MissionState, task: TaskDef | undefined): GroupRt | null {
+  if (task?.kind !== 'attack_group') return null;
+  const t = s.groups.get(task.group);
+  return t && !t.air ? t : null;
+}
+
+/**
+ * 'attack_group' on a ground / SAM group: give each live attacker a live target of that group,
+ * spread out (the target with the fewest attackers, nearest on a tie), and a new one when its
+ * target is destroyed. With `reset` every attacker is re-assigned (spawn, re-task). Called at the
+ * runner's evaluation rate; a no-op for other tasks.
+ */
+export function assignGroundAttack(s: MissionState, g: GroupRt, reset = false): void {
+  const targets = groundAttackTargets(s, g.task);
+  if (!targets) {
+    g.strikeTargets = undefined;
+    return;
+  }
+  const map = (g.strikeTargets ??= new Map());
+  if (reset) map.clear();
+  const load = new Map<number, number>();
+  for (const t of targets.members) if (t.alive) load.set(t.id, 0);
+  if (load.size === 0) return; // nothing left: the strikers egress on their own
+  for (const [m, t] of map) {
+    const ac = s.world.getEntity(m);
+    if (ac && ac.alive && load.has(t)) load.set(t, load.get(t)! + 1);
+  }
+  for (const m of g.members) {
+    if (m.kind !== 'aircraft' || !m.alive || !m.ai?.setTask) continue;
+    const cur = map.get(m.id);
+    if (cur !== undefined && load.has(cur)) continue;
+    let best: AnyEntity | null = null;
+    let bestKey = Infinity;
+    for (const t of targets.members) {
+      if (!t.alive) continue;
+      const key = load.get(t.id)! * 1e9 + t.position.distanceTo(m.position);
+      if (key < bestKey) {
+        bestKey = key;
+        best = t;
+      }
+    }
+    if (!best) break;
+    map.set(m.id, best.id);
+    load.set(best.id, load.get(best.id)! + 1);
+    m.ai.setTask({ kind: 'attack', targetId: best.id });
   }
 }
 
@@ -285,6 +336,7 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
     speed: def.speed,
     loopPath: def.loop,
     health: def.health,
+    scenery: def.scenery,
   });
   if (g) {
     if (g.spawnedAt < 0) g.spawnedAt = s.world.time;
@@ -380,6 +432,7 @@ export function retaskGroup(s: MissionState, groupId: string, task: TaskDef): vo
   for (const m of g.members) {
     if (m.kind === 'aircraft' && m.alive && m.ai?.setTask) m.ai.setTask(aiTask);
   }
+  assignGroundAttack(s, g, true);
 }
 
 /**

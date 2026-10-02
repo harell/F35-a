@@ -42,7 +42,7 @@ export function samPadRadius(def: SamSiteDef): number {
 
 /** Pad radius for a ground target (0 = no pad: ships, bridges, movers). */
 export function groundPadRadius(def: GroundTargetDef): number {
-  if (def.type === 'ship' || (def.path && def.path.length > 0)) return 0;
+  if (def.type === 'ship' || def.scenery || (def.path && def.path.length > 0)) return 0;
   return def.pad ?? GROUND_PAD_RADIUS[def.type];
 }
 

@@ -13,7 +13,7 @@ import { createAiBrain } from '../src/ai';
 import { flatLand } from './missions-helpers';
 import type { MissionDef } from '../src/core/contracts';
 
-const instant: MissionDef[] = (['dogfight', 'sam_gauntlet', 'strike', 'survival'] as const).map((mode, i) =>
+const instant: MissionDef[] = (['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'] as const).map((mode, i) =>
   buildInstantMissionSeeded({ mode, theater: i % 2 ? 'islands' : 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, 42 + i),
 );
 

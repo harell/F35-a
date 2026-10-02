@@ -113,8 +113,8 @@ export interface CombatSystemApi {
 
   /** Equip an aircraft with a loadout (stores, gun ammo, flares/chaff, rcs penalty). */
   applyLoadout(ac: AircraftEntity, loadout: LoadoutId): void;
-  /** Equip an AI aircraft with its typical weapons (by aircraft type). */
-  applyDefaultLoadout(ac: AircraftEntity): void;
+  /** Equip an AI aircraft with its typical weapons (by aircraft type); 'strike' = air-to-ground stores. */
+  applyDefaultLoadout(ac: AircraftEntity, variant?: 'default' | 'strike'): void;
 
   /** Cycle to the next weapon type that has rounds (gun included). */
   cycleWeapon(ac: AircraftEntity, world: SimWorld): void;
@@ -165,6 +165,8 @@ export interface AircraftSpawn {
   isPlayer?: boolean;
   /** Player/friendly loadout. If omitted, a type-appropriate default is applied. */
   loadout?: LoadoutId;
+  /** Without `loadout`: the type's default air-to-air stores, or its strike stores (bombs). */
+  enemyLoadout?: 'default' | 'strike';
   /** Fuel fraction 0..1 (default 0.8). */
   fuel?: number;
   ai?: AiBrain | null;
@@ -200,6 +202,8 @@ export interface GroundSpawn {
   vessel?: VesselClass;
   /** Riding at anchor (civil ship, no path): the visual swings about the bow. */
   anchored?: boolean;
+  /** Drawn by the world scenery (GroundTargetEntity.scenery): no entity model. */
+  scenery?: boolean;
 }
 
 /* ───────────────────────── Sim world (implemented by SIM-CORE agent) ───────────────────────── */

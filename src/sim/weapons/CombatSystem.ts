@@ -146,8 +146,8 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
     applyLoadout(ac, loadout) {
       loadouts.applyLoadout(ac, loadout, ctx.world);
     },
-    applyDefaultLoadout(ac) {
-      loadouts.applyDefaultLoadout(ac, ctx.world);
+    applyDefaultLoadout(ac, variant) {
+      loadouts.applyDefaultLoadout(ac, ctx.world, variant);
     },
 
     cycleWeapon(ac, world) {

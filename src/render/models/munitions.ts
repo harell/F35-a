@@ -282,6 +282,18 @@ const SPECS: Record<MunitionId, MissileSpec> = {
       { at: 0.84, root: 0.52, tip: 0.44, span: 0.3, sweep: 0.08, roll: Math.PI / 4, color: 0x8f9384 },
     ],
   },
+  kab500: {
+    body: 0x6d7466,
+    nose: 0x3f4440,
+    noseLen: 0.7,
+    blunt: 0.5,
+    tail: 0.6,
+    bands: [[0.14, 0.05, 0xc23a2a]],
+    fins: [
+      { at: 0.3, root: 0.5, tip: 0.3, span: 0.12, sweep: 0.1, roll: Math.PI / 4, color: 0x7d8376 },
+      { at: 0.86, root: 0.5, tip: 0.36, span: 0.26, sweep: 0.1, roll: Math.PI / 4, color: 0x7d8376 },
+    ],
+  },
   gbu39: {
     body: 0x9aa0a4,
     nose: 0x8d9296,
