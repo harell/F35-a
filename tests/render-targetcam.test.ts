@@ -19,7 +19,7 @@ import {
   PIP_TOWER_HIT_HOLD,
 } from '../src/hud/hmd/pip';
 import { TARGET_CAM_FOV, TARGET_CAM_MIN_AGL, framingDistance, landmarkCamPose, makePose, targetCamPose } from '../src/render/targetCam/pose';
-import { COLLAPSE, headingDir } from '../src/core/skyTower';
+import { COLLAPSE, POD_HEIGHT, headingDir } from '../src/core/skyTower';
 import { createSkyTower } from '../src/sim/landmarks';
 import { AircraftEntity, GroundTargetEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
 import type { AircraftType, SamType } from '../src/core/types';
@@ -390,12 +390,14 @@ describe('target camera pose: the Sky Tower', () => {
     return Math.abs(v.dot(up) / z) <= th && Math.abs(v.dot(right) / z) <= th * aspect;
   }
 
-  it('frames the whole standing tower from the side the hit came from', () => {
+  it('frames the upper tower and the hit from the side the hit came from, close in', () => {
     const lm = createSkyTower(20);
-    lm.damagePoint.set(lm.base.x + 8, 170, lm.base.z); // east face
+    lm.damagePoint.set(lm.base.x + 8, lm.base.y + 160, lm.base.z); // east face, where the drones dive in
     const pose = landmarkCamPose(lm, 3, makePose(), () => 0);
-    expect(inFrame(pose, lm.base)).toBe(true);
+    expect(inFrame(pose, lm.damagePoint)).toBe(true);
+    expect(inFrame(pose, lm.base.clone().setY(lm.base.y + POD_HEIGHT))).toBe(true);
     expect(inFrame(pose, lm.base.clone().setY(lm.base.y + lm.height))).toBe(true);
+    expect(pose.position.distanceTo(pose.look)).toBeLessThan(600); // the shaft is only ~12 m wide
     expect(pose.position.x).toBeGreaterThan(lm.base.x); // the east side
     expect(pose.position.y).toBeGreaterThan(lm.base.y + 200); // over the CBD roofs
   });

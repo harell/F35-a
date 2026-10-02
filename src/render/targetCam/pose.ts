@@ -284,10 +284,13 @@ export interface CamLandmark {
 }
 
 /**
- * Sky Tower shot: distance (m) and look-at height (fraction of the tower's height). At 32° the whole
- * 328 m tower fits the frame from ~720 m; the camera sits ~9° up, above the CBD roofs (≤ ~190 m).
+ * Sky Tower shot. The shaft is only ~12 m wide, so the camera comes as close as the shot allows: a hit
+ * is framed from `hitDist` on the upper tower (the pod, the mast and the burning face: look-at
+ * `hitLook` m up, or 50 m over a lower hit); the fall from `fallDist`, where the whole 328 m tower and
+ * the ~330 m it falls out along the ground fit the 32° frame (look-at `fallK` of its height). The
+ * camera sits `el` (`fallEl`) up, above the CBD roofs (≤ ~190 m), swung `side` off the hit / off square to the fall.
  */
-export const LANDMARK_FRAMING = { dist: 760, lookK: 0.47, el: (9 * Math.PI) / 180, side: (25 * Math.PI) / 180 };
+export const LANDMARK_FRAMING = { hitDist: 500, hitLook: 205, fallDist: 680, fallK: 0.48, el: (9 * Math.PI) / 180, fallEl: (5 * Math.PI) / 180, side: (25 * Math.PI) / 180 };
 
 /**
  * Camera pose for a landmark the PiP cuts to (the Sky Tower hit or collapsing). Standing (hit): the
@@ -297,8 +300,8 @@ export const LANDMARK_FRAMING = { dist: 760, lookK: 0.47, el: (9 * Math.PI) / 18
  */
 export function landmarkCamPose(lm: CamLandmark, time: number, out: CamPose, surfaceAt?: (x: number, z: number) => number): CamPose {
   const F = LANDMARK_FRAMING;
-  const d = F.dist;
-  const lookY = lm.base.y + lm.height * F.lookK;
+  const d = lm.alive ? F.hitDist : F.fallDist;
+  const lookY = lm.base.y + (lm.alive ? Math.max(120, Math.min(F.hitLook, lm.damagePoint.y - lm.base.y + 50)) : lm.height * F.fallK);
   let ax: number;
   let az: number;
   if (!lm.alive) {
@@ -326,8 +329,9 @@ export function landmarkCamPose(lm: CamLandmark, time: number, out: CamPose, sur
     az = hx * Math.sin(a) + hz * Math.cos(a);
     out.look.set(lm.base.x, lookY, lm.base.z);
   }
-  const ch = Math.cos(F.el) * d;
-  out.position.set(out.look.x + ax * ch, lookY + Math.sin(F.el) * d, out.look.z + az * ch);
+  const el = lm.alive ? F.el : F.fallEl;
+  const ch = Math.cos(el) * d;
+  out.position.set(out.look.x + ax * ch, lookY + Math.sin(el) * d, out.look.z + az * ch);
   out.up.set(0, 1, 0);
   if (surfaceAt) {
     const floor = surfaceAt(out.position.x, out.position.z) + TARGET_CAM_MIN_AGL;
