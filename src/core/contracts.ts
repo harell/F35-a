@@ -282,6 +282,13 @@ export interface MissionDef {
   intel: IntelMarker[];
   /** Mission time limit (s), optional. */
   timeLimit?: number;
+  /**
+   * Rounds in the player's gun, overriding the loadout's `gunAmmo` (180) at launch, for
+   * missions designed around the gun. A number, or per difficulty
+   * (`{ recruit: 400, ace: 300 }`): a difficulty left out takes the nearest easier one listed,
+   * else the easiest listed. Leave it out to keep the loadout's rounds.
+   */
+  gunAmmo?: number | Partial<Record<Difficulty, number>>;
   /** Mission-specific script (spawns, objectives, triggers) — schema owned by src/missions/schema.ts. */
   script: MissionScript;
 }

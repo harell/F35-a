@@ -9,6 +9,7 @@ import { isHostile, type DifficultyParams, type LoadoutId, type Team } from '../
 import type { AiTask, TerrainQuery } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
+import { armMissionGun } from './gunAmmo';
 import { difficultyAtLeast, firstAlive, type GroupRt, type MissionState } from './state';
 import { JITTER_HDG, JITTER_POS, jitter } from './variation';
 
@@ -192,6 +193,8 @@ export function spawnPlayer(s: MissionState, loadout: LoadoutId): AircraftEntity
     name: 'F-35A Lightning II',
     groupId: 'player',
   });
+  // missions built around the gun carry more rounds than the loadout's 180 (MissionDef.gunAmmo)
+  armMissionGun(ac, s.def, s.difficulty.id);
   s.player = ac;
   return ac;
 }

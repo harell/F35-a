@@ -1,13 +1,13 @@
 /**
  * F35-A — mission definition validator (used by the unit tests and handy in dev):
  * unique ids, positions inside the world, every referenced group/objective/waypoint exists,
- * loadouts, pads under every SAM and static ground target, and a player start outside the
- * threat rings of every SAM that exists at mission start.
+ * loadouts and gun rounds, pads under every SAM and static ground target, and a player start
+ * outside the threat rings of every SAM that exists at mission start.
  */
 import type { MissionDef } from '../core/contracts';
-import { LOADOUTS } from '../core/data';
+import { DIFFICULTIES, LOADOUTS } from '../core/data';
 import { SAM_DATA } from '../sim/sam/samData';
-import type { SamType } from '../core/types';
+import type { Difficulty, SamType } from '../core/types';
 import { conditionRefs } from './runtime/conditions';
 import { groundPadRadius, samPadRadius, terrainPadsFor } from './pads';
 import type { Action, Condition, TaskDef } from './schema';
@@ -40,6 +40,21 @@ export function validateMission(def: MissionDef): string[] {
   if (def.briefing.length === 0) err('empty briefing');
   if (!def.allowedLoadouts.includes(def.recommendedLoadout)) err('allowedLoadouts does not include the recommended loadout');
   for (const l of def.allowedLoadouts) if (!LOADOUTS[l]) err(`unknown loadout ${l}`);
+  // per-mission gun rounds: a whole number, or a non-empty per-difficulty table of them
+  if (def.gunAmmo !== undefined) {
+    const rounds = (n: unknown, what: string) => {
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) err(`gunAmmo${what} must be a whole number of rounds ≥ 0`);
+    };
+    if (typeof def.gunAmmo === 'number') rounds(def.gunAmmo, '');
+    else {
+      const entries = Object.entries(def.gunAmmo);
+      if (entries.length === 0) err('gunAmmo per difficulty is empty');
+      for (const [d, n] of entries) {
+        if (!DIFFICULTIES[d as Difficulty]) err(`gunAmmo for unknown difficulty "${d}"`);
+        rounds(n, `.${d}`);
+      }
+    }
+  }
 
   // player start
   const p = def.player;

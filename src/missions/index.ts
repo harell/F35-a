@@ -24,6 +24,8 @@ export { createMissionRunner } from './MissionRunner';
 export { buildInstantMission, buildInstantMissionSeeded } from './content/instant';
 export { terrainPadsFor } from './pads';
 export { validateMission } from './validate';
+/** The player's gun rounds in a mission (MissionDef.gunAmmo, else the loadout's). */
+export { missionGunAmmo } from './runtime/gunAmmo';
 /** Debrief awards (ids, names, descriptions) — MissionResult.medals entries come from here. */
 export { MEDALS, MEDAL_LIST, type MedalDef, type MedalId } from './runtime/debrief';
 export type { MissionScript } from './schema';
