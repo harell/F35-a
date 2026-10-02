@@ -28,7 +28,7 @@ import {
 import type { CreateEnvironment, EnvironmentApi, FrameContext } from '../core/contracts';
 import { BASE_MAX, finishTerrain, generateTerrain } from './terrain/generate';
 import { reduceView, TerrainWorkerPool } from './terrain/parallel';
-import { airfieldOf, anchorsFor, footprintOf } from './terrain/features';
+import { airfieldOf, footprintOf } from './terrain/features';
 import { Heightfield as HeightfieldClass } from './terrain/Heightfield';
 import { HF_EXTENT } from './terrain/types';
 import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
@@ -80,16 +80,16 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // airfields if unavailable. The high tier also fetches the
   // real 2048² detail (≈ 1.2 MB; low / medium never request it): only finishTerrain (this thread)
   // reads it, so its download overlaps the workers' base generation.
-  const hdLoad = opts.theater === 'auckland' && cfg.hdTerrain ? loadAucklandLinzHd() : null;
+  const hdLoad = cfg.hdTerrain ? loadAucklandLinzHd() : null;
   // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
   // the main thread while the terrain generates, needed only for the GPU objects below.
-  const aerialLoad = opts.theater === 'auckland' && cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
-  if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm()]);
+  const aerialLoad = cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm()]);
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain };
   let pool = TerrainWorkerPool.create();
-  if (pool && opts.theater === 'auckland') {
+  if (pool) {
     try {
       await pool.setLinz(aucklandLinzBytes());
     } catch (err) {
@@ -101,22 +101,21 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const workerCount = pool?.size ?? 0;
   // High-resolution coast mask (Auckland): 15 m signed coast distance over the central 32 km,
   // baked on the workers alongside the heightfield.
-  const coastN = opts.theater === 'auckland' ? (q.terrainDetail === 0 ? 1024 : 2048) : 0;
+  const coastN = q.terrainDetail === 0 ? 1024 : 2048;
   const coastExtent = 32_000;
   let coastPromise: Promise<Uint8Array | null> | null = null;
   if (coastN && pool) coastPromise = pool.bakeCoast(opts.seed, coastN, coastExtent).catch(() => null);
   let hf: Heightfield | null = null;
   if (pool) {
     try {
-      const anchors = anchorsFor(features, opts.pads);
       const baseN = Math.min(BASE_MAX, cfg.hfResolution);
-      const res = await pool.generateBase(opts.theater, opts.seed, anchors, baseN, (f) => report(f * 0.45, 'Generating terrain'));
+      const res = await pool.generateBase(opts.theater, opts.seed, baseN, (f) => report(f * 0.45, 'Generating terrain'));
       const base = new HeightfieldClass(baseN, HF_EXTENT);
       base.data.set(res.data);
       base.mat.set(res.mat);
       base.aux.set(res.aux);
       await hdLoad;
-      hf = await runSliced(finishTerrain(base, spec, anchors, 0), (f) => report(0.45 + f * 0.1, 'Shaping terrain'));
+      hf = await runSliced(finishTerrain(base, spec, 0), (f) => report(0.45 + f * 0.1, 'Shaping terrain'));
     } catch (err) {
       console.warn('[world] terrain workers failed, falling back to main thread', err);
       hf = null;
@@ -192,10 +191,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     );
     colorData = cd;
   }
-  if (opts.theater === 'auckland') {
-    const view = colorSize === n ? hf.data : reduceView(hf, colorSize).data;
-    dilateLandColour(colorData, view, colorSize);
-  }
+  dilateLandColour(colorData, colorSize === n ? hf.data : reduceView(hf, colorSize).data, colorSize);
   const bakeMs = performance.now() - t0;
   lap('colour');
 
@@ -251,7 +247,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
 
   const atmo = createAtmosphereUniforms(preset, q.drawDistance);
   // Auckland's light dome at night (centre of the built-up area, ~12 km radius)
-  if (opts.theater === 'auckland' && preset.lights > 0.01) atmo.uCityGlow.value.set(1500, 2500, 12_000, 0.035 * preset.lights * (opts.weather === 'overcast' ? 1.8 : 1));
+  if (preset.lights > 0.01) atmo.uCityGlow.value.set(1500, 2500, 12_000, 0.035 * preset.lights * (opts.weather === 'overcast' ? 1.8 : 1));
   const cloudCover = opts.weather === 'overcast' ? 0.75 : opts.weather === 'scattered' ? 0.42 : 0.12;
   const sky = new SkySystem({ scene, preset, atmo, quality: q, cloudLayer, cloudCover });
 
@@ -270,7 +266,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     lodRange: cfg.lodRange,
     coast,
     dummy: dummyTex,
-    noFields: airfieldRects(features, opts.theater),
+    noFields: airfieldRects(features),
     seaShallow: preset.waterShallow,
     aerial,
   });
@@ -283,7 +279,6 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     hf: { origin: hf.origin, cell: hf.cell, n: hf.n },
     deep: preset.waterDeep,
     shallow: preset.waterShallow,
-    seaIce: preset.seaIce,
     shallowDepth: preset.shallowDepth,
     radius: q.drawDistance * 1.2,
     coast,
@@ -421,14 +416,14 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
 };
 
 /** Airfield rectangles (runway strips + aprons) where the terrain shader draws no paddocks. */
-function airfieldRects(features: SceneryFeature[], theater: string): { x: number; z: number; heading: number; halfW: number; halfL: number }[] {
+function airfieldRects(features: SceneryFeature[]): { x: number; z: number; heading: number; halfW: number; halfL: number }[] {
   const out: { x: number; z: number; heading: number; halfW: number; halfL: number }[] = [];
   for (const f of features) {
     if (f.type !== 'airbase') continue;
     const fp = footprintOf(f);
     out.push({ x: fp.x, z: fp.z, heading: fp.heading, halfW: fp.halfW * (fp.kind === 'poly' ? 1 : 0.8), halfL: fp.halfL });
     // a real airfield without its outline (fallback): its other runways too (Whenuapai's 08/26)
-    const id = theater === 'auckland' && fp.kind !== 'poly' ? airfieldOf(f) : null;
+    const id = fp.kind !== 'poly' ? airfieldOf(f) : null;
     if (id) for (const X of runwaysOf(id).slice(1)) out.push({ x: X.x, z: X.z, heading: X.heading, halfW: 150, halfL: X.length / 2 + 120 });
   }
   return out.slice(0, 6);

@@ -3,32 +3,14 @@
  *
  *  - bakeSunVisibility: soft terrain shadows for a directional light, O(n²) horizon sweep
  *  - bakeSurface:       RGBA8 "surface" texture — R,G = normal x/z, B = √(water depth), A = sun visibility
- *  - bakeColorRows:     RGBA8 albedo map (sRGB) per theatre + forest density in A
+ *  - bakeColorRows:     RGBA8 albedo map (sRGB) of Auckland + forest density in A
  */
 import type { SceneryFeature } from '../../core/contracts';
 import type { TheaterId } from '../../core/types';
 import { Noise2D, sstep, hash2 } from './noise';
 import { footprintOf, footprintReach, footprintWeight, AIRBASE } from './features';
 import type { Footprint } from './types';
-import {
-  MAT_BEACH,
-  MAT_DUNE,
-  MAT_ICE,
-  MAT_JUNGLE,
-  MAT_MESA,
-  MAT_REEF,
-  MAT_RIVER,
-  MAT_ROCKY,
-  MAT_SALT,
-  MAT_TUNDRA,
-  MAT_VOLCANIC,
-  MAT_WADI,
-  MAT_URBAN,
-  MAT_BUSH,
-  MAT_CONE,
-  MAT_CLEARING,
-  MAT_PINE,
-} from './types';
+import { MAT_BEACH, MAT_VOLCANIC, MAT_URBAN, MAT_BUSH, MAT_CONE, MAT_CLEARING, MAT_PINE } from './types';
 import { createVegetation } from './vegetation';
 
 /** Minimal heightfield view (lets workers pass raw arrays). */
@@ -146,106 +128,34 @@ export function bakeSurface(hf: HfView, sunVis: Uint8Array | null, out: Uint8Arr
 type RGB = [number, number, number];
 const hex = (v: number): RGB => [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 
-/** Theatre palettes (sRGB). */
+/** Auckland palette (sRGB). */
 const PAL = {
-  auckland: {
-    pasture: hex(0x62903f),
-    pastureDry: hex(0x869c52),
-    paddockA: hex(0x5d8c3a),
-    paddockB: hex(0x86a24e),
-    paddockC: hex(0x9cae62),
-    bush: hex(0x2d4a27),
-    bushLight: hex(0x3c5c30),
-    pine: hex(0x223a2c),
-    pineLight: hex(0x2c4733),
-    pineForest: hex(0x233b2e),
-    urban: hex(0x86837a),
-    urbanGreen: hex(0x66705a),
-    beach: hex(0xd2bf92),
-    blackSand: hex(0x3e3c3a),
-    lava: hex(0x45413a),
-    lavaBush: hex(0x33492b),
-    cone: hex(0x4a643a),
-    clearing: hex(0x5e5646),
-    rock: hex(0x6a655e),
-    seabed: hex(0x8a8468),
-    airfield: hex(0x7fa052),
-    forest: hex(0x2f4c2a),
-    farmA: hex(0x5d8c3a),
-    farmB: hex(0x86a24e),
-    farmC: hex(0x9cae62),
-  },
-  desert: {
-    sand: hex(0xd4b98c),
-    sandPale: hex(0xe0cca4),
-    gravel: hex(0xae9474),
-    pavement: hex(0x8f765c),
-    dune: hex(0xdcae74),
-    duneRed: hex(0xcf9a62),
-    wadi: hex(0xc8b894),
-    scrub: hex(0x8a8a5a),
-    salt: hex(0xece6d6),
-    mesa: hex(0xa8704e),
-    rock: hex(0x76604e),
-    rockDark: hex(0x5c4a3e),
-    beach: hex(0xe6d6b0),
-    seabed: hex(0xd8c8a0),
-    urban: hex(0xc4b49a),
-    airfield: hex(0xcdb894),
-    farmA: hex(0x5d8238),
-    farmB: hex(0x86984a),
-    farmC: hex(0xb0a070),
-    forest: hex(0x56663a),
-  },
-  islands: {
-    beach: hex(0xeee2c0),
-    grass: hex(0x7c9a44),
-    scrub: hex(0x8f9a5a),
-    jungle: hex(0x2e5a26),
-    jungleDark: hex(0x234a20),
-    volcanic: hex(0x4c4642),
-    ash: hex(0x6e5c50),
-    rock: hex(0x6a625a),
-    seabed: hex(0xe6dcbc),
-    urban: hex(0xb4aa98),
-    airfield: hex(0x8aa050),
-    farmA: hex(0x7ea83e),
-    farmB: hex(0x9ab058),
-    farmC: hex(0x6a8a36),
-    forest: hex(0x2b5424),
-  },
-  mountains: {
-    grass: hex(0x71904a),
-    grassDry: hex(0x98a060),
-    meadow: hex(0x8e9a62),
-    alpine: hex(0x9c9c78),
-    scree: hex(0x9a938a),
-    rock: hex(0x7c7672),
-    river: hex(0x5f8a44),
-    forest: hex(0x3a5a30),
-    conifer: hex(0x2e4a30),
-    urban: hex(0xa8a296),
-    airfield: hex(0x86a05a),
-    farmA: hex(0x9aa45a),
-    farmB: hex(0x7a9a44),
-    farmC: hex(0xb0a26e),
-    farmD: hex(0x8c7a52),
-    seabed: hex(0x8a8468),
-  },
-  arctic: {
-    snow: hex(0xeef3f8),
-    snowBlue: hex(0xdde6f0),
-    tundra: hex(0x8e8a6c),
-    tundraSnow: hex(0xc2c4b8),
-    rock: hex(0x5e5e64),
-    ice: hex(0xbdd4e2),
-    shingle: hex(0x7c7a74),
-    forest: hex(0x3a4c44),
-    urban: hex(0xb8bcc0),
-    airfield: hex(0xe4e8ec),
-    seabed: hex(0x5a6064),
-  },
+  pasture: hex(0x62903f),
+  pastureDry: hex(0x869c52),
+  paddockA: hex(0x5d8c3a),
+  paddockB: hex(0x86a24e),
+  paddockC: hex(0x9cae62),
+  bush: hex(0x2d4a27),
+  bushLight: hex(0x3c5c30),
+  pine: hex(0x223a2c),
+  pineLight: hex(0x2c4733),
+  pineForest: hex(0x233b2e),
+  urban: hex(0x86837a),
+  urbanGreen: hex(0x66705a),
+  beach: hex(0xd2bf92),
+  blackSand: hex(0x3e3c3a),
+  lava: hex(0x45413a),
+  lavaBush: hex(0x33492b),
+  cone: hex(0x4a643a),
+  clearing: hex(0x5e5646),
+  rock: hex(0x6a655e),
+  seabed: hex(0x8a8468),
+  airfield: hex(0x7fa052),
+  forest: hex(0x2f4c2a),
 };
+
+/** Farmland features' field patchwork (farmColor). */
+const FIELDS: RGB[] = [hex(0x9aa45a), hex(0x7a9a44), hex(0xb0a26e), hex(0x8c7a52)];
 
 function mix(out: RGB, a: RGB, b: RGB, t: number): void {
   if (t <= 0) {
@@ -306,7 +216,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
     const reach = Math.max(footprintReach(fp), farm, belt) + 300;
     return { f, fp, reach, angle: hash2(i, 7, seed) * Math.PI, seed: (seed * 131 + i * 977) | 0 };
   });
-  const P = PAL;
+  const p = PAL;
 
   for (let j = j0; j < j1; j++) {
     const hj = Math.min(hf.n - 1, Math.round(j * stride));
@@ -328,159 +238,58 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
       const n2 = noise.noise(x / 780 + 5.1, z / 780 - 2.3);
       const v = n1 * 0.65 + n2 * 0.35; // -1..1 variation
 
-      /* ── base ground colour per theatre ── */
+      /* ── base ground colour ── */
       let urban = 0;
-      switch (theater) {
-        case 'auckland': {
-          const p = P.auckland;
-          if (h < 0) {
-            // Never seen through the (opaque) water, except in the thin sunk strip the shaders
-            // draw as shore: keep it a sandy/grassy shore tone rather than dark seabed.
-            mix(col, p.beach, p.pasture, 0.35);
+      if (h < 0) {
+        // Never seen through the (opaque) water, except in the thin sunk strip the shaders
+        // draw as shore: keep it a sandy/grassy shore tone rather than dark seabed.
+        mix(col, p.beach, p.pasture, 0.35);
+      } else {
+        mix(col, p.pasture, p.pastureDry, sstep(-0.35, 0.55, v));
+        // paddock patchwork on rural land
+        const pu = Math.floor(x / 260 + 0.35 * n1);
+        const pv = Math.floor(z / 190 - 0.35 * n1);
+        const pr = hash2(pu, pv, seed);
+        if (mat !== MAT_URBAN && mat !== MAT_VOLCANIC) blendInto(col, pr < 0.33 ? p.paddockA : pr < 0.66 ? p.paddockB : p.paddockC, 0.28 * sstep(0.05, 0.3, 0.3 - slope));
+        switch (mat) {
+          case MAT_URBAN:
+            urban = aux;
+            mix(tmp, p.urban, p.urbanGreen, sstep(-0.3, 0.6, n2) * (1 - aux * 0.6));
+            blendInto(col, tmp, 0.35 + 0.65 * aux);
+            break;
+          case MAT_BUSH:
+            mix(tmp, p.bush, p.bushLight, sstep(-0.3, 0.5, n2));
+            blendInto(col, tmp, 0.5 + 0.5 * aux);
+            break;
+          case MAT_PINE:
+            // plantation: darker, bluer and more even than the native bush
+            mix(tmp, p.pine, p.pineLight, sstep(-0.2, 0.6, n2));
+            blendInto(col, tmp, 0.45 + 0.55 * aux);
+            break;
+          case MAT_VOLCANIC:
+            // Rangitoto: black basalt lava fields under pōhutukawa bush — no pasture underneath
+            mix(col, p.lava, p.lavaBush, sstep(0.35, 0.75, aux + 0.12 * n2));
+            break;
+          case MAT_CONE: {
+            // Grazed grass on the steeper upper slopes, trees / scrub and the suburbs' grey-green
+            // on the gentler foot, broken up by a ~170 m noise: blended by slope instead of one
+            // categorical colour, so a cone no longer ends in a hard bright-green disc edge.
+            const nf = noise.noise(x / 170 + 3.3, z / 170 - 1.7);
+            const steep = sstep(0.05, 0.28, slope + 0.07 * nf);
+            mix(tmp, p.urbanGreen, p.bushLight, sstep(-0.35, 0.45, nf));
+            mix(tmp, tmp, p.cone, steep);
+            blendInto(col, tmp, 0.85 + 0.1 * steep);
             break;
           }
-          mix(col, p.pasture, p.pastureDry, sstep(-0.35, 0.55, v));
-          // paddock patchwork on rural land
-          const pu = Math.floor(x / 260 + 0.35 * n1);
-          const pv = Math.floor(z / 190 - 0.35 * n1);
-          const pr = hash2(pu, pv, seed);
-          if (mat !== MAT_URBAN && mat !== MAT_VOLCANIC) blendInto(col, pr < 0.33 ? p.paddockA : pr < 0.66 ? p.paddockB : p.paddockC, 0.28 * sstep(0.05, 0.3, 0.3 - slope));
-          switch (mat) {
-            case MAT_URBAN:
-              urban = aux;
-              mix(tmp, p.urban, p.urbanGreen, sstep(-0.3, 0.6, n2) * (1 - aux * 0.6));
-              blendInto(col, tmp, 0.35 + 0.65 * aux);
-              break;
-            case MAT_BUSH:
-              mix(tmp, p.bush, p.bushLight, sstep(-0.3, 0.5, n2));
-              blendInto(col, tmp, 0.5 + 0.5 * aux);
-              break;
-            case MAT_PINE:
-              // plantation: darker, bluer and more even than the native bush
-              mix(tmp, p.pine, p.pineLight, sstep(-0.2, 0.6, n2));
-              blendInto(col, tmp, 0.45 + 0.55 * aux);
-              break;
-            case MAT_VOLCANIC:
-              // Rangitoto: black basalt lava fields under pōhutukawa bush — no pasture underneath
-              mix(col, p.lava, p.lavaBush, sstep(0.35, 0.75, aux + 0.12 * n2));
-              break;
-            case MAT_CONE: {
-              // Grazed grass on the steeper upper slopes, trees / scrub and the suburbs' grey-green
-              // on the gentler foot, broken up by a ~170 m noise: blended by slope instead of one
-              // categorical colour, so a cone no longer ends in a hard bright-green disc edge.
-              const nf = noise.noise(x / 170 + 3.3, z / 170 - 1.7);
-              const steep = sstep(0.05, 0.28, slope + 0.07 * nf);
-              mix(tmp, p.urbanGreen, p.bushLight, sstep(-0.35, 0.45, nf));
-              mix(tmp, tmp, p.cone, steep);
-              blendInto(col, tmp, 0.85 + 0.1 * steep);
-              break;
-            }
-            case MAT_CLEARING:
-              // levelled military pad: dry grass and gravel
-              mix(tmp, p.clearing, p.pastureDry, sstep(-0.4, 0.6, n2));
-              blendInto(col, tmp, 0.85);
-              break;
-            case MAT_BEACH:
-              // the crisp 15 m beach band is painted by the terrain shader from the coast mask
-              blendInto(col, hf.aux[k] > 128 ? p.blackSand : p.beach, 0.3 * (1 - sstep(3, 6, h)));
-              break;
-          }
-          break;
-        }
-        case 'desert': {
-          const p = P.desert;
-          if (h < 0) {
-            mix(col, p.seabed, p.beach, 0.5);
+          case MAT_CLEARING:
+            // levelled military pad: dry grass and gravel
+            mix(tmp, p.clearing, p.pastureDry, sstep(-0.4, 0.6, n2));
+            blendInto(col, tmp, 0.85);
             break;
-          }
-          mix(col, p.sand, p.gravel, sstep(-0.25, 0.45, v));
-          blendInto(col, p.pavement, sstep(0.35, 0.7, n2) * 0.5);
-          blendInto(col, p.sandPale, sstep(0.3, 0.8, -n1) * 0.4);
-          if (h > 700) blendInto(col, p.rock, sstep(700, 1400, h) * 0.7);
-          switch (mat) {
-            case MAT_DUNE:
-              mix(tmp, p.dune, p.duneRed, sstep(-0.3, 0.5, n1));
-              blendInto(col, tmp, aux);
-              break;
-            case MAT_WADI:
-              blendInto(col, p.wadi, aux * 0.8);
-              blendInto(col, p.scrub, aux * sstep(0.1, 0.5, n2) * 0.6);
-              break;
-            case MAT_SALT:
-              blendInto(col, p.salt, aux * (0.7 + 0.3 * sstep(-0.5, 0.5, n2)));
-              break;
-            case MAT_MESA:
-              blendInto(col, p.mesa, aux * 0.85);
-              break;
-            case MAT_ROCKY:
-              mix(tmp, p.rock, p.rockDark, sstep(-0.2, 0.4, n2));
-              blendInto(col, tmp, aux * 0.9);
-              break;
-            case MAT_BEACH:
-              blendInto(col, p.beach, 0.85);
-              break;
-          }
-          break;
-        }
-        case 'islands': {
-          const p = P.islands;
-          if (h < 0) {
-            mix(col, p.seabed, p.beach, mat === MAT_REEF ? 0.3 : 0);
+          case MAT_BEACH:
+            // the crisp 15 m beach band is painted by the terrain shader from the coast mask
+            blendInto(col, hf.aux[k] > 128 ? p.blackSand : p.beach, 0.3 * (1 - sstep(3, 6, h)));
             break;
-          }
-          mix(col, p.grass, p.scrub, sstep(-0.3, 0.5, v));
-          switch (mat) {
-            case MAT_BEACH:
-              mix(col, p.beach, p.grass, sstep(2.2, 4.5, h));
-              break;
-            case MAT_JUNGLE:
-              mix(tmp, p.jungle, p.jungleDark, sstep(-0.3, 0.4, n2));
-              blendInto(col, tmp, 0.35 + 0.65 * aux);
-              break;
-            case MAT_VOLCANIC:
-              mix(tmp, p.volcanic, p.ash, sstep(-0.2, 0.6, n2));
-              blendInto(col, tmp, 0.4 + 0.6 * aux);
-              break;
-          }
-          break;
-        }
-        case 'mountains': {
-          const p = P.mountains;
-          if (h < 0) {
-            mix(col, p.seabed, p.seabed, 0);
-            break;
-          }
-          mix(col, p.grass, p.grassDry, sstep(-0.3, 0.6, v));
-          blendInto(col, p.meadow, sstep(1300, 1900, h + v * 200));
-          blendInto(col, p.alpine, sstep(2100, 2600, h + v * 250));
-          blendInto(col, p.scree, sstep(2600, 3100, h + v * 300));
-          if (mat === MAT_ROCKY) blendInto(col, p.rock, aux * 0.8);
-          if (mat === MAT_RIVER) blendInto(col, p.river, aux * 0.7 * (1 - sstep(1800, 2400, h)));
-          break;
-        }
-        case 'arctic': {
-          const p = P.arctic;
-          if (h < 0) {
-            mix(col, p.seabed, p.seabed, 0);
-            break;
-          }
-          mix(col, p.snow, p.snowBlue, sstep(-0.4, 0.6, v));
-          switch (mat) {
-            case MAT_TUNDRA:
-              mix(tmp, p.tundraSnow, p.tundra, sstep(-0.2, 0.5, n2 + aux * 0.5));
-              blendInto(col, tmp, 0.4 + 0.6 * aux);
-              break;
-            case MAT_ICE:
-              blendInto(col, p.ice, 0.4 + 0.6 * aux);
-              break;
-            case MAT_BEACH:
-              blendInto(col, p.shingle, 0.75);
-              break;
-            case MAT_ROCKY:
-              blendInto(col, p.rock, aux * 0.45);
-              break;
-          }
-          break;
         }
       }
 
@@ -494,15 +303,14 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
           const dz = z - ft.fp.z;
           if (Math.abs(dx) > ft.reach || Math.abs(dz) > ft.reach) continue;
           const type = ft.f.type;
-          const pal = P[theater] as Record<string, RGB>;
           if (type === 'airbase') {
             const w = footprintWeight(ft.fp, x, z);
             if (w > 0) {
               // mown airfield grass over the levelled strip; suburbs / trees resume just outside it
-              const core = theater === 'auckland' ? sstep(0.55, 0.95, w) : Math.min(1, w * 1.3);
-              blendInto(col, pal.airfield, core * (0.75 + 0.25 * n2));
-              clear = Math.max(clear, theater === 'auckland' ? core : w);
-              airfield = Math.max(airfield, theater === 'auckland' ? sstep(0.7, 0.95, w) : Math.min(1, w * 1.8));
+              const core = sstep(0.55, 0.95, w);
+              blendInto(col, p.airfield, core * (0.75 + 0.25 * n2));
+              clear = Math.max(clear, core);
+              airfield = Math.max(airfield, sstep(0.7, 0.95, w));
             }
             continue;
           }
@@ -511,7 +319,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
             const r = ft.fp.radius * (0.9 + 0.25 * n2);
             const w = 1 - sstep(r * 0.55, r * 1.05, dist);
             if (w > 0) {
-              blendInto(col, pal.urban, w * (type === 'village' ? 0.55 : 0.85));
+              blendInto(col, p.urban, w * (type === 'village' ? 0.55 : 0.85));
               clear = Math.max(clear, w);
               if (type !== 'port' && type !== 'industrial') urban = Math.max(urban, w * (type === 'city' ? 1 : type === 'town' ? 0.75 : 0.45));
             }
@@ -525,9 +333,8 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
             farmW = sstep(r0, r0 + 300, dist) * (1 - sstep(r1 * 0.7, r1, dist + n1 * 600)) * 0.9;
           }
           if (farmW > 0 && slopeOk(slope) && h > 1.5) {
-            if (theater === 'arctic') continue;
-            farmColor(tmp, theater, x - ft.fp.x, z - ft.fp.z, ft.angle, ft.seed);
-            if (tmp[0] >= 0) blendInto(col, tmp, farmW * (1 - sstep(0.12, 0.25, slope)));
+            farmColor(tmp, x - ft.fp.x, z - ft.fp.z, ft.angle, ft.seed);
+            blendInto(col, tmp, farmW * (1 - sstep(0.12, 0.25, slope)));
           }
         }
       }
@@ -537,13 +344,7 @@ export function bakeColorRows(hf: HfView, opts: ColorBakeOptions, m: number, j0:
       if (clear > 0) forest *= 1 - clear;
       urban *= 1 - airfield; // no suburbs on the airfield
       if (urban > 0.05) forest = 0;
-      if (forest > 0.02) {
-        const pal = P[theater] as Record<string, RGB>;
-        let fc = pal.forest;
-        if (theater === 'mountains' && h > 1100) fc = P.mountains.conifer;
-        else if (mat === MAT_PINE) fc = P.auckland.pineForest;
-        blendInto(col, fc, forest * (theater === 'arctic' ? 0.55 : 0.8));
-      }
+      if (forest > 0.02) blendInto(col, mat === MAT_PINE ? p.pineForest : p.forest, forest * 0.8);
 
       // Subtle large-scale brightness variation keeps the map from looking flat
       const bright = 1 + 0.06 * n1;
@@ -564,33 +365,16 @@ function clampByte(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v | 0;
 }
 
-/** Field patchwork / irrigation circles. Writes tmp[0] = -1 when not on a field. */
-function farmColor(out: RGB, theater: TheaterId, lx: number, lz: number, angle: number, seed: number): void {
+/** Field patchwork of a farmland feature (local frame rotated by `angle`). */
+function farmColor(out: RGB, lx: number, lz: number, angle: number, seed: number): void {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   const u = lx * c + lz * s;
   const v = -lx * s + lz * c;
-  if (theater === 'desert') {
-    // centre-pivot irrigation circles on an 820 m grid
-    const cu = Math.floor(u / 820);
-    const cv = Math.floor(v / 820);
-    const du = u - (cu + 0.5) * 820;
-    const dv = v - (cv + 0.5) * 820;
-    const r = hash2(cu, cv, seed);
-    if (r < 0.28 || du * du + dv * dv > 380 * 380) {
-      out[0] = -1;
-      return;
-    }
-    const p = PAL.desert;
-    mix(out, r > 0.7 ? p.farmA : r > 0.45 ? p.farmB : p.farmC, p.farmA, 0);
-    return;
-  }
   const fu = Math.floor(u / 330);
   const fv = Math.floor(v / (190 + 120 * hash2(fu, 3, seed)));
   const r = hash2(fu, fv, seed);
-  const pal = theater === 'islands' ? PAL.islands : PAL.mountains;
-  const list: RGB[] = theater === 'islands' ? [pal.farmA, pal.farmB, pal.farmC, pal.farmA] : [PAL.mountains.farmA, PAL.mountains.farmB, PAL.mountains.farmC, PAL.mountains.farmD];
-  const a = list[(r * 4) | 0];
+  const a = FIELDS[(r * 4) | 0];
   out[0] = a[0];
   out[1] = a[1];
   out[2] = a[2];

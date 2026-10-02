@@ -12,20 +12,10 @@ export const HF_EXTENT = 88_000;
 export const EDGE_FADE_START = 38_500;
 export const EDGE_FADE_END = 43_200;
 
-/* Material hints written per sample by the theater generators (consumed by the colour baker). */
+/* Material hints written per sample by the Auckland generator (consumed by the colour baker). */
 export const MAT_NONE = 0;
-export const MAT_DUNE = 1; // aux = sand-sea intensity
-export const MAT_WADI = 2; // aux = channel strength
-export const MAT_SALT = 3; // sabkha / salt flat
-export const MAT_MESA = 4; // aux = plateau strength
 export const MAT_BEACH = 5;
 export const MAT_VOLCANIC = 6; // aux = volcanic intensity
-export const MAT_REEF = 7;
-export const MAT_ICE = 8; // frozen lake
-export const MAT_RIVER = 9; // valley floor / river plain, aux = strength
-export const MAT_JUNGLE = 10; // aux = density
-export const MAT_ROCKY = 11; // bare mountain rock, aux = strength
-export const MAT_TUNDRA = 12;
 export const MAT_URBAN = 13; // aux = built-up density
 export const MAT_BUSH = 14; // native bush / dense forest, aux = density
 export const MAT_CONE = 15; // grassy volcanic cone (Auckland)
@@ -43,15 +33,6 @@ export interface TheaterGenerator {
   height(x: number, z: number, out: SampleOut): number;
   /** Smooth "outside the world" profile (m). Must be low-frequency — it's clamped outward forever. */
   edge(x: number, z: number): number;
-}
-
-/** Area that must be dry land (features / pads). */
-export interface Anchor {
-  x: number;
-  z: number;
-  /** Radius that must be land (m). */
-  r: number;
-  port: boolean;
 }
 
 export interface TerrainSpec {

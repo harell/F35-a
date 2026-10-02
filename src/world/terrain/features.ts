@@ -5,7 +5,7 @@
  */
 import type { SceneryFeature } from '../../core/contracts';
 import { AIRFIELDS, airfieldNear, mainRunway, type AirfieldId } from '../../core/airfields';
-import type { Anchor, Footprint } from './types';
+import type { Footprint } from './types';
 
 /* ───────────── Airbase layout (local frame: v along the runway heading, u to its right) ───────────── */
 export const AIRBASE = {
@@ -154,19 +154,6 @@ export function footprintOf(f: SceneryFeature): Footprint {
   }
   if (f.flatten !== undefined) base.flatten = f.flatten;
   return base;
-}
-
-/** Areas that must be dry land for the given features / pads. */
-export function anchorsFor(features: SceneryFeature[], pads: { x: number; z: number; radius: number }[]): Anchor[] {
-  const out: Anchor[] = [];
-  for (const f of features) {
-    const fp = footprintOf(f);
-    const core = footprintCoreRadius(fp);
-    const r = f.type === 'forest' || f.type === 'farmland' ? core * 0.6 : core;
-    out.push({ x: fp.x, z: fp.z, r: f.type === 'port' ? r * 0.55 : r, port: f.type === 'port' });
-  }
-  for (const p of pads) out.push({ x: p.x, z: p.z, r: Math.max(80, p.radius) + 120, port: false });
-  return out;
 }
 
 /**

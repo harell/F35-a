@@ -40,7 +40,6 @@ uniform sampler2D uDetail;
 uniform vec4 uHf; // origin, cell, n, 0
 uniform vec3 uDeep;
 uniform vec3 uShallow;
-uniform float uSeaIce;
 uniform float uGlint;
 uniform float uShallowDepth;
 varying vec3 vWorld;
@@ -117,14 +116,6 @@ void main() {
     col = mix(col, (uHemiSky * 0.6 + uSunColor * 0.3) * 0.9, clamp(foam, 0.0, 1.0) * 0.6 * fade);
   }
 
-  // Sea ice floes (arctic)
-  if (uSeaIce > 0.0) {
-    float ice = texture2D(uDetail, wp / 3100.0).g * 0.7 + texture2D(uDetail, wp / 450.0).r * 0.35;
-    float m = smoothstep(1.0 - uSeaIce, 1.0 - uSeaIce + 0.06, ice) * smoothstep(3.0, 30.0, depth + 3.0);
-    vec3 iceCol = atmoDiffuse(vec3(0.85, 0.9, 0.95), vec3(0.0, 1.0, 0.0), 1.0);
-    col = mix(col, iceCol, m);
-  }
-
   col = atmoNight(col);
   col = atmoApplyFog(col, vWorld);
   gl_FragColor = vec4(col, 1.0);
@@ -140,7 +131,6 @@ export interface WaterOptions {
   hf: { origin: number; cell: number; n: number };
   deep: Color;
   shallow: Color;
-  seaIce: number;
   shallowDepth: number;
   radius: number;
   coast: CoastMaskInfo | null;
@@ -167,7 +157,6 @@ export class Water {
         uHf: { value: new Vector4(o.hf.origin, o.hf.cell, o.hf.n, 0) },
         uDeep: { value: o.deep },
         uShallow: { value: o.shallow },
-        uSeaIce: { value: o.seaIce },
         uGlint: { value: 1 },
         uShallowDepth: { value: o.shallowDepth },
         ...coastUniforms(o.coast, o.dummy),

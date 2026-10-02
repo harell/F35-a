@@ -1,17 +1,17 @@
 /**
- * Terrain generation worker: computes bands of the theatre base heightfield and of the colour map
+ * Terrain generation worker: computes bands of the Auckland base heightfield and of the colour map
  * off the main thread. Generators (coarse fields, the Auckland map raster) are cached per worker.
  */
 import { createTheaterGenerator, generateBaseRows } from './generate';
 import { bakeColorRows, type HfView } from './bake';
 import { bakeAucklandCoastMask } from './theaters/auckland';
 import { aucklandLinzVersion, setAucklandLinz } from './theaters/aucklandLinz';
-import type { Anchor, TheaterGenerator } from './types';
+import type { TheaterGenerator } from './types';
 import type { TheaterId } from '../../core/types';
 import type { SceneryFeature } from '../../core/contracts';
 
 export type WorkerJob =
-  | { id: number; kind: 'base'; theater: TheaterId; seed: number; anchors: Anchor[]; n: number; z0: number; z1: number }
+  | { id: number; kind: 'base'; theater: TheaterId; seed: number; n: number; z0: number; z1: number }
   | { id: number; kind: 'hf'; hf: HfView }
   | { id: number; kind: 'linz'; bytes: Uint8Array | null }
   | { id: number; kind: 'color'; theater: TheaterId; seed: number; features: SceneryFeature[]; m: number; j0: number; j1: number }
@@ -38,9 +38,9 @@ scope.onmessage = (e) => {
   const job = e.data;
   try {
     if (job.kind === 'base') {
-      const key = `${job.theater}|${job.seed}|${aucklandLinzVersion()}|${JSON.stringify(job.anchors)}`;
+      const key = `${job.theater}|${job.seed}|${aucklandLinzVersion()}`;
       if (key !== cacheKey || !cached) {
-        cached = createTheaterGenerator({ theater: job.theater, seed: job.seed }, job.anchors);
+        cached = createTheaterGenerator({ theater: job.theater, seed: job.seed });
         cacheKey = key;
       }
       const rows = job.z1 - job.z0;

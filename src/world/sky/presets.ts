@@ -1,5 +1,5 @@
 /**
- * Lighting / atmosphere presets per (theatre, time of day, weather). Pure data (three.js Color /
+ * Lighting / atmosphere presets per (time of day, weather) over Auckland. Pure data (three.js Color /
  * Vector3 only), node-safe. All colours are authored as sRGB hex and converted to linear by
  * three's Color (ColorManagement enabled).
  */
@@ -40,8 +40,6 @@ export interface SkyPreset {
   /** Water colours. */
   waterDeep: Color;
   waterShallow: Color;
-  /** Sea-ice coverage 0..1 (arctic). */
-  seaIce: number;
   /** Depth (m) at which the water reaches its deep colour. */
   shallowDepth: number;
   /** Night-time emissive factor for town / runway lights (0 by day). */
@@ -99,18 +97,11 @@ const TOD: Record<TimeOfDay, TodBase> = {
   },
 };
 
-/** Theatre tweaks: sun path, haze colour/density, water colours. */
-const THEATER: Record<
-  TheaterId,
-  { dayEl: number; azShift: number; haze: number; fogK: number; hazeH: number; deep: number; shallow: number; ice: number; tint: number; dayAz?: number }
-> = {
-  // Southern hemisphere: the midday sun stands in the NORTH over the Hauraki Gulf.
-  auckland: { dayEl: 54, azShift: 0, dayAz: 20, haze: 0xb6cde6, fogK: 1.3, hazeH: 3000, deep: 0x0f3844, shallow: 0x2a5e58, ice: 0, tint: 0.1 },
-  desert: { dayEl: 66, azShift: 0, haze: 0xd8cdb8, fogK: 1.75, hazeH: 2600, deep: 0x0d5a6a, shallow: 0x46c8c0, ice: 0, tint: 0.35 },
-  islands: { dayEl: 62, azShift: 10, haze: 0xbad6ec, fogK: 1.45, hazeH: 3200, deep: 0x06306a, shallow: 0x2fd0d8, ice: 0, tint: 0.2 },
-  mountains: { dayEl: 50, azShift: -10, haze: 0xb4cae2, fogK: 1.25, hazeH: 3600, deep: 0x123a58, shallow: 0x3a8c96, ice: 0, tint: 0 },
-  arctic: { dayEl: 22, azShift: -25, haze: 0xcad8e6, fogK: 1.35, hazeH: 3000, deep: 0x0e2a3a, shallow: 0x3c7a86, ice: 0.3, tint: 0 },
-};
+/**
+ * Auckland: sun path, haze colour/density, water colours. Southern hemisphere: the midday sun (and
+ * the night's moon) stands in the NORTH over the Hauraki Gulf.
+ */
+const AKL = { dayEl: 54, dayAz: 20, nightAz: 20, haze: 0xb6cde6, fogK: 1.3, hazeH: 3000, deep: 0x0f3844, shallow: 0x2a5e58, tint: 0.1, shallowDepth: 5 };
 
 /**
  * City / street-light intensity from the sun's elevation (degrees): street lights and the urban
@@ -122,20 +113,18 @@ export function lightsForSun(elDeg: number): number {
   return Math.min(1, Math.max(0, (7 - elDeg) / 10));
 }
 
-export function skyPreset(theater: TheaterId, tod: TimeOfDay, weather: Weather, drawDistance: number): SkyPreset {
+export function skyPreset(_theater: TheaterId, tod: TimeOfDay, weather: Weather, drawDistance: number): SkyPreset {
   const b = TOD[tod];
-  const t = THEATER[theater];
-  let el = b.el;
-  if (tod === 'day') el = t.dayEl;
-  if (theater === 'arctic' && tod !== 'day' && tod !== 'night') el = Math.max(3, el - 3);
-  const az = tod === 'day' && t.dayAz !== undefined ? t.dayAz : theater === 'auckland' && tod === 'night' ? 20 : b.az + t.azShift;
+  const t = AKL;
+  const el = tod === 'day' ? t.dayEl : b.el;
+  const az = tod === 'day' ? t.dayAz : tod === 'night' ? t.nightAz : b.az;
   const sunDir = dirFromAzEl(az, el);
 
   const c = (hex: number) => new Color().setHex(hex);
   const horizon = c(b.horizon);
   const zenith = c(b.zenith);
   const horizonSun = c(b.horizonSun);
-  // Daytime haze colour depends on the theatre (dusty desert, humid tropics, crisp mountains).
+  // Daytime haze: Auckland's humid maritime blue.
   if (tod === 'day') {
     horizon.lerp(c(t.haze), 0.7);
     horizonSun.lerp(c(t.haze), 0.5);
@@ -196,8 +185,7 @@ export function skyPreset(theater: TheaterId, tod: TimeOfDay, weather: Weather, 
     cloudShade,
     waterDeep: c(t.deep).lerp(c(0x2a3438), 1 - waterK).multiplyScalar(waterK),
     waterShallow: c(t.shallow).lerp(c(0x3a4644), 1 - waterK).multiplyScalar(waterK),
-    seaIce: t.ice,
-    shallowDepth: theater === 'islands' ? 14 : theater === 'desert' ? 9 : theater === 'auckland' ? 5 : 4,
+    shallowDepth: t.shallowDepth,
     lights: tod === 'night' ? b.lights : Math.min(b.lights, lightsForSun(el)),
   };
 }

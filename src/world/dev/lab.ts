@@ -1,7 +1,7 @@
 /**
  * WORLD lab (dev only, labs/world-lab.html): renders the environment alone with a free-flying camera.
  *
- *   labs/world-lab.html?theater=auckland&tod=day&weather=scattered&quality=medium&seed=1234
+ *   labs/world-lab.html?tod=day&weather=scattered&quality=medium&seed=1234
  *                 &cam=x,y,z&look=headingDeg,pitchDeg&aerial=0&railways=0
  *
  * Keys: WASD/QE fly, arrows look, Shift = fast. `window.__lab` exposes setCamera/stats for
@@ -16,7 +16,7 @@ import { airfieldFeature } from '../../core/airfields';
 import { dirFromHeadingPitch } from '../../core/math';
 
 const params = new URLSearchParams(location.search);
-const theater = (params.get('theater') ?? 'auckland') as TheaterId;
+const theater: TheaterId = 'auckland';
 const tod = (params.get('tod') ?? 'day') as TimeOfDay;
 const weather = (params.get('weather') ?? 'scattered') as Weather;
 const level = (params.get('quality') ?? 'medium') as QualityLevel;
@@ -42,34 +42,16 @@ const camera = new PerspectiveCamera(Number(params.get('fov') ?? 60), window.inn
 scene.add(camera);
 
 function features(): { features: SceneryFeature[]; pads: { x: number; z: number; radius: number }[] } {
-  if (theater === 'auckland') {
-    return {
-      features: [
-        airfieldFeature('whenuapai'), // FEATURES.whenuapai (the real layout comes from OSM)
-        { type: 'airbase', x: 26_900, z: -6600, rotation: 90, size: 0.8 }, // campaign Waiheke strip (FEATURES.waihekeStrip)
-        { type: 'industrial', x: 13_300, z: -9800, size: 0.6 },
-      ],
-      pads: [
-        { x: 12_900, z: -8600, radius: 150 },
-        { x: 8200, z: -5600, radius: 110 },
-        { x: 24_000, z: -5500, radius: 120 },
-      ],
-    };
-  }
   return {
     features: [
-      { type: 'airbase', x: -8000, z: 14_000, rotation: 30 },
-      { type: 'city', x: 6000, z: -4000 },
-      { type: 'town', x: -14_000, z: -12_000 },
-      { type: 'village', x: 18_000, z: 16_000 },
-      { type: 'industrial', x: 12_000, z: 6000 },
-      { type: 'port', x: 22_000, z: -2000 },
-      { type: 'forest', x: -20_000, z: 5000 },
-      { type: 'farmland', x: -2000, z: 24_000 },
+      airfieldFeature('whenuapai'), // FEATURES.whenuapai (the real layout comes from OSM)
+      { type: 'airbase', x: 26_900, z: -6600, rotation: 90, size: 0.8 }, // campaign Waiheke strip (FEATURES.waihekeStrip)
+      { type: 'industrial', x: 13_300, z: -9800, size: 0.6 },
     ],
     pads: [
-      { x: 2000, z: -20_000, radius: 120 },
-      { x: -16_000, z: -2000, radius: 150 },
+      { x: 12_900, z: -8600, radius: 150 },
+      { x: 8200, z: -5600, radius: 110 },
+      { x: 24_000, z: -5500, radius: 120 },
     ],
   };
 }

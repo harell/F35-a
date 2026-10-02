@@ -164,8 +164,6 @@ describe('real airfields', () => {
       expect(footprintWeight(fp, rw.x, rw.z)).toBe(1);
       expect(footprintWeight(fp, rw.x + 9000, rw.z)).toBe(0);
     }
-    // other theatres keep their own (template) airbases
-    expect(allFeatures('desert', [{ type: 'airbase', x: 0, z: 0, rotation: 30 }])).toEqual([{ type: 'airbase', x: 0, z: 0, rotation: 30 }]);
   });
 
   it('terrain: every paved runway, taxiway and apron of the real airfields is level', () => {

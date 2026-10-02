@@ -107,10 +107,10 @@ describe('high tier generation with the real 2048 detail', () => {
       return b;
     };
     let t = performance.now();
-    real = runSync(finishTerrain(copy(), spec(1840, true), [], 0));
+    real = runSync(finishTerrain(copy(), spec(1840, true), 0));
     realMs = performance.now() - t;
     t = performance.now();
-    proc = runSync(finishTerrain(copy(), spec(1840, false), [], 0));
+    proc = runSync(finishTerrain(copy(), spec(1840, false), 0));
     procMs = performance.now() - t;
   }, 120_000);
   afterAll(() => setAucklandLinzHd(null));
@@ -153,7 +153,7 @@ describe('high tier generation with the real 2048 detail', () => {
     const fin = (hd: boolean) => {
       const b = new Heightfield(1024, HF_EXTENT);
       b.data.set(base7.data);
-      return runSync(finishTerrain(b, spec(7, hd), [], 0));
+      return runSync(finishTerrain(b, spec(7, hd), 0));
     };
     const other = fin(true);
     const otherProc = fin(false);
@@ -211,7 +211,7 @@ describe('high tier generation with the real 2048 detail', () => {
     b.data.set(base1024.data);
     const warn = console.warn;
     console.warn = () => undefined;
-    const fallback = runSync(finishTerrain(b, spec(1840, true), [], 0));
+    const fallback = runSync(finishTerrain(b, spec(1840, true), 0));
     console.warn = warn;
     let diff = 0;
     for (let k = 0; k < fallback.data.length; k += 97) diff = Math.max(diff, Math.abs(fallback.data[k] - proc.data[k]));

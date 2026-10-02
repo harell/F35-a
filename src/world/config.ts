@@ -1,5 +1,5 @@
 /**
- * Quality-dependent world parameters (derived from QualitySettings) and per-theatre terrain styles.
+ * Quality-dependent world parameters (derived from QualitySettings) and the Auckland terrain style.
  */
 import { Color } from 'three';
 import type { QualitySettings, TheaterId } from '../core/types';
@@ -67,45 +67,20 @@ function aucklandCones(): NonNullable<TerrainStyle['cones']> {
   ];
 }
 
-/** Shader-side splatting parameters per theatre. */
-export function terrainStyle(theater: TheaterId): TerrainStyle {
+/** Shader-side splatting parameters (Auckland). */
+export function terrainStyle(_theater: TheaterId): TerrainStyle {
   const six = (a: number[]): Color[] => a.map((h) => c(h));
-  const shore = { sand: c(0xcdb88a), blackSand: c(0x34322f), shoreRock: c(0x4a4640), blackSandX: -1e9, vineyard: null, sink: false, cbd: null };
-  switch (theater) {
-    case 'desert':
-      return {
-        ...shore, rockColor: c(0x8a6c52), snowColor: c(0xf4f6fa), snowLine: 1e6, rockSlope: 0.3, outsideColor: c(0xcdb58c), fields: 0,
-        roofs: six([0xe0d6c2, 0xc8b89a, 0xf0ece4, 0xd8ccb0, 0xb8a888, 0xe8e0d0]), garden: c(0xb8a47e), canopy: c(0x5a6a3a), sand: c(0xe0cca0),
-      };
-    case 'islands':
-      return {
-        ...shore, rockColor: c(0x5c554e), snowColor: c(0xf4f6fa), snowLine: 1e6, rockSlope: 0.36, outsideColor: c(0x7c9a44), fields: 0.5,
-        roofs: six([0xb04a32, 0x6a8aa0, 0xd8d0c0, 0x8a4a3a, 0xc8c0b0, 0x5a7a8a]), garden: c(0x5c8a3a), canopy: c(0x24461e), sand: c(0xeee2c0),
-      };
-    case 'mountains':
-      return {
-        ...shore, rockColor: c(0x7c7671), snowColor: c(0xf2f5fa), snowLine: 2900, rockSlope: 0.3, outsideColor: c(0x7a9450), fields: 0.9,
-        roofs: six([0x8a3a2c, 0x5a5f66, 0x9a9a92, 0x6a3024, 0x44484e, 0x7a6a5a]), garden: c(0x6c8a48), canopy: c(0x2c4426), shoreRock: c(0x6a6560),
-      };
-    case 'arctic':
-      return {
-        ...shore, rockColor: c(0x55565c), snowColor: c(0xf0f4f8), snowLine: 1100, rockSlope: 0.33, outsideColor: c(0xe6ecf2), fields: 0,
-        roofs: six([0xa03028, 0x2f4f6f, 0xc8b040, 0x3a3c40, 0x5a2a28, 0xe8ecf0]), garden: c(0xd8dee6), canopy: c(0x2e3c36), sand: c(0x7c7a74),
-      };
-    case 'auckland':
-    default:
-      return {
-        rockColor: c(0x5f5a52), snowColor: c(0xf4f6fa), snowLine: 1e6, rockSlope: 0.42, outsideColor: c(0x6f9a46), fields: 1,
-        // Auckland roofs: charcoal & grey corrugated iron, terracotta tiles, red-painted iron,
-        // off-white, a few muted greens. Lawns are a fresh NZ green, canopy a dark bush green.
-        roofs: six([0x3a3d40, 0x6e7074, 0x8a4a38, 0x7a2e26, 0xbdb9ae, 0x3f4d3c]),
-        garden: c(0x55803a), canopy: c(0x263f20),
-        sand: c(0xd2bf92), blackSand: c(0x2f2d2b), shoreRock: c(0x3e3a35), blackSandX: -18_000,
-        // Waiheke vineyards (Oneroa → Onetangi)
-        vineyard: [27_500, -5_200, 8_500, 3_000],
-        sink: true,
-        cbd: aucklandCbd(),
-        cones: aucklandCones(),
-      };
-  }
+  return {
+    rockColor: c(0x5f5a52), snowColor: c(0xf4f6fa), snowLine: 1e6, rockSlope: 0.42, outsideColor: c(0x6f9a46), fields: 1,
+    // Auckland roofs: charcoal & grey corrugated iron, terracotta tiles, red-painted iron,
+    // off-white, a few muted greens. Lawns are a fresh NZ green, canopy a dark bush green.
+    roofs: six([0x3a3d40, 0x6e7074, 0x8a4a38, 0x7a2e26, 0xbdb9ae, 0x3f4d3c]),
+    garden: c(0x55803a), canopy: c(0x263f20),
+    sand: c(0xd2bf92), blackSand: c(0x2f2d2b), shoreRock: c(0x3e3a35), blackSandX: -18_000,
+    // Waiheke vineyards (Oneroa → Onetangi)
+    vineyard: [27_500, -5_200, 8_500, 3_000],
+    sink: true,
+    cbd: aucklandCbd(),
+    cones: aucklandCones(),
+  };
 }

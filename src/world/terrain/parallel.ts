@@ -6,7 +6,6 @@
 import type { SceneryFeature } from '../../core/contracts';
 import type { TheaterId } from '../../core/types';
 import type { HfView } from './bake';
-import type { Anchor } from './types';
 import type { WorkerJob, WorkerResult } from './worker';
 
 type Pending = { resolve: (r: WorkerResult) => void; reject: (e: Error) => void };
@@ -68,7 +67,6 @@ export class TerrainWorkerPool {
   async generateBase(
     theater: TheaterId,
     seed: number,
-    anchors: Anchor[],
     n: number,
     onProgress: (f: number) => void,
   ): Promise<{ data: Float32Array; mat: Uint8Array; aux: Uint8Array }> {
@@ -82,7 +80,7 @@ export class TerrainWorkerPool {
     for (let z0 = 0; z0 < n; z0 += rows) {
       const z1 = Math.min(n, z0 + rows);
       jobs.push(
-        this.run({ kind: 'base', theater, seed, anchors, n, z0, z1 }).then((r) => {
+        this.run({ kind: 'base', theater, seed, n, z0, z1 }).then((r) => {
           if (r.kind !== 'base') return;
           data.set(r.data, r.z0 * n);
           mat.set(r.mat, r.z0 * n);

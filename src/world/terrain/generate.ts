@@ -1,22 +1,18 @@
 /**
- * Deterministic heightfield generation (theatre style + seed + mission features/pads).
+ * Deterministic heightfield generation (Auckland + seed + mission features/pads).
  *
  * Written as a generator that yields progress (0..1) so callers can either run it synchronously
  * (tests, `runSync`) or time-slice it on the main thread (`runSliced`) to keep the loading bar
  * animating on phones.
  *
- * Pipeline: theatre base terrain (≤1024², with a border fade to a smooth outside profile)
+ * Pipeline: Auckland base terrain (≤1024², with a border fade to a smooth outside profile)
  *   → optional 2× Catmull-Rom upsample + fine detail (2048² on high quality): procedural octaves, or
- *     on Auckland with `spec.hdTerrain` a blend to the real 2048 LiDAR heights (aucklandLinzHd.ts)
- *   → keep feature/pad anchors dry → flatten features (airfields, towns…) and pads (SAM sites).
+ *     with `spec.hdTerrain` a blend to the real 2048 LiDAR heights (aucklandLinzHd.ts)
+ *   → flatten features (airfields, depots…) and pads (SAM sites).
  */
 import { Heightfield } from './Heightfield';
 import { Noise2D, sstep, mixf } from './noise';
-import { airfieldOf, anchorsFor, footprintCoreRadius, footprintOf, footprintReach, footprintWeight } from './features';
-import { createDesert } from './theaters/desert';
-import { createIslands } from './theaters/islands';
-import { createMountains } from './theaters/mountains';
-import { createArctic } from './theaters/arctic';
+import { airfieldOf, footprintCoreRadius, footprintOf, footprintReach, footprintWeight } from './features';
 import { createAuckland } from './theaters/auckland';
 import { runwaysOf } from '../../core/airfields';
 import { aucklandLinz } from './theaters/aucklandLinz';
@@ -27,28 +23,14 @@ import {
   HF_EXTENT,
   MAT_CLEARING,
   MAT_NONE,
-  type Anchor,
   type Footprint,
   type SampleOut,
   type TerrainSpec,
   type TheaterGenerator,
 } from './types';
 
-export function createTheaterGenerator(spec: Pick<TerrainSpec, 'theater' | 'seed'>, anchors: Anchor[]): TheaterGenerator {
-  switch (spec.theater) {
-    case 'auckland':
-      return createAuckland(spec.seed);
-    case 'desert':
-      return createDesert(spec.seed);
-    case 'islands':
-      return createIslands(spec.seed, anchors);
-    case 'mountains':
-      return createMountains(spec.seed);
-    case 'arctic':
-      return createArctic(spec.seed);
-    default:
-      return createAuckland(spec.seed);
-  }
+export function createTheaterGenerator(spec: Pick<TerrainSpec, 'theater' | 'seed'>): TheaterGenerator {
+  return createAuckland(spec.seed);
 }
 
 /** Rounded-square radius used for the border fade. */
@@ -110,51 +92,47 @@ export function generateBaseRows(
 }
 
 export function* generateTerrain(spec: TerrainSpec): Generator<number, Heightfield, void> {
-  const anchors = anchorsFor(spec.features, spec.pads);
-  const gen = createTheaterGenerator(spec, anchors);
+  const gen = createTheaterGenerator(spec);
   const baseN = Math.min(BASE_MAX, spec.resolution);
   const base = new Heightfield(baseN, HF_EXTENT);
   const upsample = spec.resolution > baseN;
   const baseShare = upsample ? 0.72 : 0.88;
 
-  // 1) Theatre base terrain with border fade.
+  // 1) Base terrain with border fade.
   for (let iz = 0; iz < baseN; iz += 16) {
     const z1 = Math.min(baseN, iz + 16);
     generateBaseRows(gen, baseN, iz, z1, base.data.subarray(iz * baseN, z1 * baseN), base.mat.subarray(iz * baseN, z1 * baseN), base.aux.subarray(iz * baseN, z1 * baseN));
     yield (z1 / baseN) * baseShare;
   }
 
-  return yield* finishTerrain(base, spec, anchors, baseShare);
+  return yield* finishTerrain(base, spec, baseShare);
 }
 
 /**
- * Steps after the theatre base: optional 2× upsample (+ detail), anchors kept dry, flattening.
+ * Steps after the base terrain: optional 2× upsample (+ detail), flattening.
  * Progress continues from `p0` to 1.
  */
-export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: Anchor[], p0: number): Generator<number, Heightfield, void> {
+export function* finishTerrain(base: Heightfield, spec: TerrainSpec, p0: number): Generator<number, Heightfield, void> {
   let hf = base;
   if (spec.resolution > base.n) {
     hf = new Heightfield(base.n * 2, HF_EXTENT);
     yield* upsample2x(base, hf, spec.seed, p0, 0.9, realDetail(spec, hf.n));
   }
 
-  // 3) Keep anchors dry (features / pads never end up in the sea). Auckland's coast is mapped and its
-  //    missions place everything on land: lifting there would grow aprons of land into the harbours.
-  const mapped = spec.theater === 'auckland';
-  if (!mapped) for (const a of anchors) liftAnchor(hf, a);
   yield 0.93;
 
-  // 4) Flatten features, then pads (pads see the already flattened ground).
+  // 3) Flatten features, then pads (pads see the already flattened ground). The coast is mapped and
+  //    missions place everything on land, so flattening keeps to the real shoreline (keepCoast).
   for (const f of spec.features) {
     const fp = footprintOf(f);
     if (!fp.flatten) continue;
-    const level = flatten(hf, fp, mapped);
+    const level = flatten(hf, fp, true);
     // A real airfield without its OSM outline (fallback): level its other runways (Whenuapai's cross
     // runway 08/26) to the same height as the main strip. The outline already covers them.
-    const id = mapped && !fp.poly ? airfieldOf(f) : null;
+    const id = !fp.poly ? airfieldOf(f) : null;
     if (id) {
       for (const X of runwaysOf(id).slice(1)) {
-        flatten(hf, { kind: 'rect', x: X.x, z: X.z, halfW: 70, halfL: X.length / 2 + 80, radius: 0, heading: X.heading, blend: 350, strength: 1, minLevel: 2, flatten: true }, mapped, MAT_NONE, level);
+        flatten(hf, { kind: 'rect', x: X.x, z: X.z, halfW: 70, halfL: X.length / 2 + 80, radius: 0, heading: X.heading, blend: 350, strength: 1, minLevel: 2, flatten: true }, true, MAT_NONE, level);
       }
     }
   }
@@ -172,7 +150,7 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
       strength: 1,
       minLevel: 2,
       flatten: true,
-    }, mapped, MAT_CLEARING);
+    }, true, MAT_CLEARING);
   }
   yield 1;
   return hf;
@@ -180,7 +158,7 @@ export function* finishTerrain(base: Heightfield, spec: TerrainSpec, anchors: An
 
 /** The real Auckland n × n heights, when asked for, loaded and baked against the installed base grid. */
 function realDetail(spec: TerrainSpec, n: number): Float32Array | null {
-  if (spec.theater !== 'auckland' || !spec.hdTerrain) return null;
+  if (!spec.hdTerrain) return null;
   const base = aucklandLinz();
   const hd = aucklandLinzHd();
   if (!base || !hd) return null;
@@ -254,31 +232,6 @@ function* upsample2x(src: Heightfield, dst: Heightfield, seed: number, p0: numbe
       dst.aux[di] = src.aux[si];
     }
     if ((iz & 31) === 31) yield p0 + (iz / n) * (p1 - p0);
-  }
-}
-
-/** Raise the ground around an anchor to at least a few metres above sea level. */
-function liftAnchor(hf: Heightfield, a: Anchor): void {
-  const reach = a.r + 2200;
-  const i0 = Math.max(0, Math.floor((a.x - reach - hf.origin) / hf.cell));
-  const i1 = Math.min(hf.n - 1, Math.ceil((a.x + reach - hf.origin) / hf.cell));
-  const j0 = Math.max(0, Math.floor((a.z - reach - hf.origin) / hf.cell));
-  const j1 = Math.min(hf.n - 1, Math.ceil((a.z + reach - hf.origin) / hf.cell));
-  const target = a.port ? 3 : 6;
-  for (let j = j0; j <= j1; j++) {
-    const z = hf.pos(j);
-    for (let i = i0; i <= i1; i++) {
-      const x = hf.pos(i);
-      const d = Math.hypot(x - a.x, z - a.z);
-      const w = 1 - sstep(a.r, reach, d);
-      if (w <= 0) continue;
-      const k = j * hf.n + i;
-      const h = hf.data[k];
-      if (h < target) {
-        hf.data[k] = mixf(h, target, w);
-        if (w > 0.5) hf.mat[k] = MAT_NONE;
-      }
-    }
   }
 }
 
