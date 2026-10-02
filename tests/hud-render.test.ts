@@ -1128,3 +1128,16 @@ describe('the steering waypoint always has its name on screen', () => {
     });
   }
 });
+
+describe('NEXT slot with the bandits in reach', () => {
+  it('stays empty for a target waypoint off screen while a hostile aircraft is within 5 km (chase)', () => {
+    const r = rig('gun', 'chase');
+    const p = r.mock.player;
+    const wp = { id: 'wp_swarm', label: 'Swarm', position: p.position.clone().add(new Vector3(0, 0, 5000).applyQuaternion(p.quaternion)), radius: 2000, kind: 'target' as const };
+    (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
+    expect(find(r.run(0.1), /^swarm$/i).length).toBe(0);
+    // a nav waypoint behind: named in the NEXT slot
+    (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = { ...wp, kind: 'nav' };
+    expect(find(r.run(0.1), /^swarm$/i).length).toBe(1);
+  });
+});

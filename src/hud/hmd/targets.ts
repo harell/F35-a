@@ -763,6 +763,11 @@ export function drawWaypoint(f: HudFrame): void {
   if (!wp) return;
   const { p, pen, pal, L, occ } = f;
   const u = L.u;
+  // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
+  // would only print into them (playtest: over the drone boxes through the g01 gun pass), and the NEXT
+  // slot stays empty too
+  const engaged = wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE);
+  wpName.done = engaged;
   f.proj.point(wp.position, f.sp);
   if (!drawable(f)) return;
   const x = f.sp.x;
@@ -775,12 +780,7 @@ export function drawWaypoint(f: HudFrame): void {
   pen.diamond(x, y, r);
   pen.line(x, y - r, x, y - r - 5 * u);
   pen.strokeGlow(pal.main, 1.6);
-  // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
-  // would only print into them (playtest: over the drone boxes through the g01 gun pass)
-  if (wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE)) {
-    wpName.done = true;
-    return;
-  }
+  if (engaged) return;
   const dx = wp.position.x - p.position.x;
   const dz = wp.position.z - p.position.z;
   const d = Math.hypot(dx, dz);
