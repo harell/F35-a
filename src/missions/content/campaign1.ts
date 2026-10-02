@@ -468,7 +468,10 @@ export const C06: MissionDef = mission({
     ],
     ground: [
       // slow patrol line (≈2 kn): a JDAM flies to where the ship was at release, so a fast ship
-    // would sail out of the blast during a long glide
+      // would sail out of the blast during a long glide. Issue #65 weighed one corvette at 5–8 m/s
+      // so the StormBreaker's tracking shows; not done: a JDAM released on IN RANGE from 25,000 ft
+      // (56 s fall) sinks a 1 m/s corvette but misses one at 3 m/s or more, so the recommended
+      // 2-JDAM load could no longer sink both
       target('cv1', 'fleet', 'ship', { x: 24000, z: 1000 }, { name: 'Corvette 531', path: [{ x: 17000, z: -500 }, { x: 24000, z: 1000 }], loop: true, speed: 1 }),
       target('cv2', 'fleet', 'ship', { x: 25500, z: 1800 }, { name: 'Corvette 532', path: [{ x: 18500, z: 300 }, { x: 25500, z: 1800 }], loop: true, speed: 1 }),
       target('supply', 'supply', 'ship', { x: 20500, z: -2300 }, { name: 'Supply Ship' }),
