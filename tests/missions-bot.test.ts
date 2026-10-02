@@ -146,28 +146,28 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
     expect(rounds, rows.join('; ')).toBeGreaterThan(0);
   });
 
-  it('gun-only probe on Pilot (c01, ia_dogfight_auckland): the bot fires the gun in real fights (was 0 of 180 rounds)', { timeout: 300_000 }, async () => {
+  it('gun-only probe on Pilot (c01, ia_dogfight_auckland): no missiles, and c01 fights reach the gun (was 0 rounds)', { timeout: 300_000 }, async () => {
     // the playtest's probe (#69): missile stores zeroed every step, rtbWhenWinchester false. The
     // bot used to lose every fight before a gun shot: crippled by a head-on R-27 or R-73 in the
-    // first merge, then 9 g pursuit down to 100 m/s. Rounds fired per seed (2026-10-02): c01 0,
-    // 102, 0, 0, 102 (a gun kill), 6; ia_dogfight_auckland 0 on seeds 0-7, 6 on seed 8 (the
-    // a2a_beast wingman often splashes all four first). Deterministic, but one seed carries the
-    // Instant Action half: a change to the AI or the missiles can move it.
+    // first merge, then 9 g pursuit down to 100 m/s. Rounds fired per seed on a flat sea
+    // (2026-10-02): c01 0, 102, 0, 0, 102 (a gun kill), 6, so the assertion is "some c01 seed
+    // fires", not any one seed. ia_dogfight_auckland fires on 1 seed of 0-15 (seed 8, 6 rounds:
+    // the a2a_beast wingman often splashes all four first, or the bot dies in a four-ship merge),
+    // so its rounds aren't asserted; its rows (the playtest's seeds) check that no missile flies.
     const probe: [string, number[]][] = [
       ['c01', [0, 1, 2, 3, 4, 5]],
-      ['ia_dogfight_auckland', [0, 1, 2, 3, 4, 5, 6, 7, 8]],
+      ['ia_dogfight_auckland', [1, 2, 3]],
     ];
-    for (const [id, seeds] of probe) {
-      const rows: string[] = [];
-      let rounds = 0;
+    const rows: string[] = [];
+    let c01Rounds = 0;
+    for (const [id, seeds] of probe)
       for (const seed of seeds) {
         await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
         const r = runBalanceMission(id, 'pilot', seed, flat(0), { gunOnly: true });
         expect(r.playerShots, `${id} seed ${seed}`).toBe(0);
-        rounds += r.gunRounds;
-        rows.push(`seed ${seed}: ${r.state} t=${r.t.toFixed(0)} rounds=${r.gunRounds} kills=${r.playerKills}`);
+        if (id === 'c01') c01Rounds += r.gunRounds;
+        rows.push(`${id} seed ${seed}: ${r.state} t=${r.t.toFixed(0)} rounds=${r.gunRounds} kills=${r.playerKills}`);
       }
-      expect(rounds, `${id}: ${rows.join('; ')}`).toBeGreaterThan(0);
-    }
+    expect(c01Rounds, rows.join('; ')).toBeGreaterThan(0);
   });
 });

@@ -518,11 +518,13 @@ export function runBalanceMission(
     /**
      * Gun-only probe: the player's stores are emptied every step (so a mission rearm adds no
      * missiles), the pilot presses on with the gun (as 'committed') and the run doesn't end as
-     * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02): on Pilot the bot fires the gun in 5 of
-     * 16 c01 seeds (3 gun kills) and 1 of 16 ia_dogfight_auckland seeds; most runs still end at
-     * the first merge (two missile hits kill on Pilot), and in the Instant Action dogfight the
-     * a2a_beast wingman often splashes all four bandits first. A sweep measures the gun and the
-     * bot's dogfighting together.
+     * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02), on Pilot: over a flat sea (seeds
+     * 0-15) the bot fires the gun in 5 c01 runs (3 gun kills) and 1 ia_dogfight_auckland run (6
+     * rounds); over the real Auckland terrain (seeds 0-11) in 2 c01 runs (1 gun kill) and 1
+     * ia_dogfight_auckland run, and the playtest's seeds 1-3 still fire 0 in both missions. Most
+     * runs still end at the first merge (two missile hits kill on Pilot), and in the Instant
+     * Action dogfight the a2a_beast wingman often splashes all four bandits first. A sweep
+     * measures the gun and the bot's dogfighting together.
      */
     gunOnly?: boolean;
     onStep?: (world: SimWorld, p: AircraftEntity, bot: PlayerBot) => void;
