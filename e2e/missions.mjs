@@ -2,6 +2,7 @@
  * Mission sweep smoke test: launches every mission (campaign + training) via
  * ?mission=<id>&autostart=1, lets it run, and reports console errors, entity counts,
  * player state and frame stats. Screenshots go to e2e/screenshots/missions/.
+ * Training lessons start on an Ace setting and must fly at Pilot (#68: Game.runSession).
  *
  *   node e2e/missions.mjs [--base=http://localhost:5173/] [--seconds=12] [--only=c01,c02] [--view=chase]
  */
@@ -40,7 +41,9 @@ for (const m of missions) {
   page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   const t0 = Date.now();
-  await page.goto(`${base}?mission=${m.id}&autostart=1&view=${view}&quality=low`, { waitUntil: 'load' });
+  // a lesson flies at Pilot whatever the setting: start it on Ace and read what the session got
+  const lesson = m.kind === 'training';
+  await page.goto(`${base}?mission=${m.id}&autostart=1&view=${view}&quality=low${lesson ? '&difficulty=ace' : ''}`, { waitUntil: 'load' });
   try {
     await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 60000 });
   } catch {
@@ -50,13 +53,14 @@ for (const m of missions) {
   await page.waitForTimeout(seconds * 1000);
   const state = await page.evaluate(() => window.__f35?.state()).catch((e) => ({ error: e.message }));
   await page.screenshot({ path: `e2e/screenshots/missions/${m.id}.png` });
+  if (lesson && state?.difficulty !== 'pilot') errors.push(`lesson flies at ${state?.difficulty} on an Ace setting, not Pilot`);
   const ok = errors.length === 0 && state?.inMission && state?.player;
   if (!ok) failures++;
   console.log(
     `${ok ? 'OK  ' : 'FAIL'} ${m.id.padEnd(6)} ${m.title.padEnd(34)} load ${(loadMs / 1000).toFixed(1)}s  t=${state?.time?.toFixed?.(1)}  ` +
       `ac=${state?.counts?.aircraft} sam=${state?.counts?.sams} gnd=${state?.counts?.ground} msl=${state?.counts?.missiles}  ` +
       `player=${state?.player ? `${state.player.alive ? 'alive' : 'DEAD'} hp=${Math.round(state.player.health)} alt=${Math.round(state.player.alt)}m` : 'none'}  ` +
-      `state=${state?.missionState}  dc=${state?.renderer?.calls} tri=${state?.renderer?.triangles}`,
+      `diff=${state?.difficulty}  state=${state?.missionState}  dc=${state?.renderer?.calls} tri=${state?.renderer?.triangles}`,
   );
   for (const e of errors.slice(0, 5)) console.log('     ', e.slice(0, 300));
   await page.close();

@@ -837,6 +837,8 @@ export class Game {
           inMission: !!s,
           paused: this.paused,
           mission: s?.def.id ?? null,
+          /** The difficulty the running mission flies at (a lesson: Pilot whatever the setting). */
+          difficulty: s?.world.difficulty.id ?? null,
           missionState: s?.runner.state ?? null,
           time: s?.world.time ?? 0,
           view: s?.rig.mode ?? null,
