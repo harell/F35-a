@@ -14,7 +14,7 @@
 import { Vector3 } from 'three';
 import { AKL } from '../../core/auckland';
 import { LOADOUTS } from '../../core/data';
-import type { Waypoint } from '../../core/contracts';
+import type { MissionDef, Waypoint } from '../../core/contracts';
 import type { LoadoutId } from '../../core/types';
 import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
 import type { AircraftEntity } from '../../sim/entities';
@@ -36,6 +36,18 @@ export function storesLeft(p: AircraftEntity): number {
   return n;
 }
 
+/**
+ * Where the player rearms in a mission (x, z m): Whenuapai in the Auckland theatre, otherwise the
+ * first airbase of the mission's scenery, else the player start. The scripted test pilot
+ * (tests/missions-bot.ts) flies to the same point.
+ */
+export function rearmHome(def: MissionDef): { x: number; z: number; name: string } {
+  if (def.theater === 'auckland') return { x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' };
+  const base = def.features.find((f) => f.type === 'airbase');
+  if (base) return { x: base.x, z: base.z, name: 'home base' };
+  return { x: def.player.x, z: def.player.z, name: 'home plate' };
+}
+
 export class RearmController {
   /** Steering cue while Winchester / bingo. */
   readonly waypoint: Waypoint;
@@ -48,22 +60,7 @@ export class RearmController {
   private enabled = false;
 
   constructor(private readonly s: MissionState) {
-    const def = s.def;
-    let x = def.player.x;
-    let z = def.player.z;
-    let name = 'home plate';
-    if (def.theater === 'auckland') {
-      x = AKL.whenuapai.x;
-      z = AKL.whenuapai.z;
-      name = 'Whenuapai';
-    } else {
-      const base = def.features.find((f) => f.type === 'airbase');
-      if (base) {
-        x = base.x;
-        z = base.z;
-        name = 'home base';
-      }
-    }
+    const { x, z, name } = rearmHome(s.def);
     this.homeName = name;
     this.waypoint = { id: 'rearm', label: `${name === 'Whenuapai' ? 'Whenuapai' : 'Home'} — REARM`, kind: 'rtb', radius: REARM_RADIUS, position: new Vector3(x, 900, z) };
   }

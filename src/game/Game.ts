@@ -232,14 +232,14 @@ export class Game {
       // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
       this.progress = loadProgress();
       if (choice === 'campaign') {
-        const def = await this.ui.showCampaign(CAMPAIGN, this.progress);
-        if (def) await this.missionFlow(def);
+        await this.pickAndFly(() => this.ui.showCampaign(CAMPAIGN, this.progress));
       } else if (choice === 'training') {
-        const def = await this.ui.showTraining(TRAINING, this.progress);
-        if (def) await this.missionFlow(def);
+        await this.pickAndFly(() => this.ui.showTraining(TRAINING, this.progress));
       } else if (choice === 'instant') {
-        const opts = await this.ui.showInstantAction();
-        if (opts) await this.missionFlow(buildInstantMission(opts));
+        await this.pickAndFly(async () => {
+          const opts = await this.ui.showInstantAction();
+          return opts ? buildInstantMission(opts) : null;
+        });
       } else if (choice === 'settings') {
         await this.editSettings();
       } else if (choice === 'credits') {
@@ -248,14 +248,26 @@ export class Game {
     }
   }
 
-  /** Briefing → fly → debrief loop. Returns to the caller (menu) when the player leaves. */
-  private async missionFlow(first: MissionDef, presetLoadout?: LoadoutId): Promise<void> {
+  /** Mission list / Instant Action setup → missionFlow; Back on the briefing returns to that screen. */
+  private async pickAndFly(pick: () => Promise<MissionDef | null>): Promise<void> {
+    for (;;) {
+      const def = await pick();
+      if (!def || (await this.missionFlow(def)) !== 'back') return;
+      this.progress = loadProgress();
+    }
+  }
+
+  /**
+   * Briefing → fly → debrief loop. Resolves 'back' when the player backs out of a briefing (the
+   * caller shows the screen they came from), 'menu' when they leave from the debrief or pause menu.
+   */
+  private async missionFlow(first: MissionDef, presetLoadout?: LoadoutId): Promise<'back' | 'menu'> {
     let def: MissionDef | null = first;
     let loadout = presetLoadout ?? null;
     while (def) {
       if (!loadout) {
         const brief = await this.ui.showBriefing(def, this.settings);
-        if (!brief) return;
+        if (!brief) return 'back';
         loadout = brief.loadout;
       }
       const outcome = await this.playMission(def, loadout);
@@ -265,8 +277,9 @@ export class Game {
         loadout = null;
         continue;
       }
-      return;
+      return 'menu';
     }
+    return 'menu';
   }
 
   private async playMission(def: MissionDef, loadout: LoadoutId): Promise<MissionOutcome> {
@@ -284,7 +297,8 @@ export class Game {
       const result = this.finishSession();
       if (!result) return 'menu';
       this.trackResult(result);
-      const hasNext = result.success && def.kind === 'campaign' && !!nextMissionAfter(def.id);
+      // campaign → next mission, training → next lesson (T03 → the first campaign mission)
+      const hasNext = result.success && !!nextMissionAfter(def.id);
       const choice = await this.ui.showDebrief(result, hasNext);
       return choice;
     }
@@ -303,6 +317,9 @@ export class Game {
   /** Builds the world for a mission and resolves when it ends (or the player restarts/quits). */
   private async runSession(def: MissionDef, loadout: LoadoutId): Promise<'ended' | 'restart' | 'quit'> {
     this.teardownSession();
+    // test hooks (autopilot, controls override) belong to one mission: never leak into the next
+    this.autopilot = false;
+    this.controlOverride = null;
     const difficulty = DIFFICULTIES[this.settings.difficulty];
     this.ui.hideAll();
     this.ui.showLoading(0, 'Preparing mission');
@@ -844,6 +861,44 @@ export class Game {
       /** Override (merge) player controls, e.g. {pitch: 1, throttle: 1}; null clears. */
       controls: (c: Partial<ControlInput> | null) => {
         this.controlOverride = c;
+      },
+      /** Weapons can't hurt the player's jet (crashing still kills): keeps a scripted run alive until a later moment. Per mission. */
+      invulnerable: (on = true) => {
+        const w = this.session?.world as (SimWorld & { realApplyDamage?: SimWorld['applyDamage'] }) | undefined;
+        if (!w) return false;
+        const real = (w.realApplyDamage ??= w.applyDamage.bind(w));
+        w.applyDamage = on ? (target, ...rest) => void (target !== w.player && real(target, ...rest)) : real;
+        return true;
+      },
+      /** Destroy an entity (id) or every live member of a mission group (id string), credited to the player or to nobody. */
+      destroy: (target: number | string, byPlayer = false) => {
+        const w = this.session?.world;
+        if (!w) return 0;
+        const hit = [...w.aircraft, ...w.sams, ...w.ground].filter((e) => e.alive && (typeof target === 'number' ? e.id === target : e.groupId === target));
+        for (const e of hit) w.applyDamage(e, e.maxHealth * 10 + 500, byPlayer ? (w.player?.id ?? null) : null, 'aim120');
+        return hit.length;
+      },
+      /** Pin the camera at `pos` looking at `look` (scenery checks without a driver); null hands it back to the rig. */
+      camera: (pos: [number, number, number] | null, look: [number, number, number] = [0, 0, 0]) => {
+        const rig = this.session?.rig as (CameraRigApi & { rigUpdate?: CameraRigApi['update'] }) | undefined;
+        if (!rig) return false;
+        const update = (rig.rigUpdate ??= rig.update);
+        rig.update = pos
+          ? () => {
+              rig.camera.position.set(pos[0], pos[1], pos[2]);
+              rig.camera.up.set(0, 1, 0); // level: the rig may have left a banked up vector
+              rig.camera.lookAt(look[0], look[1], look[2]);
+              rig.camera.updateMatrixWorld();
+            }
+          : update;
+        return true;
+      },
+      /** Skip the end-of-mission outro: the debrief opens on the next rendered frame (the outro counts render time, not simulate()). */
+      skipOutro: () => {
+        const s = this.session;
+        if (!s || s.runner.state === 'running') return false;
+        s.endTimer = 0.01;
+        return true;
       },
       /** Knock the Sky Tower down as if the player's JDAM hit it at height `y` (m above its base, from the east). */
       destroySkyTower: (y = 120) => {

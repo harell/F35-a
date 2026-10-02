@@ -166,6 +166,12 @@ export interface HudFrame {
   cockpit: boolean;
   /** Text de-collision: symbols that must never be covered register here first. */
   occ: Occupancy;
+  /**
+   * Boxes of the conformal symbols drawn AFTER the centre cues are planned (air contacts, ground /
+   * SAM symbols, the steering waypoint, the sites to defend; targets.ts reserveSymbols): the cues
+   * dodge them. Kept apart from `occ` so labels and the ladder keep their usual rules.
+   */
+  sym: Occupancy;
   /** 0..1 — cockpit view looking down into the PCD fades the non-critical HMD text (1 = normal). */
   declutter: number;
   /** Designated (or locked) hostile target entity, alive, or null. */
@@ -202,6 +208,7 @@ export function makeFrame(pen: Pen, proj: Projector, picks: PickRegistry, st: Hu
     mode: 'hmd',
     cockpit: false,
     occ: new Occupancy(192),
+    sym: new Occupancy(64),
     declutter: 1,
     target: null,
     locked: false,

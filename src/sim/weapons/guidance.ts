@@ -417,6 +417,8 @@ const COS_PURSUIT = Math.cos((25 * Math.PI) / 180);
 const COS_ENDGAME_PN = Math.cos((35 * Math.PI) / 180);
 /** Heading error beyond which midcourse PN gets an extra pursuit term (rad → cos). */
 const COS_HEADING_TERM = Math.cos((3 * Math.PI) / 180);
+/** Heading error to a bomb's aim point (ground track and velocity) beyond which it turns on the glide branch, not PN (cos). */
+const COS_BOMB_TURN = Math.cos((20 * Math.PI) / 180);
 /** Time constant of the midcourse heading-error term (s). */
 const HEADING_TAU = 1.3;
 /** Aim point stays this far above the terrain until the endgame (m). */
@@ -606,7 +608,12 @@ export function steeringCommand(ctx: CombatCtx, m: CombatMissile, aMax: number, 
   return out;
 }
 
-/** GPS bomb law: best-glide toward the point while it is "above" the glide slope, then PN onto it. */
+/**
+ * GPS bomb law: best glide toward the point while it is beyond the glide slope, then PN onto it. A bomb
+ * whose ground track points well away from the point (released off the nose) first turns onto it on
+ * the best-glide branch: PN with a big heading error only orbits the point (a ∝ v²/R) until the
+ * bomb runs out of height (playtest 2.1-a).
+ */
 function bombCommand(m: CombatMissile, v: number, aMax: number, out: Vector3): Vector3 {
   const def = m.cdef;
   // moving target (tri-mode datalink / seeker): PN on the relative velocity, best glide toward
@@ -617,7 +624,12 @@ function bombCommand(m: CombatMissile, v: number, aMax: number, out: Vector3): V
   const h = -_r.y;
   const depression = Math.atan2(h, horiz);
   const glide = Math.atan(1 / Math.max(0.5, def.glideRatio * 0.75));
-  if (depression > glide + 0.05 || horiz < 1_500) {
+  // off track: both the ground track and the velocity vector well off the point (a bomb diving
+  // onto it with some crossing drift stays on PN)
+  const vh = Math.hypot(m.velocity.x, m.velocity.z);
+  const offTrack =
+    horiz >= 1_500 && vh > 1 && (m.velocity.x * _r.x + m.velocity.z * _r.z) / (vh * horiz) < COS_BOMB_TURN && _vhat.dot(_r) < COS_BOMB_TURN * _r.length();
+  if ((depression > glide + 0.05 || horiz < 1_500) && !offTrack) {
     const R = _r.length();
     if (R < 1) return out;
     _los.copy(_r).divideScalar(R);

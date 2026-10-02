@@ -448,7 +448,7 @@ export const C06: MissionDef = mission({
   briefing: [
     'Two enemy corvettes are escorting a supply ship through the Tāmaki Strait, between Waiheke and the eastern suburbs, bringing fuel and missiles to the island garrisons.',
     'Sink both corvettes. An SA-15 Tor on Motuihe Island and an SA-8 on the south shore of Waiheke cover the strait, a Shilka sits on Browns Island at the mouth of the Tāmaki River, and a pair of Flankers is holding CAP overhead.',
-    "The corvettes are creeping along a patrol line at two knots. A JDAM flies to where the ship was when you let it go — release the moment IN RANGE shows from 25,000 ft and the blast does the rest. Fly to the IP south of Beachlands and run in northbound: up there you are above the Tor and the SA-8 (both top out below 20,000 ft) and well outside their reach. Viper 2 will take on the Flankers.",
+    "The corvettes are creeping along a patrol line at two knots. A JDAM flies to where the ship was when you let it go — release the moment IN RANGE shows from 25,000 ft and the blast does the rest (STEER instead means the ship is outside the bomb's turn: point the nose at it). Fly to the IP south of Beachlands and run in northbound: up there you are above the Tor and the SA-8 (both top out below 20,000 ft) and well outside their reach. Viper 2 will take on the Flankers.",
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
@@ -493,7 +493,7 @@ export const C06: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. One corvette burning. The other's still making way — finish it." }],
       },
     ],
-    hints: [{ id: 'h_ships', text: 'Ships: designate with TGT and release the moment IN RANGE shows — the JDAM flies to where the ship WAS', when: { kind: 'area', x: 21000, z: 500, radius: 22000 }, duration: 8 }],
+    hints: [{ id: 'h_ships', text: 'Ships: TGT, release at IN RANGE. StormBreaker tracks the ship; JDAM does not', when: { kind: 'area', x: 21000, z: 500, radius: 22000 }, duration: 8 }],
     opening: [
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two corvettes and a supply ship in the Tāmaki Strait. SA-15 on Motuihe, SA-8 on Waiheke south. Flankers overhead.', priority: 2 },
     ],

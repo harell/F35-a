@@ -442,6 +442,11 @@ export class SamSiteEntity implements Entity {
   known = false;
   /** Mission group for objectives. */
   groupId = '';
+  /**
+   * A target of an active primary objective (kept by the mission runner): A/G auto-designation and
+   * TGT cycling rank it above every other surface target.
+   */
+  objective = false;
   // EXTENSION (combat agent may append optional fields)
   /** (combat) Current max engagement range (m, difficulty-scaled) — TSD threat ring radius. */
   engageRange?: number;
@@ -486,6 +491,8 @@ export class GroundTargetEntity implements Entity {
   emitter = false;
   groupId = '';
   known = true;
+  /** A target of an active primary objective (as on SamSiteEntity): A/G designation ranks it first. */
+  objective = false;
   /**
    * Civil merchant ship ('ship' type, neutral team): container ship or cruise liner. Its hull is a
    * capsule along the heading (sim/civil/vessels.ts), and one bomb / missile hit sinks it.

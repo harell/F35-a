@@ -1,8 +1,9 @@
 /**
  * Tactical Situation Display renderer, shared by the HMD radar inset (external views) and the PCD TSD
  * page: moving map around ownship (heading-up), range rings, compass, route / waypoints, bullseye
- * (Sky Tower = world origin), known SAM threat rings, ground targets, sensor-fused air tracks with
- * velocity leaders (hostile red, friendly blue), designated / locked highlight, missiles in flight.
+ * (Sky Tower = world origin), known SAM threat rings, ground targets, the friendly sites to defend,
+ * sensor-fused air tracks with velocity leaders (hostile red, friendly blue), designated / locked
+ * highlight, missiles in flight.
  */
 import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
@@ -10,19 +11,21 @@ import type { AircraftEntity } from '../../sim/entities';
 import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
 import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
+import { protectedSites } from './sites';
 import { chartPaths } from './tacmap';
 
 /** Label de-collision inside one TSD draw. */
 const lblOcc = new Occupancy(64);
-/** Draw a label unless it would overlap one already drawn (or the ownship). */
-function label(pen: Pen, text: string, x: number, y: number, color: string, size: number, align: 'left' | 'center' = 'center'): void {
-  if (!text) return;
+/** Draw a label unless it would overlap one already drawn (or the ownship). True = drawn. */
+function label(pen: Pen, text: string, x: number, y: number, color: string, size: number, align: 'left' | 'center' = 'center'): boolean {
+  if (!text) return false;
   const w = pen.textWidth(text, size);
   const x0 = align === 'left' ? x : x - w / 2;
   const h = size * 0.55;
-  if (lblOcc.hits(x0, y - h, x0 + w, y + h)) return;
+  if (lblOcc.hits(x0, y - h, x0 + w, y + h)) return false;
   lblOcc.add(x0, y - h, x0 + w, y + h);
   pen.text(text, x, y, color, size, align);
+  return true;
 }
 
 export interface TsdColors {
@@ -243,6 +246,22 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     // civil ships (sensor tracks only): neutral (text) colour, like civil air traffic
     pen.strokePlain(gt.team === 'neutral' ? c.text : c.ground, 1.3 * lw);
     if (gt.id === des || gt.id === lock) ringHighlight(pen, pt.x, pt.y, s, c, gt.id === lock);
+  }
+  // friendly sites to defend (protect objectives, sites.ts): circle-and-square in the friendly colour
+  for (const site of protectedSites(mission, world, p.team)) {
+    map(site.x, site.z);
+    pen.begin();
+    pen.circle(pt.x, pt.y, 5 * s);
+    pen.rect(pt.x - 1.8 * s, pt.y - 1.8 * s, 3.6 * s, 3.6 * s);
+    pen.strokePlain(c.friend, 1.5 * lw);
+    // labelled pages: "DEFEND 8/9"; the unlabelled radar inset: just the count, when it fits inside
+    if (key && label(pen, site.label, pt.x, pt.y + 12 * s, c.friend, st.font * 0.85)) continue;
+    const ly = pt.y + 11 * s;
+    const hw = pen.textWidth(site.count, st.font * 0.85) / 2;
+    const inside = st.clipRect
+      ? pt.x - hw >= st.clipRect[0] && pt.x + hw <= st.clipRect[0] + st.clipRect[2] && ly + 5 * s <= st.clipRect[1] + st.clipRect[3]
+      : Math.hypot(Math.abs(pt.x - st.cx) + hw, Math.abs(ly - st.cy) + 4 * s) <= st.clipCircle;
+    if (inside) label(pen, site.count, pt.x, ly, c.friend, st.font * 0.85);
   }
 
   // hostile air tracks (sensor fused)

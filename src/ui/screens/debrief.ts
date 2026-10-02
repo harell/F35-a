@@ -44,6 +44,16 @@ export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   return rows;
 }
 
+/**
+ * The debrief's primary (highlighted, focused) button: the campaign ending after the last win, NEXT
+ * when there is a next mission or lesson, MENU after any other win, RETRY after a failure.
+ */
+export function debriefPrimary(r: Pick<MissionResult, 'success' | 'campaignComplete'>, hasNext: boolean): 'ending' | 'next' | 'retry' | 'menu' {
+  if (!r.success) return 'retry';
+  if (r.campaignComplete) return 'ending';
+  return hasNext ? 'next' : 'menu';
+}
+
 export async function showDebrief(host: UiHost, r: MissionResult, hasNext: boolean, ctx?: DebriefContext): Promise<'next' | 'retry' | 'menu'> {
   let fresh: string[] = [];
   try {
@@ -157,9 +167,10 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
 
     // ── footer ──
     const foot = h('footer', { class: 'scr-foot db-foot' });
-    const menu = h('button', { class: 'ui-btn', attrs: { type: 'button' }, html: `${icon('menu')}<span>Menu</span>` });
+    const primary = debriefPrimary(r, hasNext);
+    const menu = h('button', { class: `ui-btn ${primary === 'menu' ? 'primary' : ''}`, attrs: { type: 'button' }, html: `${icon('menu')}<span>Menu</span>` });
     menu.addEventListener('click', () => finish('menu'));
-    const retry = h('button', { class: `ui-btn ${hasNext ? '' : 'primary'}`, attrs: { type: 'button' }, html: `${icon('retry')}<span>Retry</span>` });
+    const retry = h('button', { class: `ui-btn ${primary === 'retry' ? 'primary' : ''}`, attrs: { type: 'button' }, html: `${icon('retry')}<span>Retry</span>` });
     retry.addEventListener('click', () => finish('retry'));
     foot.append(menu, h('div', { class: 'spacer' }));
     const live = ctx?.settings();
@@ -172,14 +183,13 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
       foot.appendChild(easy);
     }
     foot.appendChild(retry);
-    let focusEl: HTMLElement = retry;
-    if (r.campaignComplete && r.success) {
+    let focusEl: HTMLElement = primary === 'menu' ? menu : retry;
+    if (primary === 'ending') {
       const fin = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `<span>Campaign complete</span>${icon('next')}` });
       fin.addEventListener('click', () => finish('menu'));
       foot.appendChild(fin);
       focusEl = fin;
-      retry.classList.remove('primary');
-    } else if (hasNext) {
+    } else if (primary === 'next') {
       const next = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `<span>Next mission</span>${icon('next')}` });
       next.addEventListener('click', () => finish('next'));
       foot.appendChild(next);

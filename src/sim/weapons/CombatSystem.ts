@@ -29,7 +29,7 @@ import type { CombatCtx } from './context';
 import { acState } from './context';
 import { MUNITIONS } from './defs';
 import { updateCountermeasurePrograms, updateDecoys } from './countermeasures';
-import { ccipPoint, gpsMaxRange, launchZoneFor, munitionForRelease, type CombatLaunchZone, type ZoneHooks } from './dlz';
+import { ccipPoint, gpsMaxRange, gpsReleaseGeometry, launchZoneFor, munitionForRelease, type CombatLaunchZone, type ZoneHooks } from './dlz';
 import { updateMissiles } from './flight';
 import { gunLeadPoint, updateAircraftGun, updateProjectiles } from './gun';
 import * as loadouts from './loadouts';
@@ -111,7 +111,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
     }
   };
 
-  const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0 };
+  const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0, offAxis: false };
 
   const api: CombatSystemApi & { aiSalt: number } = {
     aiSalt: aiSaltFor(seed),
@@ -222,12 +222,16 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
         const dx = gp.x - ac.position.x;
         const dz = gp.z - ac.position.z;
         const horiz = Math.hypot(dx, dz);
+        // no generous-cue pad on the max range: IN RANGE is a range the bomb reaches (playtest 2.1-a);
+        // and only with the target inside the cone around the ground track the bomb can turn to,
+        // outside its turn circle (2.1-b). Off the cone the cue says to steer, not to count down.
         const rMax = gpsMaxRange(def, ac.position.y - gp.y, ac.velocity.length(), gp.y);
-        const pad = ac.isPlayer && world.difficulty.generousShootCues ? 1.1 : 1;
+        const geo = gpsReleaseGeometry(def, ac, gp);
         r.point.copy(gp);
-        r.inRange = horiz <= rMax * pad;
+        r.offAxis = geo.offAxis;
+        r.inRange = geo.reachable && horiz <= rMax;
         const gs = horiz > 1 ? (ac.velocity.x * dx + ac.velocity.z * dz) / horiz : 0;
-        r.timeToRelease = r.inRange ? 0 : gs > 5 ? (horiz - rMax * pad) / gs : -1;
+        r.timeToRelease = r.inRange ? 0 : geo.reachable && gs > 5 ? (horiz - rMax) / gs : -1;
         return r;
       }
       if (def.guidance === 'tri_mode') return null; // SDB II: designated targets only, no CCIP
@@ -235,6 +239,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
       const st = loadouts.pickStation(ac, w);
       const delay = st >= 0 && ac.stores[st].internal && ac.isPlayer ? Math.max(0, 0.9 - ac.bayDoors) * BAY_OPEN_TIME : 0;
       if (!ccipPoint(world, ac, def, r.point, delay)) return null;
+      r.offAxis = false;
       r.inRange = ac.position.y - r.point.y > 60;
       r.timeToRelease = 0;
       return r;

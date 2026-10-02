@@ -4,7 +4,7 @@
  * it), range rings + scale bar, the Auckland coastline / islands / urban areas (WORLD module map data,
  * read defensively), landmark names, known SAM threat rings, the mission route and objective markers,
  * sensor-fused hostile air tracks (type, angels, velocity leader), datalinked friendlies, ground targets,
- * missiles in flight, edge arrows for hostiles beyond the map, and a legend.
+ * the friendly sites to defend, missiles in flight, edge arrows for hostiles beyond the map, and a legend.
  *
  * Coastline geometry is cached as Path2D objects in km (built once), drawn with a canvas transform, so
  * a frame costs a handful of fills and no allocation.
@@ -17,6 +17,7 @@ import type { AnyEntity } from '../../sim/entities';
 import { AIRCRAFT_LABEL, GROUND_LABEL, NumText, SAM_LABEL } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
+import { protectedSites } from './sites';
 
 /** Map range choices (km, ownship → outer ring). */
 export const TAC_SCALES_KM = [10, 20, 40] as const;
@@ -273,6 +274,8 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   }
   tm.active = true;
   const legendOpen = tm.legendOpen(f.st.clock);
+  // (the legend lists the DEFEND symbol only in a mission with a site to defend)
+  legendSites = protectedSites(ctx.mission, world, p.team).length > 0;
 
   const R = Math.max(80, Math.min(L.H / 2 - 22 * u, (L.right - L.left) / 2 - 10 * u));
   const rangeM = tm.rangeKm * 1000;
@@ -459,6 +462,26 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     }
     if (gt.id === p.radar.designatedId || gt.id === p.radar.lockedId) highlight(f, pt.x, pt.y, 10 * u, gt.id === p.radar.lockedId);
     picks.add(gt.id, pt.x, pt.y, 8 * u);
+  }
+
+  /* friendly sites to defend (protect objectives, sites.ts): pinned to the ring when beyond it, never pickable */
+  for (const site of protectedSites(mission, world, p.team)) {
+    tacProject(proj, site.x, site.z, pt);
+    const dx = pt.x - proj.cx;
+    const dy = pt.y - proj.cy;
+    const dist = Math.hypot(dx, dy);
+    const edge = dist > R - 8 * u;
+    if (edge) {
+      pt.x = proj.cx + (dx / dist) * (R - 8 * u);
+      pt.y = proj.cy + (dy / dist) * (R - 8 * u);
+    }
+    const r = (edge ? 5 : 6.5) * u;
+    pen.begin();
+    pen.circle(pt.x, pt.y, r);
+    pen.rect(pt.x - 2.2 * u, pt.y - 2.2 * u, 4.4 * u, 4.4 * u);
+    pen.strokeGlow(edge ? withAlpha(pal.friend, 0.75) : pal.friend, 1.6);
+    occ.addBox(pt.x, pt.y, r + 2, r + 2);
+    labelNear(f, site.label, pt.x, pt.y, pal.friend);
   }
 
   /* friendlies (datalink) */
@@ -651,6 +674,9 @@ function labelNear(f: HudFrame, text: string, x: number, y: number, col: string)
   }
 }
 
+/** This frame's map has a friendly site to defend (an extra legend row). */
+let legendSites = false;
+
 /** Legend panel size (full or collapsed chip) — reserved before the symbols are labelled. */
 function legendSize(f: HudFrame, open: boolean, out: { x: number; y: number; w: number; h: number }): void {
   const L = f.L;
@@ -658,7 +684,7 @@ function legendSize(f: HudFrame, open: boolean, out: { x: number; y: number; w: 
   out.x = L.colX - 4 * u;
   out.y = L.colY - 4 * u;
   out.w = open ? Math.min(L.colW, 196 * u) : 118 * u;
-  out.h = open ? 18 * u + 6 * 13 * u + 34 * u : 22 * u;
+  out.h = open ? 18 * u + (legendSites ? 7 : 6) * 13 * u + 34 * u : 22 * u;
 }
 
 /** Legend + scale bar + tap hint (top-left panel), or the collapsed 'i' chip. Returns the panel bottom. */
@@ -719,6 +745,15 @@ function drawLegend(f: HudFrame, tm: TacMapState, open: boolean): number {
   pen.strokeGlow(pal.friend, 1.5);
   pen.text('FRIENDLY (DATALINK)', tx, y, pal.friend, 9.5, 'left');
   y += lh;
+  if (legendSites) {
+    // the site to defend: the map's circle-and-square (sites.ts)
+    pen.begin();
+    pen.circle(sx, y, s);
+    pen.rect(sx - s * 0.34, y - s * 0.34, s * 0.68, s * 0.68);
+    pen.strokeGlow(pal.friend, 1.4);
+    pen.text('DEFEND n/m  SITE TO PROTECT', tx, y, pal.friend, 9.5, 'left');
+    y += lh;
+  }
   pen.begin();
   pen.circle(sx, y, s);
   pen.fillPlain(C.samFill);

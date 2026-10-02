@@ -7,7 +7,7 @@
  */
 import { FEET_PER_M, NM, RAD, wrapPi } from '../../core/math';
 import type { AircraftEntity } from '../../sim/entities';
-import { aircraftNoun, countWord } from './names';
+import { aircraftNoun, countWord, groupNoun } from './names';
 import { aliveCount, type GroupRt, type MissionState } from './state';
 
 export type Aspect = 'hot' | 'flanking' | 'beaming' | 'cold';
@@ -77,7 +77,7 @@ export function groupPicture(g: GroupRt, out?: GroupPicture): GroupPicture | nul
   pic.z = z / n;
   pic.altitude = y / n;
   pic.heading = Math.atan2(vx, -vz);
-  pic.noun = def?.noun ?? aircraftNoun(type, n);
+  pic.noun = def?.noun ? groupNoun(def.noun, n) : aircraftNoun(type, n);
   return pic;
 }
 

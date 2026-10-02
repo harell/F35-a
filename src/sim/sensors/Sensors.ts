@@ -376,8 +376,9 @@ function threatRank(ctx: CombatCtx, ac: AircraftEntity, id: number): number {
 
 /**
  * Designation priority of a contact (higher first), or NaN if not eligible in the current mode.
- * A/A: threat to us › in front (±60°) › range. A/G: (emitting, with AARGM) › in front › range.
- * Requires _fwd = nose of `ac`.
+ * A/A: threat to us › in front (±60°) › range. A/G: (emitting, with AARGM) › in front › target of an
+ * active primary objective (`objective`, set by the mission runner: the c06 corvettes before the
+ * Shilka on the way, the c03 SA-6) › range. Requires _fwd = nose of `ac`.
  */
 const NEUTRAL_RANK_PENALTY = 1e12;
 
@@ -394,7 +395,8 @@ function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): numb
   if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d - neutral;
   const e = ctx.world.getEntity(c.id);
   const emitting = e && ((e.kind === 'sam' && e.radarOn) || (e.kind === 'ground' && e.emitter)) ? 1 : 0;
-  return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 - d - neutral;
+  const objective = e && (e.kind === 'sam' || e.kind === 'ground') && e.objective ? 1 : 0;
+  return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 + objective * 1e6 - d - neutral;
 }
 
 /** Candidates for designation in the current mode, sorted by priority (allocates; input-driven). */

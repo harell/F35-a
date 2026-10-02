@@ -6,10 +6,19 @@
  *
  *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=c01,c04|campaign|training|all]
  *       [--diffs=recruit,pilot,veteran,ace] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
+ *       [--loadout=strike_sdb2] [--log] [--nojitter]
  *
  * Defaults: every campaign mission, pilot, 3 seeds, all cores. Prints one line per run and a
  * win-rate table per mission × difficulty; --json writes every PlaythroughResult (minus the raw
  * MissionResult) for the playtest ledger. --jobs splits the runs over child processes.
+ *   --loadout   fly this loadout instead of each mission's recommended one; missions that don't
+ *               allow it are skipped (their cells read "skip" and the table says why)
+ *   --log       record the bot's event log (launches, kills, objectives, radio, a state line every
+ *               5 s) into each row's `events` (only useful with --json; without it they stay empty)
+ *   --nojitter  no seeded jitter of the player start and enemy positions: the seed only changes
+ *               the combat RNG and the mission seed
+ * Mission ids include Instant Action (`ia_<mode>_<theater>`, e.g. ia_strike_desert): the id seeds
+ * the layout and terrain, so the same id is the same mission in every run (missionById()).
  * Exit code 0 even when missions fail: the table is the result, judging it is the caller's job.
  */
 import { spawn } from 'node:child_process';
@@ -21,7 +30,8 @@ import { CAMPAIGN, TRAINING, missionById, terrainPadsFor } from '../../src/missi
 import { generateTerrain, runSync } from '../../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../../src/world/scenery/Scenery';
-import type { Difficulty } from '../../src/core/types';
+import { LOADOUTS } from '../../src/core/data';
+import type { Difficulty, LoadoutId } from '../../src/core/types';
 import type { TerrainQuery } from '../../src/sim/api';
 
 const args = Object.fromEntries(
@@ -34,11 +44,10 @@ const args = Object.fromEntries(
     }),
 ) as Record<string, string>;
 
+/** Ids and the groups campaign / training / all, comma-separated in any mix (e.g. campaign,training,ia_defend_auckland). */
 function missionIds(spec: string): string[] {
-  if (spec === 'campaign') return CAMPAIGN.map((m) => m.id);
-  if (spec === 'training') return TRAINING.map((m) => m.id);
-  if (spec === 'all') return [...CAMPAIGN, ...TRAINING].map((m) => m.id);
-  return spec.split(',').filter(Boolean);
+  const group = (s: string) => (s === 'campaign' ? CAMPAIGN : s === 'training' ? TRAINING : s === 'all' ? [...CAMPAIGN, ...TRAINING] : null);
+  return [...new Set(spec.split(',').filter(Boolean).flatMap((s) => group(s)?.map((m) => m.id) ?? [s]))];
 }
 
 const missions = missionIds(args.missions || 'campaign');
@@ -46,11 +55,19 @@ const diffs = (args.diffs || 'pilot').split(',') as Difficulty[];
 const seeds = Number(args.seeds || 3);
 const maxT = Number(args.maxT || 900);
 const jobs = Math.max(1, Number(args.jobs || os.cpus().length));
+const loadout = (args.loadout || undefined) as LoadoutId | undefined;
+if (loadout && !LOADOUTS[loadout]) throw new Error(`no loadout ${loadout} (${Object.keys(LOADOUTS).join(', ')})`);
+const log = 'log' in args;
+const jitter = !('nojitter' in args);
 for (const id of missions) if (!missionById(id)) throw new Error(`no mission ${id}`);
+/** Missions that don't allow the --loadout (skipped). */
+const skipped = loadout ? missions.filter((id) => !missionById(id)!.allowedLoadouts.includes(loadout)) : [];
 
 type Run = { mission: string; diff: Difficulty; seed: number };
-const runs: Run[] = missions.flatMap((mission) => diffs.flatMap((diff) => Array.from({ length: seeds }, (_, seed) => ({ mission, diff, seed }))));
-type Row = Omit<PlaythroughResult, 'result'> & { wallMs: number };
+const runs: Run[] = missions
+  .filter((m) => !skipped.includes(m))
+  .flatMap((mission) => diffs.flatMap((diff) => Array.from({ length: seeds }, (_, seed) => ({ mission, diff, seed }))));
+type Row = Omit<PlaythroughResult, 'result'> & { loadout: LoadoutId; wallMs: number };
 
 if (args.shard) {
   // child: run my share, one JSON line per run on stdout
@@ -65,8 +82,8 @@ if (args.shard) {
       terrains.set(r.mission, t);
     }
     const t0 = Date.now();
-    const { result: _, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT });
-    process.stdout.write(JSON.stringify({ ...rest, wallMs: Date.now() - t0 } satisfies Row) + '\n');
+    const { result: _, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT, loadout, log, jitter });
+    process.stdout.write(JSON.stringify({ ...rest, loadout: loadout ?? missionById(r.mission)!.recommendedLoadout, wallMs: Date.now() - t0 } satisfies Row) + '\n');
   }
 } else {
   const t0 = Date.now();
@@ -86,20 +103,24 @@ if (args.shard) {
           if (!line.startsWith('{')) continue;
           const r = JSON.parse(line) as Row;
           rows.push(r);
-          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
+          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  rearms=${r.rearms}  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
         }
       });
       return new Promise<void>((resolve) => child.on('close', () => resolve()));
     }),
   );
-  console.log(`\nwin rate (${seeds} seeds, maxT ${maxT} s), ${rows.length}/${runs.length} runs in ${((Date.now() - t0) / 1000).toFixed(0)} s on ${n} jobs`);
-  console.log(`mission  ${diffs.map((d) => d.padEnd(9)).join('')}`);
+  const flags = [loadout ? `loadout ${loadout}` : '', log ? 'log' : '', jitter ? '' : 'no jitter'].filter(Boolean).join(', ');
+  console.log(`\nwin rate (${seeds} seeds, maxT ${maxT} s${flags ? `, ${flags}` : ''}), ${rows.length}/${runs.length} runs in ${((Date.now() - t0) / 1000).toFixed(0)} s on ${n} jobs`);
+  const w = Math.max(9, ...missions.map((m) => m.length + 2));
+  console.log(`${'mission'.padEnd(w)}${diffs.map((d) => d.padEnd(9)).join('')}`);
   for (const m of missions) {
     const cells = diffs.map((d) => {
+      if (skipped.includes(m)) return 'skip'.padEnd(9);
       const rs = rows.filter((r) => r.mission === m && r.diff === d);
       return `${rs.filter((r) => r.state === 'success').length}/${rs.length}`.padEnd(9);
     });
-    console.log(`${m.padEnd(9)}${cells.join('')}`);
+    console.log(`${m.padEnd(w)}${cells.join('')}`);
   }
+  if (skipped.length) console.log(`skip = ${loadout} is not an allowed loadout there (${skipped.join(', ')}); those missions were not flown`);
   if (args.json) fs.writeFileSync(args.json, JSON.stringify(rows, null, 1));
 }

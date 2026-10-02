@@ -13,10 +13,14 @@
  *  - a fighter that has already fought the player (came inside ENGAGE_RANGE, or had a player
  *    missile fired at it) and then keeps beyond DISENGAGE_RANGE for DISENGAGE_CREDIT s — running
  *    a stern chase the player can't win — is credited too;
+ *  - a strike jet on a ground-attack task with bombs left is never withdrawing: its EGRESS between
+ *    passes sets up the next run (a Defend raid used to be "driven off" after its first pass when
+ *    the player parked 25 km away, winning with no shot fired);
  *  - the credit sticks (it may still be shot down for the full bonus);
  *  - when one live bandit is left on an active primary 'destroy' objective, DARKSTAR gives a
  *    BRAA call on it every LAST_BANDIT_INTERVAL s so the player can find it.
  */
+import { WEAPON_INFO } from '../../core/data';
 import type { AircraftEntity } from '../../sim/entities';
 import { braaText, type GroupPicture } from './awacs';
 import { aircraftHudName, aircraftNoun } from './names';
@@ -73,6 +77,10 @@ export class WithdrawalMonitor {
     const half = s.script.aoHalfSize ?? DEFAULT_AO;
     for (const ac of s.world.aircraft) {
       if (!ac.alive || s.withdrawn.has(ac.id) || !this.eligible(ac)) continue;
+      if (this.onStrike(ac)) {
+        s.withdrawSince.delete(ac.id);
+        continue;
+      }
       // out of missiles (gun only) for a long time: no longer a threat worth an objective
       let missiles = 0;
       for (const st of ac.stores) missiles += st.count;
@@ -113,6 +121,14 @@ export class WithdrawalMonitor {
       if (t - since >= WITHDRAW_CREDIT || range >= WITHDRAW_RANGE || outside) this.credit(ac);
     }
     this.lastBanditCall();
+  }
+
+  /** On a ground-attack task with bombs or missiles for it left: between passes, not running away. */
+  private onStrike(ac: AircraftEntity): boolean {
+    const g = ac.groupId ? this.s.groups.get(ac.groupId) : undefined;
+    if (g?.task?.kind !== 'attack_group') return false;
+    for (const st of ac.stores) if (st.count > 0 && WEAPON_INFO[st.weapon].kind !== 'aam') return true;
+    return false;
   }
 
   /** A friendly (non-player) jet is within ENGAGE_RANGE of it: it is still in someone's fight. */

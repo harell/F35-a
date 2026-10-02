@@ -74,6 +74,7 @@ Tell it:
 - Every finding needs **evidence** (bot table rows, a screenshot path you looked at, a state dump, an error) and a **repro** (a command or URL anyone can rerun). A claim without evidence is not a finding.
 - Report what you did **not** cover.
 - Log wall-clock time per step (setup, load, simulate, screenshots, analysis, waiting) and anything that wasted time.
+- Write repros that force the state, not ones that wait for it: `__f35.destroy(id | 'group')`, `invulnerable(true)`, `skipOutro()`, `--nojitter`. A repro like "a tank is lost at ≈180 s" stops working the moment a seed or the AI changes.
 
 Output (one JSON block, then at most 10 lines of prose):
 

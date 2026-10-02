@@ -54,12 +54,12 @@ export const T01: MissionDef = mission({
       { id: 't_done', when: { kind: 'objective', id: 'o_rings', state: 'complete' }, actions: [{ kind: 'radio', from: TOWER, text: 'Viper 1, Tower. Nice flying. Come on home.' }] },
     ],
     hints: [
-      { id: 'h1', text: 'RIGHT THUMB = STICK: pull back to climb, push to dive, sideways to roll', when: { kind: 'time', t: 1.5 }, duration: 7 },
-      { id: 'h2', text: 'LEFT THUMB = THROTTLE: slide up for power, past the detent for AFTERBURNER', when: { kind: 'time', t: 9 }, duration: 7 },
+      { id: 'h1', text: 'STICK ({stickThumb}): pull back to climb, push to dive, sideways to roll', when: { kind: 'time', t: 1.5 }, duration: 7 },
+      { id: 'h2', text: 'THROTTLE ({throttleThumb} thumb): slide up for power, past the detent for AFTERBURNER', when: { kind: 'time', t: 9 }, duration: 7 },
       { id: 'h3', text: 'Follow the steering cue to each ring. Next: the Harbour Bridge — the main span has 43 m clearance…', when: { kind: 'waypoint', id: 'r1' }, duration: 8 },
       { id: 'h4', text: 'To turn: roll into a bank, then pull. More pull = tighter turn, but you bleed speed', when: { kind: 'waypoint', id: 'r3' }, duration: 7 },
       { id: 'h5', text: 'Climb to the next ring: add power first, then raise the nose', when: { kind: 'waypoint', id: 'r4' }, duration: 7 },
-      { id: 'h6', text: 'Too fast? Hold the AIRBRAKE and pull the throttle back', when: { kind: 'waypoint', id: 'r5' }, duration: 7 },
+      { id: 'h6', text: 'Too fast? Pull the throttle to IDLE: the speed brake opens at the stop', when: { kind: 'waypoint', id: 'r5' }, duration: 7 },
       { id: 'h7', text: 'Rings complete! Follow the RTB cue home to Whenuapai', when: { kind: 'objective', id: 'o_rings', state: 'complete' }, duration: 7 },
     ],
     opening: [{ kind: 'radio', from: TOWER, text: 'Viper 1, Whenuapai Tower. Training area is hot. Six rings over the harbour, then come home.', priority: 2 }],
@@ -137,7 +137,7 @@ export const T02: MissionDef = mission({
         actions: [
           { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Last drone is programmed to merge with you. Knife fight.' },
           { kind: 'spawn', group: 'drone3' },
-          { kind: 'hint', text: 'WPN selects the AIM-9X: look at the drone, wait for the lock TONE, then fire', duration: 9 },
+          { kind: 'hint', text: 'WPN selects the AIM-9X (beast loadout) or the GUN: look at the drone, wait for the TONE, fire', duration: 9 },
         ],
       },
     ],
@@ -169,7 +169,7 @@ export const T03: MissionDef = mission({
   briefing: [
     'Live-fire SAM training. An SA-6 battery and a Shilka are defending a fuel depot on the eastern slope of Rangitoto. The missiles are real.',
     'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and descend — the radar loses you in the notch, and the notch works best low. Save the CHAFF for the last few seconds before impact: chaff at launch is wasted. Against a heat-seeker, FLARES late and a hard break into the missile.',
-    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows. The bomb flies itself; you turn for home. Out of bombs? Hold over Whenuapai to rearm.',
+    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. Out of bombs? Hold over Whenuapai to rearm.',
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'sead_stealth', 'strike_beast', 'strike_sdb2'],

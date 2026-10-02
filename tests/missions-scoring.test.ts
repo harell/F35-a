@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
 import { POINTS, computeScore, gradeForRating, gradeForWaves, timeFactor, type ScoreInput } from '../src/missions/runtime/scoring';
 import { angels, aspectOf, bearingText, compassWord } from '../src/missions/runtime/awacs';
+import { groupNoun } from '../src/missions/runtime/names';
 import { RadioQueue } from '../src/missions/runtime/radio';
 import { segmentIntersect } from '../src/missions/MissionRunner';
 
@@ -105,6 +106,12 @@ describe('AWACS formatting', () => {
     expect(angels(100)).toBe('angels 1');
     expect(compassWord((225 * Math.PI) / 180)).toBe('southwest');
     expect(compassWord(0)).toBe('north');
+  });
+
+  it('a mission noun goes singular for a single jet ("single striker", playtest 2026-10-02)', () => {
+    expect(groupNoun('strikers', 1)).toBe('striker');
+    expect(groupNoun('low Backfires', 1)).toBe('low Backfire');
+    expect(groupNoun('strikers', 2)).toBe('strikers');
   });
 });
 

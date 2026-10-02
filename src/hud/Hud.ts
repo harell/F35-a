@@ -42,6 +42,7 @@ import {
   drawOwnMissiles,
   drawWaypoint,
   lockCommandedOf,
+  reserveSymbols,
   waypointBearing,
 } from './hmd/targets';
 import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
@@ -281,6 +282,7 @@ export const createHud: CreateHud = (canvas, events) => {
       pen.fontScale = L.u;
       picks.begin();
       f.occ.clear();
+      f.sym.clear();
       dirty = true;
 
       f.ctx = ctx;
@@ -291,11 +293,11 @@ export const createHud: CreateHud = (canvas, events) => {
 
       if (!p || !p.alive) {
         resetPip();
-        // player down: keep the feeds (mission messages, radio, kills)
+        // player down: keep the feeds (mission messages, radio, kills); the message makes way for the radio
+        reserveRadio(f);
         reserveMessage(f, L.msgY);
         drawMessages(f);
         drawKillFeed(f, L.killX, L.killY);
-        reserveRadio(f);
         drawRadio(f);
         return;
       }
@@ -347,6 +349,8 @@ export const createHud: CreateHud = (canvas, events) => {
         g2.clip();
         pen.reset();
       }
+      // 0) the radio pill first: the target box labels and the centre message make way for it (3.3-a/b)
+      reserveRadio(f);
       // 1) protected symbols (they register in the occupancy pass): FPM, pipper / seeker, target box
       drawFpm(f);
       if (hmd) {
@@ -363,12 +367,12 @@ export const createHud: CreateHud = (canvas, events) => {
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
       reserveWarningBand(f);
       if (!zoomed) {
+        reserveSymbols(f);
         const below = planCues(f);
         const cur = st.messages.current;
         if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));
         else clearMessagePlan();
       } else clearMessagePlan();
-      reserveRadio(f);
       // 3) everything else: secondary labels make way for the reserved text
       g2.globalAlpha = declutter;
       if (hmd) drawLockCone(f);

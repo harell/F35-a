@@ -155,7 +155,7 @@ export const C08: MissionDef = mission({
     hints: [
       { id: 'h_low', text: 'The SA-10 kills anything high. Stay below 300 ft and keep Rangitoto between you and Motutapu', when: { kind: 'time', t: 4 }, duration: 10 },
       { id: 'h_bridge', text: 'Harbour Bridge ahead: the main span has 43 m of clearance…', when: { kind: 'area', x: P.harbourBridge.x, z: P.harbourBridge.z, radius: 3500 }, duration: 6 },
-      { id: 'h_pop', text: 'Ships ahead: SDB selected, TGT to designate, pop to ~800 ft, release the moment IN RANGE shows, then back down', when: { kind: 'area', x: wharf.x, z: wharf.z, radius: 5000 }, duration: 8 },
+      { id: 'h_pop', text: 'Ships ahead: TGT the ship, pop to ~800 ft, release at IN RANGE, then back down', when: { kind: 'area', x: wharf.x, z: wharf.z, radius: 5000 }, duration: 8 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Grumble is up on Motutapu. Nothing high survives out there tonight. Go low.', priority: 2 }],
     successText: 'The landing is off. Get home low and fast.',
@@ -599,7 +599,7 @@ export const C12: MissionDef = mission({
       }),
     ],
     sams: [
-      site('sa15', 'motu_sams', 'sa15', P.motuE),
+      site('sa15', 'motu_sams', 'sa15', P.motuE, { minDifficulty: 'pilot' }),
       site('zsu1', 'motu_sams', 'zsu23', { x: 12200, z: -8500 }),
       site('zsu2', 'motu_sams', 'zsu23', { x: 13300, z: -9600 }, { minDifficulty: 'pilot' }),
       site('manpads', 'motu_sams', 'sa18', P.motuS, { minDifficulty: 'pilot' }),

@@ -261,6 +261,40 @@ export function gpsMaxRange(def: CombatMunitionDef, height: number, speed: numbe
   return r;
 }
 
+/**
+ * Widest angle (rad) between the jet's ground track and the bearing to the target at which a GPS /
+ * glide bomb release still reaches it out to gpsMaxRange: a winged glide bomb (SDB, StormBreaker)
+ * turns hard onto a point well off the nose, a JDAM's strakes much less (playtest 2.1-b).
+ */
+export function gpsReleaseCone(def: CombatMunitionDef): number {
+  return ((def.glideRatio >= 3 ? 60 : 30) * Math.PI) / 180;
+}
+
+/**
+ * Can a GPS / glide bomb released now turn onto `point`? The point must lie inside the release cone
+ * around the ground track (else `offAxis`: steer toward it) and outside the bomb's horizontal turn
+ * circle: a point nearer than 2·r·sin θ (θ off the ground track, r the bomb's turn radius at release)
+ * can't be turned onto, as when the jet has run past a target it tossed at from low level. Gravity
+ * does the turn down, so only the horizontal turn counts.
+ */
+export function gpsReleaseGeometry(def: CombatMunitionDef, ac: AircraftEntity, point: Vector3): { offAxis: boolean; reachable: boolean } {
+  const dx = point.x - ac.position.x;
+  const dz = point.z - ac.position.z;
+  const horiz = Math.hypot(dx, dz);
+  const vh = Math.hypot(ac.velocity.x, ac.velocity.z);
+  // (straight below the jet the bearing means nothing: no cone)
+  if (horiz < 50 || vh < 1) return { offAxis: false, reachable: true };
+  const cos = (ac.velocity.x * dx + ac.velocity.z * dz) / (vh * horiz);
+  const offAxis = cos < Math.cos(gpsReleaseCone(def));
+  const v = ac.velocity.length();
+  const q = 0.5 * airDensity(ac.position.y) * v * v;
+  const r = (v * v) / Math.max(1, def.maxG * G * Math.min(1, q / def.fullGQ));
+  const sin = Math.sqrt(Math.max(0, 1 - cos * cos));
+  return { offAxis, reachable: !offAxis && horiz >= 2 * r * sin * TURN_MARGIN };
+}
+/** Margin on the bomb's turn circle (autopilot lag, lift lost to the turn). */
+const TURN_MARGIN = 1.15;
+
 /* ───────────────────────── CCIP ───────────────────────── */
 
 const _p = new Vector3();

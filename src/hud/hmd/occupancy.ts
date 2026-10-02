@@ -66,21 +66,22 @@ export class Occupancy {
 
   /**
    * Nearest top y in [yMin, yMax − h] (searching outward from `yPref`, preferring `prefer` first) at
-   * which the rectangle [x0, x1] × [y, y + h] is free. NaN if there is none.
+   * which the rectangle [x0, x1] × [y, y + h] is free (in this registry and in `also`, if given). NaN
+   * if there is none.
    */
-  freeY(x0: number, x1: number, h: number, yPref: number, yMin: number, yMax: number, prefer: 'down' | 'up' = 'down', step = 4): number {
+  freeY(x0: number, x1: number, h: number, yPref: number, yMin: number, yMax: number, prefer: 'down' | 'up' = 'down', step = 4, also?: Occupancy): number {
     const lo = yMin;
     const hi = yMax - h;
     if (hi < lo) return NaN;
     const start = Math.max(lo, Math.min(hi, yPref));
-    if (!this.hits(x0, start, x1, start + h)) return start;
+    if (!this.hits(x0, start, x1, start + h) && !also?.hits(x0, start, x1, start + h)) return start;
     const maxK = Math.ceil((hi - lo) / step) + 1;
     for (let k = 1; k <= maxK; k++) {
       for (let s = 0; s < 2; s++) {
         const dir = (s === 0) === (prefer === 'down') ? 1 : -1;
         const y = start + dir * k * step;
         if (y < lo || y > hi) continue;
-        if (!this.hits(x0, y, x1, y + h)) return y;
+        if (!this.hits(x0, y, x1, y + h) && !also?.hits(x0, y, x1, y + h)) return y;
       }
     }
     return NaN;

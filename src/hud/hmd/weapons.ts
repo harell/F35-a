@@ -2,7 +2,7 @@
  * Weapon symbology: status block (master mode, selected weapon + count, countermeasures, EMCON,
  * release denials), DLZ scale with target caret / time of flight, SHOOT cue, AIM-9X seeker circle,
  * gun LCOS pipper + EEGS funnel, bomb CCIP pipper and JDAM/SDB release cue (azimuth steering line,
- * time to release, IN RNG).
+ * time to release, IN RANGE).
  */
 import { DEG, G, dirFromHeadingPitch, forwardOf, rightOf, toKnots, upOf } from '../../core/math';
 import type { Vector3 } from 'three';
@@ -158,13 +158,14 @@ export function placeCueLine(f: HudFrame, text: string, size: number, yPref: num
   const hw = pen.textWidth(text, size) / 2 + 4 * u;
   const h = (size + 4) * u;
   const lo = L.row2Y + 16 * u;
-  let top = occ.freeY(L.cx - hw, L.cx + hw, h, yPref - h / 2, lo, Math.max(L.msgFloor, yPref + h), 'down');
+  // (clear of the protected symbols and text, and of the contact / ground / waypoint symbols)
+  let top = occ.freeY(L.cx - hw, L.cx + hw, h, yPref - h / 2, lo, Math.max(L.msgFloor, yPref + h), 'down', 4, f.sym);
   if (!Number.isFinite(top)) top = yPref - h / 2;
   occ.add(L.cx - hw, top, L.cx + hw, top + h);
   return top + h / 2;
 }
 
-/* ───────────────────────── Centre cue lines (SHOOT / IN RNG / FOX 3) ───────────────────────── */
+/* ───────────────────────── Centre cue lines (SHOOT / IN RANGE / FOX 3) ───────────────────────── */
 
 interface CueLine {
   text: string;
@@ -200,17 +201,21 @@ export function planCues(f: HudFrame): number {
   // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
   // never lands on the target box that the pipper is tracking)
   if (z && z.shoot && !WEAPON_IS_BOMB[z.weapon]) addCue('SHOOT', 20, pal.bright, 4);
-  // bombs: release cue
+  // bombs: release cue. The GPS cue (REL n / IN RANGE, the wording the briefings and hints use) shows
+  // in every view, chase included; the CCIP cue goes with its pipper, which only the HMD draws
   const w = p.selectedWeapon;
-  if (f.mode === 'hmd' && WEAPON_IS_BOMB[w]) {
+  if (WEAPON_IS_BOMB[w]) {
     const bi = bombInfo(f);
     if (bi) {
       if (p.radar.groundPoint) {
-        if (bi.inRange) addCue('IN RNG', 19, pal.bright, 3.5);
+        if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
+        else if (bi.offAxis) addCue('STEER', 17, pal.warn, 0); // target outside the bomb's release cone
         else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
-        else addCue('OUT RNG', 15, pal.warn, 0);
-      } else if (!bombOnScreen) addCue('CCIP', 13, pal.dim, 0);
-      else if (bi.inRange) addCue('PICKLE', 17, pal.bright, 3.5);
+        else addCue('OUT OF RANGE', 15, pal.warn, 0);
+      } else if (f.mode === 'hmd') {
+        if (!bombOnScreen) addCue('CCIP', 13, pal.dim, 0);
+        else if (bi.inRange) addCue('PICKLE', 17, pal.bright, 3.5);
+      }
     }
   }
   // brevity flash after a release ("FOX 3")
@@ -403,9 +408,9 @@ export function drawGun(f: HudFrame): void {
 
 let bombOnScreen = false;
 let biFrame = -1;
-let biCache: { point: Vector3; inRange: boolean; timeToRelease: number } | null = null;
+let biCache: { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null = null;
 /** Bomb impact / release info for this frame (cached: planCues + drawAirToGround both need it). */
-function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToRelease: number } | null {
+function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null {
   if (biFrame === f.st.frame) return biCache;
   biFrame = f.st.frame;
   try {

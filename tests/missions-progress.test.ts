@@ -105,7 +105,17 @@ describe('campaign progress', () => {
     expect(p.unlocked.length).toBe(loadProgress().unlocked.length);
     expect(nextMissionAfter(last.id)).toBeNull();
     expect(nextMissionAfter('c01')?.id).toBe('c02');
-    expect(nextMissionAfter('t01')).toBeNull();
+  });
+
+  it('training lessons chain T01 → T02 → T03 → the first campaign mission', () => {
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03']);
+    expect(nextMissionAfter('t01')?.id).toBe('t02');
+    expect(nextMissionAfter('t02')?.id).toBe('t03');
+    expect(nextMissionAfter('t03')?.id).toBe(CAMPAIGN[0].id);
+    // the campaign's first mission is always unlocked, so NEXT after T03 never hits a locked mission
+    expect(loadProgress().unlocked).toContain(CAMPAIGN[0].id);
+    expect(nextMissionAfter('ia_dogfight_auckland')).toBeNull();
+    expect(nextMissionAfter('nope')).toBeNull();
   });
 
   it('persists to localStorage and survives garbage', () => {

@@ -592,7 +592,7 @@ describe('i1: late fixes — no stalled package, SDB press-in', () => {
     expect(h.runner.objectives.find((o) => o.id === 'o_strike')!.state).toBe('complete');
   });
 
-  it(`SDB: at its 30 km maximum the cue says press in to ${SDB_PRESS_RANGE / 1000} km; closer it says release`, () => {
+  it(`SDB: near its maximum the cue says press in to ${SDB_PRESS_RANGE / 1000} km; closer it says release`, () => {
     // a fresh sortie per range; the cue while holding that geometry (after the opening SEAD hint)
     const hintsAt = (range: number): string[] => {
       const h = harness(byId('c03'));
@@ -612,7 +612,7 @@ describe('i1: late fixes — no stalled package, SDB press-in', () => {
       });
       return [...out];
     };
-    const far = hintsAt(27_000);
+    const far = hintsAt(24_000);
     expect(far.some((t) => /press in to 20 km/.test(t)), JSON.stringify(far)).toBe(true);
     expect(far.some((t) => /release the SDB/.test(t))).toBe(false);
     const near = hintsAt(18_000);

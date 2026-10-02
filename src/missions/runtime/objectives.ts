@@ -41,7 +41,9 @@ function setState(s: MissionState, o: ObjectiveRt, state: ObjectiveStatus['state
     s.hud('OBJECTIVE COMPLETE', 'good', 3);
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Objective complete — ${o.def.label}.`, voice: 'a_objective_complete', priority: 2 });
   } else if (state === 'failed') {
-    s.hud(o.def.primary ? 'PRIMARY OBJECTIVE FAILED' : 'OBJECTIVE FAILED', 'bad', 3.5);
+    // a lost bonus is not a lost mission: amber and short, never the red primary-failure banner
+    if (o.def.primary) s.hud('PRIMARY OBJECTIVE FAILED', 'bad', 3.5);
+    else s.hud('BONUS FAILED', 'warn', 2.5);
   } else if (state === 'active' && s.time > 1) {
     s.hud(`NEW OBJECTIVE: ${o.def.label.toUpperCase()}`, 'info', 4);
   }
@@ -214,6 +216,39 @@ export function updateObjectives(s: MissionState, dt: number): void {
           if (dx * dx + dz * dz <= def.radius * def.radius) setState(s, o, 'complete');
         }
         break;
+      }
+    }
+  }
+  markObjectiveTargets(s);
+}
+
+/**
+ * Flag the surface targets of the open primary objectives (`objective` on SAM sites and ground
+ * targets): the sim's A/G auto-designation and TGT cycling rank them above every other surface target,
+ * so c06 boxes a corvette, not the Shilka on the way, and a SEAD sortie still boxes its SAM first.
+ * "Open" = active, or pending with no activation condition (it goes active on the first evaluation:
+ * the flag is already set when the radar builds its first picture).
+ */
+export function markObjectiveTargets(s: MissionState): void {
+  const w = s.world;
+  for (const e of w.sams) e.objective = false;
+  for (const e of w.ground) e.objective = false;
+  for (const o of s.objectives) {
+    const def = o.def;
+    const st = o.status.state;
+    if (!def.primary || !(st === 'active' || (st === 'pending' && !def.activeAt))) continue;
+    if (def.kind === 'destroy') {
+      for (const id of def.groups) {
+        const g = s.groups.get(id);
+        if (!g) continue;
+        for (const m of g.members) if (m.kind === 'sam' || m.kind === 'ground') m.objective = true;
+      }
+    } else if (def.kind === 'destroy_sams') {
+      const r2 = def.radius * def.radius;
+      for (const site of w.sams) {
+        const dx = site.position.x - def.x;
+        const dz = site.position.z - def.z;
+        if (site.team !== 'blue' && dx * dx + dz * dz <= r2) site.objective = true;
       }
     }
   }

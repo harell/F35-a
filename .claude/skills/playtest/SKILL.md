@@ -45,7 +45,9 @@ Parse the constraints. Free text is fine ("3 rounds, done by 5pm NZT").
 ### 2a. Reviewer
 
 - Spawn **one reviewer subagent per charter, in parallel**, with fresh context and the brief from `charters.md` section 4. Run headless sweeps (`bot-sweep.ts --jobs`) inside the reviewers, not in your own context.
-- **Parallel limits.** The bot sweep already fills every core, so run one sweep at a time across all reviewers. Browser sessions use the CPU renderer, so run at most `cores / 2` at once. Plan the charters so that sweeps and browser work overlap rather than queue.
+- **Parallel limits.** Run one sweep at a time across all reviewers, with `--jobs=2` when browsers run beside it. Browser sessions use the CPU renderer: browsers plus sweep jobs should not exceed the core count. On 4 cores that's 2 browsers and a 2-job sweep. Three browsers plus a sweep pushed the load average to 7–11, which slowed screenshots to 8–14 s and `simulate()` to ~5 s per game minute. Plan the charters so that sweeps and browser work overlap rather than queue.
+- **Test a frozen snapshot.** Serve the reviewers a detached worktree of the commit under test, on its own port (`git worktree add ../<repo>-r<N> <sha> --detach`, symlink `node_modules`, `npx vite --config vite.e2e.config.ts --port 519N`). Developers can then fix in their own worktrees while reviewers test, and nobody reads half-edited code through a dev server that doesn't watch files.
+- **Start the next charters early.** A reviewer whose charter doesn't depend on a pending fix can start on the last snapshot while developers finish. Round 2's sweep and HUD charters ran while round 1's flow fixes were still in progress.
 - **Round 1** runs the risk-ranked charters. **Later rounds** re-test what the developer changed (regression charters on the fixed findings) plus the next charters by risk, if there's budget.
 - Collect the JSON. Merge duplicate findings. Drop any finding without evidence or a repro, and note that you dropped it.
 
@@ -70,8 +72,9 @@ Don't make up a score to keep the loop going. Don't hold one back to make it loo
 
 1. **Triage** the open findings by severity, then cost. Fix in this round what fits in the round's fix budget. Anything bigger (a redesign, a new system, multi-file refactors, anything that changes the game's intent) becomes a GitHub issue: the finding, the evidence, the repro and a suggested approach. Never silently drop a finding. Each one ends up fixed, filed, or marked "won't fix" with a reason.
 2. **Gameplay intent is the user's.** If a fix would change what a mission or mechanic *is* (not just a number), and the user is reachable, ask. If they aren't, file an issue instead of choosing.
-3. Fix in the code's own style (`docs/ARCHITECTURE.md`). For each balance or logic fix, add or extend a vitest test that would have caught it (`runPlaythrough()` from `tests/missions-bot.ts`; see `tests/missions-balance.test.ts`), so the finding can't come back unseen.
-4. **Verify before committing the layer:** `npx tsc --noEmit && npx vitest run && npx vite build`, plus the finding's own repro command. Restart the playtest server so the next round tests the new code.
+3. **Fix in parallel by area.** Give each area (HUD, bot and tooling, menus and flow, weapons) to its own developer subagent: its own worktree, a local branch, targeted tests only, and a report of its commit SHAs. Cherry-pick the commits into one branch. Keep the small content and balance fixes yourself. Brief each developer with the finding, the evidence, the repro, the files, and "add a test that fails on the old code".
+   Fix in the code's own style (`docs/ARCHITECTURE.md`). For each balance or logic fix, add or extend a vitest test that would have caught it (`runPlaythrough()` from `tests/missions-bot.ts`; see `tests/missions-balance.test.ts`), so the finding can't come back unseen.
+4. **Verify before committing the layer:** `npx tsc --noEmit && npx vitest run && npx vite build`, plus the finding's own repro command. Run the build even when vitest fails (the `&&` chain skips it). Under reviewer load, heavy tests can hit vitest's 5 s timeout: rerun a failure alone before calling it real, and give heavy new tests an explicit `{ timeout }`. Restart the playtest server (or serve a new snapshot) so the next round tests the new code.
 5. Commit the round as one layer (section 4). Go to the next round.
 
 ## 3. Wrap-up and retro (the reserved time)

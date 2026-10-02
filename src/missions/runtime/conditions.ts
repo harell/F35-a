@@ -79,6 +79,12 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       const p = s.player;
       return !!p && p.alive && p.incoming.length > 0;
     }
+    case 'munitions_clear': {
+      const g = s.groups.get(c.group);
+      if (!g) return true;
+      for (const m of s.world.missiles) if (m.alive && g.members.some((e) => e.id === m.shooterId)) return false;
+      return true;
+    }
     case 'player_fired': {
       const p = s.player;
       return !!p && p.shotsFired >= (c.count ?? 1);
@@ -117,6 +123,7 @@ export function conditionRefs(c: Condition, out: { groups: string[]; objectives:
     case 'group_destroyed':
     case 'group_defeated':
     case 'group_spawned':
+    case 'munitions_clear':
       out.groups.push(c.group);
       break;
     case 'waypoint':

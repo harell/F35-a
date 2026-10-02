@@ -67,6 +67,11 @@ export function aircraftNoun(type: AircraftType, count: number): string {
   }
 }
 
+/** A group's plural AWACS noun for `count` jets: "single striker", not "single strikers". */
+export function groupNoun(noun: string, count: number): string {
+  return count === 1 && noun.endsWith('s') ? noun.slice(0, -1) : noun;
+}
+
 export function samLongName(type: SamType): string {
   return SAM_INFO[type].nato;
 }
