@@ -117,7 +117,8 @@ no attacker; `oneWay.impacted` tells it from a drone that was shot down). Wherev
 every other live aircraft within 150 m (`AIRCRAFT_WARHEAD` in `src/sim/damage/tables.ts`, applied as `flak`), never
 other drones, so one missile can't clear a swarm by chain reaction. A mission spawns a swarm with an aircraft group
 carrying `oneWay` (target point and optional route; `formation: 'triangle'` gives rows of 1, 2, 3, 4) in
-`src/missions/runtime/spawner.ts`. Its buzz is `PistonBuzzVoice` (`src/audio/world/DroneSounds.ts`), not a jet voice.
+`src/missions/runtime/spawner.ts`. Each drone flies the route shifted by its slot, and at a fixed speed the triangle
+can't wheel round a corner: it keeps its first-leg orientation, so a swarm whose shape matters wants a straight route. Its buzz is `PistonBuzzVoice` (`src/audio/world/DroneSounds.ts`), not a jet voice.
 
 ## Real airfields (OpenStreetMap)
 

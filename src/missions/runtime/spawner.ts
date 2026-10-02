@@ -327,6 +327,8 @@ function spawnOneWayGroup(s: MissionState, g: GroupRt): void {
       leaderId: null,
       groupId: g.id,
     });
+    // the route shifted by the slot (world frame): the formation holds its first-leg orientation
+    // (fixed-speed drones can't wheel it round a corner; see OneWayDef)
     const route = (ow.route ?? []).map((p) => new Vector3(p.x + dx, def.altitude, p.z + dz));
     placeOneWay(ac, createOneWay({ target, altitude: def.altitude, speed: def.speed, route }), pos);
     if (i === 0) g.leadId = ac.id;
