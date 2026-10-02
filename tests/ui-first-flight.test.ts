@@ -82,65 +82,128 @@ describe('tilt chosen, no orientation data: the texts describe the stick (4.2-b)
   });
 });
 
+interface HudFrameRec {
+  t: number;
+  hint: string | null;
+  /** The OBJECTIVES summary was drawn. */
+  obj: boolean;
+  /** The current hint was drawn (any of its lines). */
+  hintDrawn: boolean;
+}
+
+/** Fly a lesson with the real runner, sim world and HUD (one event bus), cockpit view at 844x390, 30 HUD fps. */
+function flyLesson(id: string, seconds: number, prep?: (world: ReturnType<typeof createSimWorld>) => void): HudFrameRec[] {
+  useSettings({});
+  followActiveScheme('stick', 'stick');
+  const W = 844;
+  const H = 390;
+  const events = new EventBus();
+  const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+  // the HUD listens before the mission starts (the opening radio call goes out at setup)
+  const hud = createHud(canvas, events);
+  hud.resize(W, H, 1);
+  hud.setVisible(true);
+  const def = missionById(id)!;
+  const diff = DIFFICULTIES.pilot;
+  const world = createSimWorld({ terrain: flatLand(), difficulty: diff, events, combat: createCombatSystemSeeded(7) });
+  const runner = createMissionRunner(def, { createAi: stubAi({ created: [], retasked: [] }), difficulty: diff, events });
+  runner.setup(world, def.recommendedLoadout);
+  prep?.(world);
+  const p = world.player!;
+  const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+  const ctx: FrameContext = {
+    dt: 1 / 30,
+    time: 0,
+    world,
+    player: p,
+    camera,
+    viewMode: 'cockpit',
+    focusId: p.id,
+    mission: runner,
+    settings: { ...DEFAULT_SETTINGS },
+    quality: { ...QUALITY_PRESETS.medium },
+    paused: false,
+    screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+  };
+  const eye = new Vector3();
+  const out: HudFrameRec[] = [];
+  for (let i = 0; i < 60 * seconds; i++) {
+    world.step(1 / 60);
+    runner.update(world, 1 / 60);
+    if (i % 2) continue;
+    camera.position.copy(eye.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position));
+    camera.quaternion.copy(p.quaternion);
+    camera.updateMatrixWorld();
+    ctx.time = world.time;
+    fake.reset();
+    hud.update(ctx);
+    const texts = fake.texts.map((t) => t.text.toUpperCase().trim());
+    const hint = runner.hint ?? null;
+    const up = hint?.toUpperCase() ?? '';
+    // (a short last line of a page — "NOSE" — only counts at the hint's end)
+    const hintDrawn = !!hint && texts.some((t) => (t.length > 8 ? up.includes(t) : t.length >= 3 && up.endsWith(t)));
+    out.push({ t: world.time, hint, obj: texts.includes('OBJECTIVES'), hintDrawn });
+  }
+  return out;
+}
+
+/** Runs of consecutive frames with the objectives summary drawn: [start, end) times. */
+function objectiveRuns(frames: HudFrameRec[]): [number, number][] {
+  const runs: [number, number][] = [];
+  let from = -1;
+  for (let i = 0; i <= frames.length; i++) {
+    const on = i < frames.length && frames[i].obj;
+    if (on && from < 0) from = i;
+    if (!on && from >= 0) {
+      runs.push([frames[from].t, i < frames.length ? frames[i].t : frames[i - 1].t]);
+      from = -1;
+    }
+  }
+  return runs;
+}
+
 describe("T01's first hint is visible for its whole duration (4.2-c)", () => {
   it('cockpit view, 844x390: drawn in every frame from t=1.5 s to its expiry, with the radio and objectives up', { timeout: 30_000 }, () => {
-    useSettings({});
-    followActiveScheme('stick', 'stick');
-    const W = 844;
-    const H = 390;
-    const events = new EventBus();
-    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
-    // the HUD listens before the mission starts (the opening radio call goes out at setup)
-    const hud = createHud(canvas, events);
-    hud.resize(W, H, 1);
-    hud.setVisible(true);
-    const def = missionById('t01')!;
-    const diff = DIFFICULTIES.pilot;
-    const world = createSimWorld({ terrain: flatLand(), difficulty: diff, events, combat: createCombatSystemSeeded(7) });
-    const runner = createMissionRunner(def, { createAi: stubAi({ created: [], retasked: [] }), difficulty: diff, events });
-    runner.setup(world, def.recommendedLoadout);
-    const p = world.player!;
-    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
-    const ctx: FrameContext = {
-      dt: 1 / 30,
-      time: 0,
-      world,
-      player: p,
-      camera,
-      viewMode: 'cockpit',
-      focusId: p.id,
-      mission: runner,
-      settings: { ...DEFAULT_SETTINGS },
-      quality: { ...QUALITY_PRESETS.medium },
-      paused: false,
-      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-    };
-    const eye = new Vector3();
-    let shown = 0;
-    let drawn = 0;
-    let objectivesSeen = 0;
-    for (let i = 0; i < 60 * 11; i++) {
-      world.step(1 / 60);
-      runner.update(world, 1 / 60);
-      if (i % 2) continue;
-      camera.position.copy(eye.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position));
-      camera.quaternion.copy(p.quaternion);
-      camera.updateMatrixWorld();
-      ctx.time = world.time;
-      fake.reset();
-      hud.update(ctx);
-      const texts = fake.texts.map((t) => t.text.toUpperCase());
-      if (texts.includes('OBJECTIVES')) objectivesSeen++;
-      if (!runner.hint?.startsWith('STICK')) continue;
-      shown++;
-      if (texts.some((t) => t.startsWith('STICK ('))) drawn++;
-    }
+    const frames = flyLesson('t01', 11);
+    const first = frames.filter((r) => r.hint?.startsWith('STICK'));
     // the hint ran its 7 s (≈ 210 HUD frames at 30 fps)…
-    expect(shown).toBeGreaterThan(200);
+    expect(first.length).toBeGreaterThan(200);
     // …and was on screen in every one of them
-    expect(drawn).toBe(shown);
+    expect(first.filter((r) => r.hintDrawn).length).toBe(first.length);
     // the opening objectives summary still showed (before and after the hint)
-    expect(objectivesSeen).toBeGreaterThan(10);
+    expect(frames.filter((r) => r.obj).length).toBeGreaterThan(10);
+  });
+
+  it('T01–T03: the summary never flashes on and off with the hints or the radio, and every hint is drawn while it waits', { timeout: 120_000 }, () => {
+    for (const id of ['t01', 't02', 't03']) {
+      const frames = flyLesson(id, 30);
+      // once it shows, it stays up for a while: no frame-long flash between two radio calls, no blink
+      // at the start before the first hint arrives (review of #70: T02 at 12.52 s, T03 at 0.02 s)
+      for (const [a, b] of objectiveRuns(frames)) expect(b - a, `${id}: OBJECTIVES drawn only ${a.toFixed(2)}–${b.toFixed(2)} s`).toBeGreaterThan(1.5);
+      expect(objectiveRuns(frames).length, `${id}: the summary never showed`).toBeGreaterThan(0);
+      const hidden = frames.filter((r) => r.hint && !r.hintDrawn);
+      expect(hidden.length, `${id}: hint hidden at ${hidden[0]?.t.toFixed(2)} s: ${hidden[0]?.hint}`).toBe(0);
+    }
+  });
+
+  it('a damaged jet: the damage block counts too, so the summary never keeps the hint off the screen', { timeout: 30_000 }, () => {
+    // HP bar only: the summary yields and the first hint is drawn in every frame
+    const frames = flyLesson('t01', 11, (world) => {
+      const p = world.player!;
+      p.health = 0.5 * p.maxHealth;
+    });
+    const first = frames.filter((r) => r.hint?.startsWith('STICK'));
+    expect(first.length).toBeGreaterThan(200);
+    expect(first.filter((r) => r.hintDrawn).length).toBe(first.length);
+    // HP bar + a HYD tag: with the radio pill up the hint can't fit even alone, but the summary still
+    // never takes its place
+    const worse = flyLesson('t01', 11, (world) => {
+      const p = world.player!;
+      p.health = 0.5 * p.maxHealth;
+      p.damage.hydraulics = 0.3;
+    });
+    expect(worse.filter((r) => r.obj && r.hint && !r.hintDrawn).length).toBe(0);
+    expect(worse.filter((r) => r.obj).length).toBeGreaterThan(10);
   });
 });
 

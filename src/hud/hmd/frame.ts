@@ -46,8 +46,12 @@ export class HudState {
   warnAge = 99;
   /** Seconds left to show the objective summary. */
   objShow = 8;
-  /** The summary is held back (a lesson's hint has the column): its time doesn't run. */
+  /** The summary is held back this frame (a lesson's hint has the column): not drawn, its time doesn't run. */
   objHold = false;
+  /** A lesson's hint took the column from the summary: it keeps it until no hint is up (no toggling as radio calls come and go). */
+  objYield = false;
+  /** Seconds since a hint last had the column (a lesson's summary waits OBJ_SETTLE first, so a hint arriving just after it doesn't flash it). */
+  objFree = 0;
   /** Objective that changed last (highlighted in the summary) and when. */
   objChangedId = '';
   /** Sticky DLZ scale (m). */
@@ -105,6 +109,7 @@ export class HudState {
     this.warnAge += dt;
     this.titleAge += dt;
     if (!this.objHold) this.objShow = Math.max(0, this.objShow - dt);
+    this.objFree = this.objYield ? 0 : this.objFree + dt;
     this.radio.update(dt);
     this.messages.update(dt);
     this.kills.update(dt);
@@ -124,6 +129,8 @@ export class HudState {
     this.warnAge = 99;
     this.objShow = 8;
     this.objHold = false;
+    this.objYield = false;
+    this.objFree = 0;
     this.objChangedId = '';
     this.dlzScale = 0;
     this.threats.reset();
@@ -140,6 +147,8 @@ export class HudState {
     this.warnAge = 99;
     this.objShow = 8;
     this.objHold = false;
+    this.objYield = false;
+    this.objFree = 0;
     this.objChangedId = '';
     this.dlzScale = 0;
     this.radio.clear();
