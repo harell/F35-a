@@ -71,8 +71,12 @@ node e2e/hd-terrain.mjs  # HD terrain download scope per quality tier (against `
 npm run voices       # regenerate voice clips (needs a local TTS + ffmpeg, see tools/)
 ```
 
-Handy URL parameters: `?mission=c01&autostart=1&view=chase&difficulty=veteran&quality=high&fps=1` (`&hdterrain=0` turns off the high tier's HD terrain download).
+Handy URL parameters: `?view=chase&difficulty=veteran&quality=high&fps=1` (`&hdterrain=0` turns off the high tier's HD terrain download).
+
+Test hooks, on the dev server and in `npm run build:test` builds only (never in the deployed game): `?mission=c01&autostart=1` flies any mission straight away,
+whatever the campaign has unlocked, and `window.__f35` exposes state, autopilot and fast-forward for Playwright.
 Missions: `c01`–`c12`, `t01`–`t03`, and Instant Action ids like `ia_dogfight_auckland`.
+Playtesting (`/playtest`) is described in [`.claude/skills/playtest`](.claude/skills/playtest/SKILL.md) and logged in [`docs/playtests/`](docs/playtests/).
 
 Architecture, conventions and module ownership are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Developer labs for models,
 effects, HUD, audio, UI and world live in [`labs/`](labs/).

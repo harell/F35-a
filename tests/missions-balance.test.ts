@@ -3,7 +3,7 @@
  *  - c04 'Broken Wing' was 0/2 on Pilot (SA-6 / SA-15 point defence shooting down the JDAMs);
  *  - c10 'Night Harbour' was 0/2 on Pilot (Su-27 sweep R-27s at 137/159 s) and failed on Recruit;
  *  - c07 'Mainstay' on Veteran/Ace was an unavoidable Su-35 R-77 kill at 51–58 s.
- * Full sweep: npx vite-node e2e/review/dev-ux-botsweep3.ts <difficulties> <missions>.
+ * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  */
 import { describe, expect, it } from 'vitest';
 import { missionById, terrainPadsFor } from '../src/missions';

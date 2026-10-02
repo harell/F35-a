@@ -26,6 +26,14 @@ export const GAME_TITLE = 'F35-A';
  */
 export const GAME_BUILD: string = (import.meta.env.VITE_BUILD_NUMBER as string | undefined) || 'dev';
 
+/**
+ * Test hooks: `?mission=<id>&autostart=1` (fly any mission, campaign locks ignored) and `window.__f35`
+ * (state, autopilot, fast-forward, scripted controls, Sky Tower demolition). They exist on the dev
+ * server and in builds made with VITE_TEST_HOOKS=1, never in the deployed game. Playtests use them
+ * (.claude/skills/play-f35).
+ */
+export const TEST_HOOKS: boolean = import.meta.env.DEV || import.meta.env.VITE_TEST_HOOKS === '1';
+
 export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   recruit: {
     id: 'recruit',
