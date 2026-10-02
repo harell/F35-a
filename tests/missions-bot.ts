@@ -157,17 +157,42 @@ export class MissionBot {
     return null;
   }
 
-  /** Next surface target: nearest live objective target we can hit; a live Tor guarding it goes first. */
+  /**
+   * One of our bombs is already flying at `t`, or at a target close enough to `t` that its blast
+   * takes `t` too (a JDAM on one of a pair of parked jets 60 m apart).
+   */
+  private bombInbound(t: AnyEntity): boolean {
+    for (const m of this.world.missiles) {
+      if (!m.alive || m.shooterId !== this.p.id || m.def.category !== 'bomb') continue;
+      if (m.targetId === t.id) return true;
+      const aim = this.world.getEntity(m.targetId);
+      if (aim && aim.alive && Math.hypot(aim.position.x - t.position.x, aim.position.z - t.position.z) <= m.def.blastRadius) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Next surface target: nearest live objective target we can hit; a live Tor guarding it goes first.
+   * SDB-class glide bombs (SDB, StormBreaker): with one already on its way to a target the next is
+   * preferred, so they are rippled onto the targets like a human does instead of one 2-minute glide
+   * at a time (issue #65: StormBreaker runs over 600 s). Not JDAMs (a JDAM rippled from inside the
+   * run-in overflew its target in t03) and not low under the SA-10, where each toss is flown alone.
+   */
   private surfaceTarget(): AnyEntity | null {
     const p = this.p;
+    const ripple = !this.sa10Threat();
     let best: AnyEntity | null = null;
     let bestD = Infinity;
+    let bestBusy = true;
     for (const t of this.objectiveTargets('surface')) {
-      if (!this.weaponFor(t)) continue; // e.g. only AARGMs left and a silent / optical site
+      const wt = this.weaponFor(t);
+      if (!wt) continue; // e.g. only AARGMs left and a silent / optical site
+      const busy = ripple && isSdb(wt) && this.bombInbound(t);
       const d = t.position.distanceTo(p.position);
-      if (d < bestD) {
+      if ((bestBusy && !busy) || (busy === bestBusy && d < bestD)) {
         bestD = d;
         best = t;
+        bestBusy = busy;
       }
     }
     if (!best) return null;
