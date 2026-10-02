@@ -59,10 +59,18 @@ export interface VesselData {
   health: number;
 }
 
+/**
+ * A mission-flagged civil ship that takes more than one hit (GroundTargetEntity.hitsToSink > 1, the
+ * escorted tanker) keeps sailing after a bomb / missile hit, burning and this much slower per hit.
+ */
+export const VESSEL_HIT_SPEED_FACTOR = 0.8;
+
 /** Civil merchant ships (neutral 'ship' entities with a VesselClass). */
 export const VESSEL_DATA: Record<VesselClass, VesselData> = {
   container: { length: 270, beam: 34, height: 40, health: 2_800 },
   cruise: { length: 290, beam: 36, height: 52, health: 3_200 },
+  // Aframax-size crude carrier: low freeboard when laden, accommodation block and funnel aft
+  tanker: { length: 250, beam: 44, height: 40, health: 3_000 },
 };
 
 /** Explosion for an aircraft blowing up (in the air or on impact). */

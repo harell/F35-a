@@ -7,11 +7,17 @@
  */
 import { Vector3 } from 'three';
 import { forwardOf } from '../../core/math';
+import type { VesselClass } from '../../core/types';
 import type { AnyEntity, GroundTargetEntity } from '../entities';
 import { VESSEL_DATA } from '../damage/tables';
 
 const _fwd = new Vector3();
 const _p = new Vector3();
+
+/** What the radio and the HUD call a ship of this class ("tanker"; the HUD upper-cases it). */
+export function vesselNoun(v: VesselClass | null | undefined): string {
+  return v === 'tanker' ? 'tanker' : v === 'cruise' ? 'cruise ship' : 'ship';
+}
 
 /** A neutral merchant ship (has a vessel class). */
 export function isCivilVessel(e: AnyEntity | null | undefined): e is GroundTargetEntity {

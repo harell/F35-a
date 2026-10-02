@@ -204,6 +204,8 @@ export interface GroundSpawn {
   health?: number;
   /** Civil merchant ship class (type 'ship'): hull size and hit points from VESSEL_DATA. */
   vessel?: VesselClass;
+  /** Bomb / missile hits a civil ship takes before it sinks (default 1; GroundTargetEntity.hitsToSink). Neutral ships only: ignored on any other team. */
+  hitsToSink?: number;
   /** Riding at anchor (civil ship, no path): the visual swings about the bow. */
   anchored?: boolean;
   /** Drawn by the world scenery (GroundTargetEntity.scenery): no entity model. */

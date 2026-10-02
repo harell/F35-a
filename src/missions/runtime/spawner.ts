@@ -358,6 +358,8 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
     loopPath: def.loop,
     health: def.health,
     scenery: def.scenery,
+    vessel: def.vessel,
+    hitsToSink: def.hitsToSink,
   });
   if (g) {
     if (g.spawnedAt < 0) g.spawnedAt = s.world.time;

@@ -84,8 +84,9 @@ export type GroundTargetType =
 /**
  * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):
  * picks the model, hull size and callouts. Military ships (corvettes, landing ships) have none.
+ * 'tanker' is a ~250 m crude carrier (the escort mission's protected ship).
  */
-export type VesselClass = 'container' | 'cruise';
+export type VesselClass = 'container' | 'cruise' | 'tanker';
 
 export type WeaponId =
   | 'gun' // GAU-22/A 25 mm, 180 rds

@@ -261,7 +261,11 @@ class SimWorldImpl implements SimWorld {
       radius: vessel ? vessel.length / 2 : data.radius,
       health: spec.health ?? vessel?.health ?? data.health,
     });
-    if (vessel) e.vessel = spec.vessel!;
+    if (vessel) {
+      e.vessel = spec.vessel!;
+      // only a neutral (civil) ship takes several hits: Damage applies the rule to civil ships only
+      if (spec.team === 'neutral') e.hitsToSink = Math.max(1, Math.round(spec.hitsToSink ?? 1));
+    }
     e.anchored = !!spec.anchored && !spec.path;
     e.scenery = !!spec.scenery;
     e.emitter = data.emitter;

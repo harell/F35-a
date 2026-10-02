@@ -498,6 +498,13 @@ export class GroundTargetEntity implements Entity {
    * capsule along the heading (sim/civil/vessels.ts), and one bomb / missile hit sinks it.
    */
   vessel: VesselClass | null = null;
+  /**
+   * Bomb / missile hits a civil ship takes before it sinks (#19's rule is 1). Only a mission can
+   * raise it (GroundTargetDef.hitsToSink: the escorted tanker takes 2); Damage counts `hits`.
+   */
+  hitsToSink = 1;
+  /** Hits taken so far (bombs, missiles, a suicide boat's ram; civil ship with hitsToSink > 1): burning and slower once hit. */
+  hits = 0;
   /** Riding at anchor (civil ship): the visual swings slowly about the bow. */
   anchored = false;
   /** Sim time it was destroyed (-1 = alive): paces the sinking / collapse animation. */
