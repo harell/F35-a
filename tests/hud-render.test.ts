@@ -1009,3 +1009,45 @@ describe('engaged marker: own missile in flight at a contact', () => {
     expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
   });
 });
+
+describe('gun closure cue', () => {
+  const kt = 0.514444;
+  /** The gun cue's Vc (the altitude column has its own, at the right): the leftmost one, if two. */
+  const gunVc = (texts: TextRec[]) => {
+    const all = find(texts, /^Vc \d+$/);
+    return all.length < 2 ? null : all.reduce((a, b) => (b.x < a.x ? b : a));
+  };
+  it('shows Vc (knots) by the gun cue inside 3 km of an air target, OVERSHOOT when closing > 150 kt inside 1.5 km', () => {
+    const r = rig('gun', 'hud');
+    const p = r.mock.player;
+    const mig = r.mock.world.getEntity(p.radar.lockedId)!;
+    expect(mig.kind).toBe('aircraft');
+    const fwd = p.velocity.clone().normalize();
+    // a slow drone ahead, 100 kt closure: Vc only
+    mig.velocity.copy(p.velocity).addScaledVector(fwd, -100 * kt);
+    let texts = r.run(0.1);
+    const vc = gunVc(texts)!;
+    expect(vc).not.toBeNull();
+    expect(Math.abs(Number(vc.text.slice(3)) - 100)).toBeLessThanOrEqual(15);
+    expect(vc.x).toBeLessThan(r.W * 0.75);
+    expect(find(texts, 'OVERSHOOT').length).toBe(0);
+    for (const t of texts) if (t !== vc) expect(overlaps(textBox(vc), textBox(t)), `Vc over "${t.text}"`).toBe(false);
+    // 220 kt closure inside 1.5 km: OVERSHOOT, clear of every other text
+    mig.velocity.copy(p.velocity).addScaledVector(fwd, -220 * kt);
+    texts = r.run(0.1);
+    const os = one(texts, 'OVERSHOOT');
+    expect(Number(gunVc(texts)!.text.slice(3))).toBeGreaterThan(150);
+    for (const t of texts) if (t !== os) expect(overlaps(textBox(os), textBox(t)), `OVERSHOOT over "${t.text}"`).toBe(false);
+    // beyond 3 km: no closure cue (the column's Vc only)
+    mig.position.copy(p.position).addScaledVector(fwd, 4000);
+    texts = r.run(0.1);
+    expect(find(texts, /^Vc \d+$/).length).toBe(1);
+    expect(find(texts, 'OVERSHOOT').length).toBe(0);
+  });
+
+  it('is gun-only', () => {
+    const r = rig('gun', 'hud');
+    r.mock.player.selectedWeapon = 'aim120';
+    expect(find(r.run(0.1), /^Vc \d+$/).length).toBe(1);
+  });
+});
