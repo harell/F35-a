@@ -1,6 +1,6 @@
 /**
  * F35-A UI lab (dev only, served at /labs/ui-lab.html): renders one screen with mock data for visual checks.
- *   ?screen=splash|main|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|loading|rotate|toast|controls
+ *   ?screen=splash|main|campaigns|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|loading|rotate|toast|controls
  *   &mission=c01          mission for briefing / pause
  *   &tab=obj|hangar       briefing tab to open
  *   &stab=controls|audio|display  settings tab
@@ -10,7 +10,7 @@
  */
 import type { CampaignProgress, MissionResult, MissionRunnerApi } from '../../core/contracts';
 import { DEFAULT_SETTINGS } from '../../core/data';
-import { CAMPAIGN, TRAINING, missionById } from '../../missions';
+import { CAMPAIGN, CAMPAIGNS, SOUTHERN_CROSS, TRAINING, missionById } from '../../missions';
 import { createInput } from '../../input/Input';
 import { createUi } from '../Ui';
 
@@ -84,8 +84,11 @@ async function run(): Promise<void> {
     case 'main':
       out(await ui.showMainMenu());
       break;
+    case 'campaigns':
+      out((await ui.showCampaigns(CAMPAIGNS, progress))?.id ?? null);
+      break;
     case 'campaign':
-      out((await ui.showCampaign(CAMPAIGN, progress))?.id ?? null);
+      out((await ui.showCampaign(SOUTHERN_CROSS, progress))?.id ?? null);
       break;
     case 'training':
       out((await ui.showTraining(TRAINING, progress))?.id ?? null);

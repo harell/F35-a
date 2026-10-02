@@ -297,6 +297,24 @@ export interface MissionDef {
   script: MissionScript;
 }
 
+/** Campaign ids: Operation Southern Cross, and the IRGC campaign over Auckland (epic #72). */
+export type CampaignId = 'southern_cross' | 'irgc';
+
+/**
+ * A campaign: an ordered chain of missions with its own unlocks and ending. Each campaign's first
+ * mission is always unlocked and winning one unlocks the next in the same campaign. Mission ids are
+ * unique across every campaign and training, so progress (keyed by mission id) never mixes them up.
+ */
+export interface CampaignDef {
+  id: CampaignId;
+  /** "Operation Southern Cross" */
+  name: string;
+  /** One line for the campaign picker. */
+  description: string;
+  /** In order (MissionDef.index is the mission number within this campaign). Empty = coming soon. */
+  missions: MissionDef[];
+}
+
 export interface ObjectiveStatus {
   id: string;
   label: string;
@@ -327,7 +345,7 @@ export interface MissionResult {
   tips?: string[];
   /** Awards earned this sortie (e.g. 'Distinguished Flying Cross', 'Bridge Runner'). */
   medals?: { id: string; name: string; description: string }[];
-  /** Final campaign mission completed (show the campaign ending). */
+  /** Final mission of a campaign completed (show that campaign's ending: the mission id names it). */
   campaignComplete?: boolean;
 }
 
@@ -367,6 +385,10 @@ export interface InstantActionOptions {
   enemyCount: number;
 }
 
+/**
+ * The player's progress over every campaign and training, keyed by mission id (ids are unique
+ * across campaigns, so one campaign's unlocks never touch another's).
+ */
 export interface CampaignProgress {
   /** Mission ids the player can fly. */
   unlocked: string[];
@@ -385,8 +407,10 @@ export interface UiApi {
   showLoading(fraction: number, label: string): void;
   hideLoading(): void;
   showMainMenu(): Promise<MainMenuChoice>;
-  /** Campaign mission list/map. Resolves the chosen mission or null (back). */
-  showCampaign(missions: MissionDef[], progress: CampaignProgress): Promise<MissionDef | null>;
+  /** Campaign picker (one card per campaign). Resolves the chosen campaign or null (back). */
+  showCampaigns(campaigns: CampaignDef[], progress: CampaignProgress): Promise<CampaignDef | null>;
+  /** One campaign's mission list/map. Resolves the chosen mission or null (back). */
+  showCampaign(campaign: CampaignDef, progress: CampaignProgress): Promise<MissionDef | null>;
   showTraining(missions: MissionDef[], progress: CampaignProgress): Promise<MissionDef | null>;
   showInstantAction(): Promise<InstantActionOptions | null>;
   /** Briefing + intel map + loadout (hangar) selection. Null = back. */

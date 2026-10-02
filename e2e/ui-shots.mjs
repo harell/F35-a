@@ -25,6 +25,7 @@ const devices = args.device === 'all' || !args.device ? ['phone', 'se', 'desktop
 const SCREENS = [
   ['splash', 'screen=splash', 1800],
   ['main', 'screen=main', 1200],
+  ['campaigns', 'screen=campaigns', 1000],
   ['campaign', 'screen=campaign', 1200],
   ['training', 'screen=training', 1000],
   ['instant', 'screen=instant', 1000],

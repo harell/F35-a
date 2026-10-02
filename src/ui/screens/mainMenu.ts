@@ -11,6 +11,7 @@ import { logoBlock } from '../art/logo';
 import { basicTrainingDone, careerRank, dismissOnboarding, isFirstLaunch } from '../career';
 import { escapeHtml, h } from '../dom';
 import type { UiHost } from '../host';
+import { CAMPAIGNS } from '../../missions';
 import { stagger } from '../widgets';
 import { showServiceRecord } from './serviceRecord';
 
@@ -81,6 +82,8 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
     const list = h('nav', { class: 'mm-list', attrs: { 'aria-label': 'Main menu' } });
     let first: HTMLButtonElement | null = null;
     for (const it of ITEMS) {
+      // the Campaign line names every campaign (the campaign picker follows)
+      const sub = it.id === 'campaign' && CAMPAIGNS.length > 1 ? CAMPAIGNS.map((c) => c.name).join(' · ') : it.sub;
       const recBadge = it.id === 'training' && needsTraining ? '<span class="badge mm-recb">RECOMMENDED</span>' : '';
       const b = h('button', {
         class: `mm-item ${it.primary ? 'is-primary' : ''} ${recBadge ? 'is-rec' : ''}`,
@@ -88,7 +91,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
         dataset: { id: it.id },
         html:
           `<span class="mm-ico">${icon(it.icon)}</span>` +
-          `<span class="mm-txt"><span class="mm-t">${it.title}${recBadge}</span><span class="mm-s">${it.sub}</span></span>` +
+          `<span class="mm-txt"><span class="mm-t">${it.title}${recBadge}</span><span class="mm-s">${escapeHtml(sub)}</span></span>` +
           `<span class="mm-go">${icon('next')}</span>`,
       });
       b.addEventListener('click', () => finish(it.id));

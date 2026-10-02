@@ -1,7 +1,7 @@
 /**
  * F35-A UI — pure formatting / presentation helpers (unit-tested in tests/ui-format.test.ts).
  */
-import type { CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
+import type { CampaignDef, CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
 import type { LoadoutDef } from '../core/data';
 
 /** 367.4 s → "6:07"; ≥ 1 h → "1:02:03". */
@@ -76,6 +76,12 @@ export function missionState(m: MissionDef, progress: CampaignProgress): Mission
   if (progress.best[m.id]) return 'done';
   if (m.kind !== 'campaign') return 'open';
   return progress.unlocked.includes(m.id) ? 'open' : 'locked';
+}
+
+/** A campaign picker card: missions won of the total; `soon` while the campaign has no missions yet. */
+export function campaignStatus(c: CampaignDef, progress: CampaignProgress): { done: number; total: number; soon: boolean } {
+  const done = c.missions.filter((m) => progress.best[m.id]).length;
+  return { done, total: c.missions.length, soon: c.missions.length === 0 };
 }
 
 /** Index of the mission a returning player most likely wants (first unlocked but not yet completed). */

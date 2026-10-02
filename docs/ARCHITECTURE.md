@@ -32,6 +32,10 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 >   (terrain masking behind Rangitoto), an escort of a friendly strike package to Waiheke, a night defence of the CBD, and
 >   a Su-57 finale over the Gulf. Optional bonus: flying under the Harbour Bridge (43 m clearance) earns a score bonus and
 >   a HUD message.
+> * **Second campaign, the IRGC (epic #72):** `CAMPAIGNS` in `src/missions/index.ts` lists Operation Southern Cross and the
+>   IRGC campaign (`src/missions/content/irgc.ts`, mission ids `g01`, `g02`, …). Each campaign has its own unlock chain
+>   (its first mission is always unlocked, a win unlocks the next one of the same campaign), its own ending screen and a
+>   card in the campaign picker. Progress stays keyed by mission id, so mission ids must be unique across campaigns.
 > * Terrain heights: sea level 0, isthmus 20–80 m, volcanic cones up to 196 m (Mt Eden), Rangitoto 260 m, Waitākere
 >   ≤474 m, Hunua ≤688 m at the SE edge. Aircraft spawn altitudes can be low: a 1,000–3,000 m CAP is fine.
 
@@ -84,7 +88,7 @@ No per-frame allocations in hot loops: reuse module-level scratch `Vector3`/`Qua
 | HMD symbology + 3D cockpit + PCD | HUD | `src/hud/**`, `tests/hud-*.test.ts` | `createHud`, `createCockpit` |
 | Audio (synth + voice) | AUDIO | `src/audio/**`, `tools/gen-voices.sh`, `public/audio/**` | `createAudio` |
 | Touch/tilt/keyboard/gamepad input, menus, PWA | UI | `src/input/**`, `src/ui/**`, `public/manifest.webmanifest`, `public/sw.js`, `public/icons/**`, `tools/gen-icons.mjs` | `createInput`, `createUi` |
-| Missions, campaign, scoring | MISSIONS | `src/missions/**`, `tests/missions-*.test.ts` | `CAMPAIGN`, `TRAINING`, `buildInstantMission`, `createMissionRunner`, progress fns, `terrainPadsFor` |
+| Missions, campaigns, scoring | MISSIONS | `src/missions/**`, `tests/missions-*.test.ts` | `CAMPAIGNS` (`CAMPAIGN` = Southern Cross's missions), `TRAINING`, `buildInstantMission`, `createMissionRunner`, progress fns, `terrainPadsFor` |
 
 ## Protected landmarks (the Sky Tower)
 

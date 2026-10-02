@@ -478,12 +478,12 @@ describe('i1: progress safety valve (failure streak, skip)', () => {
     kills: { air: 0, sam: 0, ground: 0 }, friendlyLosses: 0, shotsFired: 0, hits: 0, accuracy: 0, damageTaken: 0, objectives: [],
   });
   it('counts consecutive failures, resets on success, survives save/load; skip unlocks the next mission', () => {
-    let p = defaultProgress(CAMPAIGN, TRAINING);
+    let p = defaultProgress([CAMPAIGN], TRAINING);
     p = recordResult(p, res('c09', false));
     p = recordResult(p, res('c09', false));
     expect(failStreak(p, 'c09')).toBe(2);
     expect(p.unlocked.includes('c10')).toBe(false);
-    const reloaded = sanitizeProgress(JSON.parse(JSON.stringify(p)), CAMPAIGN, TRAINING);
+    const reloaded = sanitizeProgress(JSON.parse(JSON.stringify(p)), [CAMPAIGN], TRAINING);
     expect(failStreak(reloaded, 'c09')).toBe(2);
     const skipped = skipMission(reloaded, 'c09');
     expect(skipped.unlocked.includes('c10')).toBe(true);

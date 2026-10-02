@@ -141,9 +141,9 @@ describe('Sky Tower in Auckland sorties', () => {
 });
 
 describe('Sky Tower: never destroyed for good (issue #75)', () => {
-  const fresh = () => defaultProgress(CAMPAIGN, TRAINING);
+  const fresh = () => defaultProgress([CAMPAIGN], TRAINING);
   /** What Game does between sorties: fold the result into the save, write it, read it back. */
-  const saveAndLoad = (p: CampaignProgress) => sanitizeProgress(JSON.parse(JSON.stringify(p)), CAMPAIGN, TRAINING);
+  const saveAndLoad = (p: CampaignProgress) => sanitizeProgress(JSON.parse(JSON.stringify(p)), [CAMPAIGN], TRAINING);
 
   afterEach(() => vi.unstubAllGlobals());
 
@@ -174,7 +174,7 @@ describe('Sky Tower: never destroyed for good (issue #75)', () => {
     const old = { ...fresh(), skyTowerDown: { fallHeading: 1.25 } } as CampaignProgress;
     const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(old)]]);
     vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) });
-    const loaded = loadProgressFrom(CAMPAIGN, TRAINING);
+    const loaded = loadProgressFrom([CAMPAIGN], TRAINING);
     expect(loaded).not.toHaveProperty('skyTowerDown');
     expect(loaded.unlocked).toContain('c01');
     // results and skips folded into an unsanitised old object don't carry it on either

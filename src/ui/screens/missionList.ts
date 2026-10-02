@@ -1,8 +1,9 @@
 /**
- * F35-A UI — campaign / training mission select: theatre sections with horizontally scrolling
+ * F35-A UI — one campaign's / training mission select: theatre sections with horizontally scrolling
  * mission cards (number, title, subtitle, time/weather/theatre, lock state, best grade + difficulty).
+ * The campaign itself is picked first (campaignSelect.ts).
  */
-import type { CampaignProgress, MissionDef } from '../../core/contracts';
+import type { CampaignDef, CampaignProgress, MissionDef } from '../../core/contracts';
 import { DIFFICULTIES, THEATER_INFO, TIME_OF_DAY_INFO } from '../../core/data';
 import type { TheaterId } from '../../core/types';
 import { icon } from '../art/icons';
@@ -54,6 +55,7 @@ function card(m: MissionDef, progress: CampaignProgress, onPick: (m: MissionDef,
 function listScreen(
   host: UiHost,
   kind: 'campaign' | 'training',
+  title: string,
   missions: MissionDef[],
   progress: CampaignProgress,
   toast: (t: string) => void,
@@ -76,7 +78,7 @@ function listScreen(
     el.appendChild(
       screenHeader({
         kicker: kind === 'campaign' ? 'Campaign' : 'Flight school',
-        title: kind === 'campaign' ? 'Operation Southern Cross' : 'Training',
+        title,
         back: () => finish(null),
         right: [stat],
       }),
@@ -156,7 +158,7 @@ function nextTraining(progress: CampaignProgress): MissionDef | null {
   return id ? findMission(id) : null;
 }
 
-export const showCampaign = (host: UiHost, missions: MissionDef[], progress: CampaignProgress, toast: (t: string) => void) =>
-  listScreen(host, 'campaign', missions, progress, toast, () => nextTraining(progress));
+export const showCampaign = (host: UiHost, campaign: CampaignDef, progress: CampaignProgress, toast: (t: string) => void) =>
+  listScreen(host, 'campaign', campaign.name, campaign.missions, progress, toast, () => nextTraining(progress));
 export const showTraining = (host: UiHost, missions: MissionDef[], progress: CampaignProgress, toast: (t: string) => void) =>
-  listScreen(host, 'training', missions, progress, toast);
+  listScreen(host, 'training', 'Training', missions, progress, toast);

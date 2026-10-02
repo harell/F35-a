@@ -26,6 +26,27 @@ export interface ProgressExtras {
 }
 type Ext = CampaignProgress & ProgressExtras;
 
+/**
+ * Ordered mission lists, one per campaign (src/missions/index.ts CAMPAIGNS). Each campaign's first
+ * mission is always unlocked, and completing (or skipping) a mission unlocks the next one of the
+ * same campaign. Career totals are shared by every campaign.
+ *
+ * Everything is keyed by mission id, and ids are unique across campaigns and training, so unlocks,
+ * skips and fail streaks never leak from one campaign into another, and the save format is the
+ * one-campaign format unchanged: a save from before the second campaign loads as it is, with that
+ * campaign's first mission added to `unlocked`.
+ */
+export type CampaignChains = readonly (readonly MissionDef[])[];
+
+/** The mission after `missionId` in its own campaign (null for a campaign's last mission or a non-campaign id). */
+function nextInCampaign(campaigns: CampaignChains, missionId: string): MissionDef | null {
+  for (const c of campaigns) {
+    const i = c.findIndex((m) => m.id === missionId);
+    if (i >= 0) return i + 1 < c.length ? c[i + 1] : null;
+  }
+  return null;
+}
+
 /** Consecutive failed attempts at a mission (0 after a success). */
 export function failStreak(p: CampaignProgress, missionId: string): number {
   return (p as Ext).failStreak?.[missionId] ?? 0;
@@ -37,14 +58,14 @@ export function wasSkipped(p: CampaignProgress, missionId: string): boolean {
 }
 
 /**
- * Safety valve for a mission the player keeps failing: unlock the next campaign mission without
- * a win (returns a new object; the skipped mission keeps no grade).
+ * Safety valve for a mission the player keeps failing: unlock the next mission of its campaign
+ * without a win (returns a new object; the skipped mission keeps no grade).
  */
-export function skipMission(p: CampaignProgress, missionId: string, campaign: MissionDef[]): CampaignProgress {
+export function skipMission(p: CampaignProgress, missionId: string, campaigns: CampaignChains): CampaignProgress {
   const src = p as Ext;
   const next: Ext = { unlocked: [...p.unlocked], best: { ...p.best }, totals: { ...p.totals }, failStreak: { ...(src.failStreak ?? {}) }, skipped: [...(src.skipped ?? [])] };
-  const i = campaign.findIndex((m) => m.id === missionId);
-  if (i >= 0 && i + 1 < campaign.length && !next.unlocked.includes(campaign[i + 1].id)) next.unlocked.push(campaign[i + 1].id);
+  const after = nextInCampaign(campaigns, missionId);
+  if (after && !next.unlocked.includes(after.id)) next.unlocked.push(after.id);
   if (!next.skipped!.includes(missionId)) next.skipped!.push(missionId);
   return next;
 }
@@ -57,16 +78,15 @@ function storage(): Storage | null {
   }
 }
 
-/** Fresh progress for a campaign/training list. */
-export function defaultProgress(campaign: MissionDef[], training: MissionDef[]): CampaignProgress {
-  const unlocked = [...training.map((m) => m.id)];
-  if (campaign[0]) unlocked.unshift(campaign[0].id);
+/** Fresh progress: every campaign's first mission and all training unlocked. */
+export function defaultProgress(campaigns: CampaignChains, training: readonly MissionDef[]): CampaignProgress {
+  const unlocked = [...campaigns.flatMap((c) => (c[0] ? [c[0].id] : [])), ...training.map((m) => m.id)];
   return { unlocked, best: {}, totals: { missions: 0, airKills: 0, groundKills: 0, deaths: 0 } };
 }
 
 /** Ensure the always-available missions are unlocked and the shape is sane. */
-export function sanitizeProgress(raw: unknown, campaign: MissionDef[], training: MissionDef[]): CampaignProgress {
-  const base = defaultProgress(campaign, training);
+export function sanitizeProgress(raw: unknown, campaigns: CampaignChains, training: readonly MissionDef[]): CampaignProgress {
+  const base = defaultProgress(campaigns, training);
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Partial<CampaignProgress>;
   const unlocked = new Set<string>(base.unlocked);
@@ -94,14 +114,14 @@ export function sanitizeProgress(raw: unknown, campaign: MissionDef[], training:
   return out;
 }
 
-export function loadProgressFrom(campaign: MissionDef[], training: MissionDef[]): CampaignProgress {
+export function loadProgressFrom(campaigns: CampaignChains, training: readonly MissionDef[]): CampaignProgress {
   const st = storage();
-  if (!st) return defaultProgress(campaign, training);
+  if (!st) return defaultProgress(campaigns, training);
   try {
     const txt = st.getItem(PROGRESS_KEY);
-    return sanitizeProgress(txt ? JSON.parse(txt) : null, campaign, training);
+    return sanitizeProgress(txt ? JSON.parse(txt) : null, campaigns, training);
   } catch {
-    return defaultProgress(campaign, training);
+    return defaultProgress(campaigns, training);
   }
 }
 
@@ -117,9 +137,9 @@ export function saveProgressTo(p: CampaignProgress): void {
 
 /**
  * Fold a mission result into the progress (returns a new object; the input is not mutated).
- * `campaign` is the ordered campaign list used for unlocking.
+ * `campaigns` are the ordered campaign lists: a win unlocks the next mission of its own campaign.
  */
-export function applyResult(p: CampaignProgress, r: MissionResult, campaign: MissionDef[]): CampaignProgress {
+export function applyResult(p: CampaignProgress, r: MissionResult, campaigns: CampaignChains): CampaignProgress {
   const src = p as Ext;
   const next: Ext = {
     unlocked: [...p.unlocked],
@@ -144,11 +164,8 @@ export function applyResult(p: CampaignProgress, r: MissionResult, campaign: Mis
   }
 
   if (r.success) {
-    const i = campaign.findIndex((m) => m.id === r.missionId);
-    if (i >= 0 && i + 1 < campaign.length) {
-      const id = campaign[i + 1].id;
-      if (!next.unlocked.includes(id)) next.unlocked.push(id);
-    }
+    const after = nextInCampaign(campaigns, r.missionId);
+    if (after && !next.unlocked.includes(after.id)) next.unlocked.push(after.id);
   }
   return next;
 }
