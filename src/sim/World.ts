@@ -5,7 +5,7 @@
  * collisions, ground movers and the player's ICAWS warnings. Step order (fixed 60 Hz):
  *
  *   AI brains (20 Hz, staggered) → flight model (120 Hz sub-steps) → combat.update →
- *   ground movers → collisions (+ landmark collapses) → damage over time → warnings → cleanup
+ *   ground movers → fast boats → collisions (+ landmark collapses) → damage over time → warnings → cleanup
  */
 import { Vector3 } from 'three';
 import type { EventBus } from '../core/events';
@@ -41,6 +41,10 @@ import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
 import { stepOneWay } from './drone/oneWay';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
+import { BOAT_SPEED, makeBoat, stepBoats } from './boats';
+
+/** Ground target types that are IRGC Navy fast boats (sailed by sim/boats.ts). */
+const BOAT_TYPES = new Set<GroundTargetType>(['suicide_boat', 'missile_boat']);
 
 /** Size of the pooled bullet / shell array. */
 export const PROJECTILE_POOL_SIZE = 800;
@@ -53,7 +57,7 @@ const WRECK_MAX_TIME = 120;
 /** Aircraft never spawn lower than this above the surface (m). */
 const MIN_SPAWN_AGL = 60;
 /** Default driving speeds (m/s) for ground movers without an explicit speed. */
-const DEFAULT_MOVER_SPEED: Partial<Record<GroundTargetType, number>> = { truck: 12, tank: 7, ship: 8 };
+const DEFAULT_MOVER_SPEED: Partial<Record<GroundTargetType, number>> = { truck: 12, tank: 7, ship: 8, suicide_boat: BOAT_SPEED, missile_boat: BOAT_SPEED };
 const GROUND_NAMES: Record<GroundTargetType, string> = {
   ewr: 'EW Radar',
   bunker: 'Command Bunker',
@@ -65,6 +69,8 @@ const GROUND_NAMES: Record<GroundTargetType, string> = {
   ship: 'Corvette',
   factory: 'Factory',
   bridge: 'Bridge',
+  suicide_boat: 'Suicide Boat',
+  missile_boat: 'Peykaap II',
 };
 
 function createProjectile(): Projectile {
@@ -239,8 +245,12 @@ class SimWorldImpl implements SimWorld {
     e.health = e.maxHealth = data.health;
     const x = spec.position.x;
     const z = spec.position.z;
-    e.position.set(x, this.terrain.surfaceHeightAt(x, z), z);
     const heading = spec.heading ?? 0;
+    if (spec.type === 'ad_boat') {
+      // a moving SAM on a fast boat: on the sea surface, sailed by sim/boats.ts
+      e.position.set(x, 0, z);
+      makeBoat(e, { ...spec.boat, heading });
+    } else e.position.set(x, this.terrain.surfaceHeightAt(x, z), z);
     setQuatFromHPR(e.quaternion, heading, 0, 0);
     e.radarAzimuth = heading;
     e.launcherAzimuth = heading;
@@ -289,6 +299,12 @@ class SimWorldImpl implements SimWorld {
       if (Math.hypot(t.x - x, t.z - z) > 1) heading = Math.atan2(t.x - x, -(t.z - z));
     }
     setQuatFromHPR(e.quaternion, heading, 0, 0);
+    if (BOAT_TYPES.has(spec.type)) {
+      // a fast boat: sim/boats.ts sails it (its route included), not the ground-mover path
+      makeBoat(e, { ...spec.boat, path: spec.boat?.path ?? e.path, loop: spec.boat?.loop ?? e.loopPath, speed: spec.boat?.speed ?? spec.speed ?? BOAT_SPEED, heading });
+      e.speed = e.boat!.speed;
+      e.path = null;
+    }
     this.ground.push(e);
     this.byId.set(e.id, e);
     this.hostileDirty = true;
@@ -374,8 +390,9 @@ class SimWorldImpl implements SimWorld {
       this.reportError('combat', err);
     }
 
-    // 4. Ground movers
+    // 4. Ground movers, then the IRGC Navy fast boats (chase, strike countdown, moving SAMs, Kowsars)
     this.updateMovers(dt);
+    stepBoats(this, dt);
 
     // 5. Collisions (terrain / sea, mid-air, landmarks) and landmark collapses
     this.collisions.update(aircraft, dt, this.landmarks);

@@ -52,6 +52,7 @@ export const NATO_SAM: Record<SamType, string> = {
   sa15: 'GAUNTLET',
   sa18: 'GROUSE',
   zsu23: 'SHILKA',
+  ad_boat: '', // no reporting name: the PiP shows "AD BOAT" once
 };
 
 export type PipTone = 'main' | 'warn' | 'danger' | 'dim' | 'good' | 'civil';

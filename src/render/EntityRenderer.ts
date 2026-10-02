@@ -23,9 +23,18 @@ import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
 import { WakeBatch } from './effects/Wakes';
 import { HarbourFerries } from './traffic/HarbourFerries';
 import { shipDims } from './visuals/shipMotion';
+import { BOAT_DIMS, type BoatKind } from './models/boats';
 
 const _p = new Vector3();
 const _fwd = new Vector3();
+
+/** Foam wake of a moving IRGC fast boat (suicide, missile or air-defence boat). */
+function boatWake(wakes: WakeBatch, kind: BoatKind, pos: Vector3, vel: Vector3): void {
+  const speed = Math.hypot(vel.x, vel.z);
+  if (speed <= 0.5) return;
+  const d = BOAT_DIMS[kind];
+  wakes.addHull(pos.x, pos.z, Math.atan2(vel.x, -vel.z), d.length, d.beam, speed);
+}
 /** Ship nav lights are drawn out to this range (m); cabin / deck lights closer in. */
 const SHIP_LIGHTS_FAR = 16_000;
 const SHIP_DECK_LIGHTS_FAR = 7_000;
@@ -241,7 +250,9 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
           sams.set(s.id, tr);
         }
         tr.seen = frame;
-        tr.v.update(s, t, dt, cam, s.type === 'sa10' ? groundFar * 1.4 : groundFar);
+        const vis = tr.v.update(s, t, dt, cam, s.type === 'sa10' ? groundFar * 1.4 : groundFar);
+        // the air-defence boat (a moving SAM) leaves a wake like any boat
+        if (wakes && vis && s.alive && s.boat) boatWake(wakes, 'ad_boat', s.position, s.velocity);
       }
       sams.forEach(sweepSam);
 
@@ -257,7 +268,8 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         }
         tr.seen = frame;
         const vis = tr.v.update(g, t, dt, cam, groundFar);
-        if (wakes && vis && g.alive && g.type === 'ship') {
+        if (wakes && vis && g.alive && g.boat) boatWake(wakes, g.type === 'missile_boat' ? 'missile_boat' : 'suicide_boat', g.position, g.velocity);
+        else if (wakes && vis && g.alive && g.type === 'ship') {
           const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
           if (speed > 0.5) {
             _fwd.set(0, 0, -1).applyQuaternion(g.quaternion);

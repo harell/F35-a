@@ -1,6 +1,6 @@
 /**
  * Ground target prototypes: EWR (rotating array on a mast), command bunker, fuel farm, hardened
- * aircraft shelter, parked jet, truck, tank, corvette, factory, bridge, plus the civil
+ * aircraft shelter, parked jet, truck, tank, corvette, factory, bridge, IRGC fast boats, plus the civil
  * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
@@ -17,6 +17,7 @@ import { capsuleRing } from './aircraft/parts';
 import { getAircraftPrototype } from './aircraft';
 import { getMaterial } from './materials';
 import { SHIP_DIMS } from '../visuals/shipMotion';
+import { missileBoat, suicideBoat } from './boats';
 import { PALETTES, building, mast, meshFrom, nodeFrom, panel, sawtoothHall, tank, trackedChassis, wheeledChassis, type Palette, type PaletteId } from './vehicles';
 
 export type WreckStyle = 'vehicle' | 'building' | 'bridge' | 'ship' | 'aircraft';
@@ -255,6 +256,14 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
       wreck = 'bridge';
       radius = 40;
       farScale = 2.2;
+      break;
+    }
+    case 'suicide_boat':
+    case 'missile_boat': {
+      // IRGC Navy fast boats (models/boats.ts); a killed one stays afloat, burnt out
+      statics.push(...(type === 'suicide_boat' ? suicideBoat() : missileBoat()));
+      radius = 9;
+      farScale = 1.2;
       break;
     }
   }

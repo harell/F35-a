@@ -39,6 +39,7 @@ export const SAM_LABEL: Record<SamType, string> = {
   sa15: 'SA-15',
   sa18: 'SA-18',
   zsu23: 'ZSU-23',
+  ad_boat: 'AD BOAT',
 };
 
 export const GROUND_LABEL: Record<GroundTargetType, string> = {
@@ -52,6 +53,8 @@ export const GROUND_LABEL: Record<GroundTargetType, string> = {
   ship: 'SHIP',
   factory: 'FACTORY',
   bridge: 'BRIDGE',
+  suicide_boat: 'SUICIDE BOAT',
+  missile_boat: 'MSL BOAT',
 };
 
 /** HMD weapon names ("AMRAAM 4", "9X 2", "GUN 180", "JDAM 2"). */

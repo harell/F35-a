@@ -19,6 +19,7 @@ export const SAM_SITE_DATA: Record<SamType, SamSiteData> = {
   sa15: { radius: 10, health: 90, missiles: 8, explosion: 'large' },
   sa18: { radius: 6, health: 30, missiles: 4, explosion: 'large' },
   zsu23: { radius: 8, health: 60, missiles: 4, explosion: 'large' }, // "missiles" = ammo bursts
+  ad_boat: { radius: 11, health: 50, missiles: 4, explosion: 'large' }, // ~22 m fast boat, a few gun hits
 };
 
 export interface GroundTargetData {
@@ -42,6 +43,9 @@ export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
   ship: { radius: 60, health: 400, explosion: 'huge', emitter: false, naval: true },
   factory: { radius: 40, health: 300, explosion: 'huge', emitter: false, naval: false },
   bridge: { radius: 40, health: 300, explosion: 'huge', emitter: false, naval: false },
+  // IRGC Navy fast boats (sim/boats.ts): small, unarmoured, a short gun burst sinks one
+  suicide_boat: { radius: 8, health: 40, explosion: 'huge', emitter: false, naval: true }, // ~16 m, packed with explosive
+  missile_boat: { radius: 9, health: 50, explosion: 'large', emitter: false, naval: true }, // Peykaap II, ~17 m
 };
 
 export interface VesselData {

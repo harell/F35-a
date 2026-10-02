@@ -17,6 +17,7 @@ const SAM_HUD: Record<SamType, string> = {
   sa15: 'SA-15',
   sa18: 'MANPADS TEAM',
   zsu23: 'SHILKA',
+  ad_boat: 'AD BOAT',
 };
 
 const GROUND_HUD: Record<GroundTargetType, string> = {
@@ -30,6 +31,8 @@ const GROUND_HUD: Record<GroundTargetType, string> = {
   ship: 'SHIP',
   factory: 'DEPOT',
   bridge: 'BRIDGE',
+  suicide_boat: 'SUICIDE BOAT',
+  missile_boat: 'MISSILE BOAT',
 };
 
 export function samHudName(type: SamType): string {

@@ -115,10 +115,16 @@ export function missSigma(ctx: CombatCtx, m: CombatMissile, ac: AircraftEntity, 
 
 /**
  * Step the end-game model of every round `site` is guiding (runs before weapons/flight.ts moves
- * the missiles this step). `chaff` = the site radar's chaff bookkeeping.
+ * the missiles this step). `chaff` = the site radar's chaff bookkeeping. `list` = the rounds to step
+ * (default the radar-guided ones; the AD boat's SA-18 rounds are kept apart, SamSystem manpads).
  */
-export function updateEndgame(ctx: CombatCtx, site: SamSiteEntity, chaff: { chaffExposure: number; lastChaffRoll: number }, dt: number): void {
-  const list = site.guidedMissiles;
+export function updateEndgame(
+  ctx: CombatCtx,
+  site: SamSiteEntity,
+  chaff: { chaffExposure: number; lastChaffRoll: number },
+  dt: number,
+  list: number[] = site.guidedMissiles,
+): void {
   for (let i = 0; i < list.length; i++) {
     const m = ctx.world.getEntity(list[i]);
     if (!m || !m.alive || m.kind !== 'missile' || !isCombatMissile(m)) continue;

@@ -399,6 +399,10 @@ export function spawnSamSite(s: MissionState, def: SamSiteDef): void {
     groupId: def.group,
     emcon: !!def.emcon,
     known: def.known ?? !def.emcon,
+    boat:
+      def.type === 'ad_boat'
+        ? { path: def.path?.map((p) => new Vector3(p.x, 0, p.z)), speed: def.speed, loop: def.loop, escortGroup: def.escort }
+        : undefined,
   });
   if (g) {
     if (g.spawnedAt < 0) g.spawnedAt = s.world.time;
@@ -425,6 +429,14 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
     scenery: def.scenery,
     vessel: def.vessel,
     hitsToSink: def.hitsToSink,
+    boat:
+      def.chase || def.strike
+        ? {
+            // groups, resolved by sim/boats.ts each step the boat has no live target (spawn order doesn't matter)
+            chaseGroup: def.chase,
+            strike: def.strike ? { group: def.strike.group, range: def.strike.range, countdown: def.strike.countdown, missiles: def.strike.missiles } : null,
+          }
+        : undefined,
   });
   if (g) {
     if (g.spawnedAt < 0) g.spawnedAt = s.world.time;

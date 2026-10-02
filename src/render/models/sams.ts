@@ -1,6 +1,7 @@
 /**
  * SAM site prototypes: SA-6 (Straight Flush + 3 TELs), SA-8 (TELAR), SA-10 (Flap Lid + Clam Shell mast
- * + 4 vertical-launch TELs), SA-15 (Tor), SA-18 (MANPADS team + jeep), ZSU-23-4 (Shilka).
+ * + 4 vertical-launch TELs), SA-15 (Tor), SA-18 (MANPADS team + jeep), ZSU-23-4 (Shilka), and the
+ * IRGC Navy air-defence fast boat (a moving SAM: hull from models/boats.ts, radar, SAM turret).
  *
  * Every animated node is a DIRECT child of the site root (so yaw angles are site-relative):
  *  - 'yaw:i'   launcher turret, rotates with launcherAzimuth; its children 'pitch:i:j' elevate
@@ -12,6 +13,7 @@ import type { MunitionId, SamType } from '../../core/types';
 import { box, cylinder, merge, place } from './geom/core';
 import { prismX } from './geom/loft';
 import { PALETTES, dish, mast, meshFrom, nodeFrom, panel, soldier, trackedChassis, wheeledChassis, type Palette, type PaletteId } from './vehicles';
+import { adBoat } from './boats';
 
 export interface PitchDef {
   name: string;
@@ -208,6 +210,31 @@ function build(type: SamType, pal: Palette): SamPrototype {
       launchers.push({ yaw: 'yaw:0', pitches: [{ name: '', slots: spares }] });
       ready = { kind: 'missile', munition: 'm_igla' };
       radius = 12;
+      break;
+    }
+    case 'ad_boat': {
+      // IRGC Navy air-defence fast boat: hull + cabin, a rotating search radar on the cabin roof, an
+      // aft turret of four SAM canisters and a MANPADS gunner on the foredeck
+      statics.push(...adBoat());
+      const t = addTurret(0, 0, 1.1, 5.2, [place(cylinder(0.9, 1.0, 0.5, 10, pal.dark), [0, 0.25, 0])]);
+      const pod: BufferGeometry[] = [];
+      for (const [x, y] of [
+        [-0.45, 0.35],
+        [0.45, 0.35],
+        [-0.45, 0.95],
+        [0.45, 0.95],
+      ])
+        pod.push(place(box(0.5, 0.5, 2.6, 0x7d8589), [x, y, 0]));
+      t.add(nodeFrom('pitch:0:0', pod, [0, 0.5, 0]));
+      launchers.push({ yaw: 'yaw:0', pitches: [{ name: 'pitch:0:0', slots: [] }] });
+      const radar = new Object3D();
+      radar.name = 'radar:0';
+      radar.position.set(0, 3.8, -2.6);
+      radar.add(meshFrom([cylinder(0.15, 0.2, 0.4, 8, pal.dark), ...panel(1.8, 0.5, 0.15, pal.body).map((g) => place(g, [0, 0.4, 0], [-0.2, 0, 0]))]));
+      root.add(radar);
+      radars.push({ name: 'radar:0', mode: 'search' });
+      statics.push(...soldier(pal, true).map((g) => place(g, [0.6, 1.1, -7.2])));
+      radius = 11;
       break;
     }
     case 'zsu23': {

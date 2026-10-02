@@ -8,6 +8,7 @@
 import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import type { AircraftEntity } from '../../sim/entities';
+import { isMissileBoatLive } from '../../sim/boats';
 import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
 import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
@@ -174,6 +175,17 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     pen.setFill(c.samFill);
     g.fill();
     pen.strokePlain(tracking && flash ? c.hostile : c.sam, (tracking ? 2 : 1.3) * lw);
+  }
+
+  // missile boats' launch rings (#79): the range they fire their Kowsar from, flashing while one counts down
+  for (const gt of world.ground) {
+    const strike = gt.boat?.strike;
+    if (!strike || !isMissileBoatLive(gt, p.team) || (!gt.known && !tracked(p, gt.id))) continue;
+    map(gt.position.x, gt.position.z);
+    const counting = strike.timer >= 0;
+    pen.begin();
+    pen.circle(pt.x, pt.y, strike.range * scale);
+    pen.strokePlain(counting && flash ? c.hostile : c.sam, (counting ? 2 : 1.1) * lw);
   }
 
   // route

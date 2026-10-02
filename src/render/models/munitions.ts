@@ -260,6 +260,17 @@ const SPECS: Record<MunitionId, MissileSpec> = {
       { at: 0.86, root: 0.32, tip: 0.2, span: 0.2, sweep: 0.1, roll: Math.PI / 4 },
     ],
   },
+  // Kowsar (C-704 family) anti-ship missile: cruciform mid-body wings and tail fins
+  kowsar: {
+    body: 0xd9dbd2,
+    nose: 0x6f7468,
+    noseLen: 0.45,
+    bands: [[0.3, 0.04, 0xb3261e]],
+    fins: [
+      { at: 0.45, root: 0.6, tip: 0.3, span: 0.32, sweep: 0.2, roll: Math.PI / 4 },
+      { at: 0.9, root: 0.32, tip: 0.18, span: 0.22, sweep: 0.1, roll: Math.PI / 4 },
+    ],
+  },
   m_igla: {
     body: 0x4f5a3c,
     nose: 0x2b2e2a,

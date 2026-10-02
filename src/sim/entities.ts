@@ -459,6 +459,8 @@ export class SamSiteEntity implements Entity {
   engageRange?: number;
   /** (combat) Search/acquisition range vs a 5 m² fighter (m, difficulty-scaled). */
   detectRange?: number;
+  /** (sim-core) A moving SAM on a fast boat (the IRGC Navy AD boat, sim/boats.ts sails it); absent = a fixed site. */
+  boat?: import('./boats').BoatState;
 
   constructor(
     readonly id: number,
@@ -521,6 +523,11 @@ export class GroundTargetEntity implements Entity {
    * kill effects (fire, smoke column) still play at its position.
    */
   scenery = false;
+  /**
+   * An IRGC Navy fast boat (suicide / missile boat): sim/boats.ts sails it (chase, strike countdown,
+   * route), not the ground-mover path above. Absent on every other ground target.
+   */
+  boat?: import('./boats').BoatState;
 
   constructor(
     readonly id: number,
