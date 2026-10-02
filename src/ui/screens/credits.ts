@@ -31,7 +31,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
     items: [
       ['Procedural', 'Aircraft, terrain, clouds, cockpit, HMD symbology, menus, icons and the Auckland chart are generated in code.'],
       ['Textures', 'Water normals, lens flare and moon textures from the three.js examples (MIT). See docs/CREDITS.md.'],
-      ['Map data', 'Auckland coastline, terrain, bush, harbour depths and roads: sourced from the LINZ Data Service (Toitū Te Whenua Land Information New Zealand — NZ LiDAR 1m DEM, NZ Contour-Interpolated 8m DEM, NZ Native / Exotic / Scrub Polygons, Hydro depth areas (not for navigation), NZ Addresses: Road Sections, NZ Tunnel Centrelines) and licensed for reuse under CC BY 4.0. Other landmarks hand-placed from public geography.'],
+      ['Map data', 'Auckland coastline, terrain, bush, harbour depths, roads, CBD buildings and the aerial photo of the CBD and waterfront: sourced from the LINZ Data Service (Toitū Te Whenua Land Information New Zealand — NZ LiDAR 1m DEM, NZ Contour-Interpolated 8m DEM, NZ Native / Exotic / Scrub Polygons, Hydro depth areas (not for navigation), NZ Addresses: Road Sections, NZ Tunnel Centrelines, NZ Building Outlines, Auckland 0.075m Urban Aerial Photos (2024-2025)) and licensed for reuse under CC BY 4.0. Other landmarks hand-placed from public geography.'],
       ['OpenStreetMap', 'Airfield layouts (Whenuapai, Auckland Airport, Ardmore, North Shore), the port, marinas and wharves, Devonport Naval Base, the Wiri oil terminal, Eden Park, the Harbour Bridge piers and the Sky Tower model — © OpenStreetMap contributors. Data available under the Open Database License (ODbL 1.0): openstreetmap.org/copyright.'],
     ],
   },

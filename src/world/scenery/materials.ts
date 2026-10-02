@@ -7,7 +7,7 @@
  *  - foliage: instanced low-poly trees with wrap lighting
  *  - lights: point sprites sized in metres with a pixel minimum (runway / city / aviation lights)
  */
-import { AdditiveBlending, ShaderMaterial, type Texture } from 'three';
+import { AdditiveBlending, ShaderMaterial, type Texture, type Vector4 } from 'three';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 
 const commonVertex = /* glsl */ `
@@ -84,6 +84,10 @@ void main() {
 
 const buildingFragment = /* glsl */ `
 ${ATMOSPHERE_GLSL}
+#ifdef AERIAL
+uniform sampler2D uAerial;
+uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m)
+#endif
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec3 vColor;
@@ -100,6 +104,18 @@ void main() {
   vec3 base = vColor;
   vec3 emissive = vec3(0.0);
   float mpp = max(length(dFdx(vWorld)), length(dFdy(vWorld)));
+  #ifdef AERIAL
+    // decks and roofs take the aerial photo where it shows land or a deck (yachts over the water keep
+    // their own colour); light fixtures (aWin 4) keep theirs
+    if (N.y > 0.7 && vWin < 3.5) {
+      vec2 uv = (vWorld.xz - uAerialRect.xy) * uAerialRect.z;
+      float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+      if (e > 0.0) {
+        vec4 p = texture2D(uAerial, uv);
+        base = mix(base, p.rgb, p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+      }
+    }
+  #endif
   if (vWin > 0.5 && vWin < 3.5 && abs(N.y) < 0.5) {
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
     float u = dot(vWorld.xz, t);
@@ -147,14 +163,24 @@ void main() {
 }
 `;
 
-export function createBuildingMaterial(atmo: AtmosphereUniforms, opts: { houses?: boolean } = {}): ShaderMaterial {
+/**
+ * `aerial`: the aerial photo's uniforms (TerrainRenderer aerialUniforms): upward faces inside its
+ * square take the photo's colour (the OSM wharf decks, the sheds' and the naval base's roofs).
+ */
+export function createBuildingMaterial(
+  atmo: AtmosphereUniforms,
+  opts: { houses?: boolean; aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 } } } = {},
+): ShaderMaterial {
+  const defines: Record<string, number> = {};
+  if (opts.houses) defines.HOUSES = 1;
+  if (opts.aerial) defines.AERIAL = 1;
   return new ShaderMaterial({
-    name: opts.houses ? 'WorldHouses' : 'WorldBuilding',
+    name: opts.houses ? 'WorldHouses' : opts.aerial ? 'WorldBuildingAerial' : 'WorldBuilding',
     vertexShader: buildingVertex,
     fragmentShader: buildingFragment,
-    uniforms: { ...atmo },
+    uniforms: { ...atmo, ...(opts.aerial ?? {}) },
     vertexColors: true,
-    defines: opts.houses ? { HOUSES: 1 } : {},
+    defines,
   });
 }
 

@@ -120,6 +120,30 @@ Harbour Bridge piers (`BRIDGE_PIERS_T`, which also set the fly-under span) are s
 `tests/world-sites.test.ts` checks against it. Without the file the hand-placed port and marinas come back, and the
 Wiri tanks still stand.
 
+## Aerial photo (LINZ, CBD and waterfront)
+
+`src/world/terrain/theaters/aucklandAerial.ts` loads the LINZ 2024 aerial photo of a 5.12 km square over the CBD,
+the waterfront and Devonport (`AERIAL_RECT`; baked by `tools/linz/aerial.py`): 2048² on the medium tier, 4096² on
+high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial=0`). Its alpha marks land and the
+OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
+the wharf decks and the naval base take it on their top faces, and the house / tree scatter and the procedural
+suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
+procedural ground stays.
+
+## Harbour ferries and wakes (render-only)
+
+The harbour ferries are not sim entities: no radar, no targeting, no sim cost. `src/render/traffic/ferryRoutes.ts`
+holds six timetable routes out of the Downtown Ferry Terminal (five bow-in slots in the basins either side of Queens
+Wharf) to the real OSM wharves (Devonport, Bayswater, Stanley Bay, Northcote Point and Birkenhead, Hobsonville Point,
+West Harbour), never towards the enemy-held islands. A ferry's pose is a pure function of mission time: dwell, back
+out, turn on the spot, sail a smoothed path, brake in along the next dock's axis. Every route period divides
+`FERRY_CYCLE`, so the fleet repeats exactly and `tests/render-ferries.test.ts` can prove every hull position is on the
+LINZ water clear of wharves, bridge piers and moored ships, and that no two ferries ever overlap. When you move a route
+or a dock, rerun that test; if two ferries clash, change the route `offset`s (only routes with the same headway may
+share a Downtown slot). `HarbourFerries` draws the fleet as one `InstancedMesh` (`QualitySettings.ferries` takes the
+first N of `FERRY_FLEET`), and the `WakeBatch` (`src/render/effects/Wakes.ts`) draws the V-shaped foam wakes of every
+moving ship and ferry in one draw call (`QualitySettings.wakes`, off on `low`). Both are owned by the EntityRenderer.
+
 ## Frame / sim order (Game.ts)
 
 ```
@@ -142,3 +166,5 @@ react to `munition:launch`, `explosion`, `destroyed`, `radio`, `warning` and so 
 * `node e2e/shot.mjs --url='http://localhost:5173/?mission=c01&autostart=1&view=chase' --wait=6000 --out=e2e/screenshots/x.png`
   takes a mobile-landscape (844×390 @2x) screenshot with headless Chromium (SwiftShader, so it's slow) and prints
   console errors plus `window.__f35.state()`. The dev server runs with `npx vite --port 5173`.
+* `node e2e/harbour-shots.mjs [--quality=medium] [--tag=x]` pins the camera over the Waitematā (mostly 1 km up) in an
+  Auckland sortie and screenshots the ferries and wakes, printing draw calls and triangles per view.

@@ -18,6 +18,7 @@ import {
   RedFormat,
   RGBAFormat,
   SRGBColorSpace,
+  Texture,
   UnsignedByteType,
   Vector3,
   type Camera,
@@ -31,11 +32,12 @@ import { airfieldOf, anchorsFor, footprintOf } from './terrain/features';
 import { Heightfield as HeightfieldClass } from './terrain/Heightfield';
 import { HF_EXTENT } from './terrain/types';
 import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
-import { coastUniforms, TerrainRenderer, type CoastMaskInfo } from './terrain/TerrainRenderer';
+import { coastUniforms, TerrainRenderer, type AerialPhotoInfo, type CoastMaskInfo } from './terrain/TerrainRenderer';
 import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
+import { AERIAL_FEATHER, AERIAL_RECT, loadAucklandAerial } from './terrain/theaters/aucklandAerial';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
 import { loadAucklandOsm } from './scenery/aucklandOsm';
@@ -79,6 +81,9 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // real 2048² detail (≈ 1.2 MB; low / medium never request it): only finishTerrain (this thread)
   // reads it, so its download overlaps the workers' base generation.
   const hdLoad = opts.theater === 'auckland' && cfg.hdTerrain ? loadAucklandLinzHd() : null;
+  // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
+  // the main thread while the terrain generates, needed only for the GPU objects below.
+  const aerialLoad = opts.theater === 'auckland' && cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
   if (opts.theater === 'auckland') await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm()]);
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);
@@ -226,6 +231,22 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   }
   const dummyTex = new DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, RGBAFormat, UnsignedByteType);
   dummyTex.needsUpdate = true;
+  let aerial: AerialPhotoInfo | null = null;
+  const aerialImage = aerialLoad ? await aerialLoad : null;
+  if (aerialImage) {
+    const t = new Texture(aerialImage);
+    // row 0 is the square's north edge (z0) at v = 0; the alpha channel is a mask, not coverage
+    t.flipY = false;
+    t.premultiplyAlpha = false;
+    t.colorSpace = SRGBColorSpace;
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = LinearFilter;
+    t.minFilter = LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.anisotropy = Math.min(maxAniso, cfg.anisotropy);
+    t.needsUpdate = true;
+    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER };
+  }
   const cloudLayer = createCloudLayerTexture();
 
   const atmo = createAtmosphereUniforms(preset, q.drawDistance);
@@ -251,6 +272,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     dummy: dummyTex,
     noFields: airfieldRects(features, opts.theater),
     seaShallow: preset.waterShallow,
+    aerial,
   });
   scene.add(terrain.mesh);
 
@@ -289,6 +311,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     style,
     lights: preset.lights,
     skyTowerRuin: opts.skyTowerRuin?.fallHeading ?? null,
+    aerial,
   });
   scene.add(scenery.group);
   let reflections: LightReflections | null = null;
@@ -390,6 +413,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       detail.normal.dispose();
       cloudLayer.dispose();
       coast?.texture.dispose();
+      aerial?.texture.dispose();
       dummyTex.dispose();
     },
   };

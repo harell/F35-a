@@ -1,14 +1,14 @@
 /**
  * Ground target prototypes: EWR (rotating array on a mast), command bunker, fuel farm, hardened
- * aircraft shelter, parked jet, truck, tank, corvette (with wake), factory, bridge, plus the civil
+ * aircraft shelter, parked jet, truck, tank, corvette, factory, bridge, plus the civil
  * container ship and cruise liner (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  *  'span:mid' bridge middle span (drops when destroyed)
- *  'wake'     ship wake (scaled with speed)
+ * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
  * Civil ships also carry their night lights (ShipLight, drawn as sprites by the EntityRenderer).
  */
-import { BufferGeometry, Float32BufferAttribute, Group, Mesh, Object3D, Vector3 } from 'three';
+import { BufferGeometry, Group, Object3D, Vector3 } from 'three';
 import type { GroundTargetType, VesselClass } from '../../core/types';
 import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
@@ -216,11 +216,6 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
       spin.add(meshFrom(panel(4, 1, 0.2, 0x5e6568), 'building'));
       root.add(spin);
       spinners.push({ name: 'spin:0', rate: 2.5 });
-      // wake: V-shaped foam decal widening aft (additive, fades with distance)
-      const wake = new Mesh(makeWake(L), getMaterial('wake'));
-      wake.name = 'wake';
-      wake.renderOrder = 2;
-      root.add(wake);
       wreck = 'ship';
       radius = 36;
       farScale = 2;
@@ -274,7 +269,7 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
 /**
  * Civil merchant ship, waterline at y = 0, bow at -Z: a lofted hull, then container bays and the
  * aft accommodation block (container ship) or the stacked white decks of a cruise liner, a funnel,
- * a radar on the mast ('spin:0') and a wake. Sizes match VESSEL_DATA (sim hit volume).
+ * a radar on the mast ('spin:0'). Sizes match VESSEL_DATA (sim hit volume).
  */
 function buildMerchant(vessel: VesselClass): GroundPrototype {
   const root = new Group();
@@ -389,50 +384,10 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   spin.add(meshFrom(panel(5, 0.7, 0.3, 0x3a3e40), 'building'));
   root.add(spin);
   const spinners = [{ name: 'spin:0', rate: 2.2 }];
-  const wake = new Mesh(makeWake(L, B / 2, 260), getMaterial('wake'));
-  wake.name = 'wake';
-  wake.renderOrder = 2;
-  root.add(wake);
   const body = meshFrom(statics, 'building');
   body.name = 'static';
   root.add(body);
   return { type: 'ship', root, spinners, wreck: 'ship', radius: L / 2, farScale: 3.5, lights };
-}
-
-/** Flat V-shaped wake strip on the water behind the stern (+Z), vertex colour fading to black (additive). */
-function makeWake(L: number, halfBeam = 5, len = 140): BufferGeometry {
-  const pos: number[] = [];
-  const col: number[] = [];
-  const N = 8;
-  const spread = (34 * len) / 140;
-  const at = (i: number) => {
-    const t = i / N;
-    return { z: L / 2 - 4 + t * len, w: halfBeam + t * spread, k: Math.pow(1 - t, 1.6) * 0.9 };
-  };
-  for (let i = 0; i < N; i++) {
-    const a = at(i);
-    const b = at(i + 1);
-    // two quads per segment: left and right halves with a darker centre line (turbulent water)
-    for (const s of [-1, 1]) {
-      const q = [
-        [0, a.z, a.k * 0.7],
-        [s * a.w, a.z, a.k],
-        [s * b.w, b.z, b.k],
-        [0, b.z, b.k * 0.7],
-      ];
-      const tri = s > 0 ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
-      for (const k of tri) {
-        pos.push(q[k][0], 0.12, q[k][1]);
-        col.push(q[k][2], q[k][2], q[k][2]);
-      }
-    }
-  }
-  const g = new BufferGeometry();
-  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new Float32BufferAttribute(col, 3));
-  g.setAttribute('normal', new Float32BufferAttribute(new Float32Array(pos.length).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
-  g.setAttribute('uv', new Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
-  return g;
 }
 
 export function getGroundPrototype(type: GroundTargetType, palette: PaletteId = 'green', vessel: VesselClass | null = null): GroundPrototype {

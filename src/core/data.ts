@@ -120,12 +120,15 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     drawDistance: 28_000,
     terrainDetail: 0,
     hdTerrain: false,
+    aerialPhoto: false,
     cloudCount: 24,
     particleScale: 0.4,
     shadows: false,
     antialias: false,
     postfx: false,
     sceneryDensity: 0.35,
+    wakes: false,
+    ferries: 10,
   },
   medium: {
     level: 'medium',
@@ -133,12 +136,15 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     drawDistance: 40_000,
     terrainDetail: 1,
     hdTerrain: false,
+    aerialPhoto: true,
     cloudCount: 60,
     particleScale: 0.75,
     shadows: false,
     antialias: true,
     postfx: false,
     sceneryDensity: 0.7,
+    wakes: true,
+    ferries: 13,
   },
   high: {
     level: 'high',
@@ -146,12 +152,15 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     drawDistance: 60_000,
     terrainDetail: 2,
     hdTerrain: true,
+    aerialPhoto: true,
     cloudCount: 120,
     particleScale: 1,
     shadows: true,
     antialias: true,
     postfx: true,
     sceneryDensity: 1,
+    wakes: true,
+    ferries: 16,
   },
 };
 
@@ -175,6 +184,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultView: 'cockpit',
   targetCam: true,
   hdTerrain: true,
+  aerialPhoto: true,
 };
 
 export interface LoadoutDef {
