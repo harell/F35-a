@@ -24,7 +24,7 @@ import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
-import { PlayerBot } from './ai-playerbot';
+import { PlayerBot, runBalanceMission } from './ai-playerbot';
 import { flat, makeAiWorld, v3 } from './ai-helpers';
 
 function terrainFor(id: string): TerrainQuery {
@@ -101,5 +101,21 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
       expect(r.killedAt, `seed ${seed}: ${r.rounds} rounds fired`).toBeGreaterThan(0);
       expect(r.killedAt).toBeLessThan(30);
     }
+  });
+
+  it('gun-only probe (c01, Recruit): no missiles all mission long, the pilot fights with the gun and kills a MiG with it', { timeout: 120_000 }, () => {
+    let stores = 0;
+    const r = runBalanceMission('c01', 'recruit', 0, flat(0), {
+      gunOnly: true,
+      onStep: (_w, p) => {
+        stores = Math.max(stores, p.stores.reduce((n, s) => n + s.count, 0));
+      },
+    });
+    expect(stores).toBe(0);
+    expect(r.playerShots).toBe(0);
+    // it doesn't end as Winchester-and-home at the start (it is at home with no missiles)
+    expect(r.state).not.toBe('rtb');
+    expect(r.gunRounds, JSON.stringify(r)).toBeGreaterThan(0);
+    expect(r.playerKills, JSON.stringify(r)).toBeGreaterThan(0);
   });
 });

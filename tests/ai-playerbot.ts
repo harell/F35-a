@@ -365,6 +365,8 @@ export interface BalanceResult {
   redShotsAtPlayer: number;
   redHitsOnPlayer: number;
   playerShots: number;
+  /** Gun rounds the player fired. */
+  gunRounds: number;
 }
 
 /**
@@ -383,6 +385,12 @@ export function runBalanceMission(
     reaction?: number;
     /** Randomise red spawn positions (default true). */
     jitter?: boolean;
+    /**
+     * Gun-only probe: the player's stores are emptied every step (so a mission rearm adds no
+     * missiles), the pilot presses on with the gun (as 'committed') and the run doesn't end as
+     * 'rtb' at home. Answers "is the gun useless or dominant" with a sweep.
+     */
+    gunOnly?: boolean;
     onStep?: (world: SimWorld, p: AircraftEntity, bot: PlayerBot) => void;
   } = {},
 ): BalanceResult {
@@ -397,12 +405,17 @@ export function runBalanceMission(
   const strategy = opts.strategy ?? 'bot';
   const home = p.position.clone();
   const wp = runner.waypoints[0];
-  const bot = new PlayerBot({ home, cap: wp ? wp.position.clone() : null, reaction: opts.reaction ?? 0.8, rtbWhenWinchester: strategy !== 'committed' });
+  const gunOnly = !!opts.gunOnly;
+  const emptyStores = () => {
+    if (gunOnly) for (const s of p.stores) s.count = 0;
+  };
+  emptyStores();
+  const bot = new PlayerBot({ home, cap: wp ? wp.position.clone() : null, reaction: opts.reaction ?? 0.8, rtbWhenWinchester: strategy !== 'committed' && !gunOnly });
   bot.attach(world, p);
   if (strategy === 'autopilot') p.ai = createAiBrain('fighter', { skill: 0.9 });
   const r: BalanceResult = {
     mission: missionId, diff, seed, state: 'running', survived: true, t: 0, playerKills: 0, wingKills: 0, redTotal: 0, redLost: 0,
-    playerFirstShot: -1, redFirstShotAtPlayer: -1, redFirstDetect: -1, playerFirstDetect: -1, redShotsAtPlayer: 0, redHitsOnPlayer: 0, playerShots: 0,
+    playerFirstShot: -1, redFirstShotAtPlayer: -1, redFirstDetect: -1, playerFirstDetect: -1, redShotsAtPlayer: 0, redHitsOnPlayer: 0, playerShots: 0, gunRounds: 0,
   };
   events.on('munition:launch', (e) => {
     if (e.shooter === p) {
@@ -449,12 +462,15 @@ export function runBalanceMission(
         p.input.throttle = 0.85;
       } else bot.update(p, world, dt * 3);
     }
+    const ammo = p.gunAmmo;
     world.step(dt);
+    r.gunRounds += Math.max(0, ammo - p.gunAmmo);
     runner.update(world, dt);
+    emptyStores();
     if (i % 30 === 0) jitter();
     opts.onStep?.(world, p, bot);
     // Winchester and home (≤ 6 km, nothing inbound): the engagement is over for the player
-    if (i % 30 === 0 && p.alive && p.incoming.length === 0 && world.combat.remaining(p, 'aim120') + world.combat.remaining(p, 'aim9x') === 0) {
+    if (!gunOnly && i % 30 === 0 && p.alive && p.incoming.length === 0 && world.combat.remaining(p, 'aim120') + world.combat.remaining(p, 'aim9x') === 0) {
       if (Math.hypot(p.position.x - home.x, p.position.z - home.z) < 6_000) {
         r.state = 'rtb';
         break;
