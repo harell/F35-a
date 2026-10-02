@@ -17,7 +17,7 @@ import { showServiceRecord } from './serviceRecord';
 
 const ITEMS: { id: MainMenuChoice; title: string; sub: string; icon: string; primary?: boolean }[] = [
   { id: 'campaign', title: 'Campaign', sub: 'Operation Southern Cross — defend Auckland', icon: 'flag', primary: true },
-  { id: 'instant', title: 'Instant Action', sub: 'Dogfight · SAM gauntlet · strike · survival', icon: 'crosshair' },
+  { id: 'instant', title: 'Instant Action', sub: 'Free flight · dogfight · strike · survival', icon: 'crosshair' },
   { id: 'training', title: 'Training', sub: 'Learn to fly and fight the F-35A', icon: 'book' },
   { id: 'settings', title: 'Settings', sub: 'Difficulty · controls · audio · display', icon: 'gear' },
   { id: 'credits', title: 'Credits', sub: 'Team, tools and licences', icon: 'info' },
