@@ -8,6 +8,7 @@
  *         view, pause → resume, then the fly() hook from the pause menu → c02's pause menu → quit → main menu.
  * menus:  first launch (fresh context): New pilot card → Start training → Training list → briefing → back
  *         → Training list; then splash → main menu (Not now on the card) → settings round-trip → campaign
+ *         picker (both campaigns listed) → Southern Cross
  *         → briefing → back → campaign list → briefing (tabs, loadout) → FLY → pause → quit → main menu,
  *         instant action → briefing → back → setup → back → main menu, credits, fly() from the main
  *         menu → quit → main menu.
@@ -453,8 +454,12 @@ async function menus() {
   const diff = await page.evaluate(() => window.__f35.game.settings.difficulty);
   check(diff === 'ace', 'settings resolve with the edited object and the game applies it', diff);
 
-  // campaign → briefing
+  // campaign → campaign picker → Southern Cross → briefing
   await page.tap('.mm-item[data-id="campaign"]');
+  await page.waitForSelector('.scr-campaigns:not(.is-leaving) .cp-item');
+  const campaigns = await page.evaluate(() => [...document.querySelectorAll('.scr-campaigns .cp-item')].map((b) => b.dataset.id));
+  check(campaigns.includes('southern_cross') && campaigns.includes('irgc'), 'the campaign picker lists both campaigns', campaigns.join(','));
+  await page.tap('.scr-campaigns .cp-item[data-id="southern_cross"]');
   await page.waitForSelector('.scr-missions:not(.is-leaving) .mcard');
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-3-campaign.png' });
