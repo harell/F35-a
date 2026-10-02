@@ -9,6 +9,7 @@ import type { LoadoutId, Settings } from '../../core/types';
 import { icon } from '../art/icons';
 import { storesDiagramSvg } from '../art/storesDiagram';
 import { escapeHtml, h } from '../dom';
+import { missionGunAmmo } from '../../missions';
 import { formatTime, pad2, stealthRating, storeLines } from '../format';
 import type { UiHost } from '../host';
 import { screenHeader } from '../widgets';
@@ -134,6 +135,8 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     const hangar = h('div', { class: 'br-page br-hangar ui-scroll' });
     const cards = h('div', { class: 'lo-cards' });
     const cardEls: HTMLButtonElement[] = [];
+    // the mission may set its own gun rounds, per difficulty (MissionDef.gunAmmo)
+    const gunLine = (id: LoadoutId) => `GAU-22 · ${missionGunAmmo(m, settings.difficulty, id)} rds`;
     const syncCards = () => {
       for (const c of cardEls) c.classList.toggle('is-on', c.dataset.id === loadout);
       loSummary.innerHTML = `${icon('jet')}<span>${escapeHtml(LOADOUTS[loadout].name)}</span>`;
@@ -149,7 +152,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
         `<div class="lo-tags"><span class="badge lo-role">${ROLE_LABEL[l.role]}</span>${id === m.recommendedLoadout ? '<span class="badge lo-recb">RECOMMENDED</span>' : ''}</div>` +
         `<ul class="lo-stores">${storeLines(l, WEAPON_NAMES)
           .map((s) => `<li class="${s.internal ? 'int' : 'ext'}">${escapeHtml(s.text)}<em>${s.internal ? 'bay' : 'pylon'}</em></li>`)
-          .join('')}<li class="int">GAU-22 · ${l.gunAmmo} rds</li><li class="int">${l.flares} flares · ${l.chaff} chaff</li></ul>` +
+          .join('')}<li class="int lo-gun">${gunLine(id)}</li><li class="int">${l.flares} flares · ${l.chaff} chaff</li></ul>` +
         `<div class="lo-rcs"><span>STEALTH</span><div class="bar"><i class="tone-bar-${tone}" style="width:${Math.round(stealth * 100)}%"></i></div><b class="mono">${Math.round(stealth * 100)}</b></div>` +
         `<div class="lo-desc">${escapeHtml(l.description)}</div></div>`;
       c.addEventListener('click', () => {
@@ -182,6 +185,10 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       closeSheet = openDifficultySheet(el, settings, () => {
         closeSheet = null;
         syncDiff();
+        for (const c of cardEls) {
+          const gun = c.querySelector('.lo-gun');
+          if (gun) gun.textContent = gunLine(c.dataset.id as LoadoutId);
+        }
         diffEl.focus();
       });
     });
