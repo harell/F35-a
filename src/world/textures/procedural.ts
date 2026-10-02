@@ -360,3 +360,47 @@ export function createMotorwayTexture(): DataTexture {
   const t = dataTexture(d, W, { srgb: true, w: W, h: H });
   return t;
 }
+
+/**
+ * Railway formation (64 × 256, tiling along v every 40 m like the motorway texture): grey-brown
+ * ballast with two tracks, u 0..0.5 and 0.5..1 (a single track uses half the texture: span 0.5).
+ * Each track: concrete sleepers every ≈ 0.65 m under two dark steel rails, gauge 1.067 m on a
+ * 5.5 m half-formation.
+ */
+export function createRailTexture(): DataTexture {
+  const W = 64;
+  const H = 256;
+  const d = new Uint8Array(W * H * 4);
+  const rnd = mulberry32(37);
+  const halfM = 5.5; // metres across one half of the texture
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      // metres from the centre line of this half's track
+      const m = (((x + 0.5) / W) % 0.5 - 0.25) * 2 * halfM;
+      const a = Math.abs(m);
+      const n = (rnd() - 0.5) * 18;
+      // ballast, darker towards the shoulders
+      let r = 118 + n - Math.max(0, a - 1.8) * 9;
+      let g = 110 + n - Math.max(0, a - 1.8) * 9;
+      let b = 100 + n - Math.max(0, a - 1.8) * 8;
+      if (a < 1.25 && y % 4 < 2) {
+        // sleeper
+        r = 146 + n * 0.4;
+        g = 143 + n * 0.4;
+        b = 136 + n * 0.4;
+      }
+      if (Math.abs(a - 0.53) < 0.12) {
+        // rail: dark steel
+        r = 72;
+        g = 64;
+        b = 58;
+      }
+      const o = (y * W + x) * 4;
+      d[o] = r;
+      d[o + 1] = g;
+      d[o + 2] = b;
+      d[o + 3] = 255;
+    }
+  }
+  return dataTexture(d, W, { srgb: true, w: W, h: H });
+}

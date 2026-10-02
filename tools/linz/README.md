@@ -145,6 +145,29 @@ What comes out:
 At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over the region (kerb distance, region
 distance, parks, motorway verges); the shader and the JS placement code read the same texels.
 
+# Railways (#31)
+
+`railways.ts` adds the railway lines to `src/world/terrain/data/auckland-roads.bin` (lines of kind `ROAD_RAIL`, ≈ 5 kB
+gzip of the file's ≈ 24 kB). It rewrites only its own lines and keeps the roads; `roads.ts` keeps the railways the same
+way, so the two bakes can run in either order. Same licence and attribution.
+
+| Product | LDS layer | Used for |
+|---|---|---|
+| NZ Railway Centrelines (Topo, 1:50k) | 50319 | the lines: NIMT (with the Eastern line), North Auckland Line (Western line), Newmarket line, Onehunga, Southdown, Mission Bush and Glenbrook branches |
+| NZ Tunnel Centrelines (Topo, 1:50k) | 50366 (`use1='train'`) | runs in a tunnel (Britomart, Parnell) |
+
+```sh
+export LINZ_API_KEY=…            # free key from https://data.linz.govt.nz (never commit it)
+npx vite-node tools/linz/railways.ts <work> [preview.svg]
+```
+
+What comes out: the lines chained by name and track type, clipped to the 88 km world (the North Auckland Line runs on
+to Whangārei), Douglas–Peucker 1.5 m. Sidings (yards, freight spurs) and the Waitākere bush tramways are left out. The
+width is the formation: 11 m for a double track, 6 m for a single one, so the ribbons read from altitude. Runs within
+25 m of a train tunnel and parallel to it, between its portals, are flagged as tunnels. In the game (`motorways.ts`,
+`aucklandRailPaths`) they are ballast-and-track ribbons in one mesh of their own (`QUALITY_PRESETS.railways`), and they
+join the `RoadNetwork` so houses, trees and towers keep off the tracks.
+
 # Phase 2b: CBD buildings (outlines + LiDAR heights)
 
 `buildings.py` and `buildings.ts` bake the CBD's real buildings into `src/world/terrain/data/auckland-buildings.bin`
