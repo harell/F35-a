@@ -126,6 +126,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     antialias: false,
     postfx: false,
     sceneryDensity: 0.35,
+    wakes: false,
+    ferries: 10,
   },
   medium: {
     level: 'medium',
@@ -139,6 +141,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     antialias: true,
     postfx: false,
     sceneryDensity: 0.7,
+    wakes: true,
+    ferries: 13,
   },
   high: {
     level: 'high',
@@ -152,6 +156,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     antialias: true,
     postfx: true,
     sceneryDensity: 1,
+    wakes: true,
+    ferries: 16,
   },
 };
 

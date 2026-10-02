@@ -1,6 +1,6 @@
 /**
  * Per-instance visuals for SAM sites and ground targets: animates radars / launchers / spinners,
- * shows ready missiles (one InstancedMesh per site), ship wakes, and wreck variants when destroyed.
+ * shows ready missiles (one InstancedMesh per site) and wreck variants when destroyed.
  * Ships ride the swell, swing at anchor and sink (fire, list, bow / stern settling, under in
  * 60–90 s) — the pose maths is shared with the effects in shipMotion.ts.
  */
@@ -154,7 +154,6 @@ export class SamVisual {
 export class GroundVisual {
   readonly root: Object3D;
   private spinners: { node: Object3D; rate: number }[] = [];
-  private wake: Object3D | null;
   private mid: Object3D | null;
   private wreckT = -1;
   private mats = new Map<Mesh, Material | Material[]>();
@@ -170,7 +169,6 @@ export class GroundVisual {
       const n = this.root.getObjectByName(s.name);
       if (n) this.spinners.push({ node: n, rate: s.rate });
     }
-    this.wake = this.root.getObjectByName('wake') ?? null;
     this.mid = this.root.getObjectByName('span:mid') ?? null;
     this.ship = proto.wreck === 'ship';
   }
@@ -204,7 +202,6 @@ export class GroundVisual {
       }
       this.wreckT += dt;
       if (!this.ship) this.applyWreck(this.wreckT);
-      if (this.wake) this.wake.visible = false;
       return true;
     }
     if (this.wreckT >= 0) {
@@ -215,10 +212,6 @@ export class GroundVisual {
     }
     for (const s of this.spinners) s.node.rotation.y = time * s.rate;
     const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
-    if (this.wake) {
-      this.wake.visible = speed > 0.8;
-      this.wake.scale.set(1, 1, Math.min(1.4, 0.25 + speed / 12));
-    }
     if (this.proto.lights.length) this.lightMode = speed > 0.5 ? 1 : g.anchored ? 2 : 4;
     return true;
   }

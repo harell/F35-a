@@ -6,11 +6,9 @@
  * skipped gracefully when no canvas exists (vitest/node), so geometry builders stay testable.
  */
 import {
-  AdditiveBlending,
   CanvasTexture,
   Color,
   CubeTexture,
-  DoubleSide,
   LinearMipmapLinearFilter,
   Material,
   MeshBasicMaterial,
@@ -230,18 +228,6 @@ function builtin(key: string): Factory {
       return () => new MeshLambertMaterial({ color: 0x3a3632, map: grimeTexture() });
     case 'emissive':
       return () => new MeshBasicMaterial({ color: 0xffffff, vertexColors: true, toneMapped: false });
-    case 'wake':
-      return () =>
-        new MeshBasicMaterial({
-          color: 0xdfe8ec,
-          transparent: true,
-          opacity: 0.5,
-          depthWrite: false,
-          side: DoubleSide,
-          vertexColors: true,
-          blending: AdditiveBlending,
-          fog: true,
-        });
     case 'shadowblob':
       return () => new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
     default:
