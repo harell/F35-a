@@ -486,6 +486,11 @@ export interface MissionScript {
    * down doesn't end the sortie.
    */
   freeFlight?: boolean;
+  /**
+   * No rearm point: a short sortie against the clock (g01). Winchester calls for the gun instead of
+   * sending the player home, and there is no rearm gate; bingo still calls RTB.
+   */
+  noRearm?: boolean;
 }
 
 /** Empty script (helper for builders). */

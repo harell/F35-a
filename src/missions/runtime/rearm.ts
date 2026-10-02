@@ -57,6 +57,7 @@ export class RearmController {
   private need: RearmNeed = null;
   private inGate = 0;
   private gateAnnounced = false;
+  private gunsCalled = false;
   private enabled = false;
 
   constructor(private readonly s: MissionState) {
@@ -115,12 +116,18 @@ export class RearmController {
     }
     // Winchester / bingo calls (edge-triggered)
     const bingoFuel = AIRCRAFT_PERF[p.type].internalFuel * BINGO_FRACTION;
-    const need: RearmNeed = storesLeft(p) === 0 ? 'winchester' : p.flight.fuel < bingoFuel ? 'bingo' : null;
+    const winchester = storesLeft(p) === 0;
+    // no rearm point (a sortie against the clock): Winchester means the gun, not a trip home
+    if (winchester && s.script.noRearm) {
+      if (!this.gunsCalled) this.callGuns(p);
+    }
+    const need: RearmNeed = winchester && !s.script.noRearm ? 'winchester' : p.flight.fuel < bingoFuel ? 'bingo' : null;
     if (need && need !== this.need) this.announce(need, p);
     this.need = need;
 
-    // rearm gate (free flight: only when Winchester or bingo, so a pass over Whenuapai isn't a pit stop)
-    if (this.inGateNow(p) && this.expended(p) && (!s.script.freeFlight || this.need !== null)) {
+    // rearm gate (free flight: only when Winchester or bingo, so a pass over Whenuapai isn't a pit stop;
+    // none in a mission with no rearm point)
+    if (!s.script.noRearm && this.inGateNow(p) && this.expended(p) && (!s.script.freeFlight || this.need !== null)) {
       if (!this.gateAnnounced) {
         this.gateAnnounced = true;
         s.hud(`REARMING — HOLD OVER ${this.homeName.toUpperCase()}`, 'info', REARM_HOLD);
@@ -131,6 +138,16 @@ export class RearmController {
       this.inGate = 0;
       this.gateAnnounced = false;
     }
+  }
+
+  /** Winchester with no rearm point: the missiles are gone, the gun finishes the job. */
+  private callGuns(p: AircraftEntity): void {
+    const s = this.s;
+    this.gunsCalled = true;
+    s.stats.winchester++;
+    const rounds = p.gunAmmo > 0;
+    s.hud(rounds ? 'WINCHESTER MISSILES — GUNS' : 'WINCHESTER', 'warn', 4);
+    s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. ${rounds ? 'Missiles gone: finish them with the gun.' : 'Winchester.'}`, priority: 3 });
   }
 
   private announce(need: Exclude<RearmNeed, null>, p: AircraftEntity): void {

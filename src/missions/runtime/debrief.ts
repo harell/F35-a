@@ -102,7 +102,9 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   const died = s.playerDied;
   const samType = st.lastHitBy === 'sam' ? (st.lastHitType as SamType | null) : w in SAM_MUNITION ? SAM_MUNITION[w] : null;
 
-  if (r.reason.startsWith(REASONS.skytower))
+  if (r.reason === REASONS.skytowerLost)
+    add('The swarm got through: launch at range and let each missile take a new drone (TGT steps on), then gun the leakers from behind at about 200 kt.');
+  else if (r.reason.startsWith(REASONS.skytower))
     add('The Sky Tower is a protected landmark: check what is behind your target before you pickle, and never let a missile or bomb fly through the CBD.');
   if (died) {
     if (st.downReason === 'fuel') add('Afterburner drinks fuel: cruise at MIL power and RTB to Whenuapai when BINGO shows — hold over the field to refuel.');
@@ -120,7 +122,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     if (r.reason === REASONS.time) add('Out of time: go straight for the primary objective — the steering cue points at it.');
     else if (r.reason === REASONS.ao) add('Stay inside the area of operations — turn back as soon as RETURN TO AO shows.');
     else if (r.reason.startsWith('Objective failed')) {
-      if (/Hammer|Kiwi|package|alive/i.test(r.reason)) add('Protect missions: kill the fighters going for the friendlies first — ignore bonus targets until they are safe.');
+      if (/tanker|Kōtuku/i.test(r.reason)) add('Escort the tanker: StormBreakers on the suicide boats first, released early from height, then the missile boats before they count down.');
+      else if (/Hammer|Kiwi|package|alive/i.test(r.reason)) add('Protect missions: kill the fighters going for the friendlies first — ignore bonus targets until they are safe.');
       else if (/raid|Backfire|bomber/i.test(r.reason)) add('Bombers don’t dodge: shoot them from long range the moment SHOOT shows, then deal with the escort.');
       else add('A primary objective failed: the objective list in the pause menu shows what must survive or die.');
     }
@@ -133,7 +136,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
 
   if (st.aamShots >= 2 && st.longShots >= Math.max(2, st.aamShots * 0.4)) add('Wait for SHOOT before firing: AMRAAMs launched from max range run out of energy and miss.');
   if (st.aamShots >= 3 && st.misses >= st.aamShots * 0.5) add('Your missiles were defeated: shoot inside SHOOT, then crank 50° so the bandit can’t turn cold on the missile.');
-  if (st.winchester > 0 && st.rearms === 0 && !r.success) add('Out of weapons? Follow the steering cue to Whenuapai and hold over the field below 5,000 ft for 5 s to rearm.');
+  if (st.winchester > 0 && st.rearms === 0 && !r.success && !s.script.noRearm) add('Out of weapons? Follow the steering cue to Whenuapai and hold over the field below 5,000 ft for 5 s to rearm.');
 
   if (r.success) {
     if (r.damageTaken > 40) add('You took heavy damage: defend every missile warning at once — chaff and a hard beam turn beat a missile at range.');

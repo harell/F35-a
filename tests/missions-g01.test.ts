@@ -191,6 +191,28 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
     expect(h.of('mission:end')).toEqual([{ success: false, reason: REASONS.skytowerLost }]);
   });
 
+  it('Winchester means the gun, not a trip home: no RTB call, no rearm cue, and the loss tip says how to beat the swarm (playtest 1.3-j, 1.4-h)', { timeout: 60_000 }, () => {
+    const h = harness(G01);
+    const hud: string[] = [];
+    const radio: string[] = [];
+    h.events.on('hud:message', (e) => hud.push(e.text));
+    h.events.on('radio', (e) => radio.push(e.text));
+    h.run(1);
+    const p = h.world.player!;
+    for (const st of p.stores) st.count = 0; // every missile fired
+    h.run(2);
+    expect(hud).toContain('WINCHESTER MISSILES — GUNS');
+    expect(radio.some((t) => /finish them with the gun/.test(t))).toBe(true);
+    expect(hud.some((t) => /RTB/.test(t))).toBe(false);
+    expect(radio.some((t) => /RTB|rearm/i.test(t))).toBe(false);
+    expect(h.runner.currentWaypoint?.id).not.toBe('rearm');
+    runParked(h, 300);
+    const r = h.runner.result(h.world);
+    expect(r.reason).toBe(REASONS.skytowerLost);
+    expect(r.tips?.[0]).toMatch(/swarm got through.*about 200 kt/);
+    expect(r.tips?.some((t) => /Whenuapai/.test(t))).toBe(false);
+  });
+
   it('one missile never takes two drones: live drones stay more than two missile kill radii apart all the way into the tower', { timeout: 60_000 }, () => {
     const h = harness(G01);
     const ds = drones(h);

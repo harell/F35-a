@@ -168,7 +168,8 @@ export class Callouts {
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${who}!`, priority: 4 });
         }
       } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {
-        s.hud(ship ? `CIVIL SHIP ${who.toUpperCase()} DESTROYED` : `CIVIL ${who} DOWN`, 'bad', 2.5);
+        // (not 'CIVIL SHIP … DESTROYED': read as if the player had sunk her — playtest 1.4-i)
+        s.hud(ship ? `${who.toUpperCase()} SUNK` : `CIVIL ${who} DOWN`, 'bad', 2.5);
       }
       return;
     }
