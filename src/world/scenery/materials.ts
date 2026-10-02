@@ -10,6 +10,7 @@
 import { AdditiveBlending, ShaderMaterial, type Texture, type Vector4 } from 'three';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { AERIAL_LIGHT_GLSL } from '../terrain/terrainShader';
+import { AERIAL_NIGHT_MIX } from '../terrain/theaters/aucklandAerial';
 
 const commonVertex = /* glsl */ `
 varying vec3 vWorld;
@@ -117,7 +118,10 @@ void main() {
       if (e > 0.0) {
         vec4 p = texture2D(uAerial, uv);
         photoW = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w));
-        base = mix(base, p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), photoW);
+        vec3 photoCol = p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a);
+        // at night half the photo's colour gives way to the top's own, as on the terrain photo (#61 item 5)
+        if (uNight > 0.0) photoCol = mix(photoCol, base, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));
+        base = mix(base, photoCol, photoW);
       }
     }
   #endif

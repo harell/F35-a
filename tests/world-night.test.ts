@@ -170,6 +170,12 @@ describe('at night the photo takes the procedural ground’s colour (#61 item 5,
   it('half of the photo’s colour gives way to the procedural ground’s at night, none of it by dusk', () => {
     expect(AERIAL_NIGHT_MIX).toBe(0.5);
     expect(terrainFragmentShader).toContain(`if (uNight > 0.0) photoCol = mix(photoCol, albedo, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));`);
+    // the photo-topped wharf decks and roofs at the wharf roots do the same with their own colour
+    const atmo = createAtmosphereUniforms(skyPreset('auckland', 'night', 'clear', 20_000), 20_000);
+    const tex = new DataTexture(new Uint8Array(4), 1, 1);
+    const mat = createBuildingMaterial(atmo, { aerial: aerialUniforms({ texture: tex, x0: 0, z0: 0, size: 1, feather: 1 }, tex) });
+    expect(mat.fragmentShader).toContain(`if (uNight > 0.0) photoCol = mix(photoCol, base, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));`);
+    expect(mat.fragmentShader).toContain('base = mix(base, photoCol, photoW);');
     // the procedural ground (urbanPattern) still runs under the photo at night, so 'albedo' is its colour
     expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0;');
     // dusk's lamps are on at 0.2: below the mix's 0.5 threshold
