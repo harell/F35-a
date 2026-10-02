@@ -4,7 +4,10 @@
  *
  *   node e2e/targetcam.mjs [--base=http://localhost:5173/] [--mission=c01] [--kind=air|civil|sam|ground]
  *                          [--view=cockpit|hud|chase] [--wait=6000] [--steps=1 --every=1000] [--clip] [--dpr=2]
- *                          [--out=e2e/screenshots/targetcam/<mission>-<kind>-<view>.png]
+ *                          [--out=e2e/screenshots/targetcam/<mission>-<kind>-<view>.png] [--shahed]
+ *
+ * --shahed spawns a Shahed-136 one-way drone 1.2 km ahead of the player, crossing its nose at the
+ * player's height, and designates it (no shipped mission flies them yet).
  *
  * Prints the PiP state (target, rect, label) from window.__f35.targetCam() and any console errors.
  * Exits non-zero on page errors or when the window did not open for a designated target.
@@ -43,6 +46,28 @@ page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 await page.goto(`${base}?mission=${mission}&autostart=1&view=${view}&quality=${quality}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 90000 });
 await page.waitForTimeout(1500);
+
+if (args.shahed) {
+  // the dev server serves the game's own modules: this import is the instance the game uses
+  await page.evaluate(async () => {
+    const { createOneWay, placeOneWay } = await import('/src/sim/drone/oneWay.ts');
+    const w = window.__f35.game.session.world;
+    const p = w.player;
+    const fwd = p.velocity.clone().setY(0).normalize();
+    const side = { x: -fwd.z, z: fwd.x };
+    const at = p.position.clone().addScaledVector(fwd, 1200);
+    const from = at.clone();
+    from.x -= side.x * 300;
+    from.z -= side.z * 300;
+    const target = at.clone();
+    target.x += side.x * 20000;
+    target.z += side.z * 20000;
+    target.y = 0;
+    const d = w.spawnAircraft({ type: 'shahed136', team: 'red', position: from, heading: 0, speed: 51, ai: null, groupId: 'e2e-shahed' });
+    placeOneWay(d, createOneWay({ target, altitude: p.position.y, route: [] }), from);
+  });
+  await page.evaluate(() => window.__f35.simulate(1));
+}
 
 const picked = await page.evaluate((kind) => {
   const g = window.__f35.game;
