@@ -7,7 +7,7 @@
  *    competent player (tests/missions-bot.ts): c09 (was unwinnable on every difficulty),
  *    c01 (was soft-locked on 'Splash the second MiG pair 1/2'), c08 (low-level under the SA-10),
  *    and c01 win-rate bands per difficulty (the reviewers' suggested regression test).
- * The full per-difficulty sweep is e2e/review/dev-missions-sweep.ts.
+ * The full per-difficulty sweep is tools/playtest/bot-sweep.ts.
  */
 import { Vector3 } from 'three';
 import { beforeAll, describe, expect, it } from 'vitest';
