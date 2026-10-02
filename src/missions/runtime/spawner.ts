@@ -386,13 +386,6 @@ export function assignGroundAttack(s: MissionState, g: GroupRt, reset = false): 
   }
 }
 
-/** Id of the first live member of a group (a fast boat's chase / strike / escort target), or null. */
-function firstLiveId(s: MissionState, groupId: string | undefined): number | null {
-  if (!groupId) return null;
-  const m = s.groups.get(groupId)?.members.find((e) => e.alive);
-  return m ? m.id : null;
-}
-
 /** Spawn one SAM site. */
 export function spawnSamSite(s: MissionState, def: SamSiteDef): void {
   const g = s.groups.get(def.group);
@@ -408,7 +401,7 @@ export function spawnSamSite(s: MissionState, def: SamSiteDef): void {
     known: def.known ?? !def.emcon,
     boat:
       def.type === 'ad_boat'
-        ? { path: def.path?.map((p) => new Vector3(p.x, 0, p.z)), speed: def.speed, loop: def.loop, escortId: firstLiveId(s, def.escort) }
+        ? { path: def.path?.map((p) => new Vector3(p.x, 0, p.z)), speed: def.speed, loop: def.loop, escortGroup: def.escort }
         : undefined,
   });
   if (g) {
@@ -439,8 +432,9 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
     boat:
       def.chase || def.strike
         ? {
-            chaseId: firstLiveId(s, def.chase),
-            strike: def.strike ? { targetId: firstLiveId(s, def.strike.group) ?? -1, range: def.strike.range, countdown: def.strike.countdown, missiles: def.strike.missiles } : null,
+            // groups, resolved by sim/boats.ts each step the boat has no live target (spawn order doesn't matter)
+            chaseGroup: def.chase,
+            strike: def.strike ? { group: def.strike.group, range: def.strike.range, countdown: def.strike.countdown, missiles: def.strike.missiles } : null,
           }
         : undefined,
   });

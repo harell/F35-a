@@ -33,8 +33,11 @@ export const BOAT_SPEED = 23;
 /** Missile boat: default launch range from its target (m) and countdown at the launch point (s). */
 export const BOAT_LAUNCH_RANGE = 6_000;
 export const BOAT_COUNTDOWN = 20;
-/** Kowsars a missile boat carries (Peykaap II: 2). Each one is its own full, announced countdown. */
-export const BOAT_MISSILES = 2;
+/**
+ * Kowsars a missile boat fires by default: one countdown, one launch, one hit. A mission can give a
+ * Peykaap II both of its two (strike.missiles = 2): each one is then its own full, announced countdown.
+ */
+export const BOAT_MISSILES = 1;
 /** Suicide boat weave: heading swing amplitude (rad) and period (s). */
 export const BOAT_WEAVE = 25 * DEG;
 export const BOAT_WEAVE_PERIOD = 7;
@@ -43,10 +46,17 @@ const TURN_RATE = 40 * DEG;
 /** Look-ahead time for the open-water test (s) and its floor (m). */
 const LOOK_AHEAD_T = 2.5;
 const LOOK_AHEAD_MIN = 40;
-/** Headings tried round an obstacle, relative to the wanted one. */
-const STEER_TRIES = [0, 20, -20, 40, -40, 60, -60, 90, -90, 120, -120, 150, -150, 180].map((d) => d * DEG);
+/**
+ * Headings tried round an obstacle, relative to the wanted one (× BoatState.side): every one up to 120°
+ * on the side it went round last time before the other side, so a boat that meets a coast
+ * head-on keeps going round one way instead of dithering between the two.
+ */
+const STEER_TRIES = [0, 20, 40, 60, 90, 120, -20, -40, -60, -90, -120, 150, -150, 180].map((d) => d * DEG);
 /** Escort station keeping: within this distance of the station the boat matches its leader's pace (m). */
 const STATION_TOLERANCE = 60;
+/** Missile boat: height (m) of the line of sight to its target over the sea, and how often it is checked (s). */
+const LOS_HEIGHT = 10;
+const LOS_CHECK = 0.25;
 
 /** Kowsar flight: speed (m/s, high subsonic), sea-skimming height (m), damage of the hit. */
 export const KOWSAR_SPEED = 250;
@@ -56,8 +66,15 @@ const KOWSAR_CLIMB_T = 1.5;
 const KOWSAR_EJECT = 40;
 
 export interface BoatStrike {
-  /** Ship to fire at. */
+  /** Ship to fire at (−1 = none yet). */
   targetId: number;
+  /** Mission group to fire at: its first live member, looked up again whenever the target is gone. */
+  group: string | null;
+  /** The target is there and afloat (last step): the TSD / tac map only draw the launch ring then. */
+  hasTarget: boolean;
+  /** Clear line of sight over the water to the target (checked every LOS_CHECK s while in range). */
+  clear: boolean;
+  losTimer: number;
   /** Launch range (m): the boat closes to it, then counts down. */
   range: number;
   /** Countdown at the launch point (s). */
@@ -82,8 +99,12 @@ export interface BoatState {
   loop: boolean;
   /** Suicide boat: entity to ram. */
   chaseId: number | null;
+  /** Mission group to chase: its first live member, looked up again whenever `chaseId` is gone. */
+  chaseGroup: string | null;
   /** Escort: entity to keep station on, `escortRight` m to its right and `escortAft` m behind. */
   escortId: number | null;
+  /** Mission group to escort: its first live member, looked up again whenever `escortId` is gone. */
+  escortGroup: string | null;
   escortRight: number;
   escortAft: number;
   /** Missile boat: target and countdown. */
@@ -105,10 +126,12 @@ export interface BoatOptions {
   path?: Vector3[] | null;
   loop?: boolean;
   chaseId?: number | null;
+  chaseGroup?: string | null;
   escortId?: number | null;
+  escortGroup?: string | null;
   escortRight?: number;
   escortAft?: number;
-  strike?: { targetId: number; range?: number; countdown?: number; missiles?: number } | null;
+  strike?: { targetId?: number; group?: string | null; range?: number; countdown?: number; missiles?: number } | null;
   weave?: number;
 }
 
@@ -121,12 +144,18 @@ export function makeBoat(e: BoatEntity, o: BoatOptions = {}): BoatState {
     pathIndex: 0,
     loop: !!o.loop,
     chaseId: o.chaseId ?? null,
+    chaseGroup: o.chaseGroup || null,
     escortId: o.escortId ?? null,
+    escortGroup: o.escortGroup || null,
     escortRight: o.escortRight ?? 150,
     escortAft: o.escortAft ?? 250,
     strike: o.strike
       ? {
-          targetId: o.strike.targetId,
+          targetId: o.strike.targetId ?? -1,
+          group: o.strike.group || null,
+          hasTarget: (o.strike.targetId ?? -1) >= 0,
+          clear: false,
+          losTimer: 0,
           range: o.strike.range ?? BOAT_LAUNCH_RANGE,
           countdown: o.strike.countdown ?? BOAT_COUNTDOWN,
           timer: -1,
@@ -134,7 +163,7 @@ export function makeBoat(e: BoatEntity, o: BoatOptions = {}): BoatState {
           fired: 0,
         }
       : null,
-    weave: o.weave ?? (o.chaseId != null ? BOAT_WEAVE : 0),
+    weave: o.weave ?? (o.chaseId != null || o.chaseGroup ? BOAT_WEAVE : 0),
     phase: (e.id * 2.39996) % (Math.PI * 2),
     blocked: false,
     side: 1,
@@ -149,12 +178,39 @@ export function isBoat(e: AnyEntity): e is BoatEntity {
 }
 
 /**
- * A live missile boat hostile to `team` that can still launch (a Kowsar left or a countdown
- * running): the TSD and the tac map draw its launch ring.
+ * A live missile boat hostile to `team` that has a target afloat and can still launch (a Kowsar left
+ * or a countdown running): the TSD and the tac map draw its launch ring.
  */
 export function isMissileBoatLive(g: GroundTargetEntity, team: Team): boolean {
   const st = g.boat?.strike;
-  return !!st && g.alive && g.team !== team && g.team !== 'neutral' && (st.missiles > 0 || st.timer >= 0);
+  return !!st && g.alive && g.team !== team && g.team !== 'neutral' && st.hasTarget && (st.missiles > 0 || st.timer >= 0);
+}
+
+/**
+ * `id` if that entity is still alive, else the first live member of mission group `group` (ground
+ * targets first, then SAM sites; never `self`, nor a boat that is itself an escort), else null.
+ * Looked up every step a boat has no live target, so the spawn order of a mission's groups doesn't
+ * matter and a boat moves on to the next member when its target dies.
+ */
+function resolveTarget(world: SimWorld, self: AnyEntity, id: number | null, group: string | null): number | null {
+  if (id != null && id >= 0) {
+    const e = world.getEntity(id);
+    if (e && e.alive) return id;
+  }
+  if (!group) return id;
+  for (let i = 0; i < world.ground.length; i++) {
+    const g = world.ground[i];
+    if (g.alive && g !== self && g.groupId === group && !isEscort(g)) return g.id;
+  }
+  for (let i = 0; i < world.sams.length; i++) {
+    const s = world.sams[i];
+    if (s.alive && s !== self && s.groupId === group && !isEscort(s)) return s.id;
+  }
+  return null;
+}
+
+function isEscort(e: BoatEntity): boolean {
+  return !!e.boat && (e.boat.escortGroup !== null || e.boat.escortId !== null);
 }
 
 /** The Kowsar a missile boat fired: target and launching boat. */
@@ -184,6 +240,15 @@ export function stepBoats(world: SimWorld, dt: number): void {
   }
 }
 
+const _losA = new Vector3();
+const _losB = new Vector3();
+/** No island or headland between the boat and its target: the Kowsar's sea-skimming path is clear. */
+function lineOfSightOverSea(world: SimWorld, from: Vector3, to: Vector3): boolean {
+  _losA.set(from.x, LOS_HEIGHT, from.z);
+  _losB.set(to.x, LOS_HEIGHT, to.z);
+  return world.terrain.lineOfSight(_losA, _losB);
+}
+
 function headingTo(from: Vector3, x: number, z: number): number {
   return Math.atan2(x - from.x, -(z - from.z));
 }
@@ -197,8 +262,18 @@ function stepBoat(world: SimWorld, e: BoatEntity, b: BoatState, dt: number): voi
   let want: number | null = null;
   let speed = b.speed;
 
+  // mission targets are groups: (re)resolve to the first live member while the current one is gone
+  if (b.chaseGroup) b.chaseId = resolveTarget(world, e, b.chaseId, b.chaseGroup);
+  if (b.escortGroup) b.escortId = resolveTarget(world, e, b.escortId, b.escortGroup);
+  if (b.strike?.group) b.strike.targetId = resolveTarget(world, e, b.strike.targetId, b.strike.group) ?? -1;
+
   const chase = b.chaseId != null ? world.getEntity(b.chaseId) : null;
-  const strikeTarget = b.strike ? world.getEntity(b.strike.targetId) : null;
+  const strikeTarget = b.strike && b.strike.targetId >= 0 ? world.getEntity(b.strike.targetId) : null;
+  if (b.strike) {
+    b.strike.hasTarget = !!strikeTarget && strikeTarget.alive;
+    // its ship sank (or was never there): no countdown runs on, no launch ring stays up
+    if (!b.strike.hasTarget) b.strike.timer = -1;
+  }
   const leader = b.escortId != null ? world.getEntity(b.escortId) : null;
 
   if (chase && chase.alive) {
@@ -217,7 +292,13 @@ function stepBoat(world: SimWorld, e: BoatEntity, b: BoatState, dt: number): voi
   } else if (b.strike && strikeTarget && strikeTarget.alive && (b.strike.missiles > 0 || b.strike.timer >= 0)) {
     const st = b.strike;
     const d = Math.hypot(strikeTarget.position.x - pos.x, strikeTarget.position.z - pos.z);
-    if (st.timer < 0 && d > st.range) {
+    if (d > st.range) st.clear = false;
+    else if ((st.losTimer -= dt) <= 0) {
+      st.losTimer = LOS_CHECK;
+      st.clear = lineOfSightOverSea(world, pos, strikeTarget.position);
+    }
+    if (d > st.range || !st.clear) {
+      // close in; out of range or with land in the way, a countdown that has started holds
       want = headingTo(pos, strikeTarget.position.x, strikeTarget.position.z);
     } else {
       // at the launch point: lie stopped, bow on to the target, and count down
@@ -405,10 +486,15 @@ function stepKowsar(world: SimWorld, m: MissileEntity, dt: number): void {
   _dir.set(target.position.x - m.position.x, 0, target.position.z - m.position.z);
   const dist = _dir.length();
   if (dist > 1e-3) _dir.divideScalar(dist);
-  const y = m.age < KOWSAR_CLIMB_T ? 3 + (KOWSAR_ALT * 3 - 3) * (m.age / KOWSAR_CLIMB_T) : Math.max(KOWSAR_ALT, m.position.y - 20 * dt);
+  const nx = m.position.x + _dir.x * speed * dt;
+  const nz = m.position.z + _dir.z * speed * dt;
+  // sea-skimming, but never through land (the ship may sail behind a headland while it flies)
+  const land = world.terrain.surfaceHeightAt(nx, nz);
+  const floor = land > 0 ? land + KOWSAR_ALT : 0;
+  const y = Math.max(floor, m.age < KOWSAR_CLIMB_T ? 3 + (KOWSAR_ALT * 3 - 3) * (m.age / KOWSAR_CLIMB_T) : Math.max(KOWSAR_ALT, m.position.y - 20 * dt));
   m.velocity.set(_dir.x * speed, (y - m.position.y) / dt, _dir.z * speed);
-  m.position.x += m.velocity.x * dt;
-  m.position.z += m.velocity.z * dt;
+  m.position.x = nx;
+  m.position.z = nz;
   m.position.y = y;
   m.phase = m.age < KOWSAR_CLIMB_T ? 'boost' : 'terminal';
   m.motorBurning = true;

@@ -208,6 +208,8 @@ export interface SamSpawn {
  * How an IRGC Navy fast boat sails (sim/boats.ts): a suicide boat rams `chaseId`; a missile boat
  * closes to `strike.range` of `strike.targetId`, counts down and fires; an AD boat keeps station on
  * `escortId`. With none of them (or once its target is gone) it sails `path`.
+ * The `…Group` / `strike.group` forms name a mission group instead: the boat takes its first live
+ * member, looking it up again each step it has no live target (spawn order doesn't matter).
  */
 export interface BoatSpawn {
   path?: Vector3[];
@@ -215,11 +217,13 @@ export interface BoatSpawn {
   /** Cruise speed (m/s, default BOAT_SPEED ≈ 45 kt). */
   speed?: number;
   chaseId?: number | null;
+  chaseGroup?: string;
   escortId?: number | null;
+  escortGroup?: string;
   /** Station on the escorted boat: metres to its right and behind it. */
   escortRight?: number;
   escortAft?: number;
-  strike?: { targetId: number; range?: number; countdown?: number; missiles?: number } | null;
+  strike?: { targetId?: number; group?: string; range?: number; countdown?: number; missiles?: number } | null;
   /** Weave amplitude (rad); default BOAT_WEAVE for a chasing boat, 0 otherwise. */
   weave?: number;
 }

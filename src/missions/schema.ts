@@ -224,14 +224,15 @@ export interface SamSiteDef {
   path?: XZ[];
   speed?: number;
   loop?: boolean;
-  /** 'ad_boat': keep station on the first live member of this group (the boats it escorts), at spawn. */
+  /** 'ad_boat': keep station on the first live member of this group (the boats it escorts; the next one when it dies). */
   escort?: string;
 }
 
 /**
  * IRGC Navy missile boat's strike ('missile_boat', sim/boats.ts): it closes to `range` m (default
  * BOAT_LAUNCH_RANGE) of the first live member of `group`, counts down `countdown` s (default
- * BOAT_COUNTDOWN) and fires one Kowsar per countdown, `missiles` in all (default BOAT_MISSILES).
+ * BOAT_COUNTDOWN) and fires one Kowsar per countdown, `missiles` in all (default BOAT_MISSILES = 1; a
+ * Peykaap II carries 2). It only counts down with clear water and line of sight to the target.
  */
 export interface BoatStrikeDef {
   group: string;
@@ -276,7 +277,7 @@ export interface GroundTargetDef {
    * Needs a vessel class and team 'neutral' (validate.ts rejects it otherwise).
    */
   hitsToSink?: number;
-  /** 'suicide_boat': chase and ram the first live member of this group (resolved at spawn), weaving. */
+  /** 'suicide_boat': chase and ram the first live member of this group (the next one if it sinks first), weaving. */
   chase?: string;
   /** 'missile_boat': its target, launch range and countdown. */
   strike?: BoatStrikeDef;

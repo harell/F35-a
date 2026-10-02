@@ -182,8 +182,8 @@ moving ship and ferry in one draw call (`QualitySettings.wakes`, off on `low`). 
 `src/sim/boats.ts` sails the IRGC campaign's boats after the ground movers each step. A **suicide boat**
 (`'suicide_boat'` ground target) chases a ship (`BoatState.chaseId`, weaving about the intercept course)
 and its contact with the hull is one hit on her (`applyDamage(…, 'collision')` from a ground entity).
-A **missile boat** (`'missile_boat'`, `BoatState.strike`) closes to its launch range, lies stopped and
-counts down, then fires a **Kowsar**: a plain `MissileEntity` flown by `boats.ts`, never by the
+A **missile boat** (`'missile_boat'`, `BoatState.strike`) closes to its launch range with a clear line
+of sight over the water, lies stopped and counts down, then fires a **Kowsar** (one by default): a plain `MissileEntity` flown by `boats.ts`, never by the
 CombatSystem, that always reaches its ship and scores one hit, and like every missile is never a
 sensor contact, so the only defence is killing the boat first. The countdown is announced (DARKSTAR
 call with the bearing, HUD "MISSILE BOAT LAUNCH n", a launch ring on the TSD and tac map). The
@@ -191,7 +191,8 @@ call with the bearing, HUD "MISSILE BOAT LAUNCH n", a launch ring on the TSD and
 runs it like any site (the SA-15's missile and envelope, plus SA-18s through `SamTypeData.manpads`),
 `boats.ts` only moves it and keeps its velocity, which the GBU-53/B and the AGM-88G use. Boats only
 ever move onto water (`TerrainQuery.isWater`), steering round land. Missions point them at a group
-(`GroundTargetDef.chase` / `.strike`, `SamSiteDef.escort`, resolved at spawn).
+(`GroundTargetDef.chase` / `.strike`, `SamSiteDef.escort`): `boats.ts` takes the group's first live
+member, and looks it up again each step the boat has no live target, so spawn order doesn't matter.
 
 ## Frame / sim order (Game.ts)
 

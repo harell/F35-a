@@ -13,7 +13,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import type { AircraftEntity, GroundTargetEntity, MissileEntity } from '../src/sim/entities';
-import { BOAT_COUNTDOWN, BOAT_SPEED, isKowsar } from '../src/sim/boats';
+import { BOAT_COUNTDOWN, BOAT_MISSILES, BOAT_SPEED, isKowsar, isMissileBoatLive } from '../src/sim/boats';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import { emptyScript } from '../src/missions/schema';
 import { validateMission } from '../src/missions/validate';
@@ -33,6 +33,8 @@ import { makeBoat } from '../src/sim/boats';
 import { createHud } from '../src/hud/Hud';
 import { buildMock } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
+import { createMissionRunner } from '../src/missions';
+import { createAiBrain } from '../src/ai';
 
 const DEG = Math.PI / 180;
 const DT = 1 / 60;
@@ -92,30 +94,42 @@ function record<K extends keyof GameEventMap>(w: SimWorld, name: K): GameEventMa
 /* ───────────────────────── suicide boat ───────────────────────── */
 
 describe('suicide boat', { timeout: 30_000 }, () => {
-  it('chases a moving tanker, weaving, and its contact is one hit on her; then the boat is gone', () => {
+  /**
+   * A suicide boat chasing a tanker; `maxOff` is its largest course offset from the intercept (lead)
+   * point it aims at, measured once it has settled on its chase (after the first turn) and > 1 km out.
+   */
+  function chase(weave?: number) {
     const w = seaWorld();
     const t = tanker(w);
-    const boat = w.spawnGround({ type: 'suicide_boat', team: 'red', position: new Vector3(4000, 0, -3000), boat: { chaseId: t.id } });
-    expect(boat.boat?.chaseId).toBe(t.id);
-    expect(boat.boat?.speed).toBe(BOAT_SPEED);
+    const boat = w.spawnGround({ type: 'suicide_boat', team: 'red', position: new Vector3(4000, 0, -3000), boat: { chaseId: t.id, weave } });
     const hits = record(w, 'vessel:hit');
     let maxOff = 0;
     run(w, 400, () => {
-      if (boat.alive && boat.velocity.lengthSq() > 1) {
+      const d = Math.hypot(t.position.x - boat.position.x, t.position.z - boat.position.z);
+      if (boat.alive && w.time > 15 && d > 1000 && boat.velocity.lengthSq() > 1) {
+        const lead = t.position.clone().addScaledVector(t.velocity, Math.min(60, d / BOAT_SPEED));
         const course = Math.atan2(boat.velocity.x, -boat.velocity.z);
-        const bearing = Math.atan2(t.position.x - boat.position.x, -(t.position.z - boat.position.z));
-        const off = Math.abs(Math.atan2(Math.sin(course - bearing), Math.cos(course - bearing)));
-        if (boat.position.distanceTo(t.position) > 600) maxOff = Math.max(maxOff, off);
+        const bearing = Math.atan2(lead.x - boat.position.x, -(lead.z - boat.position.z));
+        maxOff = Math.max(maxOff, Math.abs(Math.atan2(Math.sin(course - bearing), Math.cos(course - bearing))));
       }
       return !boat.alive;
     });
+    return { w, t, boat, hits, maxOff };
+  }
+
+  it('chases a moving tanker, weaving, and its contact is one hit on her; then the boat is gone', () => {
+    const { w, t, boat, hits, maxOff } = chase();
+    expect(boat.boat?.chaseId).toBe(t.id);
+    expect(boat.boat?.speed).toBe(BOAT_SPEED);
     expect(boat.alive).toBe(false);
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatchObject({ ship: t, hits: 1, attackerId: boat.id, weapon: 'collision' });
     expect(t.alive).toBe(true);
     expect(t.hits).toBe(1);
-    // it weaved about its intercept course (so a GPS bomb's fixed aim point misses it)
-    expect(maxOff).toBeGreaterThan(12 * DEG);
+    // it weaved about its intercept course (so a GPS bomb's fixed aim point misses it); with the
+    // weave off, the same chase holds its intercept course
+    expect(maxOff).toBeGreaterThan(15 * DEG);
+    expect(chase(0).maxOff).toBeLessThan(3 * DEG);
     run(w, 30);
     expect(t.hits).toBe(1); // a dead boat does nothing more
   });
@@ -123,7 +137,7 @@ describe('suicide boat', { timeout: 30_000 }, () => {
 
 /* ───────────────────────── missile boat ───────────────────────── */
 
-function missileBoat(w: SimWorld, t: GroundTargetEntity, at: Vector3, missiles = 1): GroundTargetEntity {
+function missileBoat(w: SimWorld, t: GroundTargetEntity, at: Vector3, missiles?: number): GroundTargetEntity {
   return w.spawnGround({ type: 'missile_boat', team: 'red', position: at, boat: { strike: { targetId: t.id, range: 6000, countdown: BOAT_COUNTDOWN, missiles } } });
 }
 
@@ -164,9 +178,59 @@ describe('missile boat', { timeout: 30_000 }, () => {
     expect(radio.some((r) => /missile boat, launch imminent, bearing \d{3}/i.test(r.text))).toBe(true);
     expect(hud.some((h) => h.text === `MISSILE BOAT LAUNCH ${BOAT_COUNTDOWN}`)).toBe(true);
     expect(hud.some((h) => h.text === 'MISSILE BOAT LAUNCH 1')).toBe(true);
-    // one missile carried: nothing more
+    // the default load (one Kowsar): one countdown, one launch, one hit, and nothing more
+    expect(BOAT_MISSILES).toBe(1);
     run(w, 60);
     expect(t.hits).toBe(1);
+    expect(launches).toHaveLength(1);
+    expect(radio.filter((r) => /launch imminent/i.test(r.text))).toHaveLength(1);
+    expect(boat.boat!.strike!.timer).toBe(-1);
+    expect(isMissileBoatLive(boat, 'blue')).toBe(false); // spent: its launch ring is gone
+  });
+
+  it('its target sinks during the countdown: the count stops and the launch ring goes', () => {
+    const w = seaWorld(2);
+    const t = tanker(w);
+    const p = bystander(w);
+    const boat = missileBoat(w, t, new Vector3(7500, 0, -5000));
+    const launches = record(w, 'munition:launch');
+    run(w, 200, () => boat.boat!.strike!.timer >= 0 && boat.boat!.strike!.timer < BOAT_COUNTDOWN - 5);
+    expect(isMissileBoatLive(boat, 'blue')).toBe(true);
+    w.applyDamage(t, 1000, p.id, 'kowsar');
+    w.applyDamage(t, 1000, p.id, 'kowsar');
+    expect(t.alive).toBe(false);
+    run(w, 1);
+    expect(boat.boat!.strike!.timer).toBe(-1);
+    expect(isMissileBoatLive(boat, 'blue')).toBe(false);
+    run(w, 30);
+    expect(launches).toHaveLength(0);
+  });
+
+  it('holds its countdown until no island stands between it and the ship; the Kowsar never flies through land', () => {
+    // in range from the start, but a 30 m island lies on the line to the tanker
+    const island: Island = { x0: -1500, x1: 1500, z0: -3500, z1: -2500 };
+    const w = seaWorld(9, [island]);
+    const t = w.spawnGround({ type: 'ship', team: 'neutral', vessel: 'tanker', hitsToSink: 2, position: new Vector3(0, 0, -6000) });
+    bystander(w);
+    const boat = missileBoat(w, t, new Vector3(0, 0, 0));
+    const hits = record(w, 'vessel:hit');
+    const los = (a: Vector3, b: Vector3) => w.terrain.lineOfSight(new Vector3(a.x, 10, a.z), new Vector3(b.x, 10, b.z));
+    expect(boat.position.distanceTo(t.position)).toBeLessThan(6000 + 1);
+    expect(los(boat.position, t.position)).toBe(false);
+    let countdownAt = -1;
+    let below = 0;
+    run(w, 360, () => {
+      expect(w.terrain.isWater(boat.position.x, boat.position.z)).toBe(true);
+      if (countdownAt < 0 && boat.boat!.strike!.timer >= 0) {
+        countdownAt = w.time;
+        expect(los(boat.position, t.position)).toBe(true); // it sailed clear of the island first
+      }
+      for (const m of w.missiles) if (m.alive && isKowsar(m) && m.position.y < w.terrain.surfaceHeightAt(m.position.x, m.position.z) + 1) below++;
+      return hits.length > 0;
+    });
+    expect(countdownAt).toBeGreaterThan(60); // it went round the island first, without dithering at its shore
+    expect(hits).toHaveLength(1);
+    expect(below).toBe(0);
   });
 
   it('killed during the countdown: no launch, no hit', () => {
@@ -241,6 +305,52 @@ describe('air-defence boat (moving SAM)', { timeout: 60_000 }, () => {
     run(w, 60);
     expect(lead.alive).toBe(true);
     expect(ad.position.distanceTo(lead.position)).toBeLessThan(500);
+  });
+
+  it('in a mission: escorts its boat group and moves on when that boat is gone; boats find a tanker listed after them', () => {
+    const base = missionById('c01')!;
+    const script = emptyScript();
+    // the boats come BEFORE the tanker they attack, and SAM sites spawn before every ground target
+    script.ground.push(
+      { id: 'sb1', group: 'boats', type: 'suicide_boat', x: 2500, z: -2000, chase: 'tanker' },
+      { id: 'mb1', group: 'boats', type: 'missile_boat', x: 14_000, z: -5000, strike: { group: 'tanker' } },
+      { id: 'mt', group: 'tanker', type: 'ship', team: 'neutral', vessel: 'tanker', hitsToSink: 2, x: 0, z: -5000, path: [{ x: 0, z: -35_000 }], speed: 6 },
+    );
+    script.sams.push({ id: 'ad1', group: 'ad', type: 'ad_boat', x: 3000, z: -1500, escort: 'boats' });
+    script.objectives.push({ id: 'p', kind: 'protect', label: 'Protect the tanker', primary: true, group: 'tanker' } as never);
+    const def = { ...base, script } as MissionDef;
+    expect(validateMission(def).filter((e) => /sb1|mb1|ad1|chase|strike|escort/.test(e))).toEqual([]);
+    const events = new EventBus();
+    const w = createSimWorld({ terrain: new SeaTerrain(-20), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(1) });
+    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events, civilTraffic: false } as never);
+    runner.setup(w, def.recommendedLoadout);
+    const tick = (seconds: number, until?: () => boolean) => {
+      for (let i = 0; i < seconds * 60; i++) {
+        w.step(DT);
+        runner.update(w, DT);
+        if (until?.()) return;
+      }
+    };
+    const byGroup = (g: string) => [...w.ground, ...w.sams].filter((e) => e.groupId === g);
+    const [sb, mb] = byGroup('boats') as GroundTargetEntity[];
+    const [mt] = byGroup('tanker') as GroundTargetEntity[];
+    const [ad] = byGroup('ad');
+    expect(sb.type).toBe('suicide_boat');
+    expect(mb.type).toBe('missile_boat');
+    tick(1 / 60);
+    expect(sb.boat!.chaseId).toBe(mt.id);
+    expect(mb.boat!.strike!.targetId).toBe(mt.id);
+    expect(ad.boat!.escortId).toBe(sb.id);
+    const start = ad.position.clone();
+    tick(30, () => !sb.alive);
+    expect(ad.position.distanceTo(start)).toBeGreaterThan(300);
+    expect(ad.position.distanceTo(sb.position)).toBeLessThan(600); // on station on its boat
+    tick(300, () => !sb.alive);
+    expect(sb.alive).toBe(false); // it rammed the tanker
+    expect(mt.hits).toBeGreaterThanOrEqual(1);
+    tick(1);
+    expect(ad.boat!.escortId).toBe(mb.id); // on to the next boat of the group
+    runner.dispose?.();
   });
 
   it('an AGM-88G homes on its radar while it sails, and kills it', () => {
@@ -319,7 +429,7 @@ describe('GBU-53/B vs a weaving boat', { timeout: 60_000 }, () => {
 /* ───────────────────────── boats stay in the water ───────────────────────── */
 
 describe('boats never leave the water', { timeout: 60_000 }, () => {
-  it('a suicide boat goes round an island to reach its ship; a missile boat and an AD boat stop at the shore', () => {
+  it('a suicide boat goes round an island to reach its ship; a missile boat and an AD boat never cross a coast', () => {
     const island: Island = { x0: -1500, x1: 1500, z0: -3000, z1: -2000 };
     const w = seaWorld(7, [island]);
     const water = (e: { position: Vector3 }) => w.terrain.isWater(e.position.x, e.position.z);
