@@ -10,7 +10,10 @@
  *    cold in afterburner; closer radar missiles are beamed against the launching radar with a
  *    descent into the clutter and chaff in the last seconds; IR missiles are beamed with the
  *    throttle out of afterburner and flares inside ~4 km; last-ditch break at ~2 s to go,
- *  - Winchester: turns for home.
+ *  - Winchester: turns for home, or (rtbWhenWinchester false, the gun-only probe) fights on with the
+ *    gun as a BFM fight: cranks off a bandit pointing at it inside its R-27 range and notches
+ *    harder, MIL power and flares through the merge, no more g than it can sustain when slow, and
+ *    a chase on speed (not g) behind the bandit.
  *
  * Flying is delegated to the AI Autopilot (the same "hands" the AI uses), so the bot's airmanship
  * is steady and the measured differences come from tactics and the difficulty settings.
@@ -19,15 +22,17 @@ import { Quaternion, Vector3 } from 'three';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
-import { isHostile, type Difficulty, type LoadoutId } from '../src/core/types';
+import { AB_DETENT, isHostile, type Difficulty, type LoadoutId } from '../src/core/types';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { createMissionRunner, missionById } from '../src/missions';
 import { mulberry32 } from '../src/core/math';
 import type { AircraftEntity, IncomingMissile } from '../src/sim/entities';
-import { Autopilot, gammaForAltitude } from '../src/ai/pilot/Autopilot';
+import { Autopilot, gammaForAltitude, type FlightIntent } from '../src/ai/pilot/Autopilot';
 import { dirWithElevation, rotateHorizontal, signedHorizAngle } from '../src/ai/geom';
+import { sustainableG } from '../src/ai/brain/bfm';
+import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 
 export interface PlayerBotOptions {
   /** Seconds before the pilot reacts to a new MAWS warning. */
@@ -55,6 +60,7 @@ const _aim = new Vector3();
 const _vh = new Vector3();
 const _e = new Vector3();
 const _rot = new Quaternion();
+const _bf = new Vector3();
 
 /** The bot pulls the trigger only inside this range (m) with the LCOS pipper on the bandit. */
 const GUN_FIRE_RANGE = 900;
@@ -66,6 +72,31 @@ const GUN_TRACK_CONE = 0.6;
 const GUN_KI = 3;
 /** Cap on the integral term (rad), against wind-up: twice the proportional lag of a 9 g turn (0.35 rad/s ÷ 2.2). */
 const GUN_I_MAX = 0.3;
+/** Gun fight: flares through the merge while a bandit inside this range (m) has its nose on us (R-73 envelope). */
+const MERGE_FLARE_RANGE = 3_500;
+/** ... nose within this angle of us (rad). */
+const MERGE_FLARE_CONE = 25 * (Math.PI / 180);
+/** Gun fight: behind the bandit with it inside this angle off the nose (rad), chase on speed, not g. */
+const CHASE_ATA = 30 * (Math.PI / 180);
+/** Gun fight: crank GUN_CRANK off a bandit whose nose is within GUN_CRANK_CONE of us between these ranges (m). */
+const GUN_MERGE_RANGE = 3_000;
+const GUN_CRANK_RANGE = 8_000;
+const GUN_CRANK_CONE = 50 * (Math.PI / 180);
+const GUN_CRANK = 40 * (Math.PI / 180);
+
+/**
+ * Gun-fight energy rule (as the AI's applyEnergyLimits): below 90 % of corner speed turn no harder
+ * than `slack` × the g the jet can sustain, and (`limitClimb`) don't point the flight path up into
+ * a hover; really slow, go nose-low. A slow or crippled jet that pulls 9 g bleeds to 100 m/s and
+ * can't point at anything any more.
+ */
+function gunEnergy(p: AircraftEntity, it: FlightIntent, e: number, slack: number, limitClimb: boolean): void {
+  if (e >= 0.9) return;
+  it.gMax = Math.max(3, Math.min(it.gMax, sustainableG(p, 9) * slack));
+  if (!limitClimb) return;
+  const maxY = Math.max(-0.05, Math.min(0.7, (e - 0.55) * 1.2));
+  if (it.dir.y > maxY) it.dir.setY(maxY).normalize();
+}
 
 export class PlayerBot {
   readonly pilot = new Autopilot();
@@ -79,6 +110,8 @@ export class PlayerBot {
   private beamSide = 0;
   private defendingId = -1;
   private crankSide = 0;
+  /** Last offense tick: only the gun left and fighting with it (defend() flies a faster notch then). */
+  private gunFight = false;
   private lastShot = -99;
   /** Has defended at least one missile (an unarmed aggressor turns cold after that). */
   private defended = false;
@@ -190,8 +223,8 @@ export class PlayerBot {
       dirWithElevation(_q, gammaForAltitude(p, ground + 1_000, 0.3, 5), it.dir);
       it.speed = 280;
       it.allowAb = true;
-      it.gMax = 7;
-      it.gain = 1.6;
+      it.gMax = this.gunFight ? 9 : 7;
+      it.gain = this.gunFight ? 2.5 : 1.6;
       if (tti < 7) this.pulse(p, now, true, false);
       this.state = 'NOTCH';
     } else {
@@ -214,6 +247,28 @@ export class PlayerBot {
     if ((!radar || both) && now - this.lastFlare > gap && p.flares > 0) {
       p.input.flare = true;
       this.lastFlare = now;
+    }
+  }
+
+  /**
+   * Gun fight: a salvo of flares every 0.8 s while a hostile fighter inside MERGE_FLARE_RANGE has
+   * its nose on us (a pilot sees the bandit pointing at him in the merge). A head-on R-73 at 2 km
+   * arrives in about 2 s, before the MAWS reaction; flares already in the air get it seduced.
+   */
+  private mergeFlares(p: AircraftEntity, world: SimWorld, now: number): void {
+    if (p.flares <= 0 || now - this.lastFlare < 0.8) return;
+    for (const c of p.radar.contacts) {
+      if (!isHostile(p.team, c.team)) continue;
+      const b = world.getEntity(c.id);
+      if (!b || b.kind !== 'aircraft' || !b.alive) continue;
+      _p.subVectors(p.position, b.position);
+      const R = _p.length();
+      if (R > MERGE_FLARE_RANGE || R < 1) continue;
+      _bf.set(0, 0, -1).applyQuaternion(b.quaternion);
+      if (_bf.dot(_p) < Math.cos(MERGE_FLARE_CONE) * R) continue;
+      p.input.flare = true;
+      this.lastFlare = now;
+      return;
     }
   }
 
@@ -242,6 +297,11 @@ export class PlayerBot {
       _p.subVectors(tgt.position, p.position);
       gunOnly = p.gunAmmo > 0 && (!this.opts.rtbWhenWinchester || (best < 1_500 && _fwd.dot(_p) > 0.8 * _p.length()));
     }
+    // only the gun left (gun-only probe, or Winchester and pressing on): fly the merge for survival
+    // and energy (BFM), not as a missile shooter
+    const gunFight = missiles === 0 && gunOnly && !this.opts.rtbWhenWinchester;
+    this.gunFight = gunFight;
+    if (gunFight) this.mergeFlares(p, world, now);
     const aggressor = this.opts.aggressor && !this.defended;
     if (!tgt || (missiles === 0 && !gunOnly && !aggressor)) {
       const dest = !tgt && this.opts.cap && (missiles > 0 || aggressor) ? this.opts.cap : this.opts.home;
@@ -333,17 +393,56 @@ export class PlayerBot {
       }
       it.gain = 2.2;
       it.gMax = 9;
+      const e = p.flight.ias / AIRCRAFT_PERF[p.type].cornerSpeed;
+      _bf.set(0, 0, -1).applyQuaternion(tgt.quaternion);
+      const facing = _bf.dot(_p) < 0; // the bandit's nose within 90° of us (_p: us → bandit)
       // closure: tracking a bandit flying away from us (tail chase), hold a firing position
       // ~GUN_TRAIL m behind it instead of flying through it; otherwise keep the energy up
       const away = tgt.velocity.dot(_p);
       if (tracking && away > 0.7 * tgt.velocity.length()) {
         it.throttle = -1;
-        it.speed = Math.max(170, Math.min(340, away + (R - GUN_TRAIL) * 0.15));
+        // (with only the gun left, chase a bandit that extends: the 340 m/s cap let a MiG in
+        // burner at 400+ m/s run away from 1.6 km in trail for minutes)
+        it.speed = Math.max(170, Math.min(gunFight ? 600 : 340, away + (R - GUN_TRAIL) * 0.15));
         it.allowAb = true;
         it.allowBrake = true;
+      } else if (gunFight) {
+        // IR discipline: the afterburner plume more than triples what an R-73 sees (and drowns
+        // our flares), so MIL while the bandit's nose is within 90° of us, unless the jet is
+        // getting slow; behind it, burner to close
+        it.throttle = facing && e >= 0.8 ? AB_DETENT : 1;
       } else it.throttle = 1;
+      const firing = tracking && R < GUN_FIRE_RANGE * 1.3;
+      if (gunFight && !facing && !firing && _fwd.dot(_p) > Math.cos(CHASE_ATA)) {
+        // chase: behind the bandit, nose roughly on it, out of gun range — speed closes the
+        // range, not g. The 9 g pursuit bled to ~200 m/s while a jinking MiG ran at 350+ m/s
+        // 1.5 km ahead for minutes; turn no harder than the jet can sustain
+        it.gMax = Math.max(3, Math.min(9, sustainableG(p, 9)));
+        it.throttle = -1;
+        it.speed = 600;
+        it.allowAb = true;
+      } else if (gunFight) gunEnergy(p, it, e, firing ? 1.6 : 1.1, !tracking);
       this.state = 'GUNS';
       return;
+    }
+    // gun fight, the bandit's nose on us inside its radar-missile range: approach on a crank,
+    // GUN_CRANK off the line of sight, a little below it. A head-on R-27 from 6 km lands before a
+    // 90° notch can be flown; from the crank the notch is half the turn
+    if (gunFight && R > GUN_MERGE_RANGE && R < GUN_CRANK_RANGE) {
+      _bf.set(0, 0, -1).applyQuaternion(tgt.quaternion);
+      _q.subVectors(p.position, tgt.position);
+      if (_bf.dot(_q) > Math.cos(GUN_CRANK_CONE) * R) {
+        _h.set(-_q.x, 0, -_q.z).normalize();
+        // on the side we're already turning to (once on the crank, the same side every tick)
+        rotateHorizontal(_h, (signedHorizAngle(_h, p.velocity) >= 0 ? 1 : -1) * GUN_CRANK, _q);
+        dirWithElevation(_q, gammaForAltitude(p, Math.max(p.position.y - p.flight.agl + 1_200, tgt.position.y - 500), 0.15, 8), it.dir);
+        it.speed = 300;
+        it.allowAb = false;
+        it.gMax = 6;
+        it.gain = 1.6;
+        this.state = 'OFFSET';
+        return;
+      }
     }
     // intercept: nose on the bandit, a little above its altitude
     _h.set(tgt.position.x - p.position.x, 0, tgt.position.z - p.position.z);
@@ -351,7 +450,7 @@ export class PlayerBot {
     dirWithElevation(_h, Math.max(-0.35, Math.min(0.35, los)), it.dir);
     it.speed = R < 12_000 ? 300 : 260;
     // IR discipline: the afterburner plume is what an IRST sees — MIL until the merge
-    it.allowAb = R < 3_000;
+    it.allowAb = R < 3_000 && !gunFight;
     it.gMax = R < 4_000 ? 9 : R < 15_000 ? 5 : 3;
     it.gain = R < 4_000 ? 2 : 1.2;
     it.track = R < 4_000;
@@ -419,10 +518,13 @@ export function runBalanceMission(
     /**
      * Gun-only probe: the player's stores are emptied every step (so a mission rearm adds no
      * missiles), the pilot presses on with the gun (as 'committed') and the run doesn't end as
-     * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02): the bot tracks and kills bandits in
-     * trail, and fires in real fights on Recruit, but on Pilot it still loses the fights it would
-     * need to win to get a gun shot (0 rounds in c01 / ia_dogfight_auckland), so a Pilot sweep
-     * measures the bot's dogfighting more than the gun.
+     * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02), on Pilot: over a flat sea (seeds
+     * 0-15) the bot fires the gun in 5 c01 runs (3 gun kills) and 1 ia_dogfight_auckland run (6
+     * rounds); over the real Auckland terrain (seeds 0-11) in 2 c01 runs (1 gun kill) and 1
+     * ia_dogfight_auckland run, and the playtest's seeds 1-3 still fire 0 in both missions. Most
+     * runs still end at the first merge (two missile hits kill on Pilot), and in the Instant
+     * Action dogfight the a2a_beast wingman often splashes all four bandits first. A sweep
+     * measures the gun and the bot's dogfighting together.
      */
     gunOnly?: boolean;
     onStep?: (world: SimWorld, p: AircraftEntity, bot: PlayerBot) => void;
