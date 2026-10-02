@@ -84,6 +84,8 @@ export class CollisionSystem {
       for (let j = i + 1; j < n; j++) {
         const b = aircraft[j];
         if (b.crashed || (!a.alive && !b.alive)) continue;
+        // drones of one swarm converge on the same target: they never collide with each other
+        if (a.oneWay && b.oneWay) continue;
         const reach = (a.radius + b.radius) * MIDAIR_FACTOR;
         _p.subVectors(a.position, b.position);
         _v.subVectors(a.velocity, b.velocity);

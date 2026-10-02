@@ -16,6 +16,7 @@ export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   tu22m: 'TU-22M',
   a50: 'A-50',
   a320: 'A320',
+  shahed136: 'SHAHED-136',
 };
 
 /** Short type codes for crowded places (TSD, RWR). */
@@ -28,6 +29,7 @@ export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
   tu22m: '22M',
   a50: 'A50',
   a320: 'CIV',
+  shahed136: 'UAV',
 };
 
 export const SAM_LABEL: Record<SamType, string> = {

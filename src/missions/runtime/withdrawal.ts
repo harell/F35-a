@@ -66,6 +66,8 @@ export class WithdrawalMonitor {
     const s = this.s;
     const g = ac.groupId ? s.groups.get(ac.groupId) : undefined;
     if (!g || !g.air || g.team === 'blue' || !s.player || ac.team === s.player.team) return false;
+    // one-way drones fly their route to the end, whatever role the group names
+    if (g.air.oneWay) return false;
     return FIGHTER_ROLES.has(g.air.role);
   }
 

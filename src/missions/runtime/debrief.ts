@@ -66,7 +66,8 @@ export function killerText(s: MissionState): string | null {
   }
   if (st.lastHitBy === 'aircraft' && st.lastHitType) {
     const name = AIRCRAFT_INFO[st.lastHitType as AircraftType]?.name ?? st.lastHitType;
-    const weapon = w === 'gun' ? 'gun' : w.toUpperCase().replace(/^R(\d)/, 'R-$1');
+    // an aircraft's 'flak' is a one-way drone's warhead going off next to the player
+    const weapon = w === 'gun' ? 'gun' : w === 'flak' ? 'warhead' : w.toUpperCase().replace(/^R(\d)/, 'R-$1');
     return `${article(name)} ${name}'s ${weapon}`;
   }
   if (w === 'flak') return 'flak';

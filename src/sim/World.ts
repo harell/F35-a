@@ -36,9 +36,10 @@ import type { FlightEnv } from './flight/env';
 import { ensureSimState, initFlight, stepFlight } from './flight/FlightModel';
 import { CollisionSystem } from './damage/Collisions';
 import { DamageSystem, type DamageWeapon } from './damage/Damage';
-import { GROUND_TARGET_DATA, SAM_SITE_DATA, VESSEL_DATA } from './damage/tables';
+import { AIRCRAFT_HEALTH, AIRCRAFT_WARHEAD, GROUND_TARGET_DATA, SAM_SITE_DATA, VESSEL_DATA } from './damage/tables';
 import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
+import { stepOneWay } from './drone/oneWay';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
 
 /** Size of the pooled bullet / shell array. */
@@ -132,8 +133,9 @@ class SimWorldImpl implements SimWorld {
         return self.time;
       },
       getEntity: (id) => this.getEntity(id),
-      onEntityDestroyed: () => {
+      onEntityDestroyed: (e) => {
         this.hostileDirty = true;
+        if (e.kind === 'aircraft' && AIRCRAFT_WARHEAD[e.type]) this.warheadBlast(e);
       },
     });
     this.collisions = new CollisionSystem(o.terrain, this.damage);
@@ -197,6 +199,8 @@ class SimWorldImpl implements SimWorld {
       ir: perf.ir,
     });
     ac.isPlayer = !!spec.isPlayer;
+    const hp = AIRCRAFT_HEALTH[spec.type];
+    if (hp) ac.health = ac.maxHealth = hp;
     ac.ai = spec.ai ?? null;
     ac.leaderId = spec.leaderId ?? null;
     ac.groupId = spec.groupId ?? '';
@@ -353,11 +357,14 @@ class SimWorldImpl implements SimWorld {
       }
     }
 
-    // 2. Flight model (player, AI and falling wrecks); live civil traffic flies its scripted profile
+    // 2. Flight model (player, AI and falling wrecks); live civil traffic and one-way drones fly
+    //    their scripted profiles
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
       if (ac.civil && ac.alive) stepCivil(ac, dt, this.terrain, this.player);
-      else stepFlight(ac, dt, this.env);
+      else if (ac.oneWay && ac.alive) {
+        if (stepOneWay(ac, dt, this.terrain, this.landmarks)) this.droneImpact(ac);
+      } else stepFlight(ac, dt, this.env);
     }
 
     // 3. Weapons, sensors, SAMs
@@ -382,6 +389,37 @@ class SimWorldImpl implements SimWorld {
 
     // 8. Cleanup
     this.cleanup();
+  }
+
+  /** A one-way drone reached its target: report it, then its warhead detonates (no kill credit). */
+  private droneImpact(ac: AircraftEntity): void {
+    const f = ac.oneWay!;
+    this.events.emit('drone:impact', { drone: ac, position: f.impactPoint, landmark: f.impactLandmark });
+    const ground = this.terrain.surfaceHeightAt(ac.position.x, ac.position.z);
+    const surface = ac.position.y - ground > 5 ? 'air' : this.terrain.isWater(ac.position.x, ac.position.z) ? 'water' : 'ground';
+    this.damage.destroyAircraft(ac, null, 'collision', 'crash', surface);
+    // it is gone: no wreck for the terrain collision to crash (and explode) a second time
+    ac.crashed = true;
+    ensureSimState(ac).crashTime = this.time;
+    ac.velocity.set(0, 0, 0);
+  }
+
+  /**
+   * A warhead-carrying drone was destroyed (shot down, crashed or on its target): the blast damages
+   * every other live aircraft around it (AIRCRAFT_WARHEAD), but not other drones.
+   */
+  private warheadBlast(drone: AircraftEntity): void {
+    const w = AIRCRAFT_WARHEAD[drone.type];
+    if (!w) return;
+    const aircraft = this.aircraft;
+    for (let i = 0; i < aircraft.length; i++) {
+      const ac = aircraft[i];
+      if (!ac.alive || ac === drone || AIRCRAFT_WARHEAD[ac.type]) continue;
+      const d = ac.position.distanceTo(drone.position);
+      if (d >= w.radius) continue;
+      const k = d <= w.fullRadius ? 1 : 1 - (d - w.fullRadius) / (w.radius - w.fullRadius);
+      this.damage.apply(ac, w.damage * k, drone.id, 'flak', drone.position);
+    }
   }
 
   private updateMovers(dt: number): void {
@@ -455,12 +493,12 @@ class SimWorldImpl implements SimWorld {
     let w = 0;
     for (let i = 0; i < aircraft.length; i++) {
       const a = aircraft[i];
-      // civil traffic that landed and vacated / left the area
-      let remove = a.alive && !!a.civil?.despawn;
+      // civil traffic that landed and vacated / left the area; a drone that blew up on its target
+      let remove = (a.alive && !!a.civil?.despawn) || (!a.alive && !!a.oneWay?.impacted);
       if (!a.alive && !a.isPlayer) {
         const st = a.sim;
         const landed = a.crashed && st && st.crashTime >= 0 && this.time - st.crashTime > WRECK_GROUND_TIME;
-        remove = landed || this.time - a.destroyedAt > WRECK_MAX_TIME;
+        remove = remove || landed || this.time - a.destroyedAt > WRECK_MAX_TIME;
       }
       if (remove) {
         this.byId.delete(a.id);

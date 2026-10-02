@@ -38,6 +38,7 @@ const AIRCRAFT_SPAN: Record<AircraftType, number> = {
   tu22m: 34.3,
   a50: 50.5,
   a320: 35.8,
+  shahed136: 2.5,
 };
 
 /**

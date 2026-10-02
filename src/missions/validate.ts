@@ -149,7 +149,12 @@ export function validateMission(def: MissionDef): string[] {
     inWorld(g.x, g.z, where);
     if (!(g.count >= 1)) err(`${where} count < 1`);
     if (!(g.altitude >= 100)) err(`${where} altitude below 100 m`);
-    if (!(g.speed >= 100)) err(`${where} speed below 100 m/s`);
+    if (g.oneWay) {
+      // one-way drones (Shahed-136) cruise at about 51 m/s
+      if (!(g.speed >= 30)) err(`${where} drone speed below 30 m/s`);
+      inWorld(g.oneWay.targetX, g.oneWay.targetZ, `${where} drone target`);
+      g.oneWay.route?.forEach((q, i) => inWorld(q.x, q.z, `${where} drone route ${i}`));
+    } else if (!(g.speed >= 100)) err(`${where} speed below 100 m/s`);
     checkCond(g.spawn, where);
     checkTask(g.task, where);
     if (g.task?.kind === 'escort_group' || g.task?.kind === 'attack_group') {

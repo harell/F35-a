@@ -42,6 +42,7 @@ export const NATO_AIR: Record<AircraftType, string> = {
   tu22m: 'BACKFIRE',
   a50: 'MAINSTAY',
   a320: '', // civil airliner: no reporting name (pipName shows its callsign)
+  shahed136: 'DRONE', // no NATO reporting name: the PiP reads "SHAHED-136 DRONE"
 };
 
 export const NATO_SAM: Record<SamType, string> = {

@@ -69,6 +69,11 @@ export interface GameEventMap {
   'landmark:destroyed': { landmark: LandmarkEntity; attackerId: number | null; weapon: MunitionId | null; position: Vector3; cause: LandmarkCollapseCause };
   /** The falling landmark's upper section hit the ground (dust wall, rumble). `heading` = fall heading (rad). */
   'landmark:impact': { landmark: LandmarkEntity; position: Vector3; heading: number };
+  /**
+   * A one-way attack drone (Shahed-136) reached its target point, or flew into a landmark on the
+   * way (`landmark`). Its warhead detonates right after ('destroyed' with no attacker).
+   */
+  'drone:impact': { drone: AircraftEntity; position: Vector3; landmark: LandmarkEntity | null };
   /** Player was destroyed (crash / shot down). */
   'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' };
 }

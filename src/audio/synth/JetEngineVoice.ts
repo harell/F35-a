@@ -39,6 +39,9 @@ export const ENGINE_PROFILES: Record<AircraftType, EngineProfile> = {
   a50: { whine: 0.66, fan: 0.7, roar: 0.8, rumble: 1.25, ref: 70, maxDist: 8000 },
   // high-bypass LEAP / PW1100G: fan whine and buzz-saw, little jet roar
   a320: { whine: 0.8, fan: 0.85, roar: 0.6, rumble: 1.0, ref: 55, maxDist: 6000 },
+  // Shahed-136: no turbine; its piston buzz is PistonBuzzVoice (audio/world/DroneSounds.ts), and
+  // the jet pool never picks it. Kept near-silent in case anything plays it as a jet.
+  shahed136: { whine: 0.05, fan: 0.05, roar: 0.05, rumble: 0.1, ref: 15, maxDist: 1500 },
 };
 
 export interface EngineDrive {

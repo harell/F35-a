@@ -59,7 +59,8 @@ export type AircraftType =
   | 'su57' // Su-57 Felon (low observable)
   | 'tu22m' // Tu-22M3 Backfire bomber (intercept target)
   | 'a50' // A-50 Mainstay AEW&C (high value target)
-  | 'a320'; // Airbus A320neo airliner (neutral civilian traffic)
+  | 'a320' // Airbus A320neo airliner (neutral civilian traffic)
+  | 'shahed136'; // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles

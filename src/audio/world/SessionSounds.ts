@@ -11,6 +11,7 @@ import type { SynthEnv } from '../synth/build';
 import { NoiseBank } from '../synth/NoiseBank';
 import { AvionicsSounds } from './AvionicsSounds';
 import { CockpitSounds } from './CockpitSounds';
+import { DroneSounds } from './DroneSounds';
 import { ImpactSounds } from './ImpactSounds';
 import { JetSounds } from './JetSounds';
 import { WeaponSounds } from './WeaponSounds';
@@ -18,6 +19,7 @@ import { WeaponSounds } from './WeaponSounds';
 export class SessionSounds {
   readonly noise: NoiseBank;
   readonly jets: JetSounds;
+  readonly drones: DroneSounds;
   readonly weapons: WeaponSounds;
   readonly impacts: ImpactSounds;
   readonly avionics: AvionicsSounds;
@@ -29,6 +31,7 @@ export class SessionSounds {
   ) {
     this.noise = new NoiseBank(env.ctx, env.buffers, 2);
     this.jets = new JetSounds(env, this.noise, quality);
+    this.drones = new DroneSounds(env, this.noise, quality);
     this.weapons = new WeaponSounds(env, this.noise, quality);
     this.impacts = new ImpactSounds(env);
     this.avionics = new AvionicsSounds(env, this.noise);
@@ -37,6 +40,7 @@ export class SessionSounds {
 
   update(now: number, dt: number, ctx: FrameContext, L: Listener): void {
     this.jets.update(now, dt, ctx, L);
+    this.drones.update(now, dt, ctx, L);
     this.weapons.update(now, dt, ctx, L);
     this.impacts.update(ctx, L);
     this.avionics.update(now, ctx);
@@ -46,6 +50,7 @@ export class SessionSounds {
   /** Silence continuous voices (pause) without tearing the graph down. */
   silence(now: number): void {
     this.jets.silence(now);
+    this.drones.silence(now);
     this.weapons.silence(now);
     this.avionics.silence(now);
     this.cockpit.silence(now);
@@ -54,6 +59,7 @@ export class SessionSounds {
   dispose(): void {
     this.impacts.clear();
     this.jets.dispose();
+    this.drones.dispose();
     this.weapons.dispose();
     this.avionics.dispose();
     this.cockpit.dispose();

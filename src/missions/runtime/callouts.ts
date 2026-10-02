@@ -196,7 +196,8 @@ export class Callouts {
         }
         const who = attacker.callsign.toUpperCase();
         s.hud(`${who}: ${entity.kind === 'aircraft' ? `SPLASH ${aircraftHudName(entity.type)}` : killHudText(entity)}`, 'info', 2.5);
-      } else if (entity.kind === 'aircraft' && p.alive && entity.position.distanceTo(p.position) < 40_000) {
+      } else if (entity.kind === 'aircraft' && !entity.oneWay?.impacted && p.alive && entity.position.distanceTo(p.position) < 40_000) {
+        // (a one-way drone that blew up on its target got through: it isn't "down")
         s.hud(`${aircraftHudName(entity.type)} DOWN`, 'info', 2);
       }
       return;

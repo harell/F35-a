@@ -25,6 +25,8 @@ export const TYPE_RCS: Record<AircraftType, number> = {
   tu22m: 40,
   a50: 60,
   a320: 40,
+  // Shahed-136: 2.5 m composite delta wing; small, but not LO-shaped (see isStealthy)
+  shahed136: 0.1,
 };
 
 /** Default IR signature scale by type (1 = typical fighter at MIL power). */
@@ -37,6 +39,8 @@ export const TYPE_IR: Record<AircraftType, number> = {
   tu22m: 2.5,
   a50: 2,
   a320: 1.8,
+  // a ~50 hp pusher piston engine: small, but enough for an AIM-9X inside a few km
+  shahed136: 0.2,
 };
 
 export interface FighterRadarSpec {
@@ -70,6 +74,8 @@ export const FIGHTER_RADAR: Record<AircraftType, FighterRadarSpec> = {
   a50: { range: 110_000, gimbal: Math.PI, lpi: false, irst: 0, notchResistance: 0.5 },
   // airliner: weather radar only, no fire control
   a320: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
+  // one-way attack drone: no radar at all (nothing on the RWR)
+  shahed136: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
 };
 
 /** Early-warning radar (ground, VHF): long range and better against stealth shaping. */
@@ -78,7 +84,8 @@ export const EWR_RANGE = 90_000;
 export const EWR_STEALTH_BONUS = 25;
 
 export function isStealthy(ac: AircraftEntity): boolean {
-  return ac.rcsBase < 0.5;
+  // the Shahed-136 is small, not low-observable: no LO shaping (beam/rear multipliers, FCR factor)
+  return ac.rcsBase < 0.5 && ac.type !== 'shahed136';
 }
 
 /**
