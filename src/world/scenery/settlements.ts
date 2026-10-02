@@ -1,9 +1,16 @@
 /**
- * Generic settlements for scenery features: city / town / village centres (Auckland-style weatherboard
- * walls and iron roofs, a church spire), industrial zones (warehouses, tank farms, striped chimneys)
+ * Generic settlement builders for scenery features: city / town / village centres (weatherboard
+ * walls, iron roofs, a church spire), industrial zones (warehouses, tank farms, striped chimneys)
  * and ports (piers into the nearest water, gantry cranes, containers). Suburban houses around them
  * come from the instanced scatter (scatter.ts) following the same street grid the terrain shader
- * paints. Auckland's own missions build the real city instead (aucklandSites.ts, the CBD).
+ * paints.
+ *
+ * This is not Auckland's scenery: the real city comes from aucklandSites.ts (the CBD, the port).
+ * Since the procedural theatres were removed (#73) no shipped mission places a city, town,
+ * village or port feature (only airbase and industrial ones), so of these builders only
+ * buildIndustrial runs today. The others stay reachable from the mission schema
+ * (SceneryFeatureType) until they are removed separately, together with the farmland / forest
+ * paths in terrain/bake.ts and terrain/vegetation.ts.
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
