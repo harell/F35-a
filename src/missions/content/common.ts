@@ -199,9 +199,9 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     const d = SAM_DATA[s.type];
     out.push({ kind: 'sam', label: SAM_INFO[s.type].nato.split(' ')[0], x: s.x, z: s.z, radius: d.engageMax });
   }
-  const groundGroups = new Map<string, { xs: number; zs: number; n: number; type: GroundTargetType; team: string }>();
+  const groundGroups = new Map<string, { xs: number; zs: number; n: number; type: GroundTargetType; team: string; name?: string }>();
   for (const g of script.ground) {
-    const e = groundGroups.get(g.group) ?? { xs: 0, zs: 0, n: 0, type: g.type, team: g.team ?? 'red' };
+    const e = groundGroups.get(g.group) ?? { xs: 0, zs: 0, n: 0, type: g.type, team: g.team ?? 'red', name: g.name };
     e.xs += g.x;
     e.zs += g.z;
     e.n++;
@@ -222,7 +222,11 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     missile_boat: 'Missile boats',
   };
   for (const e of groundGroups.values()) {
-    out.push({ kind: e.team === 'blue' ? 'friendly' : 'target', label: label[e.type], x: Math.round(e.xs / e.n), z: Math.round(e.zs / e.n) });
+    const x = Math.round(e.xs / e.n);
+    const z = Math.round(e.zs / e.n);
+    // a neutral ship (g02's tanker) is the one being protected, not a strike target: mark it friendly, by name
+    if (e.team === 'neutral') out.push({ kind: 'friendly', label: e.name ?? label[e.type], x, z });
+    else out.push({ kind: e.team === 'blue' ? 'friendly' : 'target', label: label[e.type], x, z });
   }
   for (const g of script.groups) {
     if (g.spawn && g.spawn.kind !== 'start') continue;
