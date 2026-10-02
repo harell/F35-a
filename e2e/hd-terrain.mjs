@@ -5,10 +5,11 @@
  * Island / Mt Eden summits from the game's own terrain query, the time to start the mission and the
  * HD file's download time on an emulated mid-range connection (--mbps, default 10 Mbit/s, 40 ms RTT).
  *
- *   npm run build && npx vite preview --port 4173 &
+ *   npm run build:test && npx vite preview --port 4173 &
  *   node e2e/hd-terrain.mjs [--base=http://localhost:4173/] [--mission=c01] [--mbps=10]
  *
- * Run it against the production build (vite preview): the service worker only registers there.
+ * Run it against a production build (vite preview): the service worker only registers there. It has
+ * to be the test build (VITE_TEST_HOOKS=1), the only production build with ?autostart and window.__f35.
  */
 import { chromium } from 'playwright-core';
 

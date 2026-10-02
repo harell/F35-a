@@ -5,6 +5,7 @@
  *
  * URL parameters (handy for testing on a phone or from Playwright):
  *   ?mission=<id>&loadout=<id>&autostart=1   skip menus and fly a mission immediately
+ *                                            (test hooks only: dev server / VITE_TEST_HOOKS=1, see TEST_HOOKS)
  *   ?difficulty=recruit|pilot|veteran|ace    override difficulty
  *   ?quality=low|medium|high                 override quality
  *   ?view=cockpit|hud|chase|orbit|...        initial camera
@@ -12,7 +13,7 @@
  */
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 import { EventBus } from '../core/events';
-import { DIFFICULTIES, GAME_BUILD, QUALITY_PRESETS } from '../core/data';
+import { DIFFICULTIES, GAME_BUILD, QUALITY_PRESETS, TEST_HOOKS } from '../core/data';
 import { loadSettings, resolveQuality, saveSettings } from '../core/settings';
 import type {
   AudioApi,
@@ -179,7 +180,7 @@ export class Game {
     this.resize();
     this.renderer.setAnimationLoop(() => this.frame());
 
-    (window as unknown as { __f35: unknown }).__f35 = this.debugApi();
+    if (TEST_HOOKS) (window as unknown as { __f35: unknown }).__f35 = this.debugApi();
     this.tagSettings();
   }
 
@@ -194,13 +195,13 @@ export class Game {
   /* ─────────────────────────── App flow ─────────────────────────── */
 
   async start(): Promise<void> {
-    const autostart = this.params.get('autostart') === '1';
+    const autostart = TEST_HOOKS && this.params.get('autostart') === '1';
     if (!autostart) {
       await this.ui.showSplash();
       await this.onUserGesture();
     }
     void this.audio.load();
-    const missionId = this.params.get('mission');
+    const missionId = TEST_HOOKS ? this.params.get('mission') : null;
     if (missionId) {
       const def = missionById(missionId) ?? CAMPAIGN[0];
       const loadout = (this.params.get('loadout') as LoadoutId | null) ?? def.recommendedLoadout;
