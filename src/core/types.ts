@@ -110,7 +110,15 @@ export type MunitionId =
   | 'm_9m330' // SA-15 missile, command guided
   | 'm_igla'; // SA-18 MANPADS missile, IR
 
-export type LoadoutId = 'a2a_stealth' | 'strike_stealth' | 'sead_stealth' | 'strike_sdb2' | 'a2a_beast' | 'strike_beast';
+export type LoadoutId =
+  | 'a2a_stealth'
+  | 'strike_stealth'
+  | 'sead_stealth'
+  | 'strike_sdb2'
+  /** 8× GBU-53/B + 2× AIM-120D: only in missions that list it in allowedLoadouts (the boat swarm, #82). */
+  | 'strike_sdb2_full'
+  | 'a2a_beast'
+  | 'strike_beast';
 
 /** Throttle axis 0..1. 0 = idle, AB_DETENT = 100% military (dry) power, 1 = max afterburner. */
 export const AB_DETENT = 0.9;
