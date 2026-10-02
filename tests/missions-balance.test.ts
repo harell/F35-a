@@ -163,10 +163,16 @@ function parkedRun(id: string, diff: Difficulty, seed: number, maxT: number) {
   return { state: runner.state, t: world.time, alive: p.alive, shots: p.shotsFired, reason: result?.reason ?? '', completed, objectives: runner.objectives };
 }
 
+/** Seconds from an objective completing to the end of the mission, in a logged bot playthrough (null: never completed). */
+function afterObjective(r: { events: string[]; t: number }, id: string): number | null {
+  const line = r.events.find((e) => e.endsWith(`OBJ ${id} complete`));
+  return line ? r.t - Number(line.trim().split(' ')[0]) : null;
+}
+
 describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)', () => {
   // the sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=c02,c09,t03 --diffs=recruit,pilot --seeds=6
   // (was c02 4/6, c09 4/6, t03 2/6 on Pilot; Recruit 6/6 each)
-  for (const id of ['c02']) {
+  for (const id of ['c02', 'c09']) {
     it(`${id} is won on Recruit and on Pilot in ≥ 5 of 6 seeds`, { timeout: 300_000 }, () => {
       for (const diff of ['recruit', 'pilot'] as const) {
         const r = wins(id, diff, [0, 1, 2, 3, 4, 5]);
@@ -199,6 +205,30 @@ describe('issue #57: c02 Shepherd — Kiwi has to be protected for real', () => 
       expect(r.alive, msg).toBe(true);
       expect(r.objectives.find((o) => o.id === 'o_kiwi')?.state, msg).toBe('failed');
       expect(r.t, msg).toBeLessThan(3000);
+    }
+  });
+});
+
+describe('issue #57: c09 Hammer Down — needs its escort, and ends once Hammer is clear', () => {
+  it('parked 50 km away with no shot fired: no win (round 3, 3.2-a: Weasel and Hammer won it alone)', { timeout: 120_000 }, () => {
+    for (const diff of ['recruit', 'pilot'] as const) {
+      const r = parkedRun('c09', diff, 1, 900);
+      const msg = `${diff}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives.map((o) => `${o.id}=${o.state}`).join(' ')}`;
+      expect(r.shots, msg).toBe(0);
+      expect(r.state, msg).toBe('failed');
+      expect(r.alive, msg).toBe(true);
+      expect(r.reason, msg).toMatch(/without its escort/);
+    }
+  });
+
+  it('no dead stretch after the strike: the mission ends ≤ 75 s after o_strike completes (was 240 s, a crash nursing a damaged jet home)', { timeout: 300_000 }, () => {
+    for (const seed of [0, 2, 3]) {
+      const r = runPlaythrough('c09', 'pilot', seed, terrainFor('c09'), { maxT: 900, log: true });
+      const gap = afterObjective(r, 'o_strike');
+      const msg = `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives}`;
+      expect(r.state, msg).toBe('success');
+      expect(gap, msg).not.toBeNull();
+      expect(gap!, msg).toBeLessThanOrEqual(75);
     }
   });
 });

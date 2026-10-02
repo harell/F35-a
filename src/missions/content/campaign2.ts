@@ -181,20 +181,42 @@ const HAMMER_REATTACK: TaskDef = {
     { x: 8000, z: 3000, altitude: 3000 },
   ],
 };
-const hammerHome: Condition = { kind: 'area', who: { group: 'hammer' }, x: 8000, z: 3000, radius: 6000 };
+/** Hammer's push point (the first ingress point). */
+const pushPoint = { x: 9000, z: 3000 };
+/** First egress point after the strike: back over the Tāmaki Strait, south-west of the island. */
+const hammerEgress = { x: 22000, z: 3000 };
+/**
+ * Hammer is clear of Waiheke: every live Hammer jet more than 10 km from the strip, i.e. feet wet
+ * over the strait (or the Gulf, when it jinked out east). The escort ends here, not at the old egress
+ * point 14 km further west (playtest 2026-10-02, issue #57): the 3–4 minute cruise there, longer when
+ * Hammer had jinked far east and came back round in wide turns, had nothing in it (201 s without an
+ * event), and a damaged jet had to be nursed through it.
+ */
+const hammerClear: Condition = { kind: 'not', of: { kind: 'area', who: { group: 'hammer' }, x: strip.x, z: strip.z, radius: 10_000 } };
+const hammerOut: Condition = { kind: 'all', of: [{ kind: 'objective', id: 'o_strike', state: 'complete' }, hammerClear] };
 /** Ingress from the push point: down into the Tāmaki Strait, run in low from the south (under the SA-6's radar). */
 const HAMMER_INGRESS: TaskDef = {
   kind: 'route',
   points: [
-    { x: 9000, z: 3000, altitude: 4000 },
+    { x: pushPoint.x, z: pushPoint.z, altitude: 4000 },
     { x: 17000, z: 2500, altitude: 900 },
     { x: 24500, z: 300, altitude: 300 },
     { x: strip.x + 300, z: strip.z + 3000, altitude: 400 },
     { x: 33000, z: 1500, altitude: 3000 },
   ],
 };
-/** The push: Flankers dealt with (splashed or driven off), or Hammer can't wait any longer. */
-const hammerPush: Condition = { kind: 'any', of: [{ kind: 'group_defeated', group: 'flankers' }, { kind: 'time', t: 200 }] };
+/**
+ * The escort is with Hammer: the player within 25 km of the push point. Hammer doesn't push without
+ * it (playtest 2026-10-02, 3.2-a, issue #57: a player parked 35 km away won the mission on Weasel's
+ * and Hammer's work alone).
+ */
+const escortUp: Condition = { kind: 'area', x: pushPoint.x, z: pushPoint.z, radius: 25_000 };
+/** Hammer is ready: the Flankers are dealt with (splashed or driven off), or it can't wait any longer. */
+const hammerReady: Condition = { kind: 'any', of: [{ kind: 'group_defeated', group: 'flankers' }, { kind: 'time', t: 200 }] };
+/** The push: Hammer is ready and the escort is up. */
+const hammerPush: Condition = { kind: 'all', of: [escortUp, hammerReady] };
+/** No escort by then: Hammer is bingo and goes home without striking (mission failed). */
+const HAMMER_SCRUB_T = 420;
 
 export const C09: MissionDef = mission({
   id: 'c09',
@@ -206,8 +228,8 @@ export const C09: MissionDef = mission({
   weather: 'scattered',
   briefing: [
     'The enemy is rebuilding the Waiheke airstrip and flying fuel in by sea. Hammer flight — four F-35As with JDAMs — is going to burn the fuel farm and the radar that runs the strip.',
-    "Hammer's jets are loaded for the ground and can't fight their way in. They hold on the tanker west of the city until you clear the air: a pair of Flankers is coming off the Gulf — kill them and DARKSTAR calls \"Hammer, push\". Hammer can only wait about three minutes. Su-35s scramble from the island a minute after the push: stay between them and Hammer.",
-    'Weasel flight will go after the SA-6 on the eastern end of Waiheke with AARGMs, and Hammer runs in low through the Tāmaki Strait under its radar. At least two Hammer jets have to make it back over the city.',
+    "Hammer's jets are loaded for the ground and can't fight their way in. They hold on the tanker west of the city until you clear the air: a pair of Flankers is coming off the Gulf — kill them and DARKSTAR calls \"Hammer, push\". Hammer can only wait about three minutes, and won't push without its escort: stay within 25 km of the push point east of the city. Su-35s scramble from the island a minute after the push: stay between them and Hammer.",
+    'Weasel flight will go after the SA-6 on the eastern end of Waiheke with AARGMs, and Hammer runs in low through the Tāmaki Strait under its radar. At least two Hammer jets have to get clear of Waiheke again.',
   ],
   recommendedLoadout: 'a2a_beast',
   allowedLoadouts: ['a2a_beast', 'a2a_stealth', 'sead_stealth', 'strike_sdb2'],
@@ -261,8 +283,8 @@ export const C09: MissionDef = mission({
         kind: 'protect',
         group: 'hammer',
         minSurvivors: 2,
-        until: { kind: 'all', of: [{ kind: 'objective', id: 'o_strike', state: 'complete' }, hammerHome] },
-        label: 'Keep at least two Hammer jets alive until they are home',
+        until: hammerOut,
+        label: 'Keep at least two Hammer jets alive until they are clear of Waiheke',
         primary: true,
       },
       { id: 'o_strike', kind: 'destroy', groups: ['depot'], label: 'Hammer destroys the Waiheke fuel farm', primary: true },
@@ -274,15 +296,15 @@ export const C09: MissionDef = mission({
         kind: 'protect',
         group: 'hammer',
         minSurvivors: 4,
-        until: { kind: 'all', of: [{ kind: 'objective', id: 'o_strike', state: 'complete' }, hammerHome] },
-        label: 'Bring all four Hammer jets home',
+        until: hammerOut,
+        label: 'Bring all four Hammer jets out',
         primary: false,
       },
     ],
     waypoints: [
       { id: 'wp_screen', label: 'Screen', kind: 'cap', x: 5000, z: -12000, altitude: 7000, objective: 'o_flankers' },
       { id: 'wp_target', label: 'Waiheke strip', kind: 'target', x: strip.x, z: strip.z, objective: 'o_strike' },
-      { id: 'wp_egress', label: 'Egress', kind: 'nav', x: 8000, z: 3000, altitude: 6000, objective: 'o_hammer' },
+      { id: 'wp_egress', label: 'Egress', kind: 'nav', x: hammerEgress.x, z: hammerEgress.z, altitude: 3000, objective: 'o_hammer' },
     ],
     triggers: [
       {
@@ -329,7 +351,7 @@ export const C09: MissionDef = mission({
             task: {
               kind: 'route',
               points: [
-                { x: 22000, z: 3000, altitude: 3000 },
+                { x: hammerEgress.x, z: hammerEgress.z, altitude: 3000 },
                 { x: 8000, z: 3000, altitude: 6000 },
                 { x: P.whenuapai.x, z: P.whenuapai.z, altitude: 2000 },
               ],
@@ -337,7 +359,22 @@ export const C09: MissionDef = mission({
           },
         ],
       },
-      { id: 't_home', when: { kind: 'all', of: [{ kind: 'trigger', id: 't_impact' }, hammerHome] }, actions: [{ kind: 'radio', from: 'Hammer 1', text: "Hammer's feet dry over the city. Thanks for the escort, Viper." }] },
+      {
+        // ready to go but the escort is away: tell the player where to be (every 60 s until the push)
+        id: 't_waiting',
+        when: { kind: 'all', of: [hammerReady, { kind: 'not', of: escortUp }, { kind: 'not', of: { kind: 'trigger', id: 't_push' } }] },
+        repeat: 60,
+        actions: [{ kind: 'radio', from: 'Hammer 1', text: 'Hammer is ready to push, but not without an escort. Viper, join us at the push point east of the city.', priority: 2 }],
+      },
+      {
+        id: 't_scrub',
+        when: { kind: 'all', of: [{ kind: 'time', t: HAMMER_SCRUB_T }, { kind: 'not', of: { kind: 'trigger', id: 't_push' } }] },
+        actions: [
+          { kind: 'radio', from: 'Hammer 1', text: 'Hammer is bingo and nobody came to escort us. Scrubbing the strike, Hammer RTB.', priority: 3 },
+          { kind: 'end', success: false, reason: 'Hammer went home without its escort' },
+        ],
+      },
+      { id: 't_home', when: { kind: 'all', of: [{ kind: 'trigger', id: 't_impact' }, hammerClear] }, actions: [{ kind: 'radio', from: 'Hammer 1', text: "Hammer is feet wet and clear of the island. Thanks for the escort, Viper." }] },
       { id: 't_sa6', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, delay: 2, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Waiheke SA-6 is off the air.', priority: 2 }] },
       { id: 't_loss', when: { kind: 'group_destroyed', group: 'hammer', count: 1 }, actions: [{ kind: 'radio', from: 'Hammer 1', text: "Hammer's lost a jet! Viper, we need cover!", priority: 3 }] },
     ],
@@ -350,7 +387,7 @@ export const C09: MissionDef = mission({
       { kind: 'radio', from: 'Weasel 1', text: 'Weasel 1, going for the SA-6. Magnum shortly.' },
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Picture clean for now. SA-6 active on Waiheke east. Expect Flankers from the north-east.' },
     ],
-    successText: 'Fuel farm destroyed and Hammer is home. Textbook escort.',
+    successText: 'Fuel farm destroyed and Hammer is clear. Textbook escort.',
   },
 });
 
