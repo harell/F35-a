@@ -166,9 +166,9 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       script.opening = [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Nothing hostile up here today. Enjoy the view.`, priority: 1 }];
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
-        'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill and the airport. The airliners and ships are civilians going about their day.',
+        'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. The airliners and ships are civilians going about their day.',
         'You are loaded to the teeth if you want to practise on the scenery: nothing counts against you. Terrain and buildings still do, so mind the ground.',
-        'The flight ends when you quit from the pause menu.',
+        'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
       break;
     }

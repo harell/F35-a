@@ -78,6 +78,28 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(def.intel.map((i) => i.label)).not.toContain('Enemy airstrip');
   });
 
+  it('the tour ticks each stop off, a detour past a later stop doesn\'t end it, and the last says TOUR COMPLETE (playtest r2, 2.2-3)', () => {
+    const m = setup();
+    m.tick(1);
+    const p = m.world.player!;
+    const wps = m.runner.waypoints;
+    const visit = (i: number) => {
+      p.position.set(wps[i].position.x, 600, wps[i].position.z);
+      m.tick(0.5);
+    };
+    visit(wps.length - 1); // straight to Whenuapai, the last stop
+    expect(m.runner.currentWaypoint?.label).toBe('Harbour Bridge');
+    visit(0);
+    expect(m.hud).toContain('HARBOUR BRIDGE ✓  1/11');
+    expect(m.runner.currentWaypoint?.label).toBe('Sky Tower');
+    for (let i = 1; i < wps.length - 1; i++) visit(i);
+    // Whenuapai was already visited: the tour ends as the second-last stop is reached
+    expect(m.hud).toContain('ONE TREE HILL ✓  9/11');
+    expect(m.hud).toContain('TOUR COMPLETE');
+    expect(m.runner.currentWaypoint).toBeNull();
+    expect(m.runner.state).toBe('running');
+  });
+
   it('only civilians in the air, and it keeps running until the player quits', () => {
     const m = setup();
     m.tick(60);
@@ -148,6 +170,10 @@ describe('Instant Action: A Stroll in the Park', () => {
     m.world.applyDamage(p, p.maxHealth * 10, null, 'gun');
     m.tick(1);
     expect(m.runner.state).toBe('failed');
+    // no MISSION FAILED banner or 'Mission failed' call (playtest r2, 2.2-4)
+    expect(m.hud).toContain('FLIGHT OVER');
+    expect(m.hud).not.toContain('MISSION FAILED');
+    expect(m.radio.some((t) => /Mission failed/.test(t))).toBe(false);
     // ...as a 'flight over', not a failed mission: no tips, no medals, nothing in the career
     const r = m.runner.result(m.world);
     expect(r.freeFlight).toBe(true);

@@ -88,6 +88,13 @@ export const G01_HINTS: MissionDef['script']['hints'] = [
     duration: 8,
   },
   {
+    // the 9X sees a Shahed's small engine only close in: NO SEEKER beyond ~2 km head-on (playtest r2, 2.1-e)
+    id: 'h_9x',
+    text: 'AIM-9X: the seeker needs the tone. Fire inside about 2 km',
+    when: { kind: 'player_weapon', weapon: 'aim9x' },
+    duration: 6,
+  },
+  {
     id: 'h_gun',
     text: 'Shaheds cruise at ~100 kt. From behind at about 200 kt (Vc 100), short bursts at 600–900 m',
     when: { kind: 'player_weapon', weapon: 'gun' },
@@ -95,7 +102,7 @@ export const G01_HINTS: MissionDef['script']['hints'] = [
   },
   {
     id: 'h_overshoot',
-    text: 'Overshot? Pull up and come round. Not below 175 kt: the pipper rides high',
+    text: 'Come in a little low, 300 ft below, and pull the pipper up onto the drone. Overshot? Pull up, come round',
     when: { kind: 'player_weapon', weapon: 'gun' }, // (follows h_gun: scripted hints show once each, in order)
     duration: 8,
   },
@@ -115,7 +122,7 @@ export const G01: MissionDef = mission({
   briefing: [
     '13:40. An IRGC mother ship, a converted container ship lying off the Hauraki Gulf, has launched a swarm of Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the Sky Tower. Impact in under four minutes.',
     'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are more of them than the eight missiles you carry at most. The gun is not optional today: you have extra rounds.',
-    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 600 to 900 m. Don\'t go much slower: below 175 knots the jet wallows nose-high and the pipper sits above the drone. Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
+    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 600 to 900 m. Come in about 300 ft below the drone and pull the pipper up onto it: level behind it, the jet flies nose-high and the pipper sits above the drone (more so below 175 knots). Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
   ],
   recommendedLoadout: 'a2a_beast',

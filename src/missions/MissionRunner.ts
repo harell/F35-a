@@ -483,9 +483,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
   }
 
-  /** Plain nav / IP / CAP points can be skipped; rings and RTB points cannot. */
+  /** Plain nav / IP / CAP points can be skipped; rings, RTB points and a free-flight tour's stops cannot. */
   private skippable(w: WaypointRt): boolean {
-    if (w.def.kind === 'rtb') return false;
+    // the stroll's tour: a detour past a later stop doesn't end the tour (playtest r2, 2.2-3)
+    if (w.def.kind === 'rtb' || this.s.script.freeFlight) return false;
     for (const o of this.s.objectives) if (o.def.kind === 'waypoints' && o.def.waypoints.includes(w.def.id)) return false;
     return true;
   }
@@ -498,6 +499,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
   /** HUD tick for ring/waypoint captures that belong to a 'waypoints' objective. */
   private announceCapture(w: WaypointRt): void {
     const s = this.s;
+    if (s.script.freeFlight) {
+      // the tour: tick each stop off, and say when it's done
+      const n = s.waypoints.length;
+      const i = s.waypoints.indexOf(w);
+      s.hud(i === n - 1 ? 'TOUR COMPLETE' : `${w.def.label.toUpperCase()} ✓  ${i + 1}/${n}`, 'good', i === n - 1 ? 3 : 1.8);
+      return;
+    }
     for (const o of s.objectives) {
       if (o.def.kind !== 'waypoints' || o.status.state !== 'active') continue;
       const idx = o.def.waypoints.indexOf(w.def.id);
@@ -516,7 +524,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const half = free ? FREE_FLIGHT_EDGE : (s.script.aoHalfSize ?? DEFAULT_AO);
     const outside = Math.abs(p.position.x) > half || Math.abs(p.position.z) > half;
     if (!outside) {
-      if (this.outsideAo > 0) s.hud('BACK IN THE AO', 'info', 2);
+      if (this.outsideAo > 0) s.hud(free ? 'BACK OVER AUCKLAND' : 'BACK IN THE AO', 'info', 2);
       this.outsideAo = 0;
       this.aoWarnAt = 0;
       return;
@@ -617,8 +625,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.endTime = s.time;
     this.hints.clear();
     failOpenObjectives(s);
-    s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Mission failed.`, voice: 'a_mission_failed', priority: URGENT_PRIORITY });
-    s.hud('MISSION FAILED', 'bad', 5);
+    if (s.script.freeFlight) {
+      // free flight has no mission to fail: a crash is just the end of the flight (playtest r2, 2.2-4)
+      s.hud('FLIGHT OVER', 'info', 5);
+    } else {
+      s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Mission failed.`, voice: 'a_mission_failed', priority: URGENT_PRIORITY });
+      s.hud('MISSION FAILED', 'bad', 5);
+    }
     s.events.emit('mission:end', { success: false, reason });
   }
 

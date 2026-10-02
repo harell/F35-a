@@ -447,9 +447,12 @@ export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: numbe
  */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
-  const all = candidates(ctx, ac, st);
-  if (all.length === 0) return;
   const des = ac.radar.designatedId;
+  // with hostiles about, NEXT doesn't stop on an airliner or a civil ship (g01: the A320 sat in the
+  // swarm's cycle, playtest r2 2.1-f); with only civil traffic (free flight) it still steps through it
+  const every = candidates(ctx, ac, st);
+  const all = every.some((c) => c.team !== 'neutral') ? every.filter((c) => c.team !== 'neutral' || c.id === des) : every;
+  if (all.length === 0) return;
   const free = all.filter((c) => c.id === des || !engagedBy(ctx, ac, c.id));
   const list = free.some((c) => c.id !== des) ? free : all;
   const idx = list.findIndex((c) => c.id === ac.radar.designatedId);

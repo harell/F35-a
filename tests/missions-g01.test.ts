@@ -329,7 +329,8 @@ describe('g01 Buzz Kill: gun pass and swarm hints', () => {
     expect(gun).toContain(`${G01_GUN_PASS.approachKt} kt`);
     expect(gun).toContain(`Vc ${G01_GUN_PASS.closureKt}`);
     expect(gun).toContain(`${G01_GUN_PASS.burstFrom}–${G01_GUN_PASS.burstTo} m`);
-    expect(hint('h_overshoot').text).toMatch(/Overshot\? Pull up and come round/);
+    expect(hint('h_overshoot').text).toMatch(/300 ft below.*pull the pipper up onto the drone. Overshot\? Pull up, come round/);
+    expect(hint('h_9x').text).toMatch(/AIM-9X.*inside about 2 km/); // NO SEEKER beyond ~2 km head-on (playtest r2, 2.1-e)
     const all = [...G01.briefing, ...G01.script.hints!.map((h) => h.text)].join(' ');
     expect(all).not.toMatch(/throttle right back/i);
     expect(G01.briefing.join(' ')).toContain(`${G01_GUN_PASS.approachKt} knots`);
