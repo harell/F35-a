@@ -8,10 +8,11 @@
  *   content/*          campaign "Operation Southern Cross", training, Instant Action generator
  *   progress.ts        localStorage campaign progress
  *   pads.ts            terrain pads under SAM sites / compounds
+ *   difficulty.ts      the difficulty a mission flies at (training: always Pilot)
  *   validate.ts        mission definition validator (tests / dev)
  */
 import type { CampaignProgress, InstantActionOptions, MissionDef, MissionResult } from '../core/contracts';
-import type { Difficulty, TheaterId } from '../core/types';
+import type { TheaterId } from '../core/types';
 import { buildInstantMissionSeeded } from './content/instant';
 import { CAMPAIGN_PART1 } from './content/campaign1';
 import { CAMPAIGN_PART2 } from './content/campaign2';
@@ -85,22 +86,7 @@ export function nextMissionLabel(id: string): string | null {
   return next.kind === 'training' ? 'Next lesson' : 'Start the campaign';
 }
 
-/** Training lessons always fly at this difficulty, whatever the setting (repo owner's decision, #68). */
-export const TRAINING_DIFFICULTY: Difficulty = 'pilot';
-
-/**
- * The difficulty a mission flies at whatever the player's setting, or null when it follows the
- * setting. Training is a lesson, not a wall: T01–T03 always fly at Pilot, so an Ace setting chosen
- * for the campaign doesn't turn T03's SA-6 into a 1-in-3 (playtest finding 4.3-b).
- */
-export function fixedDifficulty(def: Pick<MissionDef, 'kind'>): Difficulty | null {
-  return def.kind === 'training' ? TRAINING_DIFFICULTY : null;
-}
-
-/** The difficulty a mission actually flies at: fixedDifficulty(def), else the player's setting. */
-export function missionDifficulty(def: Pick<MissionDef, 'kind'>, chosen: Difficulty): Difficulty {
-  return fixedDifficulty(def) ?? chosen;
-}
+export { TRAINING_DIFFICULTY, fixedDifficulty, missionDifficulty } from './difficulty';
 
 /** Any campaign / training mission by id (or null). */
 export function findMission(id: string): MissionDef | null {
