@@ -8,14 +8,22 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { AKL } from '../src/core/auckland';
-import { LOADOUTS } from '../src/core/data';
+import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
+import { EventBus } from '../src/core/events';
 import type { Difficulty } from '../src/core/types';
-import { CAMPAIGNS, campaignOf, missionById, missionGunAmmo, validateMission } from '../src/missions';
+import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, missionGunAmmo, terrainPadsFor, validateMission } from '../src/missions';
 import { G01, G01_SWARM } from '../src/missions/content/irgc';
 import { REASONS } from '../src/missions/runtime/reasons';
+import { createAiBrain } from '../src/ai';
+import { createSimWorld } from '../src/sim/World';
+import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { MUNITIONS } from '../src/sim/weapons/defs';
 import type { AircraftEntity } from '../src/sim/entities';
+import { generateTerrain, runSync } from '../src/world/terrain/generate';
+import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
+import { allFeatures } from '../src/world/scenery/Scenery';
 import { harness, type Harness } from './missions-helpers';
+import { MissionBot, type MissionBotOptions } from './missions-bot';
 
 const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
 const AAMS = ['aim120', 'aim9x'] as const;
@@ -172,5 +180,42 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
     h.run(2);
     expect(h.runner.state).toBe('success');
     expect(tower(h).alive).toBe(true);
+  });
+});
+
+describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runner)', () => {
+  it('missiles alone can\'t win: the bot fires its whole load with no gun rounds, and the drones left bring the tower down', { timeout: 180_000 }, () => {
+    const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: G01.theater, seed: G01.seed, resolution: 512, features: allFeatures(G01.theater, []), pads: terrainPadsFor(G01) })));
+    for (const seed of [1, 2]) {
+      const events = new EventBus();
+      const d = DIFFICULTIES.recruit;
+      const world = createSimWorld({ terrain, difficulty: d, events, combat: createCombatSystemSeeded(seed) });
+      const runner = createMissionRunner({ ...G01, gunAmmo: 0 }, { createAi: createAiBrain, difficulty: d, events });
+      runner.setup(world, 'a2a_beast');
+      const p = world.player!;
+      const bot = new MissionBot(runner, world, p, { rearm: false, rtb: false } as MissionBotOptions);
+      let kills = 0;
+      events.on('destroyed', (e) => {
+        if (e.attackerId === p.id && e.entity.kind === 'aircraft') kills++;
+      });
+      // one load: once the last missile is gone the jet is parked where it is (no trip home for more)
+      let park: Vector3 | null = null;
+      for (let i = 0; i < 400 * 60 && runner.state === 'running'; i++) {
+        const left = world.combat.remaining(p, 'aim120') + world.combat.remaining(p, 'aim9x');
+        const flying = world.missiles.some((m) => m.alive && m.shooterId === p.id);
+        if (!park && left === 0 && !flying) park = p.position.clone();
+        if (park) p.position.copy(park);
+        else if (i % 3 === 0) bot.update(3 / 60);
+        world.step(1 / 60);
+        runner.update(world, 1 / 60);
+      }
+      const why = `seed ${seed}: ${runner.state}@${Math.round(world.time)}s kills=${kills}`;
+      expect(park, why).not.toBeNull();
+      expect(kills, why).toBeLessThanOrEqual(8);
+      expect(kills, why).toBeGreaterThanOrEqual(6); // the missiles did their part: the head-on intercept is reachable
+      expect(runner.state, why).toBe('failed');
+      expect(runner.result(world).reason, why).toBe(REASONS.skytowerLost);
+      runner.dispose?.();
+    }
   });
 });
