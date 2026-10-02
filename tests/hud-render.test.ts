@@ -1051,3 +1051,20 @@ describe('gun closure cue', () => {
     expect(find(r.run(0.1), /^Vc \d+$/).length).toBe(1);
   });
 });
+
+describe('target waypoint labels with the bandits in reach', () => {
+  it('drops the target waypoint\'s name / distance once a hostile aircraft is within 5 km (the boxes take over)', () => {
+    const r = rig('gun', 'hud');
+    const p = r.mock.player;
+    const fwd = p.velocity.clone().normalize();
+    const wp = { id: 'wp_swarm', label: 'Swarm', position: p.position.clone().addScaledVector(fwd, 4000).add(new Vector3(0, -900, 0)).addScaledVector(new Vector3(-fwd.z, 0, fwd.x).normalize(), 1200), radius: 2000, kind: 'target' as const };
+    (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
+    // the MiG at 700 m (a contact): no labels
+    expect(find(r.run(0.1), 'Swarm').length).toBe(0);
+    // nothing within 5 km: the labels come back
+    const mig = r.mock.world.getEntity(p.radar.lockedId)!;
+    mig.position.copy(p.position).addScaledVector(fwd, 9000).add(new Vector3(2000, 0, 0));
+    r.mock.player.radar.contacts.find((c) => c.id === mig.id)!.position.copy(mig.position);
+    expect(find(r.run(0.1), 'Swarm').length).toBe(1);
+  });
+});

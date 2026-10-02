@@ -762,6 +762,9 @@ export function drawWaypoint(f: HudFrame): void {
   pen.diamond(x, y, r);
   pen.line(x, y - r, x, y - r - 5 * u);
   pen.strokeGlow(pal.main, 1.6);
+  // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
+  // would only print into them (playtest: over the drone boxes through the g01 gun pass)
+  if (wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE)) return;
   const dx = wp.position.x - p.position.x;
   const dz = wp.position.z - p.position.z;
   const d = Math.hypot(dx, dz);
@@ -791,6 +794,21 @@ export function drawWaypoint(f: HudFrame): void {
     pen.text(mmss(d / gs), dx2, belowY + 12 * u, pal.dim, 10.5);
     occ.add(dx2 - dw, belowY - 6 * u, dx2 + dw, belowY + 18 * u);
   }
+}
+
+/** A target waypoint keeps only its diamond once a hostile aircraft is this close (m). */
+export const WP_ENGAGED_RANGE = 5_000;
+
+/** Is a live hostile aircraft contact within `range` (m) of the player? */
+function airContactWithin(f: HudFrame, range: number): boolean {
+  const { p, world } = f;
+  const r2 = range * range;
+  for (const c of p.radar.contacts) {
+    if (c.team === p.team || c.team === 'neutral') continue;
+    const e = world.getEntity(c.id);
+    if (e && e.alive && e.kind === 'aircraft' && c.position.distanceToSquared(p.position) < r2) return true;
+  }
+  return false;
 }
 
 /** Is (x, y) inside one of the fixed text blocks (external info block / top-left column)? */
