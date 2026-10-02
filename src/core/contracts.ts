@@ -332,6 +332,8 @@ export interface ObjectiveStatus {
   state: 'pending' | 'active' | 'complete' | 'failed';
   primary: boolean;
   progress?: { done: number; total: number };
+  /** The hostile group a protect objective counts on its HUD line ("STRIKERS 3"): its jets left in the fight. */
+  threat?: { label: string; left: number };
 }
 
 export interface MissionResult {

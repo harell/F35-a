@@ -15,7 +15,7 @@ import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
 import type { AnyEntity } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
-import { AIRCRAFT_LABEL, GROUND_LABEL, NumText, SAM_LABEL } from './format';
+import { GROUND_LABEL, NumText, SAM_LABEL, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { protectedSites } from './sites';
@@ -549,7 +549,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
       pen.arrow(ex, ey, ux, uy, 13 * u, 6 * u);
       pen.strokeGlow(col, 1.4);
       pen.fillPlain(withAlpha(col, lock || des ? 1 : 0.6));
-      const lbl = AIRCRAFT_LABEL[e.type] ?? '';
+      const lbl = trackLabel(e);
       const tx = ex - ux * 22 * u;
       const ty = ey - uy * 18 * u;
       pen.text(lbl, tx, ty, col, 9.5);
@@ -579,7 +579,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     occ.addBox(pt.x, pt.y, s + 3 * u, s + 3 * u);
     // (the label goes on the side away from its own velocity leader)
     occLine(f, pt.x, pt.y - s, pt.x + vel.x * lead * k, pt.y - s + vel.z * lead * k);
-    labelNear(f, airLabel(AIRCRAFT_LABEL[e.type] ?? 'BANDIT', pos.y), pt.x, pt.y, col);
+    labelNear(f, airLabel(trackLabel(e) || 'BANDIT', pos.y), pt.x, pt.y, col);
     picks.add(e.id, pt.x, pt.y, 10 * u);
   }
 

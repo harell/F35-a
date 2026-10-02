@@ -9,7 +9,7 @@ import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import type { AircraftEntity } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
-import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
+import { SAM_LABEL, trackShort } from './format';
 import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
 import { protectedSites } from './sites';
@@ -308,7 +308,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
       pen.fillPlain(col);
     }
     if (e.id === des || e.id === lock) ringHighlight(pen, x, y - 1 * s, s, c, e.id === lock);
-    if (all || (key && (e.id === des || e.id === lock))) label(pen, AIRCRAFT_SHORT[e.type] ?? '', x + 9 * s, y + 6 * s, col, st.font * 0.85, 'left');
+    if (all || (key && (e.id === des || e.id === lock))) label(pen, trackShort(e), x + 9 * s, y + 6 * s, col, st.font * 0.85, 'left');
   }
 
   // friendlies (datalink)

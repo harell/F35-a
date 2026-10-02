@@ -352,6 +352,8 @@ interface ObjLineEntry {
   state: string;
   done: number;
   total: number;
+  /** The threat count shown (-1 = none). */
+  left: number;
   maxChars: number;
   lines: string[];
 }
@@ -360,21 +362,46 @@ const objLineCache = new WeakMap<object, ObjLineEntry>();
 
 /**
  * Objective summary lines: state mark + label wrapped at word boundaries onto at most 3 lines (never
- * cut mid-word), with the progress count on the last line.
+ * cut mid-word), with the progress count on the last line. A protect objective that counts its threat
+ * adds a line with the jets left while it is active ("STRIKERS 3", Defend: issue #62).
  */
-export function objectiveLines(o: { label: string; state: string; progress?: { done: number; total: number } }, maxChars: number): string[] {
+export function objectiveLines(
+  o: { label: string; state: string; progress?: { done: number; total: number }; threat?: { label: string; left: number } },
+  maxChars: number,
+): string[] {
   const done = o.progress?.done ?? 0;
   const total = o.progress?.total ?? 0;
+  const left = o.threat && o.state === 'active' ? o.threat.left : -1;
   let e = objLineCache.get(o);
-  if (e && e.label === o.label && e.state === o.state && e.done === done && e.total === total && e.maxChars === maxChars) return e.lines;
+  if (e && e.label === o.label && e.state === o.state && e.done === done && e.total === total && e.left === left && e.maxChars === maxChars) return e.lines;
   const mark = o.state === 'complete' ? '+ ' : o.state === 'failed' ? 'x ' : o.state === 'active' ? '> ' : '- ';
   const prog = total > 1 ? ' ' + done + '/' + total : '';
   const body = o.label.toUpperCase() + prog;
   const wrapped = wrapFit(body, Math.max(8, maxChars - 2), 3);
   const lines = wrapped.map((l, i) => (i === 0 ? mark : '  ') + l);
-  if (!e) objLineCache.set(o, (e = { label: o.label, state: o.state, done, total, maxChars, lines }));
-  else Object.assign(e, { label: o.label, state: o.state, done, total, maxChars, lines });
+  if (left >= 0 && o.threat) lines.push('  ' + o.threat.label.toUpperCase() + ' ' + left);
+  if (!e) objLineCache.set(o, (e = { label: o.label, state: o.state, done, total, left, maxChars, lines }));
+  else Object.assign(e, { label: o.label, state: o.state, done, total, left, maxChars, lines });
   return lines;
+}
+
+/**
+ * Re-show the objective summary when a protect objective's threat count drops (a striker splashed or
+ * driven off): the summary is up only a few seconds after a change, and "STRIKERS 2" is that change.
+ */
+export function noteThreatCounts(f: HudFrame): void {
+  const objs = f.ctx.mission?.objectives;
+  if (!objs) return;
+  const st = f.st;
+  for (const o of objs) {
+    if (!o.threat || o.state !== 'active') continue;
+    const prev = st.threatLeft.get(o.id);
+    st.threatLeft.set(o.id, o.threat.left);
+    if (prev !== undefined && o.threat.left < prev) {
+      st.objShow = Math.max(st.objShow, 6);
+      st.objChangedId = o.id;
+    }
+  }
 }
 
 /**

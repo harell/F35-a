@@ -10,7 +10,7 @@ import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
-import { AIRCRAFT_SHORT, NumText, entityLabel, mmss } from './format';
+import { NumText, entityLabel, mmss, trackLabel, trackShort } from './format';
 import { zoneExt } from './zones';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
@@ -146,7 +146,8 @@ export function drawContacts(f: HudFrame): void {
     if (e.kind !== 'aircraft') continue; // ground / SAM tracks are drawn by drawGroundAndSams
     // civil traffic: white box, always labelled CIV so it is never mistaken for a bandit
     const civil = e.team === 'neutral';
-    const labelled = civil || c.position.distanceToSquared(p.position) <= d2;
+    // (a tagged jet, e.g. a STRK striker, is always labelled: it's the one to tell from its escort)
+    const labelled = civil || !!e.hudTag || c.position.distanceToSquared(p.position) <= d2;
     const stale = now - c.lastSeen > 1.5;
     if (stale) f.proj.point(c.position, f.sp);
     else project(f, e);
@@ -158,7 +159,7 @@ export function drawContacts(f: HudFrame): void {
     pen.rect(sp.x - h, sp.y - h, h * 2, h * 2);
     pen.strokeGlow(civil ? pal.white : stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
-    const lbl = labelled ? AIRCRAFT_SHORT[e.type] ?? '' : '';
+    const lbl = labelled ? trackShort(e) : '';
     if (lbl) {
       const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
       const ly = sp.y + h + 8 * u;
@@ -396,7 +397,7 @@ export function drawDesignated(f: HudFrame): void {
   }
   // labels: type above, range below, missile TOF / PITBULL below that; range + TOF stack above the
   // type label instead when they would print into reserved text under a low box (the radio pill, 3.3-a)
-  const label = entityLabel(t);
+  const label = trackLabel(t);
   const m = ownMissileOn(f, t.id);
   const pit = !!m && m.seekerLocked && (m.def.guidance === 'active_radar' || m.def.guidance === 'anti_radiation');
   const tof = m && !pit ? impactLabel(f, m, t) : '';

@@ -146,6 +146,31 @@ export function entityLabel(e: AnyEntity | null | undefined): string {
   }
 }
 
+const tagLabels = new Map<string, Map<string, string>>();
+/** "SU-27 STRK" (cached: no string built per frame). */
+function withTag(base: string, tag: string): string {
+  let m = tagLabels.get(tag);
+  if (!m) tagLabels.set(tag, (m = new Map()));
+  let s = m.get(base);
+  if (!s) m.set(base, (s = base + ' ' + tag));
+  return s;
+}
+
+/**
+ * entityLabel plus a jet's mission tag (AircraftEntity.hudTag): "SU-27 STRK" for a striker, so the
+ * strike package can be told from an escort of the same type. Other entities: entityLabel.
+ */
+export function trackLabel(e: AnyEntity | null | undefined): string {
+  const base = entityLabel(e);
+  return e?.kind === 'aircraft' && e.hudTag ? withTag(base, e.hudTag) : base;
+}
+
+/** Short contact label for crowded places (HMD contact boxes, TSD): the mission tag, else the short type code. */
+export function trackShort(e: AnyEntity): string {
+  if (e.kind !== 'aircraft') return '';
+  return e.hudTag || (AIRCRAFT_SHORT[e.type] ?? '');
+}
+
 /** Kill-feed line for a destroyed entity. */
 export function killText(e: AnyEntity): string {
   if (e.kind === 'aircraft') return 'SPLASH ' + entityLabel(e);

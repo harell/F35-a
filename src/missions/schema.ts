@@ -205,6 +205,12 @@ export interface AircraftGroupDef {
   oneWay?: OneWayDef;
   /** Friendly 'wingman' only: standing orders (hold fire until the player fires, groups to leave alone). */
   orders?: WingmanOrders;
+  /**
+   * Short HMD tag of the group's jets ('STRK'), drawn with their type on the radar contacts, the
+   * target box, the TSD and the tactical map: a strike package can be told from its escort even when
+   * both fly the same type.
+   */
+  tag?: string;
 }
 
 export interface SamSiteDef {
@@ -316,7 +322,19 @@ export type ObjectiveDef = ObjectiveBase &
        * Keep a friendly group alive. Fails when fewer than `minSurvivors` (default 1) remain.
        * Completes when `until` is true, or automatically once every other primary is complete.
        */
-    { kind: 'protect'; group: string; minSurvivors?: number; until?: Condition; /** Debrief row counting the survivors, e.g. "Fuel tanks saved". */ tally?: string }
+    {
+        kind: 'protect';
+        group: string;
+        minSurvivors?: number;
+        until?: Condition;
+        /** Debrief row counting the survivors, e.g. "Fuel tanks saved". */
+        tally?: string;
+        /**
+         * The hostile group the site is protected from, counted on the objective's HUD line
+         * ("STRIKERS 3": its jets still alive and not driven off). `label` is the plural noun.
+         */
+        threat?: { group: string; label: string };
+      }
     | /**
        * Stop a raid: fails if any live member of the groups gets within `radius` of the point.
        * Completes when they are all destroyed — or once `abortFraction` of them is destroyed,

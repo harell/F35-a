@@ -54,6 +54,8 @@ export class HudState {
   objFree = 0;
   /** Objective that changed last (highlighted in the summary) and when. */
   objChangedId = '';
+  /** Last threat count per protect objective (noteThreatCounts: a drop re-shows the summary). */
+  readonly threatLeft = new Map<string, number>();
   /** Sticky DLZ scale (m). */
   dlzScale = 0;
   readonly radio = new RadioQueue();
@@ -132,6 +134,7 @@ export class HudState {
     this.objYield = false;
     this.objFree = 0;
     this.objChangedId = '';
+    this.threatLeft.clear();
     this.dlzScale = 0;
     this.threats.reset();
     this.g.grey = this.g.red = this.g.flash = 0;
@@ -150,6 +153,7 @@ export class HudState {
     this.objYield = false;
     this.objFree = 0;
     this.objChangedId = '';
+    this.threatLeft.clear();
     this.dlzScale = 0;
     this.radio.clear();
     this.messages.clear();

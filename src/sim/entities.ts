@@ -242,6 +242,8 @@ export class AircraftEntity implements Entity {
   rcsMultiplier?: number;
   /** (sim-core) Private flight-model / world bookkeeping (engine spool, FBW filters, Auto-GCAS, AI timer, wreck). Opaque to other modules. */
   sim?: import('./flight/state').AircraftSimState;
+  /** (missions) Short HMD tag of the jet's mission role (AircraftGroupDef.tag, e.g. 'STRK' for a strike package). */
+  hudTag?: string;
   /** (sim-core) Auto-GCAS currently has control of the jet (HUD may show the GCAS chevrons / "AUTO GCAS"). */
   gcasActive?: boolean;
   /** (sim-core) Airframe buffet 0..1 (high AoA, departure, transonic high-g) — for camera shake / haptics. */

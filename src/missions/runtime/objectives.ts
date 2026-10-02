@@ -142,6 +142,12 @@ export function updateObjectives(s: MissionState, dt: number): void {
         const alive = g.members.length < g.expected ? g.expected - deadCount(g) : aliveCount(g);
         const min = Math.min(def.minSurvivors ?? 1, Math.max(1, g.expected));
         st.progress = { done: alive, total: g.expected };
+        if (def.threat) {
+          const tg = s.groups.get(def.threat.group);
+          const left = tg ? Math.max(0, (tg.members.length < tg.expected ? tg.expected - deadCount(tg) : aliveCount(tg)) - drivenOffCount(s, tg)) : 0;
+          if (!st.threat) st.threat = { label: def.threat.label, left };
+          else st.threat.left = left;
+        }
         if (g.spawnedAt >= 0 && alive < min) setState(s, o, 'failed');
         else if (def.until ? evalCondition(def.until, s) : false) setState(s, o, 'complete');
         else if (!def.until && def.primary && otherPrimariesDone(s, o) && hasOtherPrimaries(s, o)) setState(s, o, 'complete');
