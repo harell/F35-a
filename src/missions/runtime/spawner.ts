@@ -6,7 +6,7 @@ import { Vector3 } from 'three';
 import { AIRCRAFT_INFO } from '../../core/data';
 import { DEG, clamp } from '../../core/math';
 import { isHostile, type DifficultyParams, type LoadoutId, type Team } from '../../core/types';
-import type { AiTask } from '../../sim/api';
+import type { AiTask, TerrainQuery } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
 import { difficultyAtLeast, firstAlive, type GroupRt, type MissionState } from './state';
@@ -16,6 +16,22 @@ import { JITTER_HDG, JITTER_POS, jitter } from './variation';
 export const SPAWN_LIMIT = 37_000;
 
 const HEAVIES = new Set(['tu22m', 'a50']);
+
+/**
+ * Aircraft never spawn closer than this to the ground under them or SPAWN_CLEAR_AHEAD ahead (m).
+ * Mission altitudes are above sea level, and the procedural Instant Action theatres can put a hill
+ * under or in front of a "low" raid: the Defend strikers spawned inside the Mountains / Arctic
+ * terrain, or just above a rising slope, and died in the first seconds (playtest 2026-10-02, 1.1-a).
+ */
+export const SPAWN_MIN_AGL = 100;
+export const SPAWN_CLEAR_AHEAD = 3_000;
+
+/** Lowest altitude a jet may appear at (x, z) flying along the unit vector (fx, fz): clear of the ground under and ahead of it. */
+export function spawnFloor(terrain: TerrainQuery, x: number, z: number, fx: number, fz: number): number {
+  let h = 0;
+  for (let d = 0; d <= SPAWN_CLEAR_AHEAD; d += 500) h = Math.max(h, terrain.surfaceHeightAt(x + fx * d, z + fz * d));
+  return h + SPAWN_MIN_AGL;
+}
 
 /** Difficulty-scaled size of an aircraft group. */
 export function scaledCount(def: AircraftGroupDef, enemyCountScale: number): number {
@@ -223,6 +239,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
       def.z + oz + rz * _slot.right - fz * _slot.aft,
     );
     clampXZ(pos);
+    pos.y = Math.max(pos.y, spawnFloor(world.terrain, pos.x, pos.z, fx, fz));
     const aiTask = resolveTask(task, s, def.team);
     const ai = s.deps.createAi(def.role, { skill, task: aiTask, seed: (s.def.seed * 31 + s.enemiesSpawned * 7 + i * 13) >>> 0 });
     const wingman = def.role === 'wingman';

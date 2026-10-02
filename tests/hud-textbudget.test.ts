@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import hintsSrc from '../src/missions/runtime/hints.ts?raw';
+import weaponsSrc from '../src/hud/hmd/weapons.ts?raw';
 import { CAMPAIGN, TRAINING } from '../src/missions';
 import { RADIO_PAGE_LINES } from '../src/hud/hmd/feeds';
 import { CHAR_W } from '../src/hud/dev/fakeCanvas';
@@ -83,6 +84,23 @@ describe('HUD text budget lint (mission content vs the phone layout)', () => {
       const lines = wrap(h, chars);
       expect(Math.ceil(lines.length / 3), `hint "${h}"`).toBeLessThanOrEqual(2);
     }
+  });
+
+  it('the missile-defence hints fit one page (2 lines) at 667x375 (playtest 2026-10-02, 1.3-g)', () => {
+    const L = computeLayout(makeLayout(), 667, 375, noSafe, tan30, false);
+    const chars = Math.max(16, Math.floor((L.colW - 16 * L.u) / (11.5 * L.u * CHAR_W)));
+    const defend = [...(hintsSrc as string).matchAll(/'((?:IR )?MISSILE![^']*)'/g)].map((m) => m[1]);
+    expect(defend.length).toBe(2);
+    for (const h of defend) expect(wrap(h, chars).length, `hint "${h}"`).toBeLessThanOrEqual(2);
+  });
+
+  it('the HUD bomb release cue reads what the briefings and hints say to wait for (playtest 1.3-a: IN RNG vs IN RANGE)', () => {
+    const cue = /addCue\('(IN R[A-Z ]*)'/.exec(weaponsSrc as string)?.[1];
+    expect(cue).toBe('IN RANGE');
+    const content = JSON.stringify([...CAMPAIGN, ...TRAINING].map((m) => [m.briefing, m.script]));
+    expect(content).toContain(cue);
+    expect(hintsSrc as string).toContain(cue);
+    expect(content + hintsSrc).not.toMatch(/IN RNG/);
   });
 
   it('every objective label shows in full (≤ 3 lines, no ellipsis, never cut mid-word) at 667x375', () => {

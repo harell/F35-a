@@ -18,7 +18,12 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import type { GroundTargetEntity } from '../src/sim/entities';
+import { protectedSites } from '../src/hud/hmd/sites';
 import { flatLand, harness, killGroup, shieldPlayer } from './missions-helpers';
+import { terrainPadsFor } from '../src/missions';
+import { generateTerrain, runSync } from '../src/world/terrain/generate';
+import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
+import { allFeatures } from '../src/world/scenery/Scenery';
 
 const defend = (enemyCount = 4): MissionDef =>
   buildInstantMissionSeeded({ mode: 'defend', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount }, 49);
@@ -110,7 +115,51 @@ describe('missions: defend the Wiri oil terminal', () => {
     expect(h.of('radio').some((m) => /check fire/i.test(m.text))).toBe(true);
   });
 
-  it('enemy strikers spread over the tanks and destroy them; too many lost fails the mission', () => {
+  it('the first tank lost fails only the bonus: an amber BONUS FAILED, never a red OBJECTIVE FAILED (playtest 1.3-c)', () => {
+    const h = harness(defend());
+    const w = h.world;
+    h.run(1);
+    const tank = w.ground.find((g) => g.groupId === 'wiri')!;
+    w.applyDamage(tank, 1e6, null, 'gbu31');
+    h.run(1);
+    const status = (id: string) => h.runner.objectives.find((o) => o.id === id)?.state;
+    expect(status('o_all')).toBe('failed');
+    expect(status('o_tanks')).toBe('active');
+    const msgs = h.of('hud:message');
+    expect(msgs.filter((m) => /OBJECTIVE FAILED/.test(m.text))).toEqual([]);
+    const bonus = msgs.filter((m) => m.text === 'BONUS FAILED');
+    expect(bonus.length).toBe(1);
+    expect(bonus[0].tone).toBe('warn');
+  });
+
+  it('the HUD finds the Wiri tanks as the friendly site to defend, with the survivor count (playtest 1.3-b)', () => {
+    const h = harness(defend());
+    const w = h.world;
+    h.run(1);
+    const tanks = w.ground.filter((g) => g.groupId === 'wiri');
+    let sites = protectedSites(h.runner, w, 'blue');
+    expect(sites.length).toBe(1);
+    expect(sites[0].group).toBe('wiri');
+    expect(sites[0].label).toBe(`DEFEND ${tanks.length}/${tanks.length}`);
+    const cx = tanks.reduce((a, t) => a + t.position.x, 0) / tanks.length;
+    const cz = tanks.reduce((a, t) => a + t.position.z, 0) / tanks.length;
+    expect(Math.hypot(sites[0].x - cx, sites[0].z - cz)).toBeLessThan(1);
+    w.applyDamage(tanks[0], 1e6, null, 'gbu31');
+    h.run(1);
+    sites = protectedSites(h.runner, w, 'blue');
+    expect(sites[0].label).toBe(`DEFEND ${tanks.length - 1}/${tanks.length}`);
+    // the enemy's view: no site
+    expect(protectedSites(h.runner, w, 'red').length).toBe(0);
+    // protected aircraft (Kiwi flight in c02, the Hammer package in c09) are drawn as friendlies, not sites
+    for (const id of ['c02', 'c09']) {
+      const c = harness(missionById(id)!);
+      c.run(1);
+      expect(c.runner.objectives.some((o) => o.id === (id === 'c02' ? 'o_kiwi' : 'o_hammer')), id).toBe(true);
+      expect(protectedSites(c.runner, c.world, 'blue').length, id).toBe(0);
+    }
+  });
+
+  it('enemy strikers spread over the tanks and destroy them; too many lost fails the mission', { timeout: 30_000 }, () => {
     const { events, world, runner, park } = realRun(defend());
     const tankIds = new Set(world.ground.filter((g) => g.groupId === 'wiri').map((g) => g.id));
     const strikerIds = new Set(world.aircraft.filter((a) => a.groupId === 'strikers').map((a) => a.id));
@@ -165,4 +214,37 @@ describe('missions: defend the Wiri oil terminal', () => {
     expect(escorts.every((e) => e.alive)).toBe(true);
     expect(minSep).toBeGreaterThan(100);
   });
+});
+
+/**
+ * Playtest 2026-10-02 (finding 1.1-a): in the procedural theatres the raid's "low" 700 m is above sea
+ * level, and a Mountains or Arctic terrain seed can put a hill there. The strikers spawned inside it, died
+ * at t = 0 and the mission won itself with no player input.
+ */
+describe('defend: the raid survives the procedural terrain', () => {
+  for (const theater of ['mountains', 'arctic'] as const) {
+    it(`${theater}: the strikers spawn above the ground and are still flying 60 s in`, { timeout: 60_000 }, () => {
+      for (const seed of [1, 2, 3]) {
+        const def = buildInstantMissionSeeded({ mode: 'defend', theater, timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, seed);
+        const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater, seed: def.seed, resolution: 512, features: allFeatures(theater, []), pads: terrainPadsFor(def) })));
+        const events = new EventBus();
+        const diff = DIFFICULTIES.pilot;
+        const world = createSimWorld({ terrain, difficulty: diff, events, combat: createCombatSystemSeeded(5) });
+        const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: diff, events });
+        runner.setup(world, def.recommendedLoadout);
+        const strikers = world.aircraft.filter((a) => a.groupId === 'strikers');
+        expect(strikers.length).toBeGreaterThan(0);
+        for (const a of strikers) expect(a.position.y - terrain.surfaceHeightAt(a.position.x, a.position.z), `seed ${seed} ${a.callsign} AGL at spawn`).toBeGreaterThan(50);
+        const p = world.player!;
+        for (let i = 0; i < 60 * 60; i++) {
+          // the player and the wingman sit out the fight, far from the raid
+          p.position.set(-36000, 9000, 36000);
+          p.health = p.maxHealth;
+          world.step(1 / 60);
+          runner.update(world, 1 / 60);
+        }
+        expect(strikers.filter((a) => !a.alive).map((a) => a.callsign), `seed ${seed} terrain ${def.seed}: strikers lost by 60 s`).toEqual([]);
+      }
+    });
+  }
 });

@@ -6,12 +6,15 @@
  *  - air-to-air: the simai team's calibrated PlayerBot (tests/ai-playerbot.ts) — taps the TD box,
  *    fires on the calibrated SHOOT cue, cranks, defends on the MAWS after a human reaction time;
  *  - air-to-ground: picks the next live target of an active objective (primary first; a Tor
- *    guarding it goes first), selects AARGM against emitters / SDB / JDAM, designates it with the
- *    sensors a human has (the target must be a contact), releases on the launch-zone cue;
+ *    guarding it goes first), selects AARGM against emitters / SDB II / SDB / JDAM, designates it
+ *    with the sensors a human has (the target must be a contact), releases on the launch-zone cue
+ *    (the StormBreaker is flown like the SDB: same glide envelope, it just also follows a mover);
  *    under a live SA-10 it flies the whole attack low and pops up only to toss the bombs;
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
- *  - Winchester / low fuel: flies to Whenuapai, descends through the rearm gate and circles the
- *    field until the mission rearms it, then goes back to work.
+ *  - Winchester / low fuel: flies to the mission's rearm point (Whenuapai over Auckland, the
+ *    scenery's first airbase in the procedural theatres: rearmHome() of the rearm runtime),
+ *    descends through the rearm gate and circles the field until the mission rearms it, then goes
+ *    back to work.
  *
  * Flying is delegated to the AI Autopilot (the same "hands" the AI uses).
  */
@@ -33,12 +36,18 @@ import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
 import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
+import { rearmHome } from '../src/missions/runtime/rearm';
+import { spawnFloor } from '../src/missions/runtime/spawner';
 
 const _h = new Vector3();
 const _q = new Vector3();
 
-type AgWeapon = 'aargm' | 'gbu39' | 'gbu31';
-const AG: AgWeapon[] = ['aargm', 'gbu39', 'gbu31'];
+type AgWeapon = 'aargm' | 'gbu53' | 'gbu39' | 'gbu31';
+/** In order of preference (as the game's hints: AARGM for emitters, then SDB II, SDB, JDAM). */
+const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu39', 'gbu31'];
+
+/** SDB-class glide bombs (GBU-39, GBU-53/B): same envelope, pressed in to SDB_PRESS_RANGE. */
+const isSdb = (w: AgWeapon): boolean => w === 'gbu39' || w === 'gbu53';
 
 export const WHENUAPAI = new Vector3(AKL.whenuapai.x, 0, AKL.whenuapai.z);
 
@@ -82,6 +91,8 @@ export class MissionBot {
   private readonly opts: Required<MissionBotOptions>;
   /** The briefed loadout carries air-to-ground stores. */
   private readonly agLoadout: boolean;
+  /** Where the mission rearms us (y = 0). */
+  readonly home: Vector3;
 
   constructor(
     private readonly runner: MissionRunnerApi,
@@ -91,8 +102,10 @@ export class MissionBot {
   ) {
     this.opts = { reaction: 0.8, rearm: true, ...opts };
     this.agLoadout = this.agLeft() > 0;
+    const h = rearmHome(runner.def);
+    this.home = new Vector3(h.x, 0, h.z);
     const wp = runner.currentWaypoint;
-    this.air = new PlayerBot({ home: WHENUAPAI.clone().setY(3000), cap: wp ? wp.position.clone() : null, reaction: this.opts.reaction, rtbWhenWinchester: true });
+    this.air = new PlayerBot({ home: this.home.clone().setY(3000), cap: wp ? wp.position.clone() : null, reaction: this.opts.reaction, rtbWhenWinchester: true });
     this.air.attach(world, p);
   }
 
@@ -205,14 +218,14 @@ export class MissionBot {
 
     this.beamSide = 0;
     // 2. mission over: go home
-    if (this.runner.state !== 'running') return this.nav(WHENUAPAI, 2500, 'HOME', dt);
+    if (this.runner.state !== 'running') return this.nav(this.home, 2500, 'HOME', dt);
 
     const surface = ag > 0 ? this.surfaceTarget() : null;
     // surface objectives are ours only when we brought air-to-ground stores (else a package's job)
     const surfaceNeeded = this.agLoadout && this.objectiveTargets('surface').length > 0;
     const airNeeded = this.objectiveTargets('air').length > 0;
 
-    // 3. Winchester / bingo: rearm at Whenuapai (a gun kill of an overshooting bandit is still taken)
+    // 3. Winchester / bingo: rearm at home (a gun kill of an overshooting bandit is still taken)
     const agUseless = ag === 0 || (surfaceNeeded && !surface);
     const out = (aa === 0 && (airNeeded || (bandit && bandit.d < 25_000))) || (surfaceNeeded && agUseless && aa === 0) || (surfaceNeeded && ag === 0 && !airNeeded);
     if (this.opts.rearm && (out || fuelLow)) {
@@ -278,7 +291,7 @@ export class MissionBot {
     // 7. steering cue
     const wp = this.runner.currentWaypoint;
     if (wp) return this.nav(wp.position, wp.kind === 'target' ? Math.max(4_000, wp.position.y) : wp.position.y > 10 ? wp.position.y : 1500, 'NAV', dt);
-    this.nav(WHENUAPAI, 2500, 'HOME', dt);
+    this.nav(this.home, 2500, 'HOME', dt);
   }
 
   /** Nearest live aircraft of an active primary 'intercept' objective (the raid), or null. */
@@ -452,14 +465,15 @@ export class MissionBot {
 
   private rearmLeg(dt: number): void {
     const p = this.p;
+    const home = this.home;
     this.clearTriggers();
-    const d = Math.hypot(p.position.x - WHENUAPAI.x, p.position.z - WHENUAPAI.z);
+    const d = Math.hypot(p.position.x - home.x, p.position.z - home.z);
     const ground = p.position.y - p.flight.agl;
     const low = this.sa10Threat();
     const it = this.pilot.begin(p, low ? 40 : 150);
     if (d > 3_500) {
       // head home; start down so we arrive below the rearm gate (under the SA-10: on the deck)
-      _h.set(WHENUAPAI.x - p.position.x, 0, WHENUAPAI.z - p.position.z);
+      _h.set(home.x - p.position.x, 0, home.z - p.position.z);
       turnLimited(p, _h, 70);
       const alt = low ? ground + 50 : d > 20_000 ? Math.max(3_000, ground + 1_000) : ground + 600;
       dirWithElevation(_h, gammaForAltitude(p, alt, 0.2, 6), it.dir);
@@ -467,7 +481,7 @@ export class MissionBot {
       it.gMax = 4;
     } else {
       // circle the field inside the rearm gate
-      _h.set(p.position.x - WHENUAPAI.x, 0, p.position.z - WHENUAPAI.z).normalize();
+      _h.set(p.position.x - home.x, 0, p.position.z - home.z).normalize();
       const tx = -_h.z * this.orbitSign;
       const tz = _h.x * this.orbitSign;
       const corr = Math.max(-1, Math.min(1, (d - 1_200) / 1_200));
@@ -483,8 +497,8 @@ export class MissionBot {
 
   /** Release range the bot plans with (m) for a weapon from strike altitude. */
   private releaseRange(weapon: AgWeapon, low: boolean): number {
-    if (low) return weapon === 'gbu39' ? 1_400 : 800;
-    return weapon === 'gbu31' ? 9_500 : weapon === 'gbu39' ? 21_000 : 28_000;
+    if (low) return isSdb(weapon) ? 1_400 : 800;
+    return weapon === 'gbu31' ? 9_500 : isSdb(weapon) ? 21_000 : 28_000;
   }
 
   /**
@@ -532,7 +546,7 @@ export class MissionBot {
     if (p.selectedWeapon !== weapon) c.selectWeapon(p, weapon as WeaponId, w);
     if (p.radar.designatedId !== t.id) c.designate(p, t.id, w);
     // under a live SA-10 a JDAM attack is flown at wave-top height with a pop-up toss
-    const low = this.sa10Threat() && (weapon === 'gbu31' || weapon === 'gbu39');
+    const low = this.sa10Threat() && weapon !== 'aargm';
     const ground = p.position.y - p.flight.agl;
     const R = Math.hypot(t.position.x - p.position.x, t.position.z - p.position.z);
     const rel = this.releaseRange(weapon, low);
@@ -605,8 +619,8 @@ export class MissionBot {
       ok = !!z && z.shoot;
     } else {
       const b = c.bombImpactPoint(p, w);
-      // like the hint says: an SDB is pressed in to ~20 km (a max-range glide arrives slow)
-      ok = !!b && b.inRange && (weapon !== 'gbu39' || low || R <= SDB_PRESS_RANGE);
+      // like the hint says: an SDB (I or II) is pressed in to ~20 km (a max-range glide arrives slow)
+      ok = !!b && b.inRange && (!isSdb(weapon) || low || R <= SDB_PRESS_RANGE);
     }
     if (ok) {
       p.input.fireWeapon = true;
@@ -665,7 +679,9 @@ export function runPlaythrough(
       jittered.add(a.id);
       a.position.x += (jit() - 0.5) * 5_000;
       a.position.z += (jit() - 0.5) * 5_000;
-      a.position.y = Math.max(a.position.y + (jit() - 0.5) * 800, 600);
+      // never inside or just above a hill (the procedural theatres have 2 km mountains; Auckland tops out < 500 m)
+      const v = Math.hypot(a.velocity.x, a.velocity.z) || 1;
+      a.position.y = Math.max(a.position.y + (jit() - 0.5) * 800, 600, spawnFloor(terrain, a.position.x, a.position.z, a.velocity.x / v, a.velocity.z / v) + 50);
     }
   };
   jitterRed();

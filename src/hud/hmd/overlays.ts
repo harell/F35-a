@@ -395,16 +395,29 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
   pen.text('OBJECTIVES', x, y, pal.dim, 10, 'left');
   y += 14 * u;
   let used = 0;
-  // the objective that just changed first, then the active / primary ones
-  for (let pass = 0; pass < 2 && used < maxLines; pass++) {
+  let bonusHead = false;
+  // primaries first, then the bonus objectives under a BONUS heading; in each, the one that just
+  // changed leads, then the active (and pending primary) ones. A failed bonus never tops the list.
+  for (let pass = 0; pass < 4 && used < maxLines; pass++) {
+    const primary = pass < 2;
+    const changedPass = pass === 0 || pass === 2;
     for (const o of objs) {
+      if (o.primary !== primary) continue;
       const changed = !!st.objChangedId && o.id === st.objChangedId;
-      if (pass === 0 ? !changed : changed) continue;
-      if (pass === 1 && !force && o.state !== 'active' && !(o.state === 'pending' && o.primary)) continue;
-      if (pass === 1 && force && o.state === 'pending' && !o.primary) continue;
+      if (changed !== changedPass) continue;
+      if (!changedPass && !force && o.state !== 'active' && !(o.state === 'pending' && o.primary)) continue;
+      if (!changedPass && force && o.state === 'pending' && !o.primary) continue;
       const lines = objectiveLines(o, maxChars);
-      if (used + lines.length > maxLines) continue;
-      const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? pal.danger : o.state === 'active' ? pal.main : pal.dim;
+      const head = !primary && !bonusHead ? 1 : 0;
+      if (used + head + lines.length > maxLines) continue;
+      if (head) {
+        bonusHead = true;
+        if (!f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text('BONUS', x, y, pal.dim, 10, 'left');
+        y += lh;
+        used++;
+      }
+      // (a failed bonus greys out: it costs points, not the mission)
+      const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? (primary ? pal.danger : pal.dim) : o.state === 'active' ? pal.main : pal.dim;
       for (const l of lines) {
         // (a line that would print over the target box / pipper / jet is left out)
         if (!f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text(l, x, y, col, size, 'left');

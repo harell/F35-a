@@ -1,8 +1,9 @@
 /**
  * Tactical Situation Display renderer, shared by the HMD radar inset (external views) and the PCD TSD
  * page: moving map around ownship (heading-up), range rings, compass, route / waypoints, bullseye
- * (Sky Tower = world origin), known SAM threat rings, ground targets, sensor-fused air tracks with
- * velocity leaders (hostile red, friendly blue), designated / locked highlight, missiles in flight.
+ * (Sky Tower = world origin), known SAM threat rings, ground targets, the friendly sites to defend,
+ * sensor-fused air tracks with velocity leaders (hostile red, friendly blue), designated / locked
+ * highlight, missiles in flight.
  */
 import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
@@ -10,6 +11,7 @@ import type { AircraftEntity } from '../../sim/entities';
 import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
 import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
+import { protectedSites } from './sites';
 import { chartPaths } from './tacmap';
 
 /** Label de-collision inside one TSD draw. */
@@ -243,6 +245,15 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     // civil ships (sensor tracks only): neutral (text) colour, like civil air traffic
     pen.strokePlain(gt.team === 'neutral' ? c.text : c.ground, 1.3 * lw);
     if (gt.id === des || gt.id === lock) ringHighlight(pen, pt.x, pt.y, s, c, gt.id === lock);
+  }
+  // friendly sites to defend (protect objectives, sites.ts): circle-and-square in the friendly colour
+  for (const site of protectedSites(mission, world, p.team)) {
+    map(site.x, site.z);
+    pen.begin();
+    pen.circle(pt.x, pt.y, 5 * s);
+    pen.rect(pt.x - 1.8 * s, pt.y - 1.8 * s, 3.6 * s, 3.6 * s);
+    pen.strokePlain(c.friend, 1.5 * lw);
+    if (key) label(pen, site.label, pt.x, pt.y + 12 * s, c.friend, st.font * 0.85);
   }
 
   // hostile air tracks (sensor fused)

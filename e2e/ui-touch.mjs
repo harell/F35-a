@@ -5,8 +5,10 @@
  *
  * flight: ?mission=c01&autostart=1 → multi-touch stick + throttle, AB detent/double-tap, FIRE/GUN/CMS,
  *         TGT/WPN/RADAR, CAM tap + long-press padlock, look drag, tap designation, pause → resume.
- * menus:  splash → main menu → campaign → briefing (tabs, loadout) → FLY → pause → quit → main menu,
- *         settings round-trip, instant action → briefing → back.
+ * menus:  first launch (fresh context): New pilot card → Start training → Training list → briefing → back
+ *         → Training list; then splash → main menu (Not now on the card) → settings round-trip → campaign
+ *         → briefing → back → campaign list → briefing (tabs, loadout) → FLY → pause → quit → main menu,
+ *         instant action → briefing → back → setup → back → main menu, credits.
  * Uses CDP Input.dispatchTouchEvent so several fingers can be down at once. Screenshots go to
  * e2e/screenshots/ui/touch-*.png. Exits non-zero on failure.
  */
@@ -27,13 +29,14 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
 });
-const ctx = await browser.newContext({
+const CTX_OPTS = {
   viewport: { width: 844, height: 390 },
   deviceScaleFactor: 1,
   isMobile: true,
   hasTouch: true,
   userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-});
+};
+const ctx = await browser.newContext(CTX_OPTS);
 
 let failures = 0;
 const check = (cond, msg, extra = '') => {
@@ -260,7 +263,43 @@ async function flight() {
 }
 
 /* ───────────────────────── menu flow ───────────────────────── */
+/** First launch in a fresh context (empty storage): the New pilot card's 'Start training' → Training list. */
+async function onboarding() {
+  console.log('\n[menus] first launch: New pilot card (fresh context)');
+  const fresh = await browser.newContext(CTX_OPTS);
+  const page = await fresh.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForSelector('.scr-splash', { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  await page.tap('.scr-splash');
+  await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 10000 });
+  await page.waitForTimeout(700);
+  check(await page.isVisible('.mm-onboard'), 'first launch shows the New pilot card');
+  await page.screenshot({ path: 'e2e/screenshots/ui/flow-2-onboard.png' });
+  await page.tap('.mm-onboard .mo-btns .ui-btn.primary');
+  await page.waitForSelector('.scr-missions.kind-training:not(.is-leaving) .mcard');
+  const lessons = await page.evaluate(() => [...document.querySelectorAll('.scr-missions:not(.is-leaving) .mcard .mc-num')].map((e) => e.textContent));
+  check(lessons.length >= 3 && lessons[0] === 'T01', "'Start training' opens the Training list", lessons.join(','));
+  // Back on a training briefing returns to the Training list, not the main menu
+  await page.tap('.scr-missions:not(.is-leaving) .mcard');
+  await page.waitForSelector('.scr-brief:not(.is-leaving)');
+  await page.waitForTimeout(500);
+  await page.tap('.scr-brief .back-btn');
+  await page.waitForSelector('.scr-missions.kind-training:not(.is-leaving)');
+  check(!(await page.$('.scr-main:not(.is-leaving)')), 'training briefing back → Training list');
+  await page.tap('.scr-missions:not(.is-leaving) .back-btn');
+  await page.waitForSelector('.scr-main:not(.is-leaving)');
+  await page.waitForTimeout(300);
+  check(!(await page.$('.mm-onboard')), 'Training list back → main menu, the New pilot card stays dismissed');
+  check(errors.length === 0, 'no page errors', errors.slice(0, 3).join(' | '));
+  await fresh.close();
+}
+
 async function menus() {
+  await onboarding();
   console.log('\n[menus] real game flow');
   const page = await ctx.newPage();
   const errors = [];
@@ -274,6 +313,12 @@ async function menus() {
   await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 10000 });
   await page.waitForTimeout(700);
   check(true, 'splash → main menu');
+  // a fresh save shows the New pilot card over the menu rows: 'Not now' dismisses it
+  if (await page.$('.mm-onboard')) {
+    await page.tap('.mm-onboard .mo-btns .ui-btn.ghost');
+    await page.waitForSelector('.mm-onboard', { state: 'detached' });
+    check(true, "New pilot card → 'Not now' dismisses it");
+  }
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-2-main.png' });
 
   const t = await touchApi(page);
@@ -320,10 +365,19 @@ async function menus() {
     const stillThere = await page.evaluate(() => !!document.querySelector('.scr-missions:not(.is-leaving)') && !!document.querySelector('.ui-toast'));
     check(stillThere, 'tapping a locked mission shows a toast and stays on the list');
   }
-  await page.evaluate(() => document.querySelector('.mcard.is-suggested').scrollIntoView({ inline: 'center' }));
-  await page.waitForTimeout(200);
-  await page.tap('.mcard.is-suggested');
-  await page.waitForSelector('.scr-brief:not(.is-leaving)');
+  const openSuggested = async () => {
+    await page.evaluate(() => document.querySelector('.scr-missions:not(.is-leaving) .mcard.is-suggested').scrollIntoView({ inline: 'center' }));
+    await page.waitForTimeout(200);
+    await page.tap('.scr-missions:not(.is-leaving) .mcard.is-suggested');
+    await page.waitForSelector('.scr-brief:not(.is-leaving)');
+  };
+  await openSuggested();
+  await page.waitForTimeout(500);
+  await page.tap('.scr-brief .back-btn');
+  await page.waitForSelector('.scr-missions.kind-campaign:not(.is-leaving) .mcard');
+  check(!(await page.$('.scr-main:not(.is-leaving)')), 'campaign briefing back → campaign list');
+  await page.waitForTimeout(400);
+  await openSuggested();
   await page.waitForTimeout(900);
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-4-briefing.png' });
   const brief = await page.evaluate(() => ({ badge: document.querySelector('.br-diff .badge')?.textContent, map: document.querySelector('.br-map-canvas')?.width }));
@@ -348,7 +402,13 @@ async function menus() {
   await page.waitForTimeout(200);
   const armed = await page.evaluate((s) => document.querySelector(s).textContent, quit);
   check(/tap to quit/i.test(armed), 'quit needs confirmation', armed);
-  await page.tap(quit);
+  // confirm from the page: under SwiftShader on a busy box a second tap can land after the 2.6 s arm
+  // window (frames crawl behind the pause menu), which just re-arms the button. Re-arm first if so.
+  await page.evaluate((s) => {
+    const b = document.querySelector(s);
+    if (!b.classList.contains('is-armed')) b.click();
+    b.click();
+  }, quit);
   await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 15000 });
   check(true, 'quit → back to the main menu');
   if (await page.evaluate(() => window.__f35.state().inMission)) console.log('    note: Game keeps the quit session alive behind the menu (see integration notes)');
@@ -364,8 +424,12 @@ async function menus() {
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-6-ia-briefing.png' });
   check(true, 'instant action → briefing');
   await page.tap('.scr-brief .back-btn');
+  await page.waitForSelector('.scr-instant:not(.is-leaving)');
+  const mode = await page.evaluate(() => document.querySelector('.scr-instant:not(.is-leaving) .ia-mode.is-on')?.dataset.id);
+  check(mode === 'sam_gauntlet', 'briefing back → Instant Action setup (keeps the picked mode)', mode);
+  await page.tap('.scr-instant:not(.is-leaving) .back-btn');
   await page.waitForSelector('.scr-main:not(.is-leaving)');
-  check(true, 'briefing back → main menu');
+  check(true, 'setup back → main menu');
   // credits
   await page.tap('.mm-item[data-id="credits"]');
   await page.waitForSelector('.scr-credits:not(.is-leaving)');

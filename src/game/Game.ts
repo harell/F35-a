@@ -232,14 +232,14 @@ export class Game {
       // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
       this.progress = loadProgress();
       if (choice === 'campaign') {
-        const def = await this.ui.showCampaign(CAMPAIGN, this.progress);
-        if (def) await this.missionFlow(def);
+        await this.pickAndFly(() => this.ui.showCampaign(CAMPAIGN, this.progress));
       } else if (choice === 'training') {
-        const def = await this.ui.showTraining(TRAINING, this.progress);
-        if (def) await this.missionFlow(def);
+        await this.pickAndFly(() => this.ui.showTraining(TRAINING, this.progress));
       } else if (choice === 'instant') {
-        const opts = await this.ui.showInstantAction();
-        if (opts) await this.missionFlow(buildInstantMission(opts));
+        await this.pickAndFly(async () => {
+          const opts = await this.ui.showInstantAction();
+          return opts ? buildInstantMission(opts) : null;
+        });
       } else if (choice === 'settings') {
         await this.editSettings();
       } else if (choice === 'credits') {
@@ -248,14 +248,26 @@ export class Game {
     }
   }
 
-  /** Briefing → fly → debrief loop. Returns to the caller (menu) when the player leaves. */
-  private async missionFlow(first: MissionDef, presetLoadout?: LoadoutId): Promise<void> {
+  /** Mission list / Instant Action setup → missionFlow; Back on the briefing returns to that screen. */
+  private async pickAndFly(pick: () => Promise<MissionDef | null>): Promise<void> {
+    for (;;) {
+      const def = await pick();
+      if (!def || (await this.missionFlow(def)) !== 'back') return;
+      this.progress = loadProgress();
+    }
+  }
+
+  /**
+   * Briefing → fly → debrief loop. Resolves 'back' when the player backs out of a briefing (the
+   * caller shows the screen they came from), 'menu' when they leave from the debrief or pause menu.
+   */
+  private async missionFlow(first: MissionDef, presetLoadout?: LoadoutId): Promise<'back' | 'menu'> {
     let def: MissionDef | null = first;
     let loadout = presetLoadout ?? null;
     while (def) {
       if (!loadout) {
         const brief = await this.ui.showBriefing(def, this.settings);
-        if (!brief) return;
+        if (!brief) return 'back';
         loadout = brief.loadout;
       }
       const outcome = await this.playMission(def, loadout);
@@ -265,8 +277,9 @@ export class Game {
         loadout = null;
         continue;
       }
-      return;
+      return 'menu';
     }
+    return 'menu';
   }
 
   private async playMission(def: MissionDef, loadout: LoadoutId): Promise<MissionOutcome> {
@@ -284,7 +297,8 @@ export class Game {
       const result = this.finishSession();
       if (!result) return 'menu';
       this.trackResult(result);
-      const hasNext = result.success && def.kind === 'campaign' && !!nextMissionAfter(def.id);
+      // campaign → next mission, training → next lesson (T03 → the first campaign mission)
+      const hasNext = result.success && !!nextMissionAfter(def.id);
       const choice = await this.ui.showDebrief(result, hasNext);
       return choice;
     }

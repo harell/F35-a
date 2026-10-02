@@ -1,10 +1,10 @@
 /**
  * Conformal target symbology: sensor tracks (hostile air boxes, ground diamonds, SAM threat symbols),
  * the target designator (TD) box with range / type / missile time-to-impact, lock-on progress ring and
- * lock diamond, the ±30° lock cone + LOCKING cue, the off-screen target cue, friendly markers, the
- * steering waypoint and own missiles. Every tappable symbol is registered for pick(); the TD box and its
- * labels are registered as protected (text never covers them) and secondary labels (contact types,
- * waypoint name) are skipped or moved when they would collide.
+ * lock diamond, the ±30° lock cone + LOCKING cue, the off-screen target cue, friendly markers (aircraft
+ * and the sites to defend), the steering waypoint and own missiles. Every tappable symbol is registered
+ * for pick(); the TD box and its labels are registered as protected (text never covers them) and
+ * secondary labels (contact types, waypoint name) are skipped or moved when they would collide.
  */
 import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
@@ -15,6 +15,7 @@ import { zoneExt } from './zones';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
+import { protectedSites } from './sites';
 
 /** Max distance (m) at which ground targets / friendlies are drawn on the HMD. */
 const GROUND_RANGE = 30_000;
@@ -160,6 +161,35 @@ export function drawGroundAndSams(f: HudFrame): void {
       }
     }
     picks.add(g.id, f.sp.x, f.sp.y, r);
+  }
+  drawProtectedSites(f);
+}
+
+/**
+ * Friendly sites the mission asks us to defend (sites.ts): a friendly circle-and-square at the
+ * survivors' centroid with "DEFEND 8/9". Never pickable (friendlies can't be designated).
+ */
+function drawProtectedSites(f: HudFrame): void {
+  const { p, pen, pal, L } = f;
+  const u = L.u;
+  for (const site of protectedSites(f.ctx.mission, f.world, p.team)) {
+    if (Math.hypot(site.x - p.position.x, site.z - p.position.z) > SAM_RANGE) continue;
+    f.v1.set(site.x, site.y, site.z);
+    f.proj.point(f.v1, f.sp);
+    if (!drawable(f)) continue;
+    const x = f.sp.x;
+    const y = f.sp.y;
+    const r = 7 * u;
+    pen.setDash('solid');
+    pen.begin();
+    pen.circle(x, y, r);
+    pen.rect(x - 2.5 * u, y - 2.5 * u, 5 * u, 5 * u);
+    pen.strokeGlow(pal.friend, 1.6);
+    // below / above the symbol, else beside it (the one label here that matters more than a type tag)
+    const side = r + 6 * u + pen.textWidth(site.label, 10.5) / 2;
+    if (placeLabel(f, site.label, 10.5, x, y + r + 8 * u, y - r - 8 * u) || placeLabel(f, site.label, 10.5, x + side, y, y) || placeLabel(f, site.label, 10.5, x - side, y, y)) {
+      pen.text(site.label, lblPos.x, lblPos.y, pal.friend, 10.5);
+    }
   }
 }
 

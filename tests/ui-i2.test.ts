@@ -13,7 +13,7 @@ import { computeScore, contributionCap, type ScoreInput } from '../src/missions/
 import { attemptSeed, jitter, nextAttempt, setAttemptVariation } from '../src/missions/runtime/variation';
 import { sameFlight } from '../src/missions/runtime/callouts';
 import { groupSkill } from '../src/missions/runtime/spawner';
-import { missionById } from '../src/missions';
+import { CAMPAIGN, TRAINING, missionById } from '../src/missions';
 import { DIFFICULTIES } from '../src/core/data';
 
 const NO_SAFE = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -47,6 +47,12 @@ describe('i2: handedness / scheme-aware instructions', () => {
     expect(formatControls(t, { controlScheme: 'stick', leftHanded: true })).toBe('Right thumb THROTTLE, left thumb STICK. Climb');
     expect(formatControls(t, { controlScheme: 'tilt', leftHanded: false })).toBe('Tilt the phone to fly, left thumb THROTTLE. Climb');
     expect(formatControls(t, { controlScheme: 'tilt', leftHanded: true })).toBe('Tilt the phone to fly, right thumb THROTTLE. Climb');
+  });
+  it('no campaign or training hint hard-codes a thumb (playtest 2026-10-02, 1.4-d: T01 said RIGHT THUMB = STICK)', () => {
+    for (const m of [...CAMPAIGN, ...TRAINING]) {
+      const texts = [...(m.script.hints ?? []).map((h) => h.text), ...(m.script.triggers ?? []).flatMap((t) => t.actions.flatMap((a) => (a.kind === 'hint' ? [a.text] : [])))];
+      for (const t of texts) expect(t, `${m.id}: "${t}"`).not.toMatch(/\b(left|right) thumb\b/i);
+    }
   });
   it('c01 no longer hard-codes "Left thumb THROTTLE"', () => {
     const c01 = missionById('c01')!;

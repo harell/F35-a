@@ -128,7 +128,8 @@ const AUTO: AutoHint[] = [
     test(p) {
       if (p.incoming.length === 0) return null;
       const ir = p.incoming[0].guidance === 'ir';
-      return ir ? 'MISSILE (IR)! FLARES and break hard into it — out of afterburner' : 'MISSILE! Beam it: turn 90° to the missile, dive, CHAFF in the last seconds';
+      // short enough for one page: it must not page away while the missile flies
+      return ir ? 'IR MISSILE! FLARES, break into it, AB off' : 'MISSILE! Beam it 90°, dive, CHAFF late';
     },
   },
   {

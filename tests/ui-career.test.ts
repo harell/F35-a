@@ -22,7 +22,7 @@ import {
   recordMedals,
   setDifficulty,
 } from '../src/ui/career';
-import { RECRUIT_OFFER_AFTER } from '../src/ui/screens/debrief';
+import { RECRUIT_OFFER_AFTER, debriefPrimary } from '../src/ui/screens/debrief';
 import { countNote } from '../src/ui/screens/instantAction';
 
 class MemStorage {
@@ -100,6 +100,16 @@ describe('briefing difficulty picker', () => {
     expect(failStreak(p, 'c01')).toBe(1);
     p = recordResult(p, fail);
     expect(failStreak(p, 'c01')).toBeGreaterThanOrEqual(RECRUIT_OFFER_AFTER);
+  });
+});
+
+describe('debrief primary button', () => {
+  it('NEXT after a win with a next mission or lesson, MENU after any other win, RETRY only after a failure', () => {
+    expect(debriefPrimary({ success: true }, true)).toBe('next');
+    expect(debriefPrimary({ success: true }, false)).toBe('menu');
+    expect(debriefPrimary({ success: true, campaignComplete: true }, false)).toBe('ending');
+    expect(debriefPrimary({ success: false }, false)).toBe('retry');
+    expect(debriefPrimary({ success: false }, true)).toBe('retry');
   });
 });
 

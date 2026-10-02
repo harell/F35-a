@@ -211,7 +211,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       );
       sams.push(site('zsu1', 'defences', 'zsu23', rw(-650, 150)), site('zsu2', 'defences', 'zsu23', rw(650, 150)));
       if (n >= 2) sams.push(site('sam1', 'defences', akl ? 'sa6' : 'sa8', akl ? P.waiW : rw(-1800, -1200)));
-      if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', akl ? P.waiC : rw(1600, 1100)));
+      // the SA-15 Tor shoots down JDAMs: Veteran and up only, as in c04
+      if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', akl ? P.waiC : rw(1600, 1100), { minDifficulty: 'veteran' }));
       const cap = enemyFlights(opts, Math.max(1, Math.ceil(n / 2)), lay, rng, { role: 'cap' });
       groups.push(...cap);
       script.scaleEnemyTotal = true;

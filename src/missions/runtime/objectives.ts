@@ -41,7 +41,9 @@ function setState(s: MissionState, o: ObjectiveRt, state: ObjectiveStatus['state
     s.hud('OBJECTIVE COMPLETE', 'good', 3);
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Objective complete — ${o.def.label}.`, voice: 'a_objective_complete', priority: 2 });
   } else if (state === 'failed') {
-    s.hud(o.def.primary ? 'PRIMARY OBJECTIVE FAILED' : 'OBJECTIVE FAILED', 'bad', 3.5);
+    // a lost bonus is not a lost mission: amber and short, never the red primary-failure banner
+    if (o.def.primary) s.hud('PRIMARY OBJECTIVE FAILED', 'bad', 3.5);
+    else s.hud('BONUS FAILED', 'warn', 2.5);
   } else if (state === 'active' && s.time > 1) {
     s.hud(`NEW OBJECTIVE: ${o.def.label.toUpperCase()}`, 'info', 4);
   }

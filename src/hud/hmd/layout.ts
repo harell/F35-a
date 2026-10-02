@@ -10,7 +10,7 @@
  *   │                            │   ROW 1  PULL UP / MISSILE / MISSILE DEFEATED / STALL / title │
  *   │                            │   ROW 2  [SPIKE 29] [FLARES LOW] [BINGO] … chips              │
  *   │  weapon block          spd │            (flight path marker)              │ alt     DLZ    │
- *   │                            │   CUE    SHOOT / IN RNG / FOX 3                                │
+ *   │                            │   CUE    SHOOT / IN RANGE / FOX 3                              │
  *   │                            │   MSG    one centre message (priority queue)                  │
  *   └ throttle cluster ──────────┴── radio subtitles (2 lines, paged) ──────── stick ┘
  *
@@ -67,7 +67,7 @@ export interface HudLayout {
   /** Warning band: row 1 (one big critical line) and row 2 (caution chips) centre y. */
   warnY: number;
   row2Y: number;
-  /** Weapon cue line (SHOOT / IN RNG / FOX 3) centre y. */
+  /** Weapon cue line (SHOOT / IN RANGE / FOX 3) centre y. */
   cueY: number;
   /** Legacy alias of cueY. */
   stackY: number;

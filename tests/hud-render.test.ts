@@ -19,7 +19,8 @@ import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { pipView } from '../src/hud/hmd/pip';
 import { Projector } from '../src/hud/hmd/projector';
 import { computeTouchLayout } from '../src/input/touch/layout';
-import { MissileEntity } from '../src/sim/entities';
+import { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
+import { paletteFor } from '../src/hud/hmd/palette';
 import { PLAYER_LOCK_CONE } from '../src/sim/sensors/Sensors';
 
 installPath2D();
@@ -564,3 +565,173 @@ describe('external views', () => {
   });
 });
 
+
+/** Every text drawn over `seconds` (blinking cues are only on screen part of the time). */
+function textsOver(r: Rig, seconds: number): TextRec[] {
+  const all: TextRec[] = [];
+  for (let i = 0; i < Math.round(seconds * 30); i++) all.push(...r.run(1 / 30));
+  return all;
+}
+
+describe('bomb release cue in every view (playtest 1.3-a: none in the default chase view)', () => {
+  const views: CameraMode[] = ['chase', 'orbit', 'flyby', 'hud', 'cockpit'];
+
+  it('REL n counts down to the release in chase as in the HMD views', () => {
+    for (const v of views) {
+      const r = rig('ag', v);
+      const rel = find(textsOver(r, 0.5), /^REL \d+$/);
+      expect(rel.length, v).toBeGreaterThan(0);
+      expect(rel[0].size, v).toBeGreaterThanOrEqual(15);
+    }
+  });
+
+  it('IN RANGE (the briefings\' word) shows in chase, off the jet and clear of the info block and inset (844x390)', () => {
+    for (const v of views) {
+      const r = rig('ag', v);
+      const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+      (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => ({ point: ship.position.clone(), inRange: true, timeToRelease: 0 });
+      const texts = textsOver(r, 1);
+      expect(find(texts, 'IN RNG').length, v).toBe(0);
+      const cue = find(texts, 'IN RANGE');
+      expect(cue.length, v).toBeGreaterThan(0);
+      if (v !== 'chase') continue;
+      const box = textBox(cue[0]);
+      expect(box.x0).toBeGreaterThan(0);
+      expect(box.x1).toBeLessThan(r.W);
+      const proj = new Projector();
+      proj.update(r.camera, r.W, r.H);
+      const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+      proj.point(r.mock.player.position, sp);
+      expect(overlaps(box, { x0: sp.x - 60, y0: sp.y - 25, x1: sp.x + 60, y1: sp.y + 15 })).toBe(false);
+      // the compact info block (speed / alt / weapon / target, the AMRAAM mini-DLZ row) and the inset
+      const L = computeLayout(makeLayout(), r.W, r.H, r.ctx.screen.safe, Math.tan(Math.PI / 6), false, { external: true });
+      for (const t of r.run(1 / 30)) {
+        if (t.x > L.extX + 210 || t.text === 'IN RANGE') continue;
+        expect(overlaps(box, textBox(t)), t.text).toBe(false);
+      }
+      expect(box.x1).toBeLessThan(L.insetCx - L.insetR);
+    }
+  });
+
+  it('the AMRAAM SHOOT cue and its mini DLZ still work in chase', () => {
+    const r = rig('lock', 'chase');
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
+  });
+});
+
+/** Defend-style mission on the mock: friendly fuel tanks ahead and a protect objective on them. */
+function addDefendSite(r: Rig, ahead = 20_000, right = 0, n = 9): GroundTargetEntity[] {
+  const p = r.mock.player;
+  const fwd = new Vector3(0, 0, -1).applyQuaternion(p.quaternion).setY(0).normalize();
+  const rt = new Vector3(-fwd.z, 0, fwd.x);
+  const c = p.position.clone().addScaledVector(fwd, ahead).addScaledVector(rt, right).setY(0);
+  const tanks: GroundTargetEntity[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = new GroundTargetEntity(9000 + i, 'fuel', 'blue', { name: 'Fuel Tank', radius: 20 });
+    t.groupId = 'wiri';
+    t.position.set(c.x + ((i % 3) - 1) * 90, 0, c.z + (Math.floor(i / 3) - 1) * 90);
+    r.mock.world.ground.push(t);
+    tanks.push(t);
+  }
+  const def = r.mock.mission.def as unknown as { script: unknown };
+  def.script = {
+    objectives: [
+      { id: 'o_tanks', kind: 'protect', group: 'wiri', minSurvivors: 6, label: 'Keep at least 6 of the 9 fuel tanks standing', primary: true },
+      { id: 'o_all', kind: 'protect', group: 'wiri', minSurvivors: 9, label: 'Save all 9 tanks', primary: false },
+    ],
+  };
+  r.mock.mission.objectives.push(
+    { id: 'o_tanks', label: 'Keep at least 6 of the 9 fuel tanks standing', state: 'active', primary: true, progress: { done: n, total: n } },
+    { id: 'o_all', label: 'Save all 9 tanks', state: 'active', primary: false, progress: { done: n, total: n } },
+  );
+  return tanks;
+}
+
+describe('the defended site is marked (playtest 1.3-b / 1.2-b: Defend never showed the Wiri tanks)', () => {
+  const friend = paletteFor('green').friend;
+
+  it('tactical map: a friendly DEFEND n/m symbol, counting the survivors, that a tap never designates', () => {
+    const r = rig('nav', 'tactical');
+    const tanks = addDefendSite(r);
+    const lbl = one(r.run(0.1), 'DEFEND 9/9');
+    expect(lbl.color).toBe(friend);
+    // the label sits next to the symbol: a tap there zooms the map, it never returns a tank
+    const ids = new Set(tanks.map((t) => t.id));
+    for (const [dx, dy] of [[-10, 0], [10, 0], [0, -14], [0, 16]]) expect(ids.has(r.hud.pick(lbl.x + dx, lbl.y + dy) ?? -1)).toBe(false);
+    // a tank lost: the count follows (dead entities leave world.ground on the next cleanup)
+    tanks[0].alive = false;
+    r.mock.world.ground.splice(r.mock.world.ground.indexOf(tanks[0]), 1);
+    one(r.run(0.1), 'DEFEND 8/9');
+  });
+
+  it('HMD and chase: the site is marked in the friendly colour', () => {
+    for (const v of ['hud', 'chase'] as const) {
+      const r = rig('nav', v);
+      // (off to the side: in chase a label never lands on the jet itself)
+      addDefendSite(r, 20_000, 6_000);
+      const lbl = find(r.run(0.1), 'DEFEND 9/9');
+      expect(lbl.length, v).toBe(1);
+      expect(lbl[0].color, v).toBe(friend);
+    }
+  });
+
+  it('TSD: labelled on the zoomed PCD page, a symbol on the chase radar inset', () => {
+    const r = rig('nav', 'cockpit');
+    addDefendSite(r, 12_000);
+    r.run(0.1);
+    pcdZoom.openPortal(1, ['TSD'], 0);
+    one(r.run(0.1), 'DEFEND 9/9');
+    pcdZoom.close();
+    // the inset has no labels: compare its circles with and without the protect objective
+    const inInset = (q: Rig) => {
+      const L = computeLayout(makeLayout(), q.W, q.H, q.ctx.screen.safe, Math.tan(Math.PI / 6), false, { external: true });
+      q.run(0.1);
+      return q.fake.arcs.filter((a) => Math.hypot(a.x - L.insetCx, a.y - L.insetCy) < L.insetR && a.r > 3 && a.r < 6).length;
+    };
+    const without = rig('nav', 'chase');
+    const withSite = rig('nav', 'chase');
+    addDefendSite(withSite);
+    expect(inInset(withSite)).toBe(inInset(without) + 1);
+  });
+
+  it('only our own team\'s protected ground groups are sites', () => {
+    const r = rig('nav', 'tactical');
+    for (const t of addDefendSite(r)) t.team = 'red';
+    expect(find(r.run(0.1), /^DEFEND/).length).toBe(0);
+  });
+});
+
+describe('objectives list: primaries first, bonus objectives under BONUS (playtest 1.3-c / 1.3-d)', () => {
+  const pal = paletteFor('green');
+  /** Objective lines of the compact list, in draw order (state mark + text). */
+  const objLines = (texts: TextRec[]) => texts.filter((t) => t.text === 'BONUS' || /^(\+|>|-|x| ) /.test(t.text)).sort((a, b) => a.y - b.y);
+
+  it('a secondary that just changed waits below the primaries', () => {
+    const r = rig('nav', 'chase');
+    r.mock.mission.objectives.push({ id: 'o4', label: 'Splash the escort', state: 'active', primary: false, progress: { done: 0, total: 2 } });
+    r.run(0.1);
+    r.mock.events.emit('objective', { id: 'o4', label: 'Splash the escort', state: 'active' });
+    const lines = objLines(r.run(0.2));
+    expect(lines[0].text).toMatch(/^> SPLASH THE MIG-29 SWEEP/);
+    const bonus = lines.findIndex((l) => l.text === 'BONUS');
+    const escort = lines.findIndex((l) => /SPLASH THE ESCORT/.test(l.text));
+    const primary = lines.findIndex((l) => /RANGITOTO/.test(l.text));
+    expect(bonus).toBeGreaterThan(primary);
+    expect(escort).toBe(bonus + 1);
+  });
+
+  it('a failed bonus never tops the list and is not drawn in the alarm red', () => {
+    const r = rig('nav', 'hud');
+    addDefendSite(r);
+    r.run(0.1);
+    const all = r.mock.mission.objectives.find((o) => o.id === 'o_all')!;
+    all.state = 'failed';
+    r.mock.events.emit('objective', { id: 'o_all', label: all.label, state: 'failed' });
+    const lines = objLines(r.run(0.2));
+    expect(lines[0].text).toMatch(/^> /);
+    expect(lines[0].text).not.toMatch(/SAVE ALL/);
+    const failed = one(lines, /^x SAVE ALL 9 TANKS/);
+    expect(failed.color).not.toBe(pal.danger);
+    expect(failed.y).toBeGreaterThan(one(lines, 'BONUS').y);
+  });
+});

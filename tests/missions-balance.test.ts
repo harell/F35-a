@@ -6,7 +6,7 @@
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  */
 import { describe, expect, it } from 'vitest';
-import { missionById, terrainPadsFor } from '../src/missions';
+import { buildInstantMissionSeeded, missionById, terrainPadsFor } from '../src/missions';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -42,6 +42,14 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
     const sa15 = missionById('c04')!.script.sams.find((s) => s.type === 'sa15')!;
     expect(difficultyAtLeast('pilot', sa15.minDifficulty)).toBe(false);
     expect(difficultyAtLeast('veteran', sa15.minDifficulty)).toBe(true);
+  });
+  it('Instant Action strike: the SA-15 Tor only appears from Veteran up, as in c04 (playtest 2026-10-02, 1.1-b)', () => {
+    for (const theater of ['auckland', 'desert'] as const) {
+      const def = buildInstantMissionSeeded({ mode: 'strike', theater, timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, 1);
+      const sa15 = def.script.sams.find((s) => s.type === 'sa15')!;
+      expect(difficultyAtLeast('pilot', sa15.minDifficulty)).toBe(false);
+      expect(difficultyAtLeast('veteran', sa15.minDifficulty)).toBe(true);
+    }
   });
   it('c10: the Flanker sweep is Veteran+ and the eastern raid leaves time for the northern one', () => {
     const def = missionById('c10')!;
