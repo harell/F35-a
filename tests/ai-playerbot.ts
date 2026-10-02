@@ -33,6 +33,7 @@ import { Autopilot, gammaForAltitude, type FlightIntent } from '../src/ai/pilot/
 import { dirWithElevation, rotateHorizontal, signedHorizAngle } from '../src/ai/geom';
 import { sustainableG } from '../src/ai/brain/bfm';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
+import { stallSpeedIas } from '../src/sim/flight/performance';
 
 export interface PlayerBotOptions {
   /** Seconds before the pilot reacts to a new MAWS warning. */
@@ -83,6 +84,23 @@ const GUN_MERGE_RANGE = 3_000;
 const GUN_CRANK_RANGE = 8_000;
 const GUN_CRANK_CONE = 50 * (Math.PI / 180);
 const GUN_CRANK = 40 * (Math.PI / 180);
+/** Slowest gun chase (m/s) against a fighter; slower targets get gunChaseFloor(). */
+const GUN_CHASE_MIN = 170;
+/** Gun chase on a slow target (a Shahed at ~51 m/s): overtake it by this much (m/s). */
+const GUN_SLOW_OVERTAKE = 25;
+/** Lowest the terrain floor goes for a gun pass on a slow, low target (m above the surface). */
+const GUN_SLOW_MIN_AGL = 80;
+
+/**
+ * Slowest gun-chase speed (TAS, m/s): GUN_CHASE_MIN against fighters. Against a slow target its
+ * speed + GUN_SLOW_OVERTAKE, never below the 2 g stall speed (≈ 100 m/s IAS for the F-35): any
+ * slower and the jet hangs at 17–19° AoA with the pipper ~100 px above a drone. At the 170 floor
+ * the chase closed on a Shahed at 110+ m/s, overshot every pass and fired 0 rounds (g01).
+ */
+function gunChaseFloor(p: AircraftEntity, tgt: AircraftEntity): number {
+  const tasPerIas = p.velocity.length() / Math.max(1, p.flight.ias);
+  return Math.min(GUN_CHASE_MIN, Math.max(stallSpeedIas(p, 2) * tasPerIas, tgt.velocity.length() + GUN_SLOW_OVERTAKE));
+}
 
 /**
  * Gun-fight energy rule (as the AI's applyEnergyLimits): below 90 % of corner speed turn no harder
@@ -399,11 +417,24 @@ export class PlayerBot {
       // closure: tracking a bandit flying away from us (tail chase), hold a firing position
       // ~GUN_TRAIL m behind it instead of flying through it; otherwise keep the energy up
       const away = tgt.velocity.dot(_p);
-      if (tracking && away > 0.7 * tgt.velocity.length()) {
+      // a slow target (one-way drone): once tracking, close at just above its own speed
+      const floor = gunChaseFloor(p, tgt);
+      const slow = floor < GUN_CHASE_MIN;
+      // a drone cruising 250 m up sits on the 250 m terrain floor: the jet held level above it with
+      // the pipper an AoA (4–5°) over it, never inside the gate. Fly the pass a little below it
+      if (slow) it.minAgl = Math.min(it.minAgl, Math.max(GUN_SLOW_MIN_AGL, tgt.position.y - world.terrain.surfaceHeightAt(tgt.position.x, tgt.position.z) - 150));
+      if (tracking && (away > 0.7 * tgt.velocity.length() || slow)) {
         it.throttle = -1;
         // (with only the gun left, chase a bandit that extends: the 340 m/s cap let a MiG in
         // burner at 400+ m/s run away from 1.6 km in trail for minutes)
-        it.speed = Math.max(170, Math.min(gunFight ? 600 : 340, away + (R - GUN_TRAIL) * 0.15));
+        it.speed = Math.max(floor, Math.min(gunFight && !slow ? 600 : 340, Math.max(away, 0) + (R - GUN_TRAIL) * 0.15));
+        it.allowAb = true;
+        it.allowBrake = true;
+      } else if (slow) {
+        // ...and turn onto it at corner speed: at the 100 m/s chase speed the jet has 2 g (~10°/s)
+        // and a Shahed flew out of gun range while the nose came round
+        it.throttle = -1;
+        it.speed = AIRCRAFT_PERF[p.type].cornerSpeed;
         it.allowAb = true;
         it.allowBrake = true;
       } else if (gunFight) {
@@ -413,7 +444,7 @@ export class PlayerBot {
         it.throttle = facing && e >= 0.8 ? AB_DETENT : 1;
       } else it.throttle = 1;
       const firing = tracking && R < GUN_FIRE_RANGE * 1.3;
-      if (gunFight && !facing && !firing && _fwd.dot(_p) > Math.cos(CHASE_ATA)) {
+      if (gunFight && !slow && !facing && !firing && _fwd.dot(_p) > Math.cos(CHASE_ATA)) {
         // chase: behind the bandit, nose roughly on it, out of gun range — speed closes the
         // range, not g. The 9 g pursuit bled to ~200 m/s while a jinking MiG ran at 350+ m/s
         // 1.5 km ahead for minutes; turn no harder than the jet can sustain
