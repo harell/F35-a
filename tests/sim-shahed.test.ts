@@ -18,7 +18,7 @@ import { createOneWay, diveStartDistance, IMPACT_RADIUS, placeOneWay, SHAHED_SPE
 import { createSkyTower } from '../src/sim/landmarks';
 import { AIRCRAFT_HEALTH, AIRCRAFT_WARHEAD } from '../src/sim/damage/tables';
 import { createAiBrain } from '../src/ai';
-import { missionById, terrainPadsFor } from '../src/missions';
+import { missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { emptyScript, type AircraftGroupDef } from '../src/missions/schema';
 import { formationOffset } from '../src/missions/runtime/spawner';
 import { aircraftNoun, killHudText } from '../src/missions/runtime/names';
@@ -314,6 +314,32 @@ describe('Shahed-136: formation spawn', () => {
     expect(rows.map((r) => r.length)).toEqual([1, 2, 3, 4]);
     for (const r of rows) expect(r.reduce((a, b) => a + b, 0)).toBeCloseTo(0, 6);
     expect(rows[3]).toEqual([-150, -50, 50, 150]);
+  });
+
+  it('validateMission accepts a drone group at drone speed and checks its target and route', () => {
+    const base = missionById('c01')!;
+    const withGroup = (g: AircraftGroupDef): MissionDef => ({ ...base, script: { ...base.script!, groups: [...base.script!.groups, g] } });
+    const g: AircraftGroupDef = {
+      id: 'shaheds',
+      type: 'shahed136',
+      team: 'red',
+      count: 10,
+      formation: 'triangle',
+      x: 4000,
+      z: 6000,
+      altitude: ROUTE_ALT,
+      heading: 0,
+      speed: SHAHED_SPEED,
+      role: 'bomber',
+      oneWay: { targetX: 1000, targetZ: 1000, route: [{ x: 2500, z: 3500 }] },
+    };
+    expect(validateMission(base)).toEqual([]);
+    expect(validateMission(withGroup(g))).toEqual([]);
+    expect(validateMission(withGroup({ ...g, speed: 10 }))).toEqual(['c01: group shaheds drone speed below 30 m/s']);
+    const far = withGroup({ ...g, oneWay: { targetX: 1e7, targetZ: 1000, route: [{ x: 2500, z: -1e7 }] } });
+    expect(validateMission(far).filter((e) => /drone target|drone route 0/.test(e))).toHaveLength(2);
+    // ordinary flights keep the 100 m/s floor
+    expect(validateMission(withGroup({ ...g, oneWay: undefined, speed: SHAHED_SPEED }))).toContain('c01: group shaheds speed below 100 m/s');
   });
 
   it('a mission group of 10 drones spawns in the triangle, nose toward the target, and every drone dives into it', { timeout: 30_000 }, () => {
