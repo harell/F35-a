@@ -4,9 +4,17 @@
  *  - c10 'Night Harbour' was 0/2 on Pilot (Su-27 sweep R-27s at 137/159 s) and failed on Recruit;
  *  - c07 'Mainstay' on Veteran/Ace was an unavoidable Su-35 R-77 kill at 51–58 s.
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
+ *
+ * Issue #57 (playtest 2026-10-02): the Pilot band (≥ 75 % over 6 seeds) in c02, c09 and t03, and no
+ * free wins in c02 / c09 for a player parked far from the fight.
  */
 import { describe, expect, it } from 'vitest';
-import { buildInstantMissionSeeded, missionById, terrainPadsFor } from '../src/missions';
+import { EventBus } from '../src/core/events';
+import { DIFFICULTIES } from '../src/core/data';
+import { buildInstantMissionSeeded, createMissionRunner, missionById, terrainPadsFor } from '../src/missions';
+import { createSimWorld } from '../src/sim/World';
+import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
+import { createAiBrain } from '../src/ai';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -123,5 +131,204 @@ describe('i2: MissionBot playthroughs (real World / Combat / AI, 3 seeds)', () =
       const r = runPlaythrough('c07', 'veteran', seed, terrainFor('c07'), { maxT: 80 });
       expect(r.state === 'failed' && r.t < 80, `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`).toBe(false);
     }
+  });
+});
+
+/** Where the playtest's exploit charter parks the player: 35 km south-west of the city, 13 km up. */
+const FAR = { x: -35000, y: 13000, z: 35000 };
+
+/**
+ * A player parked with no shot fired (the playtest's exploit charter): real AI and combat on the real
+ * terrain, seeded like runPlaythrough, the player pinned at `at` (default FAR) and kept fuelled and
+ * unhurt, so only the friendlies and the enemy act.
+ */
+function parkedRun(id: string, diff: Difficulty, seed: number, maxT: number, at: { x: number; y: number; z: number } = FAR) {
+  const def = missionById(id)!;
+  const events = new EventBus();
+  const d = DIFFICULTIES[diff];
+  const world = createSimWorld({ terrain: terrainFor(id), difficulty: d, events, combat: createCombatSystemSeeded(seed) });
+  const runner = createMissionRunner({ ...def, seed: def.seed + seed * 101 }, { createAi: createAiBrain, difficulty: d, events });
+  runner.setup(world, def.recommendedLoadout);
+  const p = world.player!;
+  const fuel = p.flight.fuel;
+  const completed = new Map<string, number>();
+  events.on('objective', (e) => {
+    if (e.state === 'complete' && !completed.has(e.id)) completed.set(e.id, world.time);
+  });
+  for (let i = 0; i < maxT * 60 && runner.state === 'running'; i++) {
+    p.position.set(at.x, at.y, at.z);
+    p.health = p.maxHealth;
+    p.flight.fuel = fuel;
+    world.step(1 / 60);
+    runner.update(world, 1 / 60);
+  }
+  const result = runner.state !== 'running' ? runner.result(world) : null;
+  return { state: runner.state, t: world.time, alive: p.alive, shots: p.shotsFired, reason: result?.reason ?? '', completed, objectives: runner.objectives };
+}
+
+/** Let vitest's worker answer its RPC between long synchronous playthroughs (as missions-bot.test.ts does). */
+const breathe = () => new Promise((r) => setTimeout(r, 0));
+
+/** wins(), yielding between playthroughs. */
+async function winsYielding(id: string, diff: Difficulty, seeds: number[]): Promise<{ won: number; log: string[] }> {
+  const log: string[] = [];
+  let won = 0;
+  for (const seed of seeds) {
+    await breathe();
+    const r = wins(id, diff, [seed]);
+    won += r.won;
+    log.push(...r.log);
+  }
+  return { won, log };
+}
+
+/** Seconds from an objective completing to the end of the mission, in a logged bot playthrough (null: never completed). */
+function afterObjective(r: { events: string[]; t: number }, id: string): number | null {
+  const line = r.events.find((e) => e.endsWith(`OBJ ${id} complete`));
+  return line ? r.t - Number(line.trim().split(' ')[0]) : null;
+}
+
+describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)', () => {
+  // the sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=c02,c09,t03 --diffs=recruit,pilot --seeds=6
+  // (was c02 4/6, c09 4/6, t03 2/6 on Pilot; Recruit 6/6 each)
+  for (const id of ['c02', 'c09', 't03']) {
+    for (const diff of ['recruit', 'pilot'] as const) {
+      it(`${id} is won on ${diff} in ≥ 5 of 6 seeds`, { timeout: 300_000 }, async () => {
+        const r = await winsYielding(id, diff, [0, 1, 2, 3, 4, 5]);
+        expect(r.won, r.log.join('\n')).toBeGreaterThanOrEqual(5);
+      });
+    }
+  }
+});
+
+describe('issue #57: c02 Shepherd — Kiwi has to be protected for real', () => {
+  it('Kiwi is safe only when it is home AND the fighters chasing it are dealt with', () => {
+    const def = missionById('c02')!;
+    for (const id of ['o_kiwi', 'o_both']) {
+      const o = def.script.objectives.find((x) => x.id === id)!;
+      expect(o.kind).toBe('protect');
+      const until = o.kind === 'protect' ? o.until : undefined;
+      expect(until?.kind, id).toBe('all');
+      expect(until?.kind === 'all' ? until.of : [], id).toContainEqual({ kind: 'objective', id: 'o_bandits', state: 'complete' });
+    }
+    expect(def.recommendedLoadout).toBe('a2a_beast');
+    // ...with the player there to see Kiwi home (the start is near Whenuapai, the charter's parking spot is not)
+    const until = def.script.objectives.find((x) => x.id === 'o_kiwi')!;
+    const area = until.kind === 'protect' && until.until?.kind === 'all' ? until.until.of.find((c) => c.kind === 'area' && !c.who) : undefined;
+    expect(area?.kind).toBe('area');
+    if (area?.kind === 'area') expect(Math.hypot(FAR.x - area.x, FAR.z - area.z)).toBeGreaterThan(area.radius + 10_000);
+    // and the mission can't run on forever: Kiwi is bingo at 720 s
+    const bingo = def.script.triggers.find((t) => t.id === 't_kiwi_bingo')!;
+    expect(bingo.actions).toContainEqual({ kind: 'end', success: false, reason: 'Kiwi flight ran out of fuel' });
+  });
+
+  it('a Kiwi jet shot down: the chasers are pointed at the survivor (attack_group resolves to one jet)', () => {
+    const hit = missionById('c02')!.script.triggers.find((t) => t.id === 't_kiwi_hit')!;
+    for (const group of ['hunters', 'flankers']) expect(hit.actions, group).toContainEqual({ kind: 'retask', group, task: { kind: 'attack_group', group: 'kiwi' } });
+  });
+
+  // seeds 0-5 (review: seeds 0, 1, 3 and 4 used to run past 3000 s once one Kiwi jet was down)
+  for (const diff of ['recruit', 'pilot'] as const) {
+    it(`parked 50 km away on ${diff}: the protect is never credited, and the mission ends in failure (round 2, 2.3-c)`, { timeout: 300_000 }, async () => {
+      for (const seed of [0, 1, 2, 3, 4, 5]) {
+        await breathe();
+        const r = parkedRun('c02', diff, seed, 900);
+        const msg = `${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives.map((o) => `${o.id}=${o.state}`).join(' ')}`;
+        expect(r.shots, msg).toBe(0);
+        expect(r.completed.has('o_kiwi'), msg).toBe(false);
+        expect(r.state, msg).toBe('failed');
+        expect(r.alive, msg).toBe(true);
+        // shot down, or (the chase never settled) Kiwi's bingo at 720 s: never an endless run
+        expect(r.t, msg).toBeLessThanOrEqual(721);
+      }
+    });
+  }
+});
+
+describe('issue #57: c09 Hammer Down — needs its escort, and ends once Hammer is clear', () => {
+  // parked with no shot fired: far away (the charter's spot), at the player's own start (17 km from the
+  // push point) and 35 km west of the strip (19 km from it). Review: a 25 km escort circle held the start.
+  const spots: [string, { x: number; y: number; z: number }, number[]][] = [
+    ['50 km away', FAR, [1]],
+    ['at the start', { x: -6000, y: 6500, z: -5000 }, [0, 1, 2]],
+    ['35 km west of the strip', { x: -8100, y: 6000, z: -6600 }, [0]],
+  ];
+  for (const [where, at, seeds] of spots) {
+    it(`parked ${where} with no shot fired: no win (round 3, 3.2-a: Weasel and Hammer won it alone)`, { timeout: 300_000 }, async () => {
+      for (const diff of ['recruit', 'pilot'] as const) {
+        for (const seed of seeds) {
+          await breathe();
+          const r = parkedRun('c09', diff, seed, 900, at);
+          const msg = `${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives.map((o) => `${o.id}=${o.state}`).join(' ')}`;
+          expect(r.shots, msg).toBe(0);
+          expect(r.state, msg).toBe('failed');
+          expect(r.alive, msg).toBe(true);
+          expect(r.reason, msg).toMatch(/without its escort/);
+        }
+      }
+    });
+  }
+
+  it('the start is outside the escort circle, and Hammer only counts as out once it has pushed', () => {
+    const def = missionById('c09')!;
+    const push = def.script.triggers.find((t) => t.id === 't_push')!;
+    const escort = push.when.kind === 'all' ? push.when.of.find((c) => c.kind === 'area') : undefined;
+    expect(escort?.kind).toBe('area');
+    if (escort?.kind !== 'area') return;
+    expect(Math.hypot(def.player.x - escort.x, def.player.z - escort.z)).toBeGreaterThan(escort.radius + 5000);
+    // the steering cue leads to it
+    expect(def.script.waypoints.some((w) => w.id === 'wp_push' && Math.hypot(w.x - escort.x, w.z - escort.z) < 1)).toBe(true);
+    // a depot the player bombs before Hammer launches doesn't complete o_hammer / o_all4 (vacuous "clear")
+    for (const id of ['o_hammer', 'o_all4']) {
+      const o = def.script.objectives.find((x) => x.id === id)!;
+      const until = o.kind === 'protect' ? o.until : undefined;
+      expect(until?.kind === 'all' ? until.of : [], id).toContainEqual({ kind: 'trigger', id: 't_push' });
+    }
+  });
+
+  it('no dead stretch after the strike: the mission ends ≤ 75 s after o_strike completes (was 240 s, a crash nursing a damaged jet home)', { timeout: 300_000 }, async () => {
+    // the first three Pilot wins among seeds 1-5 (seed 0 is the band's loss)
+    let checked = 0;
+    const log: string[] = [];
+    for (const seed of [1, 2, 3, 4, 5]) {
+      if (checked >= 3) break;
+      await breathe();
+      const r = runPlaythrough('c09', 'pilot', seed, terrainFor('c09'), { maxT: 900, log: true });
+      const msg = `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives}`;
+      log.push(msg);
+      if (r.state !== 'success') continue;
+      checked++;
+      const gap = afterObjective(r, 'o_strike');
+      expect(gap, msg).not.toBeNull();
+      expect(gap!, msg).toBeLessThanOrEqual(75);
+    }
+    expect(checked, log.join('\n')).toBe(3);
+  });
+});
+
+describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the player', () => {
+  it('every steering point before the target stays ≥ 14 km from the SA-6, the IP behind Rangitoto from it', () => {
+    const def = missionById('t03')!;
+    const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
+    const route = def.script.waypoints.filter((w) => w.kind === 'nav' || w.kind === 'ip');
+    expect(route.length).toBeGreaterThan(0);
+    const pts = [{ x: def.player.x, z: def.player.z }, ...route];
+    for (const w of route) expect(Math.hypot(w.x - sa6.x, w.z - sa6.z), (w as { id: string }).id).toBeGreaterThanOrEqual(14_000);
+    // every leg (start → … → IP) passes ≥ 14 km from the SA-6
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((sa6.x - a.x) * dx + (sa6.z - a.z) * dz) / (dx * dx + dz * dz)));
+      expect(Math.hypot(a.x + dx * t - sa6.x, a.z + dz * t - sa6.z), `leg ${i}`).toBeGreaterThanOrEqual(14_000);
+    }
+    // the IP and the depot are on the far side of Rangitoto from the SA-6
+    const ip = route.find((w) => w.kind === 'ip')!;
+    const rangi = { x: 8700, z: -6850 };
+    const along = (q: { x: number; z: number }) => ((q.x - sa6.x) * (rangi.x - sa6.x) + (q.z - sa6.z) * (rangi.z - sa6.z)) / Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
+    const rangiD = Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
+    expect(along(ip)).toBeGreaterThan(rangiD);
+    for (const g of def.script.ground.filter((x) => x.group === 'depot')) expect(along(g), g.id).toBeGreaterThan(rangiD);
   });
 });
