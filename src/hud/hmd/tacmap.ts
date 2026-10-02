@@ -274,6 +274,8 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   }
   tm.active = true;
   const legendOpen = tm.legendOpen(f.st.clock);
+  // (the legend lists the DEFEND symbol only in a mission with a site to defend)
+  legendSites = protectedSites(ctx.mission, world, p.team).length > 0;
 
   const R = Math.max(80, Math.min(L.H / 2 - 22 * u, (L.right - L.left) / 2 - 10 * u));
   const rangeM = tm.rangeKm * 1000;
@@ -672,6 +674,9 @@ function labelNear(f: HudFrame, text: string, x: number, y: number, col: string)
   }
 }
 
+/** This frame's map has a friendly site to defend (an extra legend row). */
+let legendSites = false;
+
 /** Legend panel size (full or collapsed chip) — reserved before the symbols are labelled. */
 function legendSize(f: HudFrame, open: boolean, out: { x: number; y: number; w: number; h: number }): void {
   const L = f.L;
@@ -679,7 +684,7 @@ function legendSize(f: HudFrame, open: boolean, out: { x: number; y: number; w: 
   out.x = L.colX - 4 * u;
   out.y = L.colY - 4 * u;
   out.w = open ? Math.min(L.colW, 196 * u) : 118 * u;
-  out.h = open ? 18 * u + 6 * 13 * u + 34 * u : 22 * u;
+  out.h = open ? 18 * u + (legendSites ? 7 : 6) * 13 * u + 34 * u : 22 * u;
 }
 
 /** Legend + scale bar + tap hint (top-left panel), or the collapsed 'i' chip. Returns the panel bottom. */
@@ -740,6 +745,15 @@ function drawLegend(f: HudFrame, tm: TacMapState, open: boolean): number {
   pen.strokeGlow(pal.friend, 1.5);
   pen.text('FRIENDLY (DATALINK)', tx, y, pal.friend, 9.5, 'left');
   y += lh;
+  if (legendSites) {
+    // the site to defend: the map's circle-and-square (sites.ts)
+    pen.begin();
+    pen.circle(sx, y, s);
+    pen.rect(sx - s * 0.34, y - s * 0.34, s * 0.68, s * 0.68);
+    pen.strokeGlow(pal.friend, 1.4);
+    pen.text('DEFEND n/m  SITE TO PROTECT', tx, y, pal.friend, 9.5, 'left');
+    y += lh;
+  }
   pen.begin();
   pen.circle(sx, y, s);
   pen.fillPlain(C.samFill);

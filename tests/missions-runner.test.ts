@@ -309,3 +309,53 @@ describe('MissionRunner: presentation', () => {
     expect(h.runner.result(h.world).kills.air).toBe(before);
   });
 });
+
+describe('A/G auto-designation ranks the primary targets first (playtest 2.2-f: c06 boxed the Shilka)', () => {
+  const designatedGroup = (h: ReturnType<typeof harness>) => {
+    const p = h.world.player!;
+    const e = h.world.getEntity(p.radar.designatedId);
+    return e && (e.kind === 'ground' || e.kind === 'sam') ? e.groupId : null;
+  };
+
+  it('c06 with the StormBreaker: a corvette, not the Shilka on Browns Island in front', () => {
+    const def = CAMPAIGN.find((m) => m.id === 'c06')!;
+    const h = harness(def, 'pilot', 'strike_sdb2');
+    const p = h.world.player!;
+    shieldPlayer(h);
+    expect(p.selectedWeapon).toBe('gbu53');
+    // the Shilka is in the picture and in front: before the fix it won on range
+    expect(h.world.sams.some((s) => s.type === 'zsu23' && s.alive)).toBe(true);
+    let first: string | null = null;
+    h.run(3, () => {
+      first ??= designatedGroup(h);
+      return false;
+    });
+    expect(first).toBe('fleet');
+    // TGT cycling: the other corvette next, then the rest
+    const order: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      h.world.combat.cycleTarget(p, h.world);
+      order.push(designatedGroup(h) ?? '');
+    }
+    expect(order).toEqual(['fleet', 'fleet']);
+  });
+
+  it('c03 SEAD still boxes a primary SAM first, and a dead primary group stops ranking', () => {
+    const def = CAMPAIGN.find((m) => m.id === 'c03')!;
+    const h = harness(def, 'pilot', def.recommendedLoadout);
+    shieldPlayer(h);
+    h.run(0.2);
+    const flagged = h.world.sams.filter((s) => s.objective).map((s) => s.groupId);
+    expect(new Set(flagged)).toEqual(new Set(['rangi_sa6', 'rangi_sa8']));
+    expect(h.world.sams.filter((s) => s.groupId === 'rangi_aaa').every((s) => !s.objective)).toBe(true);
+    let first: string | null = null;
+    h.run(3, () => {
+      first ??= designatedGroup(h);
+      return false;
+    });
+    expect(['rangi_sa6', 'rangi_sa8']).toContain(first);
+    killGroup(h, 'rangi_sa6');
+    h.run(1);
+    expect(h.world.sams.filter((s) => s.groupId === 'rangi_sa8').every((s) => s.objective)).toBe(true);
+  });
+});

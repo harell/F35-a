@@ -493,7 +493,7 @@ export const C06: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. One corvette burning. The other's still making way — finish it." }],
       },
     ],
-    hints: [{ id: 'h_ships', text: 'Ships: designate with TGT, release the moment IN RANGE shows. A JDAM hits where the ship WAS; a StormBreaker tracks it', when: { kind: 'area', x: 21000, z: 500, radius: 22000 }, duration: 8 }],
+    hints: [{ id: 'h_ships', text: 'Ships: TGT, release at IN RANGE. A StormBreaker tracks the ship; a JDAM does not', when: { kind: 'area', x: 21000, z: 500, radius: 22000 }, duration: 8 }],
     opening: [
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two corvettes and a supply ship in the Tāmaki Strait. SA-15 on Motuihe, SA-8 on Waiheke south. Flankers overhead.', priority: 2 },
     ],

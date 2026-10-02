@@ -25,7 +25,7 @@ import { EventBus } from '../src/core/events';
 import type { MissionDef, MissionResult, MissionRunnerApi } from '../src/core/contracts';
 import { isHostile, type Difficulty, type LoadoutId, type WeaponId } from '../src/core/types';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
-import type { AircraftEntity, AnyEntity } from '../src/sim/entities';
+import type { AircraftEntity, AnyEntity, MissileEntity } from '../src/sim/entities';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
@@ -88,6 +88,8 @@ export class MissionBot {
   private orbitSign = 1;
   private readonly ips = new Map<number, Vector3>();
   private readonly runIn = new Set<number>();
+  /** Low-level tosses abandoned (target off the bomb's cone inside the pop-up radius): extend, come back round. */
+  private readonly extend = new Set<number>();
   private readonly opts: Required<MissionBotOptions>;
   /** The briefed loadout carries air-to-ground stores. */
   private readonly agLoadout: boolean;
@@ -555,6 +557,14 @@ export class MissionBot {
     let inFlight = 0;
     for (const m of w.missiles) if (m.alive && m.shooterId === p.id && m.targetId === t.id) inFlight++;
     const maxInFlight = weapon === 'aargm' && t.kind === 'sam' && t.type === 'sa10' ? 2 : 1;
+    // low-level toss at a target the bomb can't turn to from here (run past it, or still turning onto
+    // it inside the pop-up radius: the cue reads STEER, or no countdown): don't hang about popped up
+    // near it under the SA-10, extend at wave-top height and come back round for a clean run-in
+    if (low && R < rel + 1_300 && inFlight === 0) {
+      const b = c.bombImpactPoint(p, w);
+      if (b && !b.inRange && (b.offAxis || b.timeToRelease < 0)) this.extend.add(t.id);
+    }
+    if (this.extend.has(t.id) && (!low || R > rel + 4_000)) this.extend.delete(t.id);
     if (inFlight >= maxInFlight && R > 30_000) {
       // stand-off weapon on its way: hold (a gentle orbit) where we are
       const it2 = this.pilot.begin(p, 150);
@@ -571,7 +581,7 @@ export class MissionBot {
       this.pilot.fly(p, w, dt);
       return;
     }
-    if (inFlight >= maxInFlight) {
+    if (inFlight >= maxInFlight || this.extend.has(t.id)) {
       const it2 = this.pilot.begin(p, low ? 40 : 150);
       // turn away (under the SA-10: away from the SA-10, back into the terrain shadow)
       const sa10 = low ? this.world.sams.find((x) => x.alive && x.team !== p.team && x.type === 'sa10') : undefined;
@@ -731,7 +741,13 @@ export function runPlaythrough(
       const mine = world.missiles.filter((m) => m.alive && m.shooterId === p.id).map((m) => {
         const tg = world.getEntity(m.targetId);
         const toT = tg ? ` tgt${(Math.hypot(tg.position.x - m.position.x, tg.position.z - m.position.z) / 1000).toFixed(1)}km` : '';
-        return `${m.def.id}->${m.targetId}@${Math.round(m.position.distanceTo(p.position) / 100) / 10}km v${Math.round(m.velocity.length())} y${Math.round(m.position.y)}${toT} (${(m.position.x / 1000).toFixed(1)},${(m.position.z / 1000).toFixed(1)})`;
+        // guided bombs: how far the midcourse estimate is off the target, and the terminal seeker lock
+        const cm = m as MissileEntity & { estPos?: Vector3; estVel?: Vector3; estTime?: number; seekerLocked?: boolean };
+        const est =
+          tg && cm.estPos && m.def.category === 'bomb'
+            ? ` est${Math.round(Math.hypot(cm.estPos.x + (cm.estVel?.x ?? 0) * (world.time - (cm.estTime ?? world.time)) - tg.position.x, cm.estPos.z + (cm.estVel?.z ?? 0) * (world.time - (cm.estTime ?? world.time)) - tg.position.z))}m${cm.seekerLocked ? ' LK' : ''}`
+            : '';
+        return `${m.def.id}->${m.targetId}@${Math.round(m.position.distanceTo(p.position) / 100) / 10}km v${Math.round(m.velocity.length())} y${Math.round(m.position.y)}${toT}${est} (${(m.position.x / 1000).toFixed(1)},${(m.position.z / 1000).toFixed(1)})`;
       });
       if (mine.length) log.push(`${T()} MSL ${mine.join(' ')}`);
       log.push(`${T()} BOT ${bot.mode} pos=(${(p.position.x / 1000).toFixed(1)},${(p.position.z / 1000).toFixed(1)})km alt=${Math.round(p.position.y)} agl=${Math.round(p.flight.agl)} spd=${Math.round(p.velocity.length())} wpn=${p.selectedWeapon} des=${des ? des.kind + ':' + ((des as { type?: string }).type ?? '') : '-'} stores=${p.stores.map((x) => x.weapon + x.count).join(',')} hp=${Math.round(p.health)} fuel=${Math.round(p.flight.fuel)}`);

@@ -21,10 +21,12 @@ export interface ProtectedSite {
   total: number;
   /** "DEFEND 8/9" (cached string). */
   label: string;
+  /** "8/9" (cached string): the radar inset's short label. */
+  count: string;
 }
 
 const MAX_SITES = 4;
-const pool: ProtectedSite[] = Array.from({ length: MAX_SITES }, () => ({ group: '', x: 0, y: 0, z: 0, alive: 0, total: 0, label: '' }));
+const pool: ProtectedSite[] = Array.from({ length: MAX_SITES }, () => ({ group: '', x: 0, y: 0, z: 0, alive: 0, total: 0, label: '', count: '' }));
 const out: ProtectedSite[] = [];
 
 /** protect objective id → group, per mission definition. */
@@ -33,11 +35,19 @@ const protectGroupOf = new Map<string, string>();
 const groups: string[] = [];
 const totals: number[] = [];
 const labels = new Map<number, string>();
+const counts = new Map<number, string>();
 
 function siteLabel(alive: number, total: number): string {
   const key = alive * 1000 + total;
   let s = labels.get(key);
   if (!s) labels.set(key, (s = 'DEFEND ' + alive + '/' + total));
+  return s;
+}
+
+function siteCount(alive: number, total: number): string {
+  const key = alive * 1000 + total;
+  let s = counts.get(key);
+  if (!s) counts.set(key, (s = alive + '/' + total));
   return s;
 }
 
@@ -90,6 +100,7 @@ export function protectedSites(mission: MissionRunnerApi | null | undefined, wor
     s.alive = n;
     s.total = Math.max(n, totals[i]);
     s.label = siteLabel(n, s.total);
+    s.count = siteCount(n, s.total);
     out.push(s);
   }
   return out;

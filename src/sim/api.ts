@@ -146,8 +146,12 @@ export interface CombatSystemApi {
   irSeekerState(ac: AircraftEntity): { state: 'off' | 'search' | 'locked'; targetId: number | null; direction: Vector3 | null };
   /** Gun lead point (LCOS pipper) in world space for the gunsight, or null. */
   gunLeadPoint(ac: AircraftEntity, world: SimWorld): Vector3 | null;
-  /** CCIP / release cue for bombs: predicted impact point + whether release is valid. */
-  bombImpactPoint(ac: AircraftEntity, world: SimWorld): { point: Vector3; inRange: boolean; timeToRelease: number } | null;
+  /**
+   * CCIP / release cue for bombs: predicted impact point + whether release is valid. GPS / glide
+   * bombs: `inRange` only within the reach and with the target where the bomb can turn to,
+   * `offAxis` when it is outside the release cone around the ground track (steer toward it).
+   */
+  bombImpactPoint(ac: AircraftEntity, world: SimWorld): { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null;
 }
 
 /* ───────────────────────── Spawning ───────────────────────── */

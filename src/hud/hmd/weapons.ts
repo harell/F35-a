@@ -158,7 +158,8 @@ export function placeCueLine(f: HudFrame, text: string, size: number, yPref: num
   const hw = pen.textWidth(text, size) / 2 + 4 * u;
   const h = (size + 4) * u;
   const lo = L.row2Y + 16 * u;
-  let top = occ.freeY(L.cx - hw, L.cx + hw, h, yPref - h / 2, lo, Math.max(L.msgFloor, yPref + h), 'down');
+  // (clear of the protected symbols and text, and of the contact / ground / waypoint symbols)
+  let top = occ.freeY(L.cx - hw, L.cx + hw, h, yPref - h / 2, lo, Math.max(L.msgFloor, yPref + h), 'down', 4, f.sym);
   if (!Number.isFinite(top)) top = yPref - h / 2;
   occ.add(L.cx - hw, top, L.cx + hw, top + h);
   return top + h / 2;
@@ -208,6 +209,7 @@ export function planCues(f: HudFrame): number {
     if (bi) {
       if (p.radar.groundPoint) {
         if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
+        else if (bi.offAxis) addCue('STEER', 17, pal.warn, 0); // target outside the bomb's release cone
         else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
         else addCue('OUT OF RANGE', 15, pal.warn, 0);
       } else if (f.mode === 'hmd') {
@@ -406,9 +408,9 @@ export function drawGun(f: HudFrame): void {
 
 let bombOnScreen = false;
 let biFrame = -1;
-let biCache: { point: Vector3; inRange: boolean; timeToRelease: number } | null = null;
+let biCache: { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null = null;
 /** Bomb impact / release info for this frame (cached: planCues + drawAirToGround both need it). */
-function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToRelease: number } | null {
+function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToRelease: number; offAxis: boolean } | null {
   if (biFrame === f.st.frame) return biCache;
   biFrame = f.st.frame;
   try {

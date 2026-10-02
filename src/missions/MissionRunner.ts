@@ -26,7 +26,7 @@ import { Callouts, sameFlight, type DownReason } from './runtime/callouts';
 import type { MissionResultExt, TeamKill } from './runtime/resultExt';
 import { evalCondition } from './runtime/conditions';
 import { HintSystem } from './runtime/hints';
-import { activateObjective, createObjectives, failOpenObjectives, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
+import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS } from './runtime/reasons';
 import { computeScore } from './runtime/scoring';
@@ -171,6 +171,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     buildGroups(s);
     const p = spawnPlayer(s, loadout);
     spawnInitial(s);
+    // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
+    markObjectiveTargets(s);
     this.civil?.setup();
     this.shipping?.setup();
     this.landmarks.setup();

@@ -44,11 +44,10 @@ const args = Object.fromEntries(
     }),
 ) as Record<string, string>;
 
+/** Ids and the groups campaign / training / all, comma-separated in any mix (e.g. campaign,training,ia_defend_auckland). */
 function missionIds(spec: string): string[] {
-  if (spec === 'campaign') return CAMPAIGN.map((m) => m.id);
-  if (spec === 'training') return TRAINING.map((m) => m.id);
-  if (spec === 'all') return [...CAMPAIGN, ...TRAINING].map((m) => m.id);
-  return spec.split(',').filter(Boolean);
+  const group = (s: string) => (s === 'campaign' ? CAMPAIGN : s === 'training' ? TRAINING : s === 'all' ? [...CAMPAIGN, ...TRAINING] : null);
+  return [...new Set(spec.split(',').filter(Boolean).flatMap((s) => group(s)?.map((m) => m.id) ?? [s]))];
 }
 
 const missions = missionIds(args.missions || 'campaign');

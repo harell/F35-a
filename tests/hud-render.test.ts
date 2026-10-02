@@ -613,6 +613,58 @@ describe('bomb release cue in every view (playtest 1.3-a: none in the default ch
     }
   });
 
+  it('IN RANGE never prints over a contact box near the boresight (playtest 2.2-a: "IN□RANGE")', () => {
+    const r = rig('ag', 'hud');
+    const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+    (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => ({ point: ship.position.clone(), inRange: true, timeToRelease: 0 });
+    const free = textBox(one(textsOver(r, 1), 'IN RANGE'));
+    // a bandit right where the cue would go (the contact box is drawn after the cue is planned)
+    const mig = r.mock.world.aircraft.find((a) => a.type === 'mig29')!;
+    const at = new Vector3(((free.x0 + free.x1) / 2 / r.W) * 2 - 1, -((((free.y0 + free.y1) / 2) / r.H) * 2 - 1), 0.5).unproject(r.camera);
+    const pos = r.camera.position.clone().add(at.sub(r.camera.position).normalize().multiplyScalar(8000));
+    const c = r.mock.player.radar.contacts.find((k) => k.id === mig.id)!;
+    const proj = new Projector();
+    proj.update(r.camera, r.W, r.H);
+    const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+    let seen = 0;
+    for (let i = 0; i < 30; i++) {
+      mig.position.copy(pos);
+      c.position.copy(pos);
+      const cue = find(r.run(1 / 30), 'IN RANGE');
+      proj.point(mig.position, sp);
+      for (const t of cue) {
+        seen++;
+        expect(overlaps(textBox(t), { x0: sp.x - 8, y0: sp.y - 8, x1: sp.x + 8, y1: sp.y + 8 })).toBe(false);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    expect(Math.abs(sp.x - (free.x0 + free.x1) / 2)).toBeLessThan(4);
+  });
+
+  it('a bomb in flight shows TTI n at its target, on screen and from the off-screen cue (playtest 2.2-e)', () => {
+    for (const v of ['hud', 'chase'] as const) {
+      for (const behind of [false, true]) {
+        const r = rig('ag', v);
+        const p = r.mock.player;
+        const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+        // (a StormBreaker gliding in from 14 km: 9 km to go at ~190 m/s)
+        if (behind) ship.position.copy(p.position).add(new Vector3(0, 0, 9000).applyQuaternion(p.quaternion)).setY(0);
+        const def = { ...((r.mock.world.missiles[0] ?? { def: null }).def ?? {}), id: 'gbu53', name: 'GBU-53/B', short: 'GBU-53', category: 'bomb', guidance: 'tri_mode' } as MissileEntity['def'];
+        const m = new MissileEntity(901, def, 'blue', p.id, ship.id);
+        m.position.copy(ship.position).add(new Vector3(0, 3000, 0)).addScaledVector(new Vector3().subVectors(p.position, ship.position).setY(0).normalize(), 8500);
+        m.velocity.subVectors(ship.position, m.position).setLength(190);
+        (r.mock.world.missiles as MissileEntity[]).push(m);
+        const tti = find(r.run(0.1), /^TTI \d+$/);
+        expect(tti.length, `${v} ${behind ? 'off-screen' : 'on screen'}`).toBe(1);
+        const s = Number(tti[0].text.slice(4));
+        expect(s).toBeGreaterThan(40);
+        expect(s).toBeLessThan(55);
+        // a missile keeps its M n
+        expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+      }
+    }
+  });
+
   it('the AMRAAM SHOOT cue and its mini DLZ still work in chase', () => {
     const r = rig('lock', 'chase');
     expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
@@ -694,6 +746,51 @@ describe('the defended site is marked (playtest 1.3-b / 1.2-b: Defend never show
     expect(inInset(withSite)).toBe(inInset(without) + 1);
   });
 
+  it('chase: a site behind the jet slides off it and keeps its DEFEND n/m label (playtest 2.2-b)', () => {
+    const r = rig('nav', 'chase');
+    const p = r.mock.player;
+    const proj = new Projector();
+    proj.update(r.camera, r.W, r.H);
+    const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+    proj.point(p.position, sp);
+    const jet = { x0: sp.x - 60, y0: sp.y - 25, x1: sp.x + 60, y1: sp.y + 15 };
+    // the ground point seen just right of the jet's centre (its right wing)
+    const ray = new Vector3(((sp.x + 14) / r.W) * 2 - 1, -((sp.y / r.H) * 2 - 1), 0.5).unproject(r.camera).sub(r.camera.position).normalize();
+    const g = r.camera.position.clone().addScaledVector(ray, -r.camera.position.y / ray.y);
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(p.quaternion).setY(0).normalize();
+    const rt = new Vector3(-fwd.z, 0, fwd.x);
+    const rel = g.clone().sub(p.position).setY(0);
+    addDefendSite(r, rel.dot(fwd), rel.dot(rt));
+    const texts = r.run(0.1);
+    const lbl = one(texts, 'DEFEND 9/9');
+    expect(overlaps(textBox(lbl), jet)).toBe(false);
+    // the symbol (r 7 circle) is drawn, off the jet
+    const sym = r.fake.arcs.filter((a) => Math.abs(a.r - 7) < 0.6 && Math.hypot(a.x - sp.x, a.y - sp.y) < 200);
+    expect(sym.length).toBe(1);
+    expect(overlaps({ x0: sym[0].x - 7, y0: sym[0].y - 7, x1: sym[0].x + 7, y1: sym[0].y + 7 }, jet)).toBe(false);
+    // and the radar inset carries the count when the site is on it
+    const near = rig('nav', 'chase');
+    addDefendSite(near, 14_000, 5_000);
+    const L = computeLayout(makeLayout(), near.W, near.H, near.ctx.screen.safe, Math.tan(Math.PI / 6), false, { external: true });
+    const inset = one(near.run(0.1), '9/9');
+    expect(Math.hypot(inset.x - L.insetCx, inset.y - L.insetCy)).toBeLessThan(L.insetR);
+  });
+
+  it('tactical map legend: a DEFEND row only when there is a site, and the panel grows to fit it (playtest 2.2-i)', () => {
+    const entry = /^DEFEND n\/m/;
+    expect(find(rig('nav', 'tactical').run(0.1), entry).length).toBe(0);
+    const r = rig('nav', 'tactical');
+    addDefendSite(r);
+    const texts = r.run(0.1);
+    const row = one(texts, entry);
+    expect(row.color).toBe(friend);
+    // below FRIENDLY, above the scale bar and the tap hint, which stay inside the panel above OBJECTIVES
+    expect(row.y).toBeGreaterThan(one(texts, 'FRIENDLY (DATALINK)').y);
+    const hint = one(texts, /^TAP MAP/);
+    expect(hint.y).toBeGreaterThan(row.y);
+    expect(one(texts, 'OBJECTIVES').y).toBeGreaterThan(hint.y + 10);
+  });
+
   it('only our own team\'s protected ground groups are sites', () => {
     const r = rig('nav', 'tactical');
     for (const t of addDefendSite(r)) t.team = 'red';
@@ -733,5 +830,23 @@ describe('objectives list: primaries first, bonus objectives under BONUS (playte
     const failed = one(lines, /^x SAVE ALL 9 TANKS/);
     expect(failed.color).not.toBe(pal.danger);
     expect(failed.y).toBeGreaterThan(one(lines, 'BONUS').y);
+  });
+
+  it('at mission end the settled primaries still lead the list (playtest 2.2-c: BONUS came first)', () => {
+    for (const end of ['failed', 'complete'] as const) {
+      const r = rig('nav', 'chase');
+      const objs = r.mock.mission.objectives;
+      objs.push({ id: 'o4', label: 'Splash the escort', state: 'active', primary: false, progress: { done: 1, total: 2 } });
+      r.run(0.1);
+      for (const o of objs) if (o.primary) o.state = end;
+      objs.find((o) => o.id === 'o4')!.state = end === 'failed' ? 'failed' : 'active';
+      r.mock.events.emit('objective', { id: 'o4', label: 'Splash the escort', state: 'failed' });
+      const lines = objLines(r.run(0.2));
+      expect(lines[0].text, end).toMatch(end === 'failed' ? /^x SPLASH THE MIG-29 SWEEP/ : /^\+ SPLASH THE MIG-29 SWEEP/);
+      expect(lines[0].color, end).toBe(end === 'failed' ? pal.danger : pal.good);
+      const bonus = lines.findIndex((l) => l.text === 'BONUS');
+      expect(bonus, end).toBeGreaterThan(lines.findIndex((l) => /RANGITOTO/.test(l.text)));
+      expect(lines[bonus + 1].text, end).toMatch(/SPLASH THE ESCORT 1\/2/);
+    }
   });
 });

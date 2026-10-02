@@ -69,6 +69,8 @@ export type Condition =
   | { kind: 'sam_engaged' }
   /** A missile is currently tracking the player. */
   | { kind: 'missile_inbound' }
+  /** No missile or bomb fired by a member of the group is still in flight. */
+  | { kind: 'munitions_clear'; group: string }
   /** Another trigger has fired. */
   | { kind: 'trigger'; id: string }
   /** Player fired at least `count` weapons of any kind. */

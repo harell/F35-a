@@ -191,7 +191,11 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
           }),
         );
       }
-      briefing = [`A belt of ${count} SAM sites guards a depot. Some sites are silent until you are close.`, 'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.'];
+      briefing = [
+        `A belt of ${count} SAM sites guards a depot. Some sites are silent until you are close.`,
+        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
+        'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.',
+      ];
       script.parTime = 420;
       break;
     }
@@ -370,7 +374,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, akl:
   }
   const total = 9;
   const strikersBeaten: Condition = { kind: 'group_defeated', group: 'strikers' };
-  /** 20 s after the strikers are shot down / driven off: the bombs already in the air have landed. */
+  /** 20 s after the strikers are shot down / driven off and their bombs have landed (a KAB from 10 km falls for ~50 s). */
   const strikersDone: Condition = { kind: 'trigger', id: 't_clear' };
   const objectives: ObjectiveDef[] = [
     {
@@ -404,7 +408,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, akl:
         ],
       },
       { id: 't_hit', when: { kind: 'group_destroyed', group: 'wiri', count: 1 }, actions: [{ kind: 'radio', from: 'Wiri', text: 'We have a tank burning! Keep them off us!', priority: 3 }] },
-      { id: 't_clear', when: strikersBeaten, delay: 20, actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Strike package is beaten. Good work.`, priority: 2 }] },
+      { id: 't_clear', when: { kind: 'all', of: [strikersBeaten, { kind: 'munitions_clear', group: 'strikers' }] }, delay: 20, actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Strike package is beaten. Good work.`, priority: 2 }] },
     ],
     hints: [
       { id: 'h_defend', text: 'The tanks are friendly: kill the bombers before they reach the IP — the escort can wait', when: { kind: 'time', t: 6 }, duration: 9 },

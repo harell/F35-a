@@ -126,4 +126,12 @@ describe('missions: instant action generator', () => {
       expect(def.recommendedLoadout).not.toBe('a2a_beast');
     }
   });
+
+  it('sam gauntlet: the briefing warns of the fighter CAP when there is one (playtest 2026-10-02, 2.1-f)', () => {
+    for (const enemyCount of [2, 4, 8]) {
+      const def = buildInstantMission({ mode: 'sam_gauntlet', theater: 'desert', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount });
+      const cap = def.script.groups.some((g) => g.id === 'cap');
+      expect(/fighters/i.test(def.briefing.join(' ')), `enemyCount ${enemyCount}`).toBe(cap);
+    }
+  });
 });

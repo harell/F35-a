@@ -159,6 +159,20 @@ describe('missions: defend the Wiri oil terminal', () => {
     }
   });
 
+  it('parking 35 km away is no win: the raid between bomb passes is not "driven off" (playtest 2026-10-02, 2.3-a)', { timeout: 30_000 }, () => {
+    const { world, runner } = realRun(defend());
+    const p = world.player!;
+    for (let i = 0; i < 60 * 480 && runner.state === 'running'; i++) {
+      p.position.set(-35000, 13000, 35000);
+      p.health = p.maxHealth;
+      world.step(1 / 60);
+      runner.update(world, 1 / 60);
+    }
+    // the strikers drop every bomb they carry; unopposed, that's more than Wiri can lose
+    expect(runner.state).toBe('failed');
+    expect(runner.objectives.find((o) => o.id === 'o_tanks')?.state).toBe('failed');
+  });
+
   it('enemy strikers spread over the tanks and destroy them; too many lost fails the mission', { timeout: 30_000 }, () => {
     const { events, world, runner, park } = realRun(defend());
     const tankIds = new Set(world.ground.filter((g) => g.groupId === 'wiri').map((g) => g.id));

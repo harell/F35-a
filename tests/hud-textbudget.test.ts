@@ -86,6 +86,12 @@ describe('HUD text budget lint (mission content vs the phone layout)', () => {
     }
   });
 
+  it('every scripted hint fits ≤ 2 pages of 2 lines at 844x390, the room the hint box usually has (playtest 2026-10-02, 2.2-d)', () => {
+    const L = computeLayout(makeLayout(), 844, 390, noSafe, tan30, false);
+    const chars = Math.max(16, Math.floor((L.colW - 16 * L.u - 24 * L.u) / (11.5 * L.u * CHAR_W)));
+    for (const h of content.hints) expect(Math.ceil(wrap(h, chars).length / 2), `hint "${h}"`).toBeLessThanOrEqual(2);
+  });
+
   it('the missile-defence hints fit one page (2 lines) at 667x375 (playtest 2026-10-02, 1.3-g)', () => {
     const L = computeLayout(makeLayout(), 667, 375, noSafe, tan30, false);
     const chars = Math.max(16, Math.floor((L.colW - 16 * L.u) / (11.5 * L.u * CHAR_W)));

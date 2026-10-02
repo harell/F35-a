@@ -397,7 +397,9 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
   let used = 0;
   let bonusHead = false;
   // primaries first, then the bonus objectives under a BONUS heading; in each, the one that just
-  // changed leads, then the active (and pending primary) ones. A failed bonus never tops the list.
+  // changed leads. Every primary is listed whatever its state (at mission end they are complete or
+  // failed, and the BONUS block must never come first); bonuses only while active (or, in the forced
+  // list, once settled). A failed bonus never tops the list.
   for (let pass = 0; pass < 4 && used < maxLines; pass++) {
     const primary = pass < 2;
     const changedPass = pass === 0 || pass === 2;
@@ -405,8 +407,7 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
       if (o.primary !== primary) continue;
       const changed = !!st.objChangedId && o.id === st.objChangedId;
       if (changed !== changedPass) continue;
-      if (!changedPass && !force && o.state !== 'active' && !(o.state === 'pending' && o.primary)) continue;
-      if (!changedPass && force && o.state === 'pending' && !o.primary) continue;
+      if (!changedPass && !primary && (force ? o.state === 'pending' : o.state !== 'active')) continue;
       const lines = objectiveLines(o, maxChars);
       const head = !primary && !bonusHead ? 1 : 0;
       if (used + head + lines.length > maxLines) continue;

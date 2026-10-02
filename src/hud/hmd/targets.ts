@@ -26,6 +26,7 @@ const rangeTxt = new NumText(1);
 const rangeTxtInt = new NumText(0);
 const wpDist = new NumText(1, '', ' NM');
 const mTxt = new NumText(0, 'M ');
+const ttiTxt = new NumText(0, 'TTI ');
 const offTxt = new NumText(0, '', '°');
 const edge = { x: 0, y: 0 };
 
@@ -64,6 +65,57 @@ function drawable(f: HudFrame): boolean {
 function boxHalf(f: HudFrame, e: AnyEntity, min: number): number {
   const px = (e.radius / Math.max(1, f.sp.depth)) * f.proj.pxPerRad * 1.3;
   return Math.max(min, Math.min(min * 3.5, px));
+}
+
+/* ───────────────────────── Symbol boxes for the centre cues ───────────────────────── */
+
+/**
+ * Register into f.sym the boxes of the conformal symbols drawn after the centre cues are planned (air
+ * contact boxes, ground diamonds, SAM tents, the sites to defend, the steering waypoint), with the
+ * draw functions' own projection and visibility rules: IN RANGE / SHOOT never print over one
+ * (playtest 2.2-a: "IN□RANGE" over a contact box near the boresight). Call before planCues.
+ */
+export function reserveSymbols(f: HudFrame): void {
+  const { p, world, L, sym } = f;
+  const u = L.u;
+  sym.clear();
+  const tid = f.target?.id ?? -1;
+  const now = world.time;
+  for (const c of p.radar.contacts) {
+    if (c.id === tid) continue;
+    const e = world.getEntity(c.id);
+    if (!e || !e.alive || e.team === p.team || e.kind !== 'aircraft') continue;
+    if (now - c.lastSeen > 1.5) f.proj.point(c.position, f.sp);
+    else project(f, e);
+    if (!drawable(f)) continue;
+    const h = boxHalf(f, e, 7 * u) + 2 * u;
+    sym.addBox(f.sp.x, f.sp.y, h, h);
+  }
+  const px = p.position.x;
+  const pz = p.position.z;
+  for (const s of world.sams) {
+    if (!s.alive || s.team === p.team || s.id === tid || (!s.known && !hasContact(f, s.id))) continue;
+    if (Math.hypot(s.position.x - px, s.position.z - pz) > SAM_RANGE) continue;
+    project(f, s);
+    if (drawable(f)) sym.addBox(f.sp.x, f.sp.y, 10 * u, 8 * u);
+  }
+  for (const g of world.ground) {
+    if (!g.alive || g.team === p.team || g.id === tid || (!g.known && !hasContact(f, g.id))) continue;
+    if (Math.hypot(g.position.x - px, g.position.z - pz) > GROUND_RANGE) continue;
+    project(f, g);
+    if (drawable(f)) sym.addBox(f.sp.x, f.sp.y, 8 * u, 8 * u);
+  }
+  for (const site of protectedSites(f.ctx.mission, world, p.team)) {
+    if (Math.hypot(site.x - px, site.z - pz) > SAM_RANGE) continue;
+    f.v1.set(site.x, site.y, site.z);
+    f.proj.point(f.v1, f.sp);
+    if (drawable(f)) sym.addBox(f.sp.x, f.sp.y, 9 * u, 9 * u);
+  }
+  const wp = f.ctx.mission?.currentWaypoint;
+  if (wp) {
+    f.proj.point(wp.position, f.sp);
+    if (drawable(f)) sym.add(f.sp.x - 9 * u, f.sp.y - 14 * u, f.sp.x + 9 * u, f.sp.y + 9 * u);
+  }
 }
 
 /* ───────────────────────── Sensor tracks ───────────────────────── */
@@ -170,27 +222,83 @@ export function drawGroundAndSams(f: HudFrame): void {
  * survivors' centroid with "DEFEND 8/9". Never pickable (friendlies can't be designated).
  */
 function drawProtectedSites(f: HudFrame): void {
-  const { p, pen, pal, L } = f;
+  const { p, pen, pal, L, occ } = f;
   const u = L.u;
   for (const site of protectedSites(f.ctx.mission, f.world, p.team)) {
     if (Math.hypot(site.x - p.position.x, site.z - p.position.z) > SAM_RANGE) continue;
     f.v1.set(site.x, site.y, site.z);
     f.proj.point(f.v1, f.sp);
     if (!drawable(f)) continue;
-    const x = f.sp.x;
-    const y = f.sp.y;
+    let x = f.sp.x;
+    let y = f.sp.y;
     const r = 7 * u;
+    // external views: never on the jet silhouette (playtest 2.2-b: on the chase view's right wing, with
+    // its label squeezed out): slid to the nearest clear spot beside / below / above it
+    if (f.mode === 'external' && clearOfProtected(f, x, y, r + 2 * u)) {
+      x = clearPos.x;
+      y = clearPos.y;
+    }
     pen.setDash('solid');
     pen.begin();
     pen.circle(x, y, r);
     pen.rect(x - 2.5 * u, y - 2.5 * u, 5 * u, 5 * u);
     pen.strokeGlow(pal.friend, 1.6);
-    // below / above the symbol, else beside it (the one label here that matters more than a type tag)
+    occ.addBox(x, y, r + 1, r + 1);
+    // below / above the symbol, else beside it (the one label here that matters more than a type tag),
+    // else clamped beside it at the nearest free height: the count never vanishes
     const side = r + 6 * u + pen.textWidth(site.label, 10.5) / 2;
-    if (placeLabel(f, site.label, 10.5, x, y + r + 8 * u, y - r - 8 * u) || placeLabel(f, site.label, 10.5, x + side, y, y) || placeLabel(f, site.label, 10.5, x - side, y, y)) {
+    if (
+      placeLabel(f, site.label, 10.5, x, y + r + 8 * u, y - r - 8 * u) ||
+      placeLabel(f, site.label, 10.5, x + side, y, y) ||
+      placeLabel(f, site.label, 10.5, x - side, y, y) ||
+      placeLabelNear(f, site.label, 10.5, x + side, y, 34 * u) ||
+      placeLabelNear(f, site.label, 10.5, x - side, y, 34 * u)
+    ) {
       pen.text(site.label, lblPos.x, lblPos.y, pal.friend, 10.5);
     }
   }
+}
+
+const clearPos = { x: 0, y: 0 };
+/**
+ * Does the centred box (x, y, ±half) sit on a protected symbol (the jet in external views, the TD
+ * box)? Then clearPos = the nearest centre, in 4 px steps beside / below / above, where it doesn't
+ * (true), or the box is already clear / no spot within 120 px (false).
+ */
+function clearOfProtected(f: HudFrame, x: number, y: number, half: number): boolean {
+  const { occ, L } = f;
+  if (!occ.hits(x - half, y - half, x + half, y + half, 1)) return false;
+  for (let d = 4; d <= 120; d += 4) {
+    for (let k = 0; k < 4; k++) {
+      const cx = k === 0 ? x + d : k === 1 ? x - d : x;
+      const cy = k === 2 ? y + d : k === 3 ? y - d : y;
+      if (cx - half < L.left || cx + half > L.right || cy - half < L.row2Y || cy + half > L.H) continue;
+      if (!occ.hits(cx - half, cy - half, cx + half, cy + half, 1)) {
+        clearPos.x = cx;
+        clearPos.y = cy;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Last-resort label spot: centred on (x, ·) at the free height nearest `y` within ±`reach` (writes
+ * lblPos and registers the rect like placeLabel). False = still no room.
+ */
+function placeLabelNear(f: HudFrame, text: string, size: number, x: number, y: number, reach: number): boolean {
+  const { pen, occ, L } = f;
+  const u = L.u;
+  const hw = pen.textWidth(text, size) / 2 + 2 * u;
+  const hh = (size * 0.5 + 1.5) * u;
+  const lx = Math.max(L.left + hw, Math.min(L.right - hw, x));
+  const top = occ.freeY(lx - hw, lx + hw, hh * 2, y - hh, Math.max(L.row2Y, y - reach - hh), Math.min(L.H, y + reach + hh));
+  if (!Number.isFinite(top)) return false;
+  occ.add(lx - hw, top, lx + hw, top + hh * 2);
+  lblPos.x = lx;
+  lblPos.y = top + hh;
+  return true;
 }
 
 function hasContact(f: HudFrame, id: number): boolean {
@@ -294,11 +402,10 @@ export function drawDesignated(f: HudFrame): void {
   ly += 14 * u;
   const m = ownMissileOn(f, t.id);
   if (m) {
-    const tti = timeToImpact(f, m, t);
     const pit = m.seekerLocked && (m.def.guidance === 'active_radar' || m.def.guidance === 'anti_radiation');
     if (pit) {
       if (blink(f, 3, 0.75)) pen.text('PITBULL', x, ly, pal.bright, 11.5);
-    } else pen.text(mTxt.get(Math.max(0, Math.ceil(tti))), x, ly, pal.main, 11.5);
+    } else pen.text(impactLabel(f, m, t), x, ly, pal.main, 11.5);
     ly += 14 * u;
   }
   // right of the box: "LOCK" flash after the lock event, LOCKING while it builds, NOSE ON when the
@@ -424,7 +531,12 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   pen.text(offTxt.get(sp.offAxis * RAD), tx, ty, col, 12.5);
   pen.text(entityLabel(t), tx, ty + 13 * u, pal.dim, 10.5);
   pen.text(rangeLabel(dist), tx, ty + 25 * u, pal.dim, 10.5);
-  f.occ.add(tx - 30 * u, ty - 8 * u, tx + 30 * u, ty + 31 * u, 1);
+  // our weapon on its way: the time to impact stays readable with the target behind us (a
+  // StormBreaker's long glide, an AMRAAM fired before the turn)
+  const m = ownMissileOn(f, t.id);
+  const tl = m ? impactLabel(f, m, t) : '';
+  if (tl) pen.text(tl, tx, ty + 37 * u, pal.main, 10.5);
+  f.occ.add(tx - 30 * u, ty - 8 * u, tx + 30 * u, ty + (tl ? 43 : 31) * u, 1);
 }
 
 /** Newest live player missile guiding on `targetId`. */
@@ -435,6 +547,12 @@ function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | null {
     if (!best || m.age < best.age) best = m;
   }
   return best;
+}
+
+/** "TTI 42" for our bomb on its target, "M 12" for a missile (seconds to impact, cached strings). */
+function impactLabel(f: HudFrame, m: MissileEntity, t: AnyEntity): string {
+  const s = Math.max(0, Math.ceil(timeToImpact(f, m, t)));
+  return m.def.category === 'bomb' ? ttiTxt.get(s) : mTxt.get(s);
 }
 
 function timeToImpact(f: HudFrame, m: MissileEntity, t: AnyEntity): number {

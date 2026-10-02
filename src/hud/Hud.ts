@@ -42,6 +42,7 @@ import {
   drawOwnMissiles,
   drawWaypoint,
   lockCommandedOf,
+  reserveSymbols,
   waypointBearing,
 } from './hmd/targets';
 import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
@@ -281,6 +282,7 @@ export const createHud: CreateHud = (canvas, events) => {
       pen.fontScale = L.u;
       picks.begin();
       f.occ.clear();
+      f.sym.clear();
       dirty = true;
 
       f.ctx = ctx;
@@ -363,6 +365,7 @@ export const createHud: CreateHud = (canvas, events) => {
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
       reserveWarningBand(f);
       if (!zoomed) {
+        reserveSymbols(f);
         const below = planCues(f);
         const cur = st.messages.current;
         if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));

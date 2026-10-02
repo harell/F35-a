@@ -310,3 +310,118 @@ describe('strike_sdb2 loadout', () => {
     expect(withIt).toBeGreaterThanOrEqual(8);
   });
 });
+
+/**
+ * Playtest 2.1-a: StormBreakers released on the IN RANGE cue landed ~0.5 km short of a moving ship
+ * (c06 Strait Shooter). The cue's reach (gpsMaxRange) must be one the flight law delivers: release on
+ * the first IN RANGE frame (and at 80 % of it) from the mission altitudes, against a slow and a 5 m/s
+ * ship crossing the bomb's track, and the bomb has to hit it.
+ */
+describe('GBU-53 StormBreaker: the IN RANGE cue is a range the bomb reaches (playtest 2.1-a)', () => {
+  /** Fly a nose-on run at a ship; release on the cue (`frac` = 1) or at `frac` of the cue's range. */
+  const shot = (alt: number, shipSpeed: number, frac: number, seed: number) => {
+    const w = makeWorld(seed);
+    // the ship steams across the bomb's track (east), well clear of the end of its path
+    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: shipSpeed });
+    run(w, 0.2);
+    const p = jetToward(w, cv.position, 40_000, alt, 'strike_sdb2');
+    p.input.throttle = 0.85;
+    run(w, 0.5);
+    w.combat.designate(p, cv.id, w);
+    let cueRange = 0;
+    // fly level at it (straight and level is what the jet already does) until the cue says so
+    run(w, 200, () => {
+      const b = w.combat.bombImpactPoint(p, w);
+      const horiz = Math.hypot(cv.position.x - p.position.x, cv.position.z - p.position.z);
+      if (b?.inRange && !cueRange) cueRange = horiz;
+      return cueRange > 0 && horiz <= cueRange * frac;
+    });
+    expect(cueRange).toBeGreaterThan(10_000);
+    const m = release(w, p, 'gbu53', cv.id);
+    let end: Vector3 | null = null;
+    w.events.on('munition:end', (e) => {
+      if (e.missile === m) end = e.position.clone();
+    });
+    run(w, 250, () => !m.alive);
+    const miss = end ? Math.hypot((end as Vector3).x - cv.position.x, (end as Vector3).z - cv.position.z) : Infinity;
+    return { hit: cv.health < cv.maxHealth, miss: Math.round(miss), cueRange: Math.round(cueRange) };
+  };
+  it.each([
+    [7_600, 1, 1],
+    [7_600, 5, 1],
+    [7_600, 1, 0.8],
+    [7_600, 5, 0.8],
+    [4_700, 5, 1],
+    [4_700, 5, 0.8],
+  ])('from %i m, ship at %i m/s, released at %f × the cue range: hits', (alt, speed, frac) => {
+    const r = shot(alt, speed, frac, 11);
+    expect(r, JSON.stringify(r)).toMatchObject({ hit: true });
+  });
+});
+
+/**
+ * Playtest 2.1-b: IN RANGE ignored where the target was: the bot tossed a second StormBreaker at a
+ * ship 0.9 km behind it on egress and the bomb fell 2.4 km away. The cue now needs the target inside
+ * a cone around the ground track that the weapon can turn to (wider for a winged glide bomb than a
+ * JDAM) and outside the bomb's turn circle; off the cone it reads STEER, not a REL countdown.
+ */
+describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to (playtest 2.1-b)', () => {
+  /** Jet flying north (−z) at `alt`; the target `d` m away, `deg` right of the ground track. */
+  const cue = (weapon: 'gbu53' | 'gbu39' | 'gbu31', alt: number, d: number, deg: number) => {
+    const w = makeWorld(1, true);
+    const loadout: LoadoutId = weapon === 'gbu53' ? 'strike_sdb2' : weapon === 'gbu39' ? 'sead_stealth' : 'strike_stealth';
+    const tgt = w.spawnGround({ type: 'ewr', team: 'red', position: new Vector3(0, 0, 0), name: 'EWR' });
+    const p = jetToward(w, tgt.position, 5_000, alt, loadout);
+    run(w, 1);
+    w.combat.selectWeapon(p, weapon, w);
+    w.combat.designate(p, tgt.id, w);
+    run(w, 0.2);
+    expect(p.radar.groundPoint).not.toBeNull();
+    // then put the jet `d` m from it, the target `deg` right of the ground track (north)
+    p.position.set(-Math.sin(deg * DEG) * d, alt, Math.cos(deg * DEG) * d);
+    p.velocity.set(0, 0, -250);
+    const b = w.combat.bombImpactPoint(p, w);
+    expect(b).not.toBeNull();
+    return { inRange: b!.inRange, offAxis: b!.offAxis, rel: b!.timeToRelease };
+  };
+
+  it('a StormBreaker / SDB: in range ahead and 45° off, not abeam, behind or past the target at low level', () => {
+    for (const weapon of ['gbu53', 'gbu39'] as const) {
+      expect(cue(weapon, 7_000, 15_000, 0), weapon).toMatchObject({ inRange: true, offAxis: false });
+      expect(cue(weapon, 7_000, 15_000, 45), weapon).toMatchObject({ inRange: true, offAxis: false });
+      expect(cue(weapon, 7_000, 15_000, 90), weapon).toMatchObject({ inRange: false, offAxis: true, rel: -1 });
+      expect(cue(weapon, 7_000, 3_000, 160), weapon).toMatchObject({ inRange: false, offAxis: true });
+      // the low-level toss: nose on at 1.2 km is fine; once past it (0.9 km behind, or 50° off at
+      // 0.7 km, inside the bomb's turn circle) it is not
+      expect(cue(weapon, 300, 1_200, 0), weapon).toMatchObject({ inRange: true });
+      expect(cue(weapon, 400, 900, 180), weapon).toMatchObject({ inRange: false, offAxis: true });
+      expect(cue(weapon, 400, 700, 50), weapon).toMatchObject({ inRange: false, offAxis: false, rel: -1 });
+    }
+  });
+
+  it('a JDAM turns less: in range 20° off, STEER 45° off', () => {
+    expect(cue('gbu31', 7_000, 6_000, 20)).toMatchObject({ inRange: true, offAxis: false });
+    expect(cue('gbu31', 7_000, 6_000, 45)).toMatchObject({ inRange: false, offAxis: true, rel: -1 });
+  });
+
+  it('the REL countdown runs only toward a target the bomb can turn to', () => {
+    const ahead = cue('gbu53', 7_000, 35_000, 10);
+    expect(ahead.inRange).toBe(false);
+    expect(ahead.rel).toBeGreaterThan(0);
+    expect(cue('gbu53', 7_000, 35_000, 80)).toMatchObject({ inRange: false, offAxis: true, rel: -1 });
+  });
+
+  it('a StormBreaker released 60° off the nose turns onto the ship instead of orbiting it (c06: 14 km, 4,700 m)', () => {
+    const w = makeWorld(12);
+    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: 5 });
+    run(w, 0.2);
+    // 14 km from the ship, ground track 60° left of it
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_700, 14_000), heading: -60 * DEG, speed: 250, loadout: 'strike_sdb2' });
+    run(w, 0.5);
+    w.combat.designate(p, cv.id, w);
+    const m = release(w, p, 'gbu53', cv.id);
+    run(w, 200, () => !m.alive);
+    expect(m.alive).toBe(false);
+    expect(cv.health).toBeLessThan(cv.maxHealth);
+  });
+});
