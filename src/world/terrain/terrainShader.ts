@@ -14,6 +14,7 @@ import { ATMOSPHERE_GLSL } from '../sky/atmosphere';
 import { COAST_MASK_RANGE } from './coastline';
 import { FOOTPATH } from '../scenery/cbdStreets';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
+import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX } from './theaters/aucklandAerial';
 
 export const MAX_TERRAIN_LODS = 16;
 /** Volcanic cones the fragment shader can shade (crater bowls, flank terraces). */
@@ -34,6 +35,19 @@ float coastMaskSD(vec2 wp, out float w) {
 // Fine shoreline wiggle (m) shared by the water and the terrain beach band.
 float coastWiggle(sampler2D detail, vec2 wp) {
   return (texture2D(detail, wp * (1.0 / 57.0)).g - 0.5) * 9.0 + (texture2D(detail, wp * (1.0 / 211.0)).r - 0.5) * 8.0;
+}
+`;
+
+/**
+ * Shared by the terrain and the photo-topped buildings (after ATMOSPHERE_GLSL): the aerial photo's
+ * low-sun light (aucklandAerial.ts aerialLowSun(), the same on the CPU), in units of the sun's light
+ * on ground facing it; 0 by day and under the moon.
+ */
+export const AERIAL_LIGHT_GLSL = /* glsl */ `
+float aerialLowSun() {
+  float y = max(uSunDir.y, 0.0);
+  float facing = 0.88 * y + 0.47 * sqrt(1.0 - y * y);
+  return ${AERIAL_LOW_SUN_SHARE.toFixed(3)} * max(facing - y, 0.0) * (1.0 - smoothstep(0.2, 0.45, uSunDir.y));
 }
 `;
 
@@ -107,6 +121,7 @@ void main() {
 export const terrainFragmentShader = /* glsl */ `
 ${ATMOSPHERE_GLSL}
 ${COAST_GLSL}
+${AERIAL_LIGHT_GLSL}
 uniform sampler2D uSurface;
 uniform sampler2D uColor;
 uniform sampler2D uDetail;
@@ -618,8 +633,12 @@ void main() {
   vec3 coneN = coneDetail(wp, mpp, albedo);
 
   // The aerial photo replaces the procedural colours (streets, roofs, lots, canopy, rock, cone tints),
-  // with a faint fine grain below its texel size so it isn't smeared when flying low.
-  albedo = mix(albedo, photo.rgb * mix(1.0, 0.92 + 0.16 * dC.r, nearC), photo.a);
+  // with a faint fine grain below its texel size so it isn't smeared when flying low. At night it keeps
+  // only part of its own colour: the rest is the procedural ground's (warmer than the moonlit photo),
+  // which the night lamps and lit windows drawn over it belong to (#61 item 5).
+  vec3 photoCol = photo.rgb * mix(1.0, 0.92 + 0.16 * dC.r, nearC);
+  if (uNight > 0.0) photoCol = mix(photoCol, albedo, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));
+  albedo = mix(albedo, photoCol, photo.a);
 
   // ── Shoreline from the coast mask (15 m) or, outside it, from the true height (the band is at
   //    most ~12 m above sea level even on cliffs, so higher ground skips the lookups) ──
@@ -656,6 +675,9 @@ void main() {
   N = normalize(N + vec3(dn.x, 0.0, dn.y) * bump + vec3(dn2.x, 0.0, dn2.y) * 0.35 * nearC * natural + coneN);
 
   vec3 col = atmoDiffuse(albedo, N, s.a);
+  // under a low sun the photo also takes the light of roofs facing the sun, as the procedural houses
+  // beside it do (#61 item 5)
+  if (photo.a > 0.0) col += albedo * uSunColor * (s.a * aerialLowSun() * photo.a * 0.3183099);
   // Where the coast mask puts sea but the terrain mesh (coarser LODs a few km out) still stands above
   // the water plane, or shows through a gap in the water, paint it as water rather than as dark wet
   // sand, which read as a black outline along far coasts. Same body + sky-reflection model as the

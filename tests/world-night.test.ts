@@ -1,15 +1,18 @@
 /**
  * Polish 5/5 (#61 items 5 and 6): Auckland at night and at dawn. The aerial photo is graded toward the
- * procedural ground it fades into (its edge showed at night and dawn), the road ribbons glow with their
+ * procedural ground it fades into (its edge showed at night and dawn), takes the low sun's light on
+ * roofs at dawn and dusk and the procedural ground's colour at night, the road ribbons glow with their
  * street lights at night, and the CBD's streets glow under the towers (the CBD was a dark disc ringed
  * by black motorways).
  */
 import { describe, expect, it } from 'vitest';
-import { DataTexture } from 'three';
-import { AERIAL_GRADE_DAY, aerialGrade } from '../src/world/terrain/theaters/aucklandAerial';
-import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
+import { DataTexture, Vector4 } from 'three';
+import { AERIAL_GRADE_DAY, AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, aerialGrade, aerialLowSun } from '../src/world/terrain/theaters/aucklandAerial';
+import { AERIAL_LIGHT_GLSL, terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, cbdNightGlow, NIGHT_GLOW, suburbFarGlow } from '../src/world/terrain/nightGlow';
 import { aucklandStreets, FOOTPATH, type CbdStreets } from '../src/world/scenery/cbdStreets';
+import { createBuildingMaterial } from '../src/world/scenery/materials';
+import type { TimeOfDay } from '../src/core/types';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from '../src/world/terrain/urbanColor';
 import { terrainStyle } from '../src/world/config';
 import { skyPreset } from '../src/world/sky/presets';
@@ -26,8 +29,7 @@ const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c
 const graded = (g: number[], c: readonly number[]) => c.map((v, i) => v * (1 + (g[i] - 1) * g[3]));
 
 describe('the aerial photo is graded toward the procedural ground (#61 item 5)', () => {
-  // Only the average albedo is matched: the procedural near field's low-sun roof lighting has no term on
-  // the photo, so the edge can still show at dawn (item 5 is partly fixed).
+  // The grade matches the average albedo; the low-sun light and the night mix (below) do the lighting.
   it('at night and from dawn on, the photo’s average albedo matches the procedural suburbs’ far albedo', () => {
     for (const tod of ['dawn', 'dusk', 'night'] as const) {
       const g = aerialGrade(photo, target, tod);
@@ -60,6 +62,61 @@ describe('the road ribbons glow with their street lights at night (#61 item 6)',
     const frag = createRoadMaterial(atmo, tex, true).fragmentShader;
     expect(frag).toContain('uLit * uNight');
     expect(ROAD_NIGHT_GLOW).toBeGreaterThan(0.03);
+  });
+});
+
+// Light on flat ground (luminance of the irradiance) under a preset's sun and sky, with `extra` more of
+// the sun's light, as the terrain shader's atmoDiffuse() + the photo's low-sun term give it.
+function flatLight(tod: TimeOfDay, extra: number): number {
+  const p = skyPreset('auckland', tod, 'clear', 20_000);
+  const sun = p.sunColor.clone().multiplyScalar(p.sunIntensity);
+  const sky = p.hemiSky.clone().multiplyScalar(p.hemiIntensity);
+  const ndl = Math.max(p.sunDir.y, 0) + extra;
+  return lum([sun.r * ndl + sky.r, sun.g * ndl + sky.g, sun.b * ndl + sky.b]);
+}
+
+describe('under a low sun the photo takes the light of roofs facing it (#61 item 5, part 2)', () => {
+  const sunY = (tod: TimeOfDay) => skyPreset('auckland', tod, 'clear', 20_000).sunDir.y;
+
+  // At dawn the procedural houses round the photo read about twice as bright as the photo in the
+  // world lab (c01's light, the Newmarket edge): the photo was lit as flat ground under a 7° sun.
+  it('at dawn and dusk the photo is lit about twice as brightly as flat ground', () => {
+    for (const tod of ['dawn', 'dusk'] as const) {
+      const extra = aerialLowSun(sunY(tod));
+      const gain = flatLight(tod, extra) / flatLight(tod, 0);
+      expect(gain, tod).toBeGreaterThan(1.6);
+      expect(gain, tod).toBeLessThan(2.6);
+      // never more than all of it facing the sun like a roof
+      expect(extra + sunY(tod), tod).toBeLessThan(0.88 * sunY(tod) + 0.47 + 1e-9);
+    }
+  });
+
+  it('by day and under the moon nothing changes', () => {
+    expect(aerialLowSun(sunY('day'))).toBe(0);
+    expect(aerialLowSun(sunY('night'))).toBe(0);
+  });
+
+  it('the terrain and the photo-topped buildings use the same term', () => {
+    expect(AERIAL_LIGHT_GLSL).toContain(`${AERIAL_LOW_SUN_SHARE.toFixed(3)} * max(facing - y, 0.0) * (1.0 - smoothstep(0.2, 0.45, uSunDir.y))`);
+    expect(terrainFragmentShader).toContain('float aerialLowSun()');
+    expect(terrainFragmentShader).toContain('col += albedo * uSunColor * (s.a * aerialLowSun() * photo.a * 0.3183099)');
+    const atmo = createAtmosphereUniforms(skyPreset('auckland', 'dawn', 'clear', 20_000), 20_000);
+    const tex = new DataTexture(new Uint8Array(4), 1, 1);
+    const mat = createBuildingMaterial(atmo, { aerial: { uAerial: { value: tex }, uAerialRect: { value: new Vector4() }, uAerialGrade: { value: new Vector4(1, 1, 1, 0) } } });
+    expect(mat.fragmentShader).toContain('float aerialLowSun()');
+    expect(mat.fragmentShader).toContain('lit += base * uSunColor * (aerialLowSun() * photoW * 0.3183099)');
+  });
+});
+
+describe('at night the photo takes the procedural ground’s colour (#61 item 5, part 2)', () => {
+  it('half of the photo’s colour gives way to the procedural ground’s at night, none of it by dusk', () => {
+    expect(AERIAL_NIGHT_MIX).toBe(0.5);
+    expect(terrainFragmentShader).toContain(`if (uNight > 0.0) photoCol = mix(photoCol, albedo, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));`);
+    // the procedural ground (urbanPattern) still runs under the photo at night, so 'albedo' is its colour
+    expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0;');
+    // dusk's lamps are on at 0.2: below the mix's 0.5 threshold
+    expect(skyPreset('auckland', 'dusk', 'clear', 20_000).lights).toBeLessThan(0.5);
+    expect(skyPreset('auckland', 'night', 'clear', 20_000).lights).toBe(1);
   });
 });
 
