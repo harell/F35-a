@@ -254,13 +254,26 @@ async function flight() {
   const radarLbl = await page.evaluate(() => document.querySelector('.b-radar')?.textContent);
   check(/EMCON/.test(radarLbl ?? ''), 'RDR button shows EMCON after toggling', radarLbl);
 
-  // camera: tap cycles, long-press → padlock
+  // camera: tap cycles, long-press → padlock.
+  // The tap is sent from the page: under SwiftShader a CDP touchEnd's ack waits behind a frame (0.3–6 s),
+  // past the 480 ms wall-clock long-press timer, so a CDP 'tap' on CAM fired the padlock and changed the
+  // view without the camera command ever running. The long press below still goes through CDP.
   const view0 = (await page.evaluate(() => window.__f35.state().view)) ?? '';
   const cam = await rectOf(page, '.b-cam');
-  await t.tap(cam.cx, cam.cy);
-  await page.waitForTimeout(150);
-  const view1 = await page.evaluate(() => window.__f35.state().view);
-  check(view1 !== view0, 'CAM tap cycles the view', `${view0} → ${view1}`);
+  await page.evaluate(() => {
+    window.__spy.cmds.length = 0;
+    const el = document.querySelector('.b-cam');
+    const ev = (type) => new PointerEvent(type, { pointerId: 77, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true });
+    el.dispatchEvent(ev('pointerdown'));
+    el.dispatchEvent(ev('pointerup'));
+  });
+  await settle(page);
+  const camTap = await page.evaluate(() => ({ cmds: window.__spy.cmds.slice(), view: window.__f35.state().view }));
+  check(
+    camTap.cmds.includes('camera') && !camTap.cmds.includes('padlock') && camTap.view !== view0,
+    'CAM tap → camera command, cycles the view (no padlock)',
+    `${view0} → ${camTap.view}, cmds=${camTap.cmds.join(',')}`,
+  );
   await t.down(7, cam.cx, cam.cy);
   await page.waitForTimeout(650);
   await t.up(7);
@@ -277,8 +290,7 @@ async function flight() {
   check(spy.yaw > 0.1 && spy.pitch > 0.02, 'drag on the centre = look around (right/up)', `yaw=${spy.yaw.toFixed(2)} pitch=${spy.pitch.toFixed(2)}`);
   check(spy.taps.length === 0, 'a drag is not reported as a tap');
   // the tap stays in the target (padlock) view, where it designates like in every other view (#71).
-  // The CAM sequence above can end in another view (under SwiftShader a CAM tap's touchEnd can arrive
-  // after the 480 ms long-press timer, so the 'tap' is a padlock), so pin the view for this check.
+  // The CAM long press above should leave the target view; pin it anyway so this check can't drift.
   const tapView = await page.evaluate(() => {
     if (window.__f35.state().view !== 'target') window.__f35.setView('target');
     return window.__f35.state().view;
