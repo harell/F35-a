@@ -7,7 +7,8 @@
  */
 import type { MissionResultExt } from '../../missions/runtime/resultExt';
 import type { MissionResult } from '../../core/contracts';
-import type { Settings } from '../../core/types';
+import type { Difficulty, Settings } from '../../core/types';
+import { findMission, fixedDifficulty } from '../../missions';
 import { recordMedals, setDifficulty } from '../career';
 import { DIFFICULTIES } from '../../core/data';
 import { icon } from '../art/icons';
@@ -34,6 +35,17 @@ export interface DebriefContext {
 
 /** Offer "Retry on Recruit" after this many failures in a row (not already on Recruit). */
 export const RECRUIT_OFFER_AFTER = 2;
+
+/**
+ * Show "Retry on Recruit": after RECRUIT_OFFER_AFTER failures in a row, not already on Recruit, and
+ * not in a mission whose difficulty is fixed (a training lesson flies at Pilot whatever the setting,
+ * so switching to Recruit would change nothing there).
+ */
+export function offerRecruitRetry(r: Pick<MissionResult, 'success' | 'missionId'>, failStreak: number, setting: Difficulty): boolean {
+  if (r.success || failStreak < RECRUIT_OFFER_AFTER || setting === 'recruit' || !DIFFICULTIES.recruit) return false;
+  const m = findMission(r.missionId);
+  return !(m && fixedDifficulty(m));
+}
 
 /** Debrief stat rows for civil losses: airliners downed and civil ships destroyed (only when > 0). */
 export function civilLossRows(r: MissionResultExt): [string, string, string][] {
@@ -176,7 +188,7 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
     retry.addEventListener('click', () => finish('retry'));
     foot.append(menu, h('div', { class: 'spacer' }));
     const live = ctx?.settings();
-    if (!r.success && live && ctx && ctx.failStreak >= RECRUIT_OFFER_AFTER && live.difficulty !== 'recruit' && DIFFICULTIES.recruit) {
+    if (live && ctx && offerRecruitRetry(r, ctx.failStreak, live.difficulty)) {
       const easy = h('button', { class: 'ui-btn db-easy', attrs: { type: 'button', title: DIFFICULTIES.recruit.description }, html: `${icon('shield')}<span>Retry on Recruit</span>` });
       easy.addEventListener('click', () => {
         setDifficulty(live, 'recruit');

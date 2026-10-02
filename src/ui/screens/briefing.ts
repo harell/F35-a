@@ -1,15 +1,16 @@
 /**
  * F35-A UI — mission briefing: intel map (left) + tabs BRIEFING / OBJECTIVES / HANGAR (right),
  * loadout picker limited to allowedLoadouts (default recommendedLoadout) with store diagrams and a
- * stealth rating bar, difficulty picker (4 levels, saved to settings), FLY / BACK.
+ * stealth rating bar, difficulty picker (4 levels, saved to settings; a training lesson shows its
+ * fixed Pilot instead, see missionDifficulty), FLY / BACK.
  */
 import type { MissionDef } from '../../core/contracts';
 import { DIFFICULTIES, LOADOUTS, THEATER_INFO, TIME_OF_DAY_INFO, WEAPON_INFO } from '../../core/data';
-import type { LoadoutId, Settings } from '../../core/types';
+import type { Difficulty, LoadoutId, Settings } from '../../core/types';
 import { icon } from '../art/icons';
 import { storesDiagramSvg } from '../art/storesDiagram';
 import { escapeHtml, h } from '../dom';
-import { missionGunAmmo } from '../../missions';
+import { fixedDifficulty, missionDifficulty, missionGunAmmo } from '../../missions';
 import { formatTime, pad2, stealthRating, storeLines } from '../format';
 import { hangarLoadouts } from '../hangar';
 import type { UiHost } from '../host';
@@ -137,7 +138,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     const cards = h('div', { class: 'lo-cards' });
     const cardEls: HTMLButtonElement[] = [];
     // the mission may set its own gun rounds, per difficulty (MissionDef.gunAmmo)
-    const gunLine = (id: LoadoutId) => `GAU-22 · ${missionGunAmmo(m, settings.difficulty, id)} rds`;
+    const gunLine = (id: LoadoutId) => `GAU-22 · ${missionGunAmmo(m, missionDifficulty(m, settings.difficulty), id)} rds`;
     const syncCards = () => {
       for (const c of cardEls) c.classList.toggle('is-on', c.dataset.id === loadout);
       loSummary.innerHTML = `${icon('jet')}<span>${escapeHtml(LOADOUTS[loadout].name)}</span>`;
@@ -172,9 +173,12 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     el.appendChild(body);
 
     // ── footer ──
-    // difficulty: tap to change right here (writes the Game's live settings object + saves it)
-    const diffEl = h('button', { class: 'ui-btn ghost br-diff', attrs: { type: 'button', 'aria-haspopup': 'dialog' } });
+    // difficulty: tap to change right here (writes the Game's live settings object + saves it); a
+    // training lesson always flies at Pilot, so it shows that instead of the setting (no picker)
+    const fixed = fixedDifficulty(m);
+    const diffEl = fixed ? fixedDifficultyChip(fixed) : h('button', { class: 'ui-btn ghost br-diff', attrs: { type: 'button', 'aria-haspopup': 'dialog' } });
     const syncDiff = () => {
+      if (fixed) return;
       const d = DIFFICULTIES[settings.difficulty];
       diffEl.title = d?.description ?? '';
       diffEl.setAttribute('aria-label', `Difficulty: ${d?.label ?? settings.difficulty}. Tap to change`);
@@ -182,7 +186,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     };
     syncDiff();
     let closeSheet: (() => boolean) | null = null;
-    diffEl.addEventListener('click', () => {
+    if (!fixed) diffEl.addEventListener('click', () => {
       closeSheet = openDifficultySheet(el, settings, () => {
         closeSheet = null;
         syncDiff();
@@ -216,5 +220,16 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     requestAnimationFrame(() => requestAnimationFrame(redraw));
     // the real coastline may still be downloading (prefetched at app start): redraw when it lands
     if (!aucklandLinz()) void loadAucklandLinz().then((ok) => ok && redraw());
+  });
+}
+
+/** Footer chip of a mission that flies at a fixed difficulty (training: Pilot): not a button. */
+function fixedDifficultyChip(id: Difficulty): HTMLElement {
+  const d = DIFFICULTIES[id];
+  const label = d?.label ?? id;
+  return h('div', {
+    class: 'br-diff br-diff-fixed',
+    attrs: { role: 'note', title: `Training always flies at ${label}, whatever the difficulty setting`, 'aria-label': `Difficulty: ${label}. Training always flies at ${label}` },
+    html: `<span class="br-diff-k">DIFFICULTY</span><span class="badge diff-${id}">${escapeHtml(label)}</span><span class="br-diff-note">fixed for training</span>`,
   });
 }

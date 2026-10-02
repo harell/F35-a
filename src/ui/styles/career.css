@@ -4,6 +4,7 @@
 .br-diff { gap: 8px; padding: 0 10px; min-height: 40px; text-transform: none; }
 .br-diff .br-diff-chg { display: flex; color: var(--acc); opacity: 0.7; }
 .br-diff .br-diff-chg .ico { width: 14px; height: 14px; }
+.br-diff-fixed .br-diff-note { font: 700 9.5px/1 var(--sans); letter-spacing: 0.08em; color: var(--faint); white-space: nowrap; }
 .dsheet {
   position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
   padding: var(--pad-t) var(--pad-r) var(--pad-b) var(--pad-l);

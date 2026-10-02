@@ -31,7 +31,7 @@ import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { Autopilot, gammaForAltitude } from '../src/ai/pilot/Autopilot';
 import { dirWithElevation } from '../src/ai/geom';
-import { createMissionRunner, missionById } from '../src/missions';
+import { createMissionRunner, missionById, missionDifficulty } from '../src/missions';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
 import { PlayerBot } from './ai-playerbot';
@@ -643,6 +643,7 @@ export class MissionBot {
 
 export interface PlaythroughResult {
   mission: string;
+  /** The difficulty asked for (a training lesson flies at Pilot whatever it is: missionDifficulty). */
   diff: Difficulty;
   seed: number;
   state: 'running' | 'success' | 'failed';
@@ -669,7 +670,8 @@ export function runPlaythrough(
   const def = typeof missionIdOrDef === 'string' ? missionById(missionIdOrDef) : missionIdOrDef;
   if (!def) throw new Error(`no mission ${String(missionIdOrDef)}`);
   const events = new EventBus();
-  const d = DIFFICULTIES[diff];
+  // like the game (Game.runSession): training flies at Pilot whatever `diff` asks for
+  const d = DIFFICULTIES[missionDifficulty(def, diff)];
   const world = createSimWorld({ terrain, difficulty: d, events, combat: createCombatSystemSeeded(seed) });
   const runner = createMissionRunner({ ...def, seed: def.seed + seed * 101 }, { createAi: createAiBrain, difficulty: d, events });
   runner.setup(world, opts.loadout ?? def.recommendedLoadout);
