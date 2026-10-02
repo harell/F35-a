@@ -1,3 +1,4 @@
+import { createOneWay } from '../src/sim/drone/oneWay';
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { FakeWorld, FlatTerrain, v3 } from './combat-helpers';
@@ -232,13 +233,17 @@ describe('combat: radar & stealth', () => {
 });
 
 describe('combat: shoot list', () => {
-  /** Player F-35 heading north at three MiGs coming head-on (A nearest). */
-  function threeBandits() {
+  /**
+   * Player F-35 heading north at three bandits coming head-on (A nearest): one-way drones flying a
+   * route past the jet (the swarm the shoot list is for), or fighters.
+   */
+  function threeBandits(drones = true) {
     const w = new FakeWorld({ difficulty: 'veteran' });
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 6000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
     const a = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, -15000), heading: Math.PI, speed: 250 });
     const b = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(1500, 6000, -20000), heading: Math.PI, speed: 250 });
     const c = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(-1500, 6000, -25000), heading: Math.PI, speed: 250 });
+    if (drones) for (const x of [a, b, c]) x.oneWay = createOneWay({ target: v3(x.position.x, 0, 40_000), altitude: 6000, speed: 250 });
     w.run(0.5);
     return { w, f35, a, b, c };
   }
@@ -257,6 +262,15 @@ describe('combat: shoot list', () => {
     expect(f35.radar.designatedId).toBe(c.id);
     // the box was commanded: TGT steps on (every other bandit is engaged → the full list)
     w.combat.cycleTarget(f35, w);
+    expect(f35.radar.designatedId).toBe(a.id);
+  });
+
+  it('against fighters the box stays on the bandit just fired at (playtest r2: the step dropped that lock)', () => {
+    const { w, f35, a } = threeBandits(false);
+    expect(f35.radar.designatedId).toBe(a.id);
+    w.combat.fire(f35, w, 'aim120');
+    w.run(0.5);
+    expect(shotAt(w, f35)).toEqual([a.id]);
     expect(f35.radar.designatedId).toBe(a.id);
   });
 

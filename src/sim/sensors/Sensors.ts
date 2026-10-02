@@ -418,13 +418,17 @@ export function engagedBy(ctx: CombatCtx, ac: AircraftEntity, id: number): boole
 }
 
 /**
- * Shoot list (human player): after an air-to-air launch the TD box steps to the highest-priority
- * fresh hostile air track with none of our missiles in flight at it, so the next FIRE goes at a
- * new target (an AMRAAM leaves off the TWS track, no lock needed). The box is commanded, as a tap
- * would be, so TGT steps on from it. Nothing left unengaged: the box stays where it is.
+ * Shoot list (human player) against a swarm: after an air-to-air launch at a one-way drone the TD box
+ * steps to the highest-priority fresh hostile air track with none of our missiles in flight at it,
+ * so the next FIRE goes at a new drone (an AMRAAM leaves off the TWS track, no lock needed). The box
+ * is commanded, as a tap would be, so TGT steps on from it. Nothing left unengaged: the box stays.
+ * Only for drones: in a fighter fight the step dropped the lock the player had just fired on (the
+ * playtest bot lost c12 Pilot 4/6 → 2/6 and c01 Pilot 6/6 → 5/6 with it everywhere).
  */
 export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: number | null): void {
   if (!ac.isPlayer || !isAirMode(ac)) return;
+  const fired = ctx.world.getEntity(firedAt);
+  if (!fired || fired.kind !== 'aircraft' || !fired.oneWay) return;
   const st = acState(ac);
   for (const c of candidates(ctx, ac, st)) {
     if (c.id === firedAt || c.team === 'neutral' || c.entityKind !== 'aircraft' || c.lastSeen < ctx.time - 1.5) continue;
