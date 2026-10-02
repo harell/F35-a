@@ -398,6 +398,9 @@ class SimWorldImpl implements SimWorld {
     const ground = this.terrain.surfaceHeightAt(ac.position.x, ac.position.z);
     const surface = ac.position.y - ground > 5 ? 'air' : this.terrain.isWater(ac.position.x, ac.position.z) ? 'water' : 'ground';
     this.damage.destroyAircraft(ac, null, 'collision', 'crash', surface);
+    // it is gone: no wreck for the terrain collision to crash (and explode) a second time
+    ac.crashed = true;
+    ensureSimState(ac).crashTime = this.time;
     ac.velocity.set(0, 0, 0);
   }
 

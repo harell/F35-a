@@ -170,6 +170,19 @@ describe('Shahed-136: dumb route flight', () => {
     expect(diveFrom).toBeLessThan(startAt + SHAHED_SPEED * DT * 2);
   });
 
+  it('blows up once on a target on the ground (no second crash explosion from the wreck)', () => {
+    const w = makeWorld(new FlatTerrain(10));
+    const target = new Vector3(0, 10, 0);
+    const d = spawnDrone(w, new Vector3(0, 0, 3000), target);
+    const booms = record(w, 'explosion');
+    const impacts = record(w, 'drone:impact');
+    run(w, 120, () => !d.alive);
+    run(w, 2);
+    expect(impacts).toHaveLength(1);
+    expect(booms).toHaveLength(1);
+    expect(booms[0].surface).toBe('ground');
+  });
+
   it('a drone aimed at the Sky Tower blows up against it and says so', () => {
     const w = makeWorld(new FlatTerrain(0));
     const tower = createSkyTower(0);
