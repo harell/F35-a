@@ -127,7 +127,7 @@ describe('campaign progress', () => {
     expect(back.best.c01.score).toBe(1500);
     g.localStorage!.setItem(PROGRESS_KEY, '{not json');
     expect(loadProgress().unlocked).toContain(CAMPAIGN[0].id);
-    const s = sanitizeProgress({ unlocked: [42, 'c05'], best: { c01: { score: 'x' } }, totals: { missions: -3 } }, CAMPAIGN, TRAINING);
+    const s = sanitizeProgress({ unlocked: [42, 'c05'], best: { c01: { score: 'x' } }, totals: { missions: -3 } }, [CAMPAIGN], TRAINING);
     expect(s.unlocked).toContain('c05');
     expect(s.unlocked).toContain('c01');
     expect(s.best).toEqual({});

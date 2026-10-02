@@ -1,21 +1,23 @@
 /**
  * F35-A — missions module public API (used by src/game/Game.ts):
- * CAMPAIGN, TRAINING, buildInstantMission, loadProgress, saveProgress, recordResult,
- * nextMissionAfter, nextMissionLabel, missionDifficulty, terrainPadsFor, createMissionRunner.
+ * CAMPAIGNS (CAMPAIGN = Southern Cross's missions), TRAINING, buildInstantMission, loadProgress,
+ * saveProgress, recordResult, nextMissionAfter, nextMissionLabel, missionDifficulty, campaignOf,
+ * terrainPadsFor, createMissionRunner.
  *
  *   schema.ts          MissionScript types (spawns, SAMs, targets, objectives, triggers…)
  *   MissionRunner.ts   runtime (implements MissionRunnerApi) + ./runtime/* helpers
- *   content/*          campaign "Operation Southern Cross", training, Instant Action generator
- *   progress.ts        localStorage campaign progress
+ *   content/*          campaigns "Operation Southern Cross" and IRGC (irgc.ts), training, Instant Action generator
+ *   progress.ts        localStorage progress (unlocks chain within each campaign)
  *   pads.ts            terrain pads under SAM sites / compounds
  *   difficulty.ts      the difficulty a mission flies at (training: always Pilot)
  *   validate.ts        mission definition validator (tests / dev)
  */
-import type { CampaignProgress, InstantActionOptions, MissionDef, MissionResult } from '../core/contracts';
+import type { CampaignDef, CampaignProgress, InstantActionOptions, MissionDef, MissionResult } from '../core/contracts';
 import type { TheaterId } from '../core/types';
 import { buildInstantMissionSeeded } from './content/instant';
 import { CAMPAIGN_PART1 } from './content/campaign1';
 import { CAMPAIGN_PART2 } from './content/campaign2';
+import { IRGC_CAMPAIGN } from './content/irgc';
 import { TRAINING_MISSIONS } from './content/training';
 import { applyResult, loadProgressFrom, saveProgressTo, skipMission as skipMissionIn } from './progress';
 
@@ -39,18 +41,37 @@ export const CAMPAIGN: MissionDef[] = [...CAMPAIGN_PART1, ...CAMPAIGN_PART2];
 /** Training missions (always unlocked). */
 export const TRAINING: MissionDef[] = TRAINING_MISSIONS;
 
-/** Load campaign progress (localStorage 'f35a.progress.v1'); first mission + training always unlocked. */
+/** Operation Southern Cross, the first campaign (its missions are CAMPAIGN). */
+export const SOUTHERN_CROSS: CampaignDef = {
+  id: 'southern_cross',
+  name: 'Operation Southern Cross',
+  description: 'Drive the hostile force off the Hauraki Gulf islands and defend Auckland',
+  missions: CAMPAIGN,
+};
+
+/** Every campaign, in menu order. Each has its own unlock chain and ending. */
+export const CAMPAIGNS: CampaignDef[] = [SOUTHERN_CROSS, IRGC_CAMPAIGN];
+
+/** Each campaign's ordered mission list (what progress.ts unlocks along). */
+const chains = (): MissionDef[][] => CAMPAIGNS.map((c) => c.missions);
+
+/** The campaign a mission belongs to (null for training, Instant Action and unknown ids). */
+export function campaignOf(missionId: string): CampaignDef | null {
+  return CAMPAIGNS.find((c) => c.missions.some((m) => m.id === missionId)) ?? null;
+}
+
+/** Load progress (localStorage 'f35a.progress.v1'); each campaign's first mission + training always unlocked. */
 export function loadProgress(): CampaignProgress {
-  return loadProgressFrom(CAMPAIGN, TRAINING);
+  return loadProgressFrom(chains(), TRAINING);
 }
 
 export function saveProgress(p: CampaignProgress): void {
   saveProgressTo(p);
 }
 
-/** Fold a result into the progress (unlocks the next campaign mission on success). Returns a new object. */
+/** Fold a result into the progress (a win unlocks the next mission of the same campaign). Returns a new object. */
 export function recordResult(p: CampaignProgress, r: MissionResult): CampaignProgress {
-  return applyResult(p, r, CAMPAIGN);
+  return applyResult(p, r, chains());
 }
 
 /**
@@ -58,17 +79,20 @@ export function recordResult(p: CampaignProgress, r: MissionResult): CampaignPro
  * see failStreak()). Returns a new progress object; save it with saveProgress().
  */
 export function skipMission(p: CampaignProgress, id: string): CampaignProgress {
-  return skipMissionIn(p, id, CAMPAIGN);
+  return skipMissionIn(p, id, chains());
 }
 
 /**
- * What the debrief's NEXT button flies: the next campaign mission in order, the next training lesson
- * (the last lesson leads into the campaign's first mission, which is always unlocked), or null after
- * the last campaign mission / for Instant Action ids.
+ * What the debrief's NEXT button flies: the next mission of the same campaign, the next training
+ * lesson (the last lesson leads into Southern Cross's first mission, which is always unlocked), or
+ * null after a campaign's last mission (never into another campaign) / for Instant Action ids.
  */
 export function nextMissionAfter(id: string): MissionDef | null {
-  const i = CAMPAIGN.findIndex((m) => m.id === id);
-  if (i >= 0) return i + 1 < CAMPAIGN.length ? CAMPAIGN[i + 1] : null;
+  const campaign = campaignOf(id)?.missions;
+  if (campaign) {
+    const i = campaign.findIndex((m) => m.id === id);
+    return i + 1 < campaign.length ? campaign[i + 1] : null;
+  }
   const t = TRAINING.findIndex((m) => m.id === id);
   if (t < 0) return null;
   return t + 1 < TRAINING.length ? TRAINING[t + 1] : (CAMPAIGN[0] ?? null);
@@ -88,9 +112,13 @@ export function nextMissionLabel(id: string): string | null {
 
 export { TRAINING_DIFFICULTY, fixedDifficulty, missionDifficulty } from './difficulty';
 
-/** Any campaign / training mission by id (or null). */
+/** Any campaign's mission or training mission by id (or null). */
 export function findMission(id: string): MissionDef | null {
-  return CAMPAIGN.find((m) => m.id === id) ?? TRAINING.find((m) => m.id === id) ?? null;
+  for (const c of CAMPAIGNS) {
+    const m = c.missions.find((x) => x.id === id);
+    if (m) return m;
+  }
+  return TRAINING.find((m) => m.id === id) ?? null;
 }
 
 const IA_MODES: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
@@ -107,7 +135,7 @@ function hashId(id: string): number {
 }
 
 /**
- * Campaign / training mission by id, or an Instant Action mission from an id of the form
+ * Mission of any campaign or training by id, or an Instant Action mission from an id of the form
  * `ia_<mode>_<theater>` (e.g. `ia_dogfight_auckland`, `ia_sam_gauntlet_auckland`; Auckland is the
  * only theatre, any other returns null) with default options (4 mixed bandits, day, scattered cloud). Handy for `?mission=` URLs, test hooks and the
  * headless bot sweep. The Instant Action layout and terrain are seeded from a hash of the id, so
