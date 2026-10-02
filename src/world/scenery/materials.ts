@@ -9,6 +9,8 @@
  */
 import { AdditiveBlending, ShaderMaterial, type Texture, type Vector4 } from 'three';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
+import { AERIAL_LIGHT_GLSL } from '../terrain/terrainShader';
+import { AERIAL_NIGHT_MIX } from '../terrain/theaters/aucklandAerial';
 
 const commonVertex = /* glsl */ `
 varying vec3 vWorld;
@@ -85,6 +87,7 @@ void main() {
 const buildingFragment = /* glsl */ `
 ${ATMOSPHERE_GLSL}
 #ifdef AERIAL
+${AERIAL_LIGHT_GLSL}
 uniform sampler2D uAerial;
 uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m)
 uniform vec4 uAerialGrade; // colour grade (terrain shader's): rgb gain, strength
@@ -105,6 +108,7 @@ void main() {
   vec3 base = vColor;
   vec3 emissive = vec3(0.0);
   float mpp = max(length(dFdx(vWorld)), length(dFdy(vWorld)));
+  float photoW = 0.0;
   #ifdef AERIAL
     // decks and roofs take the aerial photo where it shows land or a deck (yachts over the water keep
     // their own colour); light fixtures (aWin 4) keep theirs
@@ -113,7 +117,11 @@ void main() {
       float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
       if (e > 0.0) {
         vec4 p = texture2D(uAerial, uv);
-        base = mix(base, p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+        photoW = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w));
+        vec3 photoCol = p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a);
+        // at night half the photo's colour gives way to the top's own, as on the terrain photo (#61 item 5)
+        if (uNight > 0.0) photoCol = mix(photoCol, base, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));
+        base = mix(base, photoCol, photoW);
       }
     }
   #endif
@@ -154,7 +162,12 @@ void main() {
   } else if (vWin > 3.5) {
     emissive += base * uNight * 1.6;
   }
-  vec3 col = atmoNight(atmoDiffuse(base, N, 1.0));
+  vec3 lit = atmoDiffuse(base, N, 1.0);
+  #ifdef AERIAL
+    // the photo's low-sun light, as on the terrain photo round these tops (#61 item 5)
+    lit += base * uSunColor * (aerialLowSun() * aerialHouseShare(distance(vWorld, uCamPos)) * photoW * 0.3183099);
+  #endif
+  vec3 col = atmoNight(lit);
   col = atmoApplyFog(col, vWorld);
   // lit windows pierce the haze more than lit surfaces do (like the terrain's street lights)
   col += emissive * (1.0 - atmoFogFactor(distance(vWorld, uCamPos) * 0.45, uCamPos.y, vWorld.y));
@@ -170,7 +183,10 @@ void main() {
  */
 export function createBuildingMaterial(
   atmo: AtmosphereUniforms,
-  opts: { houses?: boolean; aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 } } } = {},
+  opts: {
+    houses?: boolean;
+    aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 }; uAerialHouseR: { value: number } };
+  } = {},
 ): ShaderMaterial {
   const defines: Record<string, number> = {};
   if (opts.houses) defines.HOUSES = 1;

@@ -248,7 +248,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     const bare = suburbFarAlbedo(st, BARE_MIX);
     const target: [number, number, number] = [(leafy.r + bare.r) / 2, (leafy.g + bare.g) / 2, (leafy.b + bare.b) / 2];
     const grade = aerialGrade(imageMeanLinear(aerialImage), target, opts.timeOfDay);
-    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade };
+    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade, houseRadius: cfg.houseRadius };
   }
   const cloudLayer = createCloudLayerTexture();
 

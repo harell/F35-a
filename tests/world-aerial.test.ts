@@ -80,7 +80,8 @@ describe('photo square', () => {
 
   it('the terrain shader replaces the procedural ground with it and skips the hidden patterns', () => {
     expect(terrainFragmentShader).toContain('vec4 photo = aerialPhoto(wp);');
-    expect(terrainFragmentShader).toContain('albedo = mix(albedo, photo.rgb');
+    expect(terrainFragmentShader).toContain('vec3 photoCol = photo.rgb');
+    expect(terrainFragmentShader).toContain('albedo = mix(albedo, photoCol, photo.a);');
     expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0;');
     expect(terrainFragmentShader).toContain('if (urban > 0.01 && !photoFull) albedo = urbanPattern(');
   });

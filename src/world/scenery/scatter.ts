@@ -38,6 +38,16 @@ export interface ScatterMeshSpec {
   color?: (rec: number[], i: number, out: Color) => void;
 }
 
+/**
+ * Share of a tile's instances drawn at slant range `ds` (m) from the camera, for a scatter of radius
+ * `R`: everything near, thinning to ~22 % at the edge, none beyond. The aerial photo's low-sun light
+ * fades with the houses' share (terrainShader.ts AERIAL_LIGHT_GLSL, aucklandAerial.ts aerialHouseShare()).
+ */
+export function scatterKeep(ds: number, R: number): number {
+  if (ds > R * 1.02) return 0;
+  return ds < R * 0.35 ? 1 : Math.max(0.22, 1 - ((ds - R * 0.35) / (R * 0.65)) * 0.78);
+}
+
 const _m = new Matrix4();
 const _q = new Quaternion();
 const _p = new Vector3();
@@ -147,9 +157,8 @@ export class TileScatter {
       let n = 0;
       for (const { t, d } of list) {
         // rank-based thinning with slant range: keep everything near, ~22 % at the edge, none beyond
-        const ds = Math.sqrt(d * d + agl2);
-        if (ds > R * 1.02) continue;
-        const keep = ds < R * 0.35 ? 1 : Math.max(0.22, 1 - ((ds - R * 0.35) / (R * 0.65)) * 0.78);
+        const keep = scatterKeep(Math.sqrt(d * d + agl2), R);
+        if (keep <= 0) continue;
         const arr = t.inst.data[spec.kind];
         for (let i = 0; i < arr.length && n < spec.capacity; i += REC) {
           if (arr[i + 10] > keep) continue;

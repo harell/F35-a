@@ -13,6 +13,8 @@
 import { ATMOSPHERE_GLSL } from '../sky/atmosphere';
 import { COAST_MASK_RANGE } from './coastline';
 import { FOOTPATH } from '../scenery/cbdStreets';
+import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
+import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX } from './theaters/aucklandAerial';
 
 export const MAX_TERRAIN_LODS = 16;
 /** Volcanic cones the fragment shader can shade (crater bowls, flank terraces). */
@@ -33,6 +35,28 @@ float coastMaskSD(vec2 wp, out float w) {
 // Fine shoreline wiggle (m) shared by the water and the terrain beach band.
 float coastWiggle(sampler2D detail, vec2 wp) {
   return (texture2D(detail, wp * (1.0 / 57.0)).g - 0.5) * 9.0 + (texture2D(detail, wp * (1.0 / 211.0)).r - 0.5) * 8.0;
+}
+`;
+
+/**
+ * Shared by the terrain and the photo-topped buildings (after ATMOSPHERE_GLSL): the aerial photo's
+ * low-sun light (aucklandAerial.ts aerialLowSun(), the same on the CPU), in units of the sun's light
+ * on ground facing it; 0 by day and under the moon. It stands in for the light the procedural 3D houses
+ * beside the photo catch, so it applies only as far as they are drawn: aerialHouseShare() (the CPU's
+ * aerialHouseShare(), following scatter.ts scatterKeep) of the slant range.
+ */
+export const AERIAL_LIGHT_GLSL = /* glsl */ `
+uniform float uAerialHouseR; // the procedural houses' scatter radius (m); 0 = none
+float aerialLowSun() {
+  float y = max(uSunDir.y, 0.0);
+  float facing = 0.88 * y + 0.47 * sqrt(1.0 - y * y);
+  return ${AERIAL_LOW_SUN_SHARE.toFixed(3)} * max(facing - y, 0.0) * (1.0 - smoothstep(0.2, 0.45, uSunDir.y));
+}
+float aerialHouseShare(float ds) {
+  float R = uAerialHouseR;
+  if (R <= 0.0) return 0.0;
+  float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);
+  return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds));
 }
 `;
 
@@ -106,6 +130,7 @@ void main() {
 export const terrainFragmentShader = /* glsl */ `
 ${ATMOSPHERE_GLSL}
 ${COAST_GLSL}
+${AERIAL_LIGHT_GLSL}
 uniform sampler2D uSurface;
 uniform sampler2D uColor;
 uniform sampler2D uDetail;
@@ -299,13 +324,22 @@ vec3 cbdPattern(vec2 wp, float mpp, vec4 sm, out vec3 emissive) {
   }
   emissive = vec3(0.0);
   if (uNight > 0.0) {
-    // street lamps are fixtures (buildCBD); here: lit shopfronts along the footpaths up close and the
-    // area-average glow of the city centre further out
-    float shop = (1.0 - smoothstep(${FOOTPATH.toFixed(1)}, ${(FOOTPATH + 4).toFixed(1)}, kerb)) * step(0.0, kerb) * (1.0 - park) * step(0.5, fract(h * 5.3));
-    float shopGlow = shop * 0.12 * (1.0 - smoothstep(3.0, 10.0, mpp));
-    float avg = 0.06 * (0.6 + 0.8 * h) * 1.1 * (1.0 - park * 0.8);
-    float glow = mix(shopGlow, avg, smoothstep(3.0, 18.0, mpp));
-    emissive = (vec3(1.0, 0.86, 0.66) * glow + vec3(1.0, 0.72, 0.42) * 0.03 * smoothstep(4.0, 12.0, mpp)) * uNight;
+    // The street lamps are buildCBD's fixtures; this is their light on the ground (nightGlow.ts:
+    // cbdNightGlow() is the same on the CPU): lit carriageways and footpaths (brightest along the kerb,
+    // where the lamps stand), shop windows lighting the footpaths, floodlit plazas and car parks. Each
+    // term is weighted by its share of the pixel footprint and the hashed ones blend to their means, so
+    // the glow keeps its average from street level out to the far constant (#61 item 6).
+    float streetCov = clamp((w * 0.5 + ${FOOTPATH.toFixed(1)} - kerb) / w, 0.0, 1.0);
+    float frontCov = clamp((w * 0.5 + ${(FOOTPATH + 2).toFixed(1)} - kerb) / w, 0.0, 1.0);
+    float pool = 0.7 + 0.45 * (1.0 - smoothstep(0.0, 7.0, -kerb));
+    float kerbPool = mix(pool, 1.0, smoothstep(2.0, 8.0, mpp));
+    float hashBlend = smoothstep(4.0, 12.0, mpp);
+    float shopLit = mix(step(0.5, fract(h * 5.3)), ${CBD_SHOP_LIT.toFixed(3)}, hashBlend);
+    float plazaLit = mix((1.0 - step(0.45, h)) * step(0.5, fract(h * 7.9)), ${CBD_PLAZA_LIT.toFixed(3)}, hashBlend);
+    float nearGlow = streetCov * kerbPool * ${NIGHT_GLOW.cbdStreet.toFixed(3)}
+      + ((frontCov - roadCov) * shopLit * ${NIGHT_GLOW.cbdShop.toFixed(3)} + (1.0 - frontCov) * plazaLit * ${NIGHT_GLOW.cbdPlaza.toFixed(3)}) * (1.0 - park);
+    float glow = mix(nearGlow, ${NIGHT_GLOW.cbdAvg.toFixed(3)} * (1.0 - park * 0.8), smoothstep(24.0, 60.0, mpp));
+    emissive = (vec3(1.0, 0.86, 0.66) * glow + vec3(1.0, 0.72, 0.42) * ${NIGHT_GLOW.haze.toFixed(3)} * hashBlend) * uNight;
   }
   return col;
 }
@@ -450,10 +484,10 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     float lampDot = exp(-dot(lq, lq) * 36.0 * 36.0 / max(6.0, mpp * mpp * 2.0)) * min(1.0, 4.0 / max(mpp, 1.0));
     float nearLamps = road * 0.8 * lampDot * (1.0 - smoothstep(6.0, 18.0, mpp));
     float glowLots = built * step(lh, 0.45) * (1.0 - smoothstep(4.0, 12.0, mpp)) * 0.05;
-    float avgLamps = 0.06 * (0.6 + 0.8 * bh) * (0.6 + 0.5 * dens);
+    float avgLamps = ${NIGHT_GLOW.suburbLamps.toFixed(3)} * (0.6 + 0.8 * bh) * (0.6 + 0.5 * dens);
     float lamps = mix(nearLamps * 1.6, avgLamps, smoothstep(3.0, 18.0, mpp));
     vec3 lampCol = mix(vec3(1.0, 0.58, 0.22), vec3(1.0, 0.86, 0.66), step(0.55, fract(dist.z * 17.0)));
-    emissive = (lampCol * lamps + vec3(1.0, 0.72, 0.42) * (glowLots + 0.03 * dens * smoothstep(4.0, 12.0, mpp))) * uNight * clamp(dens * 2.5, 0.0, 1.0);
+    emissive = (lampCol * lamps + vec3(1.0, 0.72, 0.42) * (glowLots + ${NIGHT_GLOW.haze.toFixed(3)} * dens * smoothstep(4.0, 12.0, mpp))) * uNight * clamp(dens * 2.5, 0.0, 1.0);
   }
   return mix(base, col, clamp(dens * 2.5, 0.0, 1.0));
 }
@@ -608,8 +642,12 @@ void main() {
   vec3 coneN = coneDetail(wp, mpp, albedo);
 
   // The aerial photo replaces the procedural colours (streets, roofs, lots, canopy, rock, cone tints),
-  // with a faint fine grain below its texel size so it isn't smeared when flying low.
-  albedo = mix(albedo, photo.rgb * mix(1.0, 0.92 + 0.16 * dC.r, nearC), photo.a);
+  // with a faint fine grain below its texel size so it isn't smeared when flying low. At night it keeps
+  // only part of its own colour: the rest is the procedural ground's (warmer than the moonlit photo),
+  // which the night lamps and lit windows drawn over it belong to (#61 item 5).
+  vec3 photoCol = photo.rgb * mix(1.0, 0.92 + 0.16 * dC.r, nearC);
+  if (uNight > 0.0) photoCol = mix(photoCol, albedo, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));
+  albedo = mix(albedo, photoCol, photo.a);
 
   // ── Shoreline from the coast mask (15 m) or, outside it, from the true height (the band is at
   //    most ~12 m above sea level even on cliffs, so higher ground skips the lookups) ──
@@ -646,6 +684,9 @@ void main() {
   N = normalize(N + vec3(dn.x, 0.0, dn.y) * bump + vec3(dn2.x, 0.0, dn2.y) * 0.35 * nearC * natural + coneN);
 
   vec3 col = atmoDiffuse(albedo, N, s.a);
+  // under a low sun the photo also takes the light of roofs facing the sun, as the procedural houses
+  // beside it do, as far as they are drawn (#61 item 5)
+  if (photo.a > 0.0) col += albedo * uSunColor * (s.a * aerialLowSun() * aerialHouseShare(dist) * photo.a * 0.3183099);
   // Where the coast mask puts sea but the terrain mesh (coarser LODs a few km out) still stands above
   // the water plane, or shows through a gap in the water, paint it as water rather than as dark wet
   // sand, which read as a black outline along far coasts. Same body + sky-reflection model as the

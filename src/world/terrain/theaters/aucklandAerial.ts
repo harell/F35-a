@@ -20,6 +20,7 @@
  * by the tier that uses it (public/sw.js ON_DEMAND keeps both out of the precache).
  */
 import type { TimeOfDay } from '../../../core/types';
+import { scatterKeep } from '../../scenery/scatter';
 import aerial2048Url from '../data/auckland-aerial-2048.webp?url';
 import aerial4096Url from '../data/auckland-aerial-4096.webp?url';
 
@@ -68,6 +69,52 @@ export function aerialGrade(mean: readonly [number, number, number] | null, targ
   const g = (i: number) => Math.min(1.8, Math.max(0.6, target[i] / Math.max(1e-4, mean[i])));
   return [g(0), g(1), g(2), tod === 'day' ? AERIAL_GRADE_DAY : 1];
 }
+
+/**
+ * Share of the photo lit like a roof facing a low sun (#61 item 5, part 2). The procedural near field
+ * beside the photo shades its painted roofs and its 3D houses by their slope to the sun, so under a
+ * low sun their sun-facing roofs and walls catch it, while the photo, lit as flat ground, only gets
+ * sin(elevation) of the sun: at dawn and dusk it read dark and flat beside bright houses. The photo is
+ * a city of roofs, so this share of it also takes the light of a 28° roof facing the sun (the
+ * procedural houses' pitch), above what flat ground gets. By day a high sun lights flat ground as well
+ * as such a roof, and the moon is high: nothing changes then.
+ */
+export const AERIAL_LOW_SUN_SHARE = 0.8;
+// (the share was set against the houses drawn at full density, near the camera: see aerialHouseShare())
+
+/**
+ * Extra direct light on the photo (in units of the sun's light on ground facing it) for a sun whose
+ * direction has height `sunY` (sin of the elevation). Same as the shaders' aerialLowSun() (AERIAL_LIGHT_GLSL).
+ */
+export function aerialLowSun(sunY: number): number {
+  const y = Math.max(sunY, 0);
+  const facing = 0.88 * y + 0.47 * Math.sqrt(1 - y * y);
+  const t = Math.min(1, Math.max(0, (sunY - 0.2) / 0.25));
+  return AERIAL_LOW_SUN_SHARE * Math.max(facing - y, 0) * (1 - t * t * (3 - 2 * t));
+}
+
+/**
+ * How much of the photo's low-sun light applies at range `ds` (m) from the camera, for the procedural
+ * houses' scatter radius `houseRadius` (config.ts; 0 = none). The light stands in for the 3D houses'
+ * sun-facing roofs and walls beside the photo; they thin with range and stop at their radius (and are
+ * hidden once the camera is higher than it), past which both sides are lit as flat ground. So the light
+ * follows the houses' drawn share (scatter.ts scatterKeep), faded out before their edge rather than cut
+ * there. Same as the shaders' aerialHouseShare() (AERIAL_LIGHT_GLSL).
+ */
+export function aerialHouseShare(ds: number, houseRadius: number): number {
+  if (houseRadius <= 0) return 0;
+  const R = houseRadius;
+  const t = Math.min(1, Math.max(0, (ds - 0.9 * R) / (0.12 * R)));
+  return scatterKeep(ds, R) * (1 - t * t * (3 - 2 * t));
+}
+
+/**
+ * At night the photo's albedo is mixed this far toward the procedural ground's own colour at the same
+ * place (#61 item 5, part 2). The night lamps and lit windows drawn over the photo are the procedural
+ * pattern's (urbanPattern / cbdPattern run under the photo at night for them), and the procedural
+ * ground they light is warmer than the moonlit photo, which stayed a cool grey square in the warm city.
+ */
+export const AERIAL_NIGHT_MIX = 0.5;
 
 const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 

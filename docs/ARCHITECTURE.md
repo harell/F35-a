@@ -158,8 +158,21 @@ the wharf decks and the naval base take it on their top faces, and the house / t
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
 procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
 photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
-day. That only matches the average albedo, not the lighting: the procedural near field brightens sunlit roofs under a
-low sun and has its own night glow, which the photo lacks, so the square's edge still shows at dawn and at night.
+day. That matches the average albedo; two lighting terms do the rest. Under a low sun (dawn, dusk) the photo also
+takes the light of a 28° roof facing the sun on 80 % of its area (`aerialLowSun`, `AERIAL_LIGHT_GLSL`, on the terrain
+and the photo-topped buildings), as the procedural 3D houses round it catch the sun on their sun-facing slopes and
+walls; nothing by day or under the moon. It applies only as far as those houses are drawn: it follows their scatter's
+thinning with slant range (`aerialHouseShare`, the same curve as `scatterKeep` in `scatter.ts`, with the tier's
+`houseRadius` as the `uAerialHouseR` uniform) and is gone beyond their radius, where both sides are lit as flat ground.
+At night the procedural ground still runs under the photo for its lamps and lit windows, and the photo gives half its
+colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
+sit on the warmer procedural colour instead of a cool grey square.
+
+The terrain's night glow constants live in `src/world/terrain/nightGlow.ts`. In the CBD region (`cbdPattern`) the
+streets themselves glow with their lamps (the posts are `buildCBD`'s fixtures), with shop windows on the footpaths and
+some floodlit plazas; every term is weighted by its share of the pixel footprint, and the far constant is the near
+pattern's average over the real street map (`cbdNightGlow`, checked in `tests/world-night.test.ts`), so the CBD's
+ground keeps most of its glow at every range (no dark ring) and is brighter than the suburbs' from afar.
 
 The suburbs' painted lots and the 3D houses on them keep a corridor clear along the road and railway ribbons:
 `src/world/scenery/lotMask.ts` is one bit per 12 m cell, set near a ribbon, and both the terrain shader
