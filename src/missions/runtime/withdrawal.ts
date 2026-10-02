@@ -16,6 +16,9 @@
  *  - a strike jet on a ground-attack task with bombs left is never withdrawing: its EGRESS between
  *    passes sets up the next run (a Defend raid used to be "driven off" after its first pass when
  *    the player parked 25 km away, winning with no shot fired);
+ *  - none of this credits anything until the player has joined the air fight (an air-to-air launch or
+ *    a gun kill): a player holding over the start while bandits spent their missiles on someone else
+ *    and went home used to win c02 with no shot fired (playtest 2026-10-02 bc94edd, 1.3-b);
  *  - the credit sticks (it may still be shot down for the full bonus);
  *  - when one live bandit is left on an active primary 'destroy' objective, DARKSTAR gives a
  *    BRAA call on it every LAST_BANDIT_INTERVAL s so the player can find it.
@@ -165,6 +168,7 @@ export class WithdrawalMonitor {
 
   private credit(ac: AircraftEntity, winchester = false): void {
     const s = this.s;
+    if (s.stats.aamShots === 0 && s.stats.gunKills === 0) return; // the player hasn't joined the fight
     s.withdrawn.add(ac.id);
     s.withdrawSince.delete(ac.id);
     this.winchesterSince.delete(ac.id);

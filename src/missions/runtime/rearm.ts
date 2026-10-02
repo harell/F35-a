@@ -119,8 +119,8 @@ export class RearmController {
     if (need && need !== this.need) this.announce(need, p);
     this.need = need;
 
-    // rearm gate
-    if (this.inGateNow(p) && this.expended(p)) {
+    // rearm gate (free flight: only when Winchester or bingo, so a pass over Whenuapai isn't a pit stop)
+    if (this.inGateNow(p) && this.expended(p) && (!s.script.freeFlight || this.need !== null)) {
       if (!this.gateAnnounced) {
         this.gateAnnounced = true;
         s.hud(`REARMING — HOLD OVER ${this.homeName.toUpperCase()}`, 'info', REARM_HOLD);
@@ -169,6 +169,7 @@ export class RearmController {
     p.flight.fuel = Math.max(p.flight.fuel, this.startFuel);
     s.stats.rearms++;
     s.hud('REARMED', 'good', 3);
-    s.radio.push({ from: `${this.homeName === 'Whenuapai' ? 'Whenuapai' : 'Base'} Ground`, text: `${s.callsign}, rearmed and refuelled. Cleared back into the fight.`, priority: 2 });
+    const onward = s.script.freeFlight ? 'Enjoy the rest of your flight.' : 'Cleared back into the fight.';
+    s.radio.push({ from: `${this.homeName === 'Whenuapai' ? 'Whenuapai' : 'Base'} Ground`, text: `${s.callsign}, rearmed and refuelled. ${onward}`, priority: 2 });
   }
 }

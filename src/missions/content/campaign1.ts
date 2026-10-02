@@ -118,7 +118,7 @@ export const C02: MissionDef = mission({
     autoHints: true,
     parTime: 330,
     groups: [
-      wingmen(1, c02Start),
+      wingmen(1, c02Start, { orders: { holdFireUntilPlayerFires: true } }),
       flight('kiwi', 'f35a', 2, { x: 17000, z: -19000 }, 6000, 243, 200, 'bomber', {
         team: 'blue',
         callsign: 'Kiwi',

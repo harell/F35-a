@@ -46,6 +46,8 @@ const EVAL_PERIOD = 0.1;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
 const DEFAULT_AO = 38_000;
+/** Free flight has no AO: past this half-size (m, near the edge of the 88 km terrain) a nudge back towards the city. */
+const FREE_FLIGHT_EDGE = 42_000;
 /** Seconds before a patrolling enemy fighter group is vectored onto the player. */
 const DEFAULT_COMMIT = 150;
 
@@ -507,7 +509,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const s = this.s;
     const p = s.player;
     if (!p || !p.alive) return;
-    const half = s.script.aoHalfSize ?? DEFAULT_AO;
+    // free flight never fails over the AO: past the edge of the map, a nudge back (no countdown)
+    const free = !!s.script.freeFlight;
+    const half = free ? FREE_FLIGHT_EDGE : (s.script.aoHalfSize ?? DEFAULT_AO);
     const outside = Math.abs(p.position.x) > half || Math.abs(p.position.z) > half;
     if (!outside) {
       if (this.outsideAo > 0) s.hud('BACK IN THE AO', 'info', 2);
@@ -516,6 +520,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
       return;
     }
     this.outsideAo += dt;
+    if (free) {
+      if (this.outsideAo >= this.aoWarnAt) {
+        s.hud('EDGE OF THE MAP — TURN BACK', 'info', 2.5);
+        this.aoWarnAt += 10;
+      }
+      return;
+    }
     if (!this.aoRadioDone) {
       this.aoRadioDone = true;
       s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}, you are leaving the area of operations. Turn back now.`, priority: 3 });

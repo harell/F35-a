@@ -29,13 +29,15 @@ function setup() {
   runner.setup(world, def.recommendedLoadout);
   const radio: string[] = [];
   events.on('radio', (e) => radio.push(e.text));
+  const hud: string[] = [];
+  events.on('hud:message', (e) => hud.push(e.text));
   const tick = (seconds: number) => {
     for (let i = 0; i < seconds * 60; i++) {
       world.step(DT);
       runner.update(world, DT);
     }
   };
-  return { world, runner, radio, tick };
+  return { world, runner, radio, hud, tick };
 }
 
 describe('Instant Action: A Stroll in the Park', () => {
@@ -91,6 +93,35 @@ describe('Instant Action: A Stroll in the Park', () => {
     m.tick(5);
     expect(tower.alive).toBe(false);
     expect(m.runner.state).toBe('running');
+  });
+
+  it('flying off the map is a nudge, not a failure (no AO)', () => {
+    const m = setup();
+    m.tick(1);
+    m.world.player!.position.x = -60_000; // the default AO fails 30 s outside ±38 km
+    m.tick(45);
+    expect(m.runner.state).toBe('running');
+    expect(m.hud).toContain('EDGE OF THE MAP — TURN BACK');
+    expect(m.hud.some((t) => /RETURN TO AO/.test(t))).toBe(false);
+    expect(m.radio.some((t) => /area of operations/.test(t))).toBe(false);
+  });
+
+  it('a low pass over Whenuapai is no pit stop, and a refuel at bingo sends no one back into a fight', () => {
+    const m = setup();
+    m.tick(1);
+    const p = m.world.player!;
+    const over = () => {
+      p.position.set(AKL.whenuapai.x, 400, AKL.whenuapai.z);
+      m.tick(1);
+    };
+    p.flight.fuel *= 0.7; // a real amount used, but not bingo
+    for (let i = 0; i < 8; i++) over();
+    expect(m.hud.some((t) => /REARM/.test(t))).toBe(false);
+    p.flight.fuel = 100; // bingo: the gate refuels
+    for (let i = 0; i < 8; i++) over();
+    expect(m.hud).toContain('REARMED');
+    expect(m.radio.some((t) => /rearmed and refuelled\. Enjoy the rest of your flight\./.test(t))).toBe(true);
+    expect(m.radio.some((t) => /into the fight/.test(t))).toBe(false);
   });
 
   it('crashing still ends it', () => {
