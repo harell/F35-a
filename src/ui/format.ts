@@ -2,7 +2,8 @@
  * F35-A UI — pure formatting / presentation helpers (unit-tested in tests/ui-format.test.ts).
  */
 import type { CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
-import type { LoadoutDef } from '../core/data';
+import { LOADOUTS, type LoadoutDef } from '../core/data';
+import type { LoadoutId } from '../core/types';
 
 /** 367.4 s → "6:07"; ≥ 1 h → "1:02:03". */
 export function formatTime(seconds: number): string {
@@ -56,6 +57,17 @@ export function gradeTone(g: MissionResult['grade']): GradeTone {
 export function stealthRating(rcsMultiplier: number): number {
   const m = Math.max(1, rcsMultiplier);
   return Math.max(0.05, Math.min(1, 1 - Math.log10(m) / 2.2));
+}
+
+/**
+ * The briefing hangar's loadout cards: the mission's allowedLoadouts (known ones only; just the
+ * recommended one if the list is empty), and the card picked when the briefing opens (the
+ * recommended loadout if it is offered, else the first card).
+ */
+export function hangarLoadouts(m: Pick<MissionDef, 'allowedLoadouts' | 'recommendedLoadout'>): { cards: LoadoutId[]; initial: LoadoutId } {
+  const cards = (m.allowedLoadouts?.length ? m.allowedLoadouts : [m.recommendedLoadout]).filter((id) => LOADOUTS[id]);
+  const initial = cards.includes(m.recommendedLoadout) ? m.recommendedLoadout : (cards[0] ?? 'a2a_stealth');
+  return { cards, initial };
 }
 
 /** "4× AIM-120D" style store summary lines grouped by weapon + bay/pylon. */
