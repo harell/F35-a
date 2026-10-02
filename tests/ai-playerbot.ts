@@ -15,7 +15,7 @@
  * Flying is delegated to the AI Autopilot (the same "hands" the AI uses), so the bot's airmanship
  * is steady and the measured differences come from tactics and the difficulty settings.
  */
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
@@ -52,6 +52,20 @@ const _q = new Vector3();
 const _p = new Vector3();
 const _fwd = new Vector3();
 const _aim = new Vector3();
+const _vh = new Vector3();
+const _e = new Vector3();
+const _rot = new Quaternion();
+
+/** The bot pulls the trigger only inside this range (m) with the LCOS pipper on the bandit. */
+const GUN_FIRE_RANGE = 900;
+/** Firing position the bot holds behind a bandit in a tail chase (m). */
+const GUN_TRAIL = 450;
+/** Bandit within this angle off the nose (rad): track it with the pipper (the AI's gunnery cone). */
+const GUN_TRACK_CONE = 0.6;
+/** Integral gain on the pipper error while tracking (1/s); 1.5–2 still missed bandits in 3.5–5 g turns, 4 overshot. */
+const GUN_KI = 3;
+/** Cap on the integral term (rad), against wind-up: twice the proportional lag of a 9 g turn (0.35 rad/s ÷ 2.2). */
+const GUN_I_MAX = 0.3;
 
 export class PlayerBot {
   readonly pilot = new Autopilot();
@@ -68,6 +82,11 @@ export class PlayerBot {
   private lastShot = -99;
   /** Has defended at least one missile (an unarmed aggressor turns cold after that). */
   private defended = false;
+  /** Gun tracking: integral of the pipper error (rad, carried round with the flight path). */
+  private readonly gunI = new Vector3();
+  private readonly gunIVel = new Vector3();
+  private gunITarget = -1;
+  private gunITime = -99;
 
   constructor(opts: Partial<PlayerBotOptions> & { home: Vector3 }) {
     this.opts = { reaction: 0.8, defend: true, shootDiscipline: true, rtbWhenWinchester: true, aggressor: false, tws: false, cap: null, ...opts };
@@ -273,20 +292,56 @@ export class PlayerBot {
     this.crankSide = 0;
 
     if (want === 'gun' && R < 2_500) {
-      // lead pursuit on the LCOS pipper
       _fwd.set(0, 0, -1).applyQuaternion(p.quaternion);
-      const lp = combat.gunLeadPoint(p, world);
       _p.subVectors(tgt.position, p.position).normalize();
-      if (lp) {
+      _vh.copy(p.velocity).normalize();
+      const lp = combat.gunLeadPoint(p, world);
+      // lead pursuit on the LCOS pipper once the bandit is near the nose; until then pull the
+      // nose round onto it (pure pursuit)
+      const tracking = !!lp && _fwd.dot(_p) > Math.cos(GUN_TRACK_CONE);
+      if (lp && tracking) {
         _aim.subVectors(lp, p.position).normalize();
-        it.dir.copy(_fwd).add(_p).sub(_aim).normalize();
+        // move the pipper onto the bandit: the nose has to swing by e = (bandit − pipper). The
+        // autopilot flies the VELOCITY vector, so the correction is added to the velocity
+        // direction and the nose keeps its angle-of-attack offset above the flight path.
+        // (Adding it to the nose instead left the pipper an AoA, 2–3°, off the bandit: never
+        // inside the gate, 0 rounds in the playtest's gun-only runs.)
+        // PI on e, no autopilot feed-forward: that feed-forward is d(dir)/dt, and dir contains
+        // our own velocity, so it fed the jet's own turn rate back into the demand and the
+        // pipper swung 0.06–0.2 rad round a bandit in a 3.5 g turn. Proportional alone lags by
+        // turn rate / gain (0.07 rad); the integral, carried round with the flight path,
+        // removes that lag.
+        _e.subVectors(_p, _aim);
+        const dtI = now - this.gunITime;
+        if (this.gunITarget !== tgt.id || dtI > 0.5) this.gunI.set(0, 0, 0);
+        else {
+          _rot.setFromUnitVectors(this.gunIVel, _vh);
+          this.gunI.applyQuaternion(_rot).addScaledVector(_e, GUN_KI * dtI);
+          this.gunI.addScaledVector(_vh, -this.gunI.dot(_vh));
+          if (this.gunI.length() > GUN_I_MAX) this.gunI.setLength(GUN_I_MAX);
+        }
+        this.gunITarget = tgt.id;
+        this.gunITime = now;
+        this.gunIVel.copy(_vh);
+        it.dir.copy(_vh).add(_e).add(this.gunI).normalize();
+        it.track = false;
         const err = Math.acos(Math.max(-1, Math.min(1, _aim.dot(_p))));
-        if (R < 900 && err < Math.max(0.012, (0.6 * tgt.radius) / R)) p.input.fireGun = true;
-      } else it.dir.copy(_p);
-      it.track = true;
+        if (R < GUN_FIRE_RANGE && err < Math.max(0.012, (0.6 * tgt.radius) / R)) p.input.fireGun = true;
+      } else {
+        it.dir.copy(_p);
+        it.track = true;
+      }
       it.gain = 2.2;
       it.gMax = 9;
-      it.throttle = R < 600 ? 0.7 : 1;
+      // closure: tracking a bandit flying away from us (tail chase), hold a firing position
+      // ~GUN_TRAIL m behind it instead of flying through it; otherwise keep the energy up
+      const away = tgt.velocity.dot(_p);
+      if (tracking && away > 0.7 * tgt.velocity.length()) {
+        it.throttle = -1;
+        it.speed = Math.max(170, Math.min(340, away + (R - GUN_TRAIL) * 0.15));
+        it.allowAb = true;
+        it.allowBrake = true;
+      } else it.throttle = 1;
       this.state = 'GUNS';
       return;
     }
@@ -341,6 +396,8 @@ export interface BalanceResult {
   redShotsAtPlayer: number;
   redHitsOnPlayer: number;
   playerShots: number;
+  /** Gun rounds the player fired. */
+  gunRounds: number;
 }
 
 /**
@@ -359,6 +416,15 @@ export function runBalanceMission(
     reaction?: number;
     /** Randomise red spawn positions (default true). */
     jitter?: boolean;
+    /**
+     * Gun-only probe: the player's stores are emptied every step (so a mission rearm adds no
+     * missiles), the pilot presses on with the gun (as 'committed') and the run doesn't end as
+     * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02): the bot tracks and kills bandits in
+     * trail, and fires in real fights on Recruit, but on Pilot it still loses the fights it would
+     * need to win to get a gun shot (0 rounds in c01 / ia_dogfight_auckland), so a Pilot sweep
+     * measures the bot's dogfighting more than the gun.
+     */
+    gunOnly?: boolean;
     onStep?: (world: SimWorld, p: AircraftEntity, bot: PlayerBot) => void;
   } = {},
 ): BalanceResult {
@@ -373,12 +439,17 @@ export function runBalanceMission(
   const strategy = opts.strategy ?? 'bot';
   const home = p.position.clone();
   const wp = runner.waypoints[0];
-  const bot = new PlayerBot({ home, cap: wp ? wp.position.clone() : null, reaction: opts.reaction ?? 0.8, rtbWhenWinchester: strategy !== 'committed' });
+  const gunOnly = !!opts.gunOnly;
+  const emptyStores = () => {
+    if (gunOnly) for (const s of p.stores) s.count = 0;
+  };
+  emptyStores();
+  const bot = new PlayerBot({ home, cap: wp ? wp.position.clone() : null, reaction: opts.reaction ?? 0.8, rtbWhenWinchester: strategy !== 'committed' && !gunOnly });
   bot.attach(world, p);
   if (strategy === 'autopilot') p.ai = createAiBrain('fighter', { skill: 0.9 });
   const r: BalanceResult = {
     mission: missionId, diff, seed, state: 'running', survived: true, t: 0, playerKills: 0, wingKills: 0, redTotal: 0, redLost: 0,
-    playerFirstShot: -1, redFirstShotAtPlayer: -1, redFirstDetect: -1, playerFirstDetect: -1, redShotsAtPlayer: 0, redHitsOnPlayer: 0, playerShots: 0,
+    playerFirstShot: -1, redFirstShotAtPlayer: -1, redFirstDetect: -1, playerFirstDetect: -1, redShotsAtPlayer: 0, redHitsOnPlayer: 0, playerShots: 0, gunRounds: 0,
   };
   events.on('munition:launch', (e) => {
     if (e.shooter === p) {
@@ -425,12 +496,15 @@ export function runBalanceMission(
         p.input.throttle = 0.85;
       } else bot.update(p, world, dt * 3);
     }
+    const ammo = p.gunAmmo;
     world.step(dt);
+    r.gunRounds += Math.max(0, ammo - p.gunAmmo);
     runner.update(world, dt);
+    emptyStores();
     if (i % 30 === 0) jitter();
     opts.onStep?.(world, p, bot);
     // Winchester and home (≤ 6 km, nothing inbound): the engagement is over for the player
-    if (i % 30 === 0 && p.alive && p.incoming.length === 0 && world.combat.remaining(p, 'aim120') + world.combat.remaining(p, 'aim9x') === 0) {
+    if (!gunOnly && i % 30 === 0 && p.alive && p.incoming.length === 0 && world.combat.remaining(p, 'aim120') + world.combat.remaining(p, 'aim9x') === 0) {
       if (Math.hypot(p.position.x - home.x, p.position.z - home.z) < 6_000) {
         r.state = 'rtb';
         break;
