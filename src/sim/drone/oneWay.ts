@@ -31,6 +31,8 @@ export const SHAHED_DIVE_ANGLE = 35 * DEG;
 const DIVE_SPEEDUP = 1.3;
 /** Gentle route turns: a drone flying its route is not manoeuvring (rad/s). */
 const TURN_RATE = 6 * DEG;
+/** Steepest turn, only for a waypoint inside the gentle turn circle (it would orbit it otherwise). */
+const MAX_TURN_RATE = 20 * DEG;
 /** A waypoint counts as passed inside this horizontal distance (m). */
 const WAYPOINT_RADIUS = 120;
 /** Distance from the target point that counts as a hit (m). */
@@ -148,8 +150,13 @@ export function stepOneWay(ac: AircraftEntity, dt: number, terrain: TerrainQuery
   }
 
   if (f.phase === 'cruise') {
-    const err = wrapPi(headingTo(pos, aimPoint(f)) - f.heading);
-    f.heading = wrap2Pi(f.heading + Math.sign(err) * Math.min(Math.abs(err), TURN_RATE * dt));
+    const aim = aimPoint(f);
+    const err = wrapPi(headingTo(pos, aim) - f.heading);
+    // the circle through the aim point tangent to the track needs 2·V·sin(err)/d: turn at least
+    // that hard (a little more), so a close waypoint is never orbited for ever
+    const need = (2.1 * f.speed * Math.abs(Math.sin(err))) / Math.max(1, hDist(pos, aim));
+    const rate = Math.min(MAX_TURN_RATE, Math.max(TURN_RATE, need));
+    f.heading = wrap2Pi(f.heading + Math.sign(err) * Math.min(Math.abs(err), rate * dt));
     headingDir(f.heading, _dir);
     pos.x += _dir.x * f.speed * dt;
     pos.z += _dir.z * f.speed * dt;

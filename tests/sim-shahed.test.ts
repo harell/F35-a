@@ -141,6 +141,21 @@ describe('Shahed-136: dumb route flight', () => {
     expect(w.aircraft).not.toContain(d);
   });
 
+  it('still reaches a waypoint that sits inside its gentle turn circle, and the target after it', () => {
+    const w = makeWorld();
+    const target = new Vector3(4000, 10, -4000);
+    // fly north 3 km, then a waypoint 250 m back behind the turn
+    const route = [new Vector3(0, 0, -3000), new Vector3(250, 0, -2800)];
+    const d = spawnDrone(w, new Vector3(0, 0, 0), target, route);
+    let closest = Infinity;
+    run(w, 400, () => {
+      closest = Math.min(closest, Math.hypot(d.position.x - 250, d.position.z + 2800));
+      return !d.alive;
+    });
+    expect(closest).toBeLessThan(150);
+    expect(d.oneWay!.impacted).toBe(true);
+  });
+
   it('starts its dive at the dive distance and keeps a straight line down to the target', () => {
     const w = makeWorld();
     const target = new Vector3(0, 10, 0);
