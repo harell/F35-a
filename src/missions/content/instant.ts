@@ -318,7 +318,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
   // strike jets: the chosen Flanker / Fulcrum, else Su-27s (the Su-57 and the heavies don't carry KABs here)
   const strikeType: AircraftType = opts.enemyType === 'mig29' || opts.enemyType === 'su27' || opts.enemyType === 'su35' ? opts.enemyType : 'su27';
   const strikers = Math.max(2, Math.min(4, Math.ceil(n / 2)));
-  const escorts = Math.max(0, Math.min(4, n - strikers));
+  const escorts = Math.max(0, Math.min(2, n - strikers));
   let escortType = pickType(opts, rng);
   if (!FIGHTERS.includes(escortType)) escortType = 'mig29';
 
@@ -334,9 +334,11 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
       task: { kind: 'route', points: [{ ...climb, altitude: low }, { ...ip, altitude: bombAlt }] },
     }),
   ];
-  // Viper 2 takes the escort, never the strikers ("bombers have priority" is the player's job), and
-  // holds fire until the player has fired (issue #60: it won Defend alone)
-  if (n >= 3) groups.push(wingmen(1, lay.defend.player, { loadout: 'a2a_stealth', orders: { ...WING_ORDERS, ignoreGroups: ['strikers'] } }));
+  // Viper 2 takes the escort and never the strikers: "bombers have priority" is the player's job
+  // (issue #60: it won Defend alone). From 6 enemies (4 escorts at the top end) Viper 3 joins: with
+  // one wingman the bot lost Defend at 8 on Pilot 2 of 2.
+  const wings = n >= 6 ? 2 : n >= 3 ? 1 : 0;
+  if (wings > 0) groups.push(wingmen(wings, lay.defend.player, { loadout: 'a2a_stealth', orders: { ignoreGroups: ['strikers'] } }));
   if (escorts > 0) {
     const at = { x: Math.round(from.x + uz * 3000), z: Math.round(from.z - ux * 3000) };
     groups.push(
@@ -401,7 +403,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
       `About ${strikers} Flankers loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
-      ...(n >= 3 ? ['Viper 2 is on your wing: once you open fire it takes the escort. The bombers are yours.'] : []),
+      ...(wings > 0 ? [`${wings > 1 ? 'Vipers 2 and 3 are' : 'Viper 2 is'} on your wing and takes the escort. The bombers are yours.`] : []),
     ],
   };
 }
