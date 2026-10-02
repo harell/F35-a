@@ -1,7 +1,7 @@
 /**
  * F35-A — missions module public API (used by src/game/Game.ts):
  * CAMPAIGN, TRAINING, buildInstantMission, loadProgress, saveProgress, recordResult,
- * nextMissionAfter, terrainPadsFor, createMissionRunner.
+ * nextMissionAfter, nextMissionLabel, terrainPadsFor, createMissionRunner.
  *
  *   schema.ts          MissionScript types (spawns, SAMs, targets, objectives, triggers…)
  *   MissionRunner.ts   runtime (implements MissionRunnerApi) + ./runtime/* helpers
@@ -69,6 +69,18 @@ export function nextMissionAfter(id: string): MissionDef | null {
   const t = TRAINING.findIndex((m) => m.id === id);
   if (t < 0) return null;
   return t + 1 < TRAINING.length ? TRAINING[t + 1] : (CAMPAIGN[0] ?? null);
+}
+
+/**
+ * Label of the debrief button that flies nextMissionAfter(id): 'Next lesson' between training
+ * lessons, 'Start the campaign' after the last lesson, 'Next mission' in the campaign; null when
+ * there is nothing next.
+ */
+export function nextMissionLabel(id: string): string | null {
+  const next = nextMissionAfter(id);
+  if (!next) return null;
+  if (!TRAINING.some((m) => m.id === id)) return 'Next mission';
+  return next.kind === 'training' ? 'Next lesson' : 'Start the campaign';
 }
 
 /** Any campaign / training mission by id (or null). */

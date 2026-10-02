@@ -55,6 +55,7 @@ import {
   createMissionRunner,
   loadProgress,
   nextMissionAfter,
+  nextMissionLabel,
   recordResult,
   missionById,
   saveProgress,
@@ -298,8 +299,8 @@ export class Game {
       if (!result) return 'menu';
       this.trackResult(result);
       // campaign → next mission, training → next lesson (T03 → the first campaign mission)
-      const hasNext = result.success && !!nextMissionAfter(def.id);
-      const choice = await this.ui.showDebrief(result, hasNext);
+      const next = result.success ? nextMissionLabel(def.id) : null;
+      const choice = await this.ui.showDebrief(result, next);
       return choice;
     }
   }
