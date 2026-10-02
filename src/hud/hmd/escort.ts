@@ -6,7 +6,7 @@
  */
 import type { SimWorld } from '../../sim/api';
 import type { GroundTargetEntity } from '../../sim/entities';
-import { vesselNoun } from '../../sim/civil/vessels';
+import { isCivilVessel, vesselNoun } from '../../sim/civil/vessels';
 import type { HudFrame } from './frame';
 
 export interface VesselCounter {
@@ -38,7 +38,7 @@ function counterText(g: GroundTargetEntity): string {
 export function vesselCounters(world: SimWorld): readonly VesselCounter[] {
   out.length = 0;
   for (const g of world.ground) {
-    if (g.kind !== 'ground' || !g.vessel || g.hitsToSink <= 1) continue;
+    if (!isCivilVessel(g) || g.hitsToSink <= 1) continue;
     if (out.length >= MAX) break;
     const c = pool[out.length];
     c.ship = g;

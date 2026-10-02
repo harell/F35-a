@@ -35,6 +35,17 @@ const FIRE_ENGINE_RATE = 0.012;
 const CRASH_CREDIT_WINDOW = 15;
 
 const NON_MUNITION = new Set<string>(['gun', 'collision', 'flak']);
+
+/**
+ * Does this damage count as one whole hit on a civil ship (#19's one-hit rule, the tanker's
+ * hitsToSink)? Any bomb / missile does, and so does a ground entity ramming her: a suicide boat's
+ * contact is applyDamage(ship, …, boat.id, 'collision'). Gun and flak fire, and any other
+ * collision, only take hit points off.
+ */
+function isShipHit(weapon: DamageWeapon, attacker: AnyEntity | null): boolean {
+  if (weapon === 'collision') return attacker?.kind === 'ground';
+  return weapon !== 'gun' && weapon !== 'flak';
+}
 const _pos = new Vector3();
 const _dir = new Vector3();
 const _local = new Vector3();
@@ -193,13 +204,13 @@ export class DamageSystem {
 
   private damageStructure(t: SamSiteEntity | GroundTargetEntity, amount: number, attackerId: number | null, weapon: DamageWeapon): void {
     const host = this.host;
+    const attacker = host.getEntity(attackerId);
     // civil merchant ship: one bomb / missile hit sinks it (arcade rule, #19), or one of the
     // `hitsToSink` hits a mission-flagged ship takes (the escorted tanker); gun damage accumulates
-    if (isCivilVessel(t) && weapon !== 'gun' && weapon !== 'flak' && weapon !== 'collision') {
+    if (isCivilVessel(t) && isShipHit(weapon, attacker)) {
       amount = t.hitsToSink > 1 ? this.countVesselHit(t, attackerId, weapon) : Math.max(amount, t.health);
     }
     t.health -= amount;
-    const attacker = host.getEntity(attackerId);
     const hostileAttacker = attacker instanceof AircraftEntity && isHostile(attacker.team, t.team);
     host.events.emit('damage', { target: t, amount, attackerId, weapon });
     if (t.health > 0) return;
@@ -228,7 +239,7 @@ export class DamageSystem {
   }
 
   /**
-   * One bomb / missile hit on a civil ship that takes several (GroundTargetEntity.hitsToSink): count
+   * One hit (isShipHit) on a civil ship that takes several (GroundTargetEntity.hitsToSink): count
    * it, burn and slow her, and return the damage it does. Each hit takes her down to the next
    * (hitsToSink − hits) / hitsToSink share of her hit points (gun damage already taken stays taken);
    * the last one sinks her.

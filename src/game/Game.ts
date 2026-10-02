@@ -34,6 +34,7 @@ import type {
 import type { CameraMode, ControlInput, LoadoutId, QualityLevel, QualitySettings, Settings } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import { createSimWorld } from '../sim/World';
+import { forceDestroy } from './forceDestroy';
 import { createCombatSystem } from '../sim/weapons/CombatSystem';
 import { createAiBrain } from '../ai';
 import { createEnvironment } from '../world/Environment';
@@ -924,12 +925,12 @@ export class Game {
         w.applyDamage = on ? (target, ...rest) => void (target !== w.player && real(target, ...rest)) : real;
         return true;
       },
-      /** Destroy an entity (id) or every live member of a mission group (id string), credited to the player or to nobody. */
+      /** Destroy an entity (id) or every live member of a mission group (id string), credited to the player or to nobody (a two-hit tanker takes both hits). */
       destroy: (target: number | string, byPlayer = false) => {
         const w = this.session?.world;
         if (!w) return 0;
         const hit = [...w.aircraft, ...w.sams, ...w.ground].filter((e) => e.alive && (typeof target === 'number' ? e.id === target : e.groupId === target));
-        for (const e of hit) w.applyDamage(e, e.maxHealth * 10 + 500, byPlayer ? (w.player?.id ?? null) : null, 'aim120');
+        for (const e of hit) forceDestroy(w, e, byPlayer ? (w.player?.id ?? null) : null);
         return hit.length;
       },
       /** Pin the camera at `pos` looking at `look` (scenery checks without a driver); null hands it back to the rig. */

@@ -503,7 +503,7 @@ export class GroundTargetEntity implements Entity {
    * raise it (GroundTargetDef.hitsToSink: the escorted tanker takes 2); Damage counts `hits`.
    */
   hitsToSink = 1;
-  /** Bomb / missile hits taken so far (civil ship with hitsToSink > 1): burning and slower once hit. */
+  /** Hits taken so far (bombs, missiles, a suicide boat's ram; civil ship with hitsToSink > 1): burning and slower once hit. */
   hits = 0;
   /** Riding at anchor (civil ship): the visual swings slowly about the bow. */
   anchored = false;

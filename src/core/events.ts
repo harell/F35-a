@@ -29,9 +29,10 @@ export interface GameEventMap {
   /** Entity took damage. */
   damage: { target: AnyEntity; amount: number; attackerId: number | null; weapon: WeaponId | MunitionId | 'gun' | 'collision' | 'flak' };
   /**
-   * A bomb / missile hit counted on a civil ship that takes more than one (hitsToSink > 1, the escorted
-   * tanker): `hits` so far, including this one. `hits >= hitsToSink` = this hit sinks her ('destroyed'
-   * follows in the same step).
+   * A hit counted on a civil ship that takes more than one (hitsToSink > 1, the escorted tanker): a
+   * bomb / missile, or a ground entity ramming her (a suicide boat, weapon 'collision'; Damage.ts
+   * isShipHit). `hits` so far, including this one. `hits >= hitsToSink` = this hit sinks her
+   * ('destroyed' follows in the same step).
    */
   'vessel:hit': { ship: GroundTargetEntity; hits: number; hitsToSink: number; attackerId: number | null; weapon: WeaponId | MunitionId | 'gun' | 'collision' | 'flak' };
   /** Entity destroyed (aircraft shot down / crashed, SAM site / ground target destroyed). */

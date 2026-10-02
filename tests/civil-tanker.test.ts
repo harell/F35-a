@@ -22,6 +22,7 @@ import { emptyScript, type MissionScript } from '../src/missions/schema';
 import { validateMission } from '../src/missions/validate';
 import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { vesselCounters } from '../src/hud/hmd/escort';
+import { forceDestroy } from '../src/game/forceDestroy';
 import { SHIP_DIMS } from '../src/render/visuals/shipMotion';
 import { getGroundPrototype } from '../src/render/models/ground';
 import { framingDistance } from '../src/render/targetCam/pose';
@@ -121,6 +122,52 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
     // hitsToSink is only for civil ships: a corvette keeps its plain hit points
     const c = w.spawnGround({ type: 'ship', team: 'red', hitsToSink: 2, position: new Vector3(-3000, 0, -4000) });
     expect(c.hitsToSink).toBe(1);
+  });
+
+  it('hitsToSink only applies to a neutral ship: a red or blue tanker keeps plain hit points and shows no counter', () => {
+    const w = seaWorld();
+    for (const [i, team] of (['red', 'blue'] as const).entries()) {
+      const s = w.spawnGround({ type: 'ship', team, vessel: 'tanker', hitsToSink: 2, position: new Vector3(3000 + i * 1000, 0, -4000), heading: 0 });
+      expect(s.hitsToSink).toBe(1);
+      w.applyDamage(s, 400, null, 'gbu31');
+      expect(s.hits).toBe(0);
+      expect(s.health).toBe(s.maxHealth - 400);
+    }
+    expect(vesselCounters(w)).toHaveLength(0);
+  });
+
+  it('a suicide boat ramming her is one hit (collision from a ground entity); other collisions only take hit points', () => {
+    const w = seaWorld();
+    const t = spawnTanker(w);
+    const boat = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(500, 0, -4000), name: 'Boat' });
+    const hits: GameEventMap['vessel:hit'][] = [];
+    w.events.on('vessel:hit', (e) => hits.push(e));
+    w.applyDamage(t, 100, null, 'collision');
+    expect(t.hits).toBe(0);
+    expect(t.health).toBe(t.maxHealth - 100);
+    w.applyDamage(t, 10, boat.id, 'collision');
+    expect(t.hits).toBe(1);
+    expect(t.alive).toBe(true);
+    expect(hits[0]).toMatchObject({ ship: t, hits: 1, attackerId: boat.id, weapon: 'collision' });
+    w.applyDamage(boat, 10_000, null, 'collision'); // the boat is gone, but its id still names it
+    w.applyDamage(t, 10, boat.id, 'collision');
+    expect(t.alive).toBe(false);
+    expect(t.hits).toBe(2);
+    // and a ram sinks an ordinary civil ship, like a bomb
+    const c = w.spawnGround({ type: 'ship', team: 'neutral', vessel: 'container', position: new Vector3(3000, 0, -4000), heading: 0 });
+    w.applyDamage(c, 10, boat.id, 'collision');
+    expect(c.alive).toBe(false);
+  });
+
+  it('the __f35.destroy() test hook sinks a two-hit tanker in one call', () => {
+    const w = seaWorld();
+    const t = spawnTanker(w);
+    const c = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(3000, 0, -4000) });
+    forceDestroy(w, t, null);
+    forceDestroy(w, c, null);
+    expect(t.alive).toBe(false);
+    expect(t.hits).toBe(2);
+    expect(c.alive).toBe(false);
   });
 
   it('a real JDAM released on the tanker is one hit, not a sinking', () => {
@@ -252,10 +299,15 @@ describe('protecting the tanker (mission)', { timeout: 30_000 }, () => {
     m.runner.dispose?.();
   });
 
-  it('validation: hitsToSink needs a vessel class', () => {
-    const def = tankerMission();
-    def.script.ground[1] = { ...def.script.ground[1], hitsToSink: 2 };
-    expect(validateMission(def).some((e) => /hitsToSink/.test(e))).toBe(true);
+  it('validation: hitsToSink needs a vessel class and team neutral', () => {
+    const noVessel = tankerMission();
+    noVessel.script.ground[1] = { ...noVessel.script.ground[1], team: 'neutral', hitsToSink: 2 };
+    expect(validateMission(noVessel)).toContain('t_tanker: ground cv: hitsToSink needs a vessel class and must be ≥ 1');
+    for (const team of [undefined, 'red', 'blue'] as const) {
+      const def = tankerMission();
+      def.script.ground[0] = { ...def.script.ground[0], team }; // no team = the default, 'red'
+      expect(validateMission(def)).toContain(`t_tanker: ground tk: hitsToSink needs team 'neutral' (only a civil ship takes several hits)`);
+    }
   });
 });
 

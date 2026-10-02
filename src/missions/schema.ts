@@ -230,6 +230,7 @@ export interface GroundTargetDef {
   /**
    * Bomb / missile hits the civil ship takes before it sinks (default 1, #19's rule). The escorted
    * tanker takes 2: after the first it burns and slows, and its hit counter shows on the HUD.
+   * Needs a vessel class and team 'neutral' (validate.ts rejects it otherwise).
    */
   hitsToSink?: number;
 }
