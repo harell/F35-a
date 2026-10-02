@@ -156,7 +156,8 @@ describe('#64: the Harbour Bridge pays once in T01', () => {
   it("a 'bridge' objective validates in Auckland only", () => {
     const t01 = byId('t01');
     expect(validateMission(t01)).toEqual([]);
-    const elsewhere = { ...t01, theater: 'desert' } as MissionDef;
+    // through unknown: the theatre list may shrink to Auckland only (#73)
+    const elsewhere = { ...t01, theater: 'desert' } as unknown as MissionDef;
     expect(validateMission(elsewhere).some((e) => /o_bridge.*Harbour Bridge/.test(e))).toBe(true);
   });
 });
