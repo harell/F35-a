@@ -44,7 +44,7 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
     expect(difficultyAtLeast('veteran', sa15.minDifficulty)).toBe(true);
   });
   it('Instant Action strike: the SA-15 Tor only appears from Veteran up, as in c04 (playtest 2026-10-02, 1.1-b)', () => {
-    for (const theater of ['auckland', 'desert'] as const) {
+    for (const theater of ['auckland'] as const) {
       const def = buildInstantMissionSeeded({ mode: 'strike', theater, timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, 1);
       const sa15 = def.script.sams.find((s) => s.type === 'sa15')!;
       expect(difficultyAtLeast('pilot', sa15.minDifficulty)).toBe(false);

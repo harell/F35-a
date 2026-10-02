@@ -123,8 +123,8 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   const all = st.labels === true;
   const key = st.labels === 'key' || all;
 
-  // faint coastline + islands (Auckland theatre): the cached tactical-map Path2D, transformed heading-up
-  if (st.coast && (ctx.mission?.def?.theater ?? 'auckland') === 'auckland') {
+  // faint coastline + islands: the cached tactical-map Path2D, transformed heading-up
+  if (st.coast) {
     const ch = chartPaths();
     if (ch) {
       const k = 1000 * scale;

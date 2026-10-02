@@ -296,8 +296,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   /* background + chart */
   pen.setFill(C.sea);
   g.fillRect(0, 0, L.W, L.H);
-  const auckland = (ctx.mission?.def?.theater ?? 'auckland') === 'auckland';
-  const ch = auckland ? chartPaths() : null;
+  const ch = chartPaths();
   if (ch) {
     const d = pen.dpr;
     const s = k * 1000; // px per km
@@ -611,19 +610,17 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   const legendBottom = drawLegend(f, tm, legendOpen);
 
   /* landmark names last, only where they don't collide with a symbol or label */
-  if (auckland) {
-    pen.setFont(9);
-    pen.setAlign('center', 'middle');
-    for (const lm of LANDMARKS) {
-      const a = AKL[lm.id];
-      if (!a) continue;
-      tacProject(proj, a.x, a.z, pt);
-      if (pt.x < L.left + 20 || pt.x > L.right - 20 || pt.y < L.top + 10 || pt.y > L.bottom - 10) continue;
-      const hw = pen.textWidth(lm.text, 9) / 2 + 3;
-      if (occ.hits(pt.x - hw, pt.y - 7, pt.x + hw, pt.y + 7)) continue;
-      pen.setFill(C.place);
-      g.fillText(lm.text, pt.x, pt.y);
-    }
+  pen.setFont(9);
+  pen.setAlign('center', 'middle');
+  for (const lm of LANDMARKS) {
+    const a = AKL[lm.id];
+    if (!a) continue;
+    tacProject(proj, a.x, a.z, pt);
+    if (pt.x < L.left + 20 || pt.x > L.right - 20 || pt.y < L.top + 10 || pt.y > L.bottom - 10) continue;
+    const hw = pen.textWidth(lm.text, 9) / 2 + 3;
+    if (occ.hits(pt.x - hw, pt.y - 7, pt.x + hw, pt.y + 7)) continue;
+    pen.setFill(C.place);
+    g.fillText(lm.text, pt.x, pt.y);
   }
   return legendBottom;
 }

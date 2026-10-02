@@ -4,7 +4,8 @@
  *  - 1.1-k: it never used the GBU-53/B StormBreaker, so a strike_sdb2 loadout dropped nothing
  *    (0 wins in 16 runs, 7 HUNG);
  *  - 1.1-l: its rearm leg always flew to Whenuapai, so in the procedural Instant Action theatres
- *    (rearm at the scenery's first airbase) it never rearmed (16 of 17 HUNG rows in an IA sweep);
+ *    (rearm at the scenery's first airbase) it never rearmed (16 of 17 HUNG rows in an IA sweep).
+ *    Those theatres are gone (issue #73): every mission rearms at Whenuapai again;
  *  - 1.1-m: `ia_<mode>_<theater>` ids built a fresh random mission on every missionById() call,
  *    so the same id, difficulty and seed gave different runs (and the sweep built the terrain
  *    from one mission and flew another).
@@ -27,16 +28,17 @@ function terrainFor(id: string): TerrainQuery {
 
 describe('1.1-m: Instant Action ids are reproducible', () => {
   it('missionById(ia_*) builds the same mission every time, a different one per id', () => {
-    const a = missionById('ia_strike_desert')!;
-    const b = missionById('ia_strike_desert')!;
+    const a = missionById('ia_dogfight_auckland')!;
+    const b = missionById('ia_dogfight_auckland')!;
     expect(b.seed).toBe(a.seed);
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-    expect(missionById('ia_strike_islands')!.seed).not.toBe(a.seed);
+    expect(JSON.stringify(missionById('ia_survival_auckland'))).not.toBe(JSON.stringify(a));
   });
   it('the Instant Action menu (buildInstantMission) still rolls a fresh mission per flight', () => {
-    const opts = { mode: 'strike', theater: 'desert', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 } as const;
-    const seeds = new Set(Array.from({ length: 4 }, () => buildInstantMission(opts).seed));
-    expect(seeds.size).toBeGreaterThan(1);
+    // Auckland's terrain seed is fixed (AKL_SEED); the layout's rng (mixed bandit types) is not
+    const opts = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 8 } as const;
+    const rolls = new Set(Array.from({ length: 4 }, () => JSON.stringify(buildInstantMission(opts).script.groups)));
+    expect(rolls.size).toBeGreaterThan(1);
   });
 });
 
@@ -51,26 +53,9 @@ describe('1.1-k: the bot flies the GBU-53/B StormBreaker', () => {
 });
 
 describe('1.1-l: the bot rearms where the mission rearms it', () => {
-  it('procedural theatre: home is the first scenery airbase (Auckland: Whenuapai)', () => {
-    const def = missionById('ia_strike_islands')!;
-    const base = def.features.find((f) => f.type === 'airbase')!;
-    expect(rearmHome(def)).toMatchObject({ x: base.x, z: base.z });
-    expect(Math.hypot(base.x - AKL.whenuapai.x, base.z - AKL.whenuapai.z)).toBeGreaterThan(5_000);
-    expect(rearmHome(missionById('c04')!)).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
-  });
-  it('ia_strike_islands: Winchester after the first sortie, the bot flies to the home base (was Whenuapai)', { timeout: 60_000 }, () => {
-    // (one sortie now wins on Recruit since the Tor is Veteran+, so check the rearm leg, not a completed rearm)
-    const def = missionById('ia_strike_islands')!;
-    const home = rearmHome(def)!;
-    const r = runPlaythrough(def, 'recruit', 0, terrainFor('ia_strike_islands'), { maxT: 620, log: true });
-    const w = r.events.findIndex((l) => /WINCHESTER/.test(l));
-    expect(w, r.objectives).toBeGreaterThan(0);
-    const leg = r.events
-      .slice(w)
-      .map((l) => / BOT REARM pos=\((-?[\d.]+),(-?[\d.]+)\)km/.exec(l))
-      .filter((m): m is RegExpExecArray => !!m)
-      .map((m) => Math.hypot(Number(m[1]) * 1000 - home.x, Number(m[2]) * 1000 - home.z));
-    expect(leg.length, JSON.stringify(r.modes)).toBeGreaterThan(3);
-    expect(leg[leg.length - 1], 'closing on the home base').toBeLessThan(leg[0] - 5_000);
+  it('Auckland, the only theatre: campaign and Instant Action missions rearm at Whenuapai', () => {
+    for (const id of ['c04', 'ia_strike_auckland', 'ia_sam_gauntlet_auckland']) {
+      expect(rearmHome(missionById(id)!), id).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
+    }
   });
 });

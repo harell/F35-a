@@ -267,7 +267,7 @@ export interface MissionDef {
   kind: 'campaign' | 'training' | 'instant';
   /** Order within its list (campaign mission number). */
   index: number;
-  /** "Operation Desert Lance" */
+  /** "Harbour Watch" */
   title: string;
   /** One-line summary for list screens. */
   subtitle: string;

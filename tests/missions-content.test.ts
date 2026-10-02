@@ -87,9 +87,9 @@ describe('missions: campaign & training content', () => {
 
 describe('missions: instant action generator', () => {
   const modes: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
-  const theaters: TheaterId[] = ['auckland', 'desert', 'islands', 'mountains', 'arctic'];
+  const theaters: TheaterId[] = ['auckland'];
 
-  it('builds a valid mission for every mode × theatre × size', () => {
+  it('builds a valid mission for every mode × size, in Auckland', () => {
     for (const mode of modes) {
       for (const theater of theaters) {
         for (const enemyCount of [1, 4, 8]) {
@@ -113,7 +113,7 @@ describe('missions: instant action generator', () => {
   });
 
   it('survival uses endless waves', () => {
-    const def = buildInstantMission({ mode: 'survival', theater: 'desert', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 2 });
+    const def = buildInstantMission({ mode: 'survival', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 2 });
     expect(def.script.survival).toBeTruthy();
     expect(def.id.startsWith('ia_survival')).toBe(true);
   });
@@ -129,7 +129,7 @@ describe('missions: instant action generator', () => {
 
   it('sam gauntlet: the briefing warns of the fighter CAP when there is one (playtest 2026-10-02, 2.1-f)', () => {
     for (const enemyCount of [2, 4, 8]) {
-      const def = buildInstantMission({ mode: 'sam_gauntlet', theater: 'desert', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount });
+      const def = buildInstantMission({ mode: 'sam_gauntlet', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount });
       const cap = def.script.groups.some((g) => g.id === 'cap');
       expect(/fighters/i.test(def.briefing.join(' ')), `enemyCount ${enemyCount}`).toBe(cap);
     }

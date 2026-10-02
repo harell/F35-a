@@ -689,7 +689,7 @@ export function runPlaythrough(
       jittered.add(a.id);
       a.position.x += (jit() - 0.5) * 5_000;
       a.position.z += (jit() - 0.5) * 5_000;
-      // never inside or just above a hill (the procedural theatres have 2 km mountains; Auckland tops out < 500 m)
+      // never inside or just above a hill (the Waitākere and Hunua ranges reach 474 / 688 m)
       const v = Math.hypot(a.velocity.x, a.velocity.z) || 1;
       a.position.y = Math.max(a.position.y + (jit() - 0.5) * 800, 600, spawnFloor(terrain, a.position.x, a.position.z, a.velocity.x / v, a.velocity.z / v) + 50);
     }

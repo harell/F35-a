@@ -1,5 +1,5 @@
 /**
- * F35-A UI — briefing intel map (Canvas 2D): Auckland chart (or a generic grid for other theatres),
+ * F35-A UI — briefing intel map (Canvas 2D): Auckland chart (a plain dark fill if it can't be drawn),
  * SAM threat rings, enemy air groups, targets, friendlies, airbases, the player start with heading,
  * the waypoint route, a north arrow and a scale bar.
  *
@@ -173,39 +173,20 @@ export function drawIntelMap(canvas: HTMLCanvasElement, m: MissionDef, w: number
   const u = Math.max(0.85, Math.min(1.4, Math.min(w, h) / 300));
 
   // ── base chart ──
-  let charted = false;
-  if (m.theater === 'auckland') {
-    charted = drawAucklandChart(g, w, h, { scale: v.scale * 1000, x0: v.x0 / 1000, z0: v.z0 / 1000 }, {
-      land: '#10222b',
-      water: '#050d14',
-      coast: 'rgba(120,220,245,0.7)',
-      coastWidth: 1,
-      relief: 'rgba(150,220,200,0.12)',
-      urban: 'rgba(255,220,150,0.07)',
-    });
-  }
+  const charted = drawAucklandChart(g, w, h, { scale: v.scale * 1000, x0: v.x0 / 1000, z0: v.z0 / 1000 }, {
+    land: '#10222b',
+    water: '#050d14',
+    coast: 'rgba(120,220,245,0.7)',
+    coastWidth: 1,
+    relief: 'rgba(150,220,200,0.12)',
+    urban: 'rgba(255,220,150,0.07)',
+  });
   if (!charted) {
     const grd = g.createLinearGradient(0, 0, w, h);
     grd.addColorStop(0, '#0c1a20');
     grd.addColorStop(1, '#081217');
     g.fillStyle = grd;
     g.fillRect(0, 0, w, h);
-    // procedural "contours" so non-Auckland theatres don't look empty
-    g.strokeStyle = 'rgba(120,200,220,0.07)';
-    g.lineWidth = 1;
-    const seed = m.seed || 1;
-    for (let k = 0; k < 9; k++) {
-      g.beginPath();
-      for (let i = 0; i <= 64; i++) {
-        const t = (i / 64) * Math.PI * 2;
-        const r = (0.12 + k * 0.05) * Math.min(w, h) * (1 + 0.18 * Math.sin(t * 3 + seed * 0.7 + k) + 0.1 * Math.cos(t * 5 + seed));
-        const px = w * (0.5 + 0.15 * Math.sin(seed)) + Math.cos(t) * r * 1.3;
-        const py = h * 0.5 + Math.sin(t) * r;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.stroke();
-    }
   }
 
   // ── grid (5 km) ──

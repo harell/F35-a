@@ -97,7 +97,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     brief.innerHTML =
       `<p class="br-lead">${escapeHtml(m.subtitle)}</p>` +
       m.briefing.map((p) => `<p>${escapeHtml(p)}</p>`).join('') +
-      `<p class="br-sig mono">— ${m.theater === 'auckland' ? 'DARKSTAR / RNZAF BASE AUCKLAND' : 'COMMAND'}</p>`;
+      `<p class="br-sig mono">— DARKSTAR / RNZAF BASE AUCKLAND</p>`;
     pageEls.set('brief', brief);
 
     // objectives
@@ -214,6 +214,6 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     host.present(el, { bg: true, back: () => (closeSheet?.() ? undefined : finish(null)), focus: fly });
     requestAnimationFrame(() => requestAnimationFrame(redraw));
     // the real coastline may still be downloading (prefetched at app start): redraw when it lands
-    if (m.theater === 'auckland' && !aucklandLinz()) void loadAucklandLinz().then((ok) => ok && redraw());
+    if (!aucklandLinz()) void loadAucklandLinz().then((ok) => ok && redraw());
   });
 }

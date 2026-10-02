@@ -2,13 +2,13 @@
  * DEV ONLY — render integration sandbox (labs/sandbox.html): the REAL Environment, SimWorld, CombatSystem
  * and AI with this module's EntityRenderer + Effects + CameraRig, without the missions module.
  *
- *   /labs/sandbox.html?view=chase|cockpit|orbit|target|missile|flyby|tactical&theater=desert&tod=day&q=medium&loadout=a2a_beast
+ *   /labs/sandbox.html?view=chase|cockpit|orbit|target|missile|flyby|tactical&tod=day&q=medium&loadout=a2a_beast
  */
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 import { EventBus } from '../../core/events';
 import { DEFAULT_SETTINGS, DIFFICULTIES, QUALITY_PRESETS } from '../../core/data';
 import type { FrameContext } from '../../core/contracts';
-import type { CameraMode, LoadoutId, QualityLevel, TheaterId, TimeOfDay } from '../../core/types';
+import type { CameraMode, LoadoutId, QualityLevel, TimeOfDay } from '../../core/types';
 import { createEnvironment } from '../../world/Environment';
 import { createSimWorld } from '../../sim/World';
 import { createCombatSystem } from '../../sim/weapons/CombatSystem';
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   renderer.setSize(innerWidth, innerHeight, false);
   const scene = new Scene();
   const env = await createEnvironment(scene, renderer, {
-    theater: (q.get('theater') ?? 'desert') as TheaterId,
+    theater: 'auckland',
     timeOfDay: (q.get('tod') ?? 'day') as TimeOfDay,
     weather: 'scattered',
     seed: 1234,

@@ -110,7 +110,7 @@ describe('render SAM sites and ground targets', () => {
   const ground: GroundTargetType[] = ['ewr', 'bunker', 'fuel', 'hangar', 'parked_jet', 'truck', 'tank', 'ship', 'factory', 'bridge'];
   for (const t of ground) {
     it(`${t}: builds within budget`, () => {
-      const p = getGroundPrototype(t, 'desert');
+      const p = getGroundPrototype(t, 'green');
       const tris = trianglesOf(p.root);
       expect(tris).toBeGreaterThan(10);
       expect(tris).toBeLessThan(12000);

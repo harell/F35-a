@@ -48,10 +48,10 @@ function realRun(def: MissionDef, difficulty: Difficulty = 'pilot') {
 }
 
 describe('missions: defend the Wiri oil terminal', () => {
-  it('is reachable by id and valid in every theatre', () => {
+  it('is reachable by id and valid', () => {
     expect(missionById('ia_defend_auckland')?.kind).toBe('instant');
-    for (const theater of ['auckland', 'desert', 'islands', 'mountains', 'arctic'] as const) {
-      const def = buildInstantMissionSeeded({ mode: 'defend', theater, timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, 1);
+    for (const seed of [1, 2, 3]) {
+      const def = buildInstantMissionSeeded({ mode: 'defend', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, seed);
       expect(validateMission(def)).toEqual([]);
     }
   });
@@ -231,14 +231,14 @@ describe('missions: defend the Wiri oil terminal', () => {
 });
 
 /**
- * Playtest 2026-10-02 (finding 1.1-a): in the procedural theatres the raid's "low" 700 m is above sea
- * level, and a Mountains or Arctic terrain seed can put a hill there. The strikers spawned inside it, died
- * at t = 0 and the mission won itself with no player input.
+ * Playtest 2026-10-02 (finding 1.1-a): a raid's "low" altitude is above sea level, and in a procedural
+ * theatre (since removed, issue #73) a hill stood there: the strikers spawned inside it, died at t = 0 and
+ * the mission won itself with no player input. Over Auckland's real terrain the raid must still fly.
  */
-describe('defend: the raid survives the procedural terrain', () => {
-  for (const theater of ['mountains', 'arctic'] as const) {
+describe('defend: the raid survives the terrain', () => {
+  for (const theater of ['auckland'] as const) {
     it(`${theater}: the strikers spawn above the ground and are still flying 60 s in`, { timeout: 60_000 }, () => {
-      for (const seed of [1, 2, 3]) {
+      for (const seed of [1]) {
         const def = buildInstantMissionSeeded({ mode: 'defend', theater, timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, seed);
         const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater, seed: def.seed, resolution: 512, features: allFeatures(theater, []), pads: terrainPadsFor(def) })));
         const events = new EventBus();
