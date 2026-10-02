@@ -9,6 +9,7 @@ import type {
   AircraftType,
   CameraMode,
   ControlInput,
+  ControlScheme,
   Difficulty,
   DifficultyParams,
   LoadoutId,
@@ -215,6 +216,11 @@ export type InputCommand =
 export interface InputApi {
   /** Player flight controls (throttle is a persistent lever, not spring-loaded). */
   readonly controls: ControlInput;
+  /**
+   * The scheme actually flying: 'stick' when tilt is selected but no orientation data arrived
+   * (sensor missing, permission denied), so the touch stick took over.
+   */
+  readonly activeScheme: ControlScheme;
   /** Poll devices, update touch controls & labels. */
   update(dt: number, ctx: FrameContext): void;
   on(cmd: InputCommand, fn: () => void): () => void;

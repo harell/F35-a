@@ -496,12 +496,25 @@ export function drawWarningBand(f: HudFrame): boolean {
 const hpTxt = new NumText(0, 'AIRFRAME ', '%');
 const engTxt = new NumText(0, 'ENG ', '%');
 
+function healthFrac(p: HudFrame['p']): number {
+  return p.maxHealth > 0 ? p.health / p.maxHealth : 1;
+}
+
+/** Height drawDamage takes (0: nothing to show), without drawing it. */
+export function damageHeight(f: HudFrame): number {
+  const hp = healthFrac(f.p);
+  const d = f.p.damage;
+  if (hp > 0.985 && d.engine < 0.05 && d.hydraulics < 0.05 && !d.fire && d.fuelLeak < 0.05) return 0;
+  const tags = d.engine > 0.05 || d.hydraulics > 0.05 || d.fuelLeak > 0.05 || d.fire;
+  return (11 + 13 + (tags ? 14 : 0) + 4) * f.L.u;
+}
+
 export function drawDamage(f: HudFrame, x: number, y: number): number {
   const { p, pen, pal, L } = f;
   const u = L.u;
-  const hp = p.maxHealth > 0 ? p.health / p.maxHealth : 1;
+  const hp = healthFrac(p);
   const d = p.damage;
-  if (hp > 0.985 && d.engine < 0.05 && d.hydraulics < 0.05 && !d.fire && d.fuelLeak < 0.05) return y;
+  if (damageHeight(f) === 0) return y;
   const col = hp < 0.35 ? pal.danger : hp < 0.7 ? pal.warn : pal.main;
   pen.g.globalAlpha = 0.3 + 0.7 * f.declutter;
   pen.text(hpTxt.get(hp * 100), x, y, col, 12, 'left');

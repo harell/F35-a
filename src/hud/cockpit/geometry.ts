@@ -76,6 +76,29 @@ export function pcdScreenRect(fovDeg: number, W: number, H: number): { left: num
   return { left: W / 2 - halfX, right: W / 2 + halfX, top: topY, bottom: botY, visible };
 }
 
+/**
+ * Where the PCD crosses screen row `y` at the default head pose (pure; tests): its left / right x
+ * (a row of the tilted panel is a level line, so texture u maps linearly between them), or null
+ * when the row misses the panel.
+ */
+export function pcdRowSpan(fovDeg: number, W: number, H: number, y: number): { left: number; right: number } | null {
+  const t = Math.tan((fovDeg * Math.PI) / 360);
+  const aspect = W / H;
+  const halfAng = Math.atan(PCD.height / 2 / PCD.dist);
+  const ang = PCD.topAngle + halfAng;
+  const cyE = -Math.sin(ang) * PCD.dist;
+  const czE = -Math.cos(ang) * PCD.dist;
+  const upY = Math.cos(ang);
+  const upZ = -Math.sin(ang);
+  // the ray through row y has eye-frame slope k = Y / -Z; the panel point is centre - up * h * s
+  const k = ((H / 2 - y) / (H / 2)) * t;
+  const s = (cyE + k * czE) / (PCD.height * (upY + k * upZ));
+  if (!(Math.abs(s) <= 0.5)) return null;
+  const z = czE - upZ * PCD.height * s;
+  const halfX = ((PCD.width / 2) / -z / (t * aspect)) * (W / 2);
+  return { left: W / 2 - halfX, right: W / 2 + halfX };
+}
+
 /** Centre, orientation and size of the PCD screen plane facing the eye. */
 export function pcdFrame(out: { center: Vector3; quat: Quaternion }): { center: Vector3; quat: Quaternion } {
   const halfAng = Math.atan(PCD.height / 2 / PCD.dist);

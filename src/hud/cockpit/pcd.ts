@@ -1,9 +1,12 @@
 /**
  * PCD manager: one wide CanvasTexture (panoramic cockpit display) split into portals.
  *
- *   [ SMS / FUEL / ENG / ICAWS ] [        TSD / RDR        ] [ RWR / ICAWS / FUEL / ENG ]
+ *   | [ SMS / FUEL / ENG / ICAWS ] [        TSD / RDR        ] [ RWR / ICAWS / FUEL / ENG ] |
  *
  * (left-handed layout: the RWR portal moves to the left, away from the right-hand throttle cluster.)
+ * A dark bezel (PCD_BEZEL) at each outer edge keeps the outer portals inside the free band between
+ * the touch clusters: at 844x390 the left-handed FIRE button covered the right edge of the stores
+ * page (playtest 2026-10-02, 4.2-f; tests/ui-first-flight.test.ts).
  * Tapping a portal opens it in the large 2D zoom overlay (zoom.ts, drawn by the HUD) where tabs switch
  * its page. The canvas is redrawn at a throttled rate (8–10 Hz, 5 Hz on low quality) and uploaded only
  * then. (The UFD strip was removed in iteration 2: at ~6 CSS px on a phone it was unreadable and only
@@ -28,6 +31,19 @@ export const PCD_W = 1024;
 /** Texture height follows the screen's aspect (no stretched texels). */
 export const PCD_H = Math.round((PCD_W * PCD.height) / PCD.width / 2) * 2;
 export const TITLE_H = 36;
+/** Blank texels at each outer edge of the display (see the header). */
+export const PCD_BEZEL = 32;
+/** Outer portal width (texels): the SMS / FUEL rows need it all; the centre portal gives up the bezels. */
+const SIDE_W = 256;
+const CENTRE_W = PCD_W - 2 * PCD_BEZEL - 2 * SIDE_W;
+/** Portal spans along the texture (texels), left to right: outer, centre (TSD / RDR), outer. */
+export const PCD_PORTALS: readonly { readonly x: number; readonly w: number }[] = [
+  { x: PCD_BEZEL, w: SIDE_W },
+  { x: PCD_BEZEL + SIDE_W, w: CENTRE_W },
+  { x: PCD_BEZEL + SIDE_W + CENTRE_W, w: SIDE_W },
+];
+/** Inset (texels) of a portal's frame inside its span. */
+export const PORTAL_INSET = 4;
 
 const SMS_PAGES: PageId[] = ['SMS', 'FUEL', 'ENG', 'ICAWS'];
 const RWR_PAGES: PageId[] = ['RWR', 'ICAWS', 'FUEL', 'ENG'];
@@ -37,9 +53,9 @@ export class PcdDisplay {
   readonly texture: CanvasTexture;
   private readonly pen: Pen;
   private readonly portals: Portal[] = [
-    { x: 0, w: 256, pages: SMS_PAGES, index: 0 },
-    { x: 256, w: 512, pages: ['TSD', 'RDR'], index: 0 },
-    { x: 768, w: 256, pages: RWR_PAGES, index: 0 },
+    { ...PCD_PORTALS[0], pages: SMS_PAGES, index: 0 },
+    { ...PCD_PORTALS[1], pages: ['TSD', 'RDR'], index: 0 },
+    { ...PCD_PORTALS[2], pages: RWR_PAGES, index: 0 },
   ];
   private leftHanded = false;
   private acc = 1;
@@ -178,8 +194,8 @@ export class PcdDisplay {
     pen.setFill(PC.bg);
     g.fillRect(0, 0, PCD_W, PCD_H);
     for (const portal of this.portals) {
-      const x = portal.x + 4;
-      const w = portal.w - 8;
+      const x = portal.x + PORTAL_INSET;
+      const w = portal.w - 2 * PORTAL_INSET;
       const page = portal.pages[portal.index];
       // portal frame + title bar
       pen.setFill(PC.portal);

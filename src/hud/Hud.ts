@@ -25,7 +25,7 @@ import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, dra
 import { HudState, makeFrame, type HudMode } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
-import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom } from './hmd/overlays';
+import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
 import { drawPip, pipView, resetPip, stepPip } from './hmd/pip';
@@ -45,7 +45,7 @@ import {
   reserveSymbols,
   waypointBearing,
 } from './hmd/targets';
-import { drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
+import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
 import { reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
@@ -58,6 +58,9 @@ const DECLUTTER_SPAN = 0.14;
 const WARNING_LABELS = new Set(Object.values(WARNING_INFO).map((w) => w.label));
 /** Tap radius on the tactical map (smaller than the HMD's so empty-map taps zoom). */
 const TAC_PICK_RADIUS = 26;
+
+/** Seconds a lesson's objectives summary waits for the column to stay clear of hints before it shows. */
+const OBJ_SETTLE = 0.4;
 
 export const createHud: CreateHud = (canvas, events) => {
   const g2 = canvas.getContext('2d', { alpha: true });
@@ -427,13 +430,25 @@ export const createHud: CreateHud = (canvas, events) => {
       // top-left column: objectives (briefly), damage, mission hint — not in the missile / target cams
       // (the fight fills the frame there)
       const colTop = colY;
+      let objHold = false;
       if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') {
-        colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
-        colY = drawDamage(f, L.colX, colY);
         // (never down onto the weapon block, which rises above the throttle cluster on short screens)
         const hintMax = hmd && Number.isFinite(zoneExt.wpnTop) ? Math.min(L.colBottom, zoneExt.wpnTop - 10 * L.u) : L.colBottom;
+        // a lesson's hint outranks the objectives summary: when both (and the damage block between them)
+        // don't fit under the radio, the summary waits, its time held, until no hint is up — even if a
+        // radio call ends meanwhile, so it doesn't toggle with the radio — and then a moment longer,
+        // so a hint that arrives just after doesn't flash it (playtest 2026-10-02, 4.2-c)
+        if (ctx.mission?.def?.kind === 'training') {
+          const need = hintHeight(f, L.colW);
+          if (need === 0) st.objYield = false;
+          else if (!st.objYield) st.objYield = drawObjectives(f, L.colX, colY, false, L.colW, 6, true) + damageHeight(f) + need > hintMax;
+          objHold = st.objYield || st.objFree < OBJ_SETTLE;
+        }
+        if (!objHold) colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
+        colY = drawDamage(f, L.colX, colY);
         colY = drawHint(f, L.colX, colY + 2 * L.u, L.colW, hintMax);
       } else colY = drawDamage(f, L.colX, colY);
+      st.objHold = objHold;
       zoneExt.colBottom = colY > colTop + 1 ? colY : NaN;
 
       // target camera window chrome (the 3D view itself is rendered by Game → TargetCam)
