@@ -2,6 +2,7 @@
  * Open data 2 (issue #33): the port, marinas, Devonport Naval Base, Wiri oil terminal and Eden Park from the
  * OpenStreetMap layer (scenery/aucklandSites.ts), the ships' berths on the real wharves, the Wiri tank table
  * (core/sites.ts) in step with the bake, the Harbour Bridge piers from OSM, and the hand-placed fallback.
+ * Also issue #48: the narrow basins (Viaduct, Silo, Westhaven, west of Fergusson) stay below the water plane.
  */
 import { describe, expect, it } from 'vitest';
 import { OSM_BYTES } from './linz-setup';
@@ -103,6 +104,55 @@ describe('marinas, piers and breakwaters', () => {
     expect(B.triangleCount).toBeLessThan(120_000);
     const low = new GeometryBuilder();
     expect(buildRealWaterside(low, new LightList(), height, 0.3, S())).toBeLessThanOrEqual(900);
+  });
+});
+
+describe('narrow harbour basins render as water (issue #48)', () => {
+  // The terrain mesh (78 m cells) must not stand above the water plane inside the basins, or the basin
+  // draws as land and the moored ships and yachts sit on it. Auckland heights are a continuous function
+  // of the exact LINZ coast distance, so samples inside a 150 m basin still come out below sea level.
+  // Near the camera the terrain shader sinks ground below 1.2 m by 0.8 m (renderH in terrainShader.ts), fading
+  // the sink out at 2.5 m, and paints any ground the 15 m coast mask calls sea as water.
+  const SUNK = 0.5; // m: still under the water plane once sunk
+  const SINK_TOP = 2.5; // m: above this the terrain is not sunk at all
+
+  it('the moored hulls float: the terrain under each berthed ship stays below the water plane', () => {
+    const DEG = Math.PI / 180;
+    for (const b of PORT_BERTHS) {
+      const { length: L, beam: W } = VESSEL_DATA[b.vessel];
+      const ux = Math.sin(b.heading * DEG);
+      const uz = -Math.cos(b.heading * DEG);
+      for (let k = -0.5; k <= 0.5001; k += 0.05)
+        for (const w of [-0.5, 0, 0.5]) {
+          const x = b.x + ux * L * k - uz * W * w;
+          const z = b.z + uz * L * k + ux * W * w;
+          expect(height(x, z), `${b.vessel} @ ${b.x},${b.z}: ${x.toFixed(0)},${z.toFixed(0)}`).toBeLessThan(SUNK);
+        }
+    }
+  });
+
+  it('the Viaduct, Silo and Westhaven basins are below sea level, with no ground above the sink range', () => {
+    // [OSM marina, min share of its water (≥ 15 m from the LINZ coast) below sea level]; measured 0.94 / 1 / 0.999
+    const basins: [string, number][] = [
+      ['Auckland Central Marina', 0.9], // the Viaduct Harbour
+      ['Silo Marina', 0.97],
+      ['Westhaven Marina', 0.97],
+    ];
+    for (const [name, minShare] of basins) {
+      const r = S().marinas.find((m) => m.name === name)!;
+      let n = 0;
+      let below = 0;
+      for (let x = Math.ceil(r.x0 / 10) * 10; x <= r.x1; x += 10)
+        for (let z = Math.ceil(r.z0 / 10) * 10; z <= r.z1; z += 10) {
+          if (!inRing(r, x, z) || map.isLand(x, z) || segmentDistance(map.segments, x, z) < 15) continue;
+          const h = height(x, z);
+          n++;
+          if (h < 0) below++;
+          expect(h, `${name} @ ${x},${z}`).toBeLessThan(SINK_TOP);
+        }
+      expect(n, name).toBeGreaterThan(200);
+      expect(below / n, name).toBeGreaterThanOrEqual(minShare);
+    }
   });
 });
 
