@@ -167,6 +167,9 @@ export function validateMission(def: MissionDef): string[] {
   for (const s of sc.sams) {
     inWorld(s.x, s.z, `SAM ${s.id}`);
     checkCond(s.spawn, `SAM ${s.id}`);
+    s.path?.forEach((q, i) => inWorld(q.x, q.z, `SAM ${s.id} path ${i}`));
+    if ((s.path || s.escort) && s.type !== 'ad_boat') err(`SAM ${s.id}: only an AD boat moves (path / escort)`);
+    if (s.escort) checkGroup(s.escort, `SAM ${s.id} escort`);
   }
   for (const g of sc.ground) {
     inWorld(g.x, g.z, `ground ${g.id}`);
@@ -175,6 +178,10 @@ export function validateMission(def: MissionDef): string[] {
     if (g.vessel && g.type !== 'ship') err(`ground ${g.id} has a vessel class but is not a ship`);
     if (g.hitsToSink !== undefined && (!g.vessel || !(g.hitsToSink >= 1))) err(`ground ${g.id}: hitsToSink needs a vessel class and must be ≥ 1`);
     if (g.hitsToSink !== undefined && g.team !== 'neutral') err(`ground ${g.id}: hitsToSink needs team 'neutral' (only a civil ship takes several hits)`);
+    if (g.chase !== undefined && g.type !== 'suicide_boat') err(`ground ${g.id}: only a suicide boat chases`);
+    if (g.strike !== undefined && g.type !== 'missile_boat') err(`ground ${g.id}: only a missile boat has a strike`);
+    if (g.chase) checkGroup(g.chase, `ground ${g.id} chase`);
+    if (g.strike) checkGroup(g.strike.group, `ground ${g.id} strike`);
   }
   // objectives
   if (!sc.survival && !sc.objectives.some((o) => o.primary)) err('no primary objective');
