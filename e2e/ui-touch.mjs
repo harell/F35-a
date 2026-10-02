@@ -4,11 +4,13 @@
  *   node e2e/ui-touch.mjs [--base=http://localhost:5173/] [--part=flight|menus|all]
  *
  * flight: ?mission=c01&autostart=1 → multi-touch stick + throttle, AB detent/double-tap, FIRE/GUN/CMS,
- *         TGT/WPN/RADAR, CAM tap + long-press padlock, look drag, tap designation, pause → resume.
+ *         TGT/WPN/RADAR, CAM tap + long-press padlock, look drag, tap designation in the target (padlock)
+ *         view, pause → resume, then the fly() hook from the pause menu → c02's pause menu → quit → main menu.
  * menus:  first launch (fresh context): New pilot card → Start training → Training list → briefing → back
  *         → Training list; then splash → main menu (Not now on the card) → settings round-trip → campaign
  *         → briefing → back → campaign list → briefing (tabs, loadout) → FLY → pause → quit → main menu,
- *         instant action → briefing → back → setup → back → main menu, credits.
+ *         instant action → briefing → back → setup → back → main menu, credits, fly() from the main
+ *         menu → quit → main menu.
  * Uses CDP Input.dispatchTouchEvent so several fingers can be down at once. Screenshots go to
  * e2e/screenshots/ui/touch-*.png. Exits non-zero on failure.
  */
@@ -96,6 +98,25 @@ async function touchApi(page) {
 /** Wait until the game has run two more frames (input is polled once per frame). */
 const settle = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
 
+/** A screenshot with room for a loaded box: one SwiftShader frame can take seconds there (default 30 s timed out). */
+const shot = (page, name) => page.screenshot({ path: `e2e/screenshots/ui/${name}.png`, timeout: 120_000 });
+
+/** Quit from the pause menu: both taps from the page, so a slow frame can't let the 2.6 s confirm window lapse. */
+const quitFromPause = (page) =>
+  page.evaluate(() => {
+    const b = document.querySelector('.scr-pause:not(.is-leaving) .pz-btns .ui-btn.danger:last-child');
+    b.click();
+    b.click();
+  });
+
+/** fly() a mission and wait until it is running (the hook takes over from any screen or mission). */
+async function flyHook(page, id, timeout = 120_000) {
+  await page.evaluate((m) => window.__f35.fly(m), id);
+  return page
+    .waitForFunction((m) => window.__f35.state().mission === m && window.__f35.state().missionState === 'running' && !window.__f35.state().paused, id, { timeout })
+    .then(() => true, () => false);
+}
+
 const rectOf = (page, sel) => page.evaluate((s) => {
   const el = document.querySelector(s);
   if (!el) return null;
@@ -112,7 +133,7 @@ async function flight() {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   if (args.debug) page.on('console', (m) => m.type() === 'log' && console.log('    ·', m.text()));
   await page.goto(`${base}?mission=c01&autostart=1&view=chase`, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.__f35?.state?.().inMission && window.__f35.state().player, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__f35?.state?.().inMission && window.__f35.state().player, null, { timeout: 120_000 }); // a mission load under a loaded box can pass 60 s
   await page.waitForTimeout(1500);
   const t = await touchApi(page);
   const controls = () => page.evaluate(() => ({ ...window.__f35.game.input.controls }));
@@ -165,7 +186,7 @@ async function flight() {
   const both = await controls();
   check(both.throttle > c0.throttle + 0.1 && both.roll > 0.5, 'multi-touch: throttle moves while the stick is held', `throttle ${c0.throttle.toFixed(2)} → ${both.throttle.toFixed(2)}`);
   check(both.throttle > 0.9, 'throttle pushed through the detent into AB', `throttle=${both.throttle.toFixed(3)}`);
-  await page.screenshot({ path: 'e2e/screenshots/ui/touch-stick-throttle.png' });
+  await shot(page, 'touch-stick-throttle');
   await t.up(2);
   await t.up(1);
   await page.waitForTimeout(250);
@@ -248,23 +269,51 @@ async function flight() {
   const spy = await page.evaluate(() => window.__spy);
   check(spy.yaw > 0.1 && spy.pitch > 0.02, 'drag on the centre = look around (right/up)', `yaw=${spy.yaw.toFixed(2)} pitch=${spy.pitch.toFixed(2)}`);
   check(spy.taps.length === 0, 'a drag is not reported as a tap');
+  // the tap stays in the target (padlock) view, where it designates like in every other view (#71).
+  // The CAM sequence above can end in another view (under SwiftShader a CAM tap's touchEnd can arrive
+  // after the 480 ms long-press timer, so the 'tap' is a padlock), so pin the view for this check.
+  const tapView = await page.evaluate(() => {
+    if (window.__f35.state().view !== 'target') window.__f35.setView('target');
+    return window.__f35.state().view;
+  });
+  await settle(page);
   await t.tap(430, 180);
-  await page.waitForTimeout(100);
+  // the game reads taps once per frame, and a SwiftShader frame takes far longer than the 100 ms this
+  // used to wait, so the read came before the frame that consumes the tap (in every view)
+  await settle(page);
   const taps = await page.evaluate(() => window.__spy.taps.slice());
-  check(taps.length === 1 && Math.abs(taps[0].x - 430) < 2, 'quick tap on the view → consumeTaps', JSON.stringify(taps));
+  check(tapView === 'target' && taps.length === 1 && Math.abs(taps[0].x - 430) < 2, `quick tap on the view (${tapView}) → consumeTaps`, JSON.stringify(taps));
+  // (that a tap on a contact's box designates it in the target view is tests/hud-target-tap.test.ts)
   // ── pause via the button, resume via the menu ──
   const pause = await rectOf(page, '.b-pause');
   await t.tap(pause.cx, pause.cy);
   await page.waitForTimeout(500);
   const ps = await page.evaluate(() => ({ paused: window.__f35.state().paused, menu: !!document.querySelector('.scr-pause'), ctl: document.querySelector('.f35-ctl').classList.contains('is-disabled') }));
   check(ps.paused && ps.menu && ps.ctl, 'PAUSE → game paused, pause menu shown, controls hidden', JSON.stringify(ps));
-  await page.screenshot({ path: 'e2e/screenshots/ui/touch-pause.png' });
+  await shot(page, 'touch-pause');
   const resume = await rectOf(page, '.scr-pause .ui-btn.primary');
   await t.tap(resume.cx, resume.cy);
   await page.waitForTimeout(500);
   const rs = await page.evaluate(() => ({ paused: window.__f35.state().paused, menu: !!document.querySelector('.scr-pause:not(.is-leaving)') }));
   check(!rs.paused && !rs.menu, 'RESUME → flying again', JSON.stringify(rs));
-  await page.screenshot({ path: 'e2e/screenshots/ui/touch-flight.png' });
+  await shot(page, 'touch-flight');
+
+  // ── the fly() hook over the pause menu (#71): the new mission's pause menu still opens ──
+  await page.evaluate(() => {
+    window.__f35.pause();
+    window.__f35.fly('c02');
+    window.__f35.pause();
+  });
+  const fp = await page
+    .waitForFunction(() => window.__f35.state().mission === 'c02' && !!document.querySelector('.scr-pause:not(.is-leaving)'), null, { timeout: 120_000 })
+    .then(() => page.evaluate(() => ({ mission: window.__f35.state().mission, paused: window.__f35.state().paused, menu: true })), () =>
+      page.evaluate(() => ({ mission: window.__f35.state().mission, paused: window.__f35.state().paused, menu: false })),
+    );
+  check(fp.mission === 'c02' && fp.paused && fp.menu, "pause(); fly('c02'); pause() → c02's pause menu", JSON.stringify(fp));
+  // the autostart flow ends in the main menu, and so does the mission fly() put in its place
+  if (fp.menu) await quitFromPause(page);
+  const back = await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 30_000 }).then(() => true, () => false);
+  check(back && !(await page.evaluate(() => window.__f35.state().inMission)), 'quit the fly() mission → main menu');
   check(errors.length === 0, 'no page errors', errors.slice(0, 3).join(' | '));
   await page.close();
 }
@@ -396,7 +445,7 @@ async function menus() {
   if (cards.length > 1) await page.tap(`.lo-card[data-id="${cards[1]}"]`);
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-5-hangar.png' });
   await page.tap('.scr-brief .ui-btn.primary');
-  await page.waitForFunction(() => window.__f35.state().inMission, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__f35.state().inMission, null, { timeout: 120_000 }); // a mission load under a loaded box can pass 60 s
   const lo = await page.evaluate(() => window.__f35.game.session?.loadout ?? null);
   check(cards.length < 2 || lo === cards[1], 'FLY starts the mission with the picked loadout', lo);
   await page.waitForTimeout(1500);
@@ -443,6 +492,15 @@ async function menus() {
   await page.keyboard.press('Escape');
   await page.waitForSelector('.scr-main:not(.is-leaving)');
   check(true, 'credits + Escape → main menu');
+  // fly() from the main menu (#71): the menu's wait is dropped, and quitting brings the menu back
+  await page.waitForTimeout(400);
+  const flying = await flyHook(page, 'c01');
+  check(flying && !(await page.$('.scr-main:not(.is-leaving)')), 'fly() from the main menu → c01 running, menu gone');
+  await page.evaluate(() => window.__f35.pause());
+  const paused = await page.waitForSelector('.scr-pause:not(.is-leaving)', { timeout: 30_000 }).then(() => true, () => false);
+  if (paused) await quitFromPause(page);
+  const menuBack = await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 30_000 }).then(() => true, () => false);
+  check(paused && menuBack, 'quit the fly() mission → main menu');
   check(errors.length === 0, 'no page errors', errors.slice(0, 3).join(' | '));
   await page.close();
 }
