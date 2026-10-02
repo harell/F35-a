@@ -808,7 +808,16 @@ const CENTRES: Centre[] = [
 ];
 
 /** Town centres, suburban apartment clusters and industrial estates (one merged mesh). */
-export function buildCentres(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null): number {
+/** `skip`: places where no procedural shop / industrial block may stand (under the aerial photo, which shows the real ones). */
+export function buildCentres(
+  B: GeometryBuilder,
+  lights: LightList,
+  height: HeightFn,
+  detail: number,
+  cbd: CbdGrid,
+  roads: RoadNetwork | null,
+  skip: ((x: number, z: number) => boolean) | null = null,
+): number {
   const rnd = mulberry32(777);
   let n = 0;
   const shop = [0xe4ddd0, 0xcfc6b6, 0xb8b0a2, 0x9a5a48, 0xd8d4cc, 0xa8a49c];
@@ -842,7 +851,7 @@ export function buildCentres(B: GeometryBuilder, lights: LightList, height: Heig
             const r2 = Math.hypot(wx - cx, wz - cz);
             const fall = Math.exp(-((r2 / c.r) ** 2) * 1.8);
             if (r2 > c.r || rnd() > (c.industrial ? 0.3 : 0.1 + 0.55 * fall)) continue;
-            if (height(wx, wz) < 1.5 || (roads && roads.near(wx, wz, 10))) continue;
+            if (height(wx, wz) < 1.5 || (roads && roads.near(wx, wz, 10)) || skip?.(wx, wz)) continue;
             const g = height(wx, wz) - 2;
             const fr = frameFromHeading(wx, g, wz, d.angle);
             const bw = w - 2 - rnd() * 4;

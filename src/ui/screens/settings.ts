@@ -257,6 +257,13 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
           toggle(s.hdTerrain, (v) => (s.hdTerrain = v), 'HD terrain'),
         ),
       );
+      page.appendChild(
+        settingRow(
+          'Aerial photo',
+          'Medium and high quality: real aerial photo of the CBD and waterfront (≈ 0.3 / 0.6 MB download, cached)',
+          toggle(s.aerialPhoto, (v) => (s.aerialPhoto = v), 'Aerial photo'),
+        ),
+      );
       page.appendChild(settingRow('FPS counter', 'Frame rate, draw calls and triangles', toggle(s.showFps, (v) => (s.showFps = v), 'FPS counter')));
       return page;
     }

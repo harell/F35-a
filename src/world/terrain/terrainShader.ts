@@ -137,6 +137,8 @@ uniform vec4 uNoFieldB[6]; // half width, half length, blend (m); 0 = unused
 uniform vec4 uConeA[${MAX_CONES}]; // x, z, crater radius, crater depth (m)
 uniform vec4 uConeB[${MAX_CONES}]; // cone radius, cone height (m), terraces (0/1); radius 0 = unused
 uniform vec4 uConeBox; // xz bounds of all cones (min x, min z, max x, max z)
+uniform sampler2D uAerial; // aerial photo (aucklandAerial.ts): sRGB albedo, alpha = land / deck mask
+uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m); 1/size 0 = none
 varying vec3 vWorld;
 varying vec2 vUv;
 varying float vH;
@@ -192,6 +194,16 @@ vec4 streetMap(vec2 wp) {
   if (uStreetRect.z <= 0.0 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(32.0, -32.0, 0.0, 0.0);
   vec4 s = texture2D(uStreets, uv);
   return vec4((s.r * 255.0 - 128.0) * 0.25, (s.g * 255.0 - 128.0) * 0.25, s.b, s.a);
+}
+
+// Aerial photo: rgb = albedo (linear), a = weight (the photo's land mask × the fade at the square's edge).
+vec4 aerialPhoto(vec2 wp) {
+  if (uAerialRect.z <= 0.0) return vec4(0.0);
+  vec2 uv = (wp - uAerialRect.xy) * uAerialRect.z;
+  float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+  if (e <= 0.0) return vec4(0.0);
+  vec4 p = texture2D(uAerial, uv);
+  return vec4(p.rgb, p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
 }
 
 // Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts).
@@ -534,6 +546,13 @@ void main() {
     urban = 1.0;
     forest = 0.0;
   }
+  // Under the aerial photo the procedural ground only shows through its fade and the water's edge:
+  // where it covers fully by day, the street / house / paddock patterns are skipped (their near detail
+  // is the costly part). At night urbanPattern still runs for its lamps and lit windows (the emissive;
+  // the photo is only the dim albedo under them): its area-average glow alone, brought near the
+  // camera, lit the ground like a carpet.
+  vec4 photo = aerialPhoto(wp);
+  bool photoFull = photo.a > 0.99 && uNight <= 0.0;
 
   // Past the heightfield the (clamped) colour map would streak: fade to a flat outside colour.
   float outside = smoothstep(uOutside - 3000.0, uOutside, max(abs(wp.x), abs(wp.y)));
@@ -549,10 +568,10 @@ void main() {
     float fw = uFields * natural * (1.0 - smoothstep(0.08, 0.22, forest)) * (1.0 - smoothstep(0.06, 0.16, slope)) * step(2.0, vH);
     // no paddock hedges inside the city (parks, volcanic cones): blurred (≈ 2 km) urban density
     if (fw > 0.01) fw *= fieldMask(wp) * (1.0 - smoothstep(0.5, 0.62, textureLod(uColor, vUv, 4.6).a));
-    if (fw > 0.01) albedo = mix(albedo, fieldPattern(albedo, wp, mpp), fw);
+    if (fw > 0.01 && !photoFull) albedo = mix(albedo, fieldPattern(albedo, wp, mpp), fw);
   }
   vec3 emissive = vec3(0.0);
-  if (urban > 0.01) albedo = urbanPattern(albedo, wp, urban, mpp, sm, emissive);
+  if (urban > 0.01 && !photoFull) albedo = urbanPattern(albedo, wp, urban, mpp, sm, emissive);
 
   float rockW = smoothstep(uRockSlope, uRockSlope + 0.09, slope + (dA.b - 0.5) * 0.12 + (dB.g - 0.5) * 0.05 * nearB) * natural;
   vec3 rock = uRockColor * (0.68 + 0.6 * mix(dA.b, dB.b, nearB * 0.7));
@@ -568,6 +587,10 @@ void main() {
 
   vec3 coneN = coneDetail(wp, mpp, albedo);
 
+  // The aerial photo replaces the procedural colours (streets, roofs, lots, canopy, rock, cone tints),
+  // with a faint fine grain below its texel size so it isn't smeared when flying low.
+  albedo = mix(albedo, photo.rgb * mix(1.0, 0.92 + 0.16 * dC.r, nearC), photo.a);
+
   // ── Shoreline from the coast mask (15 m) or, outside it, from the true height (the band is at
   //    most ~12 m above sea level even on cliffs, so higher ground skips the lookups) ──
   float sd = 1e3;
@@ -582,7 +605,8 @@ void main() {
     float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
     float beachy = smoothstep(0.42, 0.62, texture2D(uDetail, wp * (1.0 / 4100.0)).g) * smoothstep(0.05, 0.1, lum) * (1.0 - 0.8 * urban);
     float bw = mix(5.0, 30.0, beachy) * (1.0 - 0.5 * urban);
-    float band = 1.0 - smoothstep(bw * 0.55, bw, sd + (dB.r - 0.5) * 7.0);
+    // (the photo already shows the real beaches and seawalls: only a trace of the band on it)
+    float band = (1.0 - smoothstep(bw * 0.55, bw, sd + (dB.r - 0.5) * 7.0)) * (1.0 - 0.8 * photo.a);
     vec3 sand = wp.x < uBlackSandX ? uBlackSand : uSand;
     vec3 shore = mix(uShoreRock * (0.7 + 0.5 * dC.g), sand * (0.92 + 0.16 * dC.r), beachy);
     // seawalls / reclaimed edges: grey basalt riprap and concrete (not black: at range the band is
@@ -598,7 +622,7 @@ void main() {
   // Detail bump
   vec3 dn = texture2D(uDetailN, wp * (1.0 / 71.0)).xyz * 2.0 - 1.0;
   vec3 dn2 = texture2D(uDetailN, wp * (1.0 / 13.3)).xyz * 2.0 - 1.0;
-  float bump = (0.3 + 0.6 * rockW + 0.5 * forest) * nearB * natural;
+  float bump = (0.3 + 0.6 * rockW + 0.5 * forest) * nearB * natural * (1.0 - photo.a);
   N = normalize(N + vec3(dn.x, 0.0, dn.y) * bump + vec3(dn2.x, 0.0, dn2.y) * 0.35 * nearC * natural + coneN);
 
   vec3 col = atmoDiffuse(albedo, N, s.a);

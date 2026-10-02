@@ -111,6 +111,17 @@ export interface TerrainRendererOptions {
   noFields?: { x: number; z: number; heading: number; halfW: number; halfL: number }[];
   /** The water's shallow colour (terrain seaward of the coast mask is painted as water). */
   seaShallow?: Color;
+  /** Aerial photo over a square (Auckland CBD / waterfront, aucklandAerial.ts), or none. */
+  aerial?: AerialPhotoInfo | null;
+}
+
+/** An aerial photo texture over the square [x0, x0 + size] × [z0, z0 + size] (row 0 at z0), fading out over `feather` m. */
+export interface AerialPhotoInfo {
+  texture: Texture;
+  x0: number;
+  z0: number;
+  size: number;
+  feather: number;
 }
 
 const MORPH_START = 0.68;
@@ -318,6 +329,7 @@ export class TerrainRenderer {
         ...coastUniforms(o.coast, o.dummy),
         ...noFieldUniforms(o.noFields ?? []),
         ...coneUniforms(o.style.cones ?? []),
+        ...aerialUniforms(o.aerial ?? null, o.dummy),
       },
     });
     this.mesh = new Mesh(this.geometry, this.material);
@@ -493,6 +505,14 @@ export function streetUniforms(st: CbdStreets | null, tex: Texture | null, dummy
   return {
     uStreets: { value: st && tex ? tex : dummy },
     uStreetRect: { value: st && tex ? new Vector4(st.x0, st.z0, 1 / (st.cols * st.cell), 1 / (st.rows * st.cell)) : new Vector4(0, 0, 0, 0) },
+  };
+}
+
+/** Uniforms of the terrain shader's aerialPhoto() (and the photo-capable building material). */
+export function aerialUniforms(a: AerialPhotoInfo | null, dummy: Texture): { uAerial: { value: Texture }; uAerialRect: { value: Vector4 } } {
+  return {
+    uAerial: { value: a ? a.texture : dummy },
+    uAerialRect: { value: a ? new Vector4(a.x0, a.z0, 1 / a.size, a.feather) : new Vector4(0, 0, 0, 0) },
   };
 }
 

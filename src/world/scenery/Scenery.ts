@@ -9,7 +9,8 @@ import type { QualitySettings, TheaterId } from '../../core/types';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { WorldConfig } from '../config';
-import type { TerrainStyle } from '../terrain/TerrainRenderer';
+import { aerialUniforms, type AerialPhotoInfo, type TerrainStyle } from '../terrain/TerrainRenderer';
+import { aerialCovers } from '../terrain/theaters/aucklandAerial';
 import { createVegetation } from '../terrain/vegetation';
 import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
@@ -50,6 +51,11 @@ export interface SceneryOptions {
   lights: number;
   /** Auckland: the Sky Tower is already down in this save (its fall heading, rad) — build the ruin. */
   skyTowerRuin?: number | null;
+  /**
+   * Auckland's aerial photo (the terrain's): the wharf decks and the naval base take it on their top
+   * faces, and no houses or trees are scattered where it covers the ground (it shows the real ones).
+   */
+  aerial?: AerialPhotoInfo | null;
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + theatre built-ins). */
@@ -88,12 +94,16 @@ export class Scenery {
     this.lightsMat = createLightsMaterial(o.atmo);
     this.lightsMat.uniforms.uIntensity.value = o.lights;
     this.materials.push(buildingMat, this.lightsMat);
+    // (the CBD's towers keep their own roofs: the photo is not a true orthophoto, a tall tower's roof is
+    // drawn up to ~25 m off its footprint)
+    const aerialMat = o.aerial ? createBuildingMaterial(o.atmo, { aerial: aerialUniforms(o.aerial, o.aerial.texture) }) : null;
+    if (aerialMat) this.materials.push(aerialMat);
     const lights = new LightList();
-    const addMesh = (b: GeometryBuilder, name: string) => {
+    const addMesh = (b: GeometryBuilder, name: string, mat: ShaderMaterial = buildingMat) => {
       const g = b.build();
       if (!g) return;
       this.geometries.push(g);
-      const m = new Mesh(g, buildingMat);
+      const m = new Mesh(g, mat);
       m.name = name;
       m.matrixAutoUpdate = false;
       this.group.add(m);
@@ -160,7 +170,7 @@ export class Scenery {
       buildMuseumAndObelisk(city, lights, height);
       addMesh(city, 'akl-cbd');
       const centres = new GeometryBuilder();
-      buildCentres(centres, lights, height, detail, cbd, roads);
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? aerialCovers : null);
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
       const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01);
       addMesh(centres, 'akl-centres');
@@ -181,7 +191,7 @@ export class Scenery {
       const port = new GeometryBuilder();
       buildPort(port, lights, height, detail);
       buildMarinas(port, lights, height, detail);
-      addMesh(port, 'akl-waterfront');
+      addMesh(port, 'akl-waterfront', aerialMat ?? buildingMat);
       // strategic sites: Devonport Naval Base, the Wiri oil terminal, Eden Park (aucklandSites.ts)
       const sites = new GeometryBuilder();
       const layout = siteLayout();
@@ -190,7 +200,7 @@ export class Scenery {
         buildStadiums(sites, lights, height, layout);
       }
       buildWiriTerminal(sites, lights, height, layout);
-      addMesh(sites, 'akl-sites');
+      addMesh(sites, 'akl-sites', aerialMat ?? buildingMat);
     }
 
     // Decal meshes
@@ -301,7 +311,9 @@ export class Scenery {
     this.geometries.push(...treeGeoms);
     const roadsRef = this.roads;
     // nothing grows or is built on the roads or inside the port, the naval base, the oil terminal or a stadium
-    const onSite = o.theater === 'auckland' ? siteBlocker() : null;
+    // (nor under the aerial photo, which shows the real houses and trees)
+    const sites = o.theater === 'auckland' ? siteBlocker() : null;
+    const onSite = o.aerial ? (x: number, z: number, m: number) => aerialCovers(x, z) || (sites?.(x, z, m) ?? false) : sites;
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
