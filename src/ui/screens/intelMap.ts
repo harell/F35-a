@@ -149,12 +149,43 @@ class LabelPlacer {
         break;
       }
     }
+    // a crowded spot (T01's rings round the harbour, START on Whenuapai): look further out, in eight
+    // directions, before printing over another label (#62), and draw a leader back to the marker
+    let leader = false;
+    if (!pick && force) {
+      for (let k = 1; k <= 6 && !pick; k++) {
+        const d = r + 3 + k * th;
+        for (let a = 0; a < 8 && !pick; a++) {
+          const cos = Math.cos((a * Math.PI) / 4);
+          const sin = Math.sin((a * Math.PI) / 4);
+          const b = { x: x + cos * (d + tw / 2) - tw / 2, y: y + sin * (d + th / 2) - th / 2, w: tw, h: th };
+          if (!this.hits(b)) pick = b;
+        }
+      }
+      leader = !!pick;
+    }
     if (!pick) {
       if (!force) return;
       const [cx, cy] = cands[0];
       pick = { x: Math.max(2, Math.min(this.w - tw - 2, cx)), y: Math.max(2, Math.min(this.h - th - 2, cy)), w: tw, h: th };
     }
     this.boxes.push(pick);
+    if (leader) {
+      // from the marker's edge to the nearest point of the label
+      const lx = Math.max(pick.x, Math.min(pick.x + pick.w, x));
+      const ly = Math.max(pick.y, Math.min(pick.y + pick.h, y));
+      const d = Math.hypot(lx - x, ly - y);
+      if (d > r + 2) {
+        g.strokeStyle = color;
+        g.globalAlpha = 0.55;
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(x + ((lx - x) / d) * (r + 1), y + ((ly - y) / d) * (r + 1));
+        g.lineTo(lx, ly);
+        g.stroke();
+        g.globalAlpha = 1;
+      }
+    }
     label(g, text, pick.x + 2, pick.y + th / 2, color, this.size, 'left');
   }
 }
