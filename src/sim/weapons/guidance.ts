@@ -7,6 +7,8 @@
  *  ir            seeker FOV/gimbal/range vs IR signature (flares handled in countermeasures.ts)
  *  anti_radiation homes on emitting radars, keeps a degraded last-known point when they shut down
  *  gps           glides/falls to the designated point with limited control authority
+ *  tri_mode      glide bomb: datalink midcourse on the designated target, MMW/IIR terminal seeker
+ *                on that same target only (never retargets), else the extrapolated last estimate
  *
  * Steering: proportional navigation (N≈3–4, gravity compensated), pursuit turn-over for large
  * heading errors (vertical launch / high off-boresight), loft for long shots, best-glide for bombs.
@@ -156,6 +158,7 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
     return;
   }
   if (def.guidance === 'gps') return;
+  if (def.guidance === 'tri_mode') return triModeGuidance(ctx, m);
   const world = ctx.world;
   const target = world.getEntity(m.targetId);
   const checkTick = (ctx.tick + m.id) % SENSOR_DIV === 0;
@@ -350,6 +353,58 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
       if (m.lostTimer > limit) m.trackBroken = true;
     }
   }
+}
+
+/**
+ * Tri-mode glide bomb (GBU-53/B). Midcourse: the launcher's fused track on the designated target is
+ * uplinked while fresh; without it the estimate is extrapolated with the last known velocity (a ship
+ * keeps steaming). Terminal: inside seekerRange of the estimate the seeker looks for the designated
+ * target ONLY (field of view around the estimate + gimbal) and homes on its live position. It never
+ * picks another entity: a destroyed or vanished target freezes the estimate where it was last
+ * predicted and the bomb goes off there.
+ */
+function triModeGuidance(ctx: CombatCtx, m: CombatMissile): void {
+  const def = m.cdef;
+  const world = ctx.world;
+  const target = world.getEntity(m.targetId);
+  if (!target || !target.alive || (target.kind !== 'ground' && target.kind !== 'sam')) {
+    // target gone: fly to the last predicted point, no more extrapolation
+    if (m.hasEstimate && (m.estVel.lengthSq() > 0 || m.seekerLocked)) {
+      m.estPos.addScaledVector(m.estVel, ctx.time - m.estTime);
+      m.estVel.set(0, 0, 0);
+      m.estTime = ctx.time;
+    }
+    m.seekerLocked = false;
+    m.targetPoint.copy(m.estPos);
+    return;
+  }
+  if (m.seekerLocked) {
+    if (inGimbal(m, target.position, def.gimbalLimit)) setEstimate(ctx, m, target.position, target.velocity);
+    else m.seekerLocked = false;
+  } else {
+    // midcourse datalink from the launcher's sensor fusion
+    const launcher = world.getEntity(m.shooterId);
+    if (def.datalink && launcher && launcher.kind === 'aircraft' && launcher.alive) {
+      const c = acState(launcher).contacts.get(target.id);
+      if (c && c.lastSeen >= ctx.time - 0.6) {
+        m.estPos.copy(c.position);
+        m.estVel.copy(c.velocity);
+        m.estTime = c.lastSeen;
+      }
+    }
+    // terminal seeker: search the basket around the predicted position for the designated target
+    _tmp.copy(m.estPos).addScaledVector(m.estVel, ctx.time - m.estTime);
+    if (m.position.distanceTo(_tmp) < def.seekerRange && m.position.distanceTo(target.position) < def.seekerRange * 1.2) {
+      _los.subVectors(_tmp, m.position).normalize();
+      _r.subVectors(target.position, m.position).normalize();
+      if (_los.dot(_r) >= Math.cos(def.seekerFov) && inGimbal(m, target.position, def.gimbalLimit)) {
+        m.seekerLocked = true;
+        m.everLocked = true;
+        setEstimate(ctx, m, target.position, target.velocity);
+      }
+    }
+  }
+  m.targetPoint.copy(m.estPos);
 }
 
 /* ───────────────────────── Steering laws ───────────────────────── */
@@ -554,6 +609,9 @@ export function steeringCommand(ctx: CombatCtx, m: CombatMissile, aMax: number, 
 /** GPS bomb law: best-glide toward the point while it is "above" the glide slope, then PN onto it. */
 function bombCommand(m: CombatMissile, v: number, aMax: number, out: Vector3): Vector3 {
   const def = m.cdef;
+  // moving target (tri-mode datalink / seeker): aim at where it will be when the bomb arrives
+  const moving = m.estVel.lengthSq() > 0.01;
+  if (moving) _aim.addScaledVector(m.estVel, _aim.distanceTo(m.position) / Math.max(v, 100));
   _r.subVectors(_aim, m.position);
   const horiz = Math.hypot(_r.x, _r.z);
   const h = -_r.y;
@@ -564,6 +622,7 @@ function bombCommand(m: CombatMissile, v: number, aMax: number, out: Vector3): V
     if (R < 1) return out;
     _los.copy(_r).divideScalar(R);
     _vrel.copy(m.velocity).negate();
+    if (moving) _vrel.add(m.estVel);
     const vc = -_r.dot(_vrel) / R;
     _omega.crossVectors(_r, _vrel).divideScalar(R * R);
     out.crossVectors(_omega, _los).multiplyScalar(def.navConstant * Math.max(vc, 0.3 * v));

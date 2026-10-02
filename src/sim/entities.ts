@@ -301,7 +301,7 @@ export class AircraftEntity implements Entity {
 
 /* ───────────────────────────── Missiles & bombs ───────────────────────────── */
 
-export type Guidance = 'active_radar' | 'semi_active' | 'ir' | 'command' | 'gps' | 'anti_radiation';
+export type Guidance = 'active_radar' | 'semi_active' | 'ir' | 'command' | 'gps' | 'anti_radiation' | 'tri_mode';
 
 /** Static munition definition (data lives in sim/weapons/defs.ts, owned by the COMBAT agent). */
 export interface MunitionDef {
