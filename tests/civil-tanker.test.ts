@@ -6,17 +6,17 @@
  * other civil ship keeps #19's one-hit rule.
  */
 import { describe, expect, it } from 'vitest';
-import { Box3, Vector3 } from 'three';
+import { Box3, PerspectiveCamera, Vector3 } from 'three';
 import { EventBus, type GameEventMap } from '../src/core/events';
-import { DIFFICULTIES } from '../src/core/data';
-import type { MissionDef } from '../src/core/contracts';
+import { DEFAULT_SETTINGS, DIFFICULTIES, QUALITY_PRESETS } from '../src/core/data';
+import type { FrameContext, MissionDef } from '../src/core/contracts';
 import type { VesselClass } from '../src/core/types';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { VESSEL_DATA, VESSEL_HIT_SPEED_FACTOR } from '../src/sim/damage/tables';
 import type { SimWorld } from '../src/sim/api';
-import type { GroundTargetEntity } from '../src/sim/entities';
+import { GroundTargetEntity } from '../src/sim/entities';
 import { createMissionRunner, missionById } from '../src/missions';
 import { emptyScript, type MissionScript } from '../src/missions/schema';
 import { validateMission } from '../src/missions/validate';
@@ -26,6 +26,9 @@ import { SHIP_DIMS } from '../src/render/visuals/shipMotion';
 import { getGroundPrototype } from '../src/render/models/ground';
 import { framingDistance } from '../src/render/targetCam/pose';
 import { FlatTerrain } from './combat-helpers';
+import { createHud } from '../src/hud/Hud';
+import { buildMock } from '../src/hud/dev/mockWorld';
+import { installPath2D, makeFakeCanvas, overlaps, textBox } from '../src/hud/dev/fakeCanvas';
 
 const DT = 1 / 60;
 
@@ -287,5 +290,48 @@ describe('tanker on screen', () => {
     expect(box.max.y).toBeGreaterThan(d.height - 6);
     const t = seaWorld().spawnGround({ type: 'ship', team: 'neutral', vessel: 'tanker', position: new Vector3(), name: 'MT' });
     expect(framingDistance(t)).toBeGreaterThan(d.length);
+  });
+});
+
+describe('tanker counter on the HMD', () => {
+  it('"TANKER 1/2" is drawn in the top-left column, clear of every other HUD text', () => {
+    installPath2D();
+    const W = 844;
+    const H = 390;
+    const mock = buildMock('threat');
+    const t = new GroundTargetEntity(9001, 'ship', 'neutral', { name: 'MT Marsden Point', radius: 125 });
+    t.vessel = 'tanker';
+    t.hitsToSink = 2;
+    t.hits = 1;
+    t.position.set(0, 0, -20_000);
+    mock.world.ground.push(t);
+    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+    const hud = createHud(canvas, mock.events);
+    hud.resize(W, H, 1);
+    hud.setVisible(true);
+    const p = mock.player;
+    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+    camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+    camera.quaternion.copy(p.quaternion);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    const ctx: FrameContext = {
+      dt: 1 / 30, time: 0, world: mock.world, player: p, camera, viewMode: 'hud', focusId: p.id, mission: mock.mission,
+      settings: { ...DEFAULT_SETTINGS }, quality: { ...QUALITY_PRESETS.medium }, paused: false,
+      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+    };
+    for (let i = 0; i < 36; i++) {
+      fake.reset();
+      ctx.time += ctx.dt;
+      mock.tick(ctx.dt);
+      hud.update(ctx);
+    }
+    const texts = fake.texts.slice();
+    const counter = texts.find((r) => r.text === 'TANKER 1/2');
+    expect(counter).toBeDefined();
+    expect(counter!.x).toBeLessThan(W / 3); // the left column
+    const box = textBox(counter!);
+    const hitBy = texts.filter((r) => r !== counter && r.text.trim() && overlaps(textBox(r), box, 1)).map((r) => r.text);
+    expect(hitBy).toEqual([]);
   });
 });
