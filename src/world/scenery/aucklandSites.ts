@@ -160,12 +160,13 @@ export function siteLayout(): SiteLayout | null {
 
 /**
  * Keeps the scattered houses and trees off the sites (sources.ts `blocked`): port land, the naval
- * base's land, the oil terminal and the stadium grounds. Null without the OSM data.
+ * base's land, the oil terminal's hardstand and the stadium grounds. Without the OSM data only the
+ * terminal's fallback hardstand, which is drawn either way (#61).
  */
-export function siteBlocker(): ((x: number, z: number, margin: number) => boolean) | null {
+export function siteBlocker(): (x: number, z: number, margin: number) => boolean {
   const s = siteLayout();
-  if (!s) return null;
-  const rings = [...s.port, ...(s.naval ? [s.naval] : []), ...(s.depot ? [s.depot] : []), ...s.stadiums.map((st) => st.outline)];
+  const pad = ringOf(Float32Array.from(wiriHardstand(s)));
+  const rings = s ? [...s.port, ...(s.naval ? [s.naval] : []), pad, ...s.stadiums.map((st) => st.outline)] : [pad];
   return (x, z) => rings.some((r) => inRing(r, x, z));
 }
 
