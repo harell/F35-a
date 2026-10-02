@@ -31,7 +31,7 @@ import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
 import { drawPip, pipView, resetPip, stepPip } from './hmd/pip';
 import { Pen } from './hmd/pen';
-import { PickRegistry } from './hmd/picking';
+import { PICK_RADIUS, PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
 import { TacMapState, drawTacticalMap } from './hmd/tacmap';
 import {
@@ -96,6 +96,12 @@ export const createHud: CreateHud = (canvas, events) => {
   const missileDist = (id: number) => {
     const m = curWorld?.getEntity(id);
     return m && curPlayer ? m.position.distanceTo(curPlayer.position) : Infinity;
+  };
+  // tap picking in a cluster: one of our missiles is already flying at this contact
+  const engagedByPlayer = (id: number) => {
+    if (!curWorld || !curPlayer) return false;
+    for (const m of curWorld.missiles) if (m.alive && m.shooterId === curPlayer.id && m.targetId === id) return true;
+    return false;
   };
 
   void loadHudFont(() => {
@@ -498,13 +504,13 @@ export const createHud: CreateHud = (canvas, events) => {
       if (lastMode === 'tactical') {
         // tap a symbol = designate it; tap the map = next range (10 / 20 / 40 km)
         if (tac.tapLegend(x, y, st.clock)) return null;
-        const id = picks.pick(x, y, TAC_PICK_RADIUS);
+        const id = picks.pick(x, y, TAC_PICK_RADIUS, st.clock, engagedByPlayer);
         if (id == null) tac.cycle();
         return id;
       }
       // the PCD zoom overlay swallows taps (the cockpit handles them first)
       if (pcdZoom.open) return null;
-      return picks.pick(x, y);
+      return picks.pick(x, y, PICK_RADIUS, st.clock, engagedByPlayer);
     },
 
     dispose() {
