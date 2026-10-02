@@ -52,6 +52,14 @@ const _q = new Vector3();
 const _p = new Vector3();
 const _fwd = new Vector3();
 const _aim = new Vector3();
+const _vh = new Vector3();
+
+/** The bot pulls the trigger only inside this range (m) with the LCOS pipper on the bandit. */
+const GUN_FIRE_RANGE = 900;
+/** Firing position the bot holds behind a bandit in a tail chase (m). */
+const GUN_TRAIL = 450;
+/** Bandit within this angle off the nose (rad): track it with the pipper (the AI's gunnery cone). */
+const GUN_TRACK_CONE = 0.6;
 
 export class PlayerBot {
   readonly pilot = new Autopilot();
@@ -273,20 +281,36 @@ export class PlayerBot {
     this.crankSide = 0;
 
     if (want === 'gun' && R < 2_500) {
-      // lead pursuit on the LCOS pipper
       _fwd.set(0, 0, -1).applyQuaternion(p.quaternion);
-      const lp = combat.gunLeadPoint(p, world);
       _p.subVectors(tgt.position, p.position).normalize();
-      if (lp) {
+      _vh.copy(p.velocity).normalize();
+      const lp = combat.gunLeadPoint(p, world);
+      // lead pursuit on the LCOS pipper once the bandit is near the nose; until then pull the
+      // nose round onto it (pure pursuit)
+      const tracking = !!lp && _fwd.dot(_p) > Math.cos(GUN_TRACK_CONE);
+      if (lp && tracking) {
         _aim.subVectors(lp, p.position).normalize();
-        it.dir.copy(_fwd).add(_p).sub(_aim).normalize();
+        // move the pipper onto the bandit: the nose has to swing by (bandit − pipper). The
+        // autopilot flies the VELOCITY vector, so the correction is added to the velocity
+        // direction and the nose keeps its angle-of-attack offset above the flight path.
+        // (Adding it to the nose instead left the pipper an AoA, 2–3°, off the bandit: never
+        // inside the gate, 0 rounds in the playtest's gun-only runs.)
+        it.dir.copy(_vh).add(_p).sub(_aim).normalize();
         const err = Math.acos(Math.max(-1, Math.min(1, _aim.dot(_p))));
-        if (R < 900 && err < Math.max(0.012, (0.6 * tgt.radius) / R)) p.input.fireGun = true;
+        if (R < GUN_FIRE_RANGE && err < Math.max(0.012, (0.6 * tgt.radius) / R)) p.input.fireGun = true;
       } else it.dir.copy(_p);
       it.track = true;
       it.gain = 2.2;
       it.gMax = 9;
-      it.throttle = R < 600 ? 0.7 : 1;
+      // closure: tracking a bandit flying away from us (tail chase), hold a firing position
+      // ~GUN_TRAIL m behind it instead of flying through it; otherwise keep the energy up
+      const away = tgt.velocity.dot(_p);
+      if (tracking && away > 0.7 * tgt.velocity.length()) {
+        it.throttle = -1;
+        it.speed = Math.max(170, Math.min(340, away + (R - GUN_TRAIL) * 0.15));
+        it.allowAb = true;
+        it.allowBrake = true;
+      } else it.throttle = 1;
       this.state = 'GUNS';
       return;
     }

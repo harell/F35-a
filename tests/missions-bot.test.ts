@@ -9,9 +9,13 @@
  *  - 1.1-m: `ia_<mode>_<theater>` ids built a fresh random mission on every missionById() call,
  *    so the same id, difficulty and seed gave different runs (and the sweep built the terrain
  *    from one mission and flew another).
+ * and in playtest 2026-10-02 r4:
+ *  - 4.3-f (#69): the air-to-air PlayerBot (tests/ai-playerbot.ts) never fired its gun (0 of 180
+ *    rounds in 6 gun-only runs), so gun balance couldn't be measured.
  * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=c04,c06,t03 --loadout=strike_sdb2
  */
 import { describe, expect, it } from 'vitest';
+import { Autopilot } from '../src/ai/pilot/Autopilot';
 import { buildInstantMission, missionById, terrainPadsFor } from '../src/missions';
 import { rearmHome } from '../src/missions/runtime/rearm';
 import { AKL } from '../src/core/auckland';
@@ -20,6 +24,8 @@ import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
+import { PlayerBot } from './ai-playerbot';
+import { flat, makeAiWorld, v3 } from './ai-helpers';
 
 function terrainFor(id: string): TerrainQuery {
   const def = missionById(id)!;
@@ -56,6 +62,44 @@ describe('1.1-l: the bot rearms where the mission rearms it', () => {
   it('Auckland, the only theatre: campaign and Instant Action missions rearm at Whenuapai', () => {
     for (const id of ['c04', 'ia_strike_auckland', 'ia_sam_gauntlet_auckland']) {
       expect(rearmHome(missionById(id)!), id).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
+    }
+  });
+});
+
+describe('4.3-f (#69): the PlayerBot fires its gun', () => {
+  /** Gun-only F-35 1 km behind a MiG-29 flying straight and level (no AI, no weapons of its own). */
+  function trailChase(seed: number): { killedAt: number; rounds: number } {
+    const { world, destroyed } = makeAiWorld('pilot', flat(0), seed);
+    const p = world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 5_000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
+    for (const s of p.stores) s.count = 0;
+    const mig = world.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 5_000, -1_000), heading: 0, speed: 230 });
+    for (const s of mig.stores) s.count = 0;
+    mig.gunAmmo = 0;
+    const straight = new Autopilot();
+    const bot = new PlayerBot({ home: v3(0, 5_000, 30_000), rtbWhenWinchester: false });
+    bot.attach(world, p);
+    const ammo = p.gunAmmo;
+    const dt = 1 / 60;
+    for (let i = 0; i < 30 * 60 && mig.alive; i++) {
+      if (i % 3 === 0) {
+        bot.update(p, world, dt * 3);
+        const it = straight.begin(mig, 150); // keep its heading and altitude at 230 m/s
+        it.dir.set(0, 0, -1);
+        it.speed = 230;
+        straight.fly(mig, world, dt * 3);
+      }
+      world.step(dt);
+    }
+    const kill = destroyed.find((e) => e.entity === mig);
+    return { killedAt: kill && kill.attackerId === p.id ? world.time : -1, rounds: ammo - p.gunAmmo };
+  }
+
+  it('kills a straight-flying MiG-29 from 1 km in trail with the gun within 30 s (was 0 rounds fired)', { timeout: 60_000 }, () => {
+    for (const seed of [1, 2, 3]) {
+      const r = trailChase(seed);
+      expect(r.rounds, `seed ${seed}`).toBeGreaterThan(0);
+      expect(r.killedAt, `seed ${seed}: ${r.rounds} rounds fired`).toBeGreaterThan(0);
+      expect(r.killedAt).toBeLessThan(30);
     }
   });
 });
