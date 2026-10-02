@@ -182,10 +182,12 @@ describe('who engages airliners', () => {
 });
 
 describe('civil traffic in missions', () => {
-  function setup(def: MissionDef) {
+  function setup(def: MissionDef, civilTraffic = true) {
     const events = new EventBus();
     const world = createSimWorld({ terrain: new FlatTerrain(ELEV), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(1) });
-    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
+    // RunnerDeps.civilTraffic (not in the public CreateMissionRunner contract)
+    const deps = { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events, civilTraffic };
+    const runner = createMissionRunner(def, deps);
     runner.setup(world, def.recommendedLoadout);
     const radio: string[] = [];
     events.on('radio', (e) => radio.push(e.text));
@@ -198,7 +200,7 @@ describe('civil traffic in missions', () => {
     return { world, runner, radio, tick };
   }
 
-  it('Auckland missions get neutral A320 traffic; other theatres do not', () => {
+  it('Auckland missions get neutral A320 traffic, unless civil traffic is switched off', () => {
     const akl = setup(missionById('c01')!);
     akl.tick(1);
     const civ = akl.world.aircraft.filter((a) => a.civil);
@@ -213,10 +215,10 @@ describe('civil traffic in missions', () => {
     expect(akl.world.aircraft.some((a) => a.civil?.kind === 'departure')).toBe(true);
     akl.runner.dispose?.();
 
-    const desert = setup(buildInstantMissionSeeded({ mode: 'dogfight', theater: 'desert', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3));
-    desert.tick(30);
-    expect(desert.world.aircraft.some((a) => a.civil || a.team === 'neutral')).toBe(false);
-    desert.runner.dispose?.();
+    const off = setup(buildInstantMissionSeeded({ mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3), false);
+    off.tick(30);
+    expect(off.world.aircraft.some((a) => a.civil || a.team === 'neutral')).toBe(false);
+    off.runner.dispose?.();
   });
 
   it('a player shoot-down is a civilian loss: AWACS check-fire call, no kill, score penalty in the debrief', () => {

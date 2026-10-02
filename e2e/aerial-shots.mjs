@@ -38,7 +38,7 @@ for (const [name, q] of Object.entries(VIEWS)) {
     page.on('console', (m) => {
       if (m.type() === 'error' || /aerial/.test(m.text())) errs.push(m.text());
     });
-    await page.goto(`http://localhost:${port}/labs/world-lab.html?theater=auckland&weather=clear&quality=${quality}&seed=1840&${q}${flag}`);
+    await page.goto(`http://localhost:${port}/labs/world-lab.html?weather=clear&quality=${quality}&seed=1840&${q}${flag}`);
     await page.waitForFunction(() => window.__lab?.ready, null, { timeout: 300_000 });
     await page.waitForTimeout(6000); // let the tree / house scatters stream in
     const file = `${outDir}/${name}-${tag}.png`;

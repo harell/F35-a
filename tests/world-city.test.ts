@@ -275,8 +275,8 @@ describe('volcanic cones (i1 re-check: Mt Eden crater invisible at 86 m heightfi
       expect(c.x + c.coneR).toBeLessThanOrEqual(b.z);
       expect(c.z + c.coneR).toBeLessThanOrEqual(b.w);
     }
-    // other theatres: an empty box, so the shader skips the loop
-    const none = coneUniforms(terrainStyle('mountains').cones ?? []).uConeBox.value;
+    // no cones: an empty box, so the shader skips the loop
+    const none = coneUniforms([]).uConeBox.value;
     expect(none.z).toBeLessThan(none.x);
     expect(terrainFragmentShader).toContain('coneDetail(wp, mpp, albedo)');
   });

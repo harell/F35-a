@@ -5,8 +5,8 @@
  * tower beacon, obstruction lights). Everything sits on the flattened strip (see terrain/features).
  *
  * Auckland's real airfields (Whenuapai, Auckland Airport, Ardmore, North Shore) are built from their
- * OpenStreetMap layout instead (buildRealAirfield); the template stays for the other theatres, the
- * fictional Waiheke strip and the offline fallback (template layout on the real runways).
+ * OpenStreetMap layout instead (buildRealAirfield); the template stays for the fictional Waiheke
+ * strip and the offline fallback (template layout on the real runways).
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';

@@ -1,9 +1,16 @@
 /**
- * Generic settlements for the non-Auckland theatres: city / town / village centres (styled per
- * theatre: flat-roofed Gulf towns with minarets, Soviet-era panel blocks, Scandinavian wooden
- * houses…), industrial zones (warehouses, tank farms, striped chimneys) and ports (piers into the
- * nearest water, gantry cranes, containers). Suburban houses around them come from the instanced
- * scatter (scatter.ts) following the same street grid the terrain shader paints.
+ * Generic settlement builders for scenery features: city / town / village centres (weatherboard
+ * walls, iron roofs, a church spire), industrial zones (warehouses, tank farms, striped chimneys)
+ * and ports (piers into the nearest water, gantry cranes, containers). Suburban houses around them
+ * come from the instanced scatter (scatter.ts) following the same street grid the terrain shader
+ * paints.
+ *
+ * This is not Auckland's scenery: the real city comes from aucklandSites.ts (the CBD, the port).
+ * Since the procedural theatres were removed (#73) no shipped mission places a city, town,
+ * village or port feature (only airbase and industrial ones), so of these builders only
+ * buildIndustrial runs today. The others stay reachable from the mission schema
+ * (SceneryFeatureType) until they are removed separately, together with the farmland / forest
+ * paths in terrain/bake.ts and terrain/vegetation.ts.
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
@@ -18,20 +25,12 @@ interface Style {
   walls: number[];
   roofs: number[];
   glass: number[];
-  flatRoofs: boolean;
-  landmark: 'minaret' | 'dome' | 'spire' | 'none';
 }
 
-const STYLES: Record<TheaterId, Style> = {
-  auckland: { walls: [0xd8d0c0, 0xc4bcad], roofs: [0x8c3b30, 0x4f5a62], glass: [0x5d7887], flatRoofs: false, landmark: 'spire' },
-  desert: { walls: [0xe8e0cc, 0xdcccb0, 0xf2eee4, 0xc8b490], roofs: [0xd8ccb4, 0xc8b89c], glass: [0x5a7a86, 0x86a0a8, 0x3e5a66], flatRoofs: true, landmark: 'minaret' },
-  islands: { walls: [0xe8e2d4, 0xd4b88c, 0xa8c4c8, 0xe0c8b0], roofs: [0xb04a32, 0x8a4a3a, 0x5a7a8a], glass: [0x4a6a78], flatRoofs: false, landmark: 'spire' },
-  mountains: { walls: [0xd0ccc4, 0xc8bca8, 0xb8b4ac, 0xe0d8c8], roofs: [0x7a3a2c, 0x5a6066, 0x8a8a80], glass: [0x6a7a80], flatRoofs: false, landmark: 'dome' },
-  arctic: { walls: [0xc8463a, 0xe0c060, 0x4a6a8a, 0xe8e4dc, 0x7a9a6a], roofs: [0x3a3c40, 0x5a2a28, 0xe8ecf0], glass: [0x5a7080], flatRoofs: false, landmark: 'spire' },
-};
+const STYLE: Style = { walls: [0xd8d0c0, 0xc4bcad], roofs: [0x8c3b30, 0x4f5a62], glass: [0x5d7887] };
 
-export function buildSettlement(f: SceneryFeature, theater: TheaterId, B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number): void {
-  const st = STYLES[theater];
+export function buildSettlement(f: SceneryFeature, _theater: TheaterId, B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number): void {
+  const st = STYLE;
   const fp = footprintOf(f);
   const rnd = mulberry32(((f.x * 73856093) ^ (f.z * 19349663)) >>> 0);
   switch (f.type) {
@@ -100,7 +99,7 @@ function buildCentre(
           const glassy = type === 'city' && h > 45;
           const wall = glassy ? pick(st.glass) : pick(st.walls);
           const roof = pick(st.roofs);
-          if (!st.flatRoofs && !glassy && h < 16) {
+          if (!glassy && h < 16) {
             h = Math.max(5, h * 0.7);
             B.box(fr, 0, 0, 0, bw, h, bd, wall, roof, WIN_HOME);
             B.gable(fr, 0, h, 0, bw, bd, Math.min(bw, bd) * 0.35, roof);
@@ -112,27 +111,13 @@ function buildCentre(
       }
     }
   }
-  // Landmark near the centre
+  // Church spire near the centre
   const g = height(cx, cz) - 1;
   const fr: Frame = { ox: cx + 40, oy: g, oz: cz - 30, c: 1, s: 0 };
-  if (st.landmark === 'minaret') {
-    B.box(fr, 0, 0, 0, 34, 14, 34, 0xf2eee4, 0xe8e0d0, WIN_NONE);
-    B.cylinder(fr, 0, 14, 0, 11, 1, 12, 12, 0x8ab0a8, WIN_NONE, true);
-    for (const ox of [-22, 22]) {
-      B.cylinder(fr, ox, 0, -22, 2.4, 2.1, 42, 8, 0xf2eee4, WIN_NONE, false);
-      B.cylinder(fr, ox, 42, -22, 2.8, 0.3, 7, 8, 0x8ab0a8, WIN_NONE, true);
-      lights.add(fr.ox + ox, g + 46, fr.oz - 22, 0x80ffb0, 3);
-    }
-  } else if (st.landmark === 'dome') {
-    B.box(fr, 0, 0, 0, 24, 16, 30, 0xf0ece0, 0xe0dac8, WIN_NONE);
-    B.cylinder(fr, 0, 16, 0, 5, 5, 8, 10, 0xf0ece0, WIN_NONE, false);
-    B.cylinder(fr, 0, 24, 0, 6, 0.5, 8, 10, 0xd4a830, WIN_NONE, true);
-  } else if (st.landmark === 'spire') {
-    B.box(fr, 0, 0, 0, 14, 12, 30, 0xe4e0d6, 0x7a3a2c, WIN_NONE);
-    B.gable(fr, 0, 12, 0, 14, 30, 7, 0x7a3a2c);
-    B.box(fr, 0, 0, -18, 7, 22, 7, 0xe4e0d6, 0xe4e0d6);
-    B.cylinder({ ...fr, c: Math.SQRT1_2, s: Math.SQRT1_2 }, 0, 22, -18, 4.8, 0.3, 16, 4, 0x4a4c50, WIN_NONE, true);
-  }
+  B.box(fr, 0, 0, 0, 14, 12, 30, 0xe4e0d6, 0x7a3a2c, WIN_NONE);
+  B.gable(fr, 0, 12, 0, 14, 30, 7, 0x7a3a2c);
+  B.box(fr, 0, 0, -18, 7, 22, 7, 0xe4e0d6, 0xe4e0d6);
+  B.cylinder({ ...fr, c: Math.SQRT1_2, s: Math.SQRT1_2 }, 0, 22, -18, 4.8, 0.3, 16, 4, 0x4a4c50, WIN_NONE, true);
   // Water tower
   if (type !== 'city' && detail > 0.3) {
     const wx = cx - core * 0.8;

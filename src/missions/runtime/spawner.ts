@@ -20,9 +20,10 @@ const HEAVIES = new Set(['tu22m', 'a50']);
 
 /**
  * Aircraft never spawn closer than this to the ground under them or SPAWN_CLEAR_AHEAD ahead (m).
- * Mission altitudes are above sea level, and the procedural Instant Action theatres can put a hill
- * under or in front of a "low" raid: the Defend strikers spawned inside the Mountains / Arctic
- * terrain, or just above a rising slope, and died in the first seconds (playtest 2026-10-02, 1.1-a).
+ * Mission altitudes are above sea level, so a hill can sit under or in front of a "low" raid: Defend
+ * strikers once spawned inside the terrain of a since-removed procedural theatre, or just above a
+ * rising slope, and died in the first seconds (playtest 2026-10-02, 1.1-a). Auckland's ranges
+ * (Waitākere ≤ 474 m, Hunua ≤ 688 m) still need it.
  */
 export const SPAWN_MIN_AGL = 100;
 export const SPAWN_CLEAR_AHEAD = 3_000;

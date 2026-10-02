@@ -34,7 +34,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Sweep the whole campaign | same, `--missions=campaign --diffs=recruit,pilot,veteran,ace --json=<file>` | 144 runs ≈ 2–3 min |
 | See a mission at minute 3 without flying there | `node tools/playtest/browser-run.mjs --mission=c09 --at=0,60,180` (needs the dev server, below) | load ~7 s + ~1 s per 3 min of game time + ~4.5 s per screenshot |
 | Smoke or draw-call baseline over many missions | `browser-run.mjs --missions=c01,c02,… --at=0,120 --shots=0` (one page, `fly()` per mission) | ~23 s per mission, ~2× faster than a page load each |
-| Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `c01`–`c12`, `t01`–`t03`, `ia_<mode>_<theater>` | free |
+| Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `c01`–`c12`, `t01`–`t03`, `ia_<mode>_auckland` (Auckland is the only theatre) | free |
 | Read the game state (objectives, player, counts, draw calls) | `window.__f35.state()` in `page.evaluate` | free |
 | Fly with scripted inputs (stall, high-g, low level) | `window.__f35.controls({pitch:1, throttle:1})`, `null` to clear; `autopilot(false)` first | free |
 | Let the AI fly the jet | `window.__f35.autopilot(true, role)` (role: `fighter`, `wingman`, `interceptor`) | free |
@@ -81,7 +81,7 @@ npx vite --config vite.e2e.config.ts --port 5190 &       # stable dev server for
 - **`state().renderer` is the last rendered frame.** Right after a start, a `fly()` or a `simulate()` it can be stale or half-loaded. Wait two `requestAnimationFrame`s (browser-run does) or take the screenshot first.
 - **Under load, everything is 2–3× slower.** With a sweep and two browsers on 4 cores, screenshots took 8–14 s and `simulate()` ~5 s per game minute. Budget charters for the box as it will be, not idle.
 - **Don't `pgrep -f`/`pkill -f` on a pattern that's in your own command line.** The wait loop matches itself, and the kill takes out the next job.
-- **The bot plays with jitter** (player ±600 m, enemies ±2.5 km), so seeds differ like players do. `--nojitter` gives the designed geometry. Instant Action ids (`ia_<mode>_<theater>`) are seeded from the id, so they reproduce; the menu still rolls a fresh mission each flight.
+- **The bot plays with jitter** (player ±600 m, enemies ±2.5 km), so seeds differ like players do. `--nojitter` gives the designed geometry. Instant Action ids (`ia_<mode>_auckland`) are seeded from the id, so they reproduce; the menu still rolls a fresh mission each flight.
 
 ## Learned
 

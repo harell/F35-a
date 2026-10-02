@@ -58,9 +58,8 @@ export interface SceneryOptions {
   aerial?: AerialPhotoInfo | null;
 }
 
-/** All features used for terrain flattening / baking / scenery (mission + theatre built-ins). */
-export function allFeatures(theater: TheaterId, mission: SceneryFeature[]): SceneryFeature[] {
-  if (theater !== 'auckland') return mission;
+/** All features used for terrain flattening / baking / scenery (mission + Auckland's built-ins). */
+export function allFeatures(_theater: TheaterId, mission: SceneryFeature[]): SceneryFeature[] {
   return [...aucklandBuiltinFeatures(), ...mission.filter((f) => !isDuplicateOfAuckland(f))];
 }
 
@@ -128,7 +127,7 @@ export class Scenery {
       if (f.type === 'airbase') {
         const b = new GeometryBuilder();
         // Auckland's real airfields: their OpenStreetMap layout, else the template on the real runways
-        const id = o.theater === 'auckland' ? airfieldOf(f) : null;
+        const id = airfieldOf(f);
         const layout = id ? airfieldLayout(id) : null;
         if (id && layout) {
           buildRealAirfield(layout, runwaysOf(id), { buildings: b, runway: (rw) => runwayDecal(rw.names, rw.length, rw.width), concrete, lights }, height, detail);
@@ -305,7 +304,7 @@ export class Scenery {
         if (height(x, z) > 5 || every++ % 3 !== 0) return;
         refl.push({ x, y, z, color: tmpC.setRGB(r, g, b).getHex(), intensity: 0.7 });
       });
-      if (o.theater === 'auckland' && !real) {
+      if (!real) {
         // stand-in lit CBD waterfront (procedural CBD)
         for (let x = -560; x <= 960; x += 40) {
           const z = -660 + ((x * 7) % 50);
@@ -323,13 +322,12 @@ export class Scenery {
     const foliage = createFoliageMaterial(o.atmo);
     this.materials.push(foliage);
     const treeCap = Math.max(300, o.cfg.treeMax);
-    const snowy = o.theater === 'arctic';
-    const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry(snowy)];
+    const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry()];
     this.geometries.push(...treeGeoms);
     const roadsRef = this.roads;
     // nothing grows or is built on the roads or inside the port, the naval base, the oil terminal or a stadium
     // (nor under the aerial photo, which shows the real houses and trees)
-    const sites = o.theater === 'auckland' ? siteBlocker() : null;
+    const sites = siteBlocker();
     const onSite = o.aerial ? (x: number, z: number, m: number) => aerialCovers(x, z) || (sites?.(x, z, m) ?? false) : sites;
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;

@@ -70,20 +70,17 @@ export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: Dis
 
 export class TreeSource implements ScatterSource {
   readonly kinds = 3;
-  private readonly tint: Color;
   private readonly dist: District = {} as District;
   constructor(
     private readonly hf: Heightfield,
     private readonly cmap: ColorMapSampler,
     private readonly veg: VegetationField,
-    private readonly theater: TheaterId,
+    _theater: TheaterId,
     private readonly seed: number,
     private readonly spacing = 14,
     private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
     private readonly cbd: CbdGrid | null = null,
-  ) {
-    this.tint = theater === 'desert' ? new Color(1.08, 1.02, 0.78) : theater === 'arctic' ? new Color(0.82, 0.9, 0.88) : new Color(1, 1, 1);
-  }
+  ) {}
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
     const sp = this.spacing;
@@ -102,7 +99,7 @@ export class TreeSource implements ScatterSource {
         let dens = this.cmap.forest(x, z);
         const urban = dens > 0 ? 0 : this.cmap.urban(x, z);
         if (urban > 0.05) dens = 0.1 * (1 - urban * 0.7); // garden & street trees
-        else if (dens < 0.02) dens = this.theater === 'desert' || this.theater === 'arctic' ? 0 : 0.012; // lone trees
+        else if (dens < 0.02) dens = 0.012; // lone trees
         if (h3 > dens) continue;
         const gh = hf.heightAt(x, z);
         if (gh < 0.6) continue;
@@ -122,8 +119,7 @@ export class TreeSource implements ScatterSource {
         const s = base * (urban > 0.05 ? 0.8 : 1);
         const w = s * (kind === TREE_PALM ? 0.95 : kind === TREE_CONIFER ? 0.95 : 1.15) * (0.85 + 0.3 * h1);
         const shade = 0.82 + 0.3 * h2;
-        _c.copy(this.tint).multiplyScalar(shade);
-        if (kind === TREE_BROADLEAF && this.theater === 'mountains' && gh > 1500) _c.multiplyScalar(0.9);
+        _c.setScalar(shade);
         const arr = out.data[kind];
         arr.push(x, hf.meshHeightAt(x, z) - 0.3, z, h3 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4));
       }

@@ -63,7 +63,7 @@ describe('wake shape', () => {
 
   it('no ship model carries its own wake mesh any more', () => {
     for (const v of ['container', 'cruise', null] as (VesselClass | null)[]) {
-      const p = getGroundPrototype('ship', 'grey', v);
+      const p = getGroundPrototype('ship', 'green', v);
       expect(p.root.getObjectByName('wake')).toBeUndefined();
     }
   });
@@ -136,17 +136,12 @@ describe('entity renderer: wakes and ferries', () => {
     r.dispose();
   });
 
-  it("'low' quality: no wakes, fewer ferries; other theatres: no ferries", () => {
+  it("'low' quality: no wakes, fewer ferries", () => {
     const low = setup('auckland', QUALITY_PRESETS.low, [ship(1, 'container', 3000, -13000, 5.5)]);
     low.r.update(low.ctx(10));
     expect(find(low.scene, 'wakes')).toHaveLength(0);
     expect((find(low.scene, 'ferries')[0] as InstancedMesh).count).toBe(QUALITY_PRESETS.low.ferries);
     low.r.dispose();
-    const desert = setup('desert', QUALITY_PRESETS.high, [ship(1, null, 0, 0, 8)]);
-    desert.r.update(desert.ctx(10));
-    expect(find(desert.scene, 'ferries')).toHaveLength(0);
-    expect(find(desert.scene, 'wakes')).toHaveLength(1);
-    desert.r.dispose();
   });
 
   it('places each ferry instance where its timetable says, with a small model', () => {

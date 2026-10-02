@@ -27,13 +27,12 @@ function knockDown(h: Harness): void {
 }
 
 describe('Sky Tower in Auckland sorties', () => {
-  it('every Auckland mode stands the tower up; other theatres do not', () => {
+  it('every mission (all Auckland) stands the tower up', () => {
     for (const def of [byId('c01'), byId('t01'), byId('ia_strike_auckland'), byId('ia_survival_auckland')]) {
       const h = harness(def);
       expect(h.world.landmarks.map((l) => l.id), def.id).toEqual(['skytower']);
       expect(h.world.landmarks[0].base.x).toBeCloseTo(AKL.skytower.x, 6);
     }
-    expect(harness(byId('ia_dogfight_desert')).world.landmarks).toEqual([]);
   });
 
   it('destroying it: check fire, SKY TOWER DESTROYED, mission failed with the reason, debrief tip', () => {

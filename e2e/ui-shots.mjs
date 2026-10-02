@@ -31,7 +31,7 @@ const SCREENS = [
   ['briefing', 'screen=briefing&mission=c01', 1400],
   ['briefing-obj', 'screen=briefing&mission=c04&tab=obj', 1400],
   ['briefing-hangar', 'screen=briefing&mission=c04&tab=hangar', 1400],
-  ['briefing-ia', 'screen=briefing&mission=ia_sam_gauntlet_desert', 1400],
+  ['briefing-ia', 'screen=briefing&mission=ia_sam_gauntlet_auckland', 1400],
   ['settings', 'screen=settings', 900],
   ['settings-controls', 'screen=settings&stab=controls&tilt=1', 900],
   ['settings-audio', 'screen=settings&stab=audio', 900],

@@ -91,7 +91,7 @@ export function findMission(id: string): MissionDef | null {
 }
 
 const IA_MODES: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
-const THEATERS: TheaterId[] = ['auckland', 'desert', 'islands', 'mountains', 'arctic'];
+const THEATERS: TheaterId[] = ['auckland'];
 
 /** FNV-1a hash of a string (32-bit, unsigned): a stable seed from a mission id. */
 function hashId(id: string): number {
@@ -105,8 +105,8 @@ function hashId(id: string): number {
 
 /**
  * Campaign / training mission by id, or an Instant Action mission from an id of the form
- * `ia_<mode>_<theater>` (e.g. `ia_dogfight_auckland`, `ia_sam_gauntlet_desert`) with default
- * options (4 mixed bandits, day, scattered cloud). Handy for `?mission=` URLs, test hooks and the
+ * `ia_<mode>_<theater>` (e.g. `ia_dogfight_auckland`, `ia_sam_gauntlet_auckland`; Auckland is the
+ * only theatre, any other returns null) with default options (4 mixed bandits, day, scattered cloud). Handy for `?mission=` URLs, test hooks and the
  * headless bot sweep. The Instant Action layout and terrain are seeded from a hash of the id, so
  * the same id is the same mission every time (the Instant Action menu builds its missions with
  * buildInstantMission(), a fresh random seed per flight).

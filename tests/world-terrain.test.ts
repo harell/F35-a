@@ -4,25 +4,26 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { Heightfield } from '../src/world/terrain/Heightfield';
 import { mulberry32 } from '../src/core/math';
-import type { TheaterId } from '../src/core/types';
 import type { SceneryFeature } from '../src/core/contracts';
 
+// Auckland is the only theatre: the generic heightfield / query tests run on it. Mission-style features
+// on land (the campaign's Waiheke strip and Motutapu depot) and SAM pads on the Gulf islands.
 const FEATURES: SceneryFeature[] = [
-  { type: 'airbase', x: -6000, z: 14_000, rotation: 30 },
-  { type: 'town', x: 9000, z: -7000 },
-  { type: 'village', x: -20_000, z: -18_000 },
+  { type: 'airbase', x: 26_900, z: -6600, rotation: 90, size: 0.8 },
+  { type: 'industrial', x: 13_300, z: -9800, size: 0.6 },
 ];
 const PADS = [
-  { x: 4000, z: -21_000, radius: 120 },
-  { x: -15_000, z: -4000, radius: 150 },
+  { x: 12_900, z: -8600, radius: 150 },
+  { x: 8200, z: -5600, radius: 110 },
+  { x: 24_000, z: -5500, radius: 120 },
 ];
 
 const cache = new Map<string, Heightfield>();
-function gen(theater: TheaterId, seed = 1234, resolution = 512): Heightfield {
-  const key = `${theater}/${seed}/${resolution}`;
+function gen(seed = 1234, resolution = 512): Heightfield {
+  const key = `${seed}/${resolution}`;
   let hf = cache.get(key);
   if (!hf) {
-    hf = runSync(generateTerrain({ theater, seed, resolution, features: FEATURES, pads: PADS }));
+    hf = runSync(generateTerrain({ theater: 'auckland', seed, resolution, features: FEATURES, pads: PADS }));
     cache.set(key, hf);
   }
   return hf;
@@ -44,18 +45,14 @@ function bruteLos(q: TerrainQueryImpl, a: Vector3, b: Vector3): boolean {
 }
 
 describe('world terrain generation', () => {
-  it('is deterministic for a given seed and differs across seeds', () => {
-    const a = runSync(generateTerrain({ theater: 'mountains', seed: 77, resolution: 256, features: FEATURES, pads: PADS }));
-    const b = runSync(generateTerrain({ theater: 'mountains', seed: 77, resolution: 256, features: FEATURES, pads: PADS }));
-    const c = runSync(generateTerrain({ theater: 'mountains', seed: 78, resolution: 256, features: FEATURES, pads: PADS }));
+  it('is deterministic for a given seed', () => {
+    const a = runSync(generateTerrain({ theater: 'auckland', seed: 77, resolution: 256, features: FEATURES, pads: PADS }));
+    const b = runSync(generateTerrain({ theater: 'auckland', seed: 77, resolution: 256, features: FEATURES, pads: PADS }));
     expect(a.data).toEqual(b.data);
-    let diff = 0;
-    for (let i = 0; i < a.data.length; i++) diff += Math.abs(a.data[i] - c.data[i]);
-    expect(diff / a.data.length).toBeGreaterThan(5);
   });
 
-  it.each(['desert', 'islands', 'mountains', 'arctic'] as TheaterId[])('%s: finite heights in a plausible range', (theater) => {
-    const hf = gen(theater);
+  it('has finite heights in a plausible range', () => {
+    const hf = gen();
     let mn = Infinity;
     let mx = -Infinity;
     let bad = 0;
@@ -65,14 +62,15 @@ describe('world terrain generation', () => {
       if (v > mx) mx = v;
     }
     expect(bad).toBe(0);
-    expect(mn).toBeGreaterThan(-1000);
-    expect(mx).toBeLessThan(5500);
-    if (theater === 'mountains') expect(mx).toBeGreaterThan(3000);
-    if (theater === 'islands') expect(mn).toBeLessThan(-200);
+    // the Tasman shelf off the west coast, the Hunua ranges (≤ 688 m) at the south-east edge
+    expect(mn).toBeGreaterThan(-200);
+    expect(mn).toBeLessThan(-40);
+    expect(mx).toBeGreaterThan(400);
+    expect(mx).toBeLessThan(800);
   }, 20_000);
 
   it('heightAt is bilinear and continuous', () => {
-    const hf = gen('mountains');
+    const hf = gen();
     const q = new TerrainQueryImpl(hf);
     // exact at samples
     for (const [i, j] of [
@@ -106,7 +104,7 @@ describe('world terrain generation', () => {
   });
 
   it('continues beyond the world edge without NaNs or cliffs', () => {
-    const q = new TerrainQueryImpl(gen('islands'));
+    const q = new TerrainQueryImpl(gen());
     for (const d of [41_000, 44_000, 60_000, 200_000]) {
       const h = q.heightAt(d, 1234);
       expect(Number.isFinite(h)).toBe(true);
@@ -114,8 +112,8 @@ describe('world terrain generation', () => {
     }
   });
 
-  it.each(['desert', 'islands', 'mountains', 'arctic'] as TheaterId[])('%s: pads and features are flattened and dry', (theater) => {
-    const hf = gen(theater);
+  it('flattens pads and features on dry land', () => {
+    const hf = gen();
     for (const p of PADS) {
       const c = hf.heightAt(p.x, p.z);
       expect(c).toBeGreaterThanOrEqual(1.9);
@@ -129,19 +127,19 @@ describe('world terrain generation', () => {
     const ab = FEATURES[0];
     const hd = ((ab.rotation ?? 0) * Math.PI) / 180;
     const h0 = hf.heightAt(ab.x, ab.z);
-    expect(h0).toBeGreaterThanOrEqual(4.9);
-    for (let v = -1500; v <= 1500; v += 250) {
+    expect(h0).toBeGreaterThanOrEqual(1.9);
+    for (let v = -600; v <= 600; v += 150) {
       const h = hf.heightAt(ab.x + Math.sin(hd) * v, ab.z - Math.cos(hd) * v);
       expect(Math.abs(h - h0)).toBeLessThan(1.0);
     }
-    // town centre is land
-    expect(hf.heightAt(FEATURES[1].x, FEATURES[1].z)).toBeGreaterThan(3);
+    // the depot is on land
+    expect(hf.heightAt(FEATURES[1].x, FEATURES[1].z)).toBeGreaterThan(1.9);
   });
 });
 
 describe('world terrain queries', () => {
   it('lineOfSight is blocked by a ridge and clear above it', () => {
-    const hf = gen('mountains');
+    const hf = gen();
     const q = new TerrainQueryImpl(hf);
     // find the highest sample away from the border
     let best = -1;
@@ -165,7 +163,7 @@ describe('world terrain queries', () => {
       const bz = pz - Math.sin(ang) * 7000;
       const a = new Vector3(ax, q.surfaceHeightAt(ax, az) + 40, az);
       const b = new Vector3(bx, q.surfaceHeightAt(bx, bz) + 40, bz);
-      if (a.y > best - 600 || b.y > best - 600) continue;
+      if (a.y > best - 250 || b.y > best - 250) continue;
       found = true;
       expect(q.lineOfSight(a, b)).toBe(false);
       expect(q.lineOfSight(b, a)).toBe(false);
@@ -178,7 +176,7 @@ describe('world terrain queries', () => {
   });
 
   it('lineOfSight is clear low over open water', () => {
-    const q = new TerrainQueryImpl(gen('islands'));
+    const q = new TerrainQueryImpl(gen());
     const rnd = mulberry32(9);
     let tested = 0;
     for (let s = 0; s < 400 && tested < 20; s++) {
@@ -198,8 +196,8 @@ describe('world terrain queries', () => {
     expect(tested).toBeGreaterThan(5);
   });
 
-  it.each(['mountains', 'arctic', 'desert'] as TheaterId[])('%s: lineOfSight agrees with dense sampling', (theater) => {
-    const q = new TerrainQueryImpl(gen(theater));
+  it('lineOfSight agrees with dense sampling', () => {
+    const q = new TerrainQueryImpl(gen());
     const rnd = mulberry32(42);
     let mismatches = 0;
     const N = 600;
@@ -218,7 +216,7 @@ describe('world terrain queries', () => {
   });
 
   it('raycast finds the surface accurately', () => {
-    const q = new TerrainQueryImpl(gen('mountains'));
+    const q = new TerrainQueryImpl(gen());
     const rnd = mulberry32(3);
     const dir = new Vector3();
     let checked = 0;
@@ -254,7 +252,7 @@ describe('world terrain queries', () => {
   });
 
   it('10k line-of-sight queries run fast', () => {
-    const q = new TerrainQueryImpl(gen('mountains', 1234, 1024));
+    const q = new TerrainQueryImpl(gen(1234, 1024));
     const rnd = mulberry32(11);
     const pts: Vector3[] = [];
     for (let s = 0; s < 20_000; s++) {

@@ -6,7 +6,6 @@
  */
 import { BufferGeometry, Color } from 'three';
 import { GeometryBuilder, WIN_HOME, WIN_OFFICE, type Frame } from './GeometryBuilder';
-import type { TheaterId } from '../../core/types';
 
 const F0: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
@@ -20,15 +19,14 @@ function cone(b: GeometryBuilder, y0: number, r: number, h: number, segs: number
 }
 
 /** Conifer: 3-sided trunk + two stacked 6/5-sided cones (17 triangles). */
-export function coniferGeometry(snowy: boolean): BufferGeometry {
+export function coniferGeometry(): BufferGeometry {
   const b = new GeometryBuilder();
   const trunk = 0x5a4430;
   const leafA = new Color(0x2f4a30);
   const leafB = new Color(0x3a5a38);
-  const snow = new Color(0xe8eef4);
   b.cylinder(F0, 0, 0, 0, 0.05, 0.04, 0.2, 3, trunk, 0, false);
   cone(b, 0.15, 0.3, 0.6, 6, leafA);
-  cone(b, 0.45, 0.22, 0.55, 5, snowy ? snow : leafB, 0.5);
+  cone(b, 0.45, 0.22, 0.55, 5, leafB, 0.5);
   return b.build()!;
 }
 
@@ -104,18 +102,4 @@ export function apartmentGeometry(): BufferGeometry {
   b.quad(F0, [-0.5, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, -0.5, -0.5, 1, -0.5], w);
   b.box(F0, 0.15, 1, -0.1, 0.3, 0.05, 0.25, 0xbdbdbd, 0xbdbdbd);
   return b.build()!;
-}
-
-/** Tree tint per theatre (multiplied with the archetype's vertex colour). */
-export function treeTint(theater: TheaterId): Color {
-  switch (theater) {
-    case 'desert':
-      return new Color(1.05, 1.0, 0.8);
-    case 'arctic':
-      return new Color(0.85, 0.92, 0.9);
-    case 'islands':
-      return new Color(0.95, 1.1, 0.9);
-    default:
-      return new Color(1, 1, 1);
-  }
 }

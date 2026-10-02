@@ -1,7 +1,6 @@
 /**
- * F35-A — Instant Action generator: dogfight / SAM gauntlet / strike / defend / survival, in any theatre
- * (Auckland uses real landmarks; the procedural theatres use generic layouts — pads and
- * features keep every SAM site and compound on dry, flat land).
+ * F35-A — Instant Action generator: dogfight / SAM gauntlet / strike / defend / survival over Auckland
+ * (real landmarks: the Gulf islands' SAM belt, the Waiheke airstrip, the Wiri oil terminal).
  */
 import type { InstantActionOptions, MissionDef, SceneryFeature } from '../../core/contracts';
 import { mulberry32 } from '../../core/math';
@@ -16,10 +15,6 @@ const PLAYER_CALL = 'Viper 1';
 
 const THEATER_LABEL: Record<TheaterId, string> = {
   auckland: 'Auckland',
-  desert: 'Desert',
-  islands: 'Islands',
-  mountains: 'Mountains',
-  arctic: 'Arctic',
 };
 
 const MODE_TITLE: Record<InstantActionOptions['mode'], string> = {
@@ -57,27 +52,6 @@ function aucklandLayout(): Layout {
     airbase: { at: P.waiAirstrip, heading: WAIHEKE_RUNWAY_HDG },
     // the raid comes in low from the Firth of Thames, over Whitford and Flat Bush
     defend: { site: P.wiri, player: { x: -5000, z: 5000, altitude: 5000, heading: 125, speed: 240 }, raidFrom: { x: 35000, z: 10000 }, low: 300 },
-  };
-}
-
-function genericLayout(): Layout {
-  const belt: XZ[] = [];
-  for (let i = 0; i < 8; i++) belt.push({ x: -10000 + i * 5000, z: (i % 2 === 0 ? 1 : -1) * (2500 + (i % 3) * 1200) });
-  return {
-    player: { x: -31000, z: 2000, altitude: 5000, heading: 90, speed: 240 },
-    enemyAt: { x: 12000, z: -12000 },
-    enemyHeading: 245,
-    target: { x: 29000, z: 0 },
-    belt,
-    features: [
-      { type: 'airbase', x: -28000, z: 22000, rotation: 45 },
-      { type: 'airbase', x: 24000, z: -14000, rotation: 90 },
-      { type: 'town', x: 30000, z: 6000 },
-      { type: 'industrial', x: 29000, z: 0, size: 0.7 },
-      { type: 'village', x: 4000, z: 14000 },
-    ],
-    airbase: { at: { x: 24000, z: -14000 }, heading: 90 },
-    defend: { site: { x: -14000, z: 9000 }, player: { x: -31000, z: 2000, altitude: 5000, heading: 90, speed: 240 }, raidFrom: { x: 26000, z: -6000 }, low: 700 },
   };
 }
 
@@ -131,8 +105,7 @@ const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 's
 
 export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: number): MissionDef {
   const rng = mulberry32(seed >>> 0);
-  const akl = opts.theater === 'auckland';
-  const lay = akl ? aucklandLayout() : genericLayout();
+  const lay = aucklandLayout();
   const n = Math.max(1, Math.min(8, Math.round(opts.enemyCount)));
   const groups: AircraftGroupDef[] = [];
   const sams: SamSiteDef[] = [];
@@ -204,7 +177,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       allowed = ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
-      if (akl && !features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);
+      if (!features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);
       ground.push(
         target('jet1', 'parked', 'parked_jet', rw(-150, 320), { name: 'Parked Jet' }),
         target('jet2', 'parked', 'parked_jet', rw(-90, 320), { name: 'Parked Jet' }),
@@ -214,9 +187,9 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         target('fuel1', 'fuel', 'fuel', rw(600, 620)),
       );
       sams.push(site('zsu1', 'defences', 'zsu23', rw(-650, 150)), site('zsu2', 'defences', 'zsu23', rw(650, 150)));
-      if (n >= 2) sams.push(site('sam1', 'defences', akl ? 'sa6' : 'sa8', akl ? P.waiW : rw(-1800, -1200)));
+      if (n >= 2) sams.push(site('sam1', 'defences', 'sa6', P.waiW));
       // the SA-15 Tor shoots down JDAMs: Veteran and up only, as in c04
-      if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', akl ? P.waiC : rw(1600, 1100), { minDifficulty: 'veteran' }));
+      if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', P.waiC, { minDifficulty: 'veteran' }));
       const cap = enemyFlights(opts, Math.max(1, Math.ceil(n / 2)), lay, rng, { role: 'cap' });
       groups.push(...cap);
       script.scaleEnemyTotal = true;
@@ -230,7 +203,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       break;
     }
     case 'defend': {
-      const d = defendScenario(opts, n, lay, akl, rng);
+      const d = defendScenario(opts, n, lay, rng);
       groups.push(...d.groups);
       ground.push(...d.ground);
       objectives.push(...d.objectives);
@@ -275,7 +248,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     theater: opts.theater,
     timeOfDay: opts.timeOfDay,
     weather: opts.weather,
-    seed: akl ? AKL_SEED : (seed % 100000) + 1,
+    seed: AKL_SEED,
     briefing,
     recommendedLoadout: loadout,
     allowedLoadouts: allowed,
@@ -295,16 +268,10 @@ function defaultWaypoints(opts: InstantActionOptions, lay: Layout, objectives: O
 /** Defend: tanks that must survive (primary), out of the 9 fuel tanks at Wiri. */
 export const DEFEND_MIN_TANKS = 6;
 
-/**
- * Fuel tanks of the defended site as friendly ground targets: the Wiri terminal's real tanks in
- * Auckland (drawn by the scenery), a 3 × 3 farm elsewhere.
- */
-export function defendTanks(lay: Layout, akl: boolean): GroundTargetDef[] {
-  const opts = { team: 'blue' as const, name: 'Fuel Tank' };
-  if (akl) return WIRI_TANKS.filter((t) => t.fuel).map((t, i) => target(`wiri${i}`, 'wiri', 'fuel', t, { ...opts, scenery: true }));
-  const out: GroundTargetDef[] = [];
-  for (let i = 0; i < 9; i++) out.push(target(`wiri${i}`, 'wiri', 'fuel', { x: lay.defend.site.x + ((i % 3) - 1) * 90, z: lay.defend.site.z + (Math.floor(i / 3) - 1) * 90 }, opts));
-  return out;
+/** Fuel tanks of the defended site as friendly ground targets: the Wiri terminal's real tanks (drawn by the scenery). */
+export function defendTanks(): GroundTargetDef[] {
+  const opts = { team: 'blue' as const, name: 'Fuel Tank', scenery: true };
+  return WIRI_TANKS.filter((t) => t.fuel).map((t, i) => target(`wiri${i}`, 'wiri', 'fuel', t, opts));
 }
 
 interface DefendParts {
@@ -326,7 +293,7 @@ interface DefendParts {
  * its own tank and moves on to the next). Keep DEFEND_MIN_TANKS of the 9 tanks standing until the
  * strikers are shot down or driven off.
  */
-function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, akl: boolean, rng: () => number): DefendParts {
+function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng: () => number): DefendParts {
   const site = lay.defend.site;
   const from = lay.defend.raidFrom;
   const low = lay.defend.low;
@@ -390,11 +357,10 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, akl:
     { id: 'o_all', kind: 'protect', group: 'wiri', minSurvivors: total, until: strikersDone, label: `Save all ${total} tanks`, primary: false },
   ];
   if (escorts > 0) objectives.push({ id: 'o_escort', kind: 'destroy', groups: ['escort'], label: 'Splash the escort', primary: false });
-  const where = akl ? 'Wiri' : 'the fuel farm';
   const at: Condition = { kind: 'area', who: { group: 'strikers' }, x: ip.x, z: ip.z, radius: 2500 };
   return {
     groups,
-    ground: defendTanks(lay, akl),
+    ground: defendTanks(),
     objectives,
     waypoints: [{ id: 'wp_site', label: 'Intercept point', kind: 'cap', x: ip.x, z: ip.z, altitude: 3000, radius: 4000, objective: 'o_tanks' }],
     triggers: [
@@ -404,7 +370,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, akl:
         when: { kind: 'any', of: [at, { kind: 'time', t: 180 }] },
         actions: [
           { kind: 'retask', group: 'strikers', task: { kind: 'attack_group', group: 'wiri' } },
-          { kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Strikers climbing, rolling in on ${where}!`, priority: 3 },
+          { kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Strikers climbing, rolling in on Wiri!`, priority: 3 },
         ],
       },
       { id: 't_hit', when: { kind: 'group_destroyed', group: 'wiri', count: 1 }, actions: [{ kind: 'radio', from: 'Wiri', text: 'We have a tank burning! Keep them off us!', priority: 3 }] },
@@ -418,17 +384,13 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, akl:
       {
         kind: 'radio',
         from: DS_CALL,
-        text: akl
-          ? `${PLAYER_CALL}, Darkstar. Strike package low over the Firth of Thames, heading for the Wiri fuel terminal. Bombers have priority.`
-          : `${PLAYER_CALL}, Darkstar. Strike package low from the east, heading for our fuel farm. Bombers have priority.`,
+        text: `${PLAYER_CALL}, Darkstar. Strike package low over the Firth of Thames, heading for the Wiri fuel terminal. Bombers have priority.`,
         priority: 3,
       },
     ],
-    successText: akl ? 'Wiri is still standing. The airport keeps its fuel.' : 'The fuel farm is still standing.',
+    successText: 'Wiri is still standing. The airport keeps its fuel.',
     briefing: [
-      akl
-        ? "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks."
-        : 'A strike package is going for our fuel farm.',
+      "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
       `About ${strikers} Flankers loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
     ],

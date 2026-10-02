@@ -16,7 +16,7 @@ function def(script: Partial<MissionScript>, over: Partial<MissionDef> = {}): Mi
     index: 1,
     title: 'Synthetic',
     subtitle: 'test',
-    theater: 'desert',
+    theater: 'auckland',
     timeOfDay: 'day',
     weather: 'clear',
     seed: 1,
@@ -102,7 +102,8 @@ describe('mission schema features', () => {
     });
     expect(validateMission(d)).toEqual([]);
     const h = harness(d);
-    expect(h.world.aircraft).toHaveLength(1);
+    // only the player at t = 0 (Auckland's civil airliners are neutral and fly their own profile)
+    expect(h.world.aircraft.filter((a) => a.team !== 'neutral')).toHaveLength(1);
     h.run(2.5);
     expect(h.world.aircraft.filter((a) => a.groupId === 'late')).toHaveLength(2);
     expect(h.runner.objectives[0].progress).toEqual({ done: 0, total: 3 });
@@ -130,10 +131,12 @@ describe('mission schema features', () => {
   it('missionById resolves campaign, training and instant ids', () => {
     expect(missionById('c05')?.title).toBe('Backfire');
     expect(missionById('t02')?.kind).toBe('training');
-    const ia = missionById('ia_sam_gauntlet_desert');
+    const ia = missionById('ia_sam_gauntlet_auckland');
     expect(ia?.kind).toBe('instant');
-    expect(ia?.theater).toBe('desert');
+    expect(ia?.theater).toBe('auckland');
     expect(missionById('ia_nope_auckland')).toBeNull();
+    // the procedural theatres are gone (issue #73)
+    expect(missionById('ia_sam_gauntlet_desert')).toBeNull();
     expect(missionById('zzz')).toBeNull();
   });
 });

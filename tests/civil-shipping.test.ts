@@ -19,7 +19,7 @@ import type { SimWorld } from '../src/sim/api';
 import type { GroundTargetEntity } from '../src/sim/entities';
 import type { VesselClass } from '../src/core/types';
 import { ANCHORAGES, PORT_BERTHS, SHIP_ROUTES, routePoints } from '../src/missions/runtime/shipping';
-import { buildInstantMissionSeeded, createMissionRunner, missionById } from '../src/missions';
+import { createMissionRunner, missionById } from '../src/missions';
 import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { computeScore, POINTS } from '../src/missions/runtime/scoring';
 import { civilLossRows } from '../src/ui/screens/debrief';
@@ -212,10 +212,7 @@ describe('civil shipping in missions', () => {
     m.runner.dispose?.();
   });
 
-  it('no ships outside Auckland, and none with civil traffic switched off', () => {
-    const desert = setup(buildInstantMissionSeeded({ mode: 'dogfight', theater: 'desert', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3));
-    expect(desert.ships()).toHaveLength(0);
-    desert.runner.dispose?.();
+  it('no ships with civil traffic switched off', () => {
     const off = setup(missionById('c01')!, false);
     expect(off.ships()).toHaveLength(0);
     off.runner.dispose?.();

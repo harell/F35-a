@@ -35,8 +35,8 @@ export function isHostile(a: Team, b: Team): boolean {
 
 export type Difficulty = 'recruit' | 'pilot' | 'veteran' | 'ace';
 export type QualityLevel = 'low' | 'medium' | 'high';
-/** 'auckland' is the primary theatre (campaign + training): Auckland CBD, Waitematā Harbour & Hauraki Gulf, NZ. */
-export type TheaterId = 'auckland' | 'desert' | 'arctic' | 'islands' | 'mountains';
+/** The game's one theatre: Auckland CBD, Waitematā Harbour & Hauraki Gulf, NZ (campaign, training, Instant Action). */
+export type TheaterId = 'auckland';
 export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
 export type Weather = 'clear' | 'scattered' | 'overcast';
 

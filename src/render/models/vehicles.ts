@@ -9,7 +9,8 @@ import { box, boxUV, cylinder, cylinderZ, dome, ellipsoid, flipWinding, merge, p
 import { latheZ, prismX } from './geom/loft';
 import { getMaterial } from './materials';
 
-export type PaletteId = 'green' | 'desert' | 'grey';
+/** Camouflage schemes for enemy vehicles and sites (one today: Auckland's green). */
+export type PaletteId = 'green';
 
 export interface Palette {
   body: number;
@@ -26,8 +27,6 @@ export interface Palette {
 
 export const PALETTES: Record<PaletteId, Palette> = {
   green: { body: 0x4e5c3a, dark: 0x303827, track: 0x2b2b29, canvas: 0x5d6545, concrete: 0x9a9890, earth: 0x6e6a4a, metal: 0x6f7472, glass: 0x1c2328, white: 0xe2e1da, roof: 0x5f625f },
-  desert: { body: 0xa89168, dark: 0x6c5d43, track: 0x3a3630, canvas: 0xb8a47c, concrete: 0xb8ae98, earth: 0xa8926a, metal: 0x7d7a72, glass: 0x1f2226, white: 0xe6e2d6, roof: 0x8a8272 },
-  grey: { body: 0x7f8781, dark: 0x4f5550, track: 0x2e2e2c, canvas: 0x8d938d, concrete: 0xa9aba8, earth: 0x8e8e86, metal: 0x767b79, glass: 0x1c2126, white: 0xe8e8e4, roof: 0x6a6d6c },
 };
 
 /** Merge + UV + mesh with a shared material. */

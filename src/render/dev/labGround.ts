@@ -2,7 +2,7 @@
  * DEV ONLY — SAM site / ground target preview for the models lab (sam:<type>, gt:<type>,
  * gt:ship:container / gt:ship:cruise for the civil merchant ships).
  * Animates radars/launchers with fake entity state; &dead=1 shows the wreck (a ship sinks from t = 0;
- * &anchored=1 swings it at anchor); &pal=desert|grey.
+ * &anchored=1 swings it at anchor).
  */
 import { Group, Scene, Vector3 } from 'three';
 import { GroundTargetEntity, SamSiteEntity } from '../../sim/entities';
@@ -10,11 +10,9 @@ import type { GroundTargetType, SamType, VesselClass } from '../../core/types';
 import { getSamPrototype } from '../models/sams';
 import { getGroundPrototype } from '../models/ground';
 import { GroundVisual, SamVisual } from '../visuals/SiteVisuals';
-import type { PaletteId } from '../models/vehicles';
 
 export function buildLabGround(id: string, _scene: Scene, onUpdate: (fn: (t: number, dt: number) => void) => void): { object: Group; radius: number } {
   const q = new URLSearchParams(location.search);
-  const pal = (q.get('pal') ?? 'green') as PaletteId;
   const dead = q.get('dead') === '1';
   const holder = new Group();
   const cam = new Vector3(0, 0, 1e9);
@@ -23,7 +21,7 @@ export function buildLabGround(id: string, _scene: Scene, onUpdate: (fn: (t: num
     const e = new SamSiteEntity(1, type, 'red', { missiles: 6 });
     e.missilesReady = Number(q.get('ready') ?? 6);
     e.alive = !dead;
-    const v = new SamVisual(getSamPrototype(type, pal));
+    const v = new SamVisual(getSamPrototype(type));
     holder.add(v.root);
     onUpdate((t, dt) => {
       e.radarAzimuth = t * 2;
@@ -41,7 +39,7 @@ export function buildLabGround(id: string, _scene: Scene, onUpdate: (fn: (t: num
   if (dead) e.destroyedAt = 0;
   e.anchored = q.get('anchored') === '1';
   if (type === 'ship' && !e.anchored) e.velocity.set(0, 0, -10);
-  const v = new GroundVisual(getGroundPrototype(type, pal, e.vessel));
+  const v = new GroundVisual(getGroundPrototype(type, 'green', e.vessel));
   holder.add(v.root);
   onUpdate((t, dt) => {
     v.update(e, t, dt, cam.set(0, 0, 100), 1e9);

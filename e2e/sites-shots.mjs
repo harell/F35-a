@@ -37,7 +37,7 @@ for (const [name, q] of Object.entries(VIEWS)) {
     if (m.type() === 'error') errs.push(m.text());
   });
   const tod = q.includes('tod=') ? '' : 'tod=day&';
-  await page.goto(`http://localhost:${port}/labs/world-lab.html?theater=auckland&${tod}weather=clear&quality=medium&seed=1840&${q}`);
+  await page.goto(`http://localhost:${port}/labs/world-lab.html?${tod}weather=clear&quality=medium&seed=1840&${q}`);
   await page.waitForFunction(() => window.__lab?.ready, null, { timeout: 240_000 });
   await page.waitForTimeout(6000); // let the tree / house scatters stream in
   const file = `${outDir}/${name}-${tag}.png`;

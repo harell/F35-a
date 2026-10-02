@@ -8,7 +8,7 @@
  */
 import { Group, Vector3 } from 'three';
 import type { CreateEntityRenderer, EntityRendererApi, FrameContext } from '../core/contracts';
-import type { AircraftType, MunitionId, TheaterId } from '../core/types';
+import type { AircraftType, MunitionId } from '../core/types';
 import { getAircraftPrototype } from './models/aircraft';
 import { AIRCRAFT_SPECS, eyeOffsetOf } from './models/specs';
 import { allMaterials, getEnvCube, modelQuality, setEnvironment } from './models/materials';
@@ -30,12 +30,6 @@ const _fwd = new Vector3();
 const SHIP_LIGHTS_FAR = 16_000;
 const SHIP_DECK_LIGHTS_FAR = 7_000;
 const eyeCache = new Map<AircraftType, Vector3>();
-
-function paletteFor(theater: TheaterId | undefined): PaletteId {
-  if (theater === 'desert') return 'desert';
-  if (theater === 'arctic') return 'grey';
-  return 'green';
-}
 
 interface Tracked<T> {
   v: T;
@@ -76,7 +70,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
 
   let playerVisible = true;
   let frame = 0;
-  let palette: PaletteId | null = null;
+  const palette: PaletteId = 'green';
 
   const q = quality;
   const lodCfg = {
@@ -186,7 +180,6 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       const cam = ctx.camera.position;
       const t = ctx.time;
       const dt = ctx.paused ? 0 : ctx.dt;
-      if (palette === null) palette = paletteFor(ctx.mission?.def.theater);
       if (!ferriesChecked && ctx.mission) {
         ferriesChecked = true;
         if (ctx.mission.def.theater === 'auckland' && q.ferries > 0) {
