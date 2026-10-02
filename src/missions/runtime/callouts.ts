@@ -156,7 +156,11 @@ export class Callouts {
           s.civilianKills++;
           if (ship) s.civilianShipKills++;
         }
-        if (ship) {
+        if (s.script.freeFlight) {
+          // free flight: no scolding, just a dry word from Darkstar
+          s.hud(ship ? 'CIVILIAN SHIP DESTROYED' : 'CIVILIAN AIRLINER DOWN', 'warn', 3);
+          s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, Darkstar. ${who} won't be making it home. Let's keep the sightseeing friendly.`, priority: 2 });
+        } else if (ship) {
           s.hud('CIVILIAN SHIP DESTROYED', 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian vessel ${who}!`, priority: 4 });
         } else {

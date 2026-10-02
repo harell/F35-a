@@ -292,8 +292,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
-    r.tips = buildTips(s, r);
-    r.medals = awardMedals(s, r, finale);
+    // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
+    if (s.script.freeFlight) r.freeFlight = true;
+    r.tips = r.freeFlight ? [] : buildTips(s, r);
+    r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
     this.finalResult = r;
     return r;

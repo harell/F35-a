@@ -10,7 +10,8 @@ import { AKL } from '../src/core/auckland';
 import { DIFFICULTIES } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import { createAiBrain } from '../src/ai';
-import { buildInstantMissionSeeded, createMissionRunner, missionById, validateMission } from '../src/missions';
+import { CAMPAIGNS, TRAINING, buildInstantMissionSeeded, createMissionRunner, missionById, validateMission } from '../src/missions';
+import { applyResult, defaultProgress } from '../src/missions/progress';
 import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { destroyLandmark } from '../src/sim/landmarks';
 import { createSimWorld } from '../src/sim/World';
@@ -19,6 +20,7 @@ import { parseInstantSetup } from '../src/ui/screens/instantAction';
 import { FlatTerrain } from './combat-helpers';
 
 const DT = 1 / 60;
+const CAMPAIGN_CHAINS = CAMPAIGNS.map((c) => c.missions);
 const stroll = () => buildInstantMissionSeeded({ mode: 'stroll', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 8 }, 7);
 
 function setup() {
@@ -59,6 +61,21 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(def.briefing[0]).toMatch(/^Everyone's friendly\. It's New Zealand\./);
     expect(def.objectiveText).toEqual(['Free flight: no objectives. Explore Auckland at your own pace.']);
     expect(missionById('ia_stroll_auckland')?.script.freeFlight).toBe(true);
+  });
+
+  it('offers a sightseeing tour on the steering cue, from a low, steady start (playtest 1.1-c)', () => {
+    const def = stroll();
+    const wps = def.script.waypoints;
+    expect(wps.map((w) => w.label)).toEqual(['Harbour Bridge', 'Sky Tower', 'North Head', 'Rangitoto', 'Mission Bay', 'Museum', 'Eden Park', 'Mt Eden', 'One Tree Hill', 'Airport', 'Whenuapai']);
+    for (const w of wps) {
+      expect(w.kind, w.id).toBe('nav'); // advances as the jet passes, never tied to an objective
+      expect(w.altitude, w.id).toBeGreaterThanOrEqual(500);
+    }
+    expect(def.player.altitude).toBeLessThanOrEqual(1000);
+    expect(def.player.speed).toBeLessThanOrEqual(160);
+    expect(def.briefing.join(' ')).toMatch(/steering cue offers a tour/);
+    // the briefing map has no enemy in free flight
+    expect(def.intel.map((i) => i.label)).not.toContain('Enemy airstrip');
   });
 
   it('only civilians in the air, and it keeps running until the player quits', () => {
@@ -131,6 +148,12 @@ describe('Instant Action: A Stroll in the Park', () => {
     m.world.applyDamage(p, p.maxHealth * 10, null, 'gun');
     m.tick(1);
     expect(m.runner.state).toBe('failed');
+    // ...as a 'flight over', not a failed mission: no tips, no medals, nothing in the career
+    const r = m.runner.result(m.world);
+    expect(r.freeFlight).toBe(true);
+    expect(r.tips).toEqual([]);
+    const before = defaultProgress(CAMPAIGN_CHAINS, TRAINING);
+    expect(applyResult(before, r, CAMPAIGN_CHAINS)).toBe(before);
   });
 
   it('is the menu default, and a saved stroll setup loads as one', () => {

@@ -194,6 +194,21 @@ describe('i2: TSD range, RWR declutter, tactical legend', () => {
     expect(tm.legendOpen(21)).toBe(false);
   });
 
+  it('tactical view in free flight names the sights and suburbs; a combat mission keeps the sparse chart (playtest 1.1-c)', () => {
+    const names = (free: boolean) => {
+      const r = rig('aa', 'tactical');
+      const m = r.mock.mission as unknown as { def?: { script: { freeFlight?: boolean } } };
+      m.def = { ...(m.def ?? {}), script: { ...(m.def?.script ?? {}), freeFlight: free } } as typeof m.def;
+      r.mock.player.position.set(1000, 3000, 1000);
+      return r.run(0.2).map((t) => t.text);
+    };
+    const free = names(true);
+    // (at the 20 km scale the centre names give way to the map's symbols: the suburbs show)
+    const sights = ['SKY TOWER', 'HARBOUR BRIDGE', 'EDEN PARK', 'MT EDEN', 'PONSONBY', 'PARNELL', 'MUSEUM', 'ST HELIERS', 'MT ALBERT', 'OTAHUHU', 'HOBSONVILLE', 'LONG BAY', 'MURIWAI', 'BEACHLANDS'];
+    expect(free.filter((t) => sights.includes(t)).length).toBeGreaterThanOrEqual(3);
+    expect(names(false).some((t) => sights.includes(t))).toBe(false);
+  });
+
   it('tactical view: the legend collapses after 5 s and the objectives list leaves the map', () => {
     const r = rig('aa', 'tactical');
     let texts = r.run(1);

@@ -360,6 +360,8 @@ export interface MissionResult {
   medals?: { id: string; name: string; description: string }[];
   /** Final mission of a campaign completed (show that campaign's ending: the mission id names it). */
   campaignComplete?: boolean;
+  /** Free flight (A Stroll in the Park): no grade, no score, nothing recorded in the career. */
+  freeFlight?: boolean;
 }
 
 export interface MissionRunnerApi {

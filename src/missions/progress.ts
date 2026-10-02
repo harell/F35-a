@@ -140,6 +140,8 @@ export function saveProgressTo(p: CampaignProgress): void {
  * `campaigns` are the ordered campaign lists: a win unlocks the next mission of its own campaign.
  */
 export function applyResult(p: CampaignProgress, r: MissionResult, campaigns: CampaignChains): CampaignProgress {
+  // free flight (A Stroll in the Park) counts for nothing: no fail streak, death, kills or best
+  if (r.freeFlight) return p;
   const src = p as Ext;
   const next: Ext = {
     unlocked: [...p.unlocked],
