@@ -131,7 +131,14 @@ high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial
 OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
 the wharf decks and the naval base take it on their top faces, and the house / tree scatter and the procedural
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
-procedural ground stays.
+procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
+photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
+day, so the square's edge doesn't show in low light.
+
+The suburbs' painted lots and the 3D houses on them keep a corridor clear along the road and railway ribbons:
+`src/world/scenery/lotMask.ts` is one bit per 12 m cell, set near a ribbon, and both the terrain shader
+(`lotMasked()`, `TerrainRenderer.setLotMask`) and `HouseSource` leave a lot unbuilt when its centre falls in a set
+cell, so painted and 3D houses still agree.
 
 ## Harbour ferries and wakes (render-only)
 
@@ -144,7 +151,8 @@ out, turn on the spot, sail a smoothed path, brake in along the next dock's axis
 LINZ water clear of wharves, bridge piers and moored ships, and that no two ferries ever overlap. When you move a route
 or a dock, rerun that test; if two ferries clash, change the route `offset`s (only routes with the same headway may
 share a Downtown slot). `HarbourFerries` draws the fleet as one `InstancedMesh` (`QualitySettings.ferries` takes the
-first N of `FERRY_FLEET`), and the `WakeBatch` (`src/render/effects/Wakes.ts`) draws the V-shaped foam wakes of every
+first N of `FERRY_FLEET`; at night a second, unlit `InstancedMesh` on the same instances lights the cabin windows),
+and the `WakeBatch` (`src/render/effects/Wakes.ts`) draws the V-shaped foam wakes of every
 moving ship and ferry in one draw call (`QualitySettings.wakes`, off on `low`). Both are owned by the EntityRenderer.
 
 ## Frame / sim order (Game.ts)
