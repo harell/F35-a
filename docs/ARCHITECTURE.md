@@ -2,7 +2,7 @@
 
 F35-A is a mobile-first combat flight simulator that runs in a phone browser (iOS Safari 15+,
 Android Chrome). It is inspired by NovaLogic's *F-22 Raptor* (1997), with the F-35A Lightning II as the player jet:
-mission-based campaign across several theatres, air-to-air and SAM threats, AWACS radio calls,
+mission-based campaign over Auckland, air-to-air and SAM threats, AWACS radio calls,
 multiple camera views, and an arcade-leaning but believable flight model.
 
 **Engine choice:** Unreal Engine 5 can't target mobile browsers (HTML5 export was removed in UE 4.24).
@@ -10,12 +10,12 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 
 > ## ⚠️ ORCHESTRATOR UPDATE — SETTING IS AUCKLAND, NEW ZEALAND (supersedes older task text)
 >
-> The user has asked for the game's scenery to be **Auckland CBD, New Zealand**. A new `TheaterId` **`'auckland'`**
-> exists (see `src/core/types.ts`) and is the **primary theatre**:
+> The user has asked for the game's scenery to be **Auckland CBD, New Zealand**. `TheaterId` (see `src/core/types.ts`)
+> has a single member, **`'auckland'`**: it is the **only theatre**:
 >
-> * **All campaign and training missions use `theater: 'auckland'`** (vary time of day and weather for variety).
->   This replaces the desert → islands → mountains → arctic campaign. The other theatres stay available **only as
->   optional Instant Action choices**, and Instant Action defaults to Auckland.
+> * **Every mission uses `theater: 'auckland'`**: campaign, training and Instant Action (vary time of day and weather
+>   for variety). The four procedural theatres (generic terrain, sky presets and scenery, Instant Action only) were
+>   removed in issue #73; `ia_<mode>_auckland` is the only Instant Action id form.
 > * Geography reference with world coordinates is in **`src/core/auckland.ts`**. The Sky Tower is the origin; use
 >   `AKL.<id>` for landmark positions, for example `AKL.rangitoto`, `AKL.whenuapai`, `AKL.port`, `AKL.bridge_s`, `AKL.waiheke`.
 >   The CBD sits on the south shore of the Waitematā Harbour, the Hauraki Gulf and its islands lie to the east/north-east,

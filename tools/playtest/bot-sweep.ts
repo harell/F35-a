@@ -17,8 +17,8 @@
  *               5 s) into each row's `events` (only useful with --json; without it they stay empty)
  *   --nojitter  no seeded jitter of the player start and enemy positions: the seed only changes
  *               the combat RNG and the mission seed
- * Mission ids include Instant Action (`ia_<mode>_<theater>`, e.g. ia_strike_desert): the id seeds
- * the layout and terrain, so the same id is the same mission in every run (missionById()).
+ * Mission ids include Instant Action (`ia_<mode>_auckland`, e.g. ia_strike_auckland): the id seeds
+ * the layout, so the same id is the same mission in every run (missionById()).
  * Exit code 0 even when missions fail: the table is the result, judging it is the caller's job.
  */
 import { spawn } from 'node:child_process';
