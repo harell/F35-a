@@ -57,7 +57,7 @@ export const G02: MissionDef = mission({
   kind: 'campaign',
   index: 2,
   title: 'Straight Outta Hauraki',
-  subtitle: 'Escort the tanker out through the Gulf — boat swarm',
+  subtitle: 'Escort the tanker through the Gulf boat swarm',
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
