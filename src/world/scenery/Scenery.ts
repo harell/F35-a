@@ -220,7 +220,7 @@ export class Scenery {
         buildNavalBase(sites, lights, height, layout);
         buildStadiums(sites, lights, height, layout);
       }
-      buildWiriTerminal(sites, lights, height, layout);
+      buildWiriTerminal(sites, lights, height, layout, concrete);
       addMesh(sites, 'akl-sites', aerialMat ?? buildingMat);
     }
 
