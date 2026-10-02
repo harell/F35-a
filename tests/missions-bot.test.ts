@@ -67,8 +67,11 @@ describe('1.1-l: the bot rearms where the mission rearms it', () => {
 });
 
 describe('4.3-f (#69): the PlayerBot fires its gun', () => {
-  /** Gun-only F-35 1 km behind a MiG-29 flying straight and level (no AI, no weapons of its own). */
-  function trailChase(seed: number): { killedAt: number; rounds: number } {
+  /**
+   * Gun-only F-35 1 km behind a MiG-29 (no AI, no weapons of its own) flying straight and level,
+   * or held in a constant level turn of `turnRate` rad/s at 230 m/s (0.15 ≈ 3.5 g, 0.25 ≈ its 5 g limit).
+   */
+  function trailChase(seed: number, turnRate = 0): { killedAt: number; rounds: number } {
     const { world, destroyed } = makeAiWorld('pilot', flat(0), seed);
     const p = world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 5_000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
     for (const s of p.stores) s.count = 0;
@@ -83,8 +86,11 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
     for (let i = 0; i < 30 * 60 && mig.alive; i++) {
       if (i % 3 === 0) {
         bot.update(p, world, dt * 3);
-        const it = straight.begin(mig, 150); // keep its heading and altitude at 230 m/s
-        it.dir.set(0, 0, -1);
+        const it = straight.begin(mig, 150); // keep its altitude at 230 m/s, heading 0 or turning
+        const psi = turnRate * world.time;
+        it.dir.set(-Math.sin(psi), 0, -Math.cos(psi));
+        it.track = turnRate > 0;
+        it.gMax = 5;
         it.speed = 230;
         straight.fly(mig, world, dt * 3);
       }
@@ -101,6 +107,17 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
       expect(r.killedAt, `seed ${seed}: ${r.rounds} rounds fired`).toBeGreaterThan(0);
       expect(r.killedAt).toBeLessThan(30);
     }
+  });
+
+  it('keeps the pipper on a MiG-29 in a sustained 3.5–5 g turn and kills it from 1 km in trail within 30 s', { timeout: 60_000 }, () => {
+    // the old loop fed the jet's own turn rate back through the autopilot's feed-forward: the
+    // pipper swung 0.06–0.2 rad round the bandit and the bot fired one burst at most
+    for (const turnRate of [0.15, 0.25])
+      for (const seed of [1, 2, 3]) {
+        const r = trailChase(seed, turnRate);
+        expect(r.killedAt, `${turnRate} rad/s, seed ${seed}: ${r.rounds} rounds fired`).toBeGreaterThan(0);
+        expect(r.killedAt).toBeLessThan(30);
+      }
   });
 
   it('gun-only probe (c01, Recruit): no missiles all mission long, the pilot fights with the gun and kills a MiG with it', { timeout: 120_000 }, () => {

@@ -15,7 +15,7 @@
  * Flying is delegated to the AI Autopilot (the same "hands" the AI uses), so the bot's airmanship
  * is steady and the measured differences come from tactics and the difficulty settings.
  */
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
@@ -53,6 +53,8 @@ const _p = new Vector3();
 const _fwd = new Vector3();
 const _aim = new Vector3();
 const _vh = new Vector3();
+const _e = new Vector3();
+const _rot = new Quaternion();
 
 /** The bot pulls the trigger only inside this range (m) with the LCOS pipper on the bandit. */
 const GUN_FIRE_RANGE = 900;
@@ -60,6 +62,10 @@ const GUN_FIRE_RANGE = 900;
 const GUN_TRAIL = 450;
 /** Bandit within this angle off the nose (rad): track it with the pipper (the AI's gunnery cone). */
 const GUN_TRACK_CONE = 0.6;
+/** Integral gain on the pipper error while tracking (1/s); 1.5–2 still missed bandits in 3.5–5 g turns, 4 overshot. */
+const GUN_KI = 3;
+/** Cap on the integral term (rad), against wind-up: twice the proportional lag of a 9 g turn (0.35 rad/s ÷ 2.2). */
+const GUN_I_MAX = 0.3;
 
 export class PlayerBot {
   readonly pilot = new Autopilot();
@@ -76,6 +82,11 @@ export class PlayerBot {
   private lastShot = -99;
   /** Has defended at least one missile (an unarmed aggressor turns cold after that). */
   private defended = false;
+  /** Gun tracking: integral of the pipper error (rad, carried round with the flight path). */
+  private readonly gunI = new Vector3();
+  private readonly gunIVel = new Vector3();
+  private gunITarget = -1;
+  private gunITime = -99;
 
   constructor(opts: Partial<PlayerBotOptions> & { home: Vector3 }) {
     this.opts = { reaction: 0.8, defend: true, shootDiscipline: true, rtbWhenWinchester: true, aggressor: false, tws: false, cap: null, ...opts };
@@ -290,16 +301,36 @@ export class PlayerBot {
       const tracking = !!lp && _fwd.dot(_p) > Math.cos(GUN_TRACK_CONE);
       if (lp && tracking) {
         _aim.subVectors(lp, p.position).normalize();
-        // move the pipper onto the bandit: the nose has to swing by (bandit − pipper). The
+        // move the pipper onto the bandit: the nose has to swing by e = (bandit − pipper). The
         // autopilot flies the VELOCITY vector, so the correction is added to the velocity
         // direction and the nose keeps its angle-of-attack offset above the flight path.
         // (Adding it to the nose instead left the pipper an AoA, 2–3°, off the bandit: never
         // inside the gate, 0 rounds in the playtest's gun-only runs.)
-        it.dir.copy(_vh).add(_p).sub(_aim).normalize();
+        // PI on e, no autopilot feed-forward: that feed-forward is d(dir)/dt, and dir contains
+        // our own velocity, so it fed the jet's own turn rate back into the demand and the
+        // pipper swung 0.06–0.2 rad round a bandit in a 3.5 g turn. Proportional alone lags by
+        // turn rate / gain (0.07 rad); the integral, carried round with the flight path,
+        // removes that lag.
+        _e.subVectors(_p, _aim);
+        const dtI = now - this.gunITime;
+        if (this.gunITarget !== tgt.id || dtI > 0.5) this.gunI.set(0, 0, 0);
+        else {
+          _rot.setFromUnitVectors(this.gunIVel, _vh);
+          this.gunI.applyQuaternion(_rot).addScaledVector(_e, GUN_KI * dtI);
+          this.gunI.addScaledVector(_vh, -this.gunI.dot(_vh));
+          if (this.gunI.length() > GUN_I_MAX) this.gunI.setLength(GUN_I_MAX);
+        }
+        this.gunITarget = tgt.id;
+        this.gunITime = now;
+        this.gunIVel.copy(_vh);
+        it.dir.copy(_vh).add(_e).add(this.gunI).normalize();
+        it.track = false;
         const err = Math.acos(Math.max(-1, Math.min(1, _aim.dot(_p))));
         if (R < GUN_FIRE_RANGE && err < Math.max(0.012, (0.6 * tgt.radius) / R)) p.input.fireGun = true;
-      } else it.dir.copy(_p);
-      it.track = true;
+      } else {
+        it.dir.copy(_p);
+        it.track = true;
+      }
       it.gain = 2.2;
       it.gMax = 9;
       // closure: tracking a bandit flying away from us (tail chase), hold a firing position
