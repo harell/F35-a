@@ -17,7 +17,8 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import type { AircraftEntity, MissileEntity } from '../src/sim/entities';
 import { STORE_SIZE, placeStores } from '../src/ui/art/storesDiagram';
-import { hangarLoadouts, storeLines } from '../src/ui/format';
+import { storeLines } from '../src/ui/format';
+import { hangarLoadouts } from '../src/ui/hangar';
 import { FlatTerrain } from './combat-helpers';
 import { harness } from './missions-helpers';
 
