@@ -109,7 +109,8 @@ Missiles are never sensor contacts or missile targets, so the drone the player s
 `shahed136` (team red): radar, HMD, missiles, gun and objectives work on it with no special case. While alive it
 flies a kinematic profile like the civil airliners (`src/sim/drone/oneWay.ts`, `AircraftEntity.oneWay`; the world
 skips the flight model and the AI for it): a fixed route at a fixed height and speed, then a straight dive into its
-target point. It never manoeuvres or reacts, and carries no stores, gun, flares or radar. Reaching the target, or
+target point. It dives only when lined up on the target; a target just past its last waypoint makes it fly on and come
+back round. It never manoeuvres or reacts, and carries no stores, gun, flares or radar. Reaching the target, or
 flying into a landmark on the way, emits `drone:impact` (with the landmark, if any) and detonates it (`destroyed`,
 no attacker; `oneWay.impacted` tells it from a drone that was shot down). Wherever it is destroyed its warhead damages
 every other live aircraft within 150 m (`AIRCRAFT_WARHEAD` in `src/sim/damage/tables.ts`, applied as `flak`), never

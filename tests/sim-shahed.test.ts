@@ -170,6 +170,27 @@ describe('Shahed-136: dumb route flight', () => {
     expect(diveFrom).toBeLessThan(startAt + SHAHED_SPEED * DT * 2);
   });
 
+  it('never snap-turns onto a target just behind its last waypoint: it goes round and dives at 35°', () => {
+    const w = makeWorld();
+    // the target sits 300 m before the last waypoint, inside the dive distance (about 414 m)
+    const target = new Vector3(0, 10, -2700);
+    const d = spawnDrone(w, new Vector3(0, 0, 0), target, [new Vector3(0, 0, -3000)]);
+    let prevHeading = d.oneWay!.heading;
+    let maxTurn = 0;
+    let steepest = 0;
+    run(w, 400, () => {
+      if (!d.alive) return true;
+      const f = d.oneWay!;
+      maxTurn = Math.max(maxTurn, Math.abs(Math.atan2(Math.sin(f.heading - prevHeading), Math.cos(f.heading - prevHeading))));
+      prevHeading = f.heading;
+      steepest = Math.min(steepest, f.pitch);
+    });
+    expect(d.oneWay!.impacted).toBe(true);
+    expect(d.oneWay!.impactPoint.distanceTo(target)).toBeLessThanOrEqual(IMPACT_RADIUS + 1e-6);
+    expect(maxTurn / (Math.PI / 180)).toBeLessThan(6); // was a 180° flip in one frame
+    expect(-steepest / (Math.PI / 180)).toBeLessThan(37); // was a 58° dive
+  });
+
   it('blows up once on a target on the ground (no second crash explosion from the wreck)', () => {
     const w = makeWorld(new FlatTerrain(10));
     const target = new Vector3(0, 10, 0);

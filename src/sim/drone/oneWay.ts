@@ -33,6 +33,8 @@ const DIVE_SPEEDUP = 1.3;
 const TURN_RATE = 6 * DEG;
 /** Steepest turn, only for a waypoint inside the gentle turn circle (it would orbit it otherwise). */
 const MAX_TURN_RATE = 20 * DEG;
+/** The dive starts only with the target this close to the nose (rad); otherwise it goes round. */
+const DIVE_ALIGN = 5 * DEG;
 /** A waypoint counts as passed inside this horizontal distance (m). */
 const WAYPOINT_RADIUS = 120;
 /** Distance from the target point that counts as a hit (m). */
@@ -55,6 +57,11 @@ export interface OneWayFlight {
   speed: number;
   diveAngle: number;
   phase: OneWayPhase;
+  /**
+   * Inside the dive distance but not lined up on the target (its last waypoint was too close to
+   * it): fly straight on, out past the dive distance plus a turn radius, then come back round.
+   */
+  goAround: boolean;
   heading: number;
   pitch: number;
   bank: number;
@@ -86,6 +93,7 @@ export function createOneWay(spec: OneWaySpec): OneWayFlight {
     speed: spec.speed ?? SHAHED_SPEED,
     diveAngle: spec.diveAngle ?? SHAHED_DIVE_ANGLE,
     phase: 'cruise',
+    goAround: false,
     heading: 0,
     pitch: 0,
     bank: 0,
@@ -146,17 +154,27 @@ export function stepOneWay(ac: AircraftEntity, dt: number, terrain: TerrainQuery
   if (f.phase === 'cruise') {
     // next waypoint once this one is (nearly) overflown
     while (f.leg < f.route.length && hDist(pos, f.route[f.leg]) < WAYPOINT_RADIUS) f.leg++;
-    if (f.leg >= f.route.length && hDist(pos, f.target) <= diveStartDistance(f) + f.speed * dt) f.phase = 'dive';
+    if (f.leg >= f.route.length) {
+      const d = hDist(pos, f.target);
+      const dive = diveStartDistance(f);
+      if (d <= dive + f.speed * dt) {
+        // dive only when lined up: never a snap turn onto a target that is beside or behind it
+        if (Math.abs(wrapPi(headingTo(pos, f.target) - f.heading)) <= DIVE_ALIGN) f.phase = 'dive';
+        else f.goAround = true;
+      } else if (f.goAround && d > dive + f.speed / TURN_RATE) f.goAround = false;
+    }
   }
 
   if (f.phase === 'cruise') {
-    const aim = aimPoint(f);
-    const err = wrapPi(headingTo(pos, aim) - f.heading);
-    // the circle through the aim point tangent to the track needs 2·V·sin(err)/d: turn at least
-    // that hard (a little more), so a close waypoint is never orbited for ever
-    const need = (2.1 * f.speed * Math.abs(Math.sin(err))) / Math.max(1, hDist(pos, aim));
-    const rate = Math.min(MAX_TURN_RATE, Math.max(TURN_RATE, need));
-    f.heading = wrap2Pi(f.heading + Math.sign(err) * Math.min(Math.abs(err), rate * dt));
+    if (!f.goAround) {
+      const aim = aimPoint(f);
+      const err = wrapPi(headingTo(pos, aim) - f.heading);
+      // the circle through the aim point tangent to the track needs 2·V·sin(err)/d: turn at least
+      // that hard (a little more), so a close waypoint is never orbited for ever
+      const need = (2.1 * f.speed * Math.abs(Math.sin(err))) / Math.max(1, hDist(pos, aim));
+      const rate = Math.min(MAX_TURN_RATE, Math.max(TURN_RATE, need));
+      f.heading = wrap2Pi(f.heading + Math.sign(err) * Math.min(Math.abs(err), rate * dt));
+    }
     headingDir(f.heading, _dir);
     pos.x += _dir.x * f.speed * dt;
     pos.z += _dir.z * f.speed * dt;
