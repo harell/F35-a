@@ -122,23 +122,44 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   s.route = true;
   s.bullseye = true;
   s.lw = 2;
-  drawTsd(pen, ctx, p, s, TSD_COLORS, d.flash);
-  // overlay readouts
-  pen.text(String(Math.round(tsdRange / NM)) + ' NM', x + 10, y + 19, PC.label, PCD_CORNER, 'left');
+  // overlay readouts, measured first: the TSD's labels and N marker keep off them (#62 review: "N",
+  // "SA-6" and "WP2 CAP" under "BULL 214/2")
+  const rng = String(Math.round(tsdRange / NM)) + ' NM';
   const hdg = Math.round((((p.flight.heading * RAD) % 360) + 360) % 360) % 360;
-  pen.text('HDG ' + String(hdg).padStart(3, '0'), x + w - 10, y + 19, PC.value, PCD_CORNER, 'right');
+  const hdgTxt = 'HDG ' + String(hdg).padStart(3, '0');
   // bullseye call (Sky Tower = origin): bearing/range from bullseye to ownship
   const bx = p.position.x;
   const bz = p.position.z;
   let brg = Math.atan2(bx, -bz) * RAD;
   if (brg < 0) brg += 360;
   const bull = 'BULL ' + String(Math.round(brg) % 360).padStart(3, '0') + '/' + Math.round(toNm(Math.hypot(bx, bz)));
+  const tgt = !!t && t.alive;
+  const lbl = tgt ? (p.radar.lockedId === t.id ? 'LOCK ' : 'TGT ') + entityLabel(t) : '';
+  const hc = PCD_CORNER * 0.6;
+  reserveRect(0, x + 10, y + 19, pen.textWidth(rng, PCD_CORNER), hc);
+  const hw = pen.textWidth(hdgTxt, PCD_CORNER);
+  reserveRect(1, x + w - 10 - hw, y + 19, hw, hc);
+  reserveRect(2, x + 10, y + 51, pen.textWidth(bull, PCD_CORNER), hc);
+  const lw = tgt ? pen.textWidth(lbl, 22) : 0;
+  if (tgt) reserveRect(3, x + w - 10 - lw, y + 51, lw, 22 * 0.6);
+  s.reserve = tsdReserve;
+  s.reserveN = tgt ? 4 : 3;
+  drawTsd(pen, ctx, p, s, TSD_COLORS, d.flash);
+  pen.text(rng, x + 10, y + 19, PC.label, PCD_CORNER, 'left');
+  pen.text(hdgTxt, x + w - 10, y + 19, PC.value, PCD_CORNER, 'right');
   pen.text(bull, x + 10, y + 51, PC.cyan, PCD_CORNER, 'left');
-  if (t && t.alive) {
-    const lbl = (p.radar.lockedId === t.id ? 'LOCK ' : 'TGT ') + entityLabel(t);
-    pen.text(lbl, x + w - 10, y + 51, p.radar.lockedId === t.id ? PC.green : PC.value, 22, 'right');
-  }
+  if (tgt) pen.text(lbl, x + w - 10, y + 51, p.radar.lockedId === t.id ? PC.green : PC.value, 22, 'right');
 };
+
+/** The TSD page's corner readout rects, reserved on the plot (x0, y0, x1, y1 each). */
+const tsdReserve = new Float32Array(16);
+
+function reserveRect(i: number, x0: number, yc: number, tw: number, half: number): void {
+  tsdReserve[i * 4] = x0 - 2;
+  tsdReserve[i * 4 + 1] = yc - half;
+  tsdReserve[i * 4 + 2] = x0 + tw + 2;
+  tsdReserve[i * 4 + 3] = yc + half;
+}
 
 /* ───────────────────────── Radar (B-scope) ───────────────────────── */
 

@@ -68,6 +68,12 @@ export interface TsdStyle {
   lw: number;
   /** Faint Auckland coastline / islands under the symbols (heading-up). */
   coast?: boolean;
+  /**
+   * Rects [x0, y0, x1, y1, ...] the caller prints over the plot afterwards (the PCD's corner
+   * readouts): the labels and the N marker keep off them (#62). `reserveN` rects are used.
+   */
+  reserve?: Float32Array;
+  reserveN?: number;
 }
 
 export function makeTsdStyle(): TsdStyle {
@@ -121,6 +127,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   pen.reset();
   lblOcc.clear();
   lblOcc.addBox(st.cx, st.cy, 9 * st.sym, 9 * st.sym);
+  if (st.reserve) for (let i = 0; i < (st.reserveN ?? 0) * 4; i += 4) lblOcc.add(st.reserve[i], st.reserve[i + 1], st.reserve[i + 2], st.reserve[i + 3]);
   const all = st.labels === true;
   const key = st.labels === 'key' || all;
 
@@ -161,7 +168,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     const r = st.radius * (st.rings > 0 ? 1 : 0.85);
     const nx = st.cx + dv.x * r;
     const ny = st.cy + dv.y * r;
-    pen.text('N', nx, ny, c.text, st.font);
+    label(pen, 'N', nx, ny, c.text, st.font); // dropped under a reserved readout
   }
 
   // SAM threat rings (known SAMs)

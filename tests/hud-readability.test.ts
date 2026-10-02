@@ -137,6 +137,57 @@ describe('cockpit PCD corner readouts at 844×390', () => {
       expect(t!.size * pxPerTexel, `${t!.text}: ${(t!.size * pxPerTexel).toFixed(1)} px`).toBeGreaterThanOrEqual(12);
     }
   });
+
+  it('keeps the TSD labels and the N marker off the bigger corner readouts, whatever the heading', () => {
+    const W = 844;
+    const H = 390;
+    const mock = buildMock('threat');
+    const cockpit = createCockpit(mock.events, { ...QUALITY_PRESETS.medium });
+    cockpit.resize(W, H);
+    cockpit.visible = true;
+    const p = mock.player;
+    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+    camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+    camera.quaternion.copy(p.quaternion);
+    camera.updateMatrixWorld();
+    const ctx: FrameContext = {
+      dt: 1 / 30,
+      time: 1,
+      world: mock.world,
+      player: p,
+      camera,
+      viewMode: 'cockpit',
+      focusId: p.id,
+      mission: mock.mission,
+      settings: { ...DEFAULT_SETTINGS },
+      quality: { ...QUALITY_PRESETS.medium },
+      paused: false,
+      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+    };
+    const bad: string[] = [];
+    let checked = 0;
+    for (let hdg = 0; hdg < 360; hdg += 10) {
+      p.flight.heading = (hdg * Math.PI) / 180;
+      for (let i = 0; i < 3; i++) {
+        for (const c of created) c.reset();
+        cockpit.update(ctx, new Quaternion());
+      }
+      for (const c of created) {
+        const bull = c.texts.find((x) => /^BULL \d{3}\/\d+$/.test(x.text));
+        if (!bull) continue;
+        checked++;
+        const corner = c.texts.filter((x) => /^(BULL |HDG |\d+ NM$)/.test(x.text));
+        for (const r of corner) {
+          for (const o of c.texts) {
+            if (corner.includes(o) || !o.text.trim()) continue;
+            if (overlaps(textBox(r), textBox(o))) bad.push(`${hdg}: "${r.text}" x "${o.text}"`);
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(bad).toEqual([]);
+  });
 });
 
 describe('labels stay off the touch controls at 844×390', () => {
