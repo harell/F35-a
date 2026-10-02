@@ -288,6 +288,9 @@ describe('GBU-53/B vs a weaving boat', { timeout: 60_000 }, () => {
     run(w, 1);
     w.combat.designate(p, boat.id, w);
     run(w, 0.5);
+    // a ground-mode radar contact like any ship, so it can be designated
+    expect(p.radar.contacts.some((c) => c.id === boat.id)).toBe(true);
+    expect(p.radar.designatedId).toBe(boat.id);
     const launches: MissileEntity[] = [];
     w.events.on('munition:launch', (e) => {
       if (e.shooter === p) launches.push(e.missile);
