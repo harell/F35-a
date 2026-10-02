@@ -26,7 +26,7 @@ import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, dra
 import { HudState, makeFrame, type HudMode } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
-import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
+import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, killFeedAt, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
 import { drawPip, pipLandmarkFocus, pipView, resetPip, stepPip } from './hmd/pip';
@@ -49,7 +49,7 @@ import {
 import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
-import { reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
+import { clearBandExt, reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
 
 const _q = new Quaternion();
 const _fwd = new Vector3();
@@ -295,6 +295,7 @@ export const createHud: CreateHud = (canvas, events) => {
       picks.begin();
       f.occ.clear();
       f.sym.clear();
+      clearBandExt(); // (the kill feed reads the warning band drawn this frame; none drawn yet)
       dirty = true;
 
       f.ctx = ctx;
@@ -477,9 +478,12 @@ export const createHud: CreateHud = (canvas, events) => {
         drawCues(f);
         drawMessages(f);
       }
+      // (HMD: under the target camera window it sits left of the DLZ scale; the right edge under the
+      // window is its way out of the warning band)
       const kx = hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u;
-      const kb = drawKillFeed(f, kx, L.killY);
-      zoneExt.killLeft = kx - 230 * L.u;
+      const kb = drawKillFeed(f, kx, L.killY, hmd ? L.right : kx);
+      zoneExt.killLeft = killFeedAt.x - 230 * L.u;
+      zoneExt.killRight = killFeedAt.x;
       zoneExt.killBottom = kb > L.killY + 1 ? kb - 8 * L.u : NaN;
       drawHitMarkers(f);
       drawRadio(f);

@@ -17,6 +17,7 @@ import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
 import { DEFEAT_MARK, DEFEAT_SHOW } from './threatTracker';
 import { pcdZoom } from '../cockpit/zoom';
+import { bandExt, clearBandExt } from './zones';
 import type { WarningId } from '../../core/types';
 
 const edge = { x: 0, y: 0 };
@@ -287,6 +288,7 @@ export function drawWarningBand(f: HudFrame): boolean {
   const inc = p.incoming;
   const cx = L.cx;
   const y1 = L.warnY;
+  clearBandExt();
 
   /* row 1 */
   let row1: WarningId | 'title' | 'defeated' | 'gcas' | 'aoa' | '' = '';
@@ -309,6 +311,14 @@ export function drawWarningBand(f: HudFrame): boolean {
   }
   // looking down into the cockpit (PCD): only the life-critical cues stay at full strength; the rest
   // fades out (the PCD's ICAWS page carries them — it jumps there on engine fire / hydraulics)
+  if (row1) {
+    // (the slot reserveWarningBand holds; a long mission title runs wider)
+    const hw = row1 === 'title' ? Math.max(125 * u, pen.textWidth(st.title, 17) / 2 + 30 * u) : 125 * u;
+    bandExt.r1x0 = cx - hw;
+    bandExt.r1x1 = cx + hw;
+    bandExt.r1y0 = y1 - 14 * u;
+    bandExt.r1y1 = y1 + 14 * u;
+  }
   const crit1 = row1 === 'pull_up' || row1 === 'missile' || row1 === 'stall';
   pen.g.globalAlpha = crit1 ? 1 : f.declutter;
   switch (row1) {
@@ -456,6 +466,10 @@ export function drawWarningBand(f: HudFrame): boolean {
     pen.g.globalAlpha = 1;
     return critical;
   }
+  bandExt.chx0 = x - 2 * u;
+  bandExt.chx1 = x + total + 2 * u;
+  bandExt.chy0 = y2 - h / 2 - 2 * u;
+  bandExt.chy1 = y2 + h / 2 + 2 * u;
   for (let i = 0; i < shown; i++) {
     const ch = chips[i];
     const launchBlink = ch.fill && ch.col === pal.danger && !blink(f, 4, 0.6);
