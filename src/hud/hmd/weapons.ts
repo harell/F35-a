@@ -233,6 +233,50 @@ export function planCues(f: HudFrame): number {
   return cueCount > 0 ? y : L.msgY;
 }
 
+const gapT = new Float32Array(cues.length * 2);
+/**
+ * Path the segment a→b with a gap where it crosses a planned cue line, so a steering line never runs
+ * through "IN RANGE" (#62: the GPS azimuth steering line struck the R's stem). Liang–Barsky clip of
+ * the segment against each cue's text rect; the pieces outside go on the current path.
+ */
+function lineAroundCues(f: HudFrame, ax: number, ay: number, bx: number, by: number): void {
+  const { pen, L } = f;
+  const u = L.u;
+  const dx = bx - ax;
+  const dy = by - ay;
+  let n = 0;
+  for (let i = 0; i < cueCount; i++) {
+    const c = cues[i];
+    const hw = pen.textWidth(c.text, c.size) / 2 + 4 * u;
+    const hh = (c.size / 2 + 2) * u;
+    let t0 = 0;
+    let t1 = 1;
+    const clip = (pp: number, q: number): boolean => {
+      if (pp === 0) return q >= 0;
+      const r = q / pp;
+      if (pp < 0) t0 = Math.max(t0, r);
+      else t1 = Math.min(t1, r);
+      return t0 <= t1;
+    };
+    if (clip(-dx, ax - (L.cx - hw)) && clip(dx, L.cx + hw - ax) && clip(-dy, ay - (c.y - hh)) && clip(dy, c.y + hh - ay) && t1 > t0) {
+      gapT[n * 2] = t0;
+      gapT[n * 2 + 1] = t1;
+      n++;
+    }
+  }
+  let t = 0;
+  // (at most three gaps: pick them in order without sorting an array)
+  for (let k = 0; k < n; k++) {
+    let best = -1;
+    for (let j = 0; j < n; j++) if (gapT[j * 2 + 1] > t && (best < 0 || gapT[j * 2] < gapT[best * 2])) best = j;
+    if (best < 0) break;
+    const g0 = gapT[best * 2];
+    if (g0 > t) pen.line(ax + dx * t, ay + dy * t, ax + dx * g0, ay + dy * g0);
+    t = Math.max(t, gapT[best * 2 + 1]);
+  }
+  if (t < 1) pen.line(ax + dx * t, ay + dy * t, bx, by);
+}
+
 /** Draw the planned cue lines. */
 export function drawCues(f: HudFrame): void {
   const { pen, L } = f;
@@ -446,7 +490,7 @@ export function drawAirToGround(f: HudFrame): void {
     if (proj.dir(f.v1, a) && proj.dir(f.v2, b) && (a.onScreen || b.onScreen)) {
       pen.setDash('solid');
       pen.begin();
-      pen.line(a.x, a.y, b.x, b.y);
+      lineAroundCues(f, a.x, a.y, b.x, b.y);
       pen.strokeGlow(bi.inRange ? pal.bright : pal.main, 1.8);
     }
     // target point marker (for designations without an entity box)

@@ -4,6 +4,7 @@
  *    the escort doesn't, and the primary objective counts the strikers left ("STRIKERS n");
  *  - the off-screen target cue's text (angle-off, type, range) never prints over the speed / altitude
  *    columns, the DLZ or another HUD text, whichever way the target lies;
+ *  - the GPS bomb's azimuth steering line breaks around the centre cue ("IN RANGE", "REL 5", STEER);
  *  - a civil contact's CIV label never prints on the touch controls (GUN, CMS, FIRE, throttle, stick);
  *  - the cockpit PCD's TSD and RWR corner readouts ("10 NM", "BULL 005/6", "2 EMIT") are at least
  *    12 px tall on the 844×390 screen (they were 9–10 px, and look smaller on the tilted panel).
@@ -261,5 +262,74 @@ describe('the speed column reservation', () => {
     const row = (k: number) => L.boxY + 11 + k * L.line + 6.5; // bottom of a 12 px row
     expect(speedColumnBottom(frame(false))).toBeGreaterThanOrEqual(row(4.75));
     expect(speedColumnBottom(frame(true))).toBeGreaterThanOrEqual(row(5.75));
+  });
+});
+
+describe('the GPS azimuth steering line', () => {
+  installPath2D();
+  it('never runs through the centre release cue', () => {
+    const W = 844;
+    const H = 390;
+    const mock = buildMock('ag');
+    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+    // record every path segment (the fake canvas only records texts)
+    const segs: [number, number, number, number][] = [];
+    let cx = 0;
+    let cy = 0;
+    (fake as unknown as { moveTo: (x: number, y: number) => void }).moveTo = (x, y) => {
+      cx = x;
+      cy = y;
+    };
+    (fake as unknown as { lineTo: (x: number, y: number) => void }).lineTo = (x, y) => {
+      segs.push([cx, cy, x, y]);
+      cx = x;
+      cy = y;
+    };
+    const hud = createHud(canvas, mock.events);
+    hud.resize(W, H, 1);
+    const p = mock.player;
+    // the designated ground point dead ahead: the steering line runs down the middle, through the cue slot
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(p.quaternion).setY(0).normalize();
+    p.radar.groundPoint = p.position.clone().addScaledVector(fwd, 9000).setY(0);
+    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+    camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+    camera.quaternion.copy(p.quaternion);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    const ctx: FrameContext = {
+      dt: 1 / 30,
+      time: 0,
+      world: mock.world,
+      player: p,
+      camera,
+      viewMode: 'hud',
+      focusId: p.id,
+      mission: mock.mission,
+      settings: { ...DEFAULT_SETTINGS },
+      quality: { ...QUALITY_PRESETS.medium },
+      paused: false,
+      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+    };
+    let cue: ReturnType<typeof textBox> | null = null;
+    for (let i = 0; i < 12 && !cue; i++) {
+      fake.reset();
+      segs.length = 0;
+      ctx.time += ctx.dt;
+      hud.update(ctx);
+      const t = fake.texts.find((x) => x.text === 'IN RANGE' || x.text === 'STEER' || x.text === 'OUT OF RANGE' || /^REL \d+$/.test(x.text));
+      if (t) cue = textBox(t);
+    }
+    expect(cue).toBeTruthy();
+    // does the steering line (a long, near-vertical segment) cross the cue's text box? (sampled along it)
+    const crosses = segs.filter(([x0, y0, x1, y1]) => {
+      if (Math.abs(y1 - y0) < 15 || Math.abs(x1 - x0) > Math.abs(y1 - y0) * 0.5) return false;
+      for (let k = 0; k <= 40; k++) {
+        const x = x0 + ((x1 - x0) * k) / 40;
+        const y = y0 + ((y1 - y0) * k) / 40;
+        if (x > cue!.x0 + 1 && x < cue!.x1 - 1 && y > cue!.y0 + 1 && y < cue!.y1 - 1) return true;
+      }
+      return false;
+    });
+    expect(crosses.map((s) => s.map((v) => Math.round(v)).join(','))).toEqual([]);
   });
 });
