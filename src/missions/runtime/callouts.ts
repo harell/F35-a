@@ -13,6 +13,7 @@
  */
 import type { GameEventMap } from '../../core/events';
 import { AircraftEntity, type AnyEntity } from '../../sim/entities';
+import { vesselNoun } from '../../sim/civil/vessels';
 import { aircraftHudName, killHudText } from './names';
 import type { MissionState } from './state';
 
@@ -37,6 +38,7 @@ export class Callouts {
     const ev = this.s.events;
     this.unsubs.push(
       ev.on('destroyed', (e) => this.guard() && this.onDestroyed(e.entity, e.attackerId, e.weapon)),
+      ev.on('vessel:hit', (e) => this.guard() && this.onVesselHit(e)),
       ev.on('munition:launch', (e) => {
         if (!this.guard()) return;
         const p = this.s.player;
@@ -101,6 +103,37 @@ export class Callouts {
 
   private belongsToUs(e: AnyEntity): boolean {
     return this.s.world.getEntity(e.id) === e;
+  }
+
+  /**
+   * A counted bomb / missile hit on a ship that takes several (the escorted tanker): her master calls
+   * it, and a hit from the player gets a check-fire. The hit that sinks her only adds the master's
+   * last call: the 'destroyed' event (same step) brings the civilian-loss callouts and penalty.
+   */
+  private onVesselHit(e: GameEventMap['vessel:hit']): void {
+    const s = this.s;
+    const ship = e.ship;
+    if (!this.belongsToUs(ship)) return;
+    const p = s.player;
+    const noun = vesselNoun(ship.vessel);
+    if (e.hits >= e.hitsToSink) {
+      s.radio.push({ from: ship.name, text: `Mayday, mayday, mayday! ${ship.name} is going down. Abandon ship, abandon ship!`, priority: 4 });
+      return;
+    }
+    const byPlayer = !!p && e.attackerId !== null && e.attackerId === p.id;
+    if (byPlayer) {
+      s.hud(`CHECK FIRE: ${noun.toUpperCase()} HIT`, 'bad', 3.5);
+      s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the ${noun} ${ship.name}!`, priority: 4 });
+    } else s.hud(`${noun.toUpperCase()} HIT ${e.hits}/${e.hitsToSink}`, 'bad', 3);
+    const left = e.hitsToSink - e.hits;
+    s.radio.push({
+      from: ship.name,
+      text:
+        left === 1
+          ? `Mayday, ${ship.name}! We're hit, fire on deck, losing speed. We can't take another one!`
+          : `${ship.name}, we're hit! Fire on deck, losing speed. We can take ${left - 1} more at most.`,
+      priority: 3,
+    });
   }
 
   private onDestroyed(entity: AnyEntity, attackerId: number | null, weapon: GameEventMap['destroyed']['weapon']): void {

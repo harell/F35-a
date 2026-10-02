@@ -18,6 +18,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { CreateHud, FrameContext, HudApi } from '../core/contracts';
 import type { WeaponId } from '../core/types';
 import { loadHudFont } from './font';
+import { drawVesselCounters } from './hmd/escort';
 import { drawExternalBlock, drawInset, drawMissileCam } from './hmd/external';
 import { WARNING_INFO, WEAPON_BREVITY, killText } from './hmd/format';
 import { classifyHudMessage } from './hmd/feeds';
@@ -427,6 +428,10 @@ export const createHud: CreateHud = (canvas, events) => {
         drawInset(f);
         if (ctx.viewMode === 'missile') drawMissileCam(f);
       }
+      // the escorted ship's hit counter ("TANKER 1/2") heads the top-left column for the whole sortie,
+      // so it never jumps when the objectives come and go — not in the missile / target cams
+      const escortTop = colY;
+      if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') colY = drawVesselCounters(f, L.colX, colY);
       // top-left column: objectives (briefly), damage, mission hint — not in the missile / target cams
       // (the fight fills the frame there)
       const colTop = colY;
@@ -450,6 +455,7 @@ export const createHud: CreateHud = (canvas, events) => {
       } else colY = drawDamage(f, L.colX, colY);
       st.objHold = objHold;
       zoneExt.colBottom = colY > colTop + 1 ? colY : NaN;
+      if (!Number.isFinite(zoneExt.colBottom) && colTop > escortTop + 1) zoneExt.colBottom = colTop; // the counter alone
 
       // target camera window chrome (the 3D view itself is rendered by Game → TargetCam)
       drawPip(f, pipTarget);

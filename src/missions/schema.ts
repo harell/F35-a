@@ -19,6 +19,7 @@ import type {
   LoadoutId,
   SamType,
   Team,
+  VesselClass,
   VoiceId,
 } from '../core/types';
 import type { WaypointKind } from '../core/contracts';
@@ -221,6 +222,16 @@ export interface GroundTargetDef {
    * and no terrain pad; kill effects still play.
    */
   scenery?: boolean;
+  /**
+   * Civil merchant ship class (type 'ship', usually team 'neutral'): its model, hull and hit points.
+   * A neutral one follows the civil-ship rules (never a kill; a player sinking it is a civilian loss).
+   */
+  vessel?: VesselClass;
+  /**
+   * Bomb / missile hits the civil ship takes before it sinks (default 1, #19's rule). The escorted
+   * tanker takes 2: after the first it burns and slows, and its hit counter shows on the HUD.
+   */
+  hitsToSink?: number;
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */
