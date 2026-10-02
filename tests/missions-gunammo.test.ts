@@ -2,44 +2,30 @@
  * MISSIONS — gun ammunition set per mission (#77, IRGC campaign 5/10).
  *
  * The IRGC missions are built around the gun, and the loadout's 180 rounds (the real F-35A load)
- * are not enough there, so MissionDef.gunAmmo overrides the loadout's rounds at launch and at every
- * rearm. Missions without it keep the loadout's 180. The HUD rounds counter and the cockpit stores
- * page read the jet's real count.
+ * are not enough there, so MissionDef.gunAmmo overrides the loadout's rounds at launch (there is no
+ * rearming, #63). Missions without it keep the loadout's 180. The HUD rounds counter and the
+ * cockpit stores page read the jet's real count.
  */
 import { PerspectiveCamera } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { AKL } from '../src/core/auckland';
 import type { FrameContext, MissionDef } from '../src/core/contracts';
 import { DEFAULT_SETTINGS, LOADOUTS, QUALITY_PRESETS } from '../src/core/data';
-import { CAMPAIGN, TRAINING, buildInstantMissionSeeded, missionGunAmmo, validateMission } from '../src/missions';
-import { REARM_HOLD } from '../src/missions/runtime/rearm';
+import { CAMPAIGN, TRAINING, missionGunAmmo, validateMission } from '../src/missions';
 import { gunAmmoOverride } from '../src/missions/runtime/gunAmmo';
 import { drawSmsPage } from '../src/hud/cockpit/pages';
 import { createHud } from '../src/hud/Hud';
 import { Pen } from '../src/hud/hmd/pen';
 import { buildMock } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
-import { harness, killGroup, shieldPlayer, type Harness } from './missions-helpers';
+import { harness } from './missions-helpers';
 
-// real-sim runs of a few seconds each: give a loaded box room
+// each test builds a real-sim mission harness: give a loaded box room
 vi.setConfig({ testTimeout: 60_000 });
 installPath2D();
 
 const byId = (id: string) => [...CAMPAIGN, ...TRAINING].find((m) => m.id === id)!;
-const WH = AKL.whenuapai;
 /** c01 (CAP over the Waitematā) with its own gun rounds. */
 const withGun = (gunAmmo: MissionDef['gunAmmo']): MissionDef => ({ ...byId('c01'), gunAmmo });
-
-/** Hold the player over Whenuapai at 600 m (stub world: teleport every step). */
-function holdOverField(h: Harness, seconds: number): void {
-  const p = h.world.player!;
-  h.run(seconds, () => {
-    p.position.set(WH.x + 300, 600, WH.z);
-    shieldPlayer(h);
-  });
-}
-
-const rearmed = (h: Harness) => h.of('hud:message').filter((m) => m.text === 'REARMED').length;
 
 describe('MissionDef.gunAmmo: resolving the rounds', () => {
   it('a number applies on every difficulty; no override → null (keep the loadout)', () => {
@@ -77,7 +63,7 @@ describe('MissionDef.gunAmmo: resolving the rounds', () => {
   });
 });
 
-describe('MissionDef.gunAmmo: launch and rearm', () => {
+describe('MissionDef.gunAmmo: launch', () => {
   it('a mission without it starts with the loadout\'s 180 rounds (unchanged)', () => {
     for (const [def, loadout] of [
       [byId('c01'), undefined],
@@ -104,65 +90,6 @@ describe('MissionDef.gunAmmo: launch and rearm', () => {
     const def = withGun({ recruit: 400, ace: 300 });
     expect(harness(def, 'recruit').world.player!.gunAmmo).toBe(400);
     expect(harness(def, 'ace').world.player!.gunAmmo).toBe(300);
-  });
-
-  it(`rearms with 400 rounds at Whenuapai (Winchester → ${REARM_HOLD} s hold over the field)`, () => {
-    const h = harness(withGun(400));
-    const p = h.world.player!;
-    for (const st of p.stores) st.count = 0;
-    p.gunAmmo = 37;
-    h.run(1, () => shieldPlayer(h));
-    holdOverField(h, REARM_HOLD + 1);
-    expect(rearmed(h)).toBe(1);
-    expect(h.world.combat.remaining(p, 'aim120')).toBeGreaterThan(0);
-    expect(p.gunAmmo).toBe(400);
-    expect(p.gunMaxAmmo).toBe(400);
-  });
-
-  it('the rearm gate measures "most of the gun spent" against the mission\'s rounds, not 180', () => {
-    // 150 of 400 left: well over half of the loadout's 180, but under half of the mission's load
-    const h = harness(withGun(400));
-    const p = h.world.player!;
-    p.gunAmmo = 150;
-    h.run(1, () => shieldPlayer(h));
-    holdOverField(h, REARM_HOLD + 1);
-    expect(rearmed(h)).toBe(1);
-    expect(p.gunAmmo).toBe(400);
-    // a fresh 400-round jet circling the field does nothing
-    holdOverField(h, REARM_HOLD * 2);
-    expect(rearmed(h)).toBe(1);
-  });
-
-  it('a mission without it still rearms to 180', () => {
-    const h = harness(byId('c01'));
-    const p = h.world.player!;
-    for (const st of p.stores) st.count = 0;
-    p.gunAmmo = 20;
-    h.run(1, () => shieldPlayer(h));
-    holdOverField(h, REARM_HOLD + 1);
-    expect(rearmed(h)).toBe(1);
-    expect(p.gunAmmo).toBe(180);
-  });
-
-  it("survival's between-wave rearm reloads the mission's rounds too", () => {
-    const base = buildInstantMissionSeeded({ mode: 'survival', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 1 }, 5);
-    expect(base.script.survival?.rearm).toBe(true);
-    const h = harness({ ...base, gunAmmo: 500 });
-    const p = h.world.player!;
-    expect(p.gunAmmo).toBe(500);
-    // wait for the first wave, spend some rounds, then clear the wave
-    let wave: string | undefined;
-    h.run(30, () => {
-      shieldPlayer(h);
-      wave = h.world.aircraft.find((a) => a.team === 'red' && a.alive)?.groupId ?? undefined;
-      return !!wave;
-    });
-    expect(wave).toBeTruthy();
-    p.gunAmmo = 12;
-    killGroup(h, wave!);
-    h.run(1, () => shieldPlayer(h));
-    expect(h.of('hud:message').some((m) => /^REARMED/.test(m.text))).toBe(true);
-    expect(p.gunAmmo).toBe(500);
   });
 });
 

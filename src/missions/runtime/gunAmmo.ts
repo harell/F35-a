@@ -4,10 +4,9 @@
  * Every loadout carries the real F-35A load of 180 rounds (LOADOUTS[*].gunAmmo, about 3.3 s of
  * fire). Missions built around the gun (the IRGC campaign) set their own amount on the mission
  * instead, so the other missions keep their balance. The override replaces the loadout's rounds
- * when the player spawns (spawner.spawnPlayer) and every time combat.applyLoadout re-arms the jet
- * (the Whenuapai rearm, survival's between-wave rearm). The HUD rounds counter and the cockpit
- * stores page read AircraftEntity.gunAmmo, so they show it as is; the briefing's hangar cards
- * read missionGunAmmo().
+ * once, when the player spawns (spawner.spawnPlayer): there is no rearming (#63). The HUD rounds
+ * counter and the cockpit stores page read AircraftEntity.gunAmmo, so they show it as is; the
+ * briefing's hangar cards read missionGunAmmo().
  */
 import type { MissionDef } from '../../core/contracts';
 import { LOADOUTS } from '../../core/data';
@@ -36,14 +35,14 @@ export function gunAmmoOverride(def: Pick<MissionDef, 'gunAmmo'>, difficulty: Di
   return null;
 }
 
-/** Rounds the player's gun carries in this mission with this loadout (briefing, rearm checks). */
+/** Rounds the player's gun carries in this mission with this loadout (the briefing's hangar cards). */
 export function missionGunAmmo(def: Pick<MissionDef, 'gunAmmo'>, difficulty: Difficulty, loadout: LoadoutId): number {
   return gunAmmoOverride(def, difficulty) ?? (LOADOUTS[loadout] ?? LOADOUTS.a2a_stealth).gunAmmo;
 }
 
 /**
- * Load the mission's rounds into the player's gun. Call right after the loadout was applied
- * (spawn, rearm). No-op for missions without an override.
+ * Load the mission's rounds into the player's gun. Call right after the loadout was applied at
+ * spawn. No-op for missions without an override.
  */
 export function armMissionGun(p: AircraftEntity, def: Pick<MissionDef, 'gunAmmo'>, difficulty: Difficulty): void {
   const n = gunAmmoOverride(def, difficulty);

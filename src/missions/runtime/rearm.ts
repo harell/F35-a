@@ -5,9 +5,8 @@
  *    still running, DARKSTAR calls "Winchester — RTB to Whenuapai to rearm" and the steering cue
  *    (MissionRunnerApi.currentWaypoint) switches to the rearm point. Same for bingo fuel.
  *  - Flying within REARM_RADIUS of the home airbase below REARM_MAX_AGL for REARM_HOLD continuous
- *    seconds re-applies the mission loadout (combat.applyLoadout, then the mission's own gun
- *    rounds when it sets MissionDef.gunAmmo) and tops the tanks up to the mission start fuel:
- *    HUD "REARMED" + a radio call. Wingmen keep fighting meanwhile.
+ *    seconds re-applies the mission loadout (combat.applyLoadout) and tops the tanks up to the
+ *    mission start fuel: HUD "REARMED" + a radio call. Wingmen keep fighting meanwhile.
  *
  * Home is RNZAF Base Auckland (Whenuapai) in the Auckland theatre, otherwise the first airbase
  * of the mission's scenery (Instant Action in the procedural theatres), else the player start.
@@ -19,7 +18,6 @@ import type { MissionDef, Waypoint } from '../../core/contracts';
 import type { LoadoutId } from '../../core/types';
 import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
 import type { AircraftEntity } from '../../sim/entities';
-import { armMissionGun, missionGunAmmo } from './gunAmmo';
 import type { MissionState } from './state';
 
 /** Rearm gate: horizontal distance from the field (m), max height above ground (m), hold time (s). */
@@ -55,8 +53,6 @@ export class RearmController {
   readonly waypoint: Waypoint;
   readonly homeName: string;
   private loadout: LoadoutId | null = null;
-  /** Full gun load in this mission (the loadout's, or MissionDef.gunAmmo). */
-  private gunRounds = 0;
   private startFuel = 0;
   private need: RearmNeed = null;
   private inGate = 0;
@@ -72,7 +68,6 @@ export class RearmController {
   /** Call after the player spawned (records the loadout and start fuel). */
   init(p: AircraftEntity, loadout: LoadoutId): void {
     this.loadout = loadout;
-    this.gunRounds = missionGunAmmo(this.s.def, this.s.difficulty.id, loadout);
     this.startFuel = p.flight.fuel;
     // survival mode rearms between waves on its own
     this.enabled = !this.s.script.survival;
@@ -96,7 +91,7 @@ export class RearmController {
     let full = 0;
     for (const st of def.stores) full += st.count;
     if (storesLeft(p) < full) return true;
-    if (p.gunAmmo < this.gunRounds * 0.5) return true;
+    if (p.gunAmmo < def.gunAmmo * 0.5) return true;
     if (p.flares < def.flares * 0.5 || p.chaff < def.chaff * 0.5) return true;
     return p.flight.fuel < this.startFuel - AIRCRAFT_PERF[p.type].internalFuel * 0.1;
   }
@@ -171,7 +166,6 @@ export class RearmController {
     this.gateAnnounced = false;
     this.need = null;
     s.world.combat.applyLoadout(p, this.loadout!);
-    armMissionGun(p, s.def, s.difficulty.id);
     p.flight.fuel = Math.max(p.flight.fuel, this.startFuel);
     s.stats.rearms++;
     s.hud('REARMED', 'good', 3);
