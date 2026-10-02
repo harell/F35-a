@@ -12,6 +12,7 @@ import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
 import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
 import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
+import { hitsBankOrWaterline } from './flight';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
@@ -531,6 +532,9 @@ export function drawLockCone(f: HudFrame): void {
   }
 }
 
+/** Sideways steps (14 px each, both sides) the off-screen cue's text tries beside its arrow. */
+const CUE_STEPS = 6;
+
 /** Arrow on the screen-edge ellipse pointing at an off-screen target, with angle-off and label. */
 function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   const { pen, pal, L } = f;
@@ -558,15 +562,46 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   // whichever way it points: anchored by its top line it ran down into a downward arrow (#62: "16°"
   // over "MIG-29 7.1" in the cockpit view, "35°" under "TU-22M 3.2")
   const hw = Math.max(pen.textWidth(off, 12.5), pen.textWidth(name, 10.5), pen.textWidth(tl, 10.5)) / 2 + 2 * u;
-  const below = (tl ? 45 : 31) * u; // last line's bottom, from the first line's centre
+  const below = (tl ? 41 : 28) * u + 6 * u; // last line's bottom (10.5 px row), from the first line's centre
   const hh = (below + 8 * u) / 2;
+  // lowest the block may reach: above the cockpit panel (cockpit view) / the screen's bottom edge
+  const maxTy = (f.cockpit && f.mode === 'hmd' ? L.cockpitTop - 3 * u : L.H - 4 * u) - below;
+  // candidates: inward of the arrow, then beside it, stepping sideways (toward the centre first).
+  // Inward of a mostly up / down arrow lands on the bank scale, the FPM or the waterline (#62
+  // review), so the first spot clear of those (and of the protected symbols) wins; none clear: inward
   const reach = 10 * u + Math.abs(sp.dirX) * hw + Math.abs(sp.dirY) * hh;
-  let tx = edge.x - sp.dirX * reach;
-  let ty = edge.y - sp.dirY * reach - hh + 8 * u;
-  // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed box)
-  tx = slideOffColumns(f, tx, hw, ty - 8 * u, ty + below);
-  tx = Math.max(L.left + hw, Math.min(L.right - hw, tx));
-  ty = Math.max(L.row2Y + 8 * u, ty);
+  const side = sp.dirX > 0 ? -1 : 1;
+  // the arrow's box: tip at edge + 10u along it, base corners 4u back and 7u either side
+  const ax0 = Math.min(edge.x + sp.dirX * 10 * u, edge.x - sp.dirX * 4 * u - Math.abs(sp.dirY) * 7 * u) - 2 * u;
+  const ax1 = Math.max(edge.x + sp.dirX * 10 * u, edge.x - sp.dirX * 4 * u + Math.abs(sp.dirY) * 7 * u) + 2 * u;
+  const ay0 = Math.min(edge.y + sp.dirY * 10 * u, edge.y - sp.dirY * 4 * u - Math.abs(sp.dirX) * 7 * u) - 2 * u;
+  const ay1 = Math.max(edge.y + sp.dirY * 10 * u, edge.y - sp.dirY * 4 * u + Math.abs(sp.dirX) * 7 * u) + 2 * u;
+  const last = 2 + 2 * CUE_STEPS;
+  let tx = 0;
+  let ty = 0;
+  for (let c = 0; c < last; c++) {
+    if (c === 0 || c === last - 1) {
+      tx = edge.x - sp.dirX * reach;
+      ty = edge.y - sp.dirY * reach - hh + 8 * u;
+    } else {
+      // beside the arrow, level with its middle (3u out along it)
+      const k = (c - 1) >> 1;
+      tx = edge.x + ((c & 1) === 1 ? side : -side) * ((ax1 - ax0) / 2 + hw + 4 * u + k * 14 * u);
+      ty = edge.y + sp.dirY * 3 * u - hh + 8 * u;
+    }
+    // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed box)
+    tx = slideOffColumns(f, tx, hw, ty - 8 * u, ty + below);
+    tx = Math.max(L.left + hw, Math.min(L.right - hw, tx));
+    ty = Math.max(L.row2Y + 8 * u, Math.min(maxTy, ty));
+    if (c === last - 1) break;
+    const x0 = tx - hw;
+    const x1 = tx + hw;
+    const y0 = ty - 8 * u;
+    const y1 = ty + below;
+    if (f.occ.hits(x0, y0, x1, y1, 1) || hitsBankOrWaterline(f, x0, y0, x1, y1)) continue;
+    if (x0 < ax1 && x1 > ax0 && y0 < ay1 && y1 > ay0) continue; // slid or clamped back over the arrow
+    break;
+  }
   pen.text(off, tx, ty, col, 12.5);
   pen.text(name, tx, ty + 15 * u, pal.dim, 10.5);
   pen.text(rng, tx, ty + 28 * u, pal.dim, 10.5);

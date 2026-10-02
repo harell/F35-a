@@ -21,10 +21,10 @@ import { createHud } from '../src/hud/Hud';
 import type { CameraMode } from '../src/core/types';
 import { computeTouchLayout } from '../src/input/touch/layout';
 import { buildMock } from '../src/hud/dev/mockWorld';
-import { installPath2D, makeFakeCanvas, overlaps, textBox } from '../src/hud/dev/fakeCanvas';
+import { installPath2D, makeFakeCanvas, overlaps, textBox, type Box } from '../src/hud/dev/fakeCanvas';
 import { pcdScreenRect } from '../src/hud/cockpit/geometry';
 import { PCD_W } from '../src/hud/cockpit/pcd';
-import { speedColumnBottom } from '../src/hud/hmd/zones';
+import { altColumnBottom, speedColumnBottom } from '../src/hud/hmd/zones';
 import type { HudFrame } from '../src/hud/hmd/frame';
 import type { MissionDef } from '../src/core/contracts';
 import { buildInstantMissionSeeded } from '../src/missions';
@@ -206,49 +206,85 @@ describe('labels stay off the touch controls at 844×390', () => {
 
 describe('the off-screen target cue keeps clear of the HMD text', () => {
   installPath2D();
+  // the bank-scale arc (drawn ±60° around the nadir, ticks up to 8 px out) as sample points
+  const onBankArc = (arcs: { x: number; y: number; r: number; dashed: boolean }[], H: number, b: Box): boolean => {
+    for (const a of arcs) {
+      if (a.dashed || a.r < 55 || a.r > H * 0.26) continue;
+      for (let d = -60; d <= 60; d += 1) {
+        const ang = Math.PI / 2 + (d * Math.PI) / 180;
+        for (const rr of [a.r, a.r + 4]) {
+          const x = a.x + Math.cos(ang) * rr;
+          const y = a.y + Math.sin(ang) * rr;
+          if (x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1) return true;
+        }
+      }
+    }
+    return false;
+  };
   for (const view of ['hud', 'cockpit'] as CameraMode[]) {
-    it(`${view}: no text overlap with the target 70° off the nose in 16 directions`, () => {
+    it(`${view}: no text overlap, and clear of the FPM, waterline and bank scale, in 16 directions`, () => {
       const W = 844;
       const H = 390;
       const bad: string[] = [];
-      for (let a = 0; a < 16; a++) {
-        const mock = buildMock('offscreen');
-        const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
-        const hud = createHud(canvas, mock.events);
-        hud.resize(W, H, 1);
-        const p = mock.player;
-        const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
-        camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
-        camera.quaternion.copy(p.quaternion);
-        camera.updateMatrixWorld();
-        camera.updateProjectionMatrix();
-        const t = mock.world.getEntity(p.radar.designatedId!)!;
-        const ang = (a / 16) * Math.PI * 2;
-        const dir = new Vector3(Math.sin(ang) * Math.sin(1.2), Math.cos(ang) * Math.sin(1.2), -Math.cos(1.2)).applyQuaternion(p.quaternion);
-        const ctx: FrameContext = {
-          dt: 1 / 30,
-          time: 0,
-          world: mock.world,
-          player: p,
-          camera,
-          viewMode: view,
-          focusId: p.id,
-          mission: mock.mission,
-          settings: { ...DEFAULT_SETTINGS },
-          quality: { ...QUALITY_PRESETS.medium },
-          paused: false,
-          screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-        };
-        for (let i = 0; i < 3; i++) {
-          fake.reset();
-          t.position.copy(p.position).addScaledVector(dir, 9000);
-          hud.update(ctx);
-        }
-        const tx = fake.texts.filter((x) => x.text.trim());
-        expect(tx.some((x) => x.text.endsWith('°'))).toBe(true);
-        for (let i = 0; i < tx.length; i++) {
-          for (let j = i + 1; j < tx.length; j++) {
-            if (overlaps(textBox(tx[i]), textBox(tx[j]))) bad.push(`${a}: "${tx[i].text}" x "${tx[j].text}"`);
+      for (const offAxis of [0.45, 1.2, 2.3]) {
+        for (let a = 0; a < 16; a++) {
+          const mock = buildMock('offscreen');
+          const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+          const hud = createHud(canvas, mock.events);
+          hud.resize(W, H, 1);
+          const p = mock.player;
+          const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+          camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+          camera.quaternion.copy(p.quaternion);
+          camera.updateMatrixWorld();
+          camera.updateProjectionMatrix();
+          const t = mock.world.getEntity(p.radar.designatedId!)!;
+          const ang = (a / 16) * Math.PI * 2;
+          const dir = new Vector3(Math.sin(ang) * Math.sin(offAxis), Math.cos(ang) * Math.sin(offAxis), -Math.cos(offAxis)).applyQuaternion(p.quaternion);
+          const ctx: FrameContext = {
+            dt: 1 / 30,
+            time: 0,
+            world: mock.world,
+            player: p,
+            camera,
+            viewMode: view,
+            focusId: p.id,
+            mission: mock.mission,
+            settings: { ...DEFAULT_SETTINGS },
+            quality: { ...QUALITY_PRESETS.medium },
+            paused: false,
+            screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+          };
+          for (let i = 0; i < 3; i++) {
+            fake.reset();
+            t.position.copy(p.position).addScaledVector(dir, 9000);
+            hud.update(ctx);
+          }
+          const tx = fake.texts.filter((x) => x.text.trim());
+          const tag = `${view} ${offAxis} ${a}`;
+          const cueOff = tx.find((x) => x.text.endsWith('°') && x.size === 12.5);
+          if (!cueOff) {
+            // on screen in this view (the target box instead): nothing to check
+            if (offAxis > 1) bad.push(`${tag}: no off-screen cue`);
+            continue;
+          }
+          for (let i = 0; i < tx.length; i++) {
+            for (let j = i + 1; j < tx.length; j++) {
+              if (overlaps(textBox(tx[i]), textBox(tx[j]))) bad.push(`${tag}: "${tx[i].text}" x "${tx[j].text}"`);
+            }
+          }
+          // the cue's block: the angle-off and the lines under it (same centre x)
+          const cue = tx.filter((x) => Math.abs(x.x - cueOff.x) < 0.01 && x.y >= cueOff.y - 0.01 && x.y <= cueOff.y + 42);
+          expect(cue.length).toBeGreaterThanOrEqual(3);
+          // waterline at the nose (the camera looks along it): W/2 ± 15, from H/2 to 5 px below
+          const wl: Box = { x0: W / 2 - 15, y0: H / 2 - 1, x1: W / 2 + 15, y1: H / 2 + 6 };
+          // the FPM: a 6.5 px circle with 10 px wings and a 7 px fin
+          const fpm = fake.arcs.find((c) => !c.dashed && Math.abs(c.r - 6.5) < 0.01);
+          for (const c of cue) {
+            const b = textBox(c);
+            if (overlaps(b, wl)) bad.push(`${tag}: "${c.text}" on the waterline`);
+            if (fpm && overlaps(b, { x0: fpm.x - 16.5, y0: fpm.y - 13.5, x1: fpm.x + 16.5, y1: fpm.y + 6.5 })) bad.push(`${tag}: "${c.text}" on the FPM`);
+            if (onBankArc(fake.arcs, H, b)) bad.push(`${tag}: "${c.text}" on the bank scale`);
           }
         }
       }
@@ -265,6 +301,18 @@ describe('the speed column reservation', () => {
     const row = (k: number) => L.boxY + 11 + k * L.line + 6.5; // bottom of a 12 px row
     expect(speedColumnBottom(frame(false))).toBeGreaterThanOrEqual(row(4.75));
     expect(speedColumnBottom(frame(true))).toBeGreaterThanOrEqual(row(5.75));
+  });
+
+  it('on the altitude side, covers the aspect line under RALT, VVI and closure when flying low', () => {
+    // rows: box (±11u), RALT at +0.75 line (below 5000 ft AGL), VVI, Vc, aspect / angels (air target)
+    const L = { boxY: 200, u: 1, line: 15 };
+    const frame = (aglM: number, air: boolean) => ({ L, p: { flight: { agl: aglM } }, target: air ? { kind: 'aircraft' } : null }) as unknown as HudFrame;
+    const row = (k: number) => L.boxY + 11 + k * L.line + 6.5;
+    expect(altColumnBottom(frame(300, true))).toBeGreaterThanOrEqual(row(3.75));
+    expect(altColumnBottom(frame(3000, true))).toBeGreaterThanOrEqual(row(2.75));
+    expect(altColumnBottom(frame(300, false))).toBeGreaterThanOrEqual(row(1.75));
+    // no 4th row: the reservation stays as tight as before
+    expect(altColumnBottom(frame(3000, true))).toBeLessThan(row(3.75));
   });
 });
 

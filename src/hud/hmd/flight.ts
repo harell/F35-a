@@ -6,6 +6,7 @@ import { DEG, RAD, dirFromHeadingPitch, elevationOf, forwardOf, headingOf, toFee
 import { AB_DETENT } from '../../core/types';
 import { HDG_STR, HDG3_STR, INT_STR, NumText } from './format';
 import { blink, type HudFrame } from './frame';
+import { makeScreenPoint } from './projector';
 import { tapeBottom } from './zones';
 
 const txt = {
@@ -241,17 +242,47 @@ function bankRadius(f: HudFrame): number {
  * message sit inside the arc instead of on it ("FIGHTS ON" over the arc).
  */
 export function reserveBankScale(f: HudFrame): void {
+  if (!bankScaleRects(f)) return;
+  for (let i = 0; i < 12; i += 4) f.occ.add(bankRects[i], bankRects[i + 1], bankRects[i + 2], bankRects[i + 3]);
+}
+
+const bankRects = new Float32Array(12);
+
+/** The three boxes along the bank-scale arc into `bankRects` (false when it is not drawn this frame). */
+function bankScaleRects(f: HudFrame): boolean {
   const R = bankRadius(f);
-  if (R <= 0) return;
-  const { L, occ } = f;
+  if (R <= 0) return false;
+  const L = f.L;
   const u = L.u;
   const cx = L.cx;
   const cy = L.cy;
   const t = 9 * u;
+  const b = bankRects;
   // bottom (±30° around the nadir), then the two flanks (30°..60° from it)
-  occ.add(cx - R * 0.5 - t, cy + R * 0.866 - 3 * u, cx + R * 0.5 + t, cy + R + t);
-  occ.add(cx - R * 0.866 - t, cy + R * 0.5 - t, cx - R * 0.5, cy + R * 0.866 + t);
-  occ.add(cx + R * 0.5, cy + R * 0.5 - t, cx + R * 0.866 + t, cy + R * 0.866 + t);
+  b[0] = cx - R * 0.5 - t; b[1] = cy + R * 0.866 - 3 * u; b[2] = cx + R * 0.5 + t; b[3] = cy + R + t;
+  b[4] = cx - R * 0.866 - t; b[5] = cy + R * 0.5 - t; b[6] = cx - R * 0.5; b[7] = cy + R * 0.866 + t;
+  b[8] = cx + R * 0.5; b[9] = cy + R * 0.5 - t; b[10] = cx + R * 0.866 + t; b[11] = cy + R * 0.866 + t;
+  return true;
+}
+
+const noseSp = makeScreenPoint();
+
+/**
+ * Does the rect [ax, bx] × [ay, by] touch the bank-scale arc or the aircraft waterline? Both are drawn
+ * last (with the ladder) and reserved late or not at all, so a block placed before them (the off-screen
+ * target cue) asks here (#62: the cue's type label on the bank arc, its angle-off on the waterline).
+ */
+export function hitsBankOrWaterline(f: HudFrame, ax: number, ay: number, bx: number, by: number): boolean {
+  if (f.mode !== 'hmd') return false;
+  if (bankScaleRects(f)) {
+    for (let i = 0; i < 12; i += 4) {
+      if (ax < bankRects[i + 2] && bx > bankRects[i] && ay < bankRects[i + 3] && by > bankRects[i + 1]) return true;
+    }
+  }
+  forwardOf(f.p.quaternion, f.v1);
+  if (!f.proj.dir(f.v1, noseSp) || !noseSp.onScreen) return false;
+  const u = f.L.u;
+  return ax < noseSp.x + 17 * u && bx > noseSp.x - 17 * u && ay < noseSp.y + 7 * u && by > noseSp.y - 2 * u;
 }
 
 export function drawBankScale(f: HudFrame): void {
