@@ -165,7 +165,7 @@ cover = np.where((cq > 0) & ~water, ((np.argmax(cov, 0) + 1) << 3) | cq, 0).asty
 # depth band [drval1, drval2] below chart datum (≈ lowest tide; drval1 < 0 = a drying flat's height above it).
 # On a 32 m grid the finest chart scale available wins; inside a band the depth runs from drval1 at the edge
 # shared with shallower water (or the shore) to drval2 at the edge shared with deeper water, in proportion to the
-# distances to the two. Chart datum lies a tide range below MHW: the highest drying height near each point
+# distances to the two. Drying flats are the exception (below). Chart datum lies a tide range below MHW: the highest drying height near each point
 # (≈ MHWS: 4.2 m in the Manukau, 3.1-3.3 m in the Waitematā) less 0.3 m.
 SQ = 0.1                                        # quantum of √depth: ±0.1 m at 1 m, ±0.5 m at 25 m
 DR = 2 * R                                      # depth raster cell (32 m), aligned with the mosaics
@@ -187,6 +187,12 @@ for lv in np.unique(d1[charted]):
     deeper = charted & (d1 > lv)
     ds = distance_transform_edt(~shallower) * DR
     dd = distance_transform_edt(~deeper) * DR if deeper.any() else np.full(dshape, np.inf)
+    if lv < 0:
+        # drying flat: banks stay near mid-tide level (≈ 55 % of the highest drying height ≈ mean sea level)
+        # and fall off to chart datum only within 400 m of deeper water
+        top = 0.55 * lv
+        cd[m] = (top + (d2 - top) * np.maximum(0, 1 - dd / 400))[m]
+        continue
     t = np.where(np.isfinite(dd), ds / np.maximum(ds + dd, 1e-6), np.minimum(1, ds / 1500))
     cd[m] = (d1 + (d2 - d1) * t)[m]
 # chart datum -> MHW: the nearest drying flat's height limit

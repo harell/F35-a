@@ -1,7 +1,7 @@
 # LINZ terrain pipeline (Auckland theatre)
 
 Bakes Toitū Te Whenua LINZ open elevation, vegetation and hydrographic data into `src/world/terrain/data/auckland-linz.bin`
-(≈ 590 kB gzip), which the game fetches once per page load (`src/world/terrain/theaters/aucklandLinz.ts`), and
+(≈ 588 kB gzip), which the game fetches once per page load (`src/world/terrain/theaters/aucklandLinz.ts`), and
 `auckland-linz-hd.bin` (≈ 1.24 MB gzip), the real 2048² detail fetched only by the high quality tier
 (`src/world/terrain/theaters/aucklandLinzHd.ts`).
 
@@ -71,12 +71,14 @@ the LINZ Data Service (data.linz.govt.nz) WFS, which needs a free API key (`LINZ
 - **Water depth** (version 2, #7): the same 512² grid, √depth in 0.1 steps (±0.1 m at 1 m, ±0.5 m at 25 m), the
   height coder. From the ENC depth areas on a 32 m grid, finer chart scales painting over coarser ones; inside a band
   [drval1, drval2] the depth runs from drval1 at the edge shared with shallower water or the shore to drval2 at the
-  edge shared with deeper water, in proportion to the distances to the two (drying flats: drval1 < 0). Chart datum
+  edge shared with deeper water, in proportion to the distances to the two. Drying flats (drval1 < 0) instead stay at
+  55 % of the charted drying height (≈ mean sea level) and fall to chart datum within 400 m of deeper water: a linear
+  ramp from the shore left the middle of the Manukau's kilometres-wide banks as deep as its channels. Chart datum
   (≈ lowest tide) is moved to the game's sea level, mean high water, by the highest drying height charted nearby
   (≈ MHWS: 4.2 m in the Manukau, 3.1–3.3 m in the Waitematā) less 0.3 m. Depth ≥ 0.3 m everywhere below the
   coastline; the land samples within two cells of the water hold the nearest water depth for bilinear lookups.
   The game reads it in `waterHeight()` (`theaters/auckland.ts`), except in the hand-placed crater lakes.
-- Both add ≈ 80 kB gzip (cover ≈ 37 kB, depth ≈ 42 kB); at 1024² they would cost ≈ 105 + 130 kB. The coastline and
+- Both add ≈ 78 kB gzip (cover ≈ 37 kB, depth ≈ 40 kB); at 1024² they would cost ≈ 105 + 130 kB. The coastline and
   heights are unchanged, so `auckland-linz-hd.bin` (tied to the 1024 grid by its hash) stays valid.
 
 ## HD terrain (high quality tier)

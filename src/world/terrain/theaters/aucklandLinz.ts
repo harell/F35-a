@@ -6,7 +6,7 @@
  * rings, the NZ LiDAR 1 m DEM resampled to the 1024² heightfield grid, and (version 2) a 512² land cover
  * grid (Topo50 native / exotic / scrub polygons) and water depth grid (ENC depth areas of the LINZ charts,
  * moved from chart datum to mean high water). It is one gzip file
- * (≈ 590 kB, emitted by Vite as a content-hashed asset, so browsers may cache it for good) fetched
+ * (≈ 588 kB, emitted by Vite as a content-hashed asset, so browsers may cache it for good) fetched
  * once per page load and decompressed in the browser; the main thread hands the
  * decompressed bytes to the terrain workers, so it is never downloaded twice.
  *
