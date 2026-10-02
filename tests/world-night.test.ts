@@ -7,14 +7,25 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DataTexture, Vector4 } from 'three';
-import { AERIAL_GRADE_DAY, AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, aerialGrade, aerialLowSun } from '../src/world/terrain/theaters/aucklandAerial';
+import {
+  AERIAL_GRADE_DAY,
+  AERIAL_LOW_SUN_SHARE,
+  AERIAL_NIGHT_MIX,
+  AERIAL_RECT,
+  aerialGrade,
+  aerialHouseShare,
+  aerialLowSun,
+} from '../src/world/terrain/theaters/aucklandAerial';
+import { aerialUniforms } from '../src/world/terrain/TerrainRenderer';
+import { scatterKeep } from '../src/world/scenery/scatter';
+import { QUALITY_PRESETS } from '../src/core/data';
 import { AERIAL_LIGHT_GLSL, terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, cbdNightGlow, NIGHT_GLOW, suburbFarGlow } from '../src/world/terrain/nightGlow';
 import { aucklandStreets, FOOTPATH, type CbdStreets } from '../src/world/scenery/cbdStreets';
 import { createBuildingMaterial } from '../src/world/scenery/materials';
 import type { TimeOfDay } from '../src/core/types';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from '../src/world/terrain/urbanColor';
-import { terrainStyle } from '../src/world/config';
+import { terrainStyle, worldConfig } from '../src/world/config';
 import { skyPreset } from '../src/world/sky/presets';
 import { createAtmosphereUniforms } from '../src/world/sky/atmosphere';
 import { createRoadMaterial, ROAD_NIGHT_GLOW } from '../src/world/scenery/materials';
@@ -78,16 +89,56 @@ function flatLight(tod: TimeOfDay, extra: number): number {
 describe('under a low sun the photo takes the light of roofs facing it (#61 item 5, part 2)', () => {
   const sunY = (tod: TimeOfDay) => skyPreset('auckland', tod, 'clear', 20_000).sunDir.y;
 
+  // the photo-capable tiers' house scatter radius (config.ts): medium 2400 m, high 3400 m
+  const radii = (['medium', 'high'] as const).map((q) => worldConfig(QUALITY_PRESETS[q]).houseRadius);
+
   // At dawn the procedural houses round the photo read about twice as bright as the photo in the
-  // world lab (c01's light, the Newmarket edge): the photo was lit as flat ground under a 7° sun.
-  it('at dawn and dusk the photo is lit about twice as brightly as flat ground', () => {
+  // world lab (c01's light, the Newmarket edge, 300 m up): the photo was lit as flat ground under a 7° sun.
+  it('near the camera, where the 3D houses are drawn, the photo is lit about twice as brightly as flat ground at dawn and dusk', () => {
     for (const tod of ['dawn', 'dusk'] as const) {
-      const extra = aerialLowSun(sunY(tod));
-      const gain = flatLight(tod, extra) / flatLight(tod, 0);
-      expect(gain, tod).toBeGreaterThan(1.6);
-      expect(gain, tod).toBeLessThan(2.6);
+      for (const R of radii) {
+        const extra = aerialLowSun(sunY(tod)) * aerialHouseShare(0.3 * R, R);
+        const gain = flatLight(tod, extra) / flatLight(tod, 0);
+        expect(gain, `${tod} R ${R}`).toBeGreaterThan(1.6);
+        expect(gain, `${tod} R ${R}`).toBeLessThan(2.6);
+      }
       // never more than all of it facing the sun like a roof
-      expect(extra + sunY(tod), tod).toBeLessThan(0.88 * sunY(tod) + 0.47 + 1e-9);
+      expect(aerialLowSun(sunY(tod)) + sunY(tod), tod).toBeLessThan(0.88 * sunY(tod) + 0.47 + 1e-9);
+    }
+  });
+
+  // From afar (or once the camera is higher than the house radius) no 3D houses are drawn beside the
+  // photo and the procedural ground is lit as flat ground: the photo must be too, or it shows as a
+  // bright square (the review's far-dawn camera 1000, 2700, 8500 looking at the photo's south edge).
+  it('beyond the houses’ range, and from above it, the photo is lit as flat ground like the procedural ground', () => {
+    for (const R of radii) {
+      for (let ds = 1.02 * R; ds < 20_000; ds += 50) expect(aerialHouseShare(ds, R), `${ds} m`).toBe(0);
+      // the camera higher than R hides the houses: every ground point is at least that far
+      for (let ds = R; ds < 1.02 * R; ds += 2) expect(aerialHouseShare(ds, R), `${ds} m`).toBeLessThan(0.02);
+    }
+    const farCam = { x: 1000, y: 2700, z: 8500 };
+    const edge = { x: 1000, y: 0, z: AERIAL_RECT.z0 + AERIAL_RECT.size - 10 };
+    const ds = Math.hypot(farCam.x - edge.x, farCam.y - edge.y, farCam.z - edge.z);
+    for (const tod of ['dawn', 'dusk'] as const) {
+      for (const R of radii) {
+        const extra = aerialLowSun(sunY(tod)) * aerialHouseShare(ds, R);
+        expect(flatLight(tod, extra) / flatLight(tod, 0), `${tod} R ${R}`).toBe(1);
+      }
+    }
+    // without houses (or a photo) there is nothing to stand in for
+    expect(aerialHouseShare(100, 0)).toBe(0);
+  });
+
+  it('in between, the light follows the share of houses drawn (scatter.ts), faded out before their edge', () => {
+    for (const R of radii) {
+      let prev = 1;
+      for (let ds = 0; ds <= 1.05 * R; ds += R / 200) {
+        const share = aerialHouseShare(ds, R);
+        if (ds <= 0.9 * R) expect(share, `${ds} m`).toBeCloseTo(scatterKeep(ds, R), 9);
+        else expect(share, `${ds} m`).toBeLessThanOrEqual(scatterKeep(ds, R));
+        expect(share, `${ds} m`).toBeLessThanOrEqual(prev + 1e-12);
+        prev = share;
+      }
     }
   });
 
@@ -96,15 +147,22 @@ describe('under a low sun the photo takes the light of roofs facing it (#61 item
     expect(aerialLowSun(sunY('night'))).toBe(0);
   });
 
-  it('the terrain and the photo-topped buildings use the same term', () => {
+  it('the terrain and the photo-topped buildings use the same term, with the game’s house radius', () => {
     expect(AERIAL_LIGHT_GLSL).toContain(`${AERIAL_LOW_SUN_SHARE.toFixed(3)} * max(facing - y, 0.0) * (1.0 - smoothstep(0.2, 0.45, uSunDir.y))`);
+    // the same thinning as scatterKeep and aerialHouseShare
+    expect(AERIAL_LIGHT_GLSL).toContain('float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);');
+    expect(AERIAL_LIGHT_GLSL).toContain('return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds));');
     expect(terrainFragmentShader).toContain('float aerialLowSun()');
-    expect(terrainFragmentShader).toContain('col += albedo * uSunColor * (s.a * aerialLowSun() * photo.a * 0.3183099)');
+    expect(terrainFragmentShader).toContain('col += albedo * uSunColor * (s.a * aerialLowSun() * aerialHouseShare(dist) * photo.a * 0.3183099)');
     const atmo = createAtmosphereUniforms(skyPreset('auckland', 'dawn', 'clear', 20_000), 20_000);
     const tex = new DataTexture(new Uint8Array(4), 1, 1);
-    const mat = createBuildingMaterial(atmo, { aerial: { uAerial: { value: tex }, uAerialRect: { value: new Vector4() }, uAerialGrade: { value: new Vector4(1, 1, 1, 0) } } });
+    const info = { texture: tex, x0: 0, z0: 0, size: 1, feather: 1, houseRadius: 2400 };
+    expect(aerialUniforms(info, tex).uAerialHouseR.value).toBe(2400);
+    expect(aerialUniforms(null, tex).uAerialHouseR.value).toBe(0);
+    const mat = createBuildingMaterial(atmo, { aerial: aerialUniforms(info, tex) });
+    expect(mat.uniforms.uAerialHouseR.value).toBe(2400);
     expect(mat.fragmentShader).toContain('float aerialLowSun()');
-    expect(mat.fragmentShader).toContain('lit += base * uSunColor * (aerialLowSun() * photoW * 0.3183099)');
+    expect(mat.fragmentShader).toContain('lit += base * uSunColor * (aerialLowSun() * aerialHouseShare(distance(vWorld, uCamPos)) * photoW * 0.3183099)');
   });
 });
 

@@ -20,6 +20,7 @@
  * by the tier that uses it (public/sw.js ON_DEMAND keeps both out of the precache).
  */
 import type { TimeOfDay } from '../../../core/types';
+import { scatterKeep } from '../../scenery/scatter';
 import aerial2048Url from '../data/auckland-aerial-2048.webp?url';
 import aerial4096Url from '../data/auckland-aerial-4096.webp?url';
 
@@ -79,6 +80,7 @@ export function aerialGrade(mean: readonly [number, number, number] | null, targ
  * as such a roof, and the moon is high: nothing changes then.
  */
 export const AERIAL_LOW_SUN_SHARE = 0.8;
+// (the share was set against the houses drawn at full density, near the camera: see aerialHouseShare())
 
 /**
  * Extra direct light on the photo (in units of the sun's light on ground facing it) for a sun whose
@@ -89,6 +91,21 @@ export function aerialLowSun(sunY: number): number {
   const facing = 0.88 * y + 0.47 * Math.sqrt(1 - y * y);
   const t = Math.min(1, Math.max(0, (sunY - 0.2) / 0.25));
   return AERIAL_LOW_SUN_SHARE * Math.max(facing - y, 0) * (1 - t * t * (3 - 2 * t));
+}
+
+/**
+ * How much of the photo's low-sun light applies at range `ds` (m) from the camera, for the procedural
+ * houses' scatter radius `houseRadius` (config.ts; 0 = none). The light stands in for the 3D houses'
+ * sun-facing roofs and walls beside the photo; they thin with range and stop at their radius (and are
+ * hidden once the camera is higher than it), past which both sides are lit as flat ground. So the light
+ * follows the houses' drawn share (scatter.ts scatterKeep), faded out before their edge rather than cut
+ * there. Same as the shaders' aerialHouseShare() (AERIAL_LIGHT_GLSL).
+ */
+export function aerialHouseShare(ds: number, houseRadius: number): number {
+  if (houseRadius <= 0) return 0;
+  const R = houseRadius;
+  const t = Math.min(1, Math.max(0, (ds - 0.9 * R) / (0.12 * R)));
+  return scatterKeep(ds, R) * (1 - t * t * (3 - 2 * t));
 }
 
 /**

@@ -161,7 +161,7 @@ void main() {
   vec3 lit = atmoDiffuse(base, N, 1.0);
   #ifdef AERIAL
     // the photo's low-sun light, as on the terrain photo round these tops (#61 item 5)
-    lit += base * uSunColor * (aerialLowSun() * photoW * 0.3183099);
+    lit += base * uSunColor * (aerialLowSun() * aerialHouseShare(distance(vWorld, uCamPos)) * photoW * 0.3183099);
   #endif
   vec3 col = atmoNight(lit);
   col = atmoApplyFog(col, vWorld);
@@ -179,7 +179,10 @@ void main() {
  */
 export function createBuildingMaterial(
   atmo: AtmosphereUniforms,
-  opts: { houses?: boolean; aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 } } } = {},
+  opts: {
+    houses?: boolean;
+    aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 }; uAerialHouseR: { value: number } };
+  } = {},
 ): ShaderMaterial {
   const defines: Record<string, number> = {};
   if (opts.houses) defines.HOUSES = 1;

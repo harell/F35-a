@@ -125,6 +125,8 @@ export interface AerialPhotoInfo {
   feather: number;
   /** Colour grade toward the procedural palette: rgb gain, strength (aucklandAerial.ts aerialGrade()). */
   grade?: readonly [number, number, number, number];
+  /** The procedural houses' scatter radius (m, config.ts): the photo's low-sun light fades with them. */
+  houseRadius?: number;
 }
 
 const MORPH_START = 0.68;
@@ -539,11 +541,15 @@ export function streetUniforms(st: CbdStreets | null, tex: Texture | null, dummy
 }
 
 /** Uniforms of the terrain shader's aerialPhoto() (and the photo-capable building material). */
-export function aerialUniforms(a: AerialPhotoInfo | null, dummy: Texture): { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 } } {
+export function aerialUniforms(
+  a: AerialPhotoInfo | null,
+  dummy: Texture,
+): { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 }; uAerialHouseR: { value: number } } {
   return {
     uAerial: { value: a ? a.texture : dummy },
     uAerialRect: { value: a ? new Vector4(a.x0, a.z0, 1 / a.size, a.feather) : new Vector4(0, 0, 0, 0) },
     uAerialGrade: { value: new Vector4(...(a?.grade ?? [1, 1, 1, 0])) },
+    uAerialHouseR: { value: a?.houseRadius ?? 0 },
   };
 }
 

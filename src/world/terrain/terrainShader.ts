@@ -41,13 +41,22 @@ float coastWiggle(sampler2D detail, vec2 wp) {
 /**
  * Shared by the terrain and the photo-topped buildings (after ATMOSPHERE_GLSL): the aerial photo's
  * low-sun light (aucklandAerial.ts aerialLowSun(), the same on the CPU), in units of the sun's light
- * on ground facing it; 0 by day and under the moon.
+ * on ground facing it; 0 by day and under the moon. It stands in for the light the procedural 3D houses
+ * beside the photo catch, so it applies only as far as they are drawn: aerialHouseShare() (the CPU's
+ * aerialHouseShare(), following scatter.ts scatterKeep) of the slant range.
  */
 export const AERIAL_LIGHT_GLSL = /* glsl */ `
+uniform float uAerialHouseR; // the procedural houses' scatter radius (m); 0 = none
 float aerialLowSun() {
   float y = max(uSunDir.y, 0.0);
   float facing = 0.88 * y + 0.47 * sqrt(1.0 - y * y);
   return ${AERIAL_LOW_SUN_SHARE.toFixed(3)} * max(facing - y, 0.0) * (1.0 - smoothstep(0.2, 0.45, uSunDir.y));
+}
+float aerialHouseShare(float ds) {
+  float R = uAerialHouseR;
+  if (R <= 0.0) return 0.0;
+  float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);
+  return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds));
 }
 `;
 
@@ -676,8 +685,8 @@ void main() {
 
   vec3 col = atmoDiffuse(albedo, N, s.a);
   // under a low sun the photo also takes the light of roofs facing the sun, as the procedural houses
-  // beside it do (#61 item 5)
-  if (photo.a > 0.0) col += albedo * uSunColor * (s.a * aerialLowSun() * photo.a * 0.3183099);
+  // beside it do, as far as they are drawn (#61 item 5)
+  if (photo.a > 0.0) col += albedo * uSunColor * (s.a * aerialLowSun() * aerialHouseShare(dist) * photo.a * 0.3183099);
   // Where the coast mask puts sea but the terrain mesh (coarser LODs a few km out) still stands above
   // the water plane, or shows through a gap in the water, paint it as water rather than as dark wet
   // sand, which read as a black outline along far coasts. Same body + sky-reflection model as the
