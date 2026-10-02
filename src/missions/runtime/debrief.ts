@@ -22,7 +22,7 @@ export const MEDALS = {
   ace_in_a_day: { id: 'ace_in_a_day', name: 'Ace in a Day', description: 'Five air-to-air kills in one sortie.' },
   iron_hand: { id: 'iron_hand', name: 'Iron Hand', description: 'Destroyed two or more SAM / AAA sites in one sortie.' },
   bridge_runner: { id: 'bridge_runner', name: 'Bridge Runner', description: 'Flew under the Auckland Harbour Bridge.' },
-  no_hits: { id: 'no_hits', name: 'Untouchable', description: 'Completed the mission without a hit and without losing a friendly.' },
+  no_hits: { id: 'no_hits', name: 'Untouchable', description: 'Fought and won a mission without a hit and without losing a friendly.' },
   sharpshooter: { id: 'sharpshooter', name: 'Sharpshooter', description: 'Four or more shots with 80 % or better accuracy.' },
   gunslinger: { id: 'gunslinger', name: 'Gunslinger', description: 'Shot down an enemy aircraft with the GAU-22 gun.' },
   shepherd: { id: 'shepherd', name: 'Good Shepherd', description: 'Brought every friendly aircraft home.' },
@@ -139,8 +139,10 @@ export function awardMedals(s: MissionState, r: MissionResult, finale: boolean):
   if (r.success) {
     if (campaign && (r.grade === 'S' || r.grade === 'A')) give(MEDALS.air_medal);
     if (campaign && r.grade === 'S' && (r.difficulty === 'veteran' || r.difficulty === 'ace')) give(MEDALS.dfc);
-    // the whole flight came home untouched (i2 review: awarded while Viper 2 was lost)
-    if (r.damageTaken <= 0 && r.friendlyLosses === 0) give(MEDALS.no_hits);
+    // the whole flight came home untouched (i2 review: awarded while Viper 2 was lost), from a fight
+    // the player took part in: hostiles and at least one shot (playtest 2026-10-02, 2.3-b: a parked,
+    // 0-shot Defend win got it)
+    if (r.damageTaken <= 0 && r.friendlyLosses === 0 && s.enemiesSpawned > 0 && r.shotsFired > 0) give(MEDALS.no_hits);
     if (r.shotsFired >= 4 && r.accuracy >= 0.8) give(MEDALS.sharpshooter);
     let friendlies = 0;
     for (const g of s.groups.values()) if (g.team === 'blue' && g.air && g.air.role !== 'wingman') friendlies += g.expected;
