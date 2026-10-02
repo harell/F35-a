@@ -15,15 +15,15 @@
  * carriageways and Stanley St / Beach Rd / Quay St) and closed through the harbour, so the seam
  * between the real streets and the procedural suburbs runs under a motorway or along a real street.
  */
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { AKL, geoToWorld } from '../../src/core/auckland';
-import { encodeRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_STREET, type RoadData, type RoadKind, type RoadLine } from '../../src/world/scenery/aucklandRoads';
+import { AKL } from '../../src/core/auckland';
+import { decodeRoads, encodeRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_RAIL, ROAD_STREET, type RoadData, type RoadKind, type RoadLine } from '../../src/world/scenery/aucklandRoads';
 import { HAND_ARTERIALS } from '../../src/world/scenery/motorways';
 import { decodeLinz, linzIsLand } from '../../src/world/terrain/theaters/aucklandLinz';
+import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, project, runs, segDist, simplify, type Feature, type Pt } from './polyline';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const WORK = process.argv[2] ?? path.join(os.tmpdir(), 'f35-linz-roads');
@@ -31,26 +31,7 @@ const SVG = process.argv[3] ?? null;
 const OUT = path.join(HERE, '../../src/world/terrain/data/auckland-roads.bin');
 fs.mkdirSync(WORK, { recursive: true });
 
-// ── Download ──
-interface Feature {
-  properties: Record<string, string | number | boolean | null>;
-  geometry: { type: string; coordinates: number[][] | number[][][] };
-}
-function wfs(file: string, typeName: string, cql: string): Feature[] {
-  const out = path.join(WORK, file);
-  if (!fs.existsSync(out)) {
-    const key = process.env.LINZ_API_KEY;
-    if (!key) throw new Error(`${out} is not cached and LINZ_API_KEY is not set (free key: https://data.linz.govt.nz)`);
-    const url = `https://data.linz.govt.nz/services;key=${key}/wfs`;
-    const q = { service: 'WFS', version: '2.0.0', request: 'GetFeature', outputFormat: 'json', srsName: 'EPSG:4326', typeNames: typeName, cql_filter: cql };
-    console.log(`fetching ${file} …`);
-    execFileSync('curl', ['-sSfG', url, ...Object.entries(q).flatMap(([k, v]) => ['--data-urlencode', `${k}=${v}`]), '-o', out + '.part']);
-    fs.renameSync(out + '.part', out);
-  }
-  const fc = JSON.parse(fs.readFileSync(out, 'utf8')) as { features: Feature[] };
-  console.log(`${file}: ${fc.features.length} features`);
-  return fc.features;
-}
+const wfs = (file: string, typeName: string, cql: string) => fetchWfs(WORK, file, typeName, cql);
 
 // World box ±44 km (lat/lon order for EPSG:4167 / 4326 BBOX filters, northing/easting for NZTM)
 const W = { s: -37.25, n: -36.44, w: 174.26, e: 175.26 };
@@ -71,118 +52,6 @@ const streets = wfs('cbd-streets.json', 'layer-123109', `BBOX(shape,${CBD.s},${C
 const motorways = wfs('motorways.json', 'layer-123109', `BBOX(shape,${W.s},${W.w},${W.n},${W.e}) AND (road_name_type IN ('Motorway','State Highway') OR full_road_name LIKE '%Motorway%')`);
 const arterials = wfs('arterials.json', 'layer-123109', `territorial_authority='Auckland' AND full_road_name IN (${Object.keys(ARTERIAL_NAMES).map((n) => `'${n}'`).join(',')})`);
 const tunnels = wfs('tunnels.json', 'layer-50366', `BBOX(GEOMETRY,5880000,1710000,5965000,1800000) AND use1='vehicle'`);
-
-// ── Geometry helpers ──
-type Pt = [number, number];
-const project = (c: number[]): Pt => {
-  const p = geoToWorld(c[1], c[0]);
-  return [p.x, p.z];
-};
-const lines = (f: Feature): Pt[][] => (f.geometry.type === 'LineString' ? [f.geometry.coordinates as number[][]] : (f.geometry.coordinates as number[][][])).map((l) => l.map(project));
-
-function segDist(px: number, pz: number, a: Pt, b: Pt): number {
-  const dx = b[0] - a[0];
-  const dz = b[1] - a[1];
-  const l2 = dx * dx + dz * dz;
-  let t = l2 > 0 ? ((px - a[0]) * dx + (pz - a[1]) * dz) / l2 : 0;
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  return Math.hypot(a[0] + dx * t - px, a[1] + dz * t - pz);
-}
-function polyDist(px: number, pz: number, pl: Pt[]): number {
-  let d = Infinity;
-  for (let i = 0; i + 1 < pl.length; i++) d = Math.min(d, segDist(px, pz, pl[i], pl[i + 1]));
-  return d;
-}
-function simplify(pts: Pt[], tol: number): Pt[] {
-  if (pts.length < 3) return pts;
-  const keep = new Uint8Array(pts.length);
-  keep[0] = keep[pts.length - 1] = 1;
-  const stack: [number, number][] = [[0, pts.length - 1]];
-  while (stack.length) {
-    const [a, b] = stack.pop()!;
-    let best = -1;
-    let bd = tol;
-    for (let i = a + 1; i < b; i++) {
-      const d = segDist(pts[i][0], pts[i][1], pts[a], pts[b]);
-      if (d > bd) {
-        bd = d;
-        best = i;
-      }
-    }
-    if (best >= 0) {
-      keep[best] = 1;
-      stack.push([a, best], [best, b]);
-    }
-  }
-  return pts.filter((_, i) => keep[i]);
-}
-function densify(pts: Pt[], step: number): Pt[] {
-  const out: Pt[] = [pts[0]];
-  for (let i = 1; i < pts.length; i++) {
-    const [ax, az] = pts[i - 1];
-    const [bx, bz] = pts[i];
-    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
-    for (let k = 1; k <= n; k++) out.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
-  }
-  return out;
-}
-/** Split a polyline into runs where keep(p) holds, then into tunnel / open runs. */
-function runs(pts: Pt[], flag: (p: Pt, i: number) => number): { pts: Pt[]; flag: number }[] {
-  const out: { pts: Pt[]; flag: number }[] = [];
-  let cur: Pt[] = [];
-  let cf = -2;
-  for (let i = 0; i < pts.length; i++) {
-    const p = pts[i];
-    const f = flag(p, i);
-    if (f !== cf) {
-      if (cur.length > 1 && cf >= 0) out.push({ pts: cur, flag: cf });
-      // the boundary vertex belongs to both runs (no gap where a road enters a tunnel)
-      cur = cur.length && f >= 0 && cf >= 0 ? [cur[cur.length - 1]] : [];
-      cf = f;
-    }
-    cur.push(p);
-  }
-  if (cur.length > 1 && cf >= 0) out.push({ pts: cur, flag: cf });
-  return out;
-}
-
-const keyOf = (p: Pt) => `${Math.round(p[0] * 2)},${Math.round(p[1] * 2)}`;
-
-/** Merge sections end to end through nodes shared by exactly two sections of the same group. */
-function chain(secs: { group: string; pts: Pt[] }[]): { group: string; pts: Pt[] }[] {
-  const at = new Map<string, number[]>();
-  secs.forEach((s, i) => {
-    for (const p of [s.pts[0], s.pts[s.pts.length - 1]]) {
-      const k = keyOf(p);
-      const l = at.get(k);
-      if (l) l.push(i);
-      else at.set(k, [i]);
-    }
-  });
-  const used = new Uint8Array(secs.length);
-  const out: { group: string; pts: Pt[] }[] = [];
-  const next = (end: Pt, group: string): Pt[] | null => {
-    const l = at.get(keyOf(end));
-    if (!l || l.length !== 2) return null;
-    for (const j of l) {
-      if (used[j] || secs[j].group !== group) continue;
-      used[j] = 1;
-      const p = secs[j].pts;
-      return keyOf(p[0]) === keyOf(end) ? p : p.slice().reverse();
-    }
-    return null;
-  };
-  secs.forEach((s, i) => {
-    if (used[i]) return;
-    used[i] = 1;
-    let pts = s.pts.slice();
-    for (let n = next(pts[pts.length - 1], s.group); n; n = next(pts[pts.length - 1], s.group)) pts = pts.concat(n.slice(1));
-    // next() returns a run starting at the shared node: reversed, it ends there
-    for (let n = next(pts[0], s.group); n; n = next(pts[0], s.group)) pts = n.slice().reverse().slice(0, -1).concat(pts);
-    out.push({ group: s.group, pts });
-  });
-  return out;
-}
 
 // ── Road graph (for the region border) ──
 class Graph {
@@ -330,12 +199,6 @@ function tunnelFlags(pts: Pt[]): Uint8Array {
   }
   return f;
 }
-/** Local direction of a polyline at vertex i. */
-const dirAt = (pts: Pt[], i: number): Pt => {
-  const a = pts[Math.max(0, i - 1)];
-  const b = pts[Math.min(pts.length - 1, i + 1)];
-  return [b[0] - a[0], b[1] - a[1]];
-};
 
 // Harbour Bridge: the scenery has its own model between the abutments; the ribbons stop at the shore.
 const BS: Pt = [AKL.bridge_s.x, AKL.bridge_s.z];
@@ -449,13 +312,15 @@ for (const [linzName, short] of Object.entries(ARTERIAL_NAMES)) {
 }
 
 // ── Write ──
-const data: RoadData = { region: Float32Array.from(regionPts.flat()), lines: out };
+// the railways (tools/linz/railways.ts) share the file: keep the ones already baked
+const rails = fs.existsSync(OUT) ? decodeRoads(new Uint8Array(zlib.gunzipSync(fs.readFileSync(OUT)))).lines.filter((l) => l.kind === ROAD_RAIL) : [];
+const data: RoadData = { region: Float32Array.from(regionPts.flat()), lines: out.concat(rails) };
 const raw = encodeRoads(data, 0.5);
 const gz = zlib.gzipSync(raw, { level: 9 });
 fs.writeFileSync(OUT, gz);
 const count = (k: RoadKind) => out.filter((l) => l.kind === k);
 const len = (ls: RoadLine[]) => ls.reduce((s, l) => s + l.pts.reduce((a, _, i, p) => (i >= 2 && i % 2 === 0 ? a + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]) : a), 0), 0) / 1000;
-console.log(`region: ${regionPts.length} vertices`);
+console.log(`region: ${regionPts.length} vertices; ${rails.length} railway lines kept`);
 for (const [k, n] of [[ROAD_STREET, 'streets'], [ROAD_MOTORWAY, 'motorways'], [ROAD_ARTERIAL, 'arterials']] as const) console.log(`${n}: ${count(k).length} lines, ${len(count(k)).toFixed(1)} km, ${count(k).reduce((s, l) => s + l.pts.length / 2, 0)} vertices, ${count(k).filter((l) => l.tunnel).length} tunnel runs`);
 console.log(`wrote ${OUT}: ${raw.length} bytes raw, ${gz.length} bytes gzip`);
 

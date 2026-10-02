@@ -137,6 +137,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 0.35,
     wakes: false,
     ferries: 10,
+    railways: true,
   },
   medium: {
     level: 'medium',
@@ -153,6 +154,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 0.7,
     wakes: true,
     ferries: 13,
+    railways: true,
   },
   high: {
     level: 'high',
@@ -169,6 +171,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 1,
     wakes: true,
     ferries: 16,
+    railways: true,
   },
 };
 

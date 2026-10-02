@@ -2,7 +2,7 @@
  * WORLD lab (dev only, labs/world-lab.html): renders the environment alone with a free-flying camera.
  *
  *   labs/world-lab.html?theater=auckland&tod=day&weather=scattered&quality=medium&seed=1234
- *                 &cam=x,y,z&look=headingDeg,pitchDeg&aerial=0
+ *                 &cam=x,y,z&look=headingDeg,pitchDeg&aerial=0&railways=0
  *
  * Keys: WASD/QE fly, arrows look, Shift = fast. `window.__lab` exposes setCamera/stats for
  * Playwright screenshots.
@@ -24,6 +24,8 @@ const seed = Number(params.get('seed') ?? 1234);
 const quality = { ...QUALITY_PRESETS[level] };
 // aerial=0: the procedural ground under the CBD / waterfront photo (before / after shots)
 if (params.get('aerial') === '0') quality.aerialPhoto = false;
+// railways=0: no railway ribbons (before / after shots, draw-call count)
+if (params.get('railways') === '0') quality.railways = false;
 
 const info = document.getElementById('info')!;
 const canvas = document.getElementById('c') as HTMLCanvasElement;
