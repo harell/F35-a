@@ -17,11 +17,12 @@
  * commits or it is threatened, then supports the leader's target.
  * Friendly 'wingman': fingertip / fighting wing on the player (or leaderId), engages hostile
  * fighters within 15 km and the player's designated target, radio calls, keeps out of the
- * player's gun line.
+ * player's gun line. Standing orders (WingmanOrders, Instant Action) can hold its fire until the
+ * player has fired and keep it off groups that are the player's job (Defend's strikers).
  */
 import { Vector3 } from 'three';
 import { forwardOf } from '../../core/math';
-import type { AiRole, AiTask, SimWorld } from '../../sim/api';
+import type { AiRole, AiTask, SimWorld, WingmanOrders } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import { isHostile, type WeaponId } from '../../core/types';
 import { isStealthy } from '../../sim/sensors/signatures';
@@ -69,6 +70,7 @@ const _k = new Vector3();
 
 export class FighterBrain extends Brain {
   private readonly cfg: FighterConfig;
+  private readonly orders: WingmanOrders;
   private readonly aw = new Awareness();
   private readonly defense = new MissileDefense();
   private readonly wpn = new WeaponsOfficer();
@@ -99,6 +101,10 @@ export class FighterBrain extends Brain {
   private engageAlt = -1;
   /** Player's designation at the last check (friendly wingman support). */
   private lastPlayerDes: number | null = null;
+  /** Most rounds + stores the player has carried so far (orders.holdFireUntilPlayerFires), -1 = not seen yet. */
+  private playerAmmoMax = -1;
+  /** The player has fired something (latched): a holding wingman is weapons free from then on. */
+  private playerFired = false;
   /** Sim time of the last engagement tick (for quick mid-fight re-targeting). */
   private lastEngageTime = -99;
   /** Tail chase of a cold, non-threatening bandit: since when, and which bandit. */
@@ -118,6 +124,7 @@ export class FighterBrain extends Brain {
   constructor(role: AiRole, opts: BrainOptions, cfg: FighterConfig) {
     super(role, opts);
     this.cfg = cfg;
+    this.orders = (cfg.friendlyWing && opts.orders) || {};
     this.ctx = {
       ac: null as unknown as AircraftEntity,
       world: null as unknown as SimWorld,
@@ -254,7 +261,29 @@ export class FighterBrain extends Brain {
     return e;
   }
 
+  /**
+   * orders.holdFireUntilPlayerFires: weapons hold until the player's rounds + stores drop below
+   * the most it has carried (a missile, a bomb or a gun burst). Latched: once the player has opened
+   * fire the wingman fights normally for the rest of the mission.
+   */
+  private holdingFire(world: SimWorld): boolean {
+    if (!this.orders.holdFireUntilPlayerFires || this.playerFired) return false;
+    const p = world.player;
+    if (!p) return true;
+    let ammo = p.gunAmmo;
+    for (const st of p.stores) ammo += st.count;
+    if (ammo < this.playerAmmoMax) this.playerFired = true;
+    else this.playerAmmoMax = ammo;
+    return !this.playerFired;
+  }
+
   private chooseTarget(ac: AircraftEntity, world: SimWorld): void {
+    if (this.holdingFire(world)) {
+      // weapons hold: stay on the wing (missile defence still runs), no target, no shots
+      this.targetId = null;
+      this.engagedId = null;
+      return;
+    }
     // a wingman re-targets at once when the player calls a new target
     if (this.cfg.friendlyWing) {
       const des = world.player?.radar.designatedId ?? null;
@@ -287,6 +316,8 @@ export class FighterBrain extends Brain {
         if (this.now < ign && b.threat === 0 && b.range > 6_000 && aspectOf(b.pos, b.vel, ac.position) < 100 * DEG) continue;
         this.ignoreUntil.delete(b.id);
       }
+      // the player's job (orders.ignoreGroups): never engaged, whatever it does
+      if (this.orders.ignoreGroups && b.ent.groupId && this.orders.ignoreGroups.includes(b.ent.groupId)) continue;
       let ok: boolean;
       if (b.id === attackId) ok = true;
       else if (cfg.escort && leader) ok = b.pos.distanceTo(leader.position) <= 20_000 || (b.threat > 0 && b.range < 12_000);

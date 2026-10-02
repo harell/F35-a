@@ -12,7 +12,7 @@
 import { Vector3 } from 'three';
 import { mulberry32 } from '../../core/math';
 import { atmosphere, type AtmosphereSample } from '../../core/atmosphere';
-import type { AiBrain, AiRole, AiTask, SimWorld } from '../../sim/api';
+import type { AiBrain, AiRole, AiTask, SimWorld, WingmanOrders } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
 import { deriveSkill, type PilotSkill } from '../skill';
@@ -35,6 +35,8 @@ export interface BrainOptions {
   skill: number;
   task?: AiTask;
   seed?: number;
+  /** Friendly wingman's standing orders (FighterBrain 'wingman' only). */
+  orders?: WingmanOrders;
 }
 
 export abstract class Brain implements AiBrain {

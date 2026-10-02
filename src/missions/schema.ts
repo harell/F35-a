@@ -11,7 +11,7 @@
  * Tower in the Auckland theatre). Headings are DEGREES (0 = north, clockwise). Altitudes are
  * metres MSL. Everything must stay within ±36 km of the origin.
  */
-import type { AiRole } from '../sim/api';
+import type { AiRole, WingmanOrders } from '../sim/api';
 import type {
   AircraftType,
   Difficulty,
@@ -196,6 +196,8 @@ export interface AircraftGroupDef {
   enemyLoadout?: 'default' | 'strike';
   /** One-way attack drone group (type 'shahed136'): see OneWayDef. */
   oneWay?: OneWayDef;
+  /** Friendly 'wingman' only: standing orders (hold fire until the player fires, groups to leave alone). */
+  orders?: WingmanOrders;
 }
 
 export interface SamSiteDef {

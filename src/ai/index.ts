@@ -31,7 +31,7 @@ import { FighterBrain, FIGHTER_CONFIGS } from './brain/FighterBrain';
 import { AwacsBrain, BomberBrain } from './brain/BomberBrain';
 
 export const createAiBrain: CreateAiBrain = (role, opts) => {
-  const o = { skill: opts?.skill ?? 0.5, task: opts?.task, seed: opts?.seed };
+  const o = { skill: opts?.skill ?? 0.5, task: opts?.task, seed: opts?.seed, orders: opts?.orders };
   let brain: AiBrain;
   switch (role) {
     case 'bomber':

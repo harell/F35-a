@@ -5,6 +5,7 @@
 import type { InstantActionOptions, MissionDef, SceneryFeature } from '../../core/contracts';
 import { mulberry32 } from '../../core/math';
 import type { AircraftType, LoadoutId, SamType, TheaterId } from '../../core/types';
+import type { WingmanOrders } from '../../sim/api';
 import { WIRI_TANKS } from '../../core/sites';
 import type { AircraftGroupDef, Condition, GroundTargetDef, HintDef, MissionScript, ObjectiveDef, SamSiteDef, TriggerDef, WaypointDef, XZ } from '../schema';
 import { AKL_SEED, BASE_FEATURES, FEATURES, P, WAIHEKE_RUNWAY_HDG, flight, mission, runwayPoint, site, target, wingmen } from './common';
@@ -101,6 +102,9 @@ function enemyFlights(opts: InstantActionOptions, n: number, lay: Layout, rng: (
   return out;
 }
 
+/** Instant Action wingman (issue #60): it backs the player up and can't win the mission for a player who never fires. */
+const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
+
 const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
 
 export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: number): MissionDef {
@@ -123,14 +127,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
 
   switch (opts.mode) {
     case 'dogfight': {
-      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast' }));
+      // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
+      // the player has fired
+      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
       const flights = enemyFlights(opts, n, lay, rng);
       groups.push(...flights);
       objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
       briefing = [
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, more on Ace). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s — Su-35s and Su-57s join on Veteran and Ace.' : '',
-        n >= 3 ? 'Viper 2 is on your wing.' : 'You are on your own.',
+        n >= 3 ? 'Viper 2 is on your wing. It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
@@ -328,7 +334,9 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
       task: { kind: 'route', points: [{ ...climb, altitude: low }, { ...ip, altitude: bombAlt }] },
     }),
   ];
-  if (n >= 3) groups.push(wingmen(1, lay.defend.player, { loadout: 'a2a_stealth' }));
+  // Viper 2 takes the escort, never the strikers ("bombers have priority" is the player's job), and
+  // holds fire until the player has fired (issue #60: it won Defend alone)
+  if (n >= 3) groups.push(wingmen(1, lay.defend.player, { loadout: 'a2a_stealth', orders: { ...WING_ORDERS, ignoreGroups: ['strikers'] } }));
   if (escorts > 0) {
     const at = { x: Math.round(from.x + uz * 3000), z: Math.round(from.z - ux * 3000) };
     groups.push(
@@ -393,6 +401,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
       `About ${strikers} Flankers loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
+      ...(n >= 3 ? ['Viper 2 is on your wing: once you open fire it takes the escort. The bombers are yours.'] : []),
     ],
   };
 }
