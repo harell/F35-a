@@ -26,6 +26,7 @@ import type { MissionDef, MissionResult, MissionRunnerApi } from '../src/core/co
 import { isHostile, type Difficulty, type LoadoutId, type WeaponId } from '../src/core/types';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import type { AircraftEntity, AnyEntity, MissileEntity } from '../src/sim/entities';
+import { isBoat } from '../src/sim/boats';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
@@ -48,6 +49,9 @@ const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu39', 'gbu31'];
 
 /** SDB-class glide bombs (GBU-39, GBU-53/B): same envelope, pressed in to SDB_PRESS_RANGE. */
 const isSdb = (w: AgWeapon): boolean => w === 'gbu39' || w === 'gbu53';
+
+/** Order a boat swarm is bombed in: the shortest clock first (a suicide boat, then a missile boat, then an AD boat). */
+const boatRank = (t: AnyEntity): number => (t.kind === 'ground' && t.type === 'suicide_boat' ? 0 : t.kind === 'ground' && t.type === 'missile_boat' ? 1 : 2);
 
 export const WHENUAPAI = new Vector3(AKL.whenuapai.x, 0, AKL.whenuapai.z);
 
@@ -177,6 +181,9 @@ export class MissionBot {
    * preferred, so they are rippled onto the targets like a human does instead of one 2-minute glide
    * at a time (issue #65: StormBreaker runs over 600 s). Not JDAMs (a JDAM rippled from inside the
    * run-in overflew its target in t03) and not low under the SA-10, where each toss is flown alone.
+   * Fast boats (a swarm on a clock, IRGC g02) are bombed one bomb per boat, rippled: a boat with our
+   * bomb already on the way is left to it while another one is free, and the shortest clock goes
+   * first (suicide boats, then missile boats, then the rest), as the briefing tells a human.
    */
   private surfaceTarget(): AnyEntity | null {
     const p = this.p;
@@ -187,8 +194,11 @@ export class MissionBot {
     for (const t of this.objectiveTargets('surface')) {
       const wt = this.weaponFor(t);
       if (!wt) continue; // e.g. only AARGMs left and a silent / optical site
-      const busy = ripple && isSdb(wt) && this.bombInbound(t);
-      const d = t.position.distanceTo(p.position);
+      // a moving boat is only covered by a bomb aimed at it, not by a blast meant for its neighbour
+      const boat = isBoat(t);
+      const busy = ripple && isSdb(wt) && (boat ? this.bombOnTheWay(t) : this.bombInbound(t));
+      let d = t.position.distanceTo(p.position);
+      if (boat) d += boatRank(t) * 1e6 + (this.bombOnTheWay(t) ? 1e7 : 0);
       if ((bestBusy && !busy) || (busy === bestBusy && d < bestD)) {
         bestD = d;
         best = t;
@@ -204,6 +214,12 @@ export class MissionBot {
       }
     }
     return best;
+  }
+
+  /** One of our weapons is in flight at `t`. */
+  private bombOnTheWay(t: AnyEntity): boolean {
+    for (const m of this.world.missiles) if (m.alive && m.shooterId === this.p.id && m.targetId === t.id) return true;
+    return false;
   }
 
   private nearestBandit(): { e: AircraftEntity; d: number } | null {
