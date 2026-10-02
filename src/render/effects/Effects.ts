@@ -196,6 +196,8 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const funnelAcc = new Map<number, number>();
   /** Damaged-landmark fire emission accumulators (flames, smoke). */
   const landmarkAcc = new Map<object, { f: number; s: number }>();
+  /** Fire / smoke accumulators of a hit ship still afloat (per ship id: the escorted tanker after its first hit). */
+  const burnAcc = new Map<number, { f: number; s: number }>();
   const trailStyles = new Map<string, RibbonStyle | null>();
 
   const now = () => world.time;
@@ -780,6 +782,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       schedule(0.5 + rnd() * 2.5 * (i + 1), _v.x, _v.y, _v.z, i === 0 ? 'huge' : i === 1 ? 'large' : 'medium', 'ground');
     }
     funnelAcc.delete(g.id);
+    burnAcc.delete(g.id);
     const fx = shipFx.find((f) => !f.ship) ?? shipFx[0];
     fx.ship = g;
     fx.fAcc = fx.sAcc = 0;
@@ -857,6 +860,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     // living ships: a thin plume from the funnel (low rate, scaled by particleScale and distance)
     for (const g of world.ground) {
       if (g.type !== 'ship' || !g.alive || !g.vessel) continue;
+      if (g.hits > 0) burnHitShip(g, t, dt);
       const funnel = shipDims(g.vessel).funnel!;
       const d = distCam(g.position.x, 40, g.position.z);
       if (d > FUNNEL_SMOKE_FAR) {
@@ -894,6 +898,53 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         }
       }
       funnelAcc.set(g.id, acc);
+    }
+  }
+
+  /**
+   * A ship that took a hit and is still afloat (hitsToSink > 1): a fire on the fore deck, bigger with
+   * each hit, and a dark smoke column leaning with her way, until she is hit again or sinks
+   * (shipKill takes over then).
+   */
+  function burnHitShip(g: GroundTargetEntity, t: number, dt: number): void {
+    const dims = shipDims(g.vessel);
+    const k = Math.max(0.6, Math.min(1.6, dims.length / 180)) * (0.7 + 0.3 * g.hits);
+    shipMatrix(g, t, _sm);
+    _v.set(dims.beam * 0.12, dims.deck + 1, -dims.length * 0.18).applyMatrix4(_sm);
+    const d = distCam(_v.x, _v.y, _v.z);
+    let acc = burnAcc.get(g.id);
+    if (!acc) burnAcc.set(g.id, (acc = { f: 0, s: 0 }));
+    acc.f += dt * 16 * k * ps * lodK(d);
+    while (acc.f >= 1) {
+      acc.f -= 1;
+      const r = 5 * k;
+      fireLick(_v.x + (rnd() - 0.5) * r * 2, _v.y + rnd() * 2, _v.z + (rnd() - 0.5) * r * 2, (rnd() - 0.5) * 2, 3 + rnd() * 5, (rnd() - 0.5) * 2, (3 + rnd() * 3.5) * k, 0.7 + rnd() * 0.5, 1, 2);
+    }
+    acc.s += dt * (1.2 + 1.2 * k) * ps * Math.max(0.5, lodK(d));
+    const v = g.velocity;
+    while (acc.s >= 1) {
+      acc.s -= 1;
+      resetSpawn(P);
+      P.x = _v.x + (rnd() - 0.5) * 12;
+      P.y = _v.y + 4 + rnd() * 4;
+      P.z = _v.z + (rnd() - 0.5) * 12;
+      P.vx = v.x * 0.6 + (rnd() - 0.5) * 3;
+      P.vy = 8 + rnd() * 5;
+      P.vz = v.z * 0.6 + (rnd() - 0.5) * 3;
+      P.drag = 0.3;
+      P.grav = 4;
+      P.size0 = 8 * k;
+      P.size1 = (35 + rnd() * 30) * k;
+      P.sizeCurve = 1.6;
+      P.life = 16 + rnd() * 8;
+      P.rot = rnd() * 6.28;
+      P.rotSpeed = (rnd() - 0.5) * 0.15;
+      P.variant = (rnd() * 4) | 0;
+      col0(P, C.smokeDark, 0.8);
+      col1(P, C.smokeGrey, 0);
+      P.fadeIn = 0.04;
+      P.minPx = 3;
+      smoke.spawn(P, t);
     }
   }
 

@@ -1,6 +1,6 @@
 /**
  * DEV ONLY — SAM site / ground target preview for the models lab (sam:<type>, gt:<type>,
- * gt:ship:container / gt:ship:cruise for the civil merchant ships).
+ * gt:ship:container / gt:ship:cruise / gt:ship:tanker for the civil merchant ships).
  * Animates radars/launchers with fake entity state; &dead=1 shows the wreck (a ship sinks from t = 0;
  * &anchored=1 swings it at anchor).
  */

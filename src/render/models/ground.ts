@@ -1,7 +1,7 @@
 /**
  * Ground target prototypes: EWR (rotating array on a mast), command bunker, fuel farm, hardened
  * aircraft shelter, parked jet, truck, tank, corvette, factory, bridge, plus the civil
- * container ship and cruise liner (a 'ship' with a VesselClass).
+ * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  *  'span:mid' bridge middle span (drops when destroyed)
@@ -269,17 +269,20 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
 /**
  * Civil merchant ship, waterline at y = 0, bow at -Z: a lofted hull, then container bays and the
  * aft accommodation block (container ship) or the stacked white decks of a cruise liner, a funnel,
- * a radar on the mast ('spin:0'). Sizes match VESSEL_DATA (sim hit volume).
+ * a radar on the mast ('spin:0'); or the flat pipe deck and aft accommodation of a crude carrier.
+ * Sizes match VESSEL_DATA (sim hit volume) and SHIP_DIMS.
  */
 function buildMerchant(vessel: VesselClass): GroundPrototype {
   const root = new Group();
   root.name = `ground:ship:${vessel}`;
   const statics: BufferGeometry[] = [];
   const cruise = vessel === 'cruise';
-  const L = cruise ? 290 : 270;
-  const B = cruise ? 36 : 34;
-  const F = cruise ? 14 : 12; // freeboard: main deck height above the waterline
-  const hullCol = cruise ? 0xeef0ee : 0x22303f;
+  const tanker = vessel === 'tanker';
+  const dims = SHIP_DIMS[vessel];
+  const L = dims.length;
+  const B = dims.beam;
+  const F = dims.deck; // freeboard: main deck height above the waterline
+  const hullCol = cruise ? 0xeef0ee : tanker ? 0x1c1f24 : 0x22303f;
   // hull: fine bow at -Z (with a little sheer), full body, transom stern at +Z
   const hw = B / 2;
   const hull = loftRings(
@@ -302,7 +305,7 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   // red boot-topping just above the waterline
   statics.push(place(box(B * 1.004, 1.2, L * 0.86, 0x8a2a22), [0, 0.4, 6]));
   // main deck
-  statics.push(place(box(B * 0.98, 0.4, L * 0.84, cruise ? 0x9a8a72 : 0x5c6064), [0, F + 0.2, 8]));
+  statics.push(place(box(B * 0.98, 0.4, L * 0.84, cruise ? 0x9a8a72 : tanker ? 0x7a3a2a : 0x5c6064), [0, F + 0.2, 8]));
   const spin = new Object3D();
   spin.name = 'spin:0';
   const lights: ShipLight[] = [];
@@ -313,7 +316,28 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   const WHITE = 0xffffff;
   const CABIN = 0xffcf8a;
   const FLOOD = 0xfff0d6;
-  if (!cruise) {
+  if (tanker) {
+    // crude carrier: a long flat deck (pipe runs, the manifold and its hose crane amidships, a
+    // catwalk to the forecastle), the accommodation block, bridge and funnel aft
+    const za = L / 2 - 34;
+    for (const x of [-4, -1.5, 1.5, 4]) statics.push(place(box(0.9, 0.9, L * 0.66, 0x9aa0a4), [x, F + 0.9, -12]));
+    statics.push(place(box(2.2, 0.5, L * 0.66, 0xd8d4c8), [B * 0.3, F + 3.2, -12])); // catwalk
+    for (let z = -L / 2 + 40; z < L / 2 - 60; z += 22) statics.push(place(box(0.5, 2.8, 0.5, 0xd8d4c8), [B * 0.3, F + 1.6, z]));
+    statics.push(place(box(B * 0.8, 1.6, 6, 0x9aa0a4), [0, F + 1.2, 0])); // manifold
+    statics.push(place(box(1.2, 12, 1.2, 0xd8b030), [B * 0.42, F + 6, 4]), place(box(1, 1, 16, 0xd8b030), [B * 0.42, F + 12, -2]));
+    statics.push(place(box(1.2, 12, 1.2, 0xd8b030), [-B * 0.42, F + 6, 4]), place(box(1, 1, 16, 0xd8b030), [-B * 0.42, F + 12, -2]));
+    statics.push(place(box(B * 0.82, 18, 16, 0xf0f0ec), [0, F + 9, za]));
+    statics.push(place(box(B * 1.02, 3, 9, 0xf0f0ec), [0, F + 19.5, za - 3]), place(box(B * 0.8, 1.2, 0.3, 0x1c2328), [0, F + 19.6, za - 7.6]));
+    statics.push(place(box(4, 8, 3, 0xf0f0ec), [0, F + 25, za]));
+    spin.position.set(0, F + 30, za);
+    light(-B * 0.52, F + 20, za - 3, RED, 'way');
+    light(B * 0.52, F + 20, za - 3, GREEN, 'way');
+    light(0, F + 10, -L / 2 + 12, WHITE, 'way');
+    light(0, F + 32, za, WHITE, 'way');
+    for (let r = 0; r < 3; r++) for (const x of [-10, 0, 10]) light(x, F + 4 + r * 5, za - 8.3, CABIN, 'deck');
+    for (let z = -L / 2 + 40; z < L / 2 - 60; z += 40) light(B * 0.3, F + 6, z, FLOOD, 'deck', 3.2);
+    statics.push(place(box(B * 0.6, 3, 14, hullCol), [0, F + 1.5, -L / 2 + 14])); // forecastle
+  } else if (!cruise) {
     // container bays forward of the accommodation block (deterministic colours)
     const rnd = mulberry32(270);
     const colors = [0xb03a2e, 0x2e5a9a, 0x2f7a4a, 0xd87a2a, 0xe8e6e0, 0x6a6e72, 0x1f3f6a, 0x8a6a3a, 0x3a8a9a];
@@ -372,10 +396,12 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   // funnel: company colours (blue with a white band and a black top); its top is in SHIP_DIMS (the
   // effects emit the exhaust there)
   const fH = cruise ? 12 : 14;
-  const [, fTop, fz] = SHIP_DIMS[vessel].funnel!;
+  const fw = cruise ? 9 : tanker ? 7.5 : 6.5;
+  const fl = cruise ? 14 : tanker ? 9 : 8;
+  const [, fTop, fz] = dims.funnel!;
   const fy = fTop - fH;
-  statics.push(place(box(cruise ? 9 : 6.5, fH, cruise ? 14 : 8, 0x1f4f8a), [0, fy + fH / 2, fz]));
-  statics.push(place(box(cruise ? 9.1 : 6.6, 1.6, cruise ? 14.1 : 8.1, 0xf2f2ee), [0, fy + fH * 0.62, fz]), place(box(cruise ? 9.2 : 6.7, 1.4, cruise ? 14.2 : 8.2, 0x161a1c), [0, fy + fH + 0.7, fz]));
+  statics.push(place(box(fw, fH, fl, 0x1f4f8a), [0, fy + fH / 2, fz]));
+  statics.push(place(box(fw + 0.1, 1.6, fl + 0.1, 0xf2f2ee), [0, fy + fH * 0.62, fz]), place(box(fw + 0.2, 1.4, fl + 0.2, 0x161a1c), [0, fy + fH + 0.7, fz]));
   // stern light under way, all-round anchor lights fore and aft at anchor
   light(0, F + 1.5, L / 2 + 0.6, WHITE, 'stern');
   light(0, F + 7, -L / 2 + 6, WHITE, 'anchor');
