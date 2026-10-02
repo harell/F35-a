@@ -140,7 +140,7 @@ async function flight() {
   // spies on look/taps consumed by Game
   await page.evaluate(() => {
     const inp = window.__f35.game.input;
-    window.__spy = { yaw: 0, pitch: 0, taps: [], cmds: [] };
+    window.__spy = { yaw: 0, pitch: 0, taps: [], handled: [], cmds: [] };
     const cl = inp.consumeLook.bind(inp);
     inp.consumeLook = () => {
       const r = cl();
@@ -155,6 +155,13 @@ async function flight() {
       return r;
     };
     for (const c of ['cycleWeapon', 'cycleTarget', 'camera', 'pause', 'radar', 'lookReset', 'padlock']) inp.on(c, () => window.__spy.cmds.push(c));
+    // the frame loop hands every consumed tap to Game.handleTap: record which view each one landed in
+    const game = window.__f35.game;
+    const ht = game.handleTap.bind(game);
+    game.handleTap = (x, y, s) => {
+      window.__spy.handled.push({ x, y, view: s.rig.mode });
+      return ht(x, y, s);
+    };
   });
 
   if (args.debug)
@@ -281,9 +288,45 @@ async function flight() {
   // the game reads taps once per frame, and a SwiftShader frame takes far longer than the 100 ms this
   // used to wait, so the read came before the frame that consumes the tap (in every view)
   await settle(page);
-  const taps = await page.evaluate(() => window.__spy.taps.slice());
+  const tapSeen = await page.evaluate(() => ({ taps: window.__spy.taps.slice(), handled: window.__spy.handled.slice() }));
+  const { taps } = tapSeen;
   check(tapView === 'target' && taps.length === 1 && Math.abs(taps[0].x - 430) < 2, `quick tap on the view (${tapView}) → consumeTaps`, JSON.stringify(taps));
-  // (that a tap on a contact's box designates it in the target view is tests/hud-target-tap.test.ts)
+  check(
+    tapSeen.handled.length === 1 && Math.abs(tapSeen.handled[0].x - 430) < 2 && tapSeen.handled[0].view === 'target',
+    'the consumed tap reaches Game.handleTap in the target view',
+    JSON.stringify(tapSeen.handled),
+  );
+  // Game.handleTap designates the box under a tap in the target view. One evaluate, no frame in between,
+  // so the padlock can't move the box: find another contact's box with hud.pick, tap it, read the designation.
+  let tgtTap = null;
+  for (let i = 0; i < 6 && !tgtTap?.box; i++) {
+    if (i) await settle(page);
+    tgtTap = await page.evaluate(() => {
+      const g = window.__f35.game;
+      const s = g.session;
+      const p = s?.world.player;
+      if (!s || !p?.alive) return { view: s?.rig.mode ?? null, box: null, why: 'no live player' };
+      if (s.rig.mode !== 'target') window.__f35.setView('target');
+      const view = s.rig.mode;
+      const before = p.radar.designatedId;
+      const contactIds = new Set(p.radar.contacts.map((c) => c.id));
+      let box = null;
+      for (let y = 40; y < 280 && !box; y += 12)
+        for (let x = 60; x < 784 && !box; x += 12) {
+          const id = g.hud.pick(x, y);
+          const e = id == null ? null : s.world.getEntity(id);
+          if (e?.alive && id !== before && contactIds.has(id) && e.team !== p.team) box = { id, x, y };
+        }
+      if (!box) return { view, before, box: null, why: 'no other contact on screen' };
+      g.handleTap(box.x, box.y, s);
+      return { view, before, box, after: p.radar.designatedId };
+    });
+  }
+  check(
+    tgtTap.view === 'target' && tgtTap.box && tgtTap.after === tgtTap.box.id,
+    "target view: Game.handleTap on another contact's box designates it",
+    JSON.stringify(tgtTap),
+  );
   // ── pause via the button, resume via the menu ──
   const pause = await rectOf(page, '.b-pause');
   await t.tap(pause.cx, pause.cy);

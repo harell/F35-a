@@ -1,8 +1,9 @@
 /**
  * Tap-to-designate in the target (padlock) camera view (#71, decided 2026-10-02): a tap on a contact's
  * box designates it there too, as in the chase view. The real CameraRig frames the HUD lab's mock
- * world, the real HUD draws it on a recording canvas, and a tap runs the same path as Game.handleTap:
- * hud.pick() at the tap, then combat.designate().
+ * world, the real HUD draws it on a recording canvas, and a tap runs the HUD half of Game.handleTap:
+ * hud.pick() at the tap, then combat.designate(). Game.handleTap itself (its alive and cockpit checks)
+ * needs the full game; e2e/ui-touch.mjs --part=flight calls it in the target view and reads the designation.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -53,7 +54,7 @@ function scene(view: CameraMode) {
     hud.update(ctx);
   };
   for (let i = 0; i < 30; i++) frame();
-  /** Game.handleTap: the HUD symbol under the tap gets designated. */
+  /** The HUD half of Game.handleTap: the HUD symbol under the tap gets designated. */
   const tap = (x: number, y: number) => {
     const id = hud.pick(x, y);
     if (id != null) mock.world.combat.designate(p, id, mock.world);
