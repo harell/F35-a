@@ -111,7 +111,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
     }
   };
 
-  const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0, offAxis: false };
+  const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0, offAxis: false, steer: 0 as -1 | 0 | 1, bombAway: false };
 
   const api: CombatSystemApi & { aiSalt: number } = {
     aiSalt: aiSaltFor(seed),
@@ -229,9 +229,20 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
         const geo = gpsReleaseGeometry(def, ac, gp);
         r.point.copy(gp);
         r.offAxis = geo.offAxis;
+        r.steer = geo.offAxis ? geo.side : 0;
         r.inRange = geo.reachable && horiz <= rMax;
         const gs = horiz > 1 ? (ac.velocity.x * dx + ac.velocity.z * dz) / horiz : 0;
         r.timeToRelease = r.inRange ? 0 : geo.reachable && gs > 5 ? (horiz - rMax) / gs : -1;
+        // one of our bombs still guiding onto this target (its entity, or the designated point)
+        r.bombAway = false;
+        const tid = ac.radar.designatedId;
+        for (const m of world.missiles) {
+          if (!m.alive || m.shooterId !== ac.id || m.def.category !== 'bomb' || (m as { guided?: boolean }).guided === false) continue;
+          if ((tid !== null && m.targetId === tid) || (m.targetId === null && Math.hypot(m.targetPoint.x - gp.x, m.targetPoint.z - gp.z) < 100)) {
+            r.bombAway = true;
+            break;
+          }
+        }
         return r;
       }
       if (def.guidance === 'tri_mode') return null; // SDB II: designated targets only, no CCIP
@@ -240,6 +251,8 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
       const delay = st >= 0 && ac.stores[st].internal && ac.isPlayer ? Math.max(0, 0.9 - ac.bayDoors) * BAY_OPEN_TIME : 0;
       if (!ccipPoint(world, ac, def, r.point, delay)) return null;
       r.offAxis = false;
+      r.steer = 0;
+      r.bombAway = false;
       r.inRange = ac.position.y - r.point.y > 60;
       r.timeToRelease = 0;
       return r;
