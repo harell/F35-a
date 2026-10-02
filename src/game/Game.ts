@@ -51,6 +51,7 @@ import { createUi } from '../ui/Ui';
 import { tag as analyticsTag, track, upgrade } from '../analytics/clarity';
 import {
   CAMPAIGN,
+  CAMPAIGNS,
   TRAINING,
   buildInstantMission,
   createMissionRunner,
@@ -256,7 +257,7 @@ export class Game {
     // Menus may change saved progress themselves (e.g. skipping a mission), so re-read it.
     this.progress = loadProgress();
     if (choice === 'campaign') {
-      await this.pickAndFly(() => this.ui.showCampaign(CAMPAIGN, this.progress));
+      await this.campaignMenu();
     } else if (choice === 'training') {
       await this.pickAndFly(() => this.ui.showTraining(TRAINING, this.progress));
     } else if (choice === 'instant') {
@@ -271,11 +272,25 @@ export class Game {
     }
   }
 
-  /** Mission list / Instant Action setup → missionFlow; Back on the briefing returns to that screen. */
-  private async pickAndFly(pick: () => Promise<MissionDef | null>): Promise<void> {
+  /** Campaign picker → that campaign's mission list; Back on the list returns to the picker. */
+  private async campaignMenu(): Promise<void> {
+    for (;;) {
+      const campaign = await this.flow.ask(this.ui.showCampaigns(CAMPAIGNS, this.progress));
+      if (!campaign) return;
+      if ((await this.pickAndFly(() => this.ui.showCampaign(campaign, this.progress))) === 'menu') return;
+      this.progress = loadProgress();
+    }
+  }
+
+  /**
+   * Mission list / Instant Action setup → missionFlow; Back on the briefing returns to that screen.
+   * Resolves 'back' when the player backs out of that screen, 'menu' when a mission flow ended.
+   */
+  private async pickAndFly(pick: () => Promise<MissionDef | null>): Promise<'back' | 'menu'> {
     for (;;) {
       const def = await this.flow.ask(pick());
-      if (!def || (await this.missionFlow(def)) !== 'back') return;
+      if (!def) return 'back';
+      if ((await this.missionFlow(def)) !== 'back') return 'menu';
       this.progress = loadProgress();
     }
   }
@@ -986,7 +1001,7 @@ export class Game {
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,
       }),
       // + the Instant Action scenario built on a fixed site (Wiri defence) so the e2e sweep covers it
-      missions: () => [...CAMPAIGN, ...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
+      missions: () => [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
     };
   }

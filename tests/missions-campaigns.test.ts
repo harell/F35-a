@@ -1,6 +1,6 @@
 /**
  * MISSIONS — several campaigns (issue #74): Operation Southern Cross and the IRGC campaign side by
- * side. Each campaign unlocks along its own chain, NEXT stays inside it, every lookup
+ * side. Each campaign unlocks along its own chain, NEXT and the ending stay inside it, every lookup
  * finds missions in any campaign, and a save from the one-campaign days keeps its progress.
  *
  * The IRGC campaign has no missions until #78 lands, so this file swaps its content module for a
@@ -36,6 +36,8 @@ import {
 import { CAMPAIGN_PART1 } from '../src/missions/content/campaign1';
 import { CAMPAIGN_PART2 } from '../src/missions/content/campaign2';
 import { PROGRESS_KEY } from '../src/missions/progress';
+import { campaignStatus } from '../src/ui/format';
+import { campaignEnding } from '../src/ui/screens/ending';
 
 function result(missionId: string, over: Partial<MissionResult> = {}): MissionResult {
   return {
@@ -115,6 +117,8 @@ describe('campaigns', () => {
     expect(real.IRGC_CAMPAIGN.name).toBe(real.IRGC_CAMPAIGN_NAME);
     expect(real.IRGC_CAMPAIGN.name.length).toBeGreaterThan(0);
     expect(real.IRGC_CAMPAIGN.missions).toEqual([]);
+    // an empty campaign shows as "coming soon" in the picker
+    expect(campaignStatus(real.IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 0, soon: true });
   });
 
   it('mission ids are unique across every campaign and training (progress is keyed by mission id)', () => {
@@ -216,5 +220,29 @@ describe('campaigns', () => {
     // and the migrated save round-trips unchanged
     saveProgress(p);
     expect(loadProgress()).toEqual(p);
+  });
+
+  it('the picker counts missions won per campaign', () => {
+    let p = loadProgress();
+    p = recordResult(p, result('g01'));
+    p = recordResult(p, result('c01'));
+    p = recordResult(p, result('c02'));
+    expect(campaignStatus(IRGC(), p)).toEqual({ done: 1, total: 3, soon: false });
+    expect(campaignStatus(SOUTHERN_CROSS, p)).toEqual({ done: 2, total: CAMPAIGN.length, soon: false });
+  });
+
+  it('each campaign has its own ending; the IRGC one is a placeholder without the Southern Cross medal', () => {
+    const sc = campaignEnding('southern_cross');
+    expect(sc.tag).toBe('OPERATION SOUTHERN CROSS');
+    expect(sc.medal).toBe('southern_cross');
+    expect(sc.epilogue.join(' ')).toContain('Operation Southern Cross is complete');
+    // an unknown campaign falls back to Southern Cross's ending
+    expect(campaignEnding(null)).toEqual(sc);
+    const irgc = campaignEnding('irgc');
+    expect(irgc.tag).toBe(IRGC().name.toUpperCase());
+    expect(irgc.medal).toBeNull();
+    expect(irgc.epilogue.join(' ')).toContain(`${IRGC().name} is complete`);
+    expect(irgc.epilogue.join(' ')).not.toContain('Southern Cross');
+    expect(irgc.roll[0]).toEqual(['Campaign', IRGC().name]);
   });
 });

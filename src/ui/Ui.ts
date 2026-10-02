@@ -3,7 +3,7 @@
  *
  *   host.ts              layers, transitions, back/Escape, spatial focus (keys + gamepad), click sound
  *   screens/*            splash, main menu (+ first-launch Training prompt, pilot card), service record
- *                        (rank, stats, medals), campaign/training (+ "complete Training" nudge), instant
+ *                        (rank, stats, medals), campaign picker, campaign/training (+ "complete Training" nudge), instant
  *                        action, briefing (+ intel map, difficulty sheet), settings, pause, debrief (+ tips,
  *                        medals, Retry on Recruit), campaign ending, credits
  *   career.ts            pure helpers: difficulty facts from DIFFICULTIES, onboarding flag, rank, medal tally
@@ -20,6 +20,7 @@ import { difficultyChangeToast } from './career';
 import { UiHost } from './host';
 import { LoadingOverlay, RotateOverlay, Toasts } from './overlays';
 import { showBriefing } from './screens/briefing';
+import { showCampaigns } from './screens/campaignSelect';
 import { showCredits } from './screens/credits';
 import { showDebrief } from './screens/debrief';
 import { showInstantAction } from './screens/instantAction';
@@ -81,7 +82,8 @@ export const createUi: CreateUi = (root, deps) => {
     showLoading: (fraction, label) => loading.show(fraction, label),
     hideLoading: () => loading.hide(),
     showMainMenu: () => showMainMenu(host, deps.build, { settings: liveSettings, progress: readProgress }),
-    showCampaign: (missions, progress) => showCampaign(host, missions, progress, toast),
+    showCampaigns: (campaigns, progress) => showCampaigns(host, campaigns, progress, toast),
+    showCampaign: (campaign, progress) => showCampaign(host, campaign, progress, toast),
     showTraining: (missions, progress) => showTraining(host, missions, progress, toast),
     showInstantAction: () => showInstantAction(host),
     showBriefing: (mission, settings) => {

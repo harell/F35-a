@@ -407,8 +407,10 @@ export interface UiApi {
   showLoading(fraction: number, label: string): void;
   hideLoading(): void;
   showMainMenu(): Promise<MainMenuChoice>;
-  /** Campaign mission list/map. Resolves the chosen mission or null (back). */
-  showCampaign(missions: MissionDef[], progress: CampaignProgress): Promise<MissionDef | null>;
+  /** Campaign picker (one card per campaign). Resolves the chosen campaign or null (back). */
+  showCampaigns(campaigns: CampaignDef[], progress: CampaignProgress): Promise<CampaignDef | null>;
+  /** One campaign's mission list/map. Resolves the chosen mission or null (back). */
+  showCampaign(campaign: CampaignDef, progress: CampaignProgress): Promise<MissionDef | null>;
   showTraining(missions: MissionDef[], progress: CampaignProgress): Promise<MissionDef | null>;
   showInstantAction(): Promise<InstantActionOptions | null>;
   /** Briefing + intel map + loadout (hangar) selection. Null = back. */
