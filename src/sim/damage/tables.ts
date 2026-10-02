@@ -73,6 +73,29 @@ export const VESSEL_DATA: Record<VesselClass, VesselData> = {
   tanker: { length: 250, beam: 44, height: 40, health: 3_000 },
 };
 
+/** Hit points of aircraft types that are not the default 100 (AircraftEntity.maxHealth). */
+export const AIRCRAFT_HEALTH: Partial<Record<AircraftType, number>> = {
+  // Shahed-136: two or three GAU-22 hits (~16–20 each) bring it down, any missile warhead kills it
+  shahed136: 30,
+};
+
+/**
+ * Warhead of a one-way attack drone: wherever it is destroyed (shot down, crashed or on its
+ * target) it detonates, damaging every other live aircraft within `radius` (full `damage` inside
+ * `fullRadius`, linear falloff to 0 at `radius`). Other drones are spared, so one missile can't
+ * clear a whole formation by chain reaction. Applied by the world as 'flak' (not a missile hit).
+ */
+export interface WarheadData {
+  damage: number;
+  fullRadius: number;
+  radius: number;
+}
+
+export const AIRCRAFT_WARHEAD: Partial<Record<AircraftType, WarheadData>> = {
+  // ~50 kg warhead: a point-blank gun kill costs the player a real chunk of health
+  shahed136: { damage: 40, fullRadius: 30, radius: 150 },
+};
+
 /** Explosion for an aircraft blowing up (in the air or on impact). */
 export function aircraftExplosion(type: AircraftType): ExplosionSize {
   return type === 'tu22m' || type === 'a50' || type === 'a320' ? 'huge' : 'large';
