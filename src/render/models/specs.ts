@@ -259,6 +259,23 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     chase: { dist: 70, height: 14 },
     abLength: 0,
   },
+  shahed136: {
+    type: 'shahed136',
+    length: 3.5,
+    span: 2.5,
+    height: 0.65,
+    eye: [0, 0.1, -1.2],
+    engines: [{ pos: [0, 0, 1.6], radius: 0.1 }],
+    wingtips: [
+      [-1.22, -0.02, 1.4],
+      [1.22, -0.02, 1.4],
+    ],
+    lex: [],
+    gun: null,
+    lights: [],
+    chase: { dist: 9, height: 2 },
+    abLength: 0,
+  },
 };
 
 /** Default munition dimensions (m) used to build models; instances are rescaled to def.length/diameter. */

@@ -377,7 +377,7 @@ export function awareOf(ctx: CombatCtx, ac: AircraftEntity, other: AircraftEntit
 const NE_FACTOR = 1.35;
 
 /** Target types that fly straight and don't defend much (bombers, AEW). */
-const NON_MANEUVERING = new Set(['tu22m', 'a50', 'a320']);
+const NON_MANEUVERING = new Set(['tu22m', 'a50', 'a320', 'shahed136']);
 
 /**
  * Pk-calibrated shoot range for air-to-air missiles — must be called right after kinematicZone()

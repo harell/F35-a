@@ -335,6 +335,7 @@ export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; r
   tu22m: { name: 'Tu-22M3', nato: 'Backfire', rwrSymbol: '22' },
   a50: { name: 'A-50', nato: 'Mainstay', rwrSymbol: '50' },
   a320: { name: 'A320neo', nato: 'Airliner', rwrSymbol: 'CV' },
+  shahed136: { name: 'Shahed-136', nato: 'Shahed', rwrSymbol: 'UA' },
 };
 
 export const SAM_INFO: Record<SamType, { name: string; nato: string; rwrSymbol: string }> = {

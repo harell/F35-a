@@ -62,6 +62,8 @@ export function aircraftNoun(type: AircraftType, count: number): string {
       return one ? 'Backfire' : 'Backfires';
     case 'a50':
       return one ? 'Mainstay' : 'Mainstays';
+    case 'shahed136':
+      return one ? 'drone' : 'drones';
     default:
       return one ? 'bandit' : 'bandits';
   }
