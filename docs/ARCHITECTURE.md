@@ -197,6 +197,9 @@ runs it like any site (the SA-15's missile and envelope, plus SA-18s through `Sa
 ever move onto water (`TerrainQuery.isWater`), steering round land. Missions point them at a group
 (`GroundTargetDef.chase` / `.strike`, `SamSiteDef.escort`): `boats.ts` takes the group's first live
 member, and looks it up again each step the boat has no live target, so spawn order doesn't matter.
+The IRGC campaign's g02 "Straight Outta Hauraki" (`src/missions/content/irgcHauraki.ts`, appended to the campaign at the
+end of `irgc.ts`) puts all three round the two-hit tanker leaving the Rangitoto Channel: suicide boats on a 2-minute
+clock, missile boats in launch range 3–4 minutes in, AD boats escorting each wave (a bonus objective, not the job).
 
 ## Frame / sim order (Game.ts)
 
