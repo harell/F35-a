@@ -725,6 +725,8 @@ export interface PlaythroughResult {
   /** Seconds the bot spent in each mode. */
   modes: Record<string, number>;
   events: string[];
+  /** The player's weapon launches in order: time, weapon, target entity id and mission group. */
+  launches: { t: number; weapon: string; targetId: number | null; group: string | null }[];
 }
 
 export function runPlaythrough(
@@ -771,6 +773,12 @@ export function runPlaythrough(
   let rearms = 0;
   let friendlyLost = 0;
   let playerKills = 0;
+  const launches: PlaythroughResult['launches'] = [];
+  events.on('munition:launch', (e) => {
+    if (e.shooter !== p) return;
+    const tgt = world.getEntity(e.targetId);
+    launches.push({ t: world.time, weapon: e.missile.def.id, targetId: e.targetId, group: (tgt as { groupId?: string } | undefined)?.groupId ?? null });
+  });
   events.on('hud:message', (e) => {
     if (e.text.startsWith('REARMED')) rearms++;
     if (opts.log) log.push(`${T()} HUD ${e.text}`);
@@ -839,6 +847,7 @@ export function runPlaythrough(
     result,
     modes: Object.fromEntries(Object.entries(modes).map(([k, v]) => [k, Math.round(v)])),
     events: log,
+    launches,
   };
   runner.dispose?.();
   return r;
