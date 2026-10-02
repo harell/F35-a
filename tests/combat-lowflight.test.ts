@@ -93,9 +93,12 @@ describe('#68: MANPADS and AAA threaten low flight (design pillar 3)', () => {
   });
 
   it('Veteran: a low pass close to a ZSU-23-4 costs far more than a pass at 1,500 m', SIM, () => {
-    const low = zsuPass('veteran', 150, 600, 6);
-    const high = zsuPass('veteran', 1_500, 600, 6);
-    expect(low).toBeGreaterThan(30); // a third of the jet (≈ 19 hp before the close-in aim, #68)
-    expect(high).toBeLessThan(10);
+    // One pass is noisy (0–100 hp), so 24 seeds and relative bounds: over seeds 1–72, 24-seed means
+    // run 36–50 hp low and 7–10 hp at 1,500 m; before the close-in aim (#68) 18 hp low, 8 hp high.
+    const low = zsuPass('veteran', 150, 600, 24);
+    const high = zsuPass('veteran', 1_500, 600, 24);
+    expect(high).toBeLessThan(15);
+    expect(low).toBeGreaterThan(3 * high);
+    expect(low).toBeGreaterThan(27);
   });
 });
