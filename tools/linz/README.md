@@ -1,7 +1,7 @@
 # LINZ terrain pipeline (Auckland theatre)
 
-Bakes Toitū Te Whenua LINZ open elevation data into `src/world/terrain/data/auckland-linz.bin`
-(≈ 510 kB gzip), which the game fetches once per page load (`src/world/terrain/theaters/aucklandLinz.ts`), and
+Bakes Toitū Te Whenua LINZ open elevation, vegetation and hydrographic data into `src/world/terrain/data/auckland-linz.bin`
+(≈ 588 kB gzip), which the game fetches once per page load (`src/world/terrain/theaters/aucklandLinz.ts`), and
 `auckland-linz-hd.bin` (≈ 1.24 MB gzip), the real 2048² detail fetched only by the high quality tier
 (`src/world/terrain/theaters/aucklandLinzHd.ts`).
 
@@ -13,6 +13,8 @@ Data is licensed CC BY 4.0: *Sourced from the LINZ Data Service and licensed for
 |---|---|---|
 | NZ LiDAR 1m DEM (national mosaic) | `s3://nz-elevation/new-zealand/new-zealand/dem_1m/2193/` (LDS layer 121859) | land heights |
 | NZ Contour-Interpolated 8m DEM | `s3://nz-elevation/new-zealand/new-zealand-contour/dem_8m/2193/` (from Topo50 contours, LDS 50768) | land/sea mask = Topo50 mean-high-water coastline |
+| NZ Native / Exotic / Scrub Polygons (Topo, 1:50k) | LDS layers 50306 / 50267 / 50339 (WFS, API key) | bush, pine plantations, scrub |
+| Depth area polygon (Hydro) 1:4k–22k, 1:22k–90k, 1:90k–350k, 1:350k–1.5M | LDS layers 50671 / 50553 / 50447 / 50852 (WFS, API key; ENC data, not for navigation) | water depth |
 
 Only the 16 m overview of the 12 tiles covering the 88 km world box is read (Cloud-Optimised GeoTIFF range
 requests, ≈ 85 MB). The 1 m LiDAR DEM is not used for the coastline: it includes intertidal mudflats and
@@ -26,6 +28,7 @@ python3 stac.py https://nz-elevation.s3.ap-southeast-2.amazonaws.com/new-zealand
 python3 stac.py https://nz-elevation.s3.ap-southeast-2.amazonaws.com/new-zealand/new-zealand-contour/dem_8m/2193 dem8m.json
 python3 fetch.py dem1m.json new-zealand/new-zealand/dem_1m/2193 16 <work>/dem1m_16.npz
 python3 fetch.py dem8m.json new-zealand/new-zealand-contour/dem_8m/2193 16 <work>/dem8m_16.npz
+LINZ_API_KEY=… python3 landcover.py <work>   # vegetation + depth-area polygons (WFS GeoJSON, cached in <work>)
 python3 bake.py <work>            # writes ../../src/world/terrain/data/auckland-linz.bin and auckland-linz-hd.bin
 python3 cones.py <work>           # prints LiDAR-snapped cone centres for aucklandMap.ts / core/auckland.ts
 ```
@@ -44,8 +47,8 @@ for each one that isn't, it suggests the nearest point that is. Review every sug
 with a margin can be the wrong landmass (it puts the Whangaparāoa tip on Tiritiri Matangi).
 `tests/world-landmarks.test.ts` asserts the same rules.
 
-No API key is needed (the `nz-elevation` bucket is public). The LINZ Data Service (data.linz.govt.nz) serves
-the same products and the vector layers (building outlines, roads) for later phases; it needs a free API key.
+The elevation needs no API key (the `nz-elevation` bucket is public); the vegetation and hydrographic layers come from
+the LINZ Data Service (data.linz.govt.nz) WFS, which needs a free API key (`LINZ_API_KEY`, never commit it).
 
 ## What comes out
 
@@ -58,6 +61,25 @@ the same products and the vector layers (building outlines, roads) for later pha
   samples keep their LiDAR height. Stored as the residual over the Catmull-Rom upsample of the decoded 1024 grid
   (what `upsample2x` in `generate.ts` reconstructs), zig-zag bytes, plus an FNV-1a hash of the 1024 grid so a
   stale pair is rejected. Always re-bake both files together.
+
+- **Land cover** (version 2, #7): a 512² grid at the 1024 grid's even samples (172 m). Each Topo50 class is rasterised
+  on the 16 m mosaic grid and box-averaged over a cell; a byte holds the class with the largest share (1 native,
+  2 exotic, 3 scrub) and the total tree cover in eighths. The game interpolates the share per class
+  (`linzCover`), so a forest edge falls where the share crosses ½, not on the 172 m cell edges. Native → `MAT_BUSH`,
+  exotic → `MAT_PINE` (darker colour, conifers), scrub → sparse `MAT_BUSH`; a share over ½ wins over the hand-traced
+  suburbs. Mangroves (layer 50296) are left out: they grow below the MHW coastline, in the game's water.
+- **Water depth** (version 2, #7): the same 512² grid, √depth in 0.1 steps (±0.1 m at 1 m, ±0.5 m at 25 m), the
+  height coder. From the ENC depth areas on a 32 m grid, finer chart scales painting over coarser ones; inside a band
+  [drval1, drval2] the depth runs from drval1 at the edge shared with shallower water or the shore to drval2 at the
+  edge shared with deeper water, in proportion to the distances to the two. Drying flats (drval1 < 0) instead stay at
+  55 % of the charted drying height (≈ mean sea level) and fall to chart datum within 400 m of deeper water: a linear
+  ramp from the shore left the middle of the Manukau's kilometres-wide banks as deep as its channels. Chart datum
+  (≈ lowest tide) is moved to the game's sea level, mean high water, by the highest drying height charted nearby
+  (≈ MHWS: 4.2 m in the Manukau, 3.1–3.3 m in the Waitematā) less 0.3 m. Depth ≥ 0.3 m everywhere below the
+  coastline; the land samples within two cells of the water hold the nearest water depth for bilinear lookups.
+  The game reads it in `waterHeight()` (`theaters/auckland.ts`), except in the hand-placed crater lakes.
+- Both add ≈ 78 kB gzip (cover ≈ 37 kB, depth ≈ 40 kB); at 1024² they would cost ≈ 105 + 130 kB. The coastline and
+  heights are unchanged, so `auckland-linz-hd.bin` (tied to the 1024 grid by its hash) stays valid.
 
 ## HD terrain (high quality tier)
 

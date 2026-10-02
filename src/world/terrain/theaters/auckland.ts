@@ -9,9 +9,10 @@
  * same function — are smooth instead of following an 86 m raster staircase.
  *
  * With the LINZ data loaded (aucklandLinz.ts — the normal case) the coastline is the real
- * mean-high-water line and land heights are the LiDAR DEM: the hand-traced polygons then only name
- * the water bodies (for the bathymetry) and the procedural relief / cones / coast noise are off.
- * Without it (offline, old browser) everything below falls back to the hand-traced map.
+ * mean-high-water line, land heights are the LiDAR DEM, water depth comes from the LINZ nautical charts
+ * (ENC depth areas) and the bush / pine forests / scrub are the Topo50 vegetation polygons: the
+ * procedural relief / cones / coast noise / bush mask are off and the hand-traced polygons only keep the
+ * crater lakes. Without it (offline, old browser) everything below falls back to the hand-traced map.
  */
 import { Noise2D, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
@@ -35,6 +36,7 @@ import {
   MAT_BUSH,
   MAT_CONE,
   MAT_NONE,
+  MAT_PINE,
   MAT_URBAN,
   MAT_VOLCANIC,
   type SampleOut,
@@ -54,7 +56,20 @@ import {
   AKL_WATER,
 } from './aucklandMap';
 import { AKL } from '../../../core/auckland';
-import { aucklandLinz, aucklandLinzVersion, fillLinzLand, linzCoastSegments, linzHeight, linzIsLand, type LinzData } from './aucklandLinz';
+import {
+  COVER_EXOTIC,
+  COVER_SCRUB,
+  aucklandLinz,
+  aucklandLinzVersion,
+  fillLinzLand,
+  linzCoastSegments,
+  linzCover,
+  linzDepth,
+  linzHeight,
+  linzIsLand,
+  type CoverSample,
+  type LinzData,
+} from './aucklandLinz';
 
 
 const KM = 1000;
@@ -278,6 +293,9 @@ function ellipseDist(e: Relief, x: number, z: number): number {
   return Math.sqrt(u * u + v * v);
 }
 
+/** Riverhead pine plantation of the hand-traced map (centre x, z and radius, m). */
+const RIVERHEAD_PINES = { x: -16_000, z: -14_500, r: 6000 };
+
 /** Shore gradients: gentle beaches / mudflats, rocky shores, cliffs (height = slope · distance). */
 const SHORE_GENTLE = 0.03;
 const SHORE_ROCKY = 0.14;
@@ -315,11 +333,16 @@ export function createAuckland(seed: number): TheaterGenerator {
   const rural = AKL_RURAL.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const cbd = { x: AKL_CBD.x * KM, z: AKL_CBD.z * KM, r: AKL_CBD.r * KM };
   const linz = map.linz;
+  const realCover = !!linz?.cover;
+  const lc: CoverSample = { cls: 0, cover: 0 };
 
   /** Water depth by water body (all negative), continuous (→ 0⁻) at the shoreline. */
   const waterHeight = (x: number, z: number, d: number): number => {
     const label = labelAt(map.labels, map.n, HF_EXTENT, x, z);
     const off = -d; // metres offshore
+    // Real bathymetry (chart depth areas); the hand-placed crater lakes keep their bowl profile.
+    const real = label === AKL_LABEL.lake || !linz ? null : linzDepth(linz, x, z);
+    if (real !== null) return -Math.max(0.3, real);
     let h: number;
     switch (label) {
       case AKL_LABEL.tasman:
@@ -430,11 +453,31 @@ export function createAuckland(seed: number): TheaterGenerator {
         }
       }
 
-      // Native bush on the ranges (ragged edges, cleared valleys)
-      const bushK = K + 0.22 * nB.fbm(x / 2600 + 4, z / 2600, 3);
-      if (bushK > 0.62 && out.mat === MAT_NONE) {
-        out.mat = MAT_BUSH;
-        out.aux = Math.min(255, (sstep(0.62, 0.85, bushK) * (0.8 + 0.2 * hills) * 255) | 0);
+      if (realCover) {
+        // Topo50 bush / pine forest / scrub: a forest share over ½ also wins over the hand-traced
+        // suburbs (which are only ≈ 350 m accurate), so reserves and the bush-clad fringes stay green.
+        linzCover(linz!, x, z, lc);
+        if (lc.cover > 0.3 && (out.mat === MAT_NONE || (out.mat === MAT_URBAN && lc.cover > 0.5))) {
+          const dens = sstep(0.3, 0.75, lc.cover) * (lc.cls === COVER_SCRUB ? 0.5 : 0.85 + 0.15 * hills);
+          out.mat = lc.cls === COVER_EXOTIC ? MAT_PINE : MAT_BUSH;
+          out.aux = Math.min(255, (dens * 255) | 0);
+        }
+      } else {
+        // Native bush on the ranges (ragged edges, cleared valleys)
+        const bushK = K + 0.22 * nB.fbm(x / 2600 + 4, z / 2600, 3);
+        if (bushK > 0.62 && out.mat === MAT_NONE) {
+          out.mat = MAT_BUSH;
+          out.aux = Math.min(255, (sstep(0.62, 0.85, bushK) * (0.8 + 0.2 * hills) * 255) | 0);
+        }
+        // Riverhead pine plantation, patchy (felled and replanted blocks)
+        const pd = Math.hypot(x - RIVERHEAD_PINES.x, z - RIVERHEAD_PINES.z);
+        if (pd < RIVERHEAD_PINES.r && out.mat === MAT_NONE) {
+          const pine = (1 - sstep(RIVERHEAD_PINES.r * 0.58, RIVERHEAD_PINES.r, pd)) * sstep(-0.6, -0.2, -nB.noise(x / 2600, z / 2600));
+          if (pine > 0.05) {
+            out.mat = MAT_PINE;
+            out.aux = Math.min(255, (pine * 255) | 0);
+          }
+        }
       }
 
       // Scoria cones (grassy parks with craters)

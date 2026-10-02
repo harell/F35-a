@@ -30,6 +30,7 @@ export const MAT_URBAN = 13; // aux = built-up density
 export const MAT_BUSH = 14; // native bush / dense forest, aux = density
 export const MAT_CONE = 15; // grassy volcanic cone (Auckland)
 export const MAT_CLEARING = 16; // levelled pad (SAM site, depot): gravel / dry grass, no trees
+export const MAT_PINE = 17; // plantation pine forest (Auckland), aux = density
 
 /** Scratch record the per-sample generator writes material hints into. */
 export interface SampleOut {
