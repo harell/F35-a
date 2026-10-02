@@ -367,6 +367,9 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     sunDirection: preset.sunDir.clone(),
     isNight: preset.isNight,
     fogColor: preset.fogColor.getHex(),
+    // what the low-quality target camera leaves out (the Wiri tanks are scenery-drawn, but friendly:
+    // never a PiP target)
+    targetCamOmit: [scenery.group, ...(reflections ? [reflections.mesh] : []), ...(towerReflections ? [towerReflections.mesh] : [])],
     heightfield: hf,
     stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle }),
 

@@ -88,6 +88,14 @@ export interface EnvironmentApi {
   readonly isNight: boolean;
   /** Fog colour / distance for other modules that render custom materials. */
   readonly fogColor: number;
+  /**
+   * Static scenery detail the target camera (PiP) leaves out of its pass when
+   * QualitySettings.targetCamScenery is off (low quality): the scenery group (city, roads and rail,
+   * airfield buildings, runway and apron markings, tree / house scatter, night lights) and the lights'
+   * water reflections. Terrain, water, sky and clouds stay. Nothing a PiP target is drawn by may be in
+   * here.
+   */
+  readonly targetCamOmit?: readonly Object3D[];
   update(ctx: FrameContext): void;
   dispose(): void;
 }
@@ -108,8 +116,11 @@ export interface EntityRendererApi {
    * Re-evaluate every visual's LOD / visibility for a second viewpoint (the target camera) right before
    * rendering it: the target and its neighbours get their close-up models, the player's jet is shown.
    * The next update() restores everything for the main camera.
+   * @param maxDist  hide aircraft farther than this (m) for this view: the target camera's short far
+   *                 plane on low quality (their flame meshes aren't frustum-culled, so a far plane alone
+   *                 still draws them)
    */
-  prepareView?(camPos: Vector3): void;
+  prepareView?(camPos: Vector3, maxDist?: number): void;
   dispose(): void;
 }
 /** src/render/EntityRenderer.ts → export const createEntityRenderer: CreateEntityRenderer */

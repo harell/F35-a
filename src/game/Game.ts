@@ -10,6 +10,9 @@
  *   ?quality=low|medium|high                 override quality
  *   ?view=cockpit|hud|chase|orbit|...        initial camera
  *   ?fps=1                                   FPS counter
+ *   ?seed=<n>                                (test hooks) fixed combat RNG seed, and the sim clock held:
+ *                                            only __f35.simulate() advances it (__f35.hold(false) lets
+ *                                            it run), so browser perf reads reproduce (#66)
  */
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 import { EventBus } from '../core/events';
@@ -35,13 +38,13 @@ import type { CameraMode, ControlInput, LoadoutId, QualityLevel, QualitySettings
 import type { SimWorld } from '../sim/api';
 import { createSimWorld } from '../sim/World';
 import { forceDestroy } from './forceDestroy';
-import { createCombatSystem } from '../sim/weapons/CombatSystem';
+import { createCombatSystem, createCombatSystemSeeded } from '../sim/weapons/CombatSystem';
 import { createAiBrain } from '../ai';
 import { createEnvironment } from '../world/Environment';
 import { createEntityRenderer } from '../render/EntityRenderer';
 import { createEffects } from '../render/effects/Effects';
 import { createCameraRig } from '../render/CameraRig';
-import { TargetCam } from '../render/TargetCam';
+import { TargetCam, targetCamOmitFor } from '../render/TargetCam';
 import { pipView } from '../hud/hmd/pip';
 import { createHud } from '../hud/Hud';
 import { createCockpit } from '../hud/Cockpit';
@@ -68,6 +71,7 @@ import {
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { FlowInterrupt } from './flow';
+import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -131,6 +135,8 @@ export class Game {
   private readonly params = new URLSearchParams(location.search);
   /** Test hooks: AI flies the player's jet / scripted control override. */
   private autopilot = false;
+  /** Test hooks: the real-time loop doesn't step the sim; only simulate() moves its clock (`?seed=`, hold()). */
+  private simHeld = false;
   private controlOverride: Partial<ControlInput> | null = null;
   private screen = { width: 1, height: 1, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } };
   private safeProbe: HTMLDivElement;
@@ -382,7 +388,12 @@ export class Game {
     this.ui.showLoading(0.82, 'Spawning forces');
     await nextFrame();
 
-    const combat = createCombatSystem();
+    // test hooks: `?seed=` makes the run reproducible: a fixed combat seed, and the sim clock held at
+    // t = 0 for the driver's simulate() (the real-time loop would otherwise run a frame-rate-dependent
+    // 0.2–0.4 s first)
+    const seed = testSeed(this.params, TEST_HOOKS);
+    this.simHeld = seed !== null;
+    const combat = seed !== null ? createCombatSystemSeeded(seed) : createCombatSystem();
     const world = createSimWorld({ terrain: env.terrain, difficulty, events: this.events, combat });
     const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events });
     runner.setup(world, loadout);
@@ -658,9 +669,10 @@ export class Game {
     this.followControlScheme();
 
     if (!this.paused) {
-      // Player controls → sim
+      // Player controls → sim (not while the clock is held: simulate() feeds them per step, and the
+      // frames before it must not leave a frame-count-dependent input on the jet)
       const p = s.world.player;
-      if (p?.alive && !this.autopilot) {
+      if (p?.alive && frameTakesControls(this.autopilot, this.simHeld)) {
         Object.assign(p.input, this.input.controls);
         if (this.controlOverride) Object.assign(p.input, this.controlOverride);
       }
@@ -670,8 +682,8 @@ export class Game {
       if (look.yaw || look.pitch) s.rig.look(look.yaw, look.pitch);
       for (const tap of this.input.consumeTaps()) this.handleTap(tap.x, tap.y, s);
 
-      // Fixed-step simulation
-      this.accumulator += dt;
+      // Fixed-step simulation (test hooks: a held clock only moves with simulate())
+      this.accumulator = frameAccumulator(this.accumulator, dt, this.simHeld);
       let steps = 0;
       while (this.accumulator >= FIXED_DT && steps < MAX_STEPS_PER_FRAME) {
         s.world.step(FIXED_DT);
@@ -712,7 +724,9 @@ export class Game {
     this.renderer.render(s.scene, s.rig.camera);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
     // target camera window (rect + target from the HUD's last frame; the HUD draws its chrome next)
-    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far);
+    // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
+    const q = this.quality;
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
     this.hud.update(ctx2);
     this.audio.update(ctx2);
   }
@@ -882,7 +896,20 @@ export class Game {
           /** Enemy hits on the Sky Tower (0 intact, 1 damaged; null = no tower this sortie). */
           skyTowerHits: s ? (s.world.landmarks.find((l) => l.id === 'skytower')?.hits ?? null) : null,
           objectives: s?.runner.objectives ?? [],
-          renderer: { calls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles },
+          // the last rendered frame (world + cockpit + PiP); `pip`: whether the target camera window was
+          // open and drawn in it, and what its pass cost (a read with the PiP open isn't comparable to one
+          // without: it adds 20–55 calls at full range)
+          renderer: {
+            calls: this.renderer.info.render.calls,
+            triangles: this.renderer.info.render.triangles,
+            pip: {
+              open: pipView.open,
+              drawn: s?.targetCam.lastTargetId != null,
+              calls: s?.targetCam.lastStats.calls ?? 0,
+              triangles: s?.targetCam.lastStats.triangles ?? 0,
+            },
+          },
+          held: this.simHeld,
         };
       },
       /** Programmatically start a mission (tests), from any screen or mission; quitting it returns to the main menu. */
@@ -912,7 +939,8 @@ export class Game {
       autopilot: (on: boolean, role: 'fighter' | 'wingman' | 'interceptor' = 'fighter') => {
         const p = this.session?.world.player;
         this.autopilot = on;
-        if (p) p.ai = on ? createAiBrain(role, { skill: 0.9 }) : null;
+        // (`?seed=`: seeded too, so a mission reruns the same whatever flew before it in the page)
+        if (p) p.ai = on ? createAiBrain(role, autopilotBrainOpts(testSeed(this.params, TEST_HOOKS))) : null;
       },
       /**
        * Fast-forward the simulation by `seconds` without rendering (fixed 60 Hz steps, player
@@ -932,6 +960,13 @@ export class Game {
           s.runner.update(s.world, FIXED_DT);
         }
         return (window as unknown as { __f35: { state: () => unknown } }).__f35.state();
+      },
+      /** Hold the sim clock (only simulate() advances it; `?seed=` starts every mission held) or let it run in real time. Per mission. */
+      hold: (on = true) => {
+        this.simHeld = on;
+        this.accumulator = 0;
+        this.lastFrame = performance.now();
+        return on;
       },
       /** Override (merge) player controls, e.g. {pitch: 1, throttle: 1}; null clears. */
       controls: (c: Partial<ControlInput> | null) => {

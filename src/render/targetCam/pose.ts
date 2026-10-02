@@ -72,6 +72,46 @@ export const SHIP_FRAMING = {
 /** Directions sampled around a ship to find open water for the orbit. */
 const SHIP_RING = 32;
 
+/** Never shorter than this far plane (m), however close the framing (a SAM site is framed from ~15 m). */
+export const TARGET_CAM_MIN_FAR = 1_500;
+
+/**
+ * The short far plane reaches at least this many times the depth of the nearest ground in the frame
+ * (targetCamGroundDepth): that ground then sits at half the far plane, where the atmosphere's haze
+ * (smoothstep from 0.36 to 0.985 of the far plane) is still light, about 13 %.
+ */
+export const TARGET_CAM_GROUND_K = 2;
+
+/**
+ * Depth along the view axis (m) at which the bottom edge of the frame meets sea level: the nearest
+ * ground the target camera can show. Infinity when the bottom edge points at or above the horizon.
+ * @param height     camera height above sea level (m)
+ * @param pitchDown  how far the view axis points below the horizon (rad)
+ * @param halfFov    half the vertical field of view (rad)
+ */
+export function targetCamGroundDepth(height: number, pitchDown: number, halfFov: number): number {
+  const down = pitchDown + halfFov; // the bottom edge's angle below the horizon
+  if (down <= 0.01) return Infinity;
+  return (Math.max(0, height) / Math.sin(down)) * Math.cos(halfFov);
+}
+
+/**
+ * Far plane of the target camera (m). With a `range` (QualitySettings.targetCamRange, low quality) the
+ * pass stops `range` metres past the target, so the distant terrain, the city and scenery beyond it are
+ * frustum-culled instead of being drawn a second time; the fog reaches the horizon colour at the far
+ * plane, so the cut reads as haze. A high target would then sit on blank haze (above about 4 km the
+ * ground in the frame is all deeper than 8 km), so the plane also reaches TARGET_CAM_GROUND_K × the
+ * nearest ground's depth. Never longer than the main camera's far plane.
+ * @param mainFar      far plane of the main camera
+ * @param distance     camera-to-target distance (the framing distance)
+ * @param range        metres drawn past the target; 0 (or less) = the main camera's far plane
+ * @param groundDepth  depth of the nearest ground in the frame (targetCamGroundDepth); 0 = ignore
+ */
+export function targetCamFar(mainFar: number, distance: number, range: number, groundDepth = 0): number {
+  if (!(range > 0)) return mainFar;
+  return Math.min(mainFar, Math.max(TARGET_CAM_MIN_FAR, distance + range, TARGET_CAM_GROUND_K * groundDepth));
+}
+
 /** Minimal entity shape the pose needs (aircraft / SAM / ground). */
 export interface CamTarget {
   readonly kind: 'aircraft' | 'sam' | 'ground' | 'missile' | 'decoy';

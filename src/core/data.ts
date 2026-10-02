@@ -138,6 +138,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     wakes: false,
     ferries: 10,
     railways: true,
+    targetCamRange: 8_000,
+    targetCamScenery: false,
   },
   medium: {
     level: 'medium',
@@ -155,6 +157,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     wakes: true,
     ferries: 13,
     railways: true,
+    targetCamRange: 0,
+    targetCamScenery: true,
   },
   high: {
     level: 'high',
@@ -172,6 +176,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     wakes: true,
     ferries: 16,
     railways: true,
+    targetCamRange: 0,
+    targetCamScenery: true,
   },
 };
 
