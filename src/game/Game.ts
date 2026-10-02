@@ -44,7 +44,7 @@ import { createEnvironment } from '../world/Environment';
 import { createEntityRenderer } from '../render/EntityRenderer';
 import { createEffects } from '../render/effects/Effects';
 import { createCameraRig } from '../render/CameraRig';
-import { TargetCam } from '../render/TargetCam';
+import { TargetCam, targetCamOmitFor } from '../render/TargetCam';
 import { pipView } from '../hud/hmd/pip';
 import { createHud } from '../hud/Hud';
 import { createCockpit } from '../hud/Cockpit';
@@ -726,7 +726,7 @@ export class Game {
     // target camera window (rect + target from the HUD's last frame; the HUD draws its chrome next)
     // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
     const q = this.quality;
-    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, q.targetCamScenery ? undefined : s.env.targetCamOmit);
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
     this.hud.update(ctx2);
     this.audio.update(ctx2);
   }

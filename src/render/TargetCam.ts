@@ -8,14 +8,15 @@
  * reused (shadowMap.autoUpdate off for this pass), and the entity renderer re-picks LODs for this
  * viewpoint (EntityRendererApi.prepareView) so a target 30 km away still gets its close-up model.
  * On low quality the pass no longer draws the whole scene again (#66): it gets a short far plane
- * (QualitySettings.targetCamRange past the target, see targetCamFar) that culls distant terrain
- * patches and models, and it leaves out the static scenery detail (EnvironmentApi.targetCamOmit: the
+ * (QualitySettings.targetCamRange past the target, or far enough to keep the ground in the frame for a
+ * high target, see targetCamFar) that culls distant terrain patches and models, and it leaves out the static scenery detail (EnvironmentApi.targetCamOmit: the
  * city, roads, scatter and night lights are merged world-wide meshes a far plane can't cull).
  */
-import { PerspectiveCamera, Vector2, type Object3D, type Scene, type WebGLRenderer } from 'three';
+import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
+import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
-import { TARGET_CAM_FOV, makePose, targetCamFar, targetCamPose, type CamTarget } from './targetCam/pose';
+import { TARGET_CAM_FOV, makePose, targetCamFar, targetCamGroundDepth, targetCamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
 export interface TargetCamRect {
@@ -29,7 +30,16 @@ export interface TargetCamRect {
 }
 
 const _size = new Vector2();
+const _dir = new Vector3();
 const NONE: readonly Object3D[] = [];
+
+/**
+ * What the PiP pass leaves out for a quality preset: the environment's targetCamOmit list when the
+ * preset drops the scenery detail from the PiP (low), nothing otherwise.
+ */
+export function targetCamOmitFor(q: Pick<QualitySettings, 'targetCamScenery'>, envOmit: readonly Object3D[] | undefined): readonly Object3D[] {
+  return q.targetCamScenery ? NONE : (envOmit ?? NONE);
+}
 
 export class TargetCam {
   readonly camera = new PerspectiveCamera(TARGET_CAM_FOV, 16 / 9, 0.5, 20_000);
@@ -75,9 +85,15 @@ export class TargetCam {
     const half = (TARGET_CAM_FOV * Math.PI) / 360;
     cam.fov = (2 * Math.atan(Math.tan(half) * k) * 180) / Math.PI;
     cam.aspect = rect.vw / rect.vh;
-    cam.far = targetCamFar(far, this.pose.position.distanceTo(this.pose.look), range);
-    cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
+    let ground = 0;
+    if (range > 0) {
+      // keep the ground in the frame inside the short far plane (a high target over blank haze otherwise)
+      cam.getWorldDirection(_dir);
+      ground = targetCamGroundDepth(cam.position.y, Math.asin(Math.max(-1, Math.min(1, -_dir.y))), (cam.fov * Math.PI) / 360);
+    }
+    cam.far = targetCamFar(far, this.pose.position.distanceTo(this.pose.look), range, ground);
+    cam.updateProjectionMatrix();
 
     this.entities.prepareView?.(cam.position, range > 0 ? cam.far : undefined);
 

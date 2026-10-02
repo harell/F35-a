@@ -91,8 +91,9 @@ export interface EnvironmentApi {
   /**
    * Static scenery detail the target camera (PiP) leaves out of its pass when
    * QualitySettings.targetCamScenery is off (low quality): the scenery group (city, roads and rail,
-   * airfield buildings, tree / house scatter, night lights) and the lights' water reflections. Terrain,
-   * water, sky and clouds stay. Nothing a PiP target is drawn by may be in here.
+   * airfield buildings, runway and apron markings, tree / house scatter, night lights) and the lights'
+   * water reflections. Terrain, water, sky and clouds stay. Nothing a PiP target is drawn by may be in
+   * here.
    */
   readonly targetCamOmit?: readonly Object3D[];
   update(ctx: FrameContext): void;
