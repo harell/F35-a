@@ -133,7 +133,8 @@ the wharf decks and the naval base take it on their top faces, and the house / t
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
 procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
 photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
-day, so the square's edge doesn't show in low light.
+day. That only matches the average albedo, not the lighting: the procedural near field brightens sunlit roofs under a
+low sun and has its own night glow, which the photo lacks, so the square's edge still shows at dawn and at night.
 
 The suburbs' painted lots and the 3D houses on them keep a corridor clear along the road and railway ribbons:
 `src/world/scenery/lotMask.ts` is one bit per 12 m cell, set near a ribbon, and both the terrain shader

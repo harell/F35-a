@@ -16,13 +16,15 @@ const style = terrainStyle('auckland');
 const leafy = suburbFarAlbedo(style, LEAFY_MIX);
 const bare = suburbFarAlbedo(style, BARE_MIX);
 const target: [number, number, number] = [(leafy.r + bare.r) / 2, (leafy.g + bare.g) / 2, (leafy.b + bare.b) / 2];
-// a city photo averages darker and greyer than the procedural suburbs (roofs, roads, real shadows)
-const photo: [number, number, number] = [target[0] * 0.8, target[1] * 0.62, target[2] * 0.9];
+// the shipped photo's land average (linear), as imageMeanLinear measures it at load
+const photo: [number, number, number] = [0.098, 0.105, 0.095];
 const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 const graded = (g: number[], c: readonly number[]) => c.map((v, i) => v * (1 + (g[i] - 1) * g[3]));
 
 describe('the aerial photo is graded toward the procedural ground (#61 item 5)', () => {
-  it('at night and from dawn on, the photo averages the procedural suburbs’ colour', () => {
+  // Only the average albedo is matched: the procedural near field's low-sun roof lighting has no term on
+  // the photo, so the edge can still show at dawn (item 5 is partly fixed).
+  it('at night and from dawn on, the photo’s average albedo matches the procedural suburbs’ far albedo', () => {
     for (const tod of ['dawn', 'dusk', 'night'] as const) {
       const g = aerialGrade(photo, target, tod);
       expect(g[3], tod).toBe(1);
