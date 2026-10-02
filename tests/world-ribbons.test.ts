@@ -59,6 +59,23 @@ describe('railway ribbons follow the rendered terrain (#61)', () => {
     for (const [, y, , g] of near) expect(y - Math.max(g, 0)).toBeLessThan(2);
   });
 
+  it('the causeways stand on an embankment of fill (no piers, no gap under the raised track)', () => {
+    const B = new GeometryBuilder();
+    new RoadNetwork(clipRailToLand(aucklandRailPaths(), height)).buildRibbons(height, B, new LightList(), false);
+    const g = B.build()!;
+    const pos = g.getAttribute('position');
+    // fill near Ōrākei reaches from the sea bed to just under the track
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < pos.count; i++)
+      if (Math.hypot(pos.getX(i) - 3751, pos.getZ(i) - 1185) < 600) {
+        lo = Math.min(lo, pos.getY(i));
+        hi = Math.max(hi, pos.getY(i));
+      }
+    expect(lo).toBeLessThan(-1);
+    expect(hi).toBeCloseTo(RAIL_CAUSEWAY_Y - 0.3, 1);
+  });
+
   it('without the clipping, the far-north line would run over the open sea (the test can fail)', () => {
     const raw = railVertices(false);
     expect(raw.some(([x, , z, g]) => x > -18600 && x < -17300 && z > -44000 && z < -41100 && g < -20)).toBe(true);

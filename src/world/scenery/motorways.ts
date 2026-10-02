@@ -372,6 +372,7 @@ export class RoadNetwork {
       if (!only(p)) continue;
       const n = p.x.length;
       const rail = p.kind === 'rail';
+      const raised = (k: number) => height(p.x[k], p.z[k]) + 0.45 < RAIL_CAUSEWAY_Y;
       // Water under the centre line → deck height profile (smoothed ramps). Railways stay low: on the
       // ground, or on a causeway just above the water (RAIL_CAUSEWAY_Y), so no deck.
       const wet = new Float32Array(n);
@@ -431,8 +432,9 @@ export class RoadNetwork {
           }
         }
         run = base;
-        // Railway causeway: an embankment of fill from the sea bed to just under the track
-        if (rail && i + 1 < n && (wet[i] || wet[i + 1]) && !p.tunnel[i + 1]) {
+        // Railway causeway: an embankment of fill from the sea bed to just under the track, wherever
+        // the track is raised above the ground (over the water and the low ground at its edge)
+        if (rail && i + 1 < n && (raised(i) || raised(i + 1)) && !p.tunnel[i + 1]) {
           const x2 = p.x[i + 1];
           const z2 = p.z[i + 1];
           const len = Math.hypot(x2 - p.x[i], z2 - p.z[i]);
