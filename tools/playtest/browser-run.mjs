@@ -7,13 +7,19 @@
  *
  *   npx vite --config vite.e2e.config.ts --port 5190 &      # test hooks are on in dev
  *   node tools/playtest/browser-run.mjs --mission=c09 [--at=0,30,120,300] [--view=chase|cockpit|hud|...]
+ *       [--missions=c01,c02,ia_defend_auckland] [--loadout=strike_sdb2] [--shots=0] [--text]
  *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}']
  *       [--device=phone|desktop] [--base=http://localhost:5190/] [--out=e2e/screenshots/playtest]
  *
  * --at: game-time checkpoints in seconds (default 0,60,180). Output: <out>/<mission>-<t>s.png per
  * checkpoint, one JSON line per checkpoint (state, objectives, errors so far) and timings, so the
  * caller can see where the wall-clock went (page load vs simulation vs screenshots).
- * Exit code 1 on page errors or if the mission never starts.
+ * --missions: several missions in ONE page (the first by URL, the rest with window.__f35.fly), about
+ * 2× faster than a page load each. --shots=0 skips the screenshots (state and draw calls only).
+ * State is read after two rendered frames, so `renderer` (draw calls, triangles) is never stale.
+ * --text: also record every string the HUD draws (canvas fillText) over 8 frames at each checkpoint, as
+ * `hudText`, so a blinking cue (IN RANGE, SHOOT) is caught even when a screenshot lands on its off phase.
+ * Exit code 1 on page errors or if a mission never starts.
  */
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -25,7 +31,8 @@ const args = Object.fromEntries(
   }),
 );
 const base = args.base || 'http://localhost:5190/';
-const mission = args.mission || 'c01';
+const missions = String(args.missions || args.mission || 'c01').split(',').filter(Boolean);
+const shots = args.shots !== '0';
 const at = String(args.at || '0,60,180').split(',').map(Number).sort((a, b) => a - b);
 const view = args.view || 'chase';
 const out = args.out || 'e2e/screenshots/playtest';
@@ -54,43 +61,75 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text().slice(0, 
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`.slice(0, 300)));
 lap('browser');
 
-const q = new URLSearchParams({ mission, autostart: '1', view, quality: args.quality || 'low' });
-if (args.difficulty) q.set('difficulty', args.difficulty);
-await page.goto(`${base}?${q}`, { waitUntil: 'load' });
-try {
-  await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 90_000 });
-} catch {
-  const hooks = await page.evaluate(() => !!window.__f35).catch(() => false);
-  console.error(hooks ? 'mission did not start within 90 s' : 'no window.__f35: not a dev server / VITE_TEST_HOOKS=1 build');
-  await browser.close();
-  process.exit(1);
+if (args.text) {
+  await page.addInitScript(() => {
+    const seen = (window.__f35text = []);
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      if (seen.length < 20_000) seen.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
 }
-lap('load');
+/** `n` rendered frames: the canvas and state().renderer show the simulated state. */
+const frames = (n = 2) =>
+  page.evaluate((n) => new Promise((r) => { const tick = (k) => (k <= 0 ? r() : requestAnimationFrame(() => tick(k - 1))); tick(n); }), n);
+/** The strings the HUD drew over the next 8 frames (--text). */
+const hudText = async () => {
+  if (!args.text) return undefined;
+  await page.evaluate(() => (window.__f35text.length = 0));
+  await frames(8);
+  return page.evaluate(() => [...new Set(window.__f35text.map((t) => t.trim()).filter(Boolean))]);
+};
 
-await page.evaluate(
-  ({ autopilot, controls }) => {
-    if (autopilot !== 'off') window.__f35.autopilot(true, autopilot);
-    if (controls) window.__f35.controls(JSON.parse(controls));
-  },
-  { autopilot, controls: args.controls || null },
-);
-
-let simT = 0;
-for (const target of at) {
-  if (target > simT) {
-    const state = await page.evaluate((s) => window.__f35.simulate(s), target - simT);
-    simT = target;
-    lap('simulate');
-    if (state?.missionState !== 'running') console.error(`mission ${state?.missionState} at ${state?.time?.toFixed(0)} s`);
+for (const [k, mission] of missions.entries()) {
+  if (k === 0) {
+    const q = new URLSearchParams({ mission, autostart: '1', view, quality: args.quality || 'low' });
+    if (args.difficulty) q.set('difficulty', args.difficulty);
+    if (args.loadout) q.set('loadout', args.loadout);
+    await page.goto(`${base}?${q}`, { waitUntil: 'load' });
+  } else {
+    await page.evaluate(({ id, loadout }) => window.__f35.fly(id, loadout || undefined), { id: mission, loadout: args.loadout });
   }
-  // let a couple of frames render so the screenshot shows the simulated state
-  await page.waitForTimeout(300);
-  const file = `${out}/${mission}-${target}s.png`;
-  await page.screenshot({ path: file });
-  lap('screenshot');
-  const state = await page.evaluate(() => window.__f35.state());
-  console.log(JSON.stringify({ checkpoint: target, file, state, errors: errors.length }));
-  if (state.missionState !== 'running') break;
+  try {
+    await page.waitForFunction((id) => window.__f35?.state().inMission && window.__f35.state().mission === id && window.__f35.state().missionState === 'running', mission, { timeout: 90_000 });
+  } catch {
+    const hooks = await page.evaluate(() => !!window.__f35).catch(() => false);
+    console.error(hooks ? `${mission}: mission did not start within 90 s` : 'no window.__f35: not a dev server / VITE_TEST_HOOKS=1 build');
+    await browser.close();
+    process.exit(1);
+  }
+  lap('load');
+
+  await page.evaluate(
+    ({ autopilot, controls, view }) => {
+      window.__f35.setView(view);
+      window.__f35.autopilot(autopilot !== 'off', autopilot === 'off' ? undefined : autopilot);
+      window.__f35.controls(controls ? JSON.parse(controls) : null);
+    },
+    { autopilot, controls: args.controls || null, view },
+  );
+
+  let simT = 0;
+  for (const target of at) {
+    if (target > simT) {
+      const state = await page.evaluate((s) => window.__f35.simulate(s), target - simT);
+      simT = target;
+      lap('simulate');
+      if (state?.missionState !== 'running') console.error(`${mission}: mission ${state?.missionState} at ${state?.time?.toFixed(0)} s`);
+    }
+    await frames();
+    let file = null;
+    if (shots) {
+      file = `${out}/${mission}-${target}s.png`;
+      await page.screenshot({ path: file });
+      lap('screenshot');
+    }
+    const text = await hudText();
+    const state = await page.evaluate(() => window.__f35.state());
+    console.log(JSON.stringify({ mission, checkpoint: target, file, state, hudText: text, errors: errors.length }));
+    if (state.missionState !== 'running') break;
+  }
 }
 await browser.close();
 console.log(JSON.stringify({ timingMs: timing, errors }));
