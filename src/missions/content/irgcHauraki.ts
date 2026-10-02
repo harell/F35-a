@@ -60,7 +60,7 @@ export const G02: MissionDef = mission({
   weather: 'scattered',
   briefing: [
     `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The IRGC mother ship has put its fast boats in the water to stop her. Clear the way.`,
-    'Three suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Three Peykaap II missile boats follow. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. Two air-defence boats escort them, with a Tor-type radar SAM good to 20,000 ft and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you.',
+    'Suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Peykaap II missile boats follow. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. Two air-defence boats escort them, with a Tor-type radar SAM good to 20,000 ft and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you.',
     'Two hits sink her: a ram, a Kowsar, or one of your own bombs. Bring StormBreakers. A GBU-53/B tracks a moving boat; a JDAM or a GBU-39 does not, and this mission does not offer them. The StormBreaker glides slowly from long range, so release early on the suicide boats. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today.',
   ],
   recommendedLoadout: 'strike_sdb2_full',
@@ -136,7 +136,7 @@ export const G02: MissionDef = mission({
     ],
     hints: [{ id: 'h_boats', text: 'Boats: TGT, StormBreaker, release early. Kill the missile boats before they count down', when: { kind: 'time', t: 6 }, duration: 8 }],
     opening: [
-      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Eight IRGC fast boats in the Gulf, heading for the tanker. Suicide boats lead, missile boats behind, two air-defence boats with them. Weapons free on the boats.', priority: 2 },
+      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. IRGC fast boats in the Gulf, heading for the tanker. Suicide boats lead, missile boats behind, two air-defence boats with them. Weapons free on the boats.', priority: 2 },
     ],
     successText: 'The Gulf is clear and the Kōtuku Star is on her way to Singapore. Good hunting, Viper.',
   },
