@@ -185,7 +185,8 @@ export class Scenery {
       const roadTex = createMotorwayTexture();
       roadTex.anisotropy = o.cfg.anisotropy;
       this.textures.push(roadTex);
-      const roadMat = createRoadMaterial(o.atmo, roadTex);
+      // the roads glow with their street lights at night (when the tier draws night lights at all)
+      const roadMat = createRoadMaterial(o.atmo, roadTex, o.lights > 0.01);
       this.materials.push(roadMat);
       this.geometries.push(roadGeo);
       const roadMesh = new Mesh(roadGeo, roadMat);

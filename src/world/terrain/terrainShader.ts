@@ -139,6 +139,7 @@ uniform vec4 uConeB[${MAX_CONES}]; // cone radius, cone height (m), terraces (0/
 uniform vec4 uConeBox; // xz bounds of all cones (min x, min z, max x, max z)
 uniform sampler2D uAerial; // aerial photo (aucklandAerial.ts): sRGB albedo, alpha = land / deck mask
 uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m); 1/size 0 = none
+uniform vec4 uAerialGrade; // colour grade toward the procedural palette: rgb gain, strength
 uniform sampler2D uLotMask; // lots cleared along the road / rail ribbons (lotMask.ts): 1 bit per cell, 8 × 4 cells per texel
 uniform vec4 uLotMaskRect; // x0, z0, cell (m), texels across; texels across 0 = none
 uniform float uLotMaskRows; // texels down
@@ -206,7 +207,7 @@ vec4 aerialPhoto(vec2 wp) {
   float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
   if (e <= 0.0) return vec4(0.0);
   vec4 p = texture2D(uAerial, uv);
-  return vec4(p.rgb, p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+  return vec4(p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
 }
 
 // 1 when a lot centred at wp is cleared for a road or railway corridor (lotMask.ts LotMask.masked()).

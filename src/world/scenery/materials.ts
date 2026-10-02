@@ -87,6 +87,7 @@ ${ATMOSPHERE_GLSL}
 #ifdef AERIAL
 uniform sampler2D uAerial;
 uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m)
+uniform vec4 uAerialGrade; // colour grade (terrain shader's): rgb gain, strength
 #endif
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -112,7 +113,7 @@ void main() {
       float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
       if (e > 0.0) {
         vec4 p = texture2D(uAerial, uv);
-        base = mix(base, p.rgb, p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+        base = mix(base, p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
       }
     }
   #endif
@@ -169,7 +170,7 @@ void main() {
  */
 export function createBuildingMaterial(
   atmo: AtmosphereUniforms,
-  opts: { houses?: boolean; aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 } } } = {},
+  opts: { houses?: boolean; aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 } } } = {},
 ): ShaderMaterial {
   const defines: Record<string, number> = {};
   if (opts.houses) defines.HOUSES = 1;
@@ -226,12 +227,44 @@ void main() {
 `;
 
 /** Motorway ribbons: decal material whose vertices rise slightly with distance. */
-export function createRoadMaterial(atmo: AtmosphereUniforms, map: Texture): ShaderMaterial {
+/** Sodium glow of a lit road ribbon at night (× uNight), and the lamp spacing along it (m). */
+export const ROAD_NIGHT_GLOW = 0.075;
+const ROAD_LAMP_SPACING = 60;
+
+// The road ribbons (decalFragment) plus, at night on the lit roads (uLit 1: motorways and arterials, not
+// the railways), the sodium light of their lamp posts on the asphalt: pools every lamp spacing along
+// the ribbon (v runs in 40 m units), so a lit motorway reads as a warm line from the air (#61 item 6).
+const roadFragment = /* glsl */ `
+${ATMOSPHERE_GLSL}
+uniform sampler2D uMap;
+uniform float uLit;
+varying vec3 vWorld;
+varying vec2 vUv;
+void main() {
+  vec4 t = texture2D(uMap, vUv);
+  vec3 col = atmoNight(atmoDiffuse(t.rgb, vec3(0.0, 1.0, 0.0), 1.0));
+  col = atmoApplyFog(col, vWorld);
+  if (uLit * uNight > 0.0) {
+    float d = distance(vWorld, uCamPos);
+    float pool = 0.45 + 0.55 * pow(abs(cos(vUv.y * ${(Math.PI * 40 / ROAD_LAMP_SPACING).toFixed(5)})), 6.0);
+    // pools blur into an even glow with distance (no shimmer)
+    pool = mix(pool, 0.62, smoothstep(300.0, 1500.0, d));
+    vec3 sodium = vec3(1.0, 0.6, 0.26) * ${ROAD_NIGHT_GLOW.toFixed(3)} * pool * (0.6 + 0.8 * t.g);
+    col += sodium * uLit * uNight * (1.0 - atmoFogFactor(d * 0.45, uCamPos.y, vWorld.y));
+  }
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+/** Road and railway ribbons; `lit` roads glow with their street lights at night (not the railways). */
+export function createRoadMaterial(atmo: AtmosphereUniforms, map: Texture, lit = false): ShaderMaterial {
   return new ShaderMaterial({
     name: 'WorldRoad',
     vertexShader: roadVertex,
-    fragmentShader: decalFragment,
-    uniforms: { ...atmo, uMap: { value: map } },
+    fragmentShader: roadFragment,
+    uniforms: { ...atmo, uMap: { value: map }, uLit: { value: lit ? 1 : 0 } },
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -4,

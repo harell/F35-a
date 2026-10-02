@@ -37,7 +37,8 @@ import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
-import { AERIAL_FEATHER, AERIAL_RECT, loadAucklandAerial } from './terrain/theaters/aucklandAerial';
+import { AERIAL_FEATHER, AERIAL_RECT, aerialGrade, imageMeanLinear, loadAucklandAerial } from './terrain/theaters/aucklandAerial';
+import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './terrain/urbanColor';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
 import { loadAucklandOsm } from './scenery/aucklandOsm';
@@ -241,7 +242,13 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     t.generateMipmaps = true;
     t.anisotropy = Math.min(maxAniso, cfg.anisotropy);
     t.needsUpdate = true;
-    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER };
+    // graded toward the procedural suburbs it fades into, fully from dawn on (#61)
+    const st = terrainStyle(opts.theater);
+    const leafy = suburbFarAlbedo(st, LEAFY_MIX);
+    const bare = suburbFarAlbedo(st, BARE_MIX);
+    const target: [number, number, number] = [(leafy.r + bare.r) / 2, (leafy.g + bare.g) / 2, (leafy.b + bare.b) / 2];
+    const grade = aerialGrade(imageMeanLinear(aerialImage), target, opts.timeOfDay);
+    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade };
   }
   const cloudLayer = createCloudLayerTexture();
 
