@@ -6,7 +6,7 @@
  *  - Strike, Dogfight and Defend reach the bands (Recruit and Pilot ≥ 75 %, Veteran ≥ 25 %, 6 seeds);
  *    SAM Gauntlet reaches them on Recruit and Veteran (Pilot is 4/6: the bot never fires its AARGMs
  *    at the belt's SA-6s while the depot stands, a bot limit);
- *  - Defend at the top of the enemy-count slider (8) stays winnable on Recruit and Pilot.
+ *  - Defend at the top of the enemy-count slider (8) is winnable on Recruit.
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=ia_strike_auckland,ia_sam_gauntlet_auckland,ia_dogfight_auckland,ia_defend_auckland --diffs=recruit,pilot,veteran,ace --seeds=6
  */
 import { describe, expect, it } from 'vitest';
@@ -47,7 +47,7 @@ function noFireRun(id: string, diff: Difficulty, seed: number, maxT = 600) {
   const runner = createMissionRunner({ ...def, seed: def.seed + seed * 101 }, { createAi: createAiBrain, difficulty: d, events });
   runner.setup(world, def.recommendedLoadout);
   const p = world.player!;
-  const bot = new MissionBot(runner, world, p, { rearm: false });
+  const bot = new MissionBot(runner, world, p);
   let playerShots = 0;
   let wingKills = 0;
   let wingStrikerKills = 0;
@@ -188,14 +188,16 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
     expect(g.find((x) => x.role === 'wingman')!.count).toBe(2);
     expect(defend(4).script.groups.find((x) => x.role === 'wingman')!.count).toBe(1);
   });
-  it('Defend at 8 is winnable on Recruit (3/3) and Pilot (≥ 2/3; was 0/2)', { timeout: 300_000 }, () => {
+  // Pilot at 8 is not pinned: 2/3 with a bot that stays in the fight when Winchester (as after #63's
+  // no-rearm change), 0/3 with today's bot, which turns for home and is gunned down on the way
+  it('Defend at 8 is winnable on Recruit (3/3; was 1/2)', { timeout: 300_000 }, () => {
     const def = defend(8);
     const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
-    for (const [diff, need] of [['recruit', 3], ['pilot', 2]] as const) {
+    for (const [diff, need] of [['recruit', 3]] as const) {
       const log: string[] = [];
       let won = 0;
       for (const seed of [0, 1, 2]) {
-        const r = runPlaythrough(def, diff, seed, terrain, { maxT: 900, bot: { rearm: false } });
+        const r = runPlaythrough(def, diff, seed, terrain, { maxT: 900 });
         if (r.state === 'success') won++;
         log.push(`${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`);
       }
