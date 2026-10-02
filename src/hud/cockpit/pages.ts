@@ -93,6 +93,14 @@ export function tsdNeed(p: AircraftEntity, ctx: FrameContext): number {
   return need;
 }
 
+/**
+ * Font size (texels) of the TSD and RWR corner readouts ("10 NM", "HDG 045", "BULL 005/6", "2 EMIT",
+ * EMCON / LAUNCH). The PCD is drawn small in the cockpit view (about 0.43 px per texel on an 844×390
+ * phone): at 22–24 texels they were 9–10 px tall, and read like 8 px on the tilted panel (#62). At 30
+ * texels they are about 13 px and still fit a 256-texel side portal.
+ */
+export const PCD_CORNER = 30;
+
 export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   const { p, ctx } = d;
   const t = ctx.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
@@ -116,19 +124,19 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   s.lw = 2;
   drawTsd(pen, ctx, p, s, TSD_COLORS, d.flash);
   // overlay readouts
-  pen.text(String(Math.round(tsdRange / NM)) + ' NM', x + 10, y + 18, PC.label, 24, 'left');
+  pen.text(String(Math.round(tsdRange / NM)) + ' NM', x + 10, y + 19, PC.label, PCD_CORNER, 'left');
   const hdg = Math.round((((p.flight.heading * RAD) % 360) + 360) % 360) % 360;
-  pen.text('HDG ' + String(hdg).padStart(3, '0'), x + w - 10, y + 18, PC.value, 24, 'right');
+  pen.text('HDG ' + String(hdg).padStart(3, '0'), x + w - 10, y + 19, PC.value, PCD_CORNER, 'right');
   // bullseye call (Sky Tower = origin): bearing/range from bullseye to ownship
   const bx = p.position.x;
   const bz = p.position.z;
   let brg = Math.atan2(bx, -bz) * RAD;
   if (brg < 0) brg += 360;
   const bull = 'BULL ' + String(Math.round(brg) % 360).padStart(3, '0') + '/' + Math.round(toNm(Math.hypot(bx, bz)));
-  pen.text(bull, x + 10, y + 46, PC.cyan, 22, 'left');
+  pen.text(bull, x + 10, y + 51, PC.cyan, PCD_CORNER, 'left');
   if (t && t.alive) {
     const lbl = (p.radar.lockedId === t.id ? 'LOCK ' : 'TGT ') + entityLabel(t);
-    pen.text(lbl, x + w - 10, y + 46, p.radar.lockedId === t.id ? PC.green : PC.value, 22, 'right');
+    pen.text(lbl, x + w - 10, y + 51, p.radar.lockedId === t.id ? PC.green : PC.value, 22, 'right');
   }
 };
 
@@ -516,9 +524,9 @@ export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
     g.closePath();
     pen.fillPlain(m.guidance === 'ir' ? '#ff8a1c' : PC.red);
   }
-  pen.text(p.rwr.length + ' EMIT', x + 10, y + 18, PC.label, 22, 'left');
-  if (launch && d.flash) pen.text('LAUNCH', x + w - 10, y + 18, PC.red, 24, 'right');
-  else if (!p.radar.emitting) pen.text('EMCON', x + w - 10, y + 18, PC.amber, 22, 'right');
+  pen.text(p.rwr.length + ' EMIT', x + 10, y + 19, PC.label, PCD_CORNER, 'left');
+  if (launch && d.flash) pen.text('LAUNCH', x + w - 10, y + 19, PC.red, PCD_CORNER, 'right');
+  else if (!p.radar.emitting) pen.text('EMCON', x + w - 10, y + 19, PC.amber, PCD_CORNER, 'right');
 };
 
 export const PAGE_FNS: Record<PageId, PageFn> = {
