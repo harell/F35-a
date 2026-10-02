@@ -974,3 +974,38 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     expect(cueTexts({ timeToRelease: 12, bombAway: true })).toContain('REL 12');
   });
 });
+
+describe('engaged marker: own missile in flight at a contact', () => {
+  it('marks a non-designated contact our missile is guiding on with M n beside its box, clear of other text', () => {
+    const r = rig('aa', 'hud');
+    const p = r.mock.player;
+    const su = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
+    expect(p.radar.designatedId).not.toBe(su.id);
+    expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+    const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+    const m = new MissileEntity(950, def, 'blue', p.id, su.id);
+    // 12 km out, closing at ~1,200 m/s: about 10 s to go
+    m.position.copy(su.position).addScaledVector(new Vector3().subVectors(p.position, su.position).normalize(), 12_000);
+    m.velocity.subVectors(su.position, m.position).setLength(1000);
+    (r.mock.world.missiles as MissileEntity[]).push(m);
+    const texts = r.run(0.1);
+    const ms = find(texts, /^M \d+$/);
+    expect(ms.length).toBe(1);
+    const s = Number(ms[0].text.slice(2));
+    expect(s).toBeGreaterThanOrEqual(8);
+    expect(s).toBeLessThanOrEqual(12);
+    // beside the su-35's box
+    const proj = new Projector();
+    proj.update(r.camera, r.W, r.H);
+    const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+    proj.point(p.radar.contacts.find((c) => c.id === su.id)!.position, sp);
+    expect(Math.abs(ms[0].y - sp.y)).toBeLessThan(30);
+    expect(Math.abs(ms[0].x - sp.x)).toBeLessThan(60);
+    // never printed over other text
+    const mb = textBox(ms[0]);
+    for (const t of texts) if (t !== ms[0]) expect(overlaps(mb, textBox(t)), `M n over "${t.text}"`).toBe(false);
+    // a dead missile: the mark goes
+    m.alive = false;
+    expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+  });
+});

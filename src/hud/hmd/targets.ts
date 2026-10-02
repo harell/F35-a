@@ -160,6 +160,10 @@ export function drawContacts(f: HudFrame): void {
     pen.rect(sp.x - h, sp.y - h, h * 2, h * 2);
     pen.strokeGlow(civil ? pal.white : stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
+    // engaged: our missile is in flight at it — a flag in the box's top-right corner, and its time to
+    // impact ("M 12") beside the box where it fits, so a swarm shows which drones are already taken
+    const m = civil ? null : ownMissileOn(f, e.id);
+    if (m) drawEngaged(f, m, e, sp.x, sp.y, h);
     const lbl = labelled ? trackShort(e) : '';
     if (lbl) {
       const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
@@ -170,6 +174,34 @@ export function drawContacts(f: HudFrame): void {
       }
     }
     picks.add(e.id, sp.x, sp.y, h);
+  }
+}
+
+/**
+ * Engaged marker on a (non-designated) contact box: a filled corner flag, always, and "M n" (the newest
+ * missile's time to impact) right of the box, or left of it, wherever no reserved text or symbol is.
+ */
+function drawEngaged(f: HudFrame, m: MissileEntity, e: AnyEntity, x: number, y: number, h: number): void {
+  const { pen, pal, L, occ } = f;
+  const u = L.u;
+  const k = Math.min(6 * u, h * 0.8);
+  const g = pen.g;
+  pen.begin();
+  g.moveTo(x + h, y - h);
+  g.lineTo(x + h - k, y - h);
+  g.lineTo(x + h, y - h + k);
+  g.closePath();
+  pen.fillPlain(pal.main);
+  const txt = impactLabel(f, m, e);
+  const tw = pen.textWidth(txt, 10);
+  const ty = y - h + 4 * u;
+  const gap = 3 * u;
+  for (let side = 0; side < 2; side++) {
+    const x0 = side === 0 ? x + h + gap : x - h - gap - tw;
+    if (occ.hits(x0 - 1, ty - 6 * u, x0 + tw + 1, ty + 6 * u)) continue;
+    pen.text(txt, side === 0 ? x0 : x0 + tw, ty, pal.main, 10, side === 0 ? 'left' : 'right');
+    occ.add(x0 - 1, ty - 6 * u, x0 + tw + 1, ty + 6 * u);
+    return;
   }
 }
 
