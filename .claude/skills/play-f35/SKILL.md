@@ -45,7 +45,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Keep the player alive through a scripted run | `window.__f35.invulnerable(true)` (weapons only; crashing still kills; per mission) | free |
 | Force an event (a tank lost, a group dead, an objective done) | `window.__f35.destroy(entityId)` or `destroy('groupId', byPlayer?)` (credited as an AIM-120 kill, so debrief stats after it are skewed) | free |
 | Reach the debrief after `simulate()` ended the mission | `window.__f35.skipOutro()` (the outro counts render frames, so headless it takes ~60 s otherwise) | free |
-| Look at a place without writing a driver | `window.__f35.camera([x,y,z], [lookX,lookY,lookZ])`, `camera(null)` to hand back | free |
+| Look at a place without writing a driver | `window.__f35.camera([x,y,z], [lookX,lookY,lookZ])`, `camera(null)` to hand back; `__f35.game.hud.setVisible(false)` for a clean frame. Prefer this to the world lab, whose shots took 45–60 s each under load | free |
 | Prove a HUD string is drawn (blinking cues, text that screenshots miss) | `browser-run.mjs … --text` (adds `hudText`: every `fillText` string over 8 frames; the HUD upper-cases and wraps, so match case-insensitively on `hudText.join(' ')`) | free |
 | Smoke-test that every mission starts | `node e2e/missions.mjs --base=http://localhost:5190/ --only=c01,c02` | *est.* ~20 s per mission (load + `--seconds`, default 12) |
 | Check menus, briefing, touch controls | `node e2e/ui-touch.mjs --base=http://localhost:5190/ --part=menus` (or `flight`) | *est.* 1–2 min |
