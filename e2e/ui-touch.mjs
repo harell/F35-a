@@ -47,15 +47,19 @@ const check = (cond, msg, extra = '') => {
 async function touchApi(page) {
   const cdp = await ctx.newCDPSession(page);
   const fingers = new Map();
-  const send = (type) =>
+  // `timestamp` (s since epoch) pins the event times: CDP otherwise stamps an event when it is
+  // dispatched, which waits for the previous event's ack, i.e. a slow SwiftShader frame. A 60 ms
+  // tap then reached the page as a ~500 ms press, and 'quick tap on the view' failed.
+  const send = (type, timestamp) =>
     cdp.send('Input.dispatchTouchEvent', {
       type,
       touchPoints: [...fingers.entries()].map(([id, p]) => ({ x: p.x, y: p.y, id, radiusX: 6, radiusY: 6, force: 1 })),
+      ...(timestamp !== undefined ? { timestamp } : {}),
     });
   return {
-    async down(id, x, y) {
+    async down(id, x, y, timestamp) {
       fingers.set(id, { x, y });
-      await send('touchStart');
+      await send('touchStart', timestamp);
     },
     async move(id, x, y, steps = 6) {
       const p = fingers.get(id);
@@ -68,20 +72,23 @@ async function touchApi(page) {
         await page.waitForTimeout(16);
       }
     },
-    async up(id) {
+    async up(id, timestamp) {
       // touchEnd lists the remaining touches
       const p = fingers.get(id);
       fingers.delete(id);
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchEnd',
         touchPoints: [...fingers.entries()].map(([fid, q]) => ({ x: q.x, y: q.y, id: fid })),
+        ...(timestamp !== undefined ? { timestamp } : {}),
       });
       return p;
     },
+    /** A tap of exactly `holdMs` as the page sees it, however slow the frames are. */
     async tap(x, y, holdMs = 60) {
-      await this.down(99, x, y);
+      const t0 = Date.now() / 1000;
+      await this.down(99, x, y, t0);
       await page.waitForTimeout(holdMs);
-      await this.up(99);
+      await this.up(99, t0 + holdMs / 1000);
     },
   };
 }
