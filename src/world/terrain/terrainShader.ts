@@ -139,6 +139,10 @@ uniform vec4 uConeB[${MAX_CONES}]; // cone radius, cone height (m), terraces (0/
 uniform vec4 uConeBox; // xz bounds of all cones (min x, min z, max x, max z)
 uniform sampler2D uAerial; // aerial photo (aucklandAerial.ts): sRGB albedo, alpha = land / deck mask
 uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m); 1/size 0 = none
+uniform vec4 uAerialGrade; // colour grade toward the procedural palette: rgb gain, strength
+uniform sampler2D uLotMask; // lots cleared along the road / rail ribbons (lotMask.ts): 1 bit per cell, 8 × 4 cells per texel
+uniform vec4 uLotMaskRect; // x0, z0, cell (m), texels across; texels across 0 = none
+uniform float uLotMaskRows; // texels down
 varying vec3 vWorld;
 varying vec2 vUv;
 varying float vH;
@@ -203,7 +207,20 @@ vec4 aerialPhoto(vec2 wp) {
   float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
   if (e <= 0.0) return vec4(0.0);
   vec4 p = texture2D(uAerial, uv);
-  return vec4(p.rgb, p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+  return vec4(p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+}
+
+// 1 when a lot centred at wp is cleared for a road or railway corridor (lotMask.ts LotMask.masked()).
+float lotMasked(vec2 wp) {
+  if (uLotMaskRect.w <= 0.0) return 0.0;
+  vec2 g = floor((wp - uLotMaskRect.xy) / uLotMaskRect.z);
+  vec2 t = floor(g / vec2(8.0, 4.0));
+  vec2 size = vec2(uLotMaskRect.w, uLotMaskRows);
+  if (t.x < 0.0 || t.y < 0.0 || t.x >= size.x || t.y >= size.y) return 0.0;
+  vec4 v = floor(texture2D(uLotMask, (t + 0.5) / size) * 255.0 + 0.5);
+  vec2 f = g - t * vec2(8.0, 4.0);
+  float byte = dot(v, vec4(equal(vec4(f.y), vec4(0.0, 1.0, 2.0, 3.0))));
+  return mod(floor(byte / exp2(f.x)), 2.0);
 }
 
 // Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts).
@@ -322,6 +339,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec2 lf = fract(p / LOT);
   float lh = hash12(lid + 17.0 + dist.z * 13.0);
   float built = step(lh, 0.8 + 0.2 * dens) * (1.0 - park);
+  // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
+  // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
+  if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
   float apt = step(0.9, dens);
   float roadD = edgeDist(p, BLOCK);
   float aa = max(mpp, 0.05);

@@ -12,6 +12,7 @@ import type { VegetationField } from '../terrain/vegetation';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import { REC, type ScatterSource, type TileInstances } from './scatter';
+import type { LotMask } from './lotMask';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
@@ -154,6 +155,8 @@ export class HouseSource implements ScatterSource {
     private readonly groundAt: (x: number, z: number) => number = (x, z) => hf.meshHeightAt(x, z),
     private readonly cbd: CbdGrid | null = null,
     private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
+    /** Lots cleared along the road and railway ribbons (the terrain shader leaves them unbuilt too). */
+    private readonly lotMask: LotMask | null = null,
   ) {}
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
@@ -195,6 +198,8 @@ export class HouseSource implements ScatterSource {
           if (blockHash(d, bx, bz) >= 0.975 - dens * 0.03) continue; // park block (same rule as the shader)
           const lh = lotHash(d, lx, lz);
           if (lh >= 0.8 + 0.2 * dens) continue;
+          // the corridor along a road or railway ribbon (lotMask.ts; tested at the lot centre, as the shader does)
+          if (this.lotMask?.masked(cwx, cwz)) continue;
           const apt = dens > 0.9;
           const fp = houseFootprint(lh, lz, apt);
           const [wx, wz] = toWorld(d, (lx + fp.cx) * lotW, (lz + fp.cz) * lotD);

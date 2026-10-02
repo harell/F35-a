@@ -39,6 +39,7 @@ import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
 import type { CbdGrid } from '../scenery/urbanGrid';
 import type { CbdStreets } from '../scenery/cbdStreets';
+import type { LotMask } from '../scenery/lotMask';
 
 export interface TerrainStyle {
   rockColor: Color;
@@ -122,6 +123,8 @@ export interface AerialPhotoInfo {
   z0: number;
   size: number;
   feather: number;
+  /** Colour grade toward the procedural palette: rgb gain, strength (aucklandAerial.ts aerialGrade()). */
+  grade?: readonly [number, number, number, number];
 }
 
 const MORPH_START = 0.68;
@@ -131,6 +134,7 @@ export class TerrainRenderer {
   readonly heightTexture: DataTexture;
   /** CBD street map texture (null without LINZ road data). */
   readonly streetTexture: DataTexture | null;
+  private lotMaskTexture: DataTexture | null = null;
   private readonly geometry: InstancedBufferGeometry;
   private readonly material: ShaderMaterial;
   private readonly patchAttr: InstancedBufferAttribute;
@@ -330,6 +334,10 @@ export class TerrainRenderer {
         ...noFieldUniforms(o.noFields ?? []),
         ...coneUniforms(o.style.cones ?? []),
         ...aerialUniforms(o.aerial ?? null, o.dummy),
+        // set by setLotMask() once the scenery has built the road network
+        uLotMask: { value: o.dummy },
+        uLotMaskRect: { value: new Vector4(0, 0, 1, 0) },
+        uLotMaskRows: { value: 1 },
       },
     });
     this.mesh = new Mesh(this.geometry, this.material);
@@ -454,12 +462,34 @@ export class TerrainRenderer {
     return dx * dx + dy * dy + dz * dz <= r * r;
   }
 
+  /** Clear the lots along the road and railway ribbons (lotMask.ts, built with the scenery); null = none. */
+  setLotMask(mask: LotMask | null): void {
+    this.lotMaskTexture?.dispose();
+    this.lotMaskTexture = null;
+    const u = this.material.uniforms;
+    if (!mask) {
+      u.uLotMaskRect.value.set(0, 0, 1, 0);
+      return;
+    }
+    const t = new DataTexture(mask.data, mask.texW, mask.texH, RGBAFormat, UnsignedByteType);
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = NearestFilter;
+    t.minFilter = NearestFilter;
+    t.generateMipmaps = false;
+    t.needsUpdate = true;
+    this.lotMaskTexture = t;
+    u.uLotMask.value = t;
+    u.uLotMaskRect.value.set(mask.x0, mask.z0, mask.cell, mask.texW);
+    u.uLotMaskRows.value = mask.texH;
+  }
+
   dispose(): void {
     this.mesh.removeFromParent();
     this.geometry.dispose();
     this.material.dispose();
     this.heightTexture.dispose();
     this.streetTexture?.dispose();
+    this.lotMaskTexture?.dispose();
   }
 }
 
@@ -509,10 +539,11 @@ export function streetUniforms(st: CbdStreets | null, tex: Texture | null, dummy
 }
 
 /** Uniforms of the terrain shader's aerialPhoto() (and the photo-capable building material). */
-export function aerialUniforms(a: AerialPhotoInfo | null, dummy: Texture): { uAerial: { value: Texture }; uAerialRect: { value: Vector4 } } {
+export function aerialUniforms(a: AerialPhotoInfo | null, dummy: Texture): { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 } } {
   return {
     uAerial: { value: a ? a.texture : dummy },
     uAerialRect: { value: a ? new Vector4(a.x0, a.z0, 1 / a.size, a.feather) : new Vector4(0, 0, 0, 0) },
+    uAerialGrade: { value: new Vector4(...(a?.grade ?? [1, 1, 1, 0])) },
   };
 }
 

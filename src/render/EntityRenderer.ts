@@ -29,6 +29,8 @@ const _fwd = new Vector3();
 /** Ship nav lights are drawn out to this range (m); cabin / deck lights closer in. */
 const SHIP_LIGHTS_FAR = 16_000;
 const SHIP_DECK_LIGHTS_FAR = 7_000;
+/** Wake brightness at night (moonlight on the foam; 1 by day). */
+const NIGHT_WAKE = 0.45;
 const eyeCache = new Map<AircraftType, Vector3>();
 
 interface Tracked<T> {
@@ -166,8 +168,9 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
     if (ctx.viewMode !== 'tactical') {
       aircraft.forEach(lightFor);
       if (env.isNight) {
-        grounds.forEach(shipLightsFor);
+        // the ferries first: a few dozen lights, which a harbour full of lit liners must not crowd out
         ferries?.addLights(lights, ctx.camera.position);
+        grounds.forEach(shipLightsFor);
       }
     }
     lights.end();
@@ -184,10 +187,11 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         ferriesChecked = true;
         if (ctx.mission.def.theater === 'auckland' && q.ferries > 0) {
           ferries = new HarbourFerries(q.ferries);
-          group.add(ferries.mesh);
+          group.add(ferries.mesh, ferries.windows);
         }
       }
-      wakes?.begin(env.isNight ? 0.3 : 1, t);
+      // (at night a faint, moonlit wake)
+      wakes?.begin(env.isNight ? NIGHT_WAKE : 1, t);
       if (lastNight !== env.isNight) {
         lastNight = env.isNight;
         setEnvironment(envMap, env.isNight ? 0.12 : 1);
@@ -265,6 +269,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       grounds.forEach(sweepGround);
 
       // harbour ferries (render-only, placed by their timetable at sim time)
+      ferries?.setNight(env.isNight);
       ferries?.update(t, wakes);
       wakes?.end();
 

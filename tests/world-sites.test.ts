@@ -233,7 +233,10 @@ describe('fallback without the OSM file', () => {
     setAucklandOsm(null);
     try {
       expect(siteLayout()).toBeNull();
-      expect(siteBlocker()).toBeNull();
+      // houses and trees still keep off the fallback Wiri hardstand (#61)
+      const blocked = siteBlocker();
+      for (const t of WIRI_TANKS) expect(blocked(t.x, t.z, 0)).toBe(true);
+      expect(blocked(WIRI_TANKS[0].x + 2000, WIRI_TANKS[0].z, 0)).toBe(false);
       const B = new GeometryBuilder();
       buildPort(B, new LightList(), height, 1);
       const port = B.triangleCount;

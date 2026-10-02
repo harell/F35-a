@@ -209,6 +209,67 @@ export function aucklandRailPaths(d: RoadData | null = aucklandRoads()): RoadPat
   return d.lines.filter((l) => l.kind === ROAD_RAIL).map((l) => linzPath(l, 'rail', l.width > DOUBLE_TRACK ? 1 : 0.5));
 }
 
+/** Ground height (m) below which a railway is over water (the ribbons' "wet" test). */
+const WET = 0.6;
+/**
+ * Top of a railway formation over water (m above sea level): Auckland's railways cross water only on
+ * low causeways and short bridges (the Eastern Line over Hobson Bay and the Ōrākei Basin), never on
+ * motorway-height viaducts.
+ */
+export const RAIL_CAUSEWAY_Y = 1.8;
+/** A railway stretch over water deeper than this (m)… */
+const RAIL_SEA_DEPTH = -4;
+/** …or longer than this (m) runs where the land model has sea: it is not drawn. */
+const RAIL_SEA_LENGTH = 800;
+
+/**
+ * Clip the railways to the land model: drop every stretch over open sea (deeper than RAIL_SEA_DEPTH
+ * or longer than RAIL_SEA_LENGTH), splitting the line there. The LINZ lines run to the world's edge,
+ * past where the terrain fades out to sea in the far north, and drew kilometres of viaduct over the
+ * ocean. Shallow, short crossings (Hobson Bay) stay, as causeways.
+ */
+export function clipRailToLand(paths: RoadPath[], height: HeightFn): RoadPath[] {
+  const out: RoadPath[] = [];
+  for (const p of paths) {
+    const n = p.x.length;
+    const drop = new Uint8Array(n);
+    for (let i = 0; i < n; ) {
+      if (p.tunnel[i] || height(p.x[i], p.z[i]) >= WET) {
+        i++;
+        continue;
+      }
+      // a run of wet points i..j-1, measured from the dry point before it to the dry point after it
+      let j = i;
+      let deepest = Infinity;
+      while (j < n && !p.tunnel[j]) {
+        const h = height(p.x[j], p.z[j]);
+        if (h >= WET) break;
+        deepest = Math.min(deepest, h);
+        j++;
+      }
+      let len = 0;
+      for (let k = Math.max(1, i); k <= Math.min(n - 1, j); k++) len += Math.hypot(p.x[k] - p.x[k - 1], p.z[k] - p.z[k - 1]);
+      if (deepest < RAIL_SEA_DEPTH || len > RAIL_SEA_LENGTH) drop.fill(1, i, j);
+      i = j;
+    }
+    if (!drop.includes(1)) {
+      out.push(p);
+      continue;
+    }
+    for (let i = 0; i < n; ) {
+      if (drop[i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < n && !drop[j]) j++;
+      if (j - i >= 2) out.push({ ...p, x: p.x.slice(i, j), z: p.z.slice(i, j), tunnel: p.tunnel.slice(i, j) });
+      i = j;
+    }
+  }
+  return out;
+}
+
 function linzPath(l: RoadLine, kind: RoadPath['kind'], span: number): RoadPath {
   const xs: number[] = [];
   const zs: number[] = [];
@@ -265,6 +326,11 @@ export class RoadNetwork {
     }
   }
 
+  /** The ribbon segments outside tunnels, flat [ax, az, bx, bz, halfWidth] records (lotMask.ts). */
+  get segments(): readonly number[] {
+    return this.segs;
+  }
+
   /** Distance (m) from (x, z) to the nearest carriageway edge (negative on the road); ≤ 60 m range. */
   edgeDistance(x: number, z: number): number {
     const key = (Math.floor(x / this.cell) + 2048) * 4096 + (Math.floor(z / this.cell) + 2048);
@@ -301,14 +367,18 @@ export class RoadNetwork {
     const uv: number[] = [];
     const idx: number[] = [];
     const deckCol = 0x8c8b86;
+    const fillCol = 0x77736b;
     for (const p of this.paths) {
       if (!only(p)) continue;
       const n = p.x.length;
-      // Water under the centre line → deck height profile (smoothed ramps).
+      const rail = p.kind === 'rail';
+      const raised = (k: number) => height(p.x[k], p.z[k]) + 0.45 < RAIL_CAUSEWAY_Y;
+      // Water under the centre line → deck height profile (smoothed ramps). Railways stay low: on the
+      // ground, or on a causeway just above the water (RAIL_CAUSEWAY_Y), so no deck.
       const wet = new Float32Array(n);
-      for (let i = 0; i < n; i++) wet[i] = height(p.x[i], p.z[i]) < 0.6 ? 1 : 0;
+      for (let i = 0; i < n; i++) wet[i] = height(p.x[i], p.z[i]) < WET ? 1 : 0;
       const deck = new Float32Array(n);
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n && !rail; i++) {
         let w = 0;
         for (let k = -4; k <= 4; k++) {
           const j = i + k;
@@ -348,7 +418,7 @@ export class RoadNetwork {
           const x = p.x[i] + nx * off;
           const z = p.z[i] + nz * off;
           const g = height(x, z) + 0.45;
-          const y = deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
+          const y = rail ? Math.max(g, RAIL_CAUSEWAY_Y) : deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
           pos.push(x, y, z);
           uv.push((k / 2) * p.span, s / 40);
         }
@@ -362,6 +432,16 @@ export class RoadNetwork {
           }
         }
         run = base;
+        // Railway causeway: an embankment of fill from the sea bed to just under the track, wherever
+        // the track is raised above the ground (over the water and the low ground at its edge)
+        if (rail && i + 1 < n && (raised(i) || raised(i + 1)) && !p.tunnel[i + 1]) {
+          const x2 = p.x[i + 1];
+          const z2 = p.z[i + 1];
+          const len = Math.hypot(x2 - p.x[i], z2 - p.z[i]);
+          const bed = Math.min(0, height(p.x[i], p.z[i]), height(x2, z2)) - 1;
+          const f = frameFromHeading((p.x[i] + x2) / 2, bed, (p.z[i] + z2) / 2, Math.atan2(x2 - p.x[i], p.z[i] - z2));
+          B.box(f, 0, 0, 0, p.width + 4, RAIL_CAUSEWAY_Y - 0.3 - bed, len + 2, fillCol, fillCol);
+        }
         // Bridge / causeway: side barriers and piers every ~60 m over the water
         if (deck[i] > 0.5 && i + 1 < n) {
           const x2 = p.x[i + 1];

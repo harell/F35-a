@@ -21,7 +21,7 @@ import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, IDENT_FRAME, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
-import type { HeightFn, LightList } from './builders';
+import type { DecalBuilder, HeightFn, LightList } from './builders';
 import { aucklandLinz, fillLinzLand, linzIsLand } from '../terrain/theaters/aucklandLinz';
 import {
   aucklandOsm,
@@ -160,12 +160,13 @@ export function siteLayout(): SiteLayout | null {
 
 /**
  * Keeps the scattered houses and trees off the sites (sources.ts `blocked`): port land, the naval
- * base's land, the oil terminal and the stadium grounds. Null without the OSM data.
+ * base's land, the oil terminal's hardstand and the stadium grounds. Without the OSM data only the
+ * terminal's fallback hardstand, which is drawn either way (#61).
  */
-export function siteBlocker(): ((x: number, z: number, margin: number) => boolean) | null {
+export function siteBlocker(): (x: number, z: number, margin: number) => boolean {
   const s = siteLayout();
-  if (!s) return null;
-  const rings = [...s.port, ...(s.naval ? [s.naval] : []), ...(s.depot ? [s.depot] : []), ...s.stadiums.map((st) => st.outline)];
+  const pad = ringOf(Float32Array.from(wiriHardstand(s)));
+  const rings = s ? [...s.port, ...(s.naval ? [s.naval] : []), pad, ...s.stadiums.map((st) => st.outline)] : [pad];
   return (x, z) => rings.some((r) => inRing(r, x, z));
 }
 
@@ -556,7 +557,64 @@ export function buildNavalBase(B: GeometryBuilder, lights: LightList, height: He
 }
 
 /** Wiri oil terminal: its storage tanks (always: core/sites.ts) and, with the OSM data, its buildings. */
-export function buildWiriTerminal(B: GeometryBuilder, lights: LightList, height: HeightFn, s: SiteLayout | null): void {
+/** Margin (m) of the tank farm's bund wall round the fuel tanks, and of the fallback hardstand round all tanks. */
+const WIRI_BUND_MARGIN = 10;
+const WIRI_PAD_MARGIN = 45;
+
+/** The tank farm's bund wall: a rectangle (x0, z0, x1, z1) round the fuel tanks. */
+export function wiriBund(): [number, number, number, number] {
+  let x0 = Infinity;
+  let z0 = Infinity;
+  let x1 = -Infinity;
+  let z1 = -Infinity;
+  for (const t of WIRI_TANKS) {
+    if (!t.fuel) continue;
+    x0 = Math.min(x0, t.x - t.r);
+    z0 = Math.min(z0, t.z - t.r);
+    x1 = Math.max(x1, t.x + t.r);
+    z1 = Math.max(z1, t.z + t.r);
+  }
+  const m = WIRI_BUND_MARGIN;
+  return [x0 - m, z0 - m, x1 + m, z1 + m];
+}
+
+/**
+ * The terminal's concrete hardstand: the OSM depot outline, else a rectangle round every tank. It hides
+ * the terrain's procedural streets and lots, which ran between the tanks (#61 item 4).
+ */
+export function wiriHardstand(s: SiteLayout | null): ArrayLike<number> {
+  if (s?.depot) return s.depot.pts;
+  const m = WIRI_PAD_MARGIN;
+  const x0 = Math.min(...WIRI_TANKS.map((t) => t.x - t.r)) - m;
+  const z0 = Math.min(...WIRI_TANKS.map((t) => t.z - t.r)) - m;
+  const x1 = Math.max(...WIRI_TANKS.map((t) => t.x + t.r)) + m;
+  const z1 = Math.max(...WIRI_TANKS.map((t) => t.z + t.r)) + m;
+  return [x0, z0, x1, z0, x1, z1, x0, z1];
+}
+
+/**
+ * The Wiri oil terminal: the storage tanks with their bunds, the tank farm's bund wall, the depot's
+ * OSM buildings and (with `pad`, the scenery's concrete decals) the hardstand under it all.
+ */
+export function buildWiriTerminal(B: GeometryBuilder, lights: LightList, height: HeightFn, s: SiteLayout | null, pad: DecalBuilder | null = null): void {
+  pad?.polygon(wiriHardstand(s), height, 40, 60, 0.3);
+  // bund wall round the tank farm (1.8 m, following the ground in ≤ 30 m pieces)
+  const [bx0, bz0, bx1, bz1] = wiriBund();
+  const corners = [bx0, bz0, bx1, bz0, bx1, bz1, bx0, bz1];
+  for (let c = 0; c < 4; c++) {
+    const ax = corners[c * 2];
+    const az = corners[c * 2 + 1];
+    const ex = corners[((c + 1) % 4) * 2];
+    const ez = corners[((c + 1) % 4) * 2 + 1];
+    const n = Math.max(1, Math.ceil(Math.hypot(ex - ax, ez - az) / 30));
+    for (let k = 0; k < n; k++) {
+      const x = ax + ((ex - ax) * k) / n;
+      const z = az + ((ez - az) * k) / n;
+      const x2 = ax + ((ex - ax) * (k + 1)) / n;
+      const z2 = az + ((ez - az) * (k + 1)) / n;
+      B.beam(IDENT_FRAME, x, height(x, z) + 0.4, z, x2, height(x2, z2) + 0.4, z2, 1.8, 0x9c9a92);
+    }
+  }
   WIRI_TANKS.forEach((t, i) => {
     const y = height(t.x, t.z) - 0.5;
     const h = Math.max(8, Math.min(18, t.r * 0.9));

@@ -20,8 +20,9 @@ import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayo
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
-import { aucklandRailPaths, aucklandRoadPaths, RoadNetwork } from './motorways';
+import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
+import { LotMask, urbanBounds } from './lotMask';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
@@ -73,6 +74,8 @@ export class Scenery {
   private readonly houseRadius: number;
   /** Auckland motorway network, plus the railways when the quality tier draws them (null elsewhere). */
   roads: RoadNetwork | null = null;
+  /** Lots left unbuilt along the road and railway ribbons (Auckland); the terrain shader takes it too. */
+  lotMask: LotMask | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
   cbdStats: CbdStats | null = null;
@@ -153,10 +156,14 @@ export class Scenery {
 
     // ── Auckland landmarks ──
     if (o.theater === 'auckland') {
-      // the railways join the network so houses, trees and towers keep off the tracks too
-      const rails = o.quality.railways ? aucklandRailPaths() : [];
+      // the railways (clipped to the land model) join the network so houses, trees and towers keep off
+      // the tracks too
+      const rails = o.quality.railways ? clipRailToLand(aucklandRailPaths(), height) : [];
       const roads = new RoadNetwork([...aucklandRoadPaths(), ...rails]);
       this.roads = roads;
+      // the suburbs' lots cleared along the ribbons (the houses here and the terrain's painted ones)
+      const urban = urbanBounds(o.colorData, o.colorSize, hf.origin, hf.extent);
+      this.lotMask = urban ? LotMask.fromSegments(roads.segments, urban) : null;
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
@@ -178,7 +185,8 @@ export class Scenery {
       const roadTex = createMotorwayTexture();
       roadTex.anisotropy = o.cfg.anisotropy;
       this.textures.push(roadTex);
-      const roadMat = createRoadMaterial(o.atmo, roadTex);
+      // the roads glow with their street lights at night (when the tier draws night lights at all)
+      const roadMat = createRoadMaterial(o.atmo, roadTex, o.lights > 0.01);
       this.materials.push(roadMat);
       this.geometries.push(roadGeo);
       const roadMesh = new Mesh(roadGeo, roadMat);
@@ -213,7 +221,7 @@ export class Scenery {
         buildNavalBase(sites, lights, height, layout);
         buildStadiums(sites, lights, height, layout);
       }
-      buildWiriTerminal(sites, lights, height, layout);
+      buildWiriTerminal(sites, lights, height, layout, concrete);
       addMesh(sites, 'akl-sites', aerialMat ?? buildingMat);
     }
 
@@ -349,7 +357,7 @@ export class Scenery {
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, this.lotMask),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
         { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
