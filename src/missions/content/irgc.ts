@@ -10,6 +10,7 @@ import { AKL } from '../../core/auckland';
 import type { CampaignDef, MissionDef } from '../../core/contracts';
 import { SHAHED_SPEED } from '../../sim/drone/oneWay';
 import { P, flight, mission } from './common';
+import { G02 } from './irgcHauraki';
 
 /**
  * Working title, shown in the menus. The campaign's real name ("Operation …") is not decided yet
@@ -120,5 +121,7 @@ export const IRGC_CAMPAIGN: CampaignDef = {
   id: 'irgc',
   name: IRGC_CAMPAIGN_NAME,
   description: 'Shahed drone swarms over the city, fast attack boats in the Hauraki Gulf',
-  missions: [G01],
+  // 1. Buzz Kill (#78); 2. Straight Outta Hauraki (#82), in its own module (irgcHauraki.ts)
+  missions: [G01, G02],
 };
+

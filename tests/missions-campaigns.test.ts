@@ -114,15 +114,15 @@ describe('campaigns', () => {
     }
   });
 
-  it('the real IRGC campaign file starts with g01 (#78; g02 arrives in #82) and has a placeholder name', async () => {
+  it('the real IRGC campaign file lists g01 (#78) then g02 (#82) and has a placeholder name', async () => {
     const real = await vi.importActual<typeof import('../src/missions/content/irgc')>('../src/missions/content/irgc');
     expect(real.IRGC_CAMPAIGN.id).toBe('irgc');
     expect(real.IRGC_CAMPAIGN.name).toBe(real.IRGC_CAMPAIGN_NAME);
     expect(real.IRGC_CAMPAIGN.name.length).toBeGreaterThan(0);
-    expect(real.IRGC_CAMPAIGN.missions.map((m) => m.id)).toEqual(['g01']);
-    expect(real.IRGC_CAMPAIGN.missions[0].index).toBe(1);
+    expect(real.IRGC_CAMPAIGN.missions.map((m) => m.id)).toEqual(['g01', 'g02']);
+    expect(real.IRGC_CAMPAIGN.missions.map((m) => m.index)).toEqual([1, 2]);
     // a campaign with a mission is no longer "coming soon" in the picker
-    expect(campaignStatus(real.IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 1, soon: false });
+    expect(campaignStatus(real.IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 2, soon: false });
   });
 
   it('mission ids are unique across every campaign and training (progress is keyed by mission id)', () => {
