@@ -49,6 +49,21 @@ export function tapeBottom(f: HudFrame): number {
 }
 
 /**
+ * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, and SPD BRK while
+ * the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
+ */
+export function speedColumnBottom(f: HudFrame): number {
+  const { L, p } = f;
+  const brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
+  return L.boxY + 11 * L.u + L.line * (brake ? 6.2 : 5.2);
+}
+
+/** Bottom of the HMD altitude column: the box, radar altitude, VSI and closure. */
+export function altColumnBottom(f: HudFrame): number {
+  return f.L.boxY + 11 * f.L.u + f.L.line * 3.4;
+}
+
+/**
  * Reserve every fixed text block of this view (level 0: text) so world-projected labels and the ladder
  * make way. Call after the protected symbols (FPM, target box, pipper, jet) and before the labels.
  */
@@ -59,8 +74,8 @@ export function reserveFixedZones(f: HudFrame): void {
     // heading tape + caret band
     occ.add(L.cx - L.tapeHalfW - 8 * u, L.tapeY - 2, L.cx + L.tapeHalfW + 8 * u, tapeBottom(f));
     // speed column (box, Mach, G, max G, AoA) and altitude column (box, AGL / VSI lines)
-    occ.add(L.spdRight - 78 * u, L.boxY - 13 * u, L.spdRight + 3 * u, L.boxY + 11 * u + L.line * 4.4);
-    occ.add(L.altLeft - 3 * u, L.boxY - 13 * u, L.altLeft + 92 * u, L.boxY + 11 * u + L.line * 3.4);
+    occ.add(L.spdRight - 78 * u, L.boxY - 13 * u, L.spdRight + 3 * u, speedColumnBottom(f));
+    occ.add(L.altLeft - 3 * u, L.boxY - 13 * u, L.altLeft + 92 * u, altColumnBottom(f));
     // DLZ scale (only while a launch zone is shown)
     const z = f.zone;
     if (z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon]) {

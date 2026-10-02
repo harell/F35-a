@@ -10,8 +10,8 @@ import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
-import { NumText, entityLabel, mmss, trackLabel, trackShort } from './format';
-import { zoneExt } from './zones';
+import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
+import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
@@ -536,17 +536,58 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   pen.arrow(edge.x + sp.dirX * 10 * u, edge.y + sp.dirY * 10 * u, sp.dirX, sp.dirY, 14 * u, 7 * u);
   pen.strokeGlow(col, 1.8);
   pen.fillPlain(withAlpha(col, 0.35));
-  const tx = edge.x - sp.dirX * 20 * u;
-  const ty = edge.y - sp.dirY * 16 * u;
-  pen.text(offTxt.get(sp.offAxis * RAD), tx, ty, col, 12.5);
-  pen.text(entityLabel(t), tx, ty + 13 * u, pal.dim, 10.5);
-  pen.text(rangeLabel(dist), tx, ty + 25 * u, pal.dim, 10.5);
   // our weapon on its way: the time to impact stays readable with the target behind us (a
   // StormBreaker's long glide, an AMRAAM fired before the turn)
   const m = ownMissileOn(f, t.id);
   const tl = m ? impactLabel(f, m, t) : '';
-  if (tl) pen.text(tl, tx, ty + 37 * u, pal.main, 10.5);
-  f.occ.add(tx - 30 * u, ty - 8 * u, tx + 30 * u, ty + (tl ? 43 : 31) * u, 1);
+  const off = offTxt.get(sp.offAxis * RAD);
+  const name = trackLabel(t);
+  const rng = rangeLabel(dist);
+  // the text block (angle-off, type, range, time to impact) sits inward of the arrow, clear of it
+  // whichever way it points: anchored by its top line it ran down into a downward arrow (#62: "16°"
+  // over "MIG-29 7.1" in the cockpit view, "35°" under "TU-22M 3.2")
+  const hw = Math.max(pen.textWidth(off, 12.5), pen.textWidth(name, 10.5), pen.textWidth(tl, 10.5)) / 2 + 2 * u;
+  const below = (tl ? 45 : 31) * u; // last line's bottom, from the first line's centre
+  const hh = (below + 8 * u) / 2;
+  const reach = 10 * u + Math.abs(sp.dirX) * hw + Math.abs(sp.dirY) * hh;
+  let tx = edge.x - sp.dirX * reach;
+  let ty = edge.y - sp.dirY * reach - hh + 8 * u;
+  if (f.mode === 'hmd') {
+    // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed
+    // box): slid sideways, toward the centre, past the block it would cover
+    const top = ty - 8 * u;
+    const bot = ty + below;
+    const z = f.zone;
+    const dlz = !!z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon];
+    for (let pass = 0; pass < 2; pass++) {
+      for (let k = 0; k < 3; k++) {
+        let x0 = L.spdRight - 78 * u;
+        let x1 = L.spdRight + 3 * u;
+        let y0 = L.boxY - 13 * u;
+        let y1 = speedColumnBottom(f);
+        if (k === 1) {
+          x0 = L.altLeft - 3 * u;
+          x1 = L.altLeft + 92 * u;
+          y1 = altColumnBottom(f);
+        } else if (k === 2) {
+          if (!dlz) continue;
+          x0 = L.dlzX - 10 * u;
+          x1 = L.dlzX + 62 * u;
+          y0 = L.dlzTop - 18 * u;
+          y1 = L.dlzBottom + 18 * u;
+        }
+        if (bot <= y0 || top >= y1 || tx + hw <= x0 || tx - hw >= x1) continue;
+        tx = (x0 + x1) / 2 < L.cx ? x1 + hw + 2 * u : x0 - hw - 2 * u;
+      }
+    }
+  }
+  tx = Math.max(L.left + hw, Math.min(L.right - hw, tx));
+  ty = Math.max(L.row2Y + 8 * u, ty);
+  pen.text(off, tx, ty, col, 12.5);
+  pen.text(name, tx, ty + 15 * u, pal.dim, 10.5);
+  pen.text(rng, tx, ty + 28 * u, pal.dim, 10.5);
+  if (tl) pen.text(tl, tx, ty + 41 * u, pal.main, 10.5);
+  f.occ.add(tx - hw, ty - 8 * u, tx + hw, ty + below, 1);
 }
 
 /** Newest live player missile guiding on `targetId`. */

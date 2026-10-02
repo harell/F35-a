@@ -2,6 +2,8 @@
  * HUD and menu readability at 844×390 (issue #62, polish 4/5 of epic #84):
  *  - Defend: the strikers carry a STRK tag on every display (contacts, target box, TSD, tactical map),
  *    the escort doesn't, and the primary objective counts the strikers left ("STRIKERS n");
+ *  - the off-screen target cue's text (angle-off, type, range) never prints over the speed / altitude
+ *    columns, the DLZ or another HUD text, whichever way the target lies;
  *  - a civil contact's CIV label never prints on the touch controls (GUN, CMS, FIRE, throttle, stick);
  *  - the cockpit PCD's TSD and RWR corner readouts ("10 NM", "BULL 005/6", "2 EMIT") are at least
  *    12 px tall on the 844×390 screen (they were 9–10 px, and look smaller on the tilted panel).
@@ -18,6 +20,8 @@ import { buildMock } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas, overlaps, textBox } from '../src/hud/dev/fakeCanvas';
 import { pcdScreenRect } from '../src/hud/cockpit/geometry';
 import { PCD_W } from '../src/hud/cockpit/pcd';
+import { speedColumnBottom } from '../src/hud/hmd/zones';
+import type { HudFrame } from '../src/hud/hmd/frame';
 import type { MissionDef } from '../src/core/contracts';
 import { buildInstantMissionSeeded } from '../src/missions';
 import { entityLabel, trackLabel, trackShort } from '../src/hud/hmd/format';
@@ -194,4 +198,68 @@ describe('labels stay off the touch controls at 844×390', () => {
       });
     }
   }
+});
+
+describe('the off-screen target cue keeps clear of the HMD text', () => {
+  installPath2D();
+  for (const view of ['hud', 'cockpit'] as CameraMode[]) {
+    it(`${view}: no text overlap with the target 70° off the nose in 16 directions`, () => {
+      const W = 844;
+      const H = 390;
+      const bad: string[] = [];
+      for (let a = 0; a < 16; a++) {
+        const mock = buildMock('offscreen');
+        const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+        const hud = createHud(canvas, mock.events);
+        hud.resize(W, H, 1);
+        const p = mock.player;
+        const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+        camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+        camera.quaternion.copy(p.quaternion);
+        camera.updateMatrixWorld();
+        camera.updateProjectionMatrix();
+        const t = mock.world.getEntity(p.radar.designatedId!)!;
+        const ang = (a / 16) * Math.PI * 2;
+        const dir = new Vector3(Math.sin(ang) * Math.sin(1.2), Math.cos(ang) * Math.sin(1.2), -Math.cos(1.2)).applyQuaternion(p.quaternion);
+        const ctx: FrameContext = {
+          dt: 1 / 30,
+          time: 0,
+          world: mock.world,
+          player: p,
+          camera,
+          viewMode: view,
+          focusId: p.id,
+          mission: mock.mission,
+          settings: { ...DEFAULT_SETTINGS },
+          quality: { ...QUALITY_PRESETS.medium },
+          paused: false,
+          screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+        };
+        for (let i = 0; i < 3; i++) {
+          fake.reset();
+          t.position.copy(p.position).addScaledVector(dir, 9000);
+          hud.update(ctx);
+        }
+        const tx = fake.texts.filter((x) => x.text.trim());
+        expect(tx.some((x) => x.text.endsWith('°'))).toBe(true);
+        for (let i = 0; i < tx.length; i++) {
+          for (let j = i + 1; j < tx.length; j++) {
+            if (overlaps(textBox(tx[i]), textBox(tx[j]))) bad.push(`${a}: "${tx[i].text}" x "${tx[j].text}"`);
+          }
+        }
+      }
+      expect(bad).toEqual([]);
+    });
+  }
+});
+
+describe('the speed column reservation', () => {
+  it('covers the THR line, and SPD BRK while the speed brake is out', () => {
+    // rows: box (±11u), Mach at +0.75 line, G, max G, AoA, THR at +4.75 line, SPD BRK at +5.75 line
+    const L = { boxY: 200, u: 1, line: 15 };
+    const frame = (airbrake: boolean) => ({ L, p: { input: { airbrake }, flight: { surfaces: { airbrake: 0 } } } }) as unknown as HudFrame;
+    const row = (k: number) => L.boxY + 11 + k * L.line + 6.5; // bottom of a 12 px row
+    expect(speedColumnBottom(frame(false))).toBeGreaterThanOrEqual(row(4.75));
+    expect(speedColumnBottom(frame(true))).toBeGreaterThanOrEqual(row(5.75));
+  });
 });
