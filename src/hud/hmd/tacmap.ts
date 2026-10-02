@@ -14,6 +14,7 @@ import { AKL } from '../../core/auckland';
 import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/aucklandLinz';
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
 import type { AnyEntity } from '../../sim/entities';
+import { isMissileBoatLive } from '../../sim/boats';
 import { AIRCRAFT_LABEL, GROUND_LABEL, NumText, SAM_LABEL } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
@@ -219,6 +220,12 @@ function airLabel(label: string, altM: number): string {
   return s;
 }
 const edgeRange = new NumText(0, '', ' NM');
+const launchTxt: string[] = [];
+/** "LAUNCH 12": a missile boat's countdown on the tac map (cached, no per-frame strings). */
+function launchLabel(timer: number): string {
+  const n = Math.max(0, Math.ceil(timer));
+  return (launchTxt[n] ??= `LAUNCH ${n}`);
+}
 const samOff = new Map<string, string>();
 function samLabel(type: keyof typeof SAM_LABEL, on: boolean): string {
   const l = SAM_LABEL[type] ?? 'SAM';
@@ -398,6 +405,22 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     }
     if (s.id === p.radar.designatedId || s.id === p.radar.lockedId) highlight(f, pt.x, pt.y, 12 * u, s.id === p.radar.lockedId);
     if (onMap(pt.x, pt.y, R)) picks.add(s.id, pt.x, pt.y, 10 * u);
+  }
+
+  /* missile boats' launch rings (#79): solid and blinking, with the seconds left, while one counts down */
+  for (const gt of world.ground) {
+    const strike = gt.boat?.strike;
+    if (!strike || !isMissileBoatLive(gt, p.team) || (!gt.known && !hasContact(f, gt.id))) continue;
+    tacProject(proj, gt.position.x, gt.position.z, pt);
+    const rr = strike.range * k;
+    if (pt.x + rr < 0 || pt.x - rr > L.W || pt.y + rr < 0 || pt.y - rr > L.H) continue;
+    const counting = strike.timer >= 0;
+    pen.begin();
+    pen.circle(pt.x, pt.y, rr);
+    pen.setDash(counting ? 'solid' : 'dash');
+    pen.strokePlain(withAlpha(pal.danger, counting && blink(f, 2.5) ? 1 : 0.6), counting ? 2 : 1.1);
+    pen.setDash('solid');
+    if (counting) pen.text(launchLabel(strike.timer), pt.x, pt.y - 14 * u, pal.danger, 10.5);
   }
 
   /* route + objective markers */

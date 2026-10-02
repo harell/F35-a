@@ -20,6 +20,7 @@
  */
 import { Vector3 } from 'three';
 import { wrapPi } from '../core/math';
+import type { Team } from '../core/types';
 import type { SimWorld } from './api';
 import { GroundTargetEntity, MissileEntity, type AnyEntity, type SamSiteEntity } from './entities';
 import { setQuatFromHPR } from './flight/attitude';
@@ -145,6 +146,15 @@ export function makeBoat(e: BoatEntity, o: BoatOptions = {}): BoatState {
 /** Is this entity a fast boat this module sails? */
 export function isBoat(e: AnyEntity): e is BoatEntity {
   return (e.kind === 'ground' || e.kind === 'sam') && !!e.boat;
+}
+
+/**
+ * A live missile boat hostile to `team` that can still launch (a Kowsar left or a countdown
+ * running): the TSD and the tac map draw its launch ring.
+ */
+export function isMissileBoatLive(g: GroundTargetEntity, team: Team): boolean {
+  const st = g.boat?.strike;
+  return !!st && g.alive && g.team !== team && g.team !== 'neutral' && (st.missiles > 0 || st.timer >= 0);
 }
 
 /** The Kowsar a missile boat fired: target and launching boat. */

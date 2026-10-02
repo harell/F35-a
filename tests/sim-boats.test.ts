@@ -24,6 +24,14 @@ import { groundHudName, samHudName } from '../src/missions/runtime/names';
 import { FlatTerrain } from './combat-helpers';
 import type { MissionDef } from '../src/core/contracts';
 import { missionById } from '../src/missions';
+import { PerspectiveCamera } from 'three';
+import type { FrameContext } from '../src/core/contracts';
+import { DEFAULT_SETTINGS, QUALITY_PRESETS } from '../src/core/data';
+import { GroundTargetEntity as GroundEntity } from '../src/sim/entities';
+import { makeBoat } from '../src/sim/boats';
+import { createHud } from '../src/hud/Hud';
+import { buildMock } from '../src/hud/dev/mockWorld';
+import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
 
 const DEG = Math.PI / 180;
 const DT = 1 / 60;
@@ -377,5 +385,53 @@ describe('boat presentation and mission options', () => {
     expect(badErrs.some((e) => /only a suicide boat chases/.test(e))).toBe(true);
     expect(badErrs.some((e) => /unknown group "nope"/.test(e))).toBe(true);
     expect(badErrs.some((e) => /only an AD boat moves/.test(e))).toBe(true);
+  });
+});
+
+/* ───────────────────────── the launch warning on the tac map ───────────────────────── */
+
+describe('missile boat launch ring', () => {
+  it('the tac map draws a counting-down missile boat with its seconds left; a dead one, nothing', () => {
+    installPath2D();
+    const mock = buildMock('aa');
+    const p = mock.player;
+    const boat = new GroundEntity(9_000, 'missile_boat', 'red', { radius: 9 });
+    boat.position.set(p.position.x + 3000, 0, p.position.z - 6000);
+    makeBoat(boat, { strike: { targetId: p.id, range: 6000 } });
+    boat.boat!.strike!.timer = 12.3;
+    mock.world.ground.push(boat);
+    const W = 844;
+    const H = 390;
+    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+    const hud = createHud(canvas, mock.events);
+    hud.resize(W, H, 1);
+    hud.setVisible(false);
+    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+    camera.position.copy(p.position).add(new Vector3(0, 5, 20));
+    camera.updateMatrixWorld();
+    const ctx: FrameContext = {
+      dt: 1 / 30,
+      time: 0,
+      world: mock.world,
+      player: p,
+      camera,
+      viewMode: 'tactical',
+      focusId: p.id,
+      mission: mock.mission,
+      settings: { ...DEFAULT_SETTINGS },
+      quality: { ...QUALITY_PRESETS.medium },
+      paused: false,
+      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+    };
+    const frame = (): string[] => {
+      fake.reset();
+      ctx.time += 1 / 30;
+      hud.update(ctx);
+      return fake.texts.map((t) => t.text);
+    };
+    frame();
+    expect(frame()).toContain('LAUNCH 13');
+    boat.alive = false;
+    expect(frame()).not.toContain('LAUNCH 13');
   });
 });
