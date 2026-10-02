@@ -287,6 +287,19 @@ export interface QualitySettings {
   ferries: number;
   /** LINZ railway lines (Auckland) as ballast-and-track ribbons (one draw call); off = no tracks drawn. */
   railways: boolean;
+  /**
+   * How far past its target the target camera (PiP) draws, in metres: its far plane is the camera's
+   * distance to the target plus this (the fog reaches the horizon colour there), so distant terrain,
+   * the city and scenery are culled from the second pass. 0 = the main camera's far plane (the whole
+   * scene again).
+   */
+  targetCamRange: number;
+  /**
+   * The target camera draws the static scenery detail too (city, roads and rail, airfield buildings,
+   * tree / house scatter, night lights and their reflections: EnvironmentApi.targetCamOmit). Off = the
+   * PiP shows the target over terrain, water, sky and clouds only.
+   */
+  targetCamScenery: boolean;
 }
 
 export type ControlScheme = 'stick' | 'tilt';

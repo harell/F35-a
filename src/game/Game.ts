@@ -712,7 +712,9 @@ export class Game {
     this.renderer.render(s.scene, s.rig.camera);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
     // target camera window (rect + target from the HUD's last frame; the HUD draws its chrome next)
-    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far);
+    // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
+    const q = this.quality;
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, q.targetCamScenery ? undefined : s.env.targetCamOmit);
     this.hud.update(ctx2);
     this.audio.update(ctx2);
   }

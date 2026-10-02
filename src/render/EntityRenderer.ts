@@ -294,13 +294,17 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       playerVisible = visible;
     },
 
-    prepareView(camPos: Vector3) {
+    prepareView(camPos: Vector3, maxDist?: number) {
       const ctx = fctx;
       if (!ctx) return;
       const t = ctx.time;
+      // (+200 m: a big airframe straddling the far plane is clipped by it, not dropped)
+      const max2 = maxDist === undefined ? Infinity : (maxDist + 200) ** 2;
       for (const ac of world.aircraft) {
         const tr = aircraft.get(ac.id);
-        if (tr) tr.v.root.visible = tr.v.update(ac, t, 0, camPos, lodCfg, env.isNight);
+        if (!tr) continue;
+        // (update() sets every aircraft's visibility again for the main camera)
+        tr.v.root.visible = ac.position.distanceToSquared(camPos) <= max2 && tr.v.update(ac, t, 0, camPos, lodCfg, env.isNight);
       }
       for (const m of world.missiles) missiles.get(m.id)?.v.update(m, t, camPos);
       for (const s of world.sams) sams.get(s.id)?.v.update(s, t, 0, camPos, s.type === 'sa10' ? groundFar * 1.4 : groundFar);

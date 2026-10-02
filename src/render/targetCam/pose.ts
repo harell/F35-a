@@ -72,6 +72,23 @@ export const SHIP_FRAMING = {
 /** Directions sampled around a ship to find open water for the orbit. */
 const SHIP_RING = 32;
 
+/** Never shorter than this far plane (m), however close the framing (a SAM site is framed from ~15 m). */
+export const TARGET_CAM_MIN_FAR = 1_500;
+
+/**
+ * Far plane of the target camera (m). With a `range` (QualitySettings.targetCamRange, low quality) the
+ * pass stops `range` metres past the target, so the distant terrain, the city and scenery beyond it are
+ * frustum-culled instead of being drawn a second time; the fog reaches the horizon colour at the far
+ * plane, so the cut reads as haze. Never longer than the main camera's far plane.
+ * @param mainFar   far plane of the main camera
+ * @param distance  camera-to-target distance (the framing distance)
+ * @param range     metres drawn past the target; 0 (or less) = the main camera's far plane
+ */
+export function targetCamFar(mainFar: number, distance: number, range: number): number {
+  if (!(range > 0)) return mainFar;
+  return Math.min(mainFar, Math.max(TARGET_CAM_MIN_FAR, distance + range));
+}
+
 /** Minimal entity shape the pose needs (aircraft / SAM / ground). */
 export interface CamTarget {
   readonly kind: 'aircraft' | 'sam' | 'ground' | 'missile' | 'decoy';
