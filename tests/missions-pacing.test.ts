@@ -12,7 +12,11 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
+import { DIFFICULTIES } from '../src/core/data';
+import type { Difficulty } from '../src/core/types';
+import { scaledCount } from '../src/missions/runtime/spawner';
 import { runPlaythrough } from './missions-bot';
+import { flatLand, harness, killGroup, shieldPlayer, type Harness } from './missions-helpers';
 import { MAX_DEAD_STRETCH, deadStretchText, deadStretches, longestDeadStretch, pacingEventTimes } from './missions-pacing';
 
 describe('pacing: dead stretches in the bot event log (#59)', () => {
@@ -99,4 +103,56 @@ describe('pacing: c02 and c08 have no dead stretch over 90 s (#59)', () => {
   });
 
   it.todo('c04: no dead stretch over 90 s on Pilot seed 0 (after #58; Pilot seed 0 was 141 s, 86–227 s)');
+});
+
+// What Darkstar's c08 MiG alert (t_pace_alert) says must be what the mission does. The first wording,
+// "Two MiG-29s on alert: they launch when the ships go down", was false twice over (review, #59):
+// sinking the ships ends the mission in the same tick, so the MiGs never launch then, and Ace flies 3.
+describe('pacing: c08\'s MiG alert call says what the mission does (#59)', () => {
+  const c08 = missionById('c08')!;
+  const alert = c08.script.triggers?.find((t) => t.id === 't_pace_alert')?.actions.find((a) => a.kind === 'radio');
+  const alertText = alert?.kind === 'radio' ? alert.text : '';
+  // no SAM sees through this terrain: the tests are about the spawn rule, not about surviving the SA-10
+  const blind: TerrainQuery = { ...flatLand(), lineOfSight: () => false };
+  /** Park Viper at its start, low and unharmed, while the mission clock runs. */
+  const hold = (h: Harness) => () => {
+    const p = h.world.player!;
+    p.position.set(c08.player.x, 100, c08.player.z);
+    shieldPlayer(h);
+  };
+  const migs = (h: Harness) => h.world.aircraft.filter((a) => a.groupId === 'migs');
+
+  it('sinking the ships ends the mission in the same tick: no MiG launches then', () => {
+    const h = harness(c08, 'pilot', undefined, blind);
+    const heardAt: number[] = [];
+    h.events.on('radio', (r) => {
+      if (r.text === alertText) heardAt.push(h.world.time);
+    });
+    h.run(50, hold(h));
+    expect(heardAt, 'the alert call plays once, from 40 s').toHaveLength(1);
+    expect(heardAt[0]).toBeGreaterThanOrEqual(40);
+    killGroup(h, 'landing');
+    h.run(10, hold(h));
+    expect(h.runner.state).toBe('success');
+    expect(migs(h)).toHaveLength(0);
+  });
+
+  it('the ships still afloat at 300 s: the MiGs launch ("take too long and they launch")', () => {
+    const h = harness(c08, 'pilot', undefined, blind);
+    h.run(298, hold(h));
+    expect(h.runner.state).toBe('running');
+    expect(migs(h)).toHaveLength(0);
+    h.run(4, hold(h));
+    expect(h.runner.state).toBe('running');
+    expect(migs(h).length).toBeGreaterThan(0);
+  });
+
+  it('the call ties the launch to time, not to the ships sinking, and names no count (2 MiGs up to Veteran, 3 on Ace)', () => {
+    expect(alertText).toMatch(/MiG-29s on alert/);
+    expect(alertText).not.toMatch(/ships (go|are|get) (down|sunk|hit)|when the ships/i);
+    const group = c08.script.groups.find((g) => g.id === 'migs')!;
+    const counts = (Object.keys(DIFFICULTIES) as Difficulty[]).map((d) => scaledCount(group, DIFFICULTIES[d].enemyCountScale));
+    expect(new Set(counts)).toEqual(new Set([2, 3]));
+    expect(alertText).not.toMatch(/\b(one|two|three|four|a pair of|\d+) MiG/i);
+  });
 });
