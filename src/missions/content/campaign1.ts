@@ -7,6 +7,7 @@
  * always military; the CBD, Sky Tower and Harbour Bridge are things you protect.
  */
 import type { MissionDef } from '../../core/contracts';
+import type { Condition } from '../schema';
 import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, fighterSweep, flight, mission, runwayPoint, site, target, wingmen } from './common';
 
 const DS = 'DARKSTAR';
@@ -78,6 +79,13 @@ export const C01: MissionDef = mission({
 
 const c02Start = { x: -6000, z: -14000, altitude: 4500, heading: 70, speed: 240 };
 const home = { kind: 'area', who: { group: 'kiwi' }, x: P.whenuapai.x, z: P.whenuapai.z, radius: 5000 } as const;
+/**
+ * Kiwi is safe: it has made it home to Whenuapai AND every fighter chasing it is splashed or driven
+ * off. Home alone was free (playtest 2026-10-02, 2.3-c, issue #57): Kiwi's short route got it there
+ * at ~100 s, before the hunters could reach it, and a Kiwi jet shot down afterwards cost nothing
+ * while the mission ran on forever. Now the protect stays live until the chase is over.
+ */
+const kiwiSafe: Condition = { kind: 'all', of: [{ kind: 'trigger', id: 't_home' }, { kind: 'objective', id: 'o_bandits', state: 'complete' }] };
 
 export const C02: MissionDef = mission({
   id: 'c02',
@@ -92,7 +100,7 @@ export const C02: MissionDef = mission({
     'The enemy has noticed. DARKSTAR has a pair of MiG-29s closing on Kiwi from the north-east, and Flankers are spinning up on Waiheke. Kiwi cannot fight back.',
     'Meet them over the Gulf, kill the pursuers and bring both jets home to Whenuapai. If Kiwi goes down, the mission goes with it.',
   ],
-  recommendedLoadout: 'a2a_stealth',
+  recommendedLoadout: 'a2a_beast',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
   player: c02Start,
   script: {
@@ -122,9 +130,9 @@ export const C02: MissionDef = mission({
       flight('flankers', 'su27', 2, { x: 33000, z: -9000 }, 7000, 275, 250, 'interceptor', { skillOffset: -0.05, maxCount: 2, spawn: { kind: 'time', t: 80 }, task: { kind: 'attack_group', group: 'kiwi' } }),
     ],
     objectives: [
-      { id: 'o_kiwi', kind: 'protect', group: 'kiwi', minSurvivors: 1, until: home, label: 'Get Kiwi flight home to Whenuapai', primary: true },
+      { id: 'o_kiwi', kind: 'protect', group: 'kiwi', minSurvivors: 1, until: kiwiSafe, label: 'Get Kiwi flight home to Whenuapai', primary: true },
       { id: 'o_bandits', kind: 'destroy', groups: ['hunters', 'flankers'], label: 'Splash the fighters chasing Kiwi', primary: true },
-      { id: 'o_both', kind: 'protect', group: 'kiwi', minSurvivors: 2, until: home, label: 'Bring both Kiwi jets home', primary: false },
+      { id: 'o_both', kind: 'protect', group: 'kiwi', minSurvivors: 2, until: kiwiSafe, label: 'Bring both Kiwi jets home', primary: false },
     ],
     waypoints: [
       { id: 'wp_meet', label: 'Rendezvous', kind: 'nav', x: 7000, z: -14500, altitude: 5000 },
@@ -132,7 +140,15 @@ export const C02: MissionDef = mission({
     ],
     triggers: [
       { id: 't_flankers', when: { kind: 'time', t: 78 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. More trade: Flankers airborne off Waiheke, vectoring on Kiwi.' }] },
-      { id: 't_home', when: home, actions: [{ kind: 'radio', from: 'Kiwi 1', text: "Kiwi's home. Viper, we owe you a beer." }] },
+      {
+        id: 't_home',
+        when: home,
+        actions: [
+          { kind: 'radio', from: 'Kiwi 1', text: "Kiwi's home, holding over the field. Viper, keep them off us till they're gone." },
+          // hold over the field (at the end of its route the flight would head back out over the Gulf)
+          { kind: 'retask', group: 'kiwi', task: { kind: 'patrol', x: P.whenuapai.x, z: P.whenuapai.z, radius: 3000, altitude: 1200 } },
+        ],
+      },
       {
         id: 't_kiwi_hit',
         when: { kind: 'group_destroyed', group: 'kiwi', count: 1 },

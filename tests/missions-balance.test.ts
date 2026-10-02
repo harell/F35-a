@@ -4,9 +4,17 @@
  *  - c10 'Night Harbour' was 0/2 on Pilot (Su-27 sweep R-27s at 137/159 s) and failed on Recruit;
  *  - c07 'Mainstay' on Veteran/Ace was an unavoidable Su-35 R-77 kill at 51–58 s.
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
+ *
+ * Issue #57 (playtest 2026-10-02): the Pilot band (≥ 75 % over 6 seeds) in c02, c09 and t03, and no
+ * free wins in c02 / c09 for a player parked far from the fight.
  */
 import { describe, expect, it } from 'vitest';
-import { buildInstantMissionSeeded, missionById, terrainPadsFor } from '../src/missions';
+import { EventBus } from '../src/core/events';
+import { DIFFICULTIES } from '../src/core/data';
+import { buildInstantMissionSeeded, createMissionRunner, missionById, terrainPadsFor } from '../src/missions';
+import { createSimWorld } from '../src/sim/World';
+import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
+import { createAiBrain } from '../src/ai';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -122,6 +130,75 @@ describe('i2: MissionBot playthroughs (real World / Combat / AI, 3 seeds)', () =
     for (const seed of [1, 2, 3]) {
       const r = runPlaythrough('c07', 'veteran', seed, terrainFor('c07'), { maxT: 80 });
       expect(r.state === 'failed' && r.t < 80, `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * A player parked far from the fight with no shot fired (the playtest's exploit charter): real AI and
+ * combat on the real terrain, seeded like runPlaythrough, the player pinned at (-35, 13, 35) km and kept
+ * fuelled and unhurt, so only the friendlies and the enemy act.
+ */
+function parkedRun(id: string, diff: Difficulty, seed: number, maxT: number) {
+  const def = missionById(id)!;
+  const events = new EventBus();
+  const d = DIFFICULTIES[diff];
+  const world = createSimWorld({ terrain: terrainFor(id), difficulty: d, events, combat: createCombatSystemSeeded(seed) });
+  const runner = createMissionRunner({ ...def, seed: def.seed + seed * 101 }, { createAi: createAiBrain, difficulty: d, events });
+  runner.setup(world, def.recommendedLoadout);
+  const p = world.player!;
+  const fuel = p.flight.fuel;
+  const completed = new Map<string, number>();
+  events.on('objective', (e) => {
+    if (e.state === 'complete' && !completed.has(e.id)) completed.set(e.id, world.time);
+  });
+  for (let i = 0; i < maxT * 60 && runner.state === 'running'; i++) {
+    p.position.set(-35000, 13000, 35000);
+    p.health = p.maxHealth;
+    p.flight.fuel = fuel;
+    world.step(1 / 60);
+    runner.update(world, 1 / 60);
+  }
+  const result = runner.state !== 'running' ? runner.result(world) : null;
+  return { state: runner.state, t: world.time, alive: p.alive, shots: p.shotsFired, reason: result?.reason ?? '', completed, objectives: runner.objectives };
+}
+
+describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)', () => {
+  // the sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=c02,c09,t03 --diffs=recruit,pilot --seeds=6
+  // (was c02 4/6, c09 4/6, t03 2/6 on Pilot; Recruit 6/6 each)
+  for (const id of ['c02']) {
+    it(`${id} is won on Recruit and on Pilot in ≥ 5 of 6 seeds`, { timeout: 300_000 }, () => {
+      for (const diff of ['recruit', 'pilot'] as const) {
+        const r = wins(id, diff, [0, 1, 2, 3, 4, 5]);
+        expect(r.won, r.log.join('\n')).toBeGreaterThanOrEqual(5);
+      }
+    });
+  }
+});
+
+describe('issue #57: c02 Shepherd — Kiwi has to be protected for real', () => {
+  it('Kiwi is safe only when it is home AND the fighters chasing it are dealt with', () => {
+    const def = missionById('c02')!;
+    for (const id of ['o_kiwi', 'o_both']) {
+      const o = def.script.objectives.find((x) => x.id === id)!;
+      expect(o.kind).toBe('protect');
+      const until = o.kind === 'protect' ? o.until : undefined;
+      expect(until?.kind, id).toBe('all');
+      expect(until?.kind === 'all' ? until.of : [], id).toContainEqual({ kind: 'objective', id: 'o_bandits', state: 'complete' });
+    }
+    expect(def.recommendedLoadout).toBe('a2a_beast');
+  });
+
+  it('parked 50 km away: the protect is never credited, and the mission ends when Kiwi is shot down (round 2, 2.3-c)', { timeout: 120_000 }, () => {
+    for (const diff of ['recruit', 'pilot'] as const) {
+      const r = parkedRun('c02', diff, 1, 3000);
+      const msg = `${diff}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives.map((o) => `${o.id}=${o.state}`).join(' ')}`;
+      expect(r.shots, msg).toBe(0);
+      expect(r.completed.has('o_kiwi'), msg).toBe(false);
+      expect(r.state, msg).toBe('failed');
+      expect(r.alive, msg).toBe(true);
+      expect(r.objectives.find((o) => o.id === 'o_kiwi')?.state, msg).toBe('failed');
+      expect(r.t, msg).toBeLessThan(3000);
     }
   });
 });
