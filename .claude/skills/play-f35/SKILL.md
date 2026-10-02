@@ -31,11 +31,12 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Know if a mission is winnable / too easy / harder after a change | `npx vite-node tools/playtest/bot-sweep.ts -- --missions=c04,c09 --diffs=recruit,pilot --seeds=3` | ~3–5 s per run, parallel over cores (12 runs in ~17 s) |
 | See why a bot run lost, or the pacing (event log, loss cause, dead stretches) | same, plus `--log --json=<file>` (fills `events`; `--log` also writes each run's longest dead stretch to the JSON row's `dead` field and prints a pacing table: each mission's longest stretch and every run over 90 s, from `tests/missions-pacing.ts`); `--nojitter` for a clean repro | same |
 | Balance of one loadout (e.g. the StormBreaker) | same, plus `--loadout=strike_sdb2` (missions that don't allow it show `skip`) | same |
-| Sweep the whole campaign | same, `--missions=campaign --diffs=recruit,pilot,veteran,ace --json=<file>` | 144 runs ≈ 2–3 min |
+| Sweep the whole campaign | same, `--missions=campaign --diffs=recruit,pilot,veteran,ace --json=<file>`. Groups: `campaign` is Operation Southern Cross only (c01–c12); `irgc` is the IRGC campaign; `campaigns` is every campaign; `training`; `all` is every campaign plus training | 144 runs ≈ 2–3 min |
 | See a mission at minute 3 without flying there | `node tools/playtest/browser-run.mjs --mission=c09 --at=0,60,180` (needs the dev server, below) | load ~7 s + ~1 s per 3 min of game time + ~4.5 s per screenshot |
 | Smoke or draw-call baseline over many missions | `browser-run.mjs --missions=c01,c02,… --at=0,120 --shots=0 --seed=7` (one page, `fly()` per mission; `--seed` makes reruns read the same calls) | ~23 s per mission, ~2× faster than a page load each |
 | Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `c01`–`c12`, `g01` (IRGC), `t01`–`t03`, `ia_<mode>_auckland` (Auckland is the only theatre) | free |
 | Read the game state (objectives, player, counts, draw calls) | `window.__f35.state()` in `page.evaluate` | free |
+| Put the jet somewhere (over a landmark, behind a drone, at the map edge) | `window.__f35.place('skytower', 600, 0, 90, 150)` (an `AKL` place id) or `place(x, alt, z, headingDeg, speed)`: level and trimmed by the flight model, so no overstress | free |
 | Fly with scripted inputs (stall, high-g, low level) | `window.__f35.controls({pitch:1, throttle:1})`, `null` to clear; `autopilot(false)` first | free |
 | Let the AI fly the jet | `window.__f35.autopilot(true, role)` (role: `fighter`, `wingman`, `interceptor`) | free |
 | Skip ahead N seconds of game time | `window.__f35.simulate(N)` (fixed 60 Hz steps, no rendering; stops when the mission ends) | ~0.4 s per game minute |
@@ -94,4 +95,9 @@ npx vite --config vite.e2e.config.ts --port 5190 &       # stable dev server for
 - 2026-10-02: One page with `fly()` per mission smoked 24 missions in 559 s under load. A page load per mission took about 21 min.
 - 2026-10-02: The game reads taps (and polls input) once per rendered frame, and a SwiftShader frame takes 0.3–1 s. After a CDP tap wait for two `requestAnimationFrame`s (`settle()` in `e2e/ui-touch.mjs`) before reading the result, never a fixed 100 ms (#71).
 - 2026-10-02: A held sim must not take player controls from the frame loop: frames before `autopilot(true)` left a frame-count-dependent input on the jet and seeded runs diverged within 0.5 s (#66).
+- 2026-10-03: Prove what the HUD draws with text capture (`--text`, or wrap `fillText` as browser-run does) and `state()` dumps, not screenshots. Under load a screenshot took 14–58 s, and an image costs a reviewer far more tokens than the text.
+- 2026-10-03: `simulate()` stops at the mission's end, so whatever plays after a failure (the Sky Tower falling in the PiP) can't be fast-forwarded. Look at the first frame after the end, or render real frames.
+- 2026-10-03: `fly()` returns before the new mission's settings apply. Read `state()` after a rendered frame, or the difficulty can still be the old one.
+- 2026-10-03: A driver's own `events.on(…)` listener that throws after the mission ends (its world is gone) shows up as a page error. It isn't the game's.
+- 2026-10-03: The cloud container can restart mid-run. Worktrees and commits survive, but background agents and dev servers don't: resume an agent with SendMessage (it keeps its context) and restart the servers.
 - 2026-10-02: Under SwiftShader a quick CDP tap on a long-press button (CAM) can fire its long press: the 480 ms timer is wall-clock and the touchEnd ack waits for a frame. Send such a tap as `pointerdown` + `pointerup` from one `page.evaluate` (ui-touch does for CAM), and set the view with `setView()` when a check needs a given view.
