@@ -264,6 +264,24 @@ describe('Shahed-136: kills', () => {
     });
   }
 
+  it('an AIM-120 from the beam, looking down, is not notched by it (it never holds a beam on purpose)', { timeout: 30_000 }, () => {
+    let kills = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const w = makeWorld(new FlatTerrain(10), seed);
+      const d = spawnDrone(w, new Vector3(0, 0, 0), new Vector3(0, 10, -30000));
+      // 6 km abeam at 1500 m, flying west across its track: the drone sits on the clutter
+      const p = spawnPlayer(w, new Vector3(6000, 1500, -1500), (3 * Math.PI) / 2, 220);
+      w.combat.selectWeapon(p, 'aim120', w);
+      run(w, 1);
+      w.combat.designate(p, d.id, w);
+      run(w, 2.5);
+      expect(launch(w, p, 'aim120', d.id), `seed ${seed}: launched`).toBe(true);
+      run(w, 40, () => !d.alive);
+      if (!d.alive) kills++;
+    }
+    expect(kills).toBe(6); // 3 in 12 before one-way drones were exempted from the Doppler notch
+  });
+
   it('one short gun burst on target destroys it', () => {
     const w = makeWorld();
     const d = spawnDrone(w, new Vector3(0, 0, 0), new Vector3(0, 10, -30000));

@@ -69,6 +69,9 @@ export function radialSpeed(radarPos: Vector3, target: AircraftEntity): number {
 
 /** Doppler-notch depth 0..1 of `target` as seen by a radar at `radarPos` (beam × clutter). */
 export function notchDepth(ctx: CombatCtx, radarPos: Vector3, target: AircraftEntity): number {
+  // a one-way drone never holds a beam on purpose (it never reacts): no notch, like the airliners
+  // the radar track exempts (Sensors.ts radarHolds)
+  if (target.oneWay && target.alive) return 0;
   const b = beamFactor(radarPos, target);
   if (b <= 0) return 0;
   return b * clutterFactor(ctx, radarPos, target.position);
