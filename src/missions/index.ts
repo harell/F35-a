@@ -21,6 +21,8 @@ import { applyResult, loadProgressFrom, saveProgressTo, skipMission as skipMissi
 export { failStreak, markSkyTowerDown, skyTowerRuin, wasSkipped, type ProgressExtras } from './progress';
 
 export { createMissionRunner } from './MissionRunner';
+/** Hints and mission texts follow the scheme Input is actually flying (Game reports it every frame). */
+export { followActiveScheme } from './runtime/controlsText';
 export { buildInstantMission, buildInstantMissionSeeded } from './content/instant';
 export { terrainPadsFor } from './pads';
 export { validateMission } from './validate';

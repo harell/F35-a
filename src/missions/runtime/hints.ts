@@ -15,7 +15,7 @@ import { WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { evalCondition } from './conditions';
-import { currentControlPrefs, formatControls } from './controlsText';
+import { controlPrefsVersion, formatControls, savedControlPrefs, withActiveScheme } from './controlsText';
 import { aircraftHudName } from './names';
 import type { MissionState } from './state';
 import type { RearmController } from './rearm';
@@ -255,12 +255,16 @@ export class HintSystem {
   private readonly shows = new Map<string, number>();
   private readonly scriptedDone = new Set<string>();
   /** A trigger-pushed hint (overrides everything until it expires). */
-  private forced: { text: string; until: number } | null = null;
+  private forced: { text: string; raw: string; until: number } | null = null;
+  /** The current hint before its {controls}-style tokens were filled. */
+  private currentRaw = '';
   private zoneCache: ZoneLike | null = null;
   private zoneAt = -1;
 
-  /** Control scheme / handedness for {controls}-style tokens (read once per mission). */
-  private readonly prefs = currentControlPrefs();
+  /** Saved control scheme / handedness for {controls}-style tokens (read once per mission). */
+  private readonly savedPrefs = savedControlPrefs();
+  /** controlPrefsVersion() the texts were last formatted for (the live scheme can change mid-mission). */
+  private prefsVersion = controlPrefsVersion();
 
   constructor(
     private readonly s: MissionState,
@@ -279,7 +283,21 @@ export class HintSystem {
 
   /** Trigger action: show a hint now. */
   force(text: string, duration = 8): void {
-    this.forced = { text: formatControls(text, this.prefs), until: this.s.time + duration };
+    this.forced = { text: this.format(text), raw: text, until: this.s.time + duration };
+  }
+
+  /** Fill the {controls}-style tokens for the scheme the player is flying right now. */
+  private format(text: string): string {
+    return formatControls(text, withActiveScheme(this.savedPrefs));
+  }
+
+  /** Tilt fell back to the stick (or came back): re-word the hints already on screen. */
+  private followScheme(): void {
+    const v = controlPrefsVersion();
+    if (v === this.prefsVersion) return;
+    this.prefsVersion = v;
+    if (this.forced) this.forced.text = this.format(this.forced.raw);
+    if (this.current && this.currentRaw && this.currentId.startsWith('script:')) this.current = this.format(this.currentRaw);
   }
 
   clear(): void {
@@ -296,6 +314,7 @@ export class HintSystem {
       this.current = null;
       return;
     }
+    this.followScheme();
     if (this.forced) {
       if (t < this.forced.until) {
         this.current = this.forced.text;
@@ -368,7 +387,8 @@ export class HintSystem {
   }
 
   private show(id: string, text: string, duration: number): void {
-    this.current = formatControls(text, this.prefs);
+    this.currentRaw = text;
+    this.current = this.format(text);
     this.currentId = id;
     this.shownAt = this.s.time;
     this.currentDuration = duration;

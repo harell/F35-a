@@ -195,6 +195,10 @@ export const createInput: CreateInput = (root, initialSettings) => {
   const api: InputApi = {
     controls,
 
+    get activeScheme() {
+      return settings.controlScheme === 'tilt' && !tiltFallback ? 'tilt' : 'stick';
+    },
+
     update(dt, ctx) {
       const sc = ctx.screen;
       touch.relayout(sc.width, sc.height, sc.safe);

@@ -62,6 +62,7 @@ import {
   terrainPadsFor,
   markSkyTowerDown,
   skyTowerRuin,
+  followActiveScheme,
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark } from '../sim/landmarks';
@@ -603,11 +604,13 @@ export class Game {
     const s = this.session;
     if (!s) {
       this.input.update(dt, this.frameContext(dt, null));
+      this.followControlScheme();
       return;
     }
 
     const ctx = this.frameContext(dt, s);
     this.input.update(dt, ctx);
+    this.followControlScheme();
 
     if (!this.paused) {
       // Player controls → sim
@@ -667,6 +670,12 @@ export class Game {
     s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far);
     this.hud.update(ctx2);
     this.audio.update(ctx2);
+  }
+
+  /** Tilt chosen but no orientation data: Input flies the stick, so say so and re-word the hints. */
+  private followControlScheme(): void {
+    const toast = followActiveScheme(this.settings.controlScheme, this.input.activeScheme);
+    if (toast) this.ui.toast(toast);
   }
 
   private handleTap(x: number, y: number, s: Session): void {
