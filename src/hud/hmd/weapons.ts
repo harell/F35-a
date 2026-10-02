@@ -213,7 +213,7 @@ export function planCues(f: HudFrame): number {
         else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
         // our bomb is still guiding onto it: nothing to steer for (STEER read as "turn back for the bomb")
         else if (bi.bombAway) addCue('BOMB AWAY', 15, pal.main, 0);
-        // target outside the bomb's release cone: which way to turn (the same words a refused release shows)
+        // target outside the bomb's release cone: which way to turn
         else if (bi.offAxis) addCue(bi.steer < 0 ? 'STEER LEFT' : 'STEER RIGHT', 17, pal.warn, 0);
         else addCue('OUT OF RANGE', 15, pal.warn, 0);
       } else if (f.mode === 'hmd') {
