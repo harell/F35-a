@@ -12,7 +12,13 @@ import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import type { Difficulty } from '../src/core/types';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, missionGunAmmo, terrainPadsFor, validateMission } from '../src/missions';
-import { G01, G01_SWARM } from '../src/missions/content/irgc';
+import { G01, G01_GUN_PASS, G01_SWARM } from '../src/missions/content/irgc';
+import { evalCondition } from '../src/missions/runtime/conditions';
+import { slowGunPass } from '../src/missions/runtime/hints';
+import type { MissionState } from '../src/missions/runtime/state';
+import { SHAHED_SPEED } from '../src/sim/drone/oneWay';
+import { stallSpeedIas } from '../src/sim/flight/performance';
+import { AircraftEntity as AircraftEntityC } from '../src/sim/entities';
 import { REASONS } from '../src/missions/runtime/reasons';
 import { createAiBrain } from '../src/ai';
 import { createSimWorld } from '../src/sim/World';
@@ -295,5 +301,69 @@ describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runne
       expect(runner.result(world).reason, why).toBe(REASONS.skytowerLost);
       runner.dispose?.();
     }
+  });
+});
+
+describe('g01 Buzz Kill: gun pass and swarm hints', () => {
+  const KT = 1.943844;
+  const hint = (id: string) => G01.script.hints!.find((h) => h.id === id)!;
+  const state = (weapon: string, shotsFired = 0) => ({ player: { alive: true, selectedWeapon: weapon, shotsFired } }) as unknown as MissionState;
+
+  it('gives the real numbers: the Shahed\'s cruise speed, an approach speed well above the F-35\'s stall, no "throttle right back"', () => {
+    const shahedKt = SHAHED_SPEED * KT;
+    const f35 = new AircraftEntityC(1, 'f35a', 'blue');
+    // half the internal fuel (mid-mission), clean: about the measured 1 g stall (~72 m/s, ~140 kt)
+    f35.flight.fuel = AIRCRAFT_PERF.f35a.internalFuel * 0.5;
+    const stallKt = stallSpeedIas(f35) * KT;
+    expect(stallKt).toBeGreaterThan(120);
+    expect(stallKt).toBeLessThan(160);
+    // ~200 kt from behind: clear of the stall (the jet wallows below ~175 kt), closing at ~100 kt
+    expect(G01_GUN_PASS.approachKt).toBeGreaterThanOrEqual(stallKt * 1.3);
+    expect(Math.abs(G01_GUN_PASS.approachKt - shahedKt - G01_GUN_PASS.closureKt)).toBeLessThanOrEqual(10);
+    const gun = hint('h_gun').text;
+    expect(gun).toContain(`~${Math.round(shahedKt / 10) * 10} kt`);
+    expect(gun).toContain(`${G01_GUN_PASS.approachKt} kt`);
+    expect(gun).toContain(`Vc ${G01_GUN_PASS.closureKt}`);
+    expect(gun).toContain(`${G01_GUN_PASS.burstFrom}–${G01_GUN_PASS.burstTo} m`);
+    expect(hint('h_overshoot').text).toMatch(/Overshot\? Pull up and come round/);
+    const all = [...G01.briefing, ...G01.script.hints!.map((h) => h.text)].join(' ');
+    expect(all).not.toMatch(/throttle right back/i);
+    expect(G01.briefing.join(' ')).toContain(`${G01_GUN_PASS.approachKt} knots`);
+  });
+
+  it('times them: the swarm hint after the first launch (missiles), the gun pass hints once the GUN is selected', () => {
+    const swarm = hint('h_swarm');
+    expect(swarm.text).toBe('After each launch the next drone is boxed: keep pressing FIRE. TGT steps through them.');
+    expect(evalCondition(swarm.when, state('aim120', 0))).toBe(false);
+    expect(evalCondition(swarm.when, state('aim120', 1))).toBe(true);
+    expect(evalCondition(swarm.when, state('gun', 3))).toBe(false);
+    for (const id of ['h_gun', 'h_overshoot']) {
+      expect(evalCondition(hint(id).when, state('aim120', 8))).toBe(false);
+      expect(evalCondition(hint(id).when, state('gun', 8))).toBe(true);
+    }
+    // the gun hint first, then what to do on an overshoot (scripted hints show once each, in order)
+    const ids = G01.script.hints!.map((h) => h.id);
+    expect(ids.indexOf('h_gun')).toBeLessThan(ids.indexOf('h_overshoot'));
+  });
+
+  it('"Too slow" keeps quiet on a gun pass (air target designated within 2 km, IAS above stall + 10 %), not when really slow', () => {
+    const p = new AircraftEntityC(1, 'f35a', 'blue');
+    const drone = new AircraftEntityC(2, 'shahed136', 'red');
+    p.position.set(0, 300, 0);
+    drone.position.set(0, 300, -800);
+    p.radar.designatedId = drone.id;
+    p.warnings.add('speed_low');
+    const s = { player: p, world: { getEntity: (id: number | null) => (id === drone.id ? drone : null) } } as unknown as MissionState;
+    const stall = stallSpeedIas(p);
+    p.flight.ias = stall * 1.2;
+    expect(slowGunPass(p, s)).toBe(true);
+    p.flight.ias = stall * 1.05; // too close to the stall: the hint stands
+    expect(slowGunPass(p, s)).toBe(false);
+    p.flight.ias = stall * 1.2;
+    drone.position.set(0, 300, -3000); // nothing close: the hint stands
+    expect(slowGunPass(p, s)).toBe(false);
+    drone.position.set(0, 300, -800);
+    p.radar.designatedId = null;
+    expect(slowGunPass(p, s)).toBe(false);
   });
 });

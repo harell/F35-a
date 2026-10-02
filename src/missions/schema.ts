@@ -21,6 +21,7 @@ import type {
   Team,
   VesselClass,
   VoiceId,
+  WeaponId,
 } from '../core/types';
 import type { WaypointKind } from '../core/contracts';
 
@@ -81,6 +82,8 @@ export type Condition =
    * 'locked' = hard (STT) lock on a hostile aircraft.
    */
   | { kind: 'player_radar'; state: 'designated' | 'locked' }
+  /** The player has this weapon selected (e.g. the GUN: down to the gun, or lining up a gun pass). */
+  | { kind: 'player_weapon'; weapon: WeaponId }
   | { kind: 'all'; of: Condition[] }
   | { kind: 'any'; of: Condition[] }
   | { kind: 'not'; of: Condition };

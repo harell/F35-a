@@ -59,6 +59,42 @@ const g01Dir = (() => {
   return { x: (G01_SWARM.start.x - TOWER.x) / d, z: (G01_SWARM.start.z - TOWER.z) / d };
 })();
 
+/**
+ * Gun pass numbers (the owner didn't know what speed to fly): the Shahed cruises at SHAHED_SPEED (51 m/s,
+ * ~100 kt); the F-35's 1 g stall is ~72 m/s IAS (~140 kt), and at 90 m/s (175 kt) it hangs at 17–19° AoA
+ * with the pipper ~100 px above the drone. Gun kills came at 100–150 m/s (195–290 kt), closing at
+ * 50–100 m/s: so about 200 kt from behind, Vc about 100 kt (the HMD's OVERSHOOT cue is Vc > 150 kt
+ * inside 1.5 km). tests/missions-g01.test.ts checks the texts against these numbers.
+ */
+export const G01_GUN_PASS = { approachKt: 200, closureKt: 100, burstFrom: 600, burstTo: 900 } as const;
+
+/**
+ * g01 hints: the plan at the start; after the first launch, how the swarm steps through the TD box (the
+ * next unengaged drone is boxed after each launch); once the GUN is selected, the speed for the pass and
+ * what to do on an overshoot.
+ */
+export const G01_HINTS: MissionDef['script']['hints'] = [
+  { id: 'h_plan', text: 'Missiles head-on at range, then the gun from behind at about 200 kt', when: { kind: 'time', t: 9 }, duration: 8 },
+  {
+    id: 'h_swarm',
+    text: 'After each launch the next drone is boxed: keep pressing FIRE. TGT steps through them.',
+    when: { kind: 'all', of: [{ kind: 'player_fired', count: 1 }, { kind: 'not', of: { kind: 'player_weapon', weapon: 'gun' } }] },
+    duration: 8,
+  },
+  {
+    id: 'h_gun',
+    text: 'Shaheds cruise at ~100 kt. From behind at about 200 kt (Vc 100), short bursts at 600–900 m',
+    when: { kind: 'player_weapon', weapon: 'gun' },
+    duration: 10,
+  },
+  {
+    id: 'h_overshoot',
+    text: 'Overshot? Pull up and come round. Not below 175 kt: the pipper rides high',
+    when: { kind: 'player_weapon', weapon: 'gun' }, // (follows h_gun: scripted hints show once each, in order)
+    duration: 8,
+  },
+];
+
 /** The player: on CAP over the upper Waitematā, nose east-south-east; the swarm is about 22 km away, 20° right. */
 const g01Start = { x: -9000, z: -5500, altitude: 3000, heading: 100, speed: 230, fuel: 0.9 };
 
@@ -73,7 +109,7 @@ export const G01: MissionDef = mission({
   briefing: [
     '13:40. An IRGC mother ship, a converted container ship lying off the Hauraki Gulf, has launched a swarm of ten Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the Sky Tower. Impact in under four minutes.',
     'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are ten of them and you carry eight missiles at most. The gun is not optional today: you have extra rounds.',
-    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. From behind they are so slow you will overshoot unless you pull the throttle right back. Kill them beyond 150 m or the warhead blast will hit you too.',
+    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 600 to 900 m. Don\'t go much slower: below 175 knots the jet wallows nose-high and the pipper sits above the drone. Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
   ],
   recommendedLoadout: 'a2a_beast',
@@ -114,7 +150,7 @@ export const G01: MissionDef = mission({
       { id: 't_close', when: { kind: 'area', who: { group: 'shaheds' }, x: TOWER.x, z: TOWER.z, radius: 4000 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Shaheds four kilometres from the tower. Get on them!', priority: 2 }] },
       { id: 't_half', when: { kind: 'group_destroyed', group: 'shaheds', count: 5 }, actions: [{ kind: 'radio', from: DS, text: 'Half the swarm is down. Keep going, Viper.' }] },
     ],
-    hints: [{ id: 'h_plan', text: 'Missiles head-on at range, then the gun from behind: throttle right back', when: { kind: 'time', t: 9 }, duration: 8 }],
+    hints: G01_HINTS,
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Ten Shaheds over Pakuranga, heading for the Sky Tower. Weapons free.', priority: 2 }],
     successText: 'Swarm destroyed. The tower is still standing. Good shooting, Viper.',
   },

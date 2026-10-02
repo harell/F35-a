@@ -14,6 +14,7 @@
 import { WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
+import { stallSpeedIas } from '../../sim/flight/performance';
 import { evalCondition } from './conditions';
 import { controlPrefsVersion, formatControls, savedControlPrefs, withActiveScheme } from './controlsText';
 import { aircraftHudName } from './names';
@@ -53,6 +54,20 @@ function remaining(p: AircraftEntity, w: WeaponId): number {
 function hostileDesignated(p: AircraftEntity, s: MissionState): AnyEntity | null {
   const e = s.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
   return e && e.alive && isHostile(p.team, e.team) ? e : null;
+}
+
+/** Range (m) inside which flying slow behind a designated air target is a gun pass, not a mistake. */
+export const SLOW_PASS_RANGE = 2_000;
+
+/**
+ * Slow on purpose: a hostile aircraft designated within SLOW_PASS_RANGE (a gun pass on a ~100 kt
+ * Shahed) and the IAS still 10 % above the 1 g stall, not stalled. The "Too slow" hint keeps quiet then
+ * (playtest: it fired through every g01 gun pass); the SPEED warning itself still sounds.
+ */
+export function slowGunPass(p: AircraftEntity, s: MissionState): boolean {
+  if (p.warnings.has('stall') || p.flight.stalled || p.flight.ias < stallSpeedIas(p) * 1.1) return false;
+  const e = hostileDesignated(p, s);
+  return !!e && e.kind === 'aircraft' && e.position.distanceTo(p.position) < SLOW_PASS_RANGE;
 }
 
 /** Target within ±30° of the nose (the player's lock cone). */
@@ -163,8 +178,9 @@ const AUTO: AutoHint[] = [
   },
   {
     id: 'speed',
-    test(p) {
-      return p.warnings.has('speed_low') || p.warnings.has('stall') ? 'Too slow — push the THROTTLE forward and ease off the stick' : null;
+    test(p, s) {
+      if (!p.warnings.has('speed_low') && !p.warnings.has('stall')) return null;
+      return slowGunPass(p, s) ? null : 'Too slow — push the THROTTLE forward and ease off the stick';
     },
   },
   {
