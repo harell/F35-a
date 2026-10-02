@@ -267,6 +267,7 @@ export const MUNITION_DIMS: Record<MunitionId, { length: number; diameter: numbe
   aim9x: { length: 3.02, diameter: 0.127 },
   gbu31: { length: 3.88, diameter: 0.46 },
   gbu39: { length: 1.8, diameter: 0.19 },
+  gbu53: { length: 1.76, diameter: 0.18 },
   aargm: { length: 4.1, diameter: 0.254 },
   r73: { length: 2.9, diameter: 0.17 },
   r27: { length: 4.08, diameter: 0.23 },

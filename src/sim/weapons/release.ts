@@ -7,6 +7,7 @@
  *                         denied beyond 1.3 × rMax ('OUT OF RANGE') or inside rMin ('MIN RANGE')
  *  AIM-9X / R-73          IR seeker must have a target within the HMD off-boresight limit
  *  JDAM / SDB             GPS attack on the designated ground point (envelope-checked), else CCIP drop
+ *  SDB II (GBU-53)        needs a designated surface target inside the glide envelope; no CCIP
  *  AARGM-ER               needs an emitting radar in its seeker field (or a designated known SAM)
  * Internal stores: bay doors open first (0 → 1 over ~0.35 s, release at > 0.9, close ~1.5 s
  * after) — the authentic F-35 release delay. External pylons release immediately.
@@ -36,6 +37,7 @@ const CALLS: Record<StoreWeapon, { text: string; voice: VoiceId }> = {
   aim9x: { text: 'Fox Two', voice: 'p_fox2' },
   gbu31: { text: 'Rifle', voice: 'p_rifle' },
   gbu39: { text: 'Rifle', voice: 'p_rifle' },
+  gbu53: { text: 'Rifle', voice: 'p_rifle' },
   aargm: { text: 'Magnum', voice: 'p_magnum' },
 };
 
@@ -175,6 +177,20 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
       }
       break;
     }
+    case 'tri_mode': {
+      // datalinked stand-off bomb: needs a designated live surface target (civil ships too, as for
+      // the GPS bombs); no CCIP mode
+      const t = world.getEntity(requested ?? ac.radar.designatedId);
+      if (!t || !t.alive || (t.kind !== 'ground' && t.kind !== 'sam') || t.team === ac.team) return deny(ctx, ac, weapon, 'NO TARGET');
+      const horiz = Math.hypot(t.position.x - ac.position.x, t.position.z - ac.position.z);
+      const rMax = gpsMaxRange(def, ac.position.y - t.position.y, ac.velocity.length(), t.position.y);
+      if (horiz > rMax * (ac.isPlayer && world.difficulty.generousShootCues ? 1.1 : 1)) return deny(ctx, ac, weapon, 'OUT OF RANGE');
+      target = t;
+      // launch estimate comes from the launcher's track (position + velocity), see launchMunition;
+      // the point is only kept for a release that sequences through the bay doors
+      groundPoint = t.position;
+      break;
+    }
     default:
       return null;
   }
@@ -207,7 +223,9 @@ function release(
   guided: boolean,
 ): CombatMissile {
   const s = ac.stores[station];
-  const m = launchMunition(ctx, ac, mun, target, { internal: s.internal, targetPoint: groundPoint, guided });
+  // a tri-mode bomb with a live target starts from the launcher's track (it has a velocity)
+  const point = ctx.defs[mun].guidance === 'tri_mode' && target ? null : groundPoint;
+  const m = launchMunition(ctx, ac, mun, target, { internal: s.internal, targetPoint: point, guided });
   // active radar missile fired off a TWS track (no STT): silent, but coarser midcourse updates
   if (m.cdef.guidance === 'active_radar' && target && !(ac.radar.lockedId === target.id && ac.radar.emitting)) m.tws = true;
   if (m.def.category === 'aam') dasLaunchCue(ctx, ac);

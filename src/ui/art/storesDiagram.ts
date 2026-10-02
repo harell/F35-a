@@ -14,10 +14,11 @@ const SIZE: Record<Store, [number, number]> = {
   aim9x: [2.7, 0.26],
   gbu31: [3.6, 0.5],
   gbu39: [1.7, 0.24],
+  gbu53: [1.7, 0.24],
   aargm: [3.9, 0.3],
 };
 
-const AG = new Set<Store>(['gbu31', 'gbu39', 'aargm']);
+const AG = new Set<Store>(['gbu31', 'gbu39', 'gbu53', 'aargm']);
 
 interface Placed {
   weapon: Store;
@@ -41,7 +42,7 @@ export function placeStores(l: LoadoutDef): Placed[] {
   const n = bay.length;
   bay.forEach((wpn, j) => {
     const x = 0.35 + ((j + 0.5) * 0.9) / Math.max(1, n);
-    const y = (S.bayOuter[1] + S.bayInner[1]) / 2 + (wpn === 'gbu39' ? 0.6 : 0);
+    const y = (S.bayOuter[1] + S.bayInner[1]) / 2 + (wpn === 'gbu39' || wpn === 'gbu53' ? 0.6 : 0);
     for (const side of [1, -1]) out.push({ weapon: wpn, x: side * x, y, internal: true });
   });
   const pylons: [number, number][] = [S.pylonIn, S.pylonMid, S.pylonOut];

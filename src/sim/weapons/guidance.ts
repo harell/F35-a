@@ -609,9 +609,9 @@ export function steeringCommand(ctx: CombatCtx, m: CombatMissile, aMax: number, 
 /** GPS bomb law: best-glide toward the point while it is "above" the glide slope, then PN onto it. */
 function bombCommand(m: CombatMissile, v: number, aMax: number, out: Vector3): Vector3 {
   const def = m.cdef;
-  // moving target (tri-mode datalink / seeker): aim at where it will be when the bomb arrives
+  // moving target (tri-mode datalink / seeker): PN on the relative velocity, best glide toward
+  // where it will be when the bomb arrives (estVel is zero for GPS bombs)
   const moving = m.estVel.lengthSq() > 0.01;
-  if (moving) _aim.addScaledVector(m.estVel, _aim.distanceTo(m.position) / Math.max(v, 100));
   _r.subVectors(_aim, m.position);
   const horiz = Math.hypot(_r.x, _r.z);
   const h = -_r.y;
@@ -628,8 +628,10 @@ function bombCommand(m: CombatMissile, v: number, aMax: number, out: Vector3): V
     out.crossVectors(_omega, _los).multiplyScalar(def.navConstant * Math.max(vc, 0.3 * v));
     out.y += G;
   } else {
-    // best glide along the horizontal bearing to the target
-    const inv = horiz > 1e-3 ? 1 / horiz : 0;
+    // best glide along the horizontal bearing to the target (its predicted position at arrival)
+    if (moving) _r.addScaledVector(m.estVel, _r.length() / Math.max(v, 100));
+    const hz = Math.hypot(_r.x, _r.z);
+    const inv = hz > 1e-3 ? 1 / hz : 0;
     _los.set(_r.x * inv * Math.cos(glide), -Math.sin(glide), _r.z * inv * Math.cos(glide));
     out.copy(_los).addScaledVector(_vhat, -_los.dot(_vhat)).multiplyScalar(v * 1.2);
     out.y += G * Math.cos(glide);

@@ -141,6 +141,7 @@ export const STORE_DATA: Record<Exclude<WeaponId, 'gun'>, { mass: number; dragEx
   aim9x: { mass: 85, dragExt: 0.0008 },
   gbu31: { mass: 934, dragExt: 0.0036 },
   gbu39: { mass: 130, dragExt: 0.0009 },
+  gbu53: { mass: 93, dragExt: 0.0009 },
   aargm: { mass: 360, dragExt: 0.0022 },
 };
 /** Drag increment of one external pylon station (stays after its stores are released). */

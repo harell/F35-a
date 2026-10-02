@@ -955,7 +955,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       slot.pos.copy(position);
       slot.t = now();
       const cat = missile.def.category;
-      slot.size = cat === 'bomb' ? (missile.def.id === 'gbu39' ? 'medium' : 'large') : cat === 'sam' ? 'medium' : cat === 'agm' ? 'medium' : 'small';
+      slot.size = cat === 'bomb' ? (missile.def.id === 'gbu31' ? 'large' : 'medium') : cat === 'sam' ? 'medium' : cat === 'agm' ? 'medium' : 'small';
       slot.surface = reason === 'water' ? 'water' : reason === 'ground' ? 'ground' : 'air';
     }),
     events.on('destroyed', ({ entity }) => {

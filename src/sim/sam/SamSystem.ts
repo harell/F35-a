@@ -45,7 +45,7 @@ const TRACK_MEMORY = 2;
 /** Radar horizon (4/3 earth): d ≈ 4,120·(√h_antenna + √h_target) m. */
 const HORIZON_K = 4_120;
 /** Radar cross-sections of munitions for point-defence detection (m²). */
-const MUNITION_RCS: Record<string, number> = { aargm: 0.1, gbu31: 0.3, gbu39: 0.05 };
+const MUNITION_RCS: Record<string, number> = { aargm: 0.1, gbu31: 0.3, gbu39: 0.05, gbu53: 0.05 };
 
 interface PdTrack {
   /** Sim time first seen / last seen by the site radar. */

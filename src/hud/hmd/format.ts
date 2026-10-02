@@ -59,6 +59,7 @@ export const WEAPON_HUD: Record<WeaponId, string> = {
   aim9x: '9X',
   gbu31: 'JDAM',
   gbu39: 'SDB',
+  gbu53: 'SDB II',
   aargm: 'AARGM',
 };
 
@@ -68,7 +69,19 @@ export const WEAPON_IS_AG: Record<WeaponId, boolean> = {
   aim9x: false,
   gbu31: true,
   gbu39: true,
+  gbu53: true,
   aargm: true,
+};
+
+/** Bombs: the HMD shows the release cue instead of a launch-zone scale / SHOOT. */
+export const WEAPON_IS_BOMB: Record<WeaponId, boolean> = {
+  gun: false,
+  aim120: false,
+  aim9x: false,
+  gbu31: true,
+  gbu39: true,
+  gbu53: true,
+  aargm: false,
 };
 
 /** Brevity call shown briefly when the player releases a weapon. */
@@ -78,6 +91,7 @@ export const WEAPON_BREVITY: Record<WeaponId, string> = {
   aim9x: 'FOX 2',
   gbu31: 'RIFLE',
   gbu39: 'RIFLE',
+  gbu53: 'RIFLE',
   aargm: 'MAGNUM',
 };
 

@@ -101,7 +101,7 @@ export const C08: MissionDef = mission({
     'Fly the harbour at wave-top height — under the Harbour Bridge if you have the nerve — pass North Head and turn north into the channel. Pop up to about 800 feet only for the release: the GBU-39 small diameter bombs glide 1.5 km from there, so let them go the moment IN RANGE shows, then get straight back down. One SDB sinks a landing ship. MANPADS guard the Rangitoto shore: flares ready.',
   ],
   recommendedLoadout: 'sead_stealth',
-  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
+  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
   player: c08Start,
   script: {
     parTime: 540,
@@ -210,7 +210,7 @@ export const C09: MissionDef = mission({
     'Weasel flight will go after the SA-6 on the eastern end of Waiheke with AARGMs, and Hammer runs in low through the Tāmaki Strait under its radar. At least two Hammer jets have to make it back over the city.',
   ],
   recommendedLoadout: 'a2a_beast',
-  allowedLoadouts: ['a2a_beast', 'a2a_stealth', 'sead_stealth'],
+  allowedLoadouts: ['a2a_beast', 'a2a_stealth', 'sead_stealth', 'strike_sdb2'],
   player: c09Start,
   script: {
     parTime: 540,
@@ -478,7 +478,7 @@ export const C11: MissionDef = mission({
     'You are not alone. Vipers 2 and 3 set up a CAP ahead of you, west of the Grumble’s umbrella, and take on the Su-35s when they come for you. Weasel flight follows with AARGMs for the Tor — when Weasel calls Magnum, put your own weapons on the Grumble so they arrive together. Out of weapons? Rearm at Whenuapai and come back.',
   ],
   recommendedLoadout: 'sead_stealth',
-  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
+  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
   player: c11Start,
   script: {
     parTime: 540,
@@ -576,7 +576,7 @@ export const C12: MissionDef = mission({
     'Viper 2 and Viper 3 fly with you. Put a JDAM through the bunker roof, kill the Felons, and bring everyone home.',
   ],
   recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth'],
+  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
   player: c12Start,
   script: {
     parTime: 600,

@@ -155,7 +155,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'sam_gauntlet': {
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
+      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'];
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
@@ -186,7 +186,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'strike': {
       loadout = 'strike_stealth';
-      allowed = ['strike_stealth', 'strike_beast', 'sead_stealth'];
+      allowed = ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
       if (akl && !features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);

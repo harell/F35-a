@@ -204,7 +204,7 @@ export function kinematicZone(def: CombatMunitionDef, g: ZoneGeometry, out: Laun
 /* ───────────────────────── GPS glide envelope ───────────────────────── */
 
 const gpsCache = new Map<number, number>();
-const MUN_INDEX: Record<string, number> = { gbu31: 1, gbu39: 2 };
+const MUN_INDEX: Record<string, number> = { gbu31: 1, gbu39: 2, gbu53: 3 };
 
 /**
  * Max horizontal reach (m) of a GPS glide weapon released level at `speed` from `height` above

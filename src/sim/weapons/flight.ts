@@ -19,7 +19,7 @@ import { radio } from './context';
 import { pointDefensePk } from '../sam/SamSystem';
 import { SAM_INFO } from '../../core/data';
 import { STRUCTURAL_BLAST_FRACTION, destroyLandmark, firstLandmarkHit, landmarkDistance } from '../landmarks';
-import { vesselHullDistance } from '../civil/vessels';
+import { vesselHullDistance, vesselSegmentHit } from '../civil/vessels';
 import { isHostile } from '../../core/types';
 
 type EndReason = 'hit' | 'proximity' | 'ground' | 'water' | 'selfdestruct' | 'decoyed';
@@ -229,6 +229,25 @@ function stepMissile(ctx: CombatCtx, m: CombatMissile, dt: number): void {
 
   const armed = m.age >= def.armTime;
   const target = world.getEntity(m.targetId);
+
+  // ── tri-mode bomb: impact fuze on the designated target only (the long hull of a civil ship) ──
+  if (def.guidance === 'tri_mode' && target && target.alive && (target.kind === 'sam' || target.kind === 'ground')) {
+    if (target.kind === 'ground' && target.vessel) {
+      const s = vesselSegmentHit(target, _p0, m.position);
+      if (s >= 0) {
+        _pt.lerpVectors(_p0, m.position, s);
+        detonate(ctx, m, _pt, target, 'hit', 'ground');
+        return;
+      }
+    } else {
+      sweptClosest(_p0, m.position, target.position, target.position, _sweep);
+      if (_sweep.dist <= def.fuseRadius + target.radius * 0.6) {
+        _pt.lerpVectors(_p0, m.position, _sweep.s);
+        detonate(ctx, m, _pt, target, 'hit', 'ground');
+        return;
+      }
+    }
+  }
 
   // ── air-to-ground proximity (AARGM onto a site) ──
   if (armed && def.category === 'agm' && target && target.alive && (target.kind === 'sam' || target.kind === 'ground')) {
