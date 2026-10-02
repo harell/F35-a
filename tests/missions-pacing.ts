@@ -9,8 +9,9 @@
  * The log's state lines (RED / BLUE / MSL / BOT, every 5 s) are the bot's own diagnostics, not
  * something the player gets, so they never break a stretch. Log times are whole seconds.
  *
- * Used by tools/playtest/bot-sweep.ts (--log prints each run's longest stretch) and by
- * tests/missions-pacing.test.ts.
+ * Used by tools/playtest/bot-sweep.ts (--log writes each run's longest stretch to the JSON row's
+ * `dead` field and prints a pacing table: each mission's longest stretch and every run over 90 s)
+ * and by tests/missions-pacing.test.ts.
  */
 
 /** Event-log kinds that count as "something happening" for pacing. */

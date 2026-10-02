@@ -48,16 +48,20 @@ describe('pacing: dead stretches in the bot event log (#59)', () => {
   });
 });
 
-describe('pacing: c11 Grumble has no dead stretch over 90 s (#59)', () => {
-  let terrain: TerrainQuery | null = null;
-  const terrainFor = (id: string): TerrainQuery => {
-    if (!terrain) {
-      const def = missionById(id)!;
-      terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
-    }
-    return terrain;
-  };
+// One terrain per mission: it depends on the mission's seed and on its SAM and ground-target pads
+// (terrainPadsFor), so a mission must never fly on another mission's terrain.
+const terrains = new Map<string, TerrainQuery>();
+function terrainFor(id: string): TerrainQuery {
+  let t = terrains.get(id);
+  if (!t) {
+    const def = missionById(id)!;
+    t = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
+    terrains.set(id, t);
+  }
+  return t;
+}
 
+describe('pacing: c11 Grumble has no dead stretch over 90 s (#59)', () => {
   // async, yielding after every playthrough: a long synchronous stretch starves vitest's worker RPC
   // (see tests/missions-instant-balance.test.ts)
   it('logged Pilot runs, seeds 0–2 (seed 0 was 112 s waiting on a GBU-39, seed 2 169 s before the reserve scrambled)', { timeout: 300_000 }, async () => {
@@ -68,9 +72,16 @@ describe('pacing: c11 Grumble has no dead stretch over 90 s (#59)', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   });
+});
 
-  // Re-measure once the layers that are rewriting these missions land (#57 c02, #58 c04, #65 c08).
-  // Pilot seed 0 on this code: c02 124 s (131–255), c04 141 s (86–227), c08 95 s (7–102).
+// Re-measure once the layers that are rewriting these missions land (#57 c02, #58 c04, #65 c08).
+// Pilot seed 0 on this code: c02 124 s (131–255), c04 141 s (86–227), c08 95 s (7–102).
+describe('pacing: c02/c04/c08 have no dead stretch over 90 s (#59, after #57/#58/#65)', () => {
+  it('each mission flies on its own terrain', () => {
+    expect(terrainFor('c11')).toBe(terrainFor('c11'));
+    expect(terrainFor('c02')).not.toBe(terrainFor('c11'));
+  });
+
   it.todo('c02: no dead stretch over 90 s on Pilot seed 0 (after #57; the rearm trip is gone with #63)');
   it.todo('c04: no dead stretch over 90 s on Pilot seed 0 (after #58)');
   it.todo('c08: no dead stretch over 90 s on Pilot seed 0 (after #65)');

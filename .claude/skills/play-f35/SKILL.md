@@ -29,7 +29,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 | I want to… | Use | Cost on a 4-core cloud container (measured 2026-10-02; *est.* = not measured) |
 |---|---|---|
 | Know if a mission is winnable / too easy / harder after a change | `npx vite-node tools/playtest/bot-sweep.ts -- --missions=c04,c09 --diffs=recruit,pilot --seeds=3` | ~3–5 s per run, parallel over cores (12 runs in ~17 s) |
-| See why a bot run lost, or the pacing (event log, loss cause, dead stretches) | same, plus `--log --json=<file>` (fills `events`; `--log` also prints each run's longest dead stretch and a per-mission pacing table, from `tests/missions-pacing.ts`); `--nojitter` for a clean repro | same |
+| See why a bot run lost, or the pacing (event log, loss cause, dead stretches) | same, plus `--log --json=<file>` (fills `events`; `--log` also writes each run's longest dead stretch to the JSON row's `dead` field and prints a pacing table: each mission's longest stretch and every run over 90 s, from `tests/missions-pacing.ts`); `--nojitter` for a clean repro | same |
 | Balance of one loadout (e.g. the StormBreaker) | same, plus `--loadout=strike_sdb2` (missions that don't allow it show `skip`) | same |
 | Sweep the whole campaign | same, `--missions=campaign --diffs=recruit,pilot,veteran,ace --json=<file>` | 144 runs ≈ 2–3 min |
 | See a mission at minute 3 without flying there | `node tools/playtest/browser-run.mjs --mission=c09 --at=0,60,180` (needs the dev server, below) | load ~7 s + ~1 s per 3 min of game time + ~4.5 s per screenshot |
