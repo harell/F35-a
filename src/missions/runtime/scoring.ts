@@ -18,7 +18,7 @@
  * objective term is scaled down, and the grade is capped at B (share < 50 %) or C (< 25 %), so
  * S and A mean "you won this fight", not "your wingman did".
  *
- * No fight, no credit: a win where hostiles existed but the player fired nothing and killed nothing
+ * No fight, no credit: a win where hostiles existed but the player hit nothing and killed nothing
  * (the enemy was only driven off, or someone else did the killing) rates a share of 0 and an
  * accuracy of 0, so it caps at C (playtest 2026-10-02, 2.3-b: a parked Defend win graded A).
  */
@@ -89,7 +89,7 @@ export interface ScoreOutput {
   accuracy: number;
   /**
    * Player kills / (player kills + flight kills); 1 when nobody scored, except 0 when hostiles
-   * existed and the player neither fired nor killed anything (see noFight()).
+   * existed and the player neither hit nor killed anything (see noFight()).
    */
   playerShare: number;
   breakdown: { kills: number; objectives: number; time: number; accuracy: number; damage: number; friendly: number; bonus: number; waves: number };
@@ -135,11 +135,12 @@ export function contributionCap(playerShare: number): Grade {
 }
 
 /**
- * Hostiles existed but the player took no part in the fight: no shot fired and no kill. Whatever
- * won the mission (bandits driven off, the wingman's kills), it wasn't the player.
+ * Hostiles existed but the player took no part in the fight: no hit on a hostile and no kill.
+ * Whatever won the mission (bandits driven off, the wingman's kills), it wasn't the player. Counts
+ * hits, not shots: one gun burst into the air is a shot, and must not buy back the grade (#64 review).
  */
-export function noFight(i: Pick<ScoreInput, 'enemiesSpawned' | 'shotsFired' | 'kills'>): boolean {
-  return i.enemiesSpawned > 0 && i.shotsFired <= 0 && i.kills.air + i.kills.sam + i.kills.ground <= 0;
+export function noFight(i: Pick<ScoreInput, 'enemiesSpawned' | 'hits' | 'kills'>): boolean {
+  return i.enemiesSpawned > 0 && i.hits <= 0 && i.kills.air + i.kills.sam + i.kills.ground <= 0;
 }
 
 export function computeScore(i: ScoreInput): ScoreOutput {

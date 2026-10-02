@@ -1,7 +1,8 @@
 /**
  * MISSIONS — scoring and debrief follow-ups from the 2026-10-02 playtest's exploit charter (#64):
- *  - a win with no kills and no shots (bandits only driven off, or killed by someone else) grades
- *    at most C and doesn't award Untouchable (2.3-b: a parked Defend win got A, ACE ×2, Untouchable);
+ *  - a win with no kills and no hits (bandits only driven off, or killed by someone else) grades
+ *    at most C, says why in the tips, and doesn't award Untouchable (2.3-b: a parked Defend win got
+ *    A, ACE ×2, Untouchable; review: one gun burst into the air got around a shots-only rule);
  *  - one pass under the Harbour Bridge in T01 pays once, and the stunt and o_bridge share one span
  *    test (2.3-d: +250 twice, and the two hit zones disagreed);
  *  - the debrief's NEXT button says 'Next lesson' / 'Start the campaign' in training, and the
@@ -59,6 +60,20 @@ describe('#64: no fight, no credit', () => {
     expect(['S', 'A']).toContain(r.grade);
   });
 
+  it('one gun burst into the air does not buy the grade back (review: a single shot gave B, A with the bridge)', () => {
+    for (const bonus of [0, 250]) {
+      const r = computeScore({ ...parked, shotsFired: 1, hits: 0, bonus });
+      expect(r.playerShare, `bonus ${bonus}`).toBe(0);
+      expect(['C', 'D', 'F'], `bonus ${bonus}`).toContain(r.grade);
+    }
+  });
+
+  it('a hit without a kill (bandit damaged, then driven off) is a fight', () => {
+    const r = computeScore({ ...parked, shotsFired: 2, hits: 1 });
+    expect(r.playerShare).toBe(1);
+    expect(['C', 'D', 'F']).not.toContain(r.grade);
+  });
+
   it('end to end: c01 won with every MiG killed by nobody the player flies with → at most C, no Untouchable', () => {
     const h = harness(byId('c01'));
     h.run(1, () => shieldPlayer(h));
@@ -72,6 +87,26 @@ describe('#64: no fight, no credit', () => {
     expect(r.kills).toEqual({ air: 0, sam: 0, ground: 0 });
     expect(['C', 'D', 'F']).toContain(r.grade);
     expect(r.medals!.map((m) => m.id)).not.toContain('no_hits');
+    // the debrief says why it is a C (review: the notes box was empty)
+    expect(r.tips).toContain('You won without firing a shot: S and A grades need you in the fight — engage the bandits yourself.');
+  });
+
+  it('end to end: one shot that hit nothing still caps at C, gets no Untouchable, and the tip says why', () => {
+    const h = harness(byId('c01'));
+    h.run(1, () => shieldPlayer(h));
+    killGroup(h, 'fulcrum1', false);
+    h.run(9, () => shieldPlayer(h));
+    killGroup(h, 'fulcrum2', false);
+    h.run(1, () => shieldPlayer(h));
+    expect(h.runner.state).toBe('success');
+    const p = h.world.player!;
+    p.shotsFired = 1; // one gun trigger pull
+    p.hits = 0;
+    p.health = p.maxHealth;
+    const r = h.runner.result(h.world);
+    expect(['C', 'D', 'F']).toContain(r.grade);
+    expect(r.medals!.map((m) => m.id)).not.toContain('no_hits');
+    expect(r.tips!.some((t) => /^You won without landing a hit: S and A grades need you in the fight/.test(t))).toBe(true);
   });
 
   it('Untouchable still goes to a clean win the player fought', () => {
@@ -208,6 +243,25 @@ describe('#64: training debrief', () => {
     expect(amraam(slow)).toBe(false);
     expect(slow.some((t) => /Faster missions score higher/.test(t))).toBe(true); // over par: the plain time tip
     expect(amraam(buildTips(state('t03'), win('t03', 900)))).toBe(false);
+  });
+
+  it('a no-fight win explains its C, in place of the wingman tip; a fight gets neither', () => {
+    const noFightTip = (tips: string[]) => tips.some((t) => /S and A grades need you in the fight/.test(t));
+    const wingmanTip = (tips: string[]) => tips.some((t) => /Your wingman scored/.test(t));
+    const s = state('c01');
+    s.enemiesSpawned = 4;
+    s.flightKills = 4;
+    const idle = buildTips(s, win('c01', 100));
+    expect(noFightTip(idle)).toBe(true);
+    expect(wingmanTip(idle)).toBe(false);
+    // the player landed a hit: it was a fight, the wingman's share is the reason instead
+    const hit = buildTips(s, { ...win('c01', 100), shotsFired: 2, hits: 1, accuracy: 0.5 });
+    expect(noFightTip(hit)).toBe(false);
+    expect(wingmanTip(hit)).toBe(true);
+    // no hostiles at all (T01): nothing to say
+    expect(noFightTip(buildTips(state('t01'), win('t01', 100)))).toBe(false);
+    // a loss is not capped by it
+    expect(noFightTip(buildTips(s, { ...win('c01', 100), success: false, reason: 'Out of time' }))).toBe(false);
   });
 
   it('the time tip only shows over par', () => {
