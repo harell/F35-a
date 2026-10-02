@@ -39,11 +39,12 @@ export const G02_TANKER = {
 export const G02_GROUPS = { suicide: 'suicide_boats', missile: 'missile_boats', ad: 'ad_boats' } as const;
 
 /**
- * The player: on CAP over the upper Waitematā at 23,000 ft, nose on the suicide boats 16 km away.
- * A StormBreaker glides at ~170 m/s, so a bomb released at once lands about 90 s in, ahead of the
- * 2-minute clock; one released from 10 km after a minute's run-in lands too late.
+ * The player: on CAP over the upper Waitematā at 15,000 ft, nose on the suicide boats 16 km away.
+ * A StormBreaker glides at ~170–200 m/s, so a ripple released in the first half-minute lands well
+ * ahead of the 2-minute clock; one released from 10 km after a minute's run-in lands too late. Pressing
+ * on at this height flies into the AD boats' radar SAM (12 km, up to 20,000 ft): climb, or stand off.
  */
-const g02Start = { x: -10500, z: -4500, altitude: 7000, heading: 68, speed: 250, fuel: 0.9 };
+const g02Start = { x: -10500, z: -4500, altitude: 4500, heading: 68, speed: 250, fuel: 0.9 };
 
 const S = G02_GROUPS;
 const chase = { chase: G02_TANKER.group };
