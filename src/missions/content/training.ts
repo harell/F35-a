@@ -170,7 +170,7 @@ export const T03: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
-    'Live-fire SAM training. An SA-6 battery and a Shilka on Rangitoto cover a fuel depot on Motutapu, the island behind it. The missiles are real. The steering cue takes you north round the SA-6 ring to an IP north-east of Motutapu, with Rangitoto between you and the radar: run in from there.',
+    'Live-fire SAM training. An SA-6 battery and a Shilka on Rangitoto cover a fuel depot on Motutapu, the island behind it. The missiles are real. The steering cue takes you north round the SA-6, beyond the range its radar can pick up a clean F-35, to an IP north-east of Motutapu: run in from there.',
     'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and descend — the radar loses you in the notch, and the notch works best low. Save the CHAFF for the last few seconds before impact: chaff at launch is wasted. Against a heat-seeker, FLARES late and a hard break into the missile.',
     'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. Out of bombs? Hold over Whenuapai to rearm.',
   ],
@@ -192,8 +192,10 @@ export const T03: MissionDef = mission({
       { id: 'o_aaa', kind: 'destroy', groups: ['aaa'], label: 'Destroy the Shilka', primary: false },
     ],
     waypoints: [
-      // round the north of the SA-6 ring (≥ 15 km from it) to an IP behind Rangitoto and Motutapu: the old
-      // IP over North Head was 6 km from the SA-6 in plain sight across the channel (issue #57)
+      // round the north of the SA-6 ring (≥ 15 km from it) to an IP north-east of Motutapu, 18 km from the
+      // SA-6: beyond the range its radar picks up a clean F-35 (at the cued altitudes the route is in its
+      // line of sight, so this works by range, not terrain masking). The old IP over North Head was 6 km
+      // from the SA-6 in plain sight across the channel (issue #57)
       { id: 'wp_north', label: 'Long Bay', kind: 'nav', x: -4000, z: -17000, altitude: 3000 },
       { id: 'wp_gulf', label: 'Tiritiri', kind: 'nav', x: 10000, z: -24000, altitude: 6000 },
       { id: 'wp_ip', label: 'IP Motutapu', kind: 'ip', x: 22000, z: -16000, altitude: 7500 },
