@@ -17,6 +17,9 @@ import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { isKowsar } from '../src/sim/boats';
+import { MUNITIONS } from '../src/sim/weapons/defs';
+import { gpsMaxRange } from '../src/sim/weapons/dlz';
+import { SAM_DATA } from '../src/sim/sam/samData';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, missionGunAmmo, terrainPadsFor, validateMission } from '../src/missions';
 import { G02, G02_GROUPS, G02_TANKER } from '../src/missions/content/irgcHauraki';
 import { forceDestroy } from '../src/game/forceDestroy';
@@ -112,12 +115,41 @@ describe('g02 Straight Outta Hauraki: content', () => {
     }
   });
 
-  it('the boat mix: 2 air-defence, 3 missile, 3 suicide; Veteran adds a suicide boat, Ace a missile boat too', { timeout: 60_000 }, () => {
-    const want: Record<Difficulty, [number, number, number]> = { recruit: [3, 3, 2], pilot: [3, 3, 2], veteran: [4, 3, 2], ace: [4, 4, 2] };
+  it('the briefing map marks the tanker as the friendly to protect, not as a strike target', () => {
+    const onTanker = G02.intel.filter((m) => Math.hypot(m.x - G02_TANKER.start.x, m.z - G02_TANKER.start.z) < 500);
+    expect(onTanker.length).toBeGreaterThan(0);
+    expect(onTanker.filter((m) => m.kind === 'target')).toEqual([]);
+    expect(onTanker).toContainEqual(expect.objectContaining({ kind: 'friendly', label: G02_TANKER.name }));
+    // the boats are still the targets
+    expect(G02.intel.filter((m) => m.kind === 'target').map((m) => m.label).sort()).toEqual(['Missile boats', 'Suicide boats']);
+  });
+
+  it('the start solves nothing: no boat is in StormBreaker reach at t=0, and the missile boats are out of reach even from 20,000 ft', () => {
+    const p = G02.player;
+    const ad = SAM_DATA.ad_boat;
+    const reach = (h: number) => gpsMaxRange(MUNITIONS.gbu53, h, p.speed, 0);
+    // from the start height the release point is inside the AD boats' radar SAM: climb, or press in
+    expect(p.altitude).toBeLessThan(ad.altMax);
+    expect(reach(p.altitude)).toBeLessThan(ad.engageMax);
+    for (const g of [...G02.script.ground, ...G02.script.sams]) {
+      if (g.group === G02_TANKER.group) continue;
+      const d = Math.hypot(g.x - p.x, g.z - p.z);
+      expect(d, g.id).toBeGreaterThan(reach(p.altitude) + 5_000);
+      if (g.group === G02_GROUPS.missile) expect(d, g.id).toBeGreaterThan(reach(ad.altMax) + 2_000);
+    }
+  });
+
+  it('the boat mix: 2 air-defence, 3 missile, 3 suicide; Veteran adds a suicide boat; Ace one more, and a two-Kowsar missile boat', { timeout: 60_000 }, () => {
+    const want: Record<Difficulty, [number, number, number]> = { recruit: [3, 3, 2], pilot: [3, 3, 2], veteran: [4, 3, 2], ace: [5, 4, 2] };
+    const bombs = LOADOUTS[G02.recommendedLoadout].stores.filter((s) => s.weapon === 'gbu53').reduce((n, s) => n + s.count, 0);
     for (const d of DIFFS) {
       const m = setup(d);
       const n = [m.group(G02_GROUPS.suicide).length, m.group(G02_GROUPS.missile).length, m.group(G02_GROUPS.ad).length];
       expect(n, d).toEqual(want[d]);
+      // the boats the mission needs sunk against the eight bombs: a spare at Pilot, one at Veteran, the gun on Ace
+      expect(bombs - n[0] - n[1], d).toBe({ recruit: 2, pilot: 2, veteran: 1, ace: -1 }[d]);
+      const kowsars = m.group(G02_GROUPS.missile).map((b) => (b.kind === 'ground' ? (b.boat?.strike?.missiles ?? 0) : 0));
+      expect(kowsars.filter((k) => k === 2).length, d).toBe(d === 'ace' ? 1 : 0);
       expect(m.tanker.team).toBe('neutral');
       expect(m.tanker.hitsToSink).toBe(2);
       expect(m.tanker.name).toBe(G02_TANKER.name);
@@ -197,13 +229,25 @@ describe('g02: the clocks and the outcome (real sim, real coast)', { timeout: 60
 });
 
 describe('g02: the competent bot (tests/missions-bot.ts)', () => {
-  it('wins on Recruit and Pilot by rippling a StormBreaker onto each boat, suicide boats first', { timeout: 120_000 }, () => {
+  it('wins on Recruit and Pilot by releasing one StormBreaker per suicide boat first, then on the missile boats', { timeout: 120_000 }, () => {
     for (const diff of ['recruit', 'pilot'] as const) {
       for (const seed of [0, 1]) {
         const r = runPlaythrough('g02', diff, seed, realTerrain(), { maxT: 400 });
-        expect(r.state, `${diff} seed ${seed}: ${r.reason}`).toBe('success');
-        // before the suicide boats' 2-minute clock runs out
-        expect(r.t, `${diff} seed ${seed}`).toBeLessThan(240);
+        const tag = `${diff} seed ${seed}`;
+        expect(r.state, `${tag}: ${r.reason}`).toBe('success');
+        const bombs = r.launches.filter((l) => l.weapon === 'gbu53');
+        // suicide boats first (the 2-minute clock), one bomb each, and released early (nothing is in reach at t=0)
+        const first = bombs.slice(0, 3);
+        expect(first.map((l) => l.group), tag).toEqual([G02_GROUPS.suicide, G02_GROUPS.suicide, G02_GROUPS.suicide]);
+        expect(new Set(first.map((l) => l.targetId)).size, tag).toBe(3);
+        expect(first[0].t, tag).toBeGreaterThan(10);
+        expect(first[2].t, tag).toBeLessThan(45);
+        // then one bomb on each missile boat
+        const next = bombs.slice(3, 6);
+        expect(next.map((l) => l.group), tag).toEqual([G02_GROUPS.missile, G02_GROUPS.missile, G02_GROUPS.missile]);
+        expect(new Set(next.map((l) => l.targetId)).size, tag).toBe(3);
+        // every boat sunk about two minutes in, long before the missile boats' 3–4 minute launch
+        expect(r.t, tag).toBeLessThan(135);
       }
     }
   });

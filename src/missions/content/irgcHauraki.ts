@@ -39,12 +39,14 @@ export const G02_TANKER = {
 export const G02_GROUPS = { suicide: 'suicide_boats', missile: 'missile_boats', ad: 'ad_boats' } as const;
 
 /**
- * The player: on CAP over the upper Waitematā at 15,000 ft, nose on the suicide boats 16 km away.
- * A StormBreaker glides at ~170–200 m/s, so a ripple released in the first half-minute lands well
- * ahead of the 2-minute clock; one released from 10 km after a minute's run-in lands too late. Pressing
- * on at this height flies into the AD boats' radar SAM (12 km, up to 20,000 ft): climb, or stand off.
+ * The player: on CAP over west Auckland at 10,000 ft, nose on the suicide boats 21 km away; the missile
+ * boats are 27 km away. From this height a StormBreaker reaches only ~11.5 km, so at the start nothing
+ * is in reach (the missile boats not even from 20,000 ft): climb on the way in (height is range) or press
+ * in, and at 10,000 ft the release point is inside the AD boats' radar SAM (12 km, up to 20,000 ft).
+ * The competent bot's ripple on the suicide boats goes at 20–30 s and lands ~15 s before the first
+ * ram (tests/missions-bot.ts); a release after much dithering lands too late.
  */
-const g02Start = { x: -10500, z: -4500, altitude: 4500, heading: 68, speed: 250, fuel: 0.9 };
+const g02Start = { x: -15000, z: -2700, altitude: 3000, heading: 68, speed: 250, fuel: 0.9 };
 
 const S = G02_GROUPS;
 const chase = { chase: G02_TANKER.group };
@@ -61,13 +63,13 @@ export const G02: MissionDef = mission({
   briefing: [
     `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The IRGC mother ship has put its fast boats in the water to stop her. Clear the way.`,
     'Suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Peykaap II missile boats follow. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. Two air-defence boats escort them, with a Tor-type radar SAM good to 20,000 ft and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you.',
-    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. Bring StormBreakers. A GBU-53/B tracks a moving boat; a JDAM or a GBU-39 does not, and this mission does not offer them. The StormBreaker glides slowly from long range, so release early on the suicide boats. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today.',
+    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. Bring StormBreakers. A GBU-53/B tracks a moving boat; a JDAM or a GBU-39 does not, and this mission does not offer them. The StormBreaker glides slowly from long range, so release early on the suicide boats. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today.',
   ],
   recommendedLoadout: 'strike_sdb2_full',
   // only loadouts with a bomb that can hit a moving boat (GBU-31 / GBU-39 can't: #65's c08 trap)
   allowedLoadouts: ['strike_sdb2_full', 'strike_sdb2'],
   player: g02Start,
-  // eight boats, eight bombs at most: the gun is part of the plan (#77)
+  // up to eight bombs for six to nine boats: on Ace the gun is part of the plan (#77)
   gunAmmo: 360,
   script: {
     parTime: 300,
@@ -86,12 +88,14 @@ export const G02: MissionDef = mission({
       target('sb3', S.suicide, 'suicide_boat', { x: 4500, z: -10800 }, chase),
       // Veteran up: a fourth one (seven boats to sink, eight bombs)
       target('sb4', S.suicide, 'suicide_boat', { x: 5700, z: -10950 }, { ...chase, minDifficulty: 'veteran' }),
+      // Ace: a fifth one (nine boats to sink, eight bombs: the gun is part of the plan)
+      target('sb5', S.suicide, 'suicide_boat', { x: 4100, z: -11050 }, { ...chase, minDifficulty: 'ace' }),
       // the long clock: three missile boats further out, in launch range 3–4 minutes in
       target('mb1', S.missile, 'missile_boat', { x: 7650, z: -18450 }, strike),
       target('mb2', S.missile, 'missile_boat', { x: 9000, z: -17900 }, strike),
       target('mb3', S.missile, 'missile_boat', { x: 6400, z: -19000 }, strike),
-      // Ace: a fourth one (eight boats to sink with eight bombs: the gun, or a ram she survives)
-      target('mb4', S.missile, 'missile_boat', { x: 10300, z: -17300 }, { ...strike, minDifficulty: 'ace' }),
+      // Ace: a fourth one too, carrying both its Kowsars (two countdowns, and two hits sink her)
+      target('mb4', S.missile, 'missile_boat', { x: 10300, z: -17300 }, { strike: { group: G02_TANKER.group, missiles: 2 }, minDifficulty: 'ace' }),
     ],
     sams: [
       // air-defence boats: one rides with each wave
