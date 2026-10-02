@@ -53,10 +53,11 @@ const SAM_FRAMING: Record<SamType, { dist: number; lookY: number }> = {
   sa15: { dist: 17, lookY: 2.8 },
   sa18: { dist: 13, lookY: 1.2 },
   zsu23: { dist: 14, lookY: 1.8 },
+  ad_boat: { dist: 30, lookY: 1.6 }, // a ~20 m fast boat, framed whole
 };
 
 /** Ground target framing scale (× entity radius) and limits. */
-const GROUND_SCALE: Partial<Record<GroundTargetType, number>> = { bridge: 1.6, factory: 1.9, hangar: 2.2 };
+const GROUND_SCALE: Partial<Record<GroundTargetType, number>> = { bridge: 1.6, factory: 1.9, hangar: 2.2, suicide_boat: 3.2, missile_boat: 3.2 };
 
 /**
  * Ship framing: orbit distance (× hull length), look-at height (fraction of the way from the

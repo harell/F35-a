@@ -84,6 +84,11 @@ interface SamInternal extends AaaState {
   pdTracks: Map<number, PdTrack>;
   /** Shared (correlated) end-game error sample of the current salvo (endgame.ts). */
   salvoZ: number;
+  /** Shoulder-launched SA-18s (SamTypeData.manpads): rounds left, seconds to the next shot, seconds a target has been in reach, rounds in flight. */
+  mpRounds: number;
+  mpTimer: number;
+  mpAcquire: number;
+  mpMissiles: number[];
 }
 
 const internals = new WeakMap<SamSiteEntity, SamInternal>();
@@ -119,6 +124,10 @@ function internal(ctx: CombatCtx, s: SamSiteEntity): SamInternal {
       lastChaffRoll: -999,
       pdTracks: new Map(),
       salvoZ: 0,
+      mpRounds: data.manpads?.rounds ?? 0,
+      mpTimer: 0,
+      mpAcquire: 0,
+      mpMissiles: [],
       burstOn: false,
       burstTimer: 0,
       gunAccum: 0,
@@ -468,6 +477,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
     }
     if (data.pointDefense) pointDefense(ctx, s, data, si);
   }
+  if (data.manpads) updateManpads(ctx, s, data, si, dt, scanNow);
 
   const target = world.getEntity(s.trackedTargetId);
   const tgt = target && target.alive && target.kind === 'aircraft' ? target : null;
@@ -553,6 +563,61 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
     default:
       break;
   }
+}
+
+/**
+ * Shoulder-launched SA-18s besides the site's main weapon (the IRGC Navy AD boat): a MANPADS team
+ * that, independently of the radar, fires at the closest hostile aircraft its IR seeker can see
+ * inside reach, after the difficulty's reaction time, one round every `refire` s. Passive: no RWR
+ * warning, no AWACS call (the DAS/MAWS warns). Its rounds get the same end-game model as any SAM.
+ */
+function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: SamInternal, dt: number, scanNow: boolean): void {
+  const mp = data.manpads!;
+  if (si.mpMissiles.length) {
+    let n = 0;
+    for (const id of si.mpMissiles) {
+      const m = ctx.world.getEntity(id);
+      if (m && m.alive) si.mpMissiles[n++] = id;
+    }
+    si.mpMissiles.length = n;
+    if (n) updateEndgame(ctx, s, si, dt, si.mpMissiles);
+  }
+  if (si.mpTimer > 0) si.mpTimer -= dt;
+  if (si.mpRounds <= 0 || si.mpTimer > 0) return;
+  if (!scanNow) {
+    return;
+  }
+  const def = ctx.defs[mp.missile];
+  const reach = mp.range * ctx.world.difficulty.samRangeScale;
+  let best: AircraftEntity | null = null;
+  let bestD = Infinity;
+  _eye.copy(s.position);
+  _eye.y += data.mastHeight;
+  for (const t of ctx.world.aircraft) {
+    if (!t.alive || !isHostile(s.team, t.team)) continue;
+    const d = t.position.distanceTo(s.position);
+    if (d < mp.minRange || d > reach || d >= bestD) continue;
+    if (t.position.y - ctx.world.terrain.surfaceHeightAt(t.position.x, t.position.z) < 10) continue;
+    if (d > def.seekerRange * Math.sqrt(irIntensity(t, s.position))) continue;
+    if (!lineOfSight(ctx.world.terrain, _eye, t.position)) continue;
+    best = t;
+    bestD = d;
+  }
+  if (!best) {
+    si.mpAcquire = 0;
+    return;
+  }
+  si.mpAcquire += SCAN_PERIOD;
+  if (si.mpAcquire < ctx.world.difficulty.samReactionTime) return;
+  _dir.subVectors(best.position, s.position).normalize();
+  const m = launchMunition(ctx, s, mp.missile, best, { launchDir: _dir });
+  registerRound(ctx, m, gaussian(ctx.rng));
+  si.mpMissiles.push(m.id);
+  si.mpRounds--;
+  si.mpTimer = mp.refire;
+  si.mpAcquire = 0;
+  s.lastLaunchTime = ctx.time;
+  revealLaunch(ctx, s);
 }
 
 /**

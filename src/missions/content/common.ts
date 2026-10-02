@@ -218,6 +218,8 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     ship: 'Ships',
     factory: 'Depot',
     bridge: 'Bridge',
+    suicide_boat: 'Suicide boats',
+    missile_boat: 'Missile boats',
   };
   for (const e of groundGroups.values()) {
     out.push({ kind: e.team === 'blue' ? 'friendly' : 'target', label: label[e.type], x: Math.round(e.xs / e.n), z: Math.round(e.zs / e.n) });

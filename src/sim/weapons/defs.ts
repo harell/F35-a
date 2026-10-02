@@ -654,6 +654,42 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     armTime: 0.5,
     minKillSpeed: 250,
   },
+  // Kowsar (C-704 family) short-range anti-ship missile of the IRGC Navy missile boat. VISUAL ONLY:
+  // sim/boats.ts flies it (a sea-skimming pursuit that always reaches its ship and scores one hit);
+  // the CombatSystem never steps it, and missiles are never sensor contacts, so it can't be shot down.
+  kowsar: {
+    ...BASE,
+    id: 'kowsar',
+    name: 'Kowsar',
+    short: 'KOWSAR',
+    category: 'agm',
+    guidance: 'active_radar',
+    launch: 'canted',
+    mass: 100,
+    boostTime: 1,
+    boostAccel: 150,
+    sustainTime: 40,
+    sustainAccel: 0,
+    drag: 0,
+    maxG: 15,
+    seekerFov: 20 * DEG,
+    gimbalLimit: 40 * DEG,
+    seekerRange: 8_000,
+    navConstant: 3,
+    minRange: 1_000,
+    maxRange: 15_000,
+    fuseRadius: 10,
+    damage: 300,
+    blastRadius: 20,
+    maxFlightTime: 90,
+    smoke: 0.6,
+    length: 3.5,
+    diameter: 0.3,
+    fullGQ: 30_000,
+    liftArea: 0.01,
+    ejectSpeed: 40,
+    blast: 'large',
+  },
 };
 
 // Induced drag consistent with the airframe L/D at max g (see CombatMunitionDef.liftArea).

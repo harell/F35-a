@@ -200,6 +200,28 @@ export interface SamSpawn {
   /** Radar initially off (pop-up SAM ambush). */
   emcon?: boolean;
   known?: boolean;
+  /** A moving SAM on a fast boat ('ad_boat'): its route / escort (sim/boats.ts). Ignored for fixed sites. */
+  boat?: BoatSpawn;
+}
+
+/**
+ * How an IRGC Navy fast boat sails (sim/boats.ts): a suicide boat rams `chaseId`; a missile boat
+ * closes to `strike.range` of `strike.targetId`, counts down and fires; an AD boat keeps station on
+ * `escortId`. With none of them (or once its target is gone) it sails `path`.
+ */
+export interface BoatSpawn {
+  path?: Vector3[];
+  loop?: boolean;
+  /** Cruise speed (m/s, default BOAT_SPEED ≈ 45 kt). */
+  speed?: number;
+  chaseId?: number | null;
+  escortId?: number | null;
+  /** Station on the escorted boat: metres to its right and behind it. */
+  escortRight?: number;
+  escortAft?: number;
+  strike?: { targetId: number; range?: number; countdown?: number; missiles?: number } | null;
+  /** Weave amplitude (rad); default BOAT_WEAVE for a chasing boat, 0 otherwise. */
+  weave?: number;
 }
 
 export interface GroundSpawn {
@@ -221,6 +243,8 @@ export interface GroundSpawn {
   anchored?: boolean;
   /** Drawn by the world scenery (GroundTargetEntity.scenery): no entity model. */
   scenery?: boolean;
+  /** IRGC Navy fast boat ('suicide_boat' / 'missile_boat'): chase / strike target (sim/boats.ts). `path` and `speed` above still apply. */
+  boat?: BoatSpawn;
 }
 
 /* ───────────────────────── Sim world (implemented by SIM-CORE agent) ───────────────────────── */

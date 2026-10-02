@@ -351,6 +351,8 @@ export const SAM_INFO: Record<SamType, { name: string; nato: string; rwrSymbol: 
   sa15: { name: '9K330 Tor', nato: 'SA-15 Gauntlet', rwrSymbol: '15' },
   sa18: { name: '9K38 Igla', nato: 'SA-18 Grouse', rwrSymbol: '' },
   zsu23: { name: 'ZSU-23-4 Shilka', nato: 'Shilka', rwrSymbol: 'A' },
+  // IRGC Navy fast boat with a short-range radar SAM and shoulder-launched SA-18s (no class name: none is confirmed)
+  ad_boat: { name: 'IRGC Navy air-defence boat', nato: 'AD boat', rwrSymbol: 'B' },
 };
 
 export const THEATER_INFO: Record<TheaterId, { name: string; region: string }> = {

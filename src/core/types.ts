@@ -68,7 +68,8 @@ export type SamType =
   | 'sa10' // S-300PS — Flap Lid + Clam Shell + vertical launch TELs, long range, TVM
   | 'sa15' // 9K330 Tor — single vehicle, vertical launch, command guided, short range
   | 'sa18' // 9K38 Igla MANPADS team — passive IR, no radar (no RWR warning!)
-  | 'zsu23'; // ZSU-23-4 Shilka radar-directed AAA
+  | 'zsu23' // ZSU-23-4 Shilka radar-directed AAA
+  | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
 export type GroundTargetType =
   | 'ewr' // early warning radar
@@ -80,7 +81,9 @@ export type GroundTargetType =
   | 'tank' // armour (can move)
   | 'ship' // corvette / frigate (can move)
   | 'factory' // industrial building
-  | 'bridge'; // bridge span
+  | 'bridge' // bridge span
+  | 'suicide_boat' // IRGC Navy unmanned explosive boat (Ya Mahdi type): chases a ship and rams it (sim/boats.ts)
+  | 'missile_boat'; // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
 
 /**
  * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):
@@ -109,7 +112,8 @@ export type MunitionId =
   | 'm_9m33' // SA-8 missile, command guided
   | 'm_48n6' // SA-10 missile, track-via-missile / command
   | 'm_9m330' // SA-15 missile, command guided
-  | 'm_igla'; // SA-18 MANPADS missile, IR
+  | 'm_igla' // SA-18 MANPADS missile, IR
+  | 'kowsar'; // Kowsar anti-ship missile of the missile boat: visual only, flown by sim/boats.ts, never a target
 
 export type LoadoutId =
   | 'a2a_stealth'

@@ -57,6 +57,11 @@ export interface SamTypeData {
   burstPause: number;
   ammo: number;
   /**
+   * Shoulder-launched IR missiles carried besides the main weapon (the IRGC Navy AD boat's SA-18s):
+   * fired at a hostile aircraft inside `range`, one every `refire` s, `rounds` in all. Null = none.
+   */
+  manpads: { missile: MunitionId; minRange: number; range: number; refire: number; rounds: number } | null;
+  /**
    * Point defence against incoming munitions (anti-radiation missiles, JDAM/SDB) aimed within
    * `protect` m of the site: engagement range, and kill probability per interceptor that fuzes.
    */
@@ -82,6 +87,7 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
   burst: 0,
   burstPause: 0,
   ammo: 0,
+  manpads: null,
   pointDefense: null,
 };
 
@@ -241,6 +247,34 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     burst: 1.6,
     burstPause: 1.4,
     ammo: 2_000,
+  },
+  // IRGC Navy air-defence fast boat: a MOVING SAM (sim/boats.ts sails it). The radar SAM behaves
+  // like the SA-15 (same missile and envelope, so the AGM-88G homes on its radar) from a low mast
+  // on a small hull with fewer rounds, and without the Tor's point defence (a fast boat has no
+  // munition-killing fire control); a crew with SA-18s fires at anything inside 5 km.
+  ad_boat: {
+    ...D,
+    type: 'ad_boat',
+    missile: 'm_9m330',
+    gun: null,
+    detectRange: 25_000,
+    engageMin: 1_000,
+    engageMax: 12_000,
+    altMin: 10,
+    altMax: 6_000,
+    reaction: 0.7,
+    salvo: 2,
+    salvoInterval: 1.5,
+    missiles: 4,
+    reloadTime: 90,
+    refireDelay: 4,
+    channels: 2,
+    radarSpin: 6.3,
+    vertical: true,
+    lowAltFactor: 0.9,
+    armDiscipline: 0.4,
+    mastHeight: 4,
+    manpads: { missile: 'm_igla', minRange: 500, range: 5_000, refire: 12, rounds: 4 },
   },
 };
 

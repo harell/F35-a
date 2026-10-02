@@ -20,6 +20,7 @@ export const SAM_PAD_RADIUS: Record<SamType, number> = {
   sa15: 60,
   sa18: 35,
   zsu23: 45,
+  ad_boat: 0, // a boat: no pad
 };
 
 export const GROUND_PAD_RADIUS: Record<GroundTargetType, number> = {
@@ -33,6 +34,8 @@ export const GROUND_PAD_RADIUS: Record<GroundTargetType, number> = {
   ship: 0,
   factory: 100,
   bridge: 0,
+  suicide_boat: 0,
+  missile_boat: 0,
 };
 
 /** Pad radius for a SAM site. */
@@ -87,7 +90,10 @@ export function mergePads(pads: Pad[]): Pad[] {
 /** Flat terrain pads (SAM sites, ground target compounds) the terrain generator must flatten. */
 export function terrainPadsFor(def: MissionDef): Pad[] {
   const pads: Pad[] = [];
-  for (const s of def.script.sams) pads.push({ x: s.x, z: s.z, radius: samPadRadius(s) });
+  for (const s of def.script.sams) {
+    const r = samPadRadius(s);
+    if (r > 0) pads.push({ x: s.x, z: s.z, radius: r });
+  }
   for (const g of def.script.ground) {
     const r = groundPadRadius(g);
     if (r > 0) pads.push({ x: g.x, z: g.z, radius: r });

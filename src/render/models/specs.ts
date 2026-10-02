@@ -295,6 +295,7 @@ export const MUNITION_DIMS: Record<MunitionId, { length: number; diameter: numbe
   m_48n6: { length: 7.5, diameter: 0.515 },
   m_9m330: { length: 2.9, diameter: 0.23 },
   m_igla: { length: 1.57, diameter: 0.072 },
+  kowsar: { length: 3.5, diameter: 0.3 },
 };
 
 export function eyeOffsetOf(type: AircraftType): V3 {
