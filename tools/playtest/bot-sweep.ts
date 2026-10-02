@@ -14,7 +14,10 @@
  *   --loadout   fly this loadout instead of each mission's recommended one; missions that don't
  *               allow it are skipped (their cells read "skip" and the table says why)
  *   --log       record the bot's event log (launches, kills, objectives, radio, a state line every
- *               5 s) into each row's `events` (only useful with --json; without it they stay empty)
+ *               5 s) into each row's `events` (keep it with --json), and measure each run's longest
+ *               dead stretch (no radio, HUD message, launch, kill or objective change:
+ *               tests/missions-pacing.ts) into `dead`; a pacing table after the win rates lists each
+ *               mission's longest one and every run over 90 s
  *   --nojitter  no seeded jitter of the player start and enemy positions: the seed only changes
  *               the combat RNG and the mission seed
  * Mission ids include Instant Action (`ia_<mode>_auckland`, e.g. ia_strike_auckland): the id seeds
@@ -26,6 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import '../../tests/linz-setup';
 import { runPlaythrough, type PlaythroughResult } from '../../tests/missions-bot';
+import { MAX_DEAD_STRETCH, deadStretchText, longestDeadStretch, type DeadStretch } from '../../tests/missions-pacing';
 import { CAMPAIGN, TRAINING, missionById, terrainPadsFor } from '../../src/missions';
 import { generateTerrain, runSync } from '../../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../../src/world/terrain/TerrainQueryImpl';
@@ -67,7 +71,8 @@ type Run = { mission: string; diff: Difficulty; seed: number };
 const runs: Run[] = missions
   .filter((m) => !skipped.includes(m))
   .flatMap((mission) => diffs.flatMap((diff) => Array.from({ length: seeds }, (_, seed) => ({ mission, diff, seed }))));
-type Row = Omit<PlaythroughResult, 'result'> & { loadout: LoadoutId; wallMs: number };
+/** `dead`: the run's longest dead stretch (only with --log). */
+type Row = Omit<PlaythroughResult, 'result'> & { loadout: LoadoutId; wallMs: number; dead?: DeadStretch };
 
 if (args.shard) {
   // child: run my share, one JSON line per run on stdout
@@ -83,7 +88,8 @@ if (args.shard) {
     }
     const t0 = Date.now();
     const { result: _, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT, loadout, log, jitter });
-    process.stdout.write(JSON.stringify({ ...rest, loadout: loadout ?? missionById(r.mission)!.recommendedLoadout, wallMs: Date.now() - t0 } satisfies Row) + '\n');
+    const dead = log ? longestDeadStretch(rest.events, rest.t) : undefined;
+    process.stdout.write(JSON.stringify({ ...rest, loadout: loadout ?? missionById(r.mission)!.recommendedLoadout, wallMs: Date.now() - t0, dead } satisfies Row) + '\n');
   }
 } else {
   const t0 = Date.now();
@@ -122,5 +128,17 @@ if (args.shard) {
     console.log(`${m.padEnd(w)}${cells.join('')}`);
   }
   if (skipped.length) console.log(`skip = ${loadout} is not an allowed loadout there (${skipped.join(', ')}); those missions were not flown`);
+  if (log) {
+    // pacing: each mission's longest dead stretch over all its runs (#59: none should pass 90 s)
+    console.log(`\nlongest dead stretch (no radio, HUD message, launch, kill or objective change; bar ${MAX_DEAD_STRETCH} s)`);
+    for (const m of missions) {
+      const rs = rows.filter((r) => r.mission === m && r.dead);
+      if (!rs.length) continue;
+      const worst = rs.reduce((a, b) => (b.dead!.length > a.dead!.length ? b : a));
+      const over = rs.filter((r) => r.dead!.length > MAX_DEAD_STRETCH);
+      console.log(`${m.padEnd(w)}${deadStretchText(worst.dead!)} in ${worst.diff} seed ${worst.seed}; ${over.length}/${rs.length} runs over ${MAX_DEAD_STRETCH} s`);
+      for (const r of over) console.log(`${''.padEnd(w)}  ${r.diff} seed ${r.seed}: ${deadStretchText(r.dead!)}`);
+    }
+  }
   if (args.json) fs.writeFileSync(args.json, JSON.stringify(rows, null, 1));
 }
