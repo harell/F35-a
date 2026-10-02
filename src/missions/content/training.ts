@@ -158,6 +158,8 @@ export const T02: MissionDef = mission({
 /* ───────────────────────── T3 — SAMs & strike ───────────────────────── */
 
 const sa6 = P.rangSW;
+/** The fuel depot on Motutapu (centre of the two tanks). */
+const depot = { x: 13000, z: -8900 };
 
 export const T03: MissionDef = mission({
   id: 't03',
@@ -168,7 +170,7 @@ export const T03: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
-    'Live-fire SAM training. An SA-6 battery and a Shilka are defending a fuel depot on the eastern slope of Rangitoto. The missiles are real.',
+    'Live-fire SAM training. An SA-6 battery and a Shilka on Rangitoto cover a fuel depot on Motutapu, the island behind it. The missiles are real. The steering cue takes you north round the SA-6 ring to an IP north-east of Motutapu, with Rangitoto between you and the radar: run in from there.',
     'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and descend — the radar loses you in the notch, and the notch works best low. Save the CHAFF for the last few seconds before impact: chaff at launch is wasted. Against a heat-seeker, FLARES late and a hard break into the missile.',
     'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. Out of bombs? Hold over Whenuapai to rearm.',
   ],
@@ -180,15 +182,22 @@ export const T03: MissionDef = mission({
     parTime: 360,
     awacs: { initialPictureAt: -1 },
     sams: [site('sa6', 'sa6', 'sa6', sa6, { heading: 240 }), site('zsu', 'aaa', 'zsu23', P.rangS)],
-    ground: [target('fuel1', 'depot', 'fuel', { x: 10300, z: -7000 }), target('fuel2', 'depot', 'fuel', { x: 10500, z: -6600 })],
+    // the depot sits behind Rangitoto from the SA-6, 6 km from it, so a JDAM released from the IP side
+    // stays outside the SA-6's reach on a stealthy jet; it used to sit 3 km from the SA-6 on Rangitoto's
+    // eastern slope, where every release point was inside it (playtest 2026-10-02, 1.1-e, issue #57)
+    ground: [target('fuel1', 'depot', 'fuel', { x: 12800, z: -9000 }), target('fuel2', 'depot', 'fuel', { x: 13200, z: -8800 })],
     objectives: [
       { id: 'o_depot', kind: 'destroy', groups: ['depot'], label: 'Destroy the fuel depot with a JDAM', primary: true },
       { id: 'o_sa6', kind: 'destroy', groups: ['sa6'], label: 'Destroy the SA-6', primary: false },
       { id: 'o_aaa', kind: 'destroy', groups: ['aaa'], label: 'Destroy the Shilka', primary: false },
     ],
     waypoints: [
-      { id: 'wp_ip', label: 'IP North Head', kind: 'ip', x: P.northHead.x - 1500, z: P.northHead.z + 800, altitude: 1500 },
-      { id: 'wp_depot', label: 'Fuel depot', kind: 'target', x: 10400, z: -6800, objective: 'o_depot' },
+      // round the north of the SA-6 ring (≥ 15 km from it) to an IP behind Rangitoto and Motutapu: the old
+      // IP over North Head was 6 km from the SA-6 in plain sight across the channel (issue #57)
+      { id: 'wp_north', label: 'Long Bay', kind: 'nav', x: -4000, z: -17000, altitude: 3000 },
+      { id: 'wp_gulf', label: 'Tiritiri', kind: 'nav', x: 10000, z: -24000, altitude: 6000 },
+      { id: 'wp_ip', label: 'IP Motutapu', kind: 'ip', x: 22000, z: -16000, altitude: 7500 },
+      { id: 'wp_depot', label: 'Fuel depot', kind: 'target', x: depot.x, z: depot.z, objective: 'o_depot' },
     ],
     triggers: [
       {
@@ -201,7 +210,7 @@ export const T03: MissionDef = mission({
       { id: 'h1', text: 'The RWR shows radars looking at you. The SA-6 ring is on the TSD — its missiles reach 20 km', when: { kind: 'time', t: 3 }, duration: 8 },
       { id: 'h2', text: 'Stay clean and in the bays: the SA-6 only sees a stealthy F-35 at ~10 km', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 24000 }, duration: 7 },
       { id: 'h3', text: 'Go low: below 300 ft the volcano blocks the radar line of sight', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 14000, above: 300 }, duration: 8 },
-      { id: 'h4', text: 'Tap WPN to select the JDAM, TGT to designate the fuel tanks, release the moment IN RANGE shows', when: { kind: 'area', x: 10400, z: -6800, radius: 16000 }, duration: 9 },
+      { id: 'h4', text: 'Tap WPN to select the JDAM, TGT to designate the fuel tanks, release the moment IN RANGE shows', when: { kind: 'area', x: depot.x, z: depot.z, radius: 13000 }, duration: 9 },
       { id: 'h5', text: 'Missile on the MAWS: count down the time-to-impact — CHAFF at ~5 s, not at launch', when: { kind: 'missile_inbound' }, duration: 7 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get in, drop a JDAM on the depot, get out alive.', priority: 2 }],

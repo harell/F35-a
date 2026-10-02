@@ -172,7 +172,7 @@ function afterObjective(r: { events: string[]; t: number }, id: string): number 
 describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)', () => {
   // the sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=c02,c09,t03 --diffs=recruit,pilot --seeds=6
   // (was c02 4/6, c09 4/6, t03 2/6 on Pilot; Recruit 6/6 each)
-  for (const id of ['c02', 'c09']) {
+  for (const id of ['c02', 'c09', 't03']) {
     it(`${id} is won on Recruit and on Pilot in ≥ 5 of 6 seeds`, { timeout: 300_000 }, () => {
       for (const diff of ['recruit', 'pilot'] as const) {
         const r = wins(id, diff, [0, 1, 2, 3, 4, 5]);
@@ -230,5 +230,32 @@ describe('issue #57: c09 Hammer Down — needs its escort, and ends once Hammer 
       expect(gap, msg).not.toBeNull();
       expect(gap!, msg).toBeLessThanOrEqual(75);
     }
+  });
+});
+
+describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the player', () => {
+  it('every steering point before the target stays ≥ 14 km from the SA-6, the IP behind Rangitoto from it', () => {
+    const def = missionById('t03')!;
+    const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
+    const route = def.script.waypoints.filter((w) => w.kind === 'nav' || w.kind === 'ip');
+    expect(route.length).toBeGreaterThan(0);
+    const pts = [{ x: def.player.x, z: def.player.z }, ...route];
+    for (const w of route) expect(Math.hypot(w.x - sa6.x, w.z - sa6.z), (w as { id: string }).id).toBeGreaterThanOrEqual(14_000);
+    // every leg (start → … → IP) passes ≥ 14 km from the SA-6
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((sa6.x - a.x) * dx + (sa6.z - a.z) * dz) / (dx * dx + dz * dz)));
+      expect(Math.hypot(a.x + dx * t - sa6.x, a.z + dz * t - sa6.z), `leg ${i}`).toBeGreaterThanOrEqual(14_000);
+    }
+    // the IP and the depot are on the far side of Rangitoto from the SA-6
+    const ip = route.find((w) => w.kind === 'ip')!;
+    const rangi = { x: 8700, z: -6850 };
+    const along = (q: { x: number; z: number }) => ((q.x - sa6.x) * (rangi.x - sa6.x) + (q.z - sa6.z) * (rangi.z - sa6.z)) / Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
+    const rangiD = Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
+    expect(along(ip)).toBeGreaterThan(rangiD);
+    for (const g of def.script.ground.filter((x) => x.group === 'depot')) expect(along(g), g.id).toBeGreaterThan(rangiD);
   });
 });
