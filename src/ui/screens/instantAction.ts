@@ -198,7 +198,7 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
   });
 }
 
-/** City chips: landmark emblem + name + tagline; cities without a theatre are disabled with a lock. */
+/** City chips: landmark emblem + name + motto; cities without a theatre are disabled under a "Coming soon" tab. */
 function cityPicker(value: TheaterId, onChange: (v: TheaterId) => void): HTMLElement {
   const wrap = h('div', { class: 'ia-cities', attrs: { role: 'radiogroup', 'aria-label': 'City' } });
   const buttons: HTMLButtonElement[] = [];
@@ -218,8 +218,9 @@ function cityPicker(value: TheaterId, onChange: (v: TheaterId) => void): HTMLEle
       attrs: { type: 'button', role: 'radio', 'aria-checked': 'false', 'aria-label': locked ? `${c.name}, coming soon` : c.name, title: locked ? `${c.name} — coming soon` : c.name },
       dataset: { value: c.theater ?? '' },
       html:
-        `<span class="ia-city-emb"><span class="ia-city-disc">${landmark(c.art)}</span>${locked ? `<span class="ia-city-lock">${icon('lock')}</span>` : ''}</span>` +
-        `<span class="ia-city-t"><span class="ia-city-n">${c.name}</span><span class="ia-city-m">${c.tagline}</span></span>`,
+        `<span class="ia-city-emb">${landmark(c.art)}</span>` +
+        `<span class="ia-city-t"><span class="ia-city-n">${c.name}</span><span class="ia-city-m">${c.tagline}</span></span>` +
+        (locked ? `<span class="ia-city-soon">${icon('lock')}Coming soon</span>` : ''),
     });
     if (locked) b.disabled = true;
     else
