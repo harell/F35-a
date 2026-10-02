@@ -4,13 +4,14 @@
  * Every Auckland sortie stands up a new, intact tower as a sim landmark: it is never destroyed for
  * good (issue #75), so a start or restart always finds it standing, whatever happened before.
  *  - An enemy hit (sim/landmarks.ts hitSkyTower) leaves it damaged and burning: AWACS calls it, the
- *    HUD flags it, and the sortie goes on.
+ *    HUD flags it, and the sortie goes on. A one-way drone (Shahed-136) that flies into it is such a
+ *    hit: the sim reports the impact ('drone:impact' with the landmark) and this watch registers it.
  *  - The second enemy hit brings it down: the mission fails with REASONS.skytowerLost.
  *  - The player bringing it down (one bomb or missile, whatever its damage) is an immediate failure
  *    in every mode (survival ends the run): AWACS calls check fire, the HUD flags it, and the runner
  *    fails with REASONS.skytower while the collapse plays on.
  */
-import { createSkyTower, type LandmarkCollapseCause, type LandmarkEntity } from '../../sim/landmarks';
+import { createSkyTower, hitLandmark, type LandmarkCollapseCause, type LandmarkEntity } from '../../sim/landmarks';
 import { AKL } from '../../core/auckland';
 import { URGENT_PRIORITY } from './radio';
 import { REASONS } from './reasons';
@@ -39,6 +40,10 @@ export class LandmarkWatch {
       }),
       s.events.on('landmark:destroyed', ({ landmark, cause }) => {
         if (landmark === this.tower && !s.disposed) this.onDestroyed(cause);
+      }),
+      // a Shahed's warhead goes off against the tower: an enemy hit (the second one brings it down)
+      s.events.on('drone:impact', ({ drone, position, landmark }) => {
+        if (landmark === this.tower && this.tower && !s.disposed) hitLandmark(this.tower, s.events, s.world.time, { attackerId: drone.id, point: position });
       }),
     );
   }

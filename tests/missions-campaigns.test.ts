@@ -3,8 +3,8 @@
  * side. Each campaign unlocks along its own chain, NEXT and the ending stay inside it, every lookup
  * finds missions in any campaign, and a save from the one-campaign days keeps its progress.
  *
- * The IRGC campaign has no missions until #78 lands, so this file swaps its content module for a
- * three-mission fixture (g01–g03, copies of c01–c03; g03 is the campaign's finale). The real, empty
+ * The IRGC campaign has a single mission so far (g01, #78), so this file swaps its content module
+ * for a three-mission fixture (g01–g03, copies of c01–c03; g03 is the campaign's finale). The real
  * file is checked separately.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,14 +114,15 @@ describe('campaigns', () => {
     }
   });
 
-  it('the real IRGC campaign file is an empty campaign with a placeholder name (missions arrive in #78 and #82)', async () => {
+  it('the real IRGC campaign file starts with g01 (#78; g02 arrives in #82) and has a placeholder name', async () => {
     const real = await vi.importActual<typeof import('../src/missions/content/irgc')>('../src/missions/content/irgc');
     expect(real.IRGC_CAMPAIGN.id).toBe('irgc');
     expect(real.IRGC_CAMPAIGN.name).toBe(real.IRGC_CAMPAIGN_NAME);
     expect(real.IRGC_CAMPAIGN.name.length).toBeGreaterThan(0);
-    expect(real.IRGC_CAMPAIGN.missions).toEqual([]);
-    // an empty campaign shows as "coming soon" in the picker
-    expect(campaignStatus(real.IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 0, soon: true });
+    expect(real.IRGC_CAMPAIGN.missions.map((m) => m.id)).toEqual(['g01']);
+    expect(real.IRGC_CAMPAIGN.missions[0].index).toBe(1);
+    // a campaign with a mission is no longer "coming soon" in the picker
+    expect(campaignStatus(real.IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 1, soon: false });
   });
 
   it('mission ids are unique across every campaign and training (progress is keyed by mission id)', () => {

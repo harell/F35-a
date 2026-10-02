@@ -251,6 +251,11 @@ export class MissionBot {
     // surface objectives are ours only when we brought air-to-ground stores (else a package's job)
     const surfaceNeeded = this.agLoadout && this.objectiveTargets('surface').length > 0;
     const airNeeded = this.objectiveTargets('air').length > 0;
+    // 2b. Winchester against one-way drones (Shaheds, unarmed): a gun pass risks nothing but the
+    //     warhead, so a competent pilot presses on with the gun instead of going home (IRGC g01)
+    const guns = !fuelLow && this.gunWork(aa);
+    this.air.opts.rtbWhenWinchester = !guns;
+    if (guns) return bandit ? this.fight('GUNS', dt) : this.huntDrone(dt);
 
     // 3. Winchester / bingo: rearm at home (a gun kill of an overshooting bandit is still taken)
     const agUseless = ag === 0 || (surfaceNeeded && !surface);
@@ -448,6 +453,27 @@ export class MissionBot {
       else p.input.flare = p.flares > 0;
       this.lastCm = now;
     }
+  }
+
+  /** Out of missiles, rounds left, and every air target an active objective wants is a one-way drone. */
+  private gunWork(aa: number): boolean {
+    if (aa > 0 || this.p.gunAmmo <= 0) return false;
+    const targets = this.objectiveTargets('air');
+    return targets.length > 0 && targets.every((t) => t.kind === 'aircraft' && !!t.oneWay);
+  }
+
+  /** No drone on the scope yet (gun work): head for the nearest one at its height. */
+  private huntDrone(dt: number): void {
+    let best: AnyEntity | null = null;
+    let bd = Infinity;
+    for (const t of this.objectiveTargets('air')) {
+      const d = t.position.distanceTo(this.p.position);
+      if (d < bd) {
+        bd = d;
+        best = t;
+      }
+    }
+    if (best) this.nav(best.position, Math.max(600, best.position.y + 300), 'HUNT', dt);
   }
 
   private fight(mode: string, dt: number): void {
@@ -713,6 +739,7 @@ export function runPlaythrough(
     if (opts.jitter === false) return;
     for (const a of world.aircraft) {
       if (!isHostile(p.team, a.team) || jittered.has(a.id)) continue; // (civil traffic flies its own profile)
+      if (a.oneWay) continue; // one-way drones fly the mission's route (no spawn jitter either: spawner.ts)
       jittered.add(a.id);
       a.position.x += (jit() - 0.5) * 5_000;
       a.position.z += (jit() - 0.5) * 5_000;

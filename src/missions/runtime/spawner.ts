@@ -286,10 +286,11 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
 }
 
 /**
- * Spawn a one-way drone group (Shahed-136): the formation (default 'triangle', 150 m) is laid out
- * nose towards the first waypoint (or the target); every member flies the route shifted by its
- * slot, at the group's altitude and speed, and dives into the shared target point. Drones fly
- * the designed geometry on every attempt (no retry jitter): the route is the mission.
+ * Spawn a one-way drone group (Shahed-136): the formation (default 'triangle', 150 m, each member
+ * a further `stagger` back) is laid out nose towards the first waypoint (or the target); every
+ * member flies the route shifted by its slot, at the group's altitude and speed, and dives into
+ * the shared target point. Drones fly the designed geometry on every attempt (no retry jitter):
+ * the route is the mission.
  */
 function spawnOneWayGroup(s: MissionState, g: GroupRt): void {
   const def = g.air!;
@@ -313,6 +314,7 @@ function spawnOneWayGroup(s: MissionState, g: GroupRt): void {
   g.task = undefined;
   for (let i = 0; i < n; i++) {
     formationOffset(formation, i, n, spacing, _slot);
+    _slot.aft += i * (ow.stagger ?? 0);
     const dx = rx * _slot.right - fx * _slot.aft;
     const dz = rz * _slot.right - fz * _slot.aft;
     const pos = clampXZ(new Vector3(def.x + dx, def.altitude, def.z + dz));

@@ -33,7 +33,8 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 >   a Su-57 finale over the Gulf. Optional bonus: flying under the Harbour Bridge (43 m clearance) earns a score bonus and
 >   a HUD message.
 > * **Second campaign, the IRGC (epic #72):** `CAMPAIGNS` in `src/missions/index.ts` lists Operation Southern Cross and the
->   IRGC campaign (`src/missions/content/irgc.ts`, mission ids `g01`, `g02`, …). Each campaign has its own unlock chain
+>   IRGC campaign (`src/missions/content/irgc.ts`, mission ids `g01`, `g02`, …; g01 "Buzz Kill" is the Shahed swarm on the
+>   Sky Tower). Each campaign has its own unlock chain
 >   (its first mission is always unlocked, a win unlocks the next one of the same campaign), its own ending screen and a
 >   card in the campaign picker. Progress stays keyed by mission id, so mission ids must be unique across campaigns.
 > * Terrain heights: sea level 0, isthmus 20–80 m, volcanic cones up to 196 m (Mt Eden), Rangitoto 260 m, Waitākere
@@ -99,8 +100,9 @@ volume, collisions, collapse explosions) and the renderer (`src/world/scenery/sk
 from the player's bomb, AGM or AAM destroys it at once, damaged or not (`landmark:destroyed`, cause `player`). Enemy
 attacks register through `hitSkyTower()` / `hitLandmark()` in `src/sim/landmarks.ts`: the first hit leaves it damaged
 (`landmark:damaged`; fire and smoke on its face from `src/render/effects/Effects.ts`), the second brings it down (cause
-`enemy`). The mission runner (`src/missions/runtime/landmarks.ts`) makes the radio and HUD calls and fails the sortie on a
-collapse, with a different reason for each cause. The tower is **never destroyed for good**: nothing about it is saved,
+`enemy`). A one-way drone that flies into it is such an enemy hit: the sim only reports the impact (`drone:impact` with
+the landmark), and the mission runner (`src/missions/runtime/landmarks.ts`) registers it with `hitLandmark()`, makes the
+radio and HUD calls and fails the sortie on a collapse, with a different reason for each cause. The tower is **never destroyed for good**: nothing about it is saved,
 so every mission start and restart builds it intact, and old saves' `skyTowerDown` is dropped on load.
 
 ## One-way attack drones (the Shahed-136)
@@ -118,7 +120,9 @@ every other live aircraft within 150 m (`AIRCRAFT_WARHEAD` in `src/sim/damage/ta
 other drones, so one missile can't clear a swarm by chain reaction. A mission spawns a swarm with an aircraft group
 carrying `oneWay` (target point and optional route; `formation: 'triangle'` gives rows of 1, 2, 3, 4) in
 `src/missions/runtime/spawner.ts`. Each drone flies the route shifted by its slot, and at a fixed speed the triangle
-can't wheel round a corner: it keeps its first-leg orientation, so a swarm whose shape matters wants a straight route. Its buzz is `PistonBuzzVoice` (`src/audio/world/DroneSounds.ts`), not a jet voice.
+can't wheel round a corner: it keeps its first-leg orientation, so a swarm whose shape matters wants a straight route.
+Converging on one target point, a row abreast closes up into a bunch that one missile can clear: `oneWay.stagger` steps
+each drone further back than the one before it, so the swarm funnels into single file instead (g01). Its buzz is `PistonBuzzVoice` (`src/audio/world/DroneSounds.ts`), not a jet voice.
 
 ## Real airfields (OpenStreetMap)
 
