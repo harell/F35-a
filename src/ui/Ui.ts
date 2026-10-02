@@ -11,11 +11,12 @@
  *   art/*                logo, F-35 planform, icons, Auckland chart, animated menu background
  *   styles/*.css         the look (dark glass, cyan accent, military avionics)
  */
-import type { CampaignProgress, CreateUi, UiApi } from '../core/contracts';
+import type { CampaignProgress, CreateUi, MissionDef, UiApi } from '../core/contracts';
 import { DIFFICULTIES } from '../core/data';
 import { loadSettings } from '../core/settings';
 import type { Settings } from '../core/types';
 import { failStreak, loadProgress } from '../missions';
+import { difficultyChangeToast } from './career';
 import { UiHost } from './host';
 import { LoadingOverlay, RotateOverlay, Toasts } from './overlays';
 import { showBriefing } from './screens/briefing';
@@ -47,6 +48,8 @@ export const createUi: CreateUi = (root, deps) => {
   host.onPresent = () => toasts.clearStale();
   /** Settings opened from the pause menu are drawn translucent over the game. */
   let fromPause = false;
+  /** The mission the pause menu was opened over (its difficulty decides the settings toast). */
+  let pausedMission: MissionDef | null = null;
   /**
    * The Game's live Settings object (seen through showBriefing / returned by showSettings — Game
    * assigns that return value). Menus that change the difficulty mutate it and save it.
@@ -89,15 +92,16 @@ export const createUi: CreateUi = (root, deps) => {
       const overlay = fromPause;
       fromPause = false;
       const before = settings.difficulty;
-      const out = await showSettings(host, settings, toast, { overlay });
+      const out = await showSettings(host, settings, toast, { overlay, running: overlay ? pausedMission : null });
       // mid-sortie the running mission keeps the difficulty it was built with (Game.runSession)
-      if (overlay && out.difficulty !== before) toast(`Difficulty: ${DIFFICULTIES[out.difficulty]?.label ?? out.difficulty} — applies from the next sortie or a restart`);
+      if (overlay && out.difficulty !== before) toast(difficultyChangeToast(out.difficulty, pausedMission));
       live = out;
       return out;
     },
     showPause: async (mission) => {
       const choice = await showPause(host, mission);
       fromPause = choice === 'settings';
+      pausedMission = mission?.def ?? null;
       return choice;
     },
     showDebrief: (result, next) => {

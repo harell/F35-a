@@ -1,13 +1,14 @@
 /**
  * F35-A — missions module public API (used by src/game/Game.ts):
  * CAMPAIGN, TRAINING, buildInstantMission, loadProgress, saveProgress, recordResult,
- * nextMissionAfter, nextMissionLabel, terrainPadsFor, createMissionRunner.
+ * nextMissionAfter, nextMissionLabel, missionDifficulty, terrainPadsFor, createMissionRunner.
  *
  *   schema.ts          MissionScript types (spawns, SAMs, targets, objectives, triggers…)
  *   MissionRunner.ts   runtime (implements MissionRunnerApi) + ./runtime/* helpers
  *   content/*          campaign "Operation Southern Cross", training, Instant Action generator
  *   progress.ts        localStorage campaign progress
  *   pads.ts            terrain pads under SAM sites / compounds
+ *   difficulty.ts      the difficulty a mission flies at (training: always Pilot)
  *   validate.ts        mission definition validator (tests / dev)
  */
 import type { CampaignProgress, InstantActionOptions, MissionDef, MissionResult } from '../core/contracts';
@@ -84,6 +85,8 @@ export function nextMissionLabel(id: string): string | null {
   if (!TRAINING.some((m) => m.id === id)) return 'Next mission';
   return next.kind === 'training' ? 'Next lesson' : 'Start the campaign';
 }
+
+export { TRAINING_DIFFICULTY, fixedDifficulty, missionDifficulty } from './difficulty';
 
 /** Any campaign / training mission by id (or null). */
 export function findMission(id: string): MissionDef | null {

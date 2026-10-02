@@ -59,6 +59,7 @@ import {
   nextMissionLabel,
   recordResult,
   missionById,
+  missionDifficulty,
   saveProgress,
   terrainPadsFor,
   followActiveScheme,
@@ -343,7 +344,9 @@ export class Game {
     // test hooks (autopilot, controls override) belong to one mission: never leak into the next
     this.autopilot = false;
     this.controlOverride = null;
-    const difficulty = DIFFICULTIES[this.settings.difficulty];
+    // training always flies at Pilot, whatever the setting (missionDifficulty)
+    const difficultyId = missionDifficulty(def, this.settings.difficulty);
+    const difficulty = DIFFICULTIES[difficultyId];
     this.ui.hideAll();
     this.ui.showLoading(0, 'Preparing mission');
     await nextFrame();
@@ -424,7 +427,7 @@ export class Game {
     analyticsTag('mission', def.id);
     analyticsTag('mission_kind', def.kind);
     analyticsTag('loadout', loadout);
-    analyticsTag('difficulty', this.settings.difficulty);
+    analyticsTag('difficulty', difficultyId);
     void this.requestWakeLock();
     this.audio.setPaused(false);
     this.missionLoading = false;
@@ -834,6 +837,8 @@ export class Game {
           inMission: !!s,
           paused: this.paused,
           mission: s?.def.id ?? null,
+          /** The difficulty the running mission flies at (a lesson: Pilot whatever the setting). */
+          difficulty: s?.world.difficulty.id ?? null,
           missionState: s?.runner.state ?? null,
           time: s?.world.time ?? 0,
           view: s?.rig.mode ?? null,

@@ -3,6 +3,7 @@
  * with a live bubble, invert, sensitivities, left-handed, haptics) · AUDIO · DISPLAY (HMD colour, FOV,
  * quality, FPS counter, default view). Resolves with the edited copy when closed.
  */
+import type { MissionDef } from '../../core/contracts';
 import { DIFFICULTIES } from '../../core/data';
 import type { Difficulty, Settings } from '../../core/types';
 import { RECENTER_TILT_EVENT } from '../../input/shared';
@@ -12,13 +13,14 @@ import { DEFAULT_TILT_NEUTRAL, tiltAngles, tiltToAxes, type TiltAngles, type Til
 import { icon } from '../art/icons';
 import { escapeHtml, h } from '../dom';
 import type { UiHost } from '../host';
-import { difficultyFacts } from '../career';
+import { difficultyFacts, midSortieDifficultyNote } from '../career';
 import { screenHeader, segmented, settingRow, slider, toggle } from '../widgets';
 
 type Tab = 'flight' | 'controls' | 'audio' | 'display';
 
 
-export function showSettings(host: UiHost, input: Settings, toast: (t: string) => void, opts: { overlay: boolean }): Promise<Settings> {
+/** `running`: the mission the settings are drawn over (overlay only), for the difficulty note. */
+export function showSettings(host: UiHost, input: Settings, toast: (t: string) => void, opts: { overlay: boolean; running?: Pick<MissionDef, 'kind'> | null }): Promise<Settings> {
   return new Promise((resolve) => {
     const s: Settings = { ...input };
     let done = false;
@@ -70,7 +72,7 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
     function buildFlight(): HTMLElement {
       const page = h('div', { class: 'set-page' });
       page.appendChild(h('div', { class: 'set-h', text: 'Difficulty' }));
-      if (opts.overlay) page.appendChild(h('div', { class: 'set-note', html: `${icon('info')}<span>A new difficulty applies from the next sortie (or RESTART).</span>` }));
+      if (opts.overlay) page.appendChild(h('div', { class: 'set-note', html: `${icon('info')}<span>${midSortieDifficultyNote(opts.running ?? null)}</span>` }));
       const grid = h('div', { class: 'diff-grid' });
       const cards: HTMLButtonElement[] = [];
       for (const id of Object.keys(DIFFICULTIES) as Difficulty[]) {

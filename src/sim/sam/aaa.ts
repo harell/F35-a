@@ -4,10 +4,11 @@
  * Fires 1–2 s bursts (57 rds/s combined) with ~1.5 s pauses at targets inside 2.5 km and below
  * 3 km above the site. Lead is computed from the target's velocity, bullet time of flight (with
  * drag) and gravity drop; a slowly wandering aim error (smaller for skilled crews) plus round
- * dispersion makes it a cone of fire rather than a laser.
+ * dispersion makes it a cone of fire rather than a laser. Against a low, close jet (inside 1.5 km,
+ * below 300 m above the site) the aim error shrinks: AAA threatens low flight (design pillar 3).
  */
 import { Vector3 } from 'three';
-import { G, clamp, wrapPi } from '../../core/math';
+import { G, clamp, smoothstep, wrapPi } from '../../core/math';
 import { atmosphere } from '../../core/atmosphere';
 import type { AircraftEntity, SamSiteEntity } from '../entities';
 import type { CombatCtx } from '../weapons/context';
@@ -34,6 +35,22 @@ const _r = new Vector3();
 const _u = new Vector3();
 const _zero = new Vector3();
 const _atm = { temperature: 0, pressure: 0, density: 0, speedOfSound: 0, sigma: 0 };
+
+/**
+ * Close-in, low target: inside CLOSE_RANGE m and below CLOSE_HEIGHT m above the site (fading out
+ * over the last 500 m / 100 m) the Gun Dish's solution is at its best (a short time of flight, a
+ * fast range rate update and a target that can't dive away), so the crew / fire-control aim error
+ * is multiplied by CLOSE_AIM_ERROR. Design pillar 3: AAA threatens low flight.
+ */
+export const CLOSE_RANGE = 1_500;
+export const CLOSE_HEIGHT = 300;
+export const CLOSE_AIM_ERROR = 0.65;
+
+/** Aim-error multiplier (1 → CLOSE_AIM_ERROR) for a target at `dist` m, `height` m above the site. */
+export function closeInAimFactor(dist: number, height: number): number {
+  const close = (1 - smoothstep(dist, CLOSE_RANGE - 500, CLOSE_RANGE)) * (1 - smoothstep(height, CLOSE_HEIGHT - 100, CLOSE_HEIGHT));
+  return 1 - (1 - CLOSE_AIM_ERROR) * close;
+}
 
 /** Aim direction (unit) leading a target, accounting for drag + gravity. */
 function leadDirection(muzzle: Vector3, t: AircraftEntity, v0: number, sigma: number, out: Vector3): Vector3 {
@@ -94,7 +111,7 @@ export function updateAaa(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, s
       const dist = Math.max(50, _r.length());
       const radial = target.velocity.dot(_r) / dist;
       const angRate = Math.sqrt(Math.max(0, target.velocity.lengthSq() - radial * radial)) / dist;
-      const mag = 0.006 + 0.022 * (1 - world.difficulty.aiSkill) + 0.05 * angRate;
+      const mag = (0.006 + 0.022 * (1 - world.difficulty.aiSkill) + 0.05 * angRate) * closeInAimFactor(dist, target.position.y - s.position.y);
       st.aimErr.set(gaussian(ctx.rng) * mag, gaussian(ctx.rng) * mag, gaussian(ctx.rng) * mag);
     }
     _dir.add(st.aimErr).normalize();

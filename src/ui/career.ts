@@ -3,10 +3,11 @@
  * tests/ui-career.test.ts). Everything that touches storage is wrapped in try/catch: private mode,
  * sandboxed iframes and full quotas must never break a menu.
  */
-import type { CampaignProgress, MissionResult } from '../core/contracts';
+import type { CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
 import { DIFFICULTIES } from '../core/data';
 import { loadSettings, saveSettings } from '../core/settings';
 import type { Difficulty, DifficultyParams, Settings } from '../core/types';
+import { fixedDifficulty } from '../missions/difficulty';
 
 export const DIFFICULTY_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
 
@@ -45,6 +46,25 @@ export function setDifficulty(settings: Settings, id: Difficulty): void {
   const saved = loadSettings();
   saved.difficulty = id;
   saveSettings(saved);
+}
+
+/**
+ * Settings opened from the pause menu: when a new difficulty applies. The running mission keeps the
+ * difficulty it was built with (Game.runSession), and a lesson flies at Pilot whatever the setting
+ * (missionDifficulty, #68), so for a lesson neither the next sortie of it nor a restart changes it.
+ */
+export function midSortieDifficultyNote(running: Pick<MissionDef, 'kind'> | null): string {
+  const fixed = running ? fixedDifficulty(running) : null;
+  if (fixed) return `Lessons always fly at ${DIFFICULTIES[fixed]?.label ?? fixed}: a new difficulty applies to the campaign and Instant Action.`;
+  return 'A new difficulty applies from the next sortie (or RESTART).';
+}
+
+/** Toast after the difficulty changes in settings opened from the pause menu (see midSortieDifficultyNote). */
+export function difficultyChangeToast(id: Difficulty, running: Pick<MissionDef, 'kind'> | null): string {
+  const label = DIFFICULTIES[id]?.label ?? id;
+  const fixed = running ? fixedDifficulty(running) : null;
+  if (fixed) return `Difficulty: ${label} — for the campaign and Instant Action; lessons always fly at ${DIFFICULTIES[fixed]?.label ?? fixed}`;
+  return `Difficulty: ${label} — applies from the next sortie or a restart`;
 }
 
 /* ───────────────────────── onboarding ───────────────────────── */

@@ -6,6 +6,7 @@
 import type { MissionResult } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, SamType } from '../../core/types';
+import { fixedDifficulty } from '../difficulty';
 import type { MissionScript } from '../schema';
 import { REASONS } from './reasons';
 import { noFight, parTimeFor } from './scoring';
@@ -137,7 +138,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     if (r.grade !== 'S' && r.accuracy < 0.5 && r.shotsFired >= 3) add('Tighten your shots: fire inside the SHOOT cue for a much better hit rate.');
     if (!idle && s.flightKills > 0 && s.flightKills >= r.kills.air + r.kills.sam + r.kills.ground)
       add(`Your wingman scored ${s.flightKills} of the flight's kills: S and A grades need at least half of them to be yours — lead the fight.`);
-    if (r.grade === 'S' && r.difficulty !== 'ace') add('Perfect sortie — try it on a harder difficulty.');
+    // not in a lesson: training flies at Pilot whatever the setting, so a harder one changes nothing there
+    if (r.grade === 'S' && r.difficulty !== 'ace' && !fixedDifficulty(s.def)) add('Perfect sortie — try it on a harder difficulty.');
   }
   if (tips.length === 0) {
     if (!r.success) add('Fly Training first: T02 teaches the lock and SHOOT cue, T03 how to survive SAMs.');
