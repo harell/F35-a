@@ -13,6 +13,7 @@ import { reduceView } from '../src/world/terrain/parallel';
 import { ColorMapSampler, HouseSource } from '../src/world/scenery/sources';
 import { LOT_CLEARANCE, LOT_MASK_CELL, LotMask, urbanBounds } from '../src/world/scenery/lotMask';
 import { AKL_CBD_GRID } from '../src/world/config';
+import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 
 // the medium tier's terrain (1024², the tier the playtest found both glitches on)
 const features = allFeatures('auckland', []);
@@ -130,6 +131,12 @@ describe('the suburbs leave a corridor along the road and railway ribbons (#61 i
 
   it('without the corridor, houses stood on the ribbons there (the test can fail)', () => {
     for (const [name, x, z] of places) expect(onRibbon(paintedHouses(x, z, null)), name).toBeGreaterThan(0);
+  });
+
+  it('the shader only fetches the mask where a lot can still show (below 40 m/px)', () => {
+    expect(terrainFragmentShader).toContain('if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(');
+    // past 40 m/px the urban colour is the far average alone, which does not read `built`
+    expect(terrainFragmentShader).toContain('mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp))');
   });
 
   it('the shader decodes the same bits (a port of lotMasked() in terrainShader.ts)', () => {

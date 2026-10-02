@@ -339,8 +339,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec2 lf = fract(p / LOT);
   float lh = hash12(lid + 17.0 + dist.z * 13.0);
   float built = step(lh, 0.8 + 0.2 * dens) * (1.0 - park);
-  // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does)
-  if (built > 0.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
+  // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
+  // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
+  if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
   float apt = step(0.9, dens);
   float roadD = edgeDist(p, BLOCK);
   float aa = max(mpp, 0.05);
