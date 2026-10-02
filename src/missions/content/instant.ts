@@ -215,7 +215,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         `Shilkas guard the runway and fighters hold a CAP overhead.${n >= 2 ? ' An SA-6 covers the field from the east end of Waiheke.' : ''}`,
         'SEAD loadout: four small-diameter bombs for the jets, AARGMs for any radar that lights you up.',
       ];
-      script.parTime = 420;
+      // one glide bomb per pass, then egress and come round: the bot's wins take 550-600 s on this fit
+      script.parTime = 600;
       break;
     }
     case 'defend': {
@@ -353,7 +354,8 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     const at = { x: Math.round(from.x + uz * 3000), z: Math.round(from.z - ux * 3000) };
     groups.push(
       flight('escort', escortType, escorts, at, 4500, inbound, 245, 'escort', {
-        maxCount: 4,
+        // capped at 2 on every difficulty (Ace's 1.5x count scaling made it 3)
+        maxCount: 2,
         task: { kind: 'escort_group', group: 'strikers' },
         ...mixedDowngrade(opts, escortType, rng),
       }),
