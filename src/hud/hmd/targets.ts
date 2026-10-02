@@ -408,14 +408,19 @@ export function drawDesignated(f: HudFrame): void {
   const span = (m ? 14 : 0) * u;
   const up = occ.hits(x - sw, below - 7 * u, x + sw, below + span + 7 * u, 0, 0) && !occ.hits(x - sw, typeY - 21 * u - span, x + sw, typeY - 7 * u, 0, 0);
   const dy = up ? -14 * u : 14 * u;
-  pen.text(label, x, typeY, col, 12);
+  const rng = rangeLabel(dist);
+  // the labels (not the box) slide off the speed / altitude columns, which print on top (#62: "MIG-29"
+  // into "M 0.77", the range into "THR 76%" with the target near the screen side)
+  const tw = Math.max(pen.textWidth(label, 12), pen.textWidth(rng, 12.5), pen.textWidth(pit ? 'PITBULL' : tof, 11.5)) / 2 + 2 * u;
+  const tx = slideOffColumns(f, x, tw, (up ? typeY - 14 * u - span : typeY) - 8 * u, (up ? typeY : below + span) + 8 * u);
+  pen.text(label, tx, typeY, col, 12);
   let ly = up ? typeY - 14 * u : below;
-  pen.text(rangeLabel(dist), x, ly, col, 12.5);
+  pen.text(rng, tx, ly, col, 12.5);
   if (m) {
     ly += dy;
     if (pit) {
-      if (blink(f, 3, 0.75)) pen.text('PITBULL', x, ly, pal.bright, 11.5);
-    } else pen.text(tof, x, ly, pal.main, 11.5);
+      if (blink(f, 3, 0.75)) pen.text('PITBULL', tx, ly, pal.bright, 11.5);
+    } else pen.text(tof, tx, ly, pal.main, 11.5);
   }
   // right of the box: "LOCK" flash after the lock event, LOCKING while it builds, NOSE ON when the
   // commanded lock can't build because the target is outside the ±30° lock cone
@@ -445,7 +450,13 @@ export function drawDesignated(f: HudFrame): void {
   // protected: the box, its ring and every label (text zones never cover it)
   const top = up ? ly - 8 * u : typeY - 8 * u;
   const bottom = up ? y + (building ? h * 1.5 : h) + 3 * u : ly + 8 * u;
-  occ.add(Math.min(x - lw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity), top, Math.max(x + lw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0), bottom, 1);
+  occ.add(
+    Math.min(x - lw - 2 * u, tx - tw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity),
+    top,
+    Math.max(x + lw + 2 * u, tx + tw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0),
+    bottom,
+    1,
+  );
   picks.add(t.id, x, y, h);
 }
 
@@ -552,35 +563,8 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   const reach = 10 * u + Math.abs(sp.dirX) * hw + Math.abs(sp.dirY) * hh;
   let tx = edge.x - sp.dirX * reach;
   let ty = edge.y - sp.dirY * reach - hh + 8 * u;
-  if (f.mode === 'hmd') {
-    // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed
-    // box): slid sideways, toward the centre, past the block it would cover
-    const top = ty - 8 * u;
-    const bot = ty + below;
-    const z = f.zone;
-    const dlz = !!z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon];
-    for (let pass = 0; pass < 2; pass++) {
-      for (let k = 0; k < 3; k++) {
-        let x0 = L.spdRight - 78 * u;
-        let x1 = L.spdRight + 3 * u;
-        let y0 = L.boxY - 13 * u;
-        let y1 = speedColumnBottom(f);
-        if (k === 1) {
-          x0 = L.altLeft - 3 * u;
-          x1 = L.altLeft + 92 * u;
-          y1 = altColumnBottom(f);
-        } else if (k === 2) {
-          if (!dlz) continue;
-          x0 = L.dlzX - 10 * u;
-          x1 = L.dlzX + 62 * u;
-          y0 = L.dlzTop - 18 * u;
-          y1 = L.dlzBottom + 18 * u;
-        }
-        if (bot <= y0 || top >= y1 || tx + hw <= x0 || tx - hw >= x1) continue;
-        tx = (x0 + x1) / 2 < L.cx ? x1 + hw + 2 * u : x0 - hw - 2 * u;
-      }
-    }
-  }
+  // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed box)
+  tx = slideOffColumns(f, tx, hw, ty - 8 * u, ty + below);
   tx = Math.max(L.left + hw, Math.min(L.right - hw, tx));
   ty = Math.max(L.row2Y + 8 * u, ty);
   pen.text(off, tx, ty, col, 12.5);
@@ -588,6 +572,42 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   pen.text(rng, tx, ty + 28 * u, pal.dim, 10.5);
   if (tl) pen.text(tl, tx, ty + 41 * u, pal.main, 10.5);
   f.occ.add(tx - hw, ty - 8 * u, tx + hw, ty + below, 1);
+}
+
+/**
+ * HMD views: the centre x for a text block [x ± hw] × [top, bot] that keeps it off the speed and
+ * altitude columns and the DLZ scale (fixed blocks drawn after the target symbology, so they would
+ * print on top of it): slid sideways, toward the screen centre, past the block it would cover (#62).
+ * Other views: x unchanged.
+ */
+function slideOffColumns(f: HudFrame, x: number, hw: number, top: number, bot: number): number {
+  if (f.mode !== 'hmd') return x;
+  const L = f.L;
+  const u = L.u;
+  const z = f.zone;
+  const dlz = !!z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon];
+  for (let pass = 0; pass < 2; pass++) {
+    for (let k = 0; k < 3; k++) {
+      let x0 = L.spdRight - 78 * u;
+      let x1 = L.spdRight + 3 * u;
+      let y0 = L.boxY - 13 * u;
+      let y1 = speedColumnBottom(f);
+      if (k === 1) {
+        x0 = L.altLeft - 3 * u;
+        x1 = L.altLeft + 92 * u;
+        y1 = altColumnBottom(f);
+      } else if (k === 2) {
+        if (!dlz) continue;
+        x0 = L.dlzX - 10 * u;
+        x1 = L.dlzX + 62 * u;
+        y0 = L.dlzTop - 18 * u;
+        y1 = L.dlzBottom + 18 * u;
+      }
+      if (bot <= y0 || top >= y1 || x + hw <= x0 || x - hw >= x1) continue;
+      x = (x0 + x1) / 2 < L.cx ? x1 + hw + 2 * u : x0 - hw - 2 * u;
+    }
+  }
+  return x;
 }
 
 /** Newest live player missile guiding on `targetId`. */

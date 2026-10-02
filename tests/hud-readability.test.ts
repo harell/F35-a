@@ -4,6 +4,7 @@
  *    the escort doesn't, and the primary objective counts the strikers left ("STRIKERS n");
  *  - the off-screen target cue's text (angle-off, type, range) never prints over the speed / altitude
  *    columns, the DLZ or another HUD text, whichever way the target lies;
+ *  - the target box's labels slide off the speed column instead of printing into it;
  *  - the GPS bomb's azimuth steering line breaks around the centre cue ("IN RANGE", "REL 5", STEER);
  *  - Defend's radar inset (chase view) always shows the tanks' count, even when it doesn't fit under
  *    the site symbol or the site lies beyond the scope's rim;
@@ -384,5 +385,62 @@ describe("Defend: the radar inset's site count", () => {
       const counts = fake.texts.filter((t) => /^\d+\/9$/.test(t.text));
       expect(counts.length, far ? 'site far beyond the rim' : 'site at the start').toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+describe("the target box's labels keep off the speed column", () => {
+  installPath2D();
+  it('hud view: a target right by the speed box has its type and range clear of the column', () => {
+    const W = 844;
+    const H = 390;
+    const mock = buildMock('aa');
+    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+    const hud = createHud(canvas, mock.events);
+    hud.resize(W, H, 1);
+    const p = mock.player;
+    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+    camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+    camera.quaternion.copy(p.quaternion);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    const ctx: FrameContext = {
+      dt: 1 / 30,
+      time: 0,
+      world: mock.world,
+      player: p,
+      camera,
+      viewMode: 'hud',
+      focusId: p.id,
+      mission: mock.mission,
+      settings: { ...DEFAULT_SETTINGS },
+      quality: { ...QUALITY_PRESETS.medium },
+      paused: false,
+      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+    };
+    hud.update(ctx);
+    const mach = fake.texts.find((t) => /^M \d/.test(t.text))!;
+    expect(mach).toBeTruthy();
+    const t = mock.world.getEntity(p.radar.designatedId!)!;
+    const at = (sx: number, sy: number) => {
+      const ndc = new Vector3((sx / W) * 2 - 1, -((sy / H) * 2 - 1), 0.5).unproject(camera);
+      t.position.copy(camera.position).addScaledVector(ndc.sub(camera.position).normalize(), 9000);
+      const c = p.radar.contacts.find((x) => x.id === t.id);
+      if (c) c.position.copy(t.position);
+    };
+    const bad: string[] = [];
+    // the box just right of the column, level with the Mach and G lines
+    for (const [dx, dy] of [[10, 0], [25, 10], [40, 25]]) {
+      for (let i = 0; i < 3; i++) {
+        fake.reset();
+        at(mach.x + dx, mach.y + dy);
+        ctx.time += ctx.dt;
+        hud.update(ctx);
+      }
+      const tx = fake.texts.filter((x) => x.text.trim());
+      for (let i = 0; i < tx.length; i++) {
+        for (let j = i + 1; j < tx.length; j++) if (overlaps(textBox(tx[i]), textBox(tx[j]))) bad.push(`${dx},${dy}: "${tx[i].text}" x "${tx[j].text}"`);
+      }
+    }
+    expect(bad).toEqual([]);
   });
 });
