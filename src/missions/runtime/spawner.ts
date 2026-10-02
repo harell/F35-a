@@ -258,7 +258,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
     clampXZ(pos);
     pos.y = Math.max(pos.y, spawnFloor(world.terrain, pos.x, pos.z, fx, fz));
     const aiTask = resolveTask(task, s, def.team);
-    const ai = s.deps.createAi(def.role, { skill, task: aiTask, seed: (s.def.seed * 31 + s.enemiesSpawned * 7 + i * 13) >>> 0 });
+    const ai = s.deps.createAi(def.role, { skill, task: aiTask, seed: (s.def.seed * 31 + s.enemiesSpawned * 7 + i * 13) >>> 0, orders: def.orders });
     const wingman = def.role === 'wingman';
     const ac = world.spawnAircraft({
       type,

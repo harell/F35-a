@@ -75,8 +75,19 @@ export type AiTask =
   | { kind: 'escort'; leaderId: number }
   | { kind: 'rtb'; point: Vector3 };
 
+/**
+ * Standing orders for a friendly 'wingman' (Instant Action, issue #60: the wingman supports the
+ * player, it can't win the mission for a player who never fires).
+ */
+export interface WingmanOrders {
+  /** Weapons hold until the player engages a bandit (a missile at a hostile aircraft, or a hit on one); a stray gun burst doesn't count. */
+  holdFireUntilPlayerFires?: boolean;
+  /** Never engage these groups (AircraftEntity.groupId), e.g. Defend's strikers: the player's job. */
+  ignoreGroups?: string[];
+}
+
 /** Factory exported by src/ai/index.ts */
-export type CreateAiBrain = (role: AiRole, opts: { skill: number; task?: AiTask; seed?: number }) => AiBrain;
+export type CreateAiBrain = (role: AiRole, opts: { skill: number; task?: AiTask; seed?: number; orders?: WingmanOrders }) => AiBrain;
 
 /* ───────────────────────── Combat (implemented by COMBAT agent) ───────────────────────── */
 

@@ -5,6 +5,7 @@
 import type { InstantActionOptions, MissionDef, SceneryFeature } from '../../core/contracts';
 import { mulberry32 } from '../../core/math';
 import type { AircraftType, LoadoutId, SamType, TheaterId } from '../../core/types';
+import type { WingmanOrders } from '../../sim/api';
 import { WIRI_TANKS } from '../../core/sites';
 import type { AircraftGroupDef, Condition, GroundTargetDef, HintDef, MissionScript, ObjectiveDef, SamSiteDef, TriggerDef, WaypointDef, XZ } from '../schema';
 import { AKL_SEED, BASE_FEATURES, FEATURES, P, WAIHEKE_RUNWAY_HDG, flight, mission, runwayPoint, site, target, wingmen } from './common';
@@ -62,12 +63,13 @@ function pickType(opts: InstantActionOptions, rng: () => number): AircraftType {
 }
 
 /**
- * 'mixed' only: the modern Su-35 / Su-57 are Veteran / Ace opponents — below that the flight is
- * a MiG-29 or Su-27 instead (resolved by the runner for the difficulty being flown).
+ * 'mixed' only: the modern Su-35 / Su-57 are Ace opponents — below that the flight is a MiG-29 or
+ * Su-27 instead (resolved by the runner for the difficulty being flown). Issue #60: on Veteran
+ * their R-77s decided every Dogfight, Gauntlet and Strike run (the bot was 0/6 in each).
  */
 function mixedDowngrade(opts: InstantActionOptions, type: AircraftType, rng: () => number): Partial<AircraftGroupDef> {
   if (opts.enemyType !== 'mixed' || (type !== 'su35' && type !== 'su57')) return {};
-  return { downgrade: { below: 'veteran', type: rng() < 0.5 ? 'mig29' : 'su27' } };
+  return { downgrade: { below: 'ace', type: rng() < 0.5 ? 'mig29' : 'su27' } };
 }
 
 /** Split `n` enemies into pairs (last group may be a single). */
@@ -101,6 +103,9 @@ function enemyFlights(opts: InstantActionOptions, n: number, lay: Layout, rng: (
   return out;
 }
 
+/** Instant Action wingman (issue #60): it backs the player up and can't win the mission for a player who never fires. */
+const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
+
 const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
 
 export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: number): MissionDef {
@@ -123,14 +128,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
 
   switch (opts.mode) {
     case 'dogfight': {
-      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast' }));
+      // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
+      // the player has fired
+      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
       const flights = enemyFlights(opts, n, lay, rng);
       groups.push(...flights);
       objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
       briefing = [
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, more on Ace). Weapons free — splash them all.`,
-        opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s — Su-35s and Su-57s join on Veteran and Ace.' : '',
-        n >= 3 ? 'Viper 2 is on your wing.' : 'You are on your own.',
+        opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s — Su-35s and Su-57s join on Ace.' : '',
+        n >= 3 ? 'Viper 2 is on your wing. It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
@@ -143,7 +150,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
-        sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35 }));
+        // the SA-15 Tor shoots down glide bombs and AARGMs: Veteran and up only, as in c04 and Strike
+        sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35, ...(type === 'sa15' ? { minDifficulty: 'veteran' as const } : {}) }));
       }
       ground.push(
         target('fuel1', 'target', 'fuel', { x: lay.target.x - 120, z: lay.target.z }),
@@ -173,8 +181,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       break;
     }
     case 'strike': {
-      loadout = 'strike_stealth';
-      allowed = ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'];
+      // SEAD fit (issue #60): 4 SDBs take the 3 parked jets in one sortie (the 2 JDAMs of
+      // strike_stealth needed a second pass through the SA-6 ring), the AARGMs answer the SA-6
+      loadout = 'sead_stealth';
+      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
       if (!features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);
@@ -187,7 +197,9 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         target('fuel1', 'fuel', 'fuel', rw(600, 620)),
       );
       sams.push(site('zsu1', 'defences', 'zsu23', rw(-650, 150)), site('zsu2', 'defences', 'zsu23', rw(650, 150)));
-      if (n >= 2) sams.push(site('sam1', 'defences', 'sa6', P.waiW));
+      // the SA-6 sits east of the field, off the run-in from the west (issue #60: at Waiheke west it
+      // shot the bot down on the bomb run in 4 of 6 Pilot runs)
+      if (n >= 2) sams.push(site('sam1', 'defences', 'sa6', P.waiE));
       // the SA-15 Tor shoots down JDAMs: Veteran and up only, as in c04
       if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', P.waiC, { minDifficulty: 'veteran' }));
       const cap = enemyFlights(opts, Math.max(1, Math.ceil(n / 2)), lay, rng, { role: 'cap' });
@@ -198,8 +210,13 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         { id: 'o_hangars', kind: 'destroy', groups: ['hangars', 'fuel'], label: 'Destroy the hangars and fuel', primary: false },
         { id: 'o_cap', kind: 'destroy', groups: cap.map((g) => g.id), label: 'Splash the CAP', primary: false },
       );
-      briefing = ['Enemy airfield. Destroy the parked jets on the apron.', 'Shilkas guard the runway and fighters hold a CAP overhead.'];
-      script.parTime = 420;
+      briefing = [
+        'Enemy airfield. Destroy the parked jets on the apron.',
+        `Shilkas guard the runway and fighters hold a CAP overhead.${n >= 2 ? ' An SA-6 covers the field from the east end of Waiheke.' : ''}`,
+        'SEAD loadout: four small-diameter bombs for the jets, AARGMs for any radar that lights you up.',
+      ];
+      // one glide bomb per pass, then egress and come round: the bot's wins take 550-600 s on this fit
+      script.parTime = 600;
       break;
     }
     case 'defend': {
@@ -312,7 +329,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
   // strike jets: the chosen Flanker / Fulcrum, else Su-27s (the Su-57 and the heavies don't carry KABs here)
   const strikeType: AircraftType = opts.enemyType === 'mig29' || opts.enemyType === 'su27' || opts.enemyType === 'su35' ? opts.enemyType : 'su27';
   const strikers = Math.max(2, Math.min(4, Math.ceil(n / 2)));
-  const escorts = Math.max(0, Math.min(4, n - strikers));
+  const escorts = Math.max(0, Math.min(2, n - strikers));
   let escortType = pickType(opts, rng);
   if (!FIGHTERS.includes(escortType)) escortType = 'mig29';
 
@@ -328,12 +345,17 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
       task: { kind: 'route', points: [{ ...climb, altitude: low }, { ...ip, altitude: bombAlt }] },
     }),
   ];
-  if (n >= 3) groups.push(wingmen(1, lay.defend.player, { loadout: 'a2a_stealth' }));
+  // Viper 2 takes the escort and never the strikers: "bombers have priority" is the player's job
+  // (issue #60: it won Defend alone). From 6 enemies (4 escorts at the top end) Viper 3 joins: with
+  // one wingman the bot lost Defend at 8 on Pilot 2 of 2.
+  const wings = n >= 6 ? 2 : n >= 3 ? 1 : 0;
+  if (wings > 0) groups.push(wingmen(wings, lay.defend.player, { loadout: 'a2a_stealth', orders: { ignoreGroups: ['strikers'] } }));
   if (escorts > 0) {
     const at = { x: Math.round(from.x + uz * 3000), z: Math.round(from.z - ux * 3000) };
     groups.push(
       flight('escort', escortType, escorts, at, 4500, inbound, 245, 'escort', {
-        maxCount: 4,
+        // capped at 2 on every difficulty (Ace's 1.5x count scaling made it 3)
+        maxCount: 2,
         task: { kind: 'escort_group', group: 'strikers' },
         ...mixedDowngrade(opts, escortType, rng),
       }),
@@ -393,6 +415,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
       `About ${strikers} Flankers loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
+      ...(wings > 0 ? [`${wings > 1 ? 'Vipers 2 and 3 are' : 'Viper 2 is'} on your wing and takes the escort. The bombers are yours.`] : []),
     ],
   };
 }
