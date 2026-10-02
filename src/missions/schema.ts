@@ -260,6 +260,12 @@ export type ObjectiveDef = ObjectiveBase &
     { kind: 'waypoints'; waypoints: string[] }
     | /** Reach a point (optionally in an altitude band). */
     { kind: 'reach'; x: number; z: number; radius: number; below?: number; above?: number }
+    | /**
+       * Fly under the Harbour Bridge's navigation span (Auckland only). Completes on the same span
+       * test as the once-per-mission stunt bonus (MissionRunner.updateBridge, `stats.bridge`), and the
+       * stunt pays the points: this objective's default bonus is 0.
+       */
+    { kind: 'bridge' }
     | /** Stay alive (optionally inside an area) for `seconds` in total. */
     { kind: 'survive'; seconds: number; area?: { x: number; z: number; radius: number } }
     | /** Return to base: only becomes active when every other primary is complete. */

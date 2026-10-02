@@ -392,7 +392,11 @@ export interface UiApi {
   /** Settings editor; resolves with the edited settings when closed. */
   showSettings(settings: Settings): Promise<Settings>;
   showPause(mission: MissionRunnerApi | null): Promise<'resume' | 'restart' | 'settings' | 'quit'>;
-  showDebrief(result: MissionResult, hasNext: boolean): Promise<'next' | 'retry' | 'menu'>;
+  /**
+   * Debrief screen. `next` labels the button that flies the next mission or lesson ('Next mission',
+   * 'Next lesson', 'Start the campaign': nextMissionLabel() in src/missions), null when there is none.
+   */
+  showDebrief(result: MissionResult, next: string | null): Promise<'next' | 'retry' | 'menu'>;
   showCredits(): Promise<void>;
   /** Portrait-orientation overlay ("rotate your phone"). */
   setRotateHint(visible: boolean): void;

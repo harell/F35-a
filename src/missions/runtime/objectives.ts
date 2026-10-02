@@ -20,6 +20,8 @@ export function createObjectives(s: MissionState): void {
 }
 
 export function objectiveBonus(def: ObjectiveDef): number {
+  // the Harbour Bridge stunt already pays for the pass (MissionRunner.updateBridge): never pay it twice
+  if (def.kind === 'bridge') return def.bonus ?? 0;
   return def.bonus ?? (def.primary ? POINTS.primary : POINTS.secondary);
 }
 
@@ -193,6 +195,10 @@ export function updateObjectives(s: MissionState, dt: number): void {
           const inBand = (def.below === undefined || y <= def.below) && (def.above === undefined || y >= def.above);
           if (dx * dx + dz * dz <= def.radius * def.radius && inBand) setState(s, o, 'complete');
         }
+        break;
+      }
+      case 'bridge': {
+        if (s.stats.bridge) setState(s, o, 'complete');
         break;
       }
       case 'survive': {

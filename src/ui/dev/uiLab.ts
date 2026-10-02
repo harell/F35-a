@@ -4,6 +4,7 @@
  *   &mission=c01          mission for briefing / pause
  *   &tab=obj|hangar       briefing tab to open
  *   &stab=controls|audio|display  settings tab
+ *   &next=<label>         debrief NEXT button label (default 'Next mission'; 'Next lesson', 'Start the campaign')
  *   &bg=<image url>       picture behind translucent screens (pause / controls)
  * Resolved values are printed to #log and window.__uiResult.
  */
@@ -111,10 +112,10 @@ async function run(): Promise<void> {
       out(await ui.showPause(fakeRunner));
       break;
     case 'debrief':
-      out(await ui.showDebrief(result(true), true));
+      out(await ui.showDebrief(result(true), q.get('next') ?? 'Next mission'));
       break;
     case 'debrief-fail':
-      out(await ui.showDebrief(result(false), false));
+      out(await ui.showDebrief(result(false), null));
       break;
     case 'credits':
       await ui.showCredits();

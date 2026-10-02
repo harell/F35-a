@@ -1,8 +1,9 @@
 /**
  * F35-A UI — mission debrief: success/fail banner, animated grade letter, score count-up, kills by
  * type, accuracy, time, damage, objectives, medals earned (saved to the service record), debrief
- * tips; NEXT (if available) / RETRY / MENU, "Retry on Recruit" after repeated failures, and the
- * campaign ending (result.campaignComplete) before returning to the menu.
+ * tips; NEXT (if available, labelled by the caller: 'Next mission', 'Next lesson', 'Start the
+ * campaign') / RETRY / MENU, "Retry on Recruit" after repeated failures, and the campaign ending
+ * (result.campaignComplete) before returning to the menu.
  */
 import type { MissionResultExt } from '../../missions/runtime/resultExt';
 import type { MissionResult } from '../../core/contracts';
@@ -54,14 +55,15 @@ export function debriefPrimary(r: Pick<MissionResult, 'success' | 'campaignCompl
   return hasNext ? 'next' : 'menu';
 }
 
-export async function showDebrief(host: UiHost, r: MissionResult, hasNext: boolean, ctx?: DebriefContext): Promise<'next' | 'retry' | 'menu'> {
+/** `next`: the label of the button that flies the next mission or lesson, null when there is none. */
+export async function showDebrief(host: UiHost, r: MissionResult, next: string | null, ctx?: DebriefContext): Promise<'next' | 'retry' | 'menu'> {
   let fresh: string[] = [];
   try {
     fresh = recordMedals(r);
   } catch {
     /* storage */
   }
-  const choice = await debriefScreen(host, r, hasNext, ctx, new Set(fresh));
+  const choice = await debriefScreen(host, r, next, ctx, new Set(fresh));
   if (r.campaignComplete && r.success && choice !== 'retry') {
     await showCampaignEnding(host, r);
     return 'menu';
@@ -69,7 +71,7 @@ export async function showDebrief(host: UiHost, r: MissionResult, hasNext: boole
   return choice;
 }
 
-function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: DebriefContext | undefined, freshMedals: Set<string>): Promise<'next' | 'retry' | 'menu'> {
+function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null, ctx: DebriefContext | undefined, freshMedals: Set<string>): Promise<'next' | 'retry' | 'menu'> {
   return new Promise((resolve) => {
     let done = false;
     let raf = 0;
@@ -167,7 +169,7 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
 
     // ── footer ──
     const foot = h('footer', { class: 'scr-foot db-foot' });
-    const primary = debriefPrimary(r, hasNext);
+    const primary = debriefPrimary(r, nextLabel !== null);
     const menu = h('button', { class: `ui-btn ${primary === 'menu' ? 'primary' : ''}`, attrs: { type: 'button' }, html: `${icon('menu')}<span>Menu</span>` });
     menu.addEventListener('click', () => finish('menu'));
     const retry = h('button', { class: `ui-btn ${primary === 'retry' ? 'primary' : ''}`, attrs: { type: 'button' }, html: `${icon('retry')}<span>Retry</span>` });
@@ -190,7 +192,7 @@ function debriefScreen(host: UiHost, r: MissionResult, hasNext: boolean, ctx: De
       foot.appendChild(fin);
       focusEl = fin;
     } else if (primary === 'next') {
-      const next = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `<span>Next mission</span>${icon('next')}` });
+      const next = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `<span>${escapeHtml(nextLabel ?? 'Next mission')}</span>${icon('next')}` });
       next.addEventListener('click', () => finish('next'));
       foot.appendChild(next);
       focusEl = next;

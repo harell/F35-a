@@ -17,8 +17,12 @@
  * less. The player's kill share = player kills / (player kills + flight kills); below 50 % the
  * objective term is scaled down, and the grade is capped at B (share < 50 %) or C (< 25 %), so
  * S and A mean "you won this fight", not "your wingman did".
+ *
+ * No fight, no credit: a win where hostiles existed but the player hit nothing and killed nothing
+ * (the enemy was only driven off, or someone else did the killing) rates a share of 0 and an
+ * accuracy of 0, so it caps at C (playtest 2026-10-02, 2.3-b: a parked Defend win graded A).
  */
-import type { MissionResult } from '../../core/contracts';
+import type { MissionDef, MissionResult } from '../../core/contracts';
 
 export const POINTS = {
   air: 100,
@@ -37,6 +41,14 @@ export const POINTS = {
 } as const;
 
 export type Grade = MissionResult['grade'];
+
+/** Par time (s) when a mission sets neither `script.parTime` nor `timeLimit`. */
+export const DEFAULT_PAR = 480;
+
+/** A mission's nominal completion time (s): what the time bonus and the debrief's time tip measure against. */
+export function parTimeFor(def: Pick<MissionDef, 'script' | 'timeLimit'>): number {
+  return def.script.parTime ?? def.timeLimit ?? DEFAULT_PAR;
+}
 
 export interface ScoreInput {
   success: boolean;
@@ -75,7 +87,10 @@ export interface ScoreOutput {
   /** 0..1 performance rating behind the grade. */
   rating: number;
   accuracy: number;
-  /** Player kills / (player kills + flight kills), 1 when nobody else scored. */
+  /**
+   * Player kills / (player kills + flight kills); 1 when nobody scored, except 0 when hostiles
+   * existed and the player neither hit nor killed anything (see noFight()).
+   */
   playerShare: number;
   breakdown: { kills: number; objectives: number; time: number; accuracy: number; damage: number; friendly: number; bonus: number; waves: number };
 }
@@ -119,6 +134,15 @@ export function contributionCap(playerShare: number): Grade {
   return 'S';
 }
 
+/**
+ * Hostiles existed but the player took no part in the fight: no hit on a hostile and no kill.
+ * Whatever won the mission (bandits driven off, the wingman's kills), it wasn't the player. Counts
+ * hits, not shots: one gun burst into the air is a shot, and must not buy back the grade (#64 review).
+ */
+export function noFight(i: Pick<ScoreInput, 'enemiesSpawned' | 'hits' | 'kills'>): boolean {
+  return i.enemiesSpawned > 0 && i.hits <= 0 && i.kills.air + i.kills.sam + i.kills.ground <= 0;
+}
+
 export function computeScore(i: ScoreInput): ScoreOutput {
   const accuracy = i.shotsFired > 0 ? clamp01(i.hits / i.shotsFired) : 0;
   const killPts = i.kills.air * POINTS.air + i.kills.sam * POINTS.sam + i.kills.ground * POINTS.ground;
@@ -135,12 +159,13 @@ export function computeScore(i: ScoreInput): ScoreOutput {
   // Size-independent performance rating.
   const totalKills = i.kills.air + i.kills.sam + i.kills.ground;
   const flightKills = Math.max(0, i.flightKills ?? 0);
-  const playerShare = totalKills + flightKills > 0 ? totalKills / (totalKills + flightKills) : 1;
+  const idle = noFight(i);
+  const playerShare = idle ? 0 : totalKills + flightKills > 0 ? totalKills / (totalKills + flightKills) : 1;
   const contrib = clamp01(playerShare / 0.5);
   const primaryShare = (i.primaryTotal > 0 ? i.primaryDone / i.primaryTotal : 1) * (0.55 + 0.45 * contrib);
   const secondaryShare = i.secondaryTotal > 0 ? i.secondaryDone / i.secondaryTotal : 1;
   const killShare = i.enemiesSpawned > 0 ? clamp01(totalKills / Math.max(1, i.enemiesSpawned * 0.6)) : 1;
-  const accShare = i.shotsFired > 0 ? clamp01(accuracy / 0.7) : 1;
+  const accShare = i.shotsFired > 0 ? clamp01(accuracy / 0.7) : idle ? 0 : 1;
   let rating =
     0.45 * primaryShare +
     0.1 * secondaryShare +

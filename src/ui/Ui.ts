@@ -100,9 +100,9 @@ export const createUi: CreateUi = (root, deps) => {
       fromPause = choice === 'settings';
       return choice;
     },
-    showDebrief: (result, hasNext) => {
+    showDebrief: (result, next) => {
       const p = readProgress();
-      return showDebrief(host, result, hasNext, { settings: liveSettings, failStreak: p ? failStreak(p, result.missionId) : 0 });
+      return showDebrief(host, result, next, { settings: liveSettings, failStreak: p ? failStreak(p, result.missionId) : 0 });
     },
     showCredits: () => showCredits(host, deps.build),
     setRotateHint: (visible) => rotate.set(visible),
