@@ -114,7 +114,23 @@ export type Formation =
   | 'vic' // V
   | 'trail' // in trail (one behind the other)
   | 'wall' // line abreast, wide
-  | 'box'; // 2 × 2 box (4-ships)
+  | 'box' // 2 × 2 box (4-ships)
+  | 'triangle'; // rows of 1, 2, 3, 4… behind the lead, `spacing` apart (one-way drone swarms)
+
+/**
+ * One-way attack drones (Shahed-136): every member flies the route at the group's `altitude` and
+ * `speed` (parallel tracks that keep the formation), then dives into the target point. No AI brain
+ * (`role` is ignored) and the group's `heading` is ignored: the formation points its nose at the
+ * first waypoint, or at the target. The world reports each hit with a 'drone:impact' event.
+ */
+export interface OneWayDef {
+  /** Impact point (m); `targetY` is its height (m MSL, default: the surface there). */
+  targetX: number;
+  targetZ: number;
+  targetY?: number;
+  /** Waypoints flown before the dive (m). */
+  route?: { x: number; z: number }[];
+}
 
 export interface AircraftGroupDef {
   /** Unique id — also stored in AircraftEntity.groupId (objectives/conditions reference it). */
@@ -173,6 +189,8 @@ export interface AircraftGroupDef {
    * their air-to-air fit. Pair it with an 'attack_group' task on a ground group.
    */
   enemyLoadout?: 'default' | 'strike';
+  /** One-way attack drone group (type 'shahed136'): see OneWayDef. */
+  oneWay?: OneWayDef;
 }
 
 export interface SamSiteDef {

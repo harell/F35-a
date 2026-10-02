@@ -9,6 +9,7 @@ import { isHostile, type DifficultyParams, type LoadoutId, type Team } from '../
 import type { AiTask, TerrainQuery } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
+import { createOneWay, placeOneWay } from '../../sim/drone/oneWay';
 import { armMissionGun } from './gunAmmo';
 import { difficultyAtLeast, firstAlive, type GroupRt, type MissionState } from './state';
 import { JITTER_HDG, JITTER_POS, jitter } from './variation';
@@ -123,6 +124,14 @@ export function formationOffset(f: Formation, i: number, n: number, s: number, o
       out.right = (i % 2) * s * 1.2;
       out.aft = Math.floor(i / 2) * s * 1.6;
       break;
+    case 'triangle': {
+      // row r holds r + 1 members, centred on the lead's track
+      const r = Math.floor((Math.sqrt(8 * i + 1) - 1) / 2);
+      const j = i - (r * (r + 1)) / 2;
+      out.right = (j - r / 2) * s;
+      out.aft = r * s;
+      break;
+    }
   }
 }
 
@@ -212,6 +221,10 @@ export function disarm(ac: AircraftEntity): void {
 /** Spawn every member of an aircraft group. */
 export function spawnAirGroup(s: MissionState, g: GroupRt): void {
   const def = g.air!;
+  if (def.oneWay) {
+    spawnOneWayGroup(s, g);
+    return;
+  }
   const world = s.world;
   const n = g.expected;
   // retries: hostile flights appear up to ±1.5 km / ±10° from the designed point (variation.ts)
@@ -270,6 +283,56 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
     if (def.team === 'red') s.enemiesSpawned++;
   }
   assignGroundAttack(s, g, true);
+}
+
+/**
+ * Spawn a one-way drone group (Shahed-136): the formation (default 'triangle', 150 m) is laid out
+ * nose towards the first waypoint (or the target); every member flies the route shifted by its
+ * slot, at the group's altitude and speed, and dives into the shared target point. Drones fly
+ * the designed geometry on every attempt (no retry jitter): the route is the mission.
+ */
+function spawnOneWayGroup(s: MissionState, g: GroupRt): void {
+  const def = g.air!;
+  const ow = def.oneWay!;
+  const world = s.world;
+  const n = g.expected;
+  const first = ow.route?.[0] ?? { x: ow.targetX, z: ow.targetZ };
+  const heading = Math.atan2(first.x - def.x, -(first.z - def.z));
+  const fx = Math.sin(heading);
+  const fz = -Math.cos(heading);
+  const rx = Math.cos(heading);
+  const rz = Math.sin(heading);
+  const spacing = def.spacing ?? 150;
+  const formation: Formation = def.formation ?? 'triangle';
+  const type = groupType(def, s.difficulty.id);
+  const stem = def.callsign ?? AIRCRAFT_INFO[type].nato;
+  const firstNumber = def.firstNumber ?? 1;
+  const target = new Vector3(ow.targetX, ow.targetY ?? world.terrain.surfaceHeightAt(ow.targetX, ow.targetZ), ow.targetZ);
+
+  g.spawnedAt = world.time;
+  g.task = undefined;
+  for (let i = 0; i < n; i++) {
+    formationOffset(formation, i, n, spacing, _slot);
+    const dx = rx * _slot.right - fx * _slot.aft;
+    const dz = rz * _slot.right - fz * _slot.aft;
+    const pos = clampXZ(new Vector3(def.x + dx, def.altitude, def.z + dz));
+    const ac = world.spawnAircraft({
+      type,
+      team: def.team,
+      position: pos,
+      heading,
+      speed: def.speed,
+      callsign: `${stem} ${firstNumber + i}`,
+      ai: null,
+      leaderId: null,
+      groupId: g.id,
+    });
+    const route = (ow.route ?? []).map((p) => new Vector3(p.x + dx, def.altitude, p.z + dz));
+    placeOneWay(ac, createOneWay({ target, altitude: def.altitude, speed: def.speed, route }), pos);
+    if (i === 0) g.leadId = ac.id;
+    g.members.push(ac);
+    if (def.team === 'red') s.enemiesSpawned++;
+  }
 }
 
 /** The ground / SAM group an 'attack_group' task points at (null for air groups and other tasks). */
