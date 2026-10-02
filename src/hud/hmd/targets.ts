@@ -10,8 +10,9 @@ import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
-import { AIRCRAFT_SHORT, NumText, entityLabel, mmss } from './format';
-import { zoneExt } from './zones';
+import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
+import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
+import { hitsBankOrWaterline } from './flight';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
@@ -146,7 +147,8 @@ export function drawContacts(f: HudFrame): void {
     if (e.kind !== 'aircraft') continue; // ground / SAM tracks are drawn by drawGroundAndSams
     // civil traffic: white box, always labelled CIV so it is never mistaken for a bandit
     const civil = e.team === 'neutral';
-    const labelled = civil || c.position.distanceToSquared(p.position) <= d2;
+    // (a tagged jet, e.g. a STRK striker, is always labelled: it's the one to tell from its escort)
+    const labelled = civil || !!e.hudTag || c.position.distanceToSquared(p.position) <= d2;
     const stale = now - c.lastSeen > 1.5;
     if (stale) f.proj.point(c.position, f.sp);
     else project(f, e);
@@ -158,7 +160,7 @@ export function drawContacts(f: HudFrame): void {
     pen.rect(sp.x - h, sp.y - h, h * 2, h * 2);
     pen.strokeGlow(civil ? pal.white : stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
-    const lbl = labelled ? AIRCRAFT_SHORT[e.type] ?? '' : '';
+    const lbl = labelled ? trackShort(e) : '';
     if (lbl) {
       const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
       const ly = sp.y + h + 8 * u;
@@ -396,7 +398,7 @@ export function drawDesignated(f: HudFrame): void {
   }
   // labels: type above, range below, missile TOF / PITBULL below that; range + TOF stack above the
   // type label instead when they would print into reserved text under a low box (the radio pill, 3.3-a)
-  const label = entityLabel(t);
+  const label = trackLabel(t);
   const m = ownMissileOn(f, t.id);
   const pit = !!m && m.seekerLocked && (m.def.guidance === 'active_radar' || m.def.guidance === 'anti_radiation');
   const tof = m && !pit ? impactLabel(f, m, t) : '';
@@ -407,14 +409,19 @@ export function drawDesignated(f: HudFrame): void {
   const span = (m ? 14 : 0) * u;
   const up = occ.hits(x - sw, below - 7 * u, x + sw, below + span + 7 * u, 0, 0) && !occ.hits(x - sw, typeY - 21 * u - span, x + sw, typeY - 7 * u, 0, 0);
   const dy = up ? -14 * u : 14 * u;
-  pen.text(label, x, typeY, col, 12);
+  const rng = rangeLabel(dist);
+  // the labels (not the box) slide off the speed / altitude columns, which print on top (#62: "MIG-29"
+  // into "M 0.77", the range into "THR 76%" with the target near the screen side)
+  const tw = Math.max(pen.textWidth(label, 12), pen.textWidth(rng, 12.5), pen.textWidth(pit ? 'PITBULL' : tof, 11.5)) / 2 + 2 * u;
+  const tx = slideOffColumns(f, x, tw, (up ? typeY - 14 * u - span : typeY) - 8 * u, (up ? typeY : below + span) + 8 * u);
+  pen.text(label, tx, typeY, col, 12);
   let ly = up ? typeY - 14 * u : below;
-  pen.text(rangeLabel(dist), x, ly, col, 12.5);
+  pen.text(rng, tx, ly, col, 12.5);
   if (m) {
     ly += dy;
     if (pit) {
-      if (blink(f, 3, 0.75)) pen.text('PITBULL', x, ly, pal.bright, 11.5);
-    } else pen.text(tof, x, ly, pal.main, 11.5);
+      if (blink(f, 3, 0.75)) pen.text('PITBULL', tx, ly, pal.bright, 11.5);
+    } else pen.text(tof, tx, ly, pal.main, 11.5);
   }
   // right of the box: "LOCK" flash after the lock event, LOCKING while it builds, NOSE ON when the
   // commanded lock can't build because the target is outside the ±30° lock cone
@@ -444,7 +451,13 @@ export function drawDesignated(f: HudFrame): void {
   // protected: the box, its ring and every label (text zones never cover it)
   const top = up ? ly - 8 * u : typeY - 8 * u;
   const bottom = up ? y + (building ? h * 1.5 : h) + 3 * u : ly + 8 * u;
-  occ.add(Math.min(x - lw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity), top, Math.max(x + lw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0), bottom, 1);
+  occ.add(
+    Math.min(x - lw - 2 * u, tx - tw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity),
+    top,
+    Math.max(x + lw + 2 * u, tx + tw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0),
+    bottom,
+    1,
+  );
   picks.add(t.id, x, y, h);
 }
 
@@ -519,6 +532,9 @@ export function drawLockCone(f: HudFrame): void {
   }
 }
 
+/** Sideways steps (14 px each, both sides) the off-screen cue's text tries beside its arrow. */
+const CUE_STEPS = 6;
+
 /** Arrow on the screen-edge ellipse pointing at an off-screen target, with angle-off and label. */
 function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   const { pen, pal, L } = f;
@@ -535,17 +551,98 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   pen.arrow(edge.x + sp.dirX * 10 * u, edge.y + sp.dirY * 10 * u, sp.dirX, sp.dirY, 14 * u, 7 * u);
   pen.strokeGlow(col, 1.8);
   pen.fillPlain(withAlpha(col, 0.35));
-  const tx = edge.x - sp.dirX * 20 * u;
-  const ty = edge.y - sp.dirY * 16 * u;
-  pen.text(offTxt.get(sp.offAxis * RAD), tx, ty, col, 12.5);
-  pen.text(entityLabel(t), tx, ty + 13 * u, pal.dim, 10.5);
-  pen.text(rangeLabel(dist), tx, ty + 25 * u, pal.dim, 10.5);
   // our weapon on its way: the time to impact stays readable with the target behind us (a
   // StormBreaker's long glide, an AMRAAM fired before the turn)
   const m = ownMissileOn(f, t.id);
   const tl = m ? impactLabel(f, m, t) : '';
-  if (tl) pen.text(tl, tx, ty + 37 * u, pal.main, 10.5);
-  f.occ.add(tx - 30 * u, ty - 8 * u, tx + 30 * u, ty + (tl ? 43 : 31) * u, 1);
+  const off = offTxt.get(sp.offAxis * RAD);
+  const name = trackLabel(t);
+  const rng = rangeLabel(dist);
+  // the text block (angle-off, type, range, time to impact) sits inward of the arrow, clear of it
+  // whichever way it points: anchored by its top line it ran down into a downward arrow (#62: "16°"
+  // over "MIG-29 7.1" in the cockpit view, "35°" under "TU-22M 3.2")
+  const hw = Math.max(pen.textWidth(off, 12.5), pen.textWidth(name, 10.5), pen.textWidth(tl, 10.5)) / 2 + 2 * u;
+  const below = (tl ? 41 : 28) * u + 6 * u; // last line's bottom (10.5 px row), from the first line's centre
+  const hh = (below + 8 * u) / 2;
+  // lowest the block may reach: above the cockpit panel (cockpit view) / the screen's bottom edge
+  const maxTy = (f.cockpit && f.mode === 'hmd' ? L.cockpitTop - 3 * u : L.H - 4 * u) - below;
+  // candidates: inward of the arrow, then beside it, stepping sideways (toward the centre first).
+  // Inward of a mostly up / down arrow lands on the bank scale, the FPM or the waterline (#62
+  // review), so the first spot clear of those (and of the protected symbols) wins; none clear: inward
+  const reach = 10 * u + Math.abs(sp.dirX) * hw + Math.abs(sp.dirY) * hh;
+  const side = sp.dirX > 0 ? -1 : 1;
+  // the arrow's box: tip at edge + 10u along it, base corners 4u back and 7u either side
+  const ax0 = Math.min(edge.x + sp.dirX * 10 * u, edge.x - sp.dirX * 4 * u - Math.abs(sp.dirY) * 7 * u) - 2 * u;
+  const ax1 = Math.max(edge.x + sp.dirX * 10 * u, edge.x - sp.dirX * 4 * u + Math.abs(sp.dirY) * 7 * u) + 2 * u;
+  const ay0 = Math.min(edge.y + sp.dirY * 10 * u, edge.y - sp.dirY * 4 * u - Math.abs(sp.dirX) * 7 * u) - 2 * u;
+  const ay1 = Math.max(edge.y + sp.dirY * 10 * u, edge.y - sp.dirY * 4 * u + Math.abs(sp.dirX) * 7 * u) + 2 * u;
+  const last = 2 + 2 * CUE_STEPS;
+  let tx = 0;
+  let ty = 0;
+  for (let c = 0; c < last; c++) {
+    if (c === 0 || c === last - 1) {
+      tx = edge.x - sp.dirX * reach;
+      ty = edge.y - sp.dirY * reach - hh + 8 * u;
+    } else {
+      // beside the arrow, level with its middle (3u out along it)
+      const k = (c - 1) >> 1;
+      tx = edge.x + ((c & 1) === 1 ? side : -side) * ((ax1 - ax0) / 2 + hw + 4 * u + k * 14 * u);
+      ty = edge.y + sp.dirY * 3 * u - hh + 8 * u;
+    }
+    // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed box)
+    tx = slideOffColumns(f, tx, hw, ty - 8 * u, ty + below);
+    tx = Math.max(L.left + hw, Math.min(L.right - hw, tx));
+    ty = Math.max(L.row2Y + 8 * u, Math.min(maxTy, ty));
+    if (c === last - 1) break;
+    const x0 = tx - hw;
+    const x1 = tx + hw;
+    const y0 = ty - 8 * u;
+    const y1 = ty + below;
+    if (f.occ.hits(x0, y0, x1, y1, 1) || hitsBankOrWaterline(f, x0, y0, x1, y1)) continue;
+    if (x0 < ax1 && x1 > ax0 && y0 < ay1 && y1 > ay0) continue; // slid or clamped back over the arrow
+    break;
+  }
+  pen.text(off, tx, ty, col, 12.5);
+  pen.text(name, tx, ty + 15 * u, pal.dim, 10.5);
+  pen.text(rng, tx, ty + 28 * u, pal.dim, 10.5);
+  if (tl) pen.text(tl, tx, ty + 41 * u, pal.main, 10.5);
+  f.occ.add(tx - hw, ty - 8 * u, tx + hw, ty + below, 1);
+}
+
+/**
+ * HMD views: the centre x for a text block [x ± hw] × [top, bot] that keeps it off the speed and
+ * altitude columns and the DLZ scale (fixed blocks drawn after the target symbology, so they would
+ * print on top of it): slid sideways, toward the screen centre, past the block it would cover (#62).
+ * Other views: x unchanged.
+ */
+function slideOffColumns(f: HudFrame, x: number, hw: number, top: number, bot: number): number {
+  if (f.mode !== 'hmd') return x;
+  const L = f.L;
+  const u = L.u;
+  const z = f.zone;
+  const dlz = !!z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon];
+  for (let pass = 0; pass < 2; pass++) {
+    for (let k = 0; k < 3; k++) {
+      let x0 = L.spdRight - 78 * u;
+      let x1 = L.spdRight + 3 * u;
+      let y0 = L.boxY - 13 * u;
+      let y1 = speedColumnBottom(f);
+      if (k === 1) {
+        x0 = L.altLeft - 3 * u;
+        x1 = L.altLeft + 92 * u;
+        y1 = altColumnBottom(f);
+      } else if (k === 2) {
+        if (!dlz) continue;
+        x0 = L.dlzX - 10 * u;
+        x1 = L.dlzX + 62 * u;
+        y0 = L.dlzTop - 18 * u;
+        y1 = L.dlzBottom + 18 * u;
+      }
+      if (bot <= y0 || top >= y1 || x + hw <= x0 || x - hw >= x1) continue;
+      x = (x0 + x1) / 2 < L.cx ? x1 + hw + 2 * u : x0 - hw - 2 * u;
+    }
+  }
+  return x;
 }
 
 /** Newest live player missile guiding on `targetId`. */

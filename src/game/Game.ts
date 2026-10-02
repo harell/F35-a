@@ -723,11 +723,12 @@ export class Game {
     this.renderer.info.reset();
     this.renderer.render(s.scene, s.rig.camera);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
-    // target camera window (rect + target from the HUD's last frame; the HUD draws its chrome next)
+    this.hud.update(ctx2);
+    // target camera window, after the HUD has laid out this frame (pipView: its rect and target), so
+    // after a view change the 3D image moves with the frame instead of a frame late (#62)
     // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
     const q = this.quality;
     s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
-    this.hud.update(ctx2);
     this.audio.update(ctx2);
   }
 

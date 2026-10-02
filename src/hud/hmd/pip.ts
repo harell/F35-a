@@ -10,7 +10,8 @@
  *  - where: HudLayout.pip* (layout.ts): top right in the HMD views (the DLZ scale and the kill feed move
  *    below / beside it), under the radar inset in the external views.
  *  - the open / close animation ("CRT" grow from the centre line) and the animated rect the 3D pass uses
- *    (`pipView`, read by Game right after the main render — one frame behind the HUD, invisible).
+ *    (`pipView`, read by Game after hud.update: the 3D image fills this frame's rect, so it moves with the
+ *    frame on a view change, #62).
  *  - the overlay: corner brackets in the HMD colour, type / NATO name, range and a status pill (SAM
  *    radar state, or the bandit's aspect).
  */

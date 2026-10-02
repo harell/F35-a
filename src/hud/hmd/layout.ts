@@ -171,12 +171,36 @@ function touchLayout(W: number, H: number, safe: Safe, leftHanded: boolean): Tou
   return tl;
 }
 
+/** A screen rectangle (CSS px). */
+export interface ScreenRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+/** The live touch controls a label must never print on (filled by computeLayout; see controlRects). */
+const ctlRects: ScreenRect[] = Array.from({ length: 5 }, () => ({ x: 0, y: 0, w: 0, h: 0 }));
+let ctlRectCount = 0;
+const ctlRectView: ScreenRect[] = [];
+
+/**
+ * The live touch controls in the bottom band at the last computeLayout (throttle, FIRE, GUN, CMS and
+ * the drawn stick base): world labels dodge them (#62: CIV labels under the GUN and CMS buttons).
+ * Shared, reused array; empty when there is no touch layout for the screen.
+ */
+export function controlRects(): readonly ScreenRect[] {
+  ctlRectView.length = 0;
+  for (let i = 0; i < ctlRectCount; i++) ctlRectView.push(ctlRects[i]);
+  return ctlRectView;
+}
+
 /** Bottom-band control extents from the live touch layout (fallback: the thumb-zone fractions). */
 function controlBand(out: HudLayout, W: number, H: number, safe: Safe, leftHanded: boolean): void {
   const t = touchLayout(W, H, safe, leftHanded);
   let l = W * THUMB_W;
   let r = W * (1 - THUMB_W);
   let top = H * (1 - THUMB_H);
+  ctlRectCount = 0;
   if (t && t.width === Math.max(320, W) && t.height === Math.max(240, H)) {
     l = 0;
     r = W;
@@ -188,6 +212,7 @@ function controlBand(out: HudLayout, W: number, H: number, safe: Safe, leftHande
       if (rc.x + rc.w / 2 < W / 2) l = Math.max(l, rc.x + rc.w);
       else r = Math.min(r, rc.x);
       top = Math.min(top, rc.y);
+      Object.assign(ctlRects[ctlRectCount++], rc);
     }
     // drawn stick base (the stick zone itself is an invisible touch area)
     const sx0 = t.stickHome.x - t.stickRadius;
@@ -195,6 +220,10 @@ function controlBand(out: HudLayout, W: number, H: number, safe: Safe, leftHande
     if (t.stickHome.x < W / 2) l = Math.max(l, sx1);
     else r = Math.min(r, sx0);
     top = Math.min(top, t.stickHome.y - t.stickRadius);
+    const sr = ctlRects[ctlRectCount++];
+    sr.x = sx0;
+    sr.y = t.stickHome.y - t.stickRadius;
+    sr.w = sr.h = t.stickRadius * 2;
   }
   out.ctlLeft = l;
   out.ctlRight = r;

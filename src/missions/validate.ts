@@ -197,6 +197,7 @@ export function validateMission(def: MissionDef): string[] {
       case 'protect':
         checkGroup(o.group, where);
         checkCond(o.until, where);
+        if (o.threat) checkGroup(o.threat.group, `${where} threat`);
         break;
       case 'intercept':
         o.groups.forEach((g) => checkGroup(g, where));

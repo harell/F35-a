@@ -279,6 +279,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
       g.leadId = ac.id;
     }
     if (def.unarmed) disarm(ac);
+    if (def.tag) ac.hudTag = def.tag;
     g.members.push(ac);
     if (def.team === 'red') s.enemiesSpawned++;
   }

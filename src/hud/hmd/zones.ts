@@ -10,9 +10,11 @@
  * Blocks whose height depends on their content (column, kill feed, external block) use the extent they
  * had on the previous frame (one frame of lag, no allocation, no double layout).
  */
+import { toFeet } from '../../core/math';
 import { reserveBankScale } from './flight';
 import { WEAPON_IS_BOMB } from './format';
 import type { HudFrame } from './frame';
+import { controlRects } from './layout';
 
 /** Extents measured while drawing (previous frame). NaN = nothing drawn. */
 export const zoneExt = {
@@ -48,6 +50,28 @@ export function tapeBottom(f: HudFrame): number {
 }
 
 /**
+ * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, and SPD BRK while
+ * the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
+ */
+export function speedColumnBottom(f: HudFrame): number {
+  const { L, p } = f;
+  const brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
+  return L.boxY + 11 * L.u + L.line * (brake ? 6.2 : 5.2);
+}
+
+/**
+ * Bottom of the HMD altitude column: the box, radar altitude (below 5000 ft AGL), VSI, and closure and
+ * aspect / angels with an air target designated. As drawAltColumn decides: with both the RALT row and
+ * a target, the aspect line is the 4th row (#62).
+ */
+export function altColumnBottom(f: HudFrame): number {
+  const { L, p } = f;
+  const t = f.target;
+  const fourRows = !!p && !!t && t.kind === 'aircraft' && toFeet(p.flight.agl) < 5000;
+  return L.boxY + 11 * L.u + L.line * (fourRows ? 4.4 : 3.4);
+}
+
+/**
  * Reserve every fixed text block of this view (level 0: text) so world-projected labels and the ladder
  * make way. Call after the protected symbols (FPM, target box, pipper, jet) and before the labels.
  */
@@ -58,8 +82,8 @@ export function reserveFixedZones(f: HudFrame): void {
     // heading tape + caret band
     occ.add(L.cx - L.tapeHalfW - 8 * u, L.tapeY - 2, L.cx + L.tapeHalfW + 8 * u, tapeBottom(f));
     // speed column (box, Mach, G, max G, AoA) and altitude column (box, AGL / VSI lines)
-    occ.add(L.spdRight - 78 * u, L.boxY - 13 * u, L.spdRight + 3 * u, L.boxY + 11 * u + L.line * 4.4);
-    occ.add(L.altLeft - 3 * u, L.boxY - 13 * u, L.altLeft + 92 * u, L.boxY + 11 * u + L.line * 3.4);
+    occ.add(L.spdRight - 78 * u, L.boxY - 13 * u, L.spdRight + 3 * u, speedColumnBottom(f));
+    occ.add(L.altLeft - 3 * u, L.boxY - 13 * u, L.altLeft + 92 * u, altColumnBottom(f));
     // DLZ scale (only while a launch zone is shown)
     const z = f.zone;
     if (z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon]) {
@@ -78,4 +102,7 @@ export function reserveFixedZones(f: HudFrame): void {
   if (Number.isFinite(zoneExt.colBottom)) occ.add(L.colX - 6 * u, L.colY - 10 * u, L.colX + L.colW, zoneExt.colBottom);
   // kill feed (top right)
   if (Number.isFinite(zoneExt.killBottom)) occ.add(zoneExt.killLeft - 4 * u, L.killY - 10 * u, L.killX + 4 * u, zoneExt.killBottom);
+  // the touch controls in the bottom band (throttle, FIRE, GUN, CMS, stick base): a contact's CIV or
+  // type label moves or drops rather than print under a thumb (#62)
+  for (const r of controlRects()) occ.add(r.x - 2 * u, r.y - 2 * u, r.x + r.w + 2 * u, r.y + r.h + 2 * u);
 }

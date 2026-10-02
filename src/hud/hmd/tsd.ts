@@ -9,7 +9,7 @@ import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import type { AircraftEntity } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
-import { AIRCRAFT_SHORT, SAM_LABEL } from './format';
+import { SAM_LABEL, trackShort } from './format';
 import { Occupancy } from './occupancy';
 import type { Pen } from './pen';
 import { protectedSites } from './sites';
@@ -68,6 +68,12 @@ export interface TsdStyle {
   lw: number;
   /** Faint Auckland coastline / islands under the symbols (heading-up). */
   coast?: boolean;
+  /**
+   * Rects [x0, y0, x1, y1, ...] the caller prints over the plot afterwards (the PCD's corner
+   * readouts): the labels and the N marker keep off them (#62). `reserveN` rects are used.
+   */
+  reserve?: Float32Array;
+  reserveN?: number;
 }
 
 export function makeTsdStyle(): TsdStyle {
@@ -121,6 +127,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   pen.reset();
   lblOcc.clear();
   lblOcc.addBox(st.cx, st.cy, 9 * st.sym, 9 * st.sym);
+  if (st.reserve) for (let i = 0; i < (st.reserveN ?? 0) * 4; i += 4) lblOcc.add(st.reserve[i], st.reserve[i + 1], st.reserve[i + 2], st.reserve[i + 3]);
   const all = st.labels === true;
   const key = st.labels === 'key' || all;
 
@@ -161,7 +168,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     const r = st.radius * (st.rings > 0 ? 1 : 0.85);
     const nx = st.cx + dv.x * r;
     const ny = st.cy + dv.y * r;
-    pen.text('N', nx, ny, c.text, st.font);
+    label(pen, 'N', nx, ny, c.text, st.font); // dropped under a reserved readout
   }
 
   // SAM threat rings (known SAMs)
@@ -266,14 +273,31 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     pen.circle(pt.x, pt.y, 5 * s);
     pen.rect(pt.x - 1.8 * s, pt.y - 1.8 * s, 3.6 * s, 3.6 * s);
     pen.strokePlain(c.friend, 1.5 * lw);
-    // labelled pages: "DEFEND 8/9"; the unlabelled radar inset: just the count, when it fits inside
+    // labelled pages: "DEFEND 8/9"; the unlabelled radar inset: just the count, below the symbol, else
+    // above or beside it, else (the site beyond the scope's rim) pinned inside the rim on its bearing:
+    // the count never vanishes because it doesn't fit under the symbol (#62: Defend's "9/9" at t = 4)
     if (key && label(pen, site.label, pt.x, pt.y + 12 * s, c.friend, st.font * 0.85)) continue;
-    const ly = pt.y + 11 * s;
-    const hw = pen.textWidth(site.count, st.font * 0.85) / 2;
-    const inside = st.clipRect
-      ? pt.x - hw >= st.clipRect[0] && pt.x + hw <= st.clipRect[0] + st.clipRect[2] && ly + 5 * s <= st.clipRect[1] + st.clipRect[3]
-      : Math.hypot(Math.abs(pt.x - st.cx) + hw, Math.abs(ly - st.cy) + 4 * s) <= st.clipCircle;
-    if (inside) label(pen, site.count, pt.x, ly, c.friend, st.font * 0.85);
+    const size = st.font * 0.85;
+    const hw = pen.textWidth(site.count, size) / 2;
+    const hh = 5 * s;
+    const fits = (x: number, y: number): boolean =>
+      st.clipRect
+        ? x - hw >= st.clipRect[0] && x + hw <= st.clipRect[0] + st.clipRect[2] && y - hh >= st.clipRect[1] && y + hh <= st.clipRect[1] + st.clipRect[3]
+        : Math.hypot(Math.abs(x - st.cx) + hw, Math.abs(y - st.cy) + hh) <= st.clipCircle;
+    const side = 6 * s + hw;
+    let placed = false;
+    for (let k = 0; k < 4 && !placed; k++) {
+      const x = k === 2 ? pt.x + side : k === 3 ? pt.x - side : pt.x;
+      const y = k === 0 ? pt.y + 11 * s : k === 1 ? pt.y - 11 * s : pt.y;
+      if (fits(x, y)) placed = label(pen, site.count, x, y, c.friend, size);
+    }
+    if (!placed && !st.clipRect && st.clipCircle > 0) {
+      const dx = pt.x - st.cx;
+      const dy = pt.y - st.cy;
+      const d = Math.hypot(dx, dy);
+      const rr = st.clipCircle - Math.hypot(hw, hh) - 2 * s;
+      if (d > rr && rr > 0) label(pen, site.count, st.cx + (dx / d) * rr, st.cy + (dy / d) * rr, c.friend, size);
+    }
   }
 
   // hostile air tracks (sensor fused)
@@ -308,7 +332,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
       pen.fillPlain(col);
     }
     if (e.id === des || e.id === lock) ringHighlight(pen, x, y - 1 * s, s, c, e.id === lock);
-    if (all || (key && (e.id === des || e.id === lock))) label(pen, AIRCRAFT_SHORT[e.type] ?? '', x + 9 * s, y + 6 * s, col, st.font * 0.85, 'left');
+    if (all || (key && (e.id === des || e.id === lock))) label(pen, trackShort(e), x + 9 * s, y + 6 * s, col, st.font * 0.85, 'left');
   }
 
   // friendlies (datalink)

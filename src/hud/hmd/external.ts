@@ -4,7 +4,7 @@
  */
 import { RAD, toFeet, toKnots, toNm } from '../../core/math';
 import { dlzLayout, makeDlzGeometry } from './dlz';
-import { HDG3_STR, INT_STR, NumText, WEAPON_IS_BOMB, entityLabel } from './format';
+import { HDG3_STR, INT_STR, NumText, WEAPON_IS_BOMB, entityLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { rangeLabel, rangeLabelNm } from './targets';
@@ -89,7 +89,7 @@ export function drawExternalBlock(f: HudFrame): number {
   const t = f.target;
   if (t) {
     const d = t.position.distanceTo(p.position);
-    const lbl = entityLabel(t);
+    const lbl = trackLabel(t);
     pen.text(lbl, x, y, f.locked ? pal.bright : pal.main, 12, 'left');
     const rl = rangeLabelNm(d);
     pen.text(rl, x + pen.textWidth(lbl, 12) + 8 * u, y, pal.main, 12, 'left');

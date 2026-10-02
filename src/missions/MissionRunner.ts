@@ -278,7 +278,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       hits,
       accuracy: sc.accuracy,
       damageTaken: Math.round(damageTaken),
-      objectives: this.objectives.map((o) => ({ ...o, progress: o.progress ? { ...o.progress } : undefined })),
+      objectives: this.objectives.map((o) => ({ ...o, progress: o.progress ? { ...o.progress } : undefined, threat: o.threat ? { ...o.threat } : undefined })),
     };
     // EXTENSION (not yet in the MissionResult contract): who else scored, for the debrief
     const team: TeamKill[] = [];
