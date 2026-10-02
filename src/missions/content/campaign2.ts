@@ -145,6 +145,31 @@ export const C08: MissionDef = mission({
         when: { kind: 'sam_engaged' },
         actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. You are painted — get down! Get down behind the volcano!', priority: 3 }],
       },
+      // Pacing (#59): after the opening calls, the low transit across the harbour was silent until the
+      // first release: 95 s (7–102 s) on Pilot seed 0, over 90 s in every run swept (playtest
+      // 2026-10-02, 1.1-i). Darkstar now calls the ships and the MiG alert part-way across, then the
+      // run-in when the player nears the Harbour Bridge (or at 80 s, wherever the player is). Both lines
+      // stay true until the ships are sunk. The MiGs only ever launch at 300 s with the ships still afloat:
+      // o_ships is the only primary, so sinking the ships ends the mission in the same tick and the
+      // group's o_ships spawn never fires. The group is 2 MiGs up to Veteran and 3 on Ace, so the call
+      // names no count (review, #59; tests/missions-pacing.test.ts).
+      {
+        id: 't_pace_alert',
+        when: { kind: 'all', of: [{ kind: 'time', t: 40 }, { kind: 'not', of: { kind: 'objective', id: 'o_ships', state: 'complete' } }] },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Landing ships still loading at Rangitoto Wharf. MiG-29s on alert: take too long and they launch.', priority: 2 }],
+      },
+      {
+        id: 't_pace_runin',
+        when: {
+          kind: 'all',
+          of: [
+            { kind: 'any', of: [{ kind: 'area', x: P.harbourBridge.x, z: P.harbourBridge.z, radius: 3000 }, { kind: 'time', t: 80 }] },
+            { kind: 'trigger', id: 't_pace_alert' },
+            { kind: 'not', of: { kind: 'objective', id: 'o_ships', state: 'complete' } },
+          ],
+        },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Pass North Head on the deck, then turn north up the channel. Pop only to release, and get straight back down.', priority: 2 }],
+      },
       {
         id: 't_ships',
         when: { kind: 'objective', id: 'o_ships', state: 'complete' },
