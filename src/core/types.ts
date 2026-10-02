@@ -264,6 +264,10 @@ export interface QualitySettings {
   postfx: boolean;
   /** Scenery object density multiplier (trees/buildings). */
   sceneryDensity: number;
+  /** Foam wakes behind moving ships and ferries (one draw call for all of them). */
+  wakes: boolean;
+  /** Visual-only harbour ferries (Auckland), 0 = none; capped by the fleet size (render/traffic/ferryRoutes.ts). */
+  ferries: number;
 }
 
 export type ControlScheme = 'stick' | 'tilt';
