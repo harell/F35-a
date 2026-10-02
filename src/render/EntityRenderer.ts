@@ -2,8 +2,9 @@
  * EntityRenderer — creates, animates and removes the visuals of every world entity:
  * aircraft (procedural models with animated surfaces, bays, stores, AB flames, LOD, wrecks),
  * missiles/bombs (with motor flames), SAM sites (radars/launchers/ready rounds), ground targets
- * (spinning radars, ship wakes, wreck variants) and aircraft nav lights / strobes (one sprite batch).
- * Decoys are drawn by Effects.
+ * (spinning radars, wreck variants), aircraft nav lights / strobes (one sprite batch), the foam wakes
+ * of every moving ship and ferry (one WakeBatch draw call) and, over Auckland, the visual-only harbour
+ * ferries (one InstancedMesh). Decoys are drawn by Effects.
  */
 import { Group, Vector3 } from 'three';
 import type { CreateEntityRenderer, EntityRendererApi, FrameContext } from '../core/contracts';
@@ -19,8 +20,12 @@ import { AircraftVisual } from './visuals/AircraftVisual';
 import { MissileVisual } from './visuals/MissileVisual';
 import { GroundVisual, SamVisual } from './visuals/SiteVisuals';
 import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
+import { WakeBatch } from './effects/Wakes';
+import { HarbourFerries } from './traffic/HarbourFerries';
+import { shipDims } from './visuals/shipMotion';
 
 const _p = new Vector3();
+const _fwd = new Vector3();
 /** Ship nav lights are drawn out to this range (m); cabin / deck lights closer in. */
 const SHIP_LIGHTS_FAR = 16_000;
 const SHIP_DECK_LIGHTS_FAR = 7_000;
@@ -62,6 +67,12 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   // aircraft nav lights / strobes + civil ships' night lights (a cruise liner has ~100 cabin lights)
   const lights = new SpriteBatch(1024);
   group.add(lights.mesh);
+  // foam wakes of every moving ship and ferry: one draw call ('low' quality: none)
+  const wakes = quality.wakes ? new WakeBatch(64) : null;
+  if (wakes) group.add(wakes.mesh);
+  // visual-only harbour ferries (Auckland only; created on the first frame, once the mission is known)
+  let ferries: HarbourFerries | null = null;
+  let ferriesChecked = false;
 
   let playerVisible = true;
   let frame = 0;
@@ -160,7 +171,10 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
     // faint 3D background, so no 3D markers are drawn there (they would not match the map scale)
     if (ctx.viewMode !== 'tactical') {
       aircraft.forEach(lightFor);
-      if (env.isNight) grounds.forEach(shipLightsFor);
+      if (env.isNight) {
+        grounds.forEach(shipLightsFor);
+        ferries?.addLights(lights, ctx.camera.position);
+      }
     }
     lights.end();
   }
@@ -173,6 +187,14 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       const t = ctx.time;
       const dt = ctx.paused ? 0 : ctx.dt;
       if (palette === null) palette = paletteFor(ctx.mission?.def.theater);
+      if (!ferriesChecked && ctx.mission) {
+        ferriesChecked = true;
+        if (ctx.mission.def.theater === 'auckland' && q.ferries > 0) {
+          ferries = new HarbourFerries(q.ferries);
+          group.add(ferries.mesh);
+        }
+      }
+      wakes?.begin(env.isNight ? 0.3 : 1, t);
       if (lastNight !== env.isNight) {
         lastNight = env.isNight;
         setEnvironment(envMap, env.isNight ? 0.12 : 1);
@@ -236,9 +258,21 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
           grounds.set(g.id, tr);
         }
         tr.seen = frame;
-        tr.v.update(g, t, dt, cam, groundFar);
+        const vis = tr.v.update(g, t, dt, cam, groundFar);
+        if (wakes && vis && g.alive && g.type === 'ship') {
+          const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
+          if (speed > 0.5) {
+            _fwd.set(0, 0, -1).applyQuaternion(g.quaternion);
+            const d = shipDims(g.vessel);
+            wakes.addHull(g.position.x, g.position.z, Math.atan2(_fwd.x, -_fwd.z), d.length, d.beam, speed);
+          }
+        }
       }
       grounds.forEach(sweepGround);
+
+      // harbour ferries (render-only, placed by their timetable at sim time)
+      ferries?.update(t, wakes);
+      wakes?.end();
 
       updateLights(ctx);
     },
@@ -286,6 +320,9 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       sams.clear();
       grounds.clear();
       lights.dispose();
+      wakes?.dispose();
+      ferries?.dispose();
+      ferries = null;
       group.removeFromParent();
       // Free GPU copies of shared materials/textures; CPU-side prototypes stay cached so the next
       // mission starts fast (three.js re-uploads on next use).
