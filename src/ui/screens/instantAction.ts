@@ -249,5 +249,5 @@ export function countNote(): string {
   const hi = scales[scales.length - 1];
   const scaled = scales.some((d) => d.enemyCountScale !== 1);
   if (!scaled || !lo || !hi) return 'Exact number of bandits';
-  return `Dogfight/strike: ×${lo.enemyCountScale} on ${lo.label} … ×${hi.enemyCountScale} on ${hi.label} · Gauntlet: SAM sites · Survival: first wave`;
+  return `Dogfight/strike: ×${lo.enemyCountScale} on ${lo.label} … ×${hi.enemyCountScale} on ${hi.label} · Gauntlet: SAM sites · Defend: strikers + escort · Survival: first wave`;
 }
