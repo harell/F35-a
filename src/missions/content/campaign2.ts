@@ -428,7 +428,9 @@ export const C10: MissionDef = mission({
         task: { kind: 'route', points: [{ x: 1000, z: -24000, altitude: 8000 }, { x: 3000, z: -12000, altitude: 7500 }, { x: 0, z: 0, altitude: 7500 }] },
       }),
       flight('escortN', 'mig29', 2, { x: 7500, z: -34000 }, 9000, 185, 240, 'escort', { skillOffset: 0.05, maxCount: 2, task: { kind: 'escort_group', group: 'raidN' } }),
-      flight('sweep', 'su27', 2, { x: 32000, z: -26000 }, 7500, 235, 250, 'fighter', {
+      // a single Flanker on Veteran, a pair on Ace (enemyCountScale 1.5): the pair's R-27s killed the
+      // Veteran bot in 7 of 12 runs, before the eastern and western raids even arrived (#58)
+      flight('sweep', 'su27', 1, { x: 32000, z: -26000 }, 7500, 235, 250, 'fighter', {
         skillOffset: 0,
         maxCount: 2,
         // Veteran and up only: on Pilot the Fulcrum escort is the fighter threat (the sweep's R-27/R-77s
@@ -448,7 +450,9 @@ export const C10: MissionDef = mission({
       flight('raidW', 'tu22m', 2, { x: -35000, z: 9000 }, 700, 75, 230, 'bomber', {
         maxCount: 2,
         minDifficulty: 'veteran',
-        spawn: { kind: 'time', t: 190 },
+        // pops up at 4:00, or earlier once the whole eastern raid is shot down (bombers turning for home don't
+        // count): at a fixed 3:10 it came while the player was still out east, and leaked before he got back (#58)
+        spawn: { kind: 'any', of: [{ kind: 'group_defeated', group: 'raidE' }, { kind: 'time', t: 240 }] },
         formation: 'wall',
         spacing: 700,
         noun: 'low Backfires',
@@ -477,6 +481,9 @@ export const C10: MissionDef = mission({
         x: 0,
         z: 0,
         radius: 6000,
+        // like the other two raids (and the briefing): lose half of it and the rest turn for home (#58)
+        abortFraction: 0.67,
+        abortTo: { x: -35000, z: 9000, altitude: 700 },
         label: 'Stop the low raid from the west',
         primary: true,
         minDifficulty: 'veteran',
@@ -491,7 +498,7 @@ export const C10: MissionDef = mission({
     ],
     triggers: [
       { id: 't_east', when: { kind: 'time', t: 146 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Second raid forming east of Waiheke! Commit east.', priority: 2 }] },
-      { id: 't_sweep', when: { kind: 'group_spawned', group: 'sweep' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Flanker pair inbound from the east, 30 miles. Watch for R-27s.', priority: 2 }] },
+      { id: 't_sweep', when: { kind: 'group_spawned', group: 'sweep' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Flanker sweep inbound from the east, 30 miles. Watch for R-27s.', priority: 2 }] },
       { id: 't_west', when: { kind: 'group_spawned', group: 'raidW' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar! Pop-up group low over the Waitākeres — they came in off the Tasman!', priority: 3 }] },
     ],
     opening: [
