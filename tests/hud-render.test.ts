@@ -1088,3 +1088,24 @@ describe('target waypoint labels with the bandits in reach', () => {
     expect(find(r.run(0.1), 'Swarm').length).toBe(1);
   });
 });
+
+describe('own missiles in flight: a count that always reads', () => {
+  for (const view of ['hud', 'chase'] as const) {
+    it(`${view}: "3 IN FLT" in the weapon block with three of our missiles in the air, clear of other text`, () => {
+      const r = rig('aa', view);
+      const p = r.mock.player;
+      expect(find(r.run(0.1), /IN FLT$/).length).toBe(0);
+      const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+      const targets = r.mock.world.aircraft.filter((a) => a.team === 'red');
+      for (let i = 0; i < 3; i++) {
+        const m = new MissileEntity(960 + i, def, 'blue', p.id, targets[i % targets.length].id);
+        m.position.copy(p.position).add(new Vector3(0, 0, -200 * (i + 1)).applyQuaternion(p.quaternion));
+        m.velocity.copy(p.velocity).multiplyScalar(4);
+        (r.mock.world.missiles as MissileEntity[]).push(m);
+      }
+      const texts = r.run(0.1);
+      const t = one(texts, '3 IN FLT');
+      for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
+    });
+  }
+});

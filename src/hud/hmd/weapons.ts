@@ -65,6 +65,15 @@ export function weaponBlockLines(f: HudFrame): number {
   return n;
 }
 
+const inFltTxt = new NumText(0, '', ' IN FLT');
+
+/** The player's missiles and bombs in flight. */
+export function ownInFlight(f: HudFrame): number {
+  let n = 0;
+  for (const m of f.world.missiles) if (m.alive && m.shooterId === f.p.id) n++;
+  return n;
+}
+
 export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = false): number {
   const { pen, pal, L, p, st } = f;
   const u = L.u;
@@ -84,6 +93,10 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
     pen.box(x - 4 * u, y - 9 * u, tw, 18 * u, pal.bright, 1.4, pal.back);
   }
   pen.text(label, x, y, col, 14, 'left');
+  // our weapons in flight ("3 IN FLT"): a fixed place that always reads, where the per-box "M n" marks
+  // in a tight swarm find no room (playtest 2.1-a)
+  const flying = ownInFlight(f);
+  if (flying > 0) pen.text(inFltTxt.get(flying), x + pen.textWidth(label, 14) + 10 * u, y + 0.5, pal.main, 11.5, 'left');
   y += L.line + 1;
   if (!compact) {
     // gun rounds as a secondary line when a missile/bomb is selected
