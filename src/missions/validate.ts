@@ -200,6 +200,9 @@ export function validateMission(def: MissionDef): string[] {
       case 'survive':
         if (o.area) inWorld(o.area.x, o.area.z, where);
         break;
+      case 'bridge':
+        if (def.theater !== 'auckland') err(`${where} needs the Harbour Bridge (Auckland theatre)`);
+        break;
     }
   }
   // objectives about difficulty-gated groups must be gated at least as strictly

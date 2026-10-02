@@ -8,10 +8,12 @@
  *    "use the AMRAAM's reach" time tip stays out of missions with nothing to shoot or under par (2.3-e).
  */
 import { describe, expect, it } from 'vitest';
+import { AKL } from '../src/core/auckland';
+import { DIFFICULTIES } from '../src/core/data';
 import type { MissionDef } from '../src/core/contracts';
-import { missionById } from '../src/missions';
+import { missionById, validateMission } from '../src/missions';
 import { computeScore, type ScoreInput } from '../src/missions/runtime/scoring';
-import { harness, killGroup, shieldPlayer } from './missions-helpers';
+import { flatLand, harness, killGroup, shieldPlayer } from './missions-helpers';
 
 const byId = (id: string): MissionDef => missionById(id)!;
 
@@ -84,5 +86,74 @@ describe('#64: no fight, no credit', () => {
     const r = h.runner.result(h.world);
     expect(r.medals!.map((m) => m.id)).toContain('no_hits');
     expect(['S', 'A']).toContain(r.grade);
+  });
+});
+
+/** Fly the T01 jet straight across the bridge line at `frac` (0 = south abutment, 1 = north), `alt` m MSL. */
+function bridgePass(frac: number, alt = 20, passes = 1) {
+  const h = harness(byId('t01'), 'pilot', undefined, flatLand(0));
+  h.run(0.5, () => shieldPlayer(h));
+  const scoreBefore = h.runner.result(h.world).score;
+  const S = AKL.bridge_s;
+  const N = AKL.bridge_n;
+  const len = Math.hypot(N.x - S.x, N.z - S.z);
+  const ux = (N.x - S.x) / len;
+  const uz = (N.z - S.z) / len;
+  // perpendicular to the deck
+  const nx = -uz;
+  const nz = ux;
+  const cx = S.x + (N.x - S.x) * frac;
+  const cz = S.z + (N.z - S.z) * frac;
+  const p = h.world.player!;
+  const v = 250;
+  for (let pass = 0; pass < passes; pass++) {
+    const dir = pass % 2 === 0 ? 1 : -1;
+    let k = 0;
+    // 600 m run-in to 600 m beyond the line, 250 m/s, re-pinned every step
+    h.run(4.8, () => {
+      const d = -600 + k * (v / 60);
+      p.position.set(cx + nx * d * dir, alt, cz + nz * d * dir);
+      p.velocity.set(nx * v * dir, 0, nz * v * dir);
+      shieldPlayer(h);
+      k++;
+    });
+  }
+  const r = h.runner.result(h.world);
+  return {
+    r,
+    scoreBefore,
+    objective: r.objectives.find((o) => o.id === 'o_bridge')!.state,
+    stunt: r.medals!.some((m) => m.id === 'bridge_runner'),
+  };
+}
+
+describe('#64: the Harbour Bridge pays once in T01', () => {
+  it('one pass under the span pays +250 once (stunt), and o_bridge completes on it', () => {
+    const one = bridgePass(0.76);
+    expect(one.stunt).toBe(true);
+    expect(one.objective).toBe('complete');
+    expect(one.r.success).toBe(false); // no time bonus in the difference
+    expect(one.r.score - one.scoreBefore).toBe(Math.round(250 * DIFFICULTIES.pilot.scoreMultiplier));
+    // a second pass (back the other way) doesn't pay again
+    const two = bridgePass(0.76, 20, 2);
+    expect(two.r.score).toBe(one.r.score);
+  });
+
+  it('the stunt and o_bridge use the same span test (sweep along the deck at 20 m)', () => {
+    const hits: number[] = [];
+    for (let f = 0.5; f <= 0.951; f += 0.05) {
+      const { objective, stunt } = bridgePass(f);
+      expect(objective === 'complete', `fraction ${f.toFixed(2)}: objective ${objective}, stunt ${stunt}`).toBe(stunt);
+      if (stunt) hits.push(Number(f.toFixed(2)));
+    }
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.length).toBeLessThan(10);
+  });
+
+  it("a 'bridge' objective validates in Auckland only", () => {
+    const t01 = byId('t01');
+    expect(validateMission(t01)).toEqual([]);
+    const elsewhere = { ...t01, theater: 'desert' } as MissionDef;
+    expect(validateMission(elsewhere).some((e) => /o_bridge.*Harbour Bridge/.test(e))).toBe(true);
   });
 });

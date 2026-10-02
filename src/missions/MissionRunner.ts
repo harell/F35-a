@@ -4,8 +4,8 @@
  * setup(): spawns the player ("Viper 1", briefed loadout and fuel), friendlies / wingmen,
  * enemy flights, SAM sites and ground targets.
  * update(): called after every 60 Hz sim step. The radio queue runs every step; the mission
- * logic runs at 10 Hz: delayed spawns → triggers → objectives → waypoint sequencing → AO /
- * time limit / Harbour Bridge stunt → AWACS → hints → survival waves → win/lose check.
+ * logic runs at 10 Hz: delayed spawns → triggers → Harbour Bridge stunt → objectives → waypoint
+ * sequencing → AO / time limit → AWACS → hints → survival waves → win/lose check.
  * result(): score, grade and statistics for the debrief.
  *
  * Helper modules live in ./runtime (state, spawner, conditions, objectives, awacs, hints,
@@ -214,11 +214,12 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
     this.updateCommits();
     this.updateTriggers();
+    // before the objectives: a 'bridge' objective completes on the pass that sets stats.bridge
+    this.updateBridge();
     updateObjectives(s, edt);
     this.updateWaypoints();
     this.updateBoundary(edt);
     this.updateTimeLimit();
-    this.updateBridge();
     this.withdrawal.update();
     this.rearm.update(edt);
     this.awacs.update();

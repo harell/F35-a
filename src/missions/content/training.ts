@@ -48,7 +48,8 @@ export const T01: MissionDef = mission({
     objectives: [
       { id: 'o_rings', kind: 'waypoints', waypoints: RINGS.map((r) => r.id), label: 'Fly through all six rings', primary: true },
       { id: 'o_rtb', kind: 'rtb', x: P.whenuapai.x, z: P.whenuapai.z, radius: 3000, label: 'Return to Whenuapai', primary: true },
-      { id: 'o_bridge', kind: 'reach', x: P.harbourBridge.x, z: P.harbourBridge.z, radius: 200, below: 40, label: 'Fly under the Harbour Bridge', primary: false },
+      // the stunt's own span test, and the stunt pays the bonus (one pass = +250, not +500)
+      { id: 'o_bridge', kind: 'bridge', label: 'Fly under the Harbour Bridge', primary: false },
     ],
     triggers: [
       { id: 't_done', when: { kind: 'objective', id: 'o_rings', state: 'complete' }, actions: [{ kind: 'radio', from: TOWER, text: 'Viper 1, Tower. Nice flying. Come on home.' }] },
