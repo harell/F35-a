@@ -326,6 +326,11 @@ export class RoadNetwork {
     }
   }
 
+  /** The ribbon segments outside tunnels, flat [ax, az, bx, bz, halfWidth] records (lotMask.ts). */
+  get segments(): readonly number[] {
+    return this.segs;
+  }
+
   /** Distance (m) from (x, z) to the nearest carriageway edge (negative on the road); ≤ 60 m range. */
   edgeDistance(x: number, z: number): number {
     const key = (Math.floor(x / this.cell) + 2048) * 4096 + (Math.floor(z / this.cell) + 2048);

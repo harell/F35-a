@@ -308,6 +308,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     aerial,
   });
   scene.add(scenery.group);
+  // the terrain leaves the lots along the road and railway ribbons unbuilt, as the scenery's houses do
+  terrain.setLotMask(scenery.lotMask);
   let reflections: LightReflections | null = null;
   if (scenery.reflectionSources.length) {
     reflections = new LightReflections(atmo, scenery.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));

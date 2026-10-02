@@ -22,6 +22,7 @@ import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHa
 import { SkyTowerVisual } from './skyTower';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
+import { LotMask, urbanBounds } from './lotMask';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
@@ -73,6 +74,8 @@ export class Scenery {
   private readonly houseRadius: number;
   /** Auckland motorway network, plus the railways when the quality tier draws them (null elsewhere). */
   roads: RoadNetwork | null = null;
+  /** Lots left unbuilt along the road and railway ribbons (Auckland); the terrain shader takes it too. */
+  lotMask: LotMask | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
   cbdStats: CbdStats | null = null;
@@ -158,6 +161,9 @@ export class Scenery {
       const rails = o.quality.railways ? clipRailToLand(aucklandRailPaths(), height) : [];
       const roads = new RoadNetwork([...aucklandRoadPaths(), ...rails]);
       this.roads = roads;
+      // the suburbs' lots cleared along the ribbons (the houses here and the terrain's painted ones)
+      const urban = urbanBounds(o.colorData, o.colorSize, hf.origin, hf.extent);
+      this.lotMask = urban ? LotMask.fromSegments(roads.segments, urban) : null;
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
@@ -350,7 +356,7 @@ export class Scenery {
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, this.lotMask),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
         { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },

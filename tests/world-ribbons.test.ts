@@ -7,7 +7,12 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
-import { aucklandRailPaths, clipRailToLand, RAIL_CAUSEWAY_Y, RoadNetwork } from '../src/world/scenery/motorways';
+import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RAIL_CAUSEWAY_Y, RoadNetwork } from '../src/world/scenery/motorways';
+import { bakeColorRows } from '../src/world/terrain/bake';
+import { reduceView } from '../src/world/terrain/parallel';
+import { ColorMapSampler, HouseSource } from '../src/world/scenery/sources';
+import { LOT_CLEARANCE, LOT_MASK_CELL, LotMask, urbanBounds } from '../src/world/scenery/lotMask';
+import { AKL_CBD_GRID } from '../src/world/config';
 
 // the medium tier's terrain (1024², the tier the playtest found both glitches on)
 const features = allFeatures('auckland', []);
@@ -57,5 +62,86 @@ describe('railway ribbons follow the rendered terrain (#61)', () => {
   it('without the clipping, the far-north line would run over the open sea (the test can fail)', () => {
     const raw = railVertices(false);
     expect(raw.some(([x, , z, g]) => x > -18600 && x < -17300 && z > -44000 && z < -41100 && g < -20)).toBe(true);
+  });
+});
+
+describe('the suburbs leave a corridor along the road and railway ribbons (#61 items 3 and 8)', () => {
+  const m = 512;
+  const color = new Uint8Array(m * m * 4);
+  bakeColorRows(reduceView(hf, m), { theater: 'auckland', seed: 1840, features }, m, 0, m, color);
+  const cmap = new ColorMapSampler(color, m, hf.origin, hf.extent);
+  // the game's network: roads plus the clipped railways
+  const network = new RoadNetwork([...aucklandRoadPaths(), ...clipRailToLand(aucklandRailPaths(), height)]);
+  const urban = urbanBounds(color, m, hf.origin, hf.extent)!;
+  const mask = LotMask.fromSegments(network.segments, urban);
+  // the playtest's views: Kingsland, Mt Albert (arterials and motorway), Newmarket and the Penrose wye (railways)
+  const places: [string, number, number][] = [
+    ['Kingsland', -1617, 2700],
+    ['Mt Albert', -4126, 3800],
+    ['Newmarket', 1500, 2200],
+    ['Penrose', 4740, 6880],
+  ];
+
+  /** Every house the terrain paints (HouseSource without the scenery's own blocker) around (x, z). */
+  function paintedHouses(x: number, z: number, lots: LotMask | null): number[] {
+    const src = new HouseSource(hf, cmap, height, AKL_CBD_GRID, null, lots);
+    const out = { data: [[], []] as number[][] };
+    for (let dz = -600; dz < 600; dz += 300) for (let dx = -600; dx < 600; dx += 300) src.generate(x + dx, z + dz, 300, out);
+    return [...out.data[0], ...out.data[1]];
+  }
+  /** Houses (records of 11) whose footprint reaches onto a ribbon. */
+  function onRibbon(recs: number[]): number {
+    let n = 0;
+    for (let i = 0; i < recs.length; i += 11) if (network.edgeDistance(recs[i], recs[i + 2]) < Math.hypot(recs[i + 4], recs[i + 6]) / 2) n++;
+    return n;
+  }
+
+  it('covers the built-up area in a compact texture (< 3 MB)', () => {
+    expect(urban.x1 - urban.x0).toBeGreaterThan(20_000);
+    expect(mask.data.length).toBeLessThan(3 * 1024 * 1024);
+    expect(mask.count).toBeGreaterThan(10_000);
+    expect(LOT_CLEARANCE).toBeGreaterThan(17 + LOT_MASK_CELL * Math.SQRT1_2);
+  });
+
+  it('no painted or 3D house reaches onto a motorway, arterial or railway ribbon', () => {
+    for (const [name, x, z] of places) {
+      const recs = paintedHouses(x, z, mask);
+      expect(recs.length / 11, name).toBeGreaterThan(100);
+      expect(onRibbon(recs), name).toBe(0);
+    }
+  });
+
+  it('without the corridor, houses stood on the ribbons there (the test can fail)', () => {
+    for (const [name, x, z] of places) expect(onRibbon(paintedHouses(x, z, null)), name).toBeGreaterThan(0);
+  });
+
+  it('the shader decodes the same bits (a port of lotMasked() in terrainShader.ts)', () => {
+    const f = Math.fround;
+    const glsl = (x: number, z: number): boolean => {
+      const gx = Math.floor(f(f(x - mask.x0) / mask.cell));
+      const gz = Math.floor(f(f(z - mask.z0) / mask.cell));
+      const tx = Math.floor(gx / 8);
+      const tz = Math.floor(gz / 4);
+      if (tx < 0 || tz < 0 || tx >= mask.texW || tz >= mask.texH) return false;
+      const k = (tz * mask.texW + tx) * 4;
+      const v = [0, 1, 2, 3].map((c) => mask.data[k + c]);
+      const byte = v[gz - tz * 4];
+      return Math.floor(byte / 2 ** (gx - tx * 8)) % 2 === 1;
+    };
+    let set = 0;
+    for (let i = 0; i < 20_000; i++) {
+      const x = urban.x0 - 500 + ((i * 7919) % 997) / 997 * (urban.x1 - urban.x0 + 1000);
+      const z = urban.z0 - 500 + ((i * 104729) % 991) / 991 * (urban.z1 - urban.z0 + 1000);
+      expect(glsl(x, z)).toBe(mask.masked(x, z));
+      if (mask.masked(x, z)) set++;
+    }
+    // and along a ribbon every point is in the corridor
+    const s = network.segments;
+    for (let o = 0; o < s.length; o += 5 * 97) {
+      const x = (s[o] + s[o + 2]) / 2;
+      const z = (s[o + 1] + s[o + 3]) / 2;
+      if (x > urban.x0 && x < urban.x1 && z > urban.z0 && z < urban.z1) expect(mask.masked(x, z)).toBe(true);
+    }
+    expect(set).toBeGreaterThan(0);
   });
 });
