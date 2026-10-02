@@ -249,6 +249,20 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
+  strike_sdb2: {
+    id: 'strike_sdb2',
+    name: 'Precision Strike (Stealth)',
+    description: '4× GBU-53/B StormBreaker + 2× AIM-120D internal. Datalinked glide bombs that chase moving ships and vehicles.',
+    rcsMultiplier: 1,
+    stores: [
+      { weapon: 'gbu53', count: 4, internal: true },
+      { weapon: 'aim120', count: 2, internal: true },
+    ],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'ag',
+  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',
@@ -288,6 +302,7 @@ export const WEAPON_INFO: Record<WeaponId, { name: string; short: string; kind: 
   aim9x: { name: 'AIM-9X Sidewinder', short: 'AIM-9X', kind: 'aam' },
   gbu31: { name: 'GBU-31 JDAM', short: 'JDAM', kind: 'bomb' },
   gbu39: { name: 'GBU-39 SDB', short: 'SDB', kind: 'bomb' },
+  gbu53: { name: 'GBU-53/B StormBreaker', short: 'SDB II', kind: 'bomb' },
   aargm: { name: 'AGM-88G AARGM-ER', short: 'AARGM', kind: 'agm' },
 };
 

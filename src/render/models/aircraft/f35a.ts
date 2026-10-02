@@ -558,9 +558,9 @@ export function buildF35(): AircraftPrototype {
 
   const bayZc = Z0 + 9.55;
   const slots: StoreSlot[] = [];
-  for (const side of [1, -1] as const) slots.push({ pos: [0.46 * side, -0.29, bayZc], internal: true, accepts: ['gbu31', 'aargm', 'aim120', 'gbu39'], side });
-  for (const side of [1, -1] as const) slots.push({ pos: [0.78 * side, -0.36, bayZc - 0.1], internal: true, accepts: ['aim120', 'gbu39'], side });
-  for (const side of [1, -1] as const) slots.push({ pos: [0.2 * side, -0.29, bayZc - 0.15], internal: true, accepts: ['aim120', 'gbu39'], side });
+  for (const side of [1, -1] as const) slots.push({ pos: [0.46 * side, -0.29, bayZc], internal: true, accepts: ['gbu31', 'aargm', 'aim120', 'gbu39', 'gbu53'], side });
+  for (const side of [1, -1] as const) slots.push({ pos: [0.78 * side, -0.36, bayZc - 0.1], internal: true, accepts: ['aim120', 'gbu39', 'gbu53'], side });
+  for (const side of [1, -1] as const) slots.push({ pos: [0.2 * side, -0.29, bayZc - 0.15], internal: true, accepts: ['aim120', 'gbu39', 'gbu53'], side });
   for (const side of [1, -1] as const) slots.push({ pos: [pIn.x * side, pIn.y, pIn.z], internal: false, accepts: ['gbu31'], side, pylon: 'pylonInner' });
   for (const side of [1, -1] as const)
     slots.push({ pos: [pMid.x * side, pMid.y, pMid.z], internal: false, accepts: ['aim120', 'gbu31', 'aim9x'], side, pylon: 'pylonMid' });

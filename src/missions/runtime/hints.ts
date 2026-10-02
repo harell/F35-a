@@ -112,9 +112,10 @@ function surfaceObjectiveTarget(s: MissionState, p: AircraftEntity, within: numb
 /** SDB releases beyond this (m) glide so long and arrive so slow that point defences eat them. */
 export const SDB_PRESS_RANGE = 22_000;
 
-/** Best air-to-ground store for a target (AARGM for emitters, then SDB, then JDAM). */
+/** Best air-to-ground store for a target (AARGM for emitters, then SDB II, SDB, then JDAM). */
 function agWeaponFor(p: AircraftEntity, t: AnyEntity): WeaponId | null {
   if (armTargetable(t) && remaining(p, 'aargm') > 0) return 'aargm';
+  if (remaining(p, 'gbu53') > 0) return 'gbu53';
   if (remaining(p, 'gbu39') > 0) return 'gbu39';
   if (remaining(p, 'gbu31') > 0) return 'gbu31';
   return null;
@@ -205,14 +206,14 @@ const AUTO: AutoHint[] = [
         if (z && z.shoot) return 'SHOOT — fire the AARGM: it keeps homing even if the radar shuts down';
         return 'Close in: fire the AARGM when SHOOT shows';
       }
-      if (w === 'gbu31' || w === 'gbu39') {
+      if (w === 'gbu31' || w === 'gbu39' || w === 'gbu53') {
         const b = s.world.combat.bombImpactPoint(p, s.world);
         if (!p.radar.groundPoint) return `Tap TGT to designate a ground target for the ${name}`;
         if (b && b.inRange) {
           // an SDB lobbed from its 30 km maximum glides for 3+ minutes and arrives slow — easy
           // meat for a Tor / Osa: press in to ~20 km first
           const gp = p.radar.groundPoint;
-          if (w === 'gbu39' && Math.hypot(gp.x - p.position.x, gp.z - p.position.z) > SDB_PRESS_RANGE) return 'IN RANGE — press in to 20 km: a max-range SDB arrives slow and gets shot down';
+          if (w !== 'gbu31' && Math.hypot(gp.x - p.position.x, gp.z - p.position.z) > SDB_PRESS_RANGE) return `IN RANGE — press in to 20 km: a max-range ${name} arrives slow and gets shot down`;
           return `IN RANGE — release the ${name}, it flies itself to the target`;
         }
         return `Fly toward the target and release the ${name} when the range cue shows IN RANGE`;

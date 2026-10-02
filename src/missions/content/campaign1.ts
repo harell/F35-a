@@ -166,7 +166,7 @@ export const C03: MissionDef = mission({
     'Fire the AARGM while a radar is emitting — it rides the beam home, and keeps going even if they shut down. SDBs glide 30 km from altitude. Stay in the bays and stay stealthy.',
   ],
   recommendedLoadout: 'sead_stealth',
-  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
+  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
   player: c03Start,
   script: {
     autoHints: true,
@@ -238,7 +238,7 @@ export const C04: MissionDef = mission({
     'Climb high for the attack: from 25,000 ft a JDAM glides about 10 km, far outside the Shilkas and above the Tor. Run in northbound from the IP off Beachlands, let it go the moment IN RANGE shows, then turn away. Beast mode carries six JDAMs for the hangars and fuel too — but every pylon makes you easier to see.',
   ],
   recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth'],
+  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
   player: c04Start,
   script: {
     autoHints: true,
@@ -451,7 +451,7 @@ export const C06: MissionDef = mission({
     "The corvettes are creeping along a patrol line at two knots. A JDAM flies to where the ship was when you let it go — release the moment IN RANGE shows from 25,000 ft and the blast does the rest. Fly to the IP south of Beachlands and run in northbound: up there you are above the Tor and the SA-8 (both top out below 20,000 ft) and well outside their reach. Viper 2 will take on the Flankers.",
   ],
   recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth'],
+  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
   player: c06Start,
   script: {
     parTime: 480,

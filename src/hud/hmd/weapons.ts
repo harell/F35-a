@@ -8,7 +8,7 @@ import { DEG, G, dirFromHeadingPitch, forwardOf, rightOf, toKnots, upOf } from '
 import type { Vector3 } from 'three';
 import type { WeaponId } from '../../core/types';
 import { dlzLayout, makeDlzGeometry } from './dlz';
-import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG } from './format';
+import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 
@@ -116,7 +116,7 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
 export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): void {
   const z = f.zone;
   if (!z || z.weapon === 'gun' || z.rMax <= 0) return;
-  if (z.weapon === 'gbu31' || z.weapon === 'gbu39') return; // bombs use the release cue
+  if (WEAPON_IS_BOMB[z.weapon]) return; // bombs use the release cue
   const { pen, pal, L, st } = f;
   const u = L.u;
   const g = dlzLayout(z, top, bottom, dlzGeom, st.dlzScale);
@@ -199,10 +199,10 @@ export function planCues(f: HudFrame): number {
   const z = f.zone;
   // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
   // never lands on the target box that the pipper is tracking)
-  if (z && z.shoot && z.weapon !== 'gbu31' && z.weapon !== 'gbu39') addCue('SHOOT', 20, pal.bright, 4);
+  if (z && z.shoot && !WEAPON_IS_BOMB[z.weapon]) addCue('SHOOT', 20, pal.bright, 4);
   // bombs: release cue
   const w = p.selectedWeapon;
-  if (f.mode === 'hmd' && (w === 'gbu31' || w === 'gbu39')) {
+  if (f.mode === 'hmd' && WEAPON_IS_BOMB[w]) {
     const bi = bombInfo(f);
     if (bi) {
       if (p.radar.groundPoint) {
@@ -421,7 +421,7 @@ function bombInfo(f: HudFrame): { point: Vector3; inRange: boolean; timeToReleas
 export function drawAirToGround(f: HudFrame): void {
   const p = f.p;
   const w = p.selectedWeapon;
-  if (w !== 'gbu31' && w !== 'gbu39') return;
+  if (!WEAPON_IS_BOMB[w]) return;
   const { pen, pal, L, proj } = f;
   const u = L.u;
   const bi = bombInfo(f);

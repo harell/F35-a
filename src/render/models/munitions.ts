@@ -43,6 +43,20 @@ interface MissileSpec {
   extra?: (L: number, R: number) => BufferGeometry[];
 }
 
+/** Deployed "Diamond Back" wings on top of an SDB-family body. */
+function sdbWings(L: number, R: number): BufferGeometry[] {
+  const wing = liftingSurface(
+    [
+      { x: 0.02, y: 0, zLE: -L / 2 + 0.55, zTE: -L / 2 + 0.72, t: 0.012 },
+      { x: 0.7, y: 0, zLE: -L / 2 + 0.95, zTE: -L / 2 + 1.05, t: 0.008 },
+    ],
+    { profile: 'flat', chordPoints: 3, color: 0x8a9094 },
+  );
+  place(wing, [0, R * 1.05, 0]);
+  const left = place(wing.clone(), [0, 0, 0], [0, 0, 0], [-1, 1, 1]);
+  return [wing, left];
+}
+
 const cache = new Map<MunitionId, BufferGeometry>();
 
 function body(L: number, R: number, s: MissileSpec): BufferGeometry[] {
@@ -274,19 +288,18 @@ const SPECS: Record<MunitionId, MissileSpec> = {
     noseLen: 0.3,
     square: 3.2,
     fins: [{ at: 0.9, root: 0.16, tip: 0.12, span: 0.09, sweep: 0.04, roll: Math.PI / 4 }],
-    extra: (L, R) => {
-      // deployed "Diamond Back" wings on top
-      const wing = liftingSurface(
-        [
-          { x: 0.02, y: 0, zLE: -L / 2 + 0.55, zTE: -L / 2 + 0.72, t: 0.012 },
-          { x: 0.7, y: 0, zLE: -L / 2 + 0.95, zTE: -L / 2 + 1.05, t: 0.008 },
-        ],
-        { profile: 'flat', chordPoints: 3, color: 0x8a9094 },
-      );
-      place(wing, [0, R * 1.05, 0]);
-      const left = place(wing.clone(), [0, 0, 0], [0, 0, 0], [-1, 1, 1]);
-      return [wing, left];
-    },
+    extra: sdbWings,
+  },
+  gbu53: {
+    // SDB II: SDB-like square body, blunt faceted tri-mode seeker nose, four tail fins, pop-out wings
+    body: 0x8e959a,
+    nose: 0x3e4246,
+    noseLen: 0.22,
+    blunt: 0.7,
+    square: 3.6,
+    bands: [[0.16, 0.04, 0xd6b21e]],
+    fins: [{ at: 0.9, root: 0.18, tip: 0.12, span: 0.1, sweep: 0.05, roll: 0 }],
+    extra: sdbWings,
   },
   aargm: {
     body: 0xdcdcd7,

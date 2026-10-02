@@ -11,6 +11,7 @@
  * had on the previous frame (one frame of lag, no allocation, no double layout).
  */
 import { reserveBankScale } from './flight';
+import { WEAPON_IS_BOMB } from './format';
 import type { HudFrame } from './frame';
 
 /** Extents measured while drawing (previous frame). NaN = nothing drawn. */
@@ -61,7 +62,7 @@ export function reserveFixedZones(f: HudFrame): void {
     occ.add(L.altLeft - 3 * u, L.boxY - 13 * u, L.altLeft + 92 * u, L.boxY + 11 * u + L.line * 3.4);
     // DLZ scale (only while a launch zone is shown)
     const z = f.zone;
-    if (z && z.rMax > 0 && z.weapon !== 'gun' && z.weapon !== 'gbu31' && z.weapon !== 'gbu39') {
+    if (z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon]) {
       occ.add(L.dlzX - 10 * u, L.dlzTop - 18 * u, L.dlzX + 62 * u, L.dlzBottom + 18 * u);
     }
     reserveBankScale(f);

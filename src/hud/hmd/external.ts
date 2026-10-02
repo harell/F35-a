@@ -4,7 +4,7 @@
  */
 import { RAD, toFeet, toKnots, toNm } from '../../core/math';
 import { dlzLayout, makeDlzGeometry } from './dlz';
-import { HDG3_STR, INT_STR, NumText, entityLabel } from './format';
+import { HDG3_STR, INT_STR, NumText, WEAPON_IS_BOMB, entityLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { rangeLabel, rangeLabelNm } from './targets';
@@ -102,7 +102,7 @@ export function drawExternalBlock(f: HudFrame): number {
     y += 14 * u;
     // mini horizontal DLZ
     const z = f.zone;
-    if (z && z.rMax > 0 && z.weapon !== 'gun' && z.weapon !== 'gbu31' && z.weapon !== 'gbu39') {
+    if (z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon]) {
       const w = 120 * u;
       // map left (0) → right (scale) using the vertical helper on a horizontal axis
       const g = dlzLayout(z, 0, w, dlzG, f.st.dlzScale);

@@ -93,6 +93,7 @@ export type WeaponId =
   | 'aim9x' // AIM-9X Sidewinder — IR, high off-boresight via HMD
   | 'gbu31' // GBU-31 JDAM — 2000 lb GPS guided bomb
   | 'gbu39' // GBU-39 SDB — 250 lb GPS guided glide bomb (standoff)
+  | 'gbu53' // GBU-53/B StormBreaker (SDB II): datalinked glide bomb with a tri-mode terminal seeker, hits moving targets
   | 'aargm'; // AGM-88G AARGM-ER — anti-radiation missile for SEAD
 
 /** Every munition that can exist as a MissileEntity (player + enemy + SAM). */
@@ -107,7 +108,7 @@ export type MunitionId =
   | 'm_9m330' // SA-15 missile, command guided
   | 'm_igla'; // SA-18 MANPADS missile, IR
 
-export type LoadoutId = 'a2a_stealth' | 'strike_stealth' | 'sead_stealth' | 'a2a_beast' | 'strike_beast';
+export type LoadoutId = 'a2a_stealth' | 'strike_stealth' | 'sead_stealth' | 'strike_sdb2' | 'a2a_beast' | 'strike_beast';
 
 /** Throttle axis 0..1. 0 = idle, AB_DETENT = 100% military (dry) power, 1 = max afterburner. */
 export const AB_DETENT = 0.9;

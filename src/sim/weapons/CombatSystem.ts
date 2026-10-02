@@ -214,7 +214,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
     bombImpactPoint(ac, world) {
       bind(world);
       const w = ac.selectedWeapon;
-      if ((w !== 'gbu31' && w !== 'gbu39') || loadouts.remaining(ac, w) <= 0) return null;
+      if (w === 'gun' || ctx.defs[w].category !== 'bomb' || loadouts.remaining(ac, w) <= 0) return null;
       const def = ctx.defs[w];
       const gp = ac.radar.groundPoint;
       const r = bombResult;
@@ -230,6 +230,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
         r.timeToRelease = r.inRange ? 0 : gs > 5 ? (horiz - rMax * pad) / gs : -1;
         return r;
       }
+      if (def.guidance === 'tri_mode') return null; // SDB II: designated targets only, no CCIP
       // an internal release waits for the bay doors: aim for where the jet will be then
       const st = loadouts.pickStation(ac, w);
       const delay = st >= 0 && ac.stores[st].internal && ac.isPlayer ? Math.max(0, 0.9 - ac.bayDoors) * BAY_OPEN_TIME : 0;
