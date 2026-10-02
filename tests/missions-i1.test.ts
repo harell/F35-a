@@ -302,9 +302,9 @@ describe('i1: c09 Hammer Down re-paced', () => {
 
   it('without a Flanker kill Hammer still pushes at 200 s (never waits forever)', () => {
     const h = harness(byId('c09'));
-    // the escort stays with Hammer (inside 25 km of the push point): the stub-flown player would fly off east
+    // the escort stays with Hammer (inside 10 km of the push point): the stub-flown player would fly off east
     h.run(206, () => {
-      pin(h, 0, 6_000, -4_000);
+      pin(h, 5_000, 6_000, 0);
       shieldPlayer(h);
     });
     expect(h.world.aircraft.filter((a) => a.groupId === 'hammer')).toHaveLength(4);
@@ -330,6 +330,24 @@ describe('i1: c09 Hammer Down re-paced', () => {
     expect(h.runner.state).toBe('failed');
     expect(h.runner.result(h.world).reason).toMatch(/without its escort/);
     expect(h.of('radio').some((r) => r.from === 'Hammer 1' && /Scrubbing/.test(r.text))).toBe(true);
+  });
+
+  it('a depot bombed before Hammer launches does not bring Hammer "out" (issue #57 review: o_hammer / o_all4 completed with no Hammer jet)', () => {
+    const h = harness(byId('c09'));
+    h.run(20, () => {
+      pin(h, -30_000, 6_000, 20_000); // away from the push point: no push
+      shieldPlayer(h);
+    });
+    killGroup(h, 'depot');
+    h.run(2, () => {
+      pin(h, -30_000, 6_000, 20_000);
+      shieldPlayer(h);
+    });
+    const state = (id: string) => h.runner.objectives.find((o) => o.id === id)!.state;
+    expect(state('o_strike')).toBe('complete');
+    expect(state('o_hammer')).toBe('active');
+    expect(state('o_all4')).toBe('active');
+    expect(h.runner.state).toBe('running');
   });
 
   it('remainingRoute drops the points already flown', () => {

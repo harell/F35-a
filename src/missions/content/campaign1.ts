@@ -85,7 +85,18 @@ const home = { kind: 'area', who: { group: 'kiwi' }, x: P.whenuapai.x, z: P.when
  * at ~100 s, before the hunters could reach it, and a Kiwi jet shot down afterwards cost nothing
  * while the mission ran on forever. Now the protect stays live until the chase is over.
  */
-const kiwiSafe: Condition = { kind: 'all', of: [{ kind: 'trigger', id: 't_home' }, { kind: 'objective', id: 'o_bandits', state: 'complete' }] };
+const kiwiSafe: Condition = {
+  kind: 'all',
+  of: [
+    { kind: 'trigger', id: 't_home' },
+    { kind: 'objective', id: 'o_bandits', state: 'complete' },
+    // ...with Viper there to see it home (review, issue #57: parked 50 km away, the chasers went home on
+    // their own after ~800 s and were credited as driven off, so the parked player still won)
+    { kind: 'area', x: P.whenuapai.x, z: P.whenuapai.z, radius: 20_000 },
+  ],
+};
+/** Kiwi is bingo: if the chase hasn't been settled by then, Kiwi flames out (mission failed, never an endless run). */
+const KIWI_BINGO_T = 720;
 
 export const C02: MissionDef = mission({
   id: 'c02',
@@ -98,7 +109,7 @@ export const C02: MissionDef = mission({
   briefing: [
     'Kiwi flight, two F-35As, spent the night hammering landing craft off Rakino Island. They are Winchester — no missiles left — and short on fuel, limping home across the Gulf at low speed.',
     'The enemy has noticed. DARKSTAR has a pair of MiG-29s closing on Kiwi from the north-east, and Flankers are spinning up on Waiheke. Kiwi cannot fight back.',
-    'Meet them over the Gulf, kill the pursuers and bring both jets home to Whenuapai. If Kiwi goes down, the mission goes with it.',
+    'Meet them over the Gulf, kill the pursuers and bring both jets home to Whenuapai. Kiwi has about twelve minutes of fuel. If Kiwi goes down, the mission goes with it.',
   ],
   recommendedLoadout: 'a2a_beast',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
@@ -145,14 +156,30 @@ export const C02: MissionDef = mission({
         when: home,
         actions: [
           { kind: 'radio', from: 'Kiwi 1', text: "Kiwi's home, holding over the field. Viper, keep them off us till they're gone." },
-          // hold over the field (at the end of its route the flight would head back out over the Gulf)
+          // stay near the field (at the end of its route the flight would head back out over the Gulf).
+          // The bomber brain flies this as a ~20 km racetrack round Whenuapai, not a 3 km circle.
           { kind: 'retask', group: 'kiwi', task: { kind: 'patrol', x: P.whenuapai.x, z: P.whenuapai.z, radius: 3000, altitude: 1200 } },
         ],
       },
       {
         id: 't_kiwi_hit',
         when: { kind: 'group_destroyed', group: 'kiwi', count: 1 },
-        actions: [{ kind: 'radio', from: 'Kiwi 1', text: "Kiwi 2 is down! Viper, get these guys off me!", priority: 3 }],
+        actions: [
+          { kind: 'radio', from: 'Kiwi 1', text: "Kiwi 2 is down! Viper, get these guys off me!", priority: 3 },
+          // attack_group resolves to one jet when the task is set: point the chasers at the survivor.
+          // Interceptors aren't GCI-committed, so with their target dead they loitered and o_bandits
+          // (and with it o_kiwi) never resolved: the mission ran on forever (issue #57 review).
+          { kind: 'retask', group: 'hunters', task: { kind: 'attack_group', group: 'kiwi' } },
+          { kind: 'retask', group: 'flankers', task: { kind: 'attack_group', group: 'kiwi' } },
+        ],
+      },
+      {
+        id: 't_kiwi_bingo',
+        when: { kind: 'all', of: [{ kind: 'time', t: KIWI_BINGO_T }, { kind: 'not', of: { kind: 'objective', id: 'o_kiwi', state: 'complete' } }] },
+        actions: [
+          { kind: 'radio', from: 'Kiwi 1', text: "Kiwi's out of gas. We're punching out.", priority: 3 },
+          { kind: 'end', success: false, reason: 'Kiwi flight ran out of fuel' },
+        ],
       },
     ],
     hints: [{ id: 'h_kiwi', text: "Kiwi flight is unarmed — kill the MiGs chasing them before they get into missile range", when: { kind: 'time', t: 6 }, duration: 8 }],

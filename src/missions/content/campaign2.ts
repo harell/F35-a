@@ -193,7 +193,8 @@ const hammerEgress = { x: 22000, z: 3000 };
  * event), and a damaged jet had to be nursed through it.
  */
 const hammerClear: Condition = { kind: 'not', of: { kind: 'area', who: { group: 'hammer' }, x: strip.x, z: strip.z, radius: 10_000 } };
-const hammerOut: Condition = { kind: 'all', of: [{ kind: 'objective', id: 'o_strike', state: 'complete' }, hammerClear] };
+// (t_push: before Hammer spawns, hammerClear is vacuously true — a depot the player bombs first doesn't bring Hammer out)
+const hammerOut: Condition = { kind: 'all', of: [{ kind: 'trigger', id: 't_push' }, { kind: 'objective', id: 'o_strike', state: 'complete' }, hammerClear] };
 /** Ingress from the push point: down into the Tāmaki Strait, run in low from the south (under the SA-6's radar). */
 const HAMMER_INGRESS: TaskDef = {
   kind: 'route',
@@ -206,11 +207,13 @@ const HAMMER_INGRESS: TaskDef = {
   ],
 };
 /**
- * The escort is with Hammer: the player within 25 km of the push point. Hammer doesn't push without
- * it (playtest 2026-10-02, 3.2-a, issue #57: a player parked 35 km away won the mission on Weasel's
- * and Hammer's work alone).
+ * The escort is with Hammer: the player within 10 km of the push point (the "Push point" steering cue).
+ * Hammer doesn't push without it (playtest 2026-10-02, 3.2-a, issue #57: a player parked 35 km away won
+ * the mission on Weasel's and Hammer's work alone). The circle leaves out the player's start (17 km
+ * from the push point), so a player who never moves gets no push.
  */
-const escortUp: Condition = { kind: 'area', x: pushPoint.x, z: pushPoint.z, radius: 25_000 };
+const ESCORT_RADIUS = 10_000;
+const escortUp: Condition = { kind: 'area', x: pushPoint.x, z: pushPoint.z, radius: ESCORT_RADIUS };
 /** Hammer is ready: the Flankers are dealt with (splashed or driven off), or it can't wait any longer. */
 const hammerReady: Condition = { kind: 'any', of: [{ kind: 'group_defeated', group: 'flankers' }, { kind: 'time', t: 200 }] };
 /** The push: Hammer is ready and the escort is up. */
@@ -228,7 +231,7 @@ export const C09: MissionDef = mission({
   weather: 'scattered',
   briefing: [
     'The enemy is rebuilding the Waiheke airstrip and flying fuel in by sea. Hammer flight — four F-35As with JDAMs — is going to burn the fuel farm and the radar that runs the strip.',
-    "Hammer's jets are loaded for the ground and can't fight their way in. They hold on the tanker west of the city until you clear the air: a pair of Flankers is coming off the Gulf — kill them and DARKSTAR calls \"Hammer, push\". Hammer can only wait about three minutes, and won't push without its escort: stay within 25 km of the push point east of the city. Su-35s scramble from the island a minute after the push: stay between them and Hammer.",
+    "Hammer's jets are loaded for the ground and can't fight their way in. They hold on the tanker west of the city until you clear the air: a pair of Flankers is coming off the Gulf — kill them and DARKSTAR calls \"Hammer, push\". Hammer can only wait about three minutes, and won't push without its escort: meet it at the push point east of the city (your steering cue) once the Flankers are dealt with. Su-35s scramble from the island a minute after the push: stay between them and Hammer.",
     'Weasel flight will go after the SA-6 on the eastern end of Waiheke with AARGMs, and Hammer runs in low through the Tāmaki Strait under its radar. At least two Hammer jets have to get clear of Waiheke again.',
   ],
   recommendedLoadout: 'a2a_beast',
@@ -303,6 +306,8 @@ export const C09: MissionDef = mission({
     ],
     waypoints: [
       { id: 'wp_screen', label: 'Screen', kind: 'cap', x: 5000, z: -12000, altitude: 7000, objective: 'o_flankers' },
+      // join Hammer: the push needs the player within ESCORT_RADIUS of here
+      { id: 'wp_push', label: 'Push point', kind: 'nav', x: pushPoint.x, z: pushPoint.z, altitude: 6000, radius: 5000 },
       { id: 'wp_target', label: 'Waiheke strip', kind: 'target', x: strip.x, z: strip.z, objective: 'o_strike' },
       { id: 'wp_egress', label: 'Egress', kind: 'nav', x: hammerEgress.x, z: hammerEgress.z, altitude: 3000, objective: 'o_hammer' },
     ],
@@ -320,7 +325,8 @@ export const C09: MissionDef = mission({
       },
       {
         id: 't_su35',
-        when: { kind: 'any', of: [{ kind: 'group_defeated', group: 'flankers' }, { kind: 'trigger', id: 't_push' }] },
+        // after the push only: spawned before Hammer is up, their attack_group hammer task falls back to the player
+        when: { kind: 'trigger', id: 't_push' },
         delay: 60,
         actions: [
           { kind: 'spawn', group: 'sukhois' },
