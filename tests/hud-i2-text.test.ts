@@ -125,10 +125,13 @@ describe('i2: no text-on-text overlaps in the combat lab scenes', () => {
     r.mock.player.velocity.set(0, 0, -250).applyQuaternion(r.mock.player.quaternion);
     const texts = r.run(1 / 30);
     const tapeTexts = /^(\d\d|N|E|S|W|\d{3})$/;
+    // …and the NEXT slot beside the heading box: the steering waypoint's name and distance when its
+    // diamond has no room for them (playtest 2.2-1)
+    const next = (r.mock.mission.currentWaypoint?.label ?? '').toUpperCase();
     for (const t of texts) {
       if (!overlaps(textBox(t), band)) continue;
       // only the tape's own numerals / heading box live there
-      expect(tapeTexts.test(t.text), `"${t.text}" in the tape band`).toBe(true);
+      expect(tapeTexts.test(t.text) || t.text === next || /^\d+(\.\d)? NM$/.test(t.text), `"${t.text}" in the tape band`).toBe(true);
     }
   });
 });

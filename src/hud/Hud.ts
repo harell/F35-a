@@ -45,6 +45,7 @@ import {
   lockCommandedOf,
   reserveSymbols,
   waypointBearing,
+  nextWaypointText,
 } from './hmd/targets';
 import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
@@ -428,7 +429,7 @@ export const createHud: CreateHud = (canvas, events) => {
       let colY: number;
       if (hmd) {
         g2.globalAlpha = declutter;
-        drawHeadingTape(f, waypointBearing(f));
+        drawHeadingTape(f, waypointBearing(f), nextWaypointText(f));
         drawSpeedColumn(f);
         drawAltColumn(f);
         drawDlz(f, L.dlzX, L.dlzTop, L.dlzBottom);

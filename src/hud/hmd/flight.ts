@@ -344,7 +344,12 @@ export function drawWaterline(f: HudFrame): void {
 
 /* ───────────────────────── Heading tape ───────────────────────── */
 
-export function drawHeadingTape(f: HudFrame, wpBearing: number | null): void {
+/**
+ * Heading tape, its waypoint bearing caret and, when `next` is given (the steering waypoint's diamond
+ * had no room for its name: targets.ts nextWaypointText), the waypoint's name left of the heading box
+ * and its distance right of it, inside the tape's reserved zone.
+ */
+export function drawHeadingTape(f: HudFrame, wpBearing: number | null, next: { name: string; dist: string } | null = null): void {
   const { pen, L, pal, p } = f;
   const u = L.u;
   const hdg = ((p.flight.heading * RAD) % 360 + 360) % 360;
@@ -374,6 +379,16 @@ export function drawHeadingTape(f: HudFrame, wpBearing: number | null): void {
   const bh = 19 * u;
   pen.box(cx - bw / 2, L.tapeY, bw, bh, pal.main, 1.5, pal.back);
   pen.text(HDG3_STR[Math.round(hdg) % 360], cx, L.tapeY + bh / 2 + 0.5, pal.main, 14);
+  if (next) {
+    const room = halfW - bw / 2 - 8 * u;
+    let name = next.name;
+    if (pen.textWidth(name, 11) > room) {
+      while (name.length > 3 && pen.textWidth(`${name}…`, 11) > room) name = name.slice(0, -1).trimEnd();
+      name = `${name}…`;
+    }
+    pen.text(name, cx - bw / 2 - 8 * u, L.tapeY + bh / 2 + 0.5, pal.main, 11, 'right');
+    pen.text(next.dist, cx + bw / 2 + 8 * u, L.tapeY + bh / 2 + 0.5, pal.dim, 11, 'left');
+  }
   pen.begin();
   pen.line(cx, L.tapeY + bh, cx, y1 + 3 * u);
   pen.strokeGlow(pal.main, 1.4);

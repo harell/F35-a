@@ -745,7 +745,20 @@ export function drawFriendlies(f: HudFrame): void {
 
 /* ───────────────────────── Steering waypoint ───────────────────────── */
 
+/**
+ * Did drawWaypoint print the steering waypoint's name this frame (or leave it out on purpose: a target
+ * waypoint with the bandits in reach)? When not, the fixed NEXT line (by the heading box in the HMD, in
+ * the outside views' info block) names it instead: a tour is useless without its names (playtest 2.2-1).
+ */
+const wpName = { frame: -1, done: false };
+
+export function waypointNamed(f: HudFrame): boolean {
+  return wpName.frame === f.st.frame && wpName.done;
+}
+
 export function drawWaypoint(f: HudFrame): void {
+  wpName.frame = f.st.frame;
+  wpName.done = false;
   const wp = f.ctx.mission?.currentWaypoint;
   if (!wp) return;
   const { p, pen, pal, L, occ } = f;
@@ -764,7 +777,10 @@ export function drawWaypoint(f: HudFrame): void {
   pen.strokeGlow(pal.main, 1.6);
   // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
   // would only print into them (playtest: over the drone boxes through the g01 gun pass)
-  if (wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE)) return;
+  if (wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE)) {
+    wpName.done = true;
+    return;
+  }
   const dx = wp.position.x - p.position.x;
   const dz = wp.position.z - p.position.z;
   const d = Math.hypot(dx, dz);
@@ -784,8 +800,10 @@ export function drawWaypoint(f: HudFrame): void {
   if (!occ.hits(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u)) {
     pen.text(name, lx, aboveY, pal.main, 11);
     occ.add(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u);
+    wpName.done = true;
   } else if (infoFree) {
     pen.text(name, lx, belowY, pal.main, 11);
+    wpName.done = true;
     occ.add(lx - nw, belowY - 7 * u, lx + nw, belowY + 7 * u);
     belowY += 13 * u;
   }
@@ -828,4 +846,15 @@ export function waypointBearing(f: HudFrame): number | null {
   let b = Math.atan2(dx, -dz);
   if (b < 0) b += Math.PI * 2;
   return b;
+}
+
+/**
+ * The fixed NEXT line: the steering waypoint's name and distance ("NEXT HARBOUR BRIDGE 2.4 NM"), for
+ * when its diamond has no room for them (waypointNamed). Text only; the caller places it.
+ */
+export function nextWaypointText(f: HudFrame): { name: string; dist: string } | null {
+  const wp = f.ctx.mission?.currentWaypoint;
+  if (!wp || waypointNamed(f)) return null;
+  const d = Math.hypot(wp.position.x - f.p.position.x, wp.position.z - f.p.position.z);
+  return { name: (wp.label || wp.id).toUpperCase(), dist: wpDist.get(toNm(d)) };
 }

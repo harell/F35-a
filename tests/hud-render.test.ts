@@ -1109,3 +1109,22 @@ describe('own missiles in flight: a count that always reads', () => {
     });
   }
 });
+
+describe('the steering waypoint always has its name on screen', () => {
+  for (const view of ['cockpit', 'hud', 'chase'] as const) {
+    it(`${view}: with no room by the diamond (here: behind the jet), the name and distance go to the fixed NEXT slot`, () => {
+      const r = rig('nav', view);
+      const p = r.mock.player;
+      const wp = { id: 'wp_bridge', label: 'Harbour Bridge', position: p.position.clone().add(new Vector3(0, 0, 4400).applyQuaternion(p.quaternion)), radius: 900, kind: 'nav' as const };
+      (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
+      const texts = r.run(0.1);
+      const name = one(texts, 'HARBOUR BRIDGE');
+      const dist = one(texts, /^2\.\d NM$/);
+      for (const t of [name, dist]) for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
+      // in sight with room by the diamond: named there, once
+      wp.position.copy(p.position).add(new Vector3(-600, -300, -4400).applyQuaternion(p.quaternion));
+      const t2 = r.run(0.1);
+      expect(find(t2, /^(HARBOUR BRIDGE|Harbour Bridge)$/).length).toBe(1);
+    });
+  }
+});
