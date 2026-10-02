@@ -1,6 +1,6 @@
 /**
  * F35-A — contextual HUD hints: scripted HintDefs plus built-in "auto hints" that react to what
- * the player is doing (training + early campaign) and always-on ones (Winchester / rearm).
+ * the player is doing (training + early campaign) and always-on ones (Winchester / bingo).
  *
  * The weapon hints follow the SELECTED weapon and the real stores (names from WEAPON_INFO):
  *  - AMRAAM: tap the TD box (or TGT) to lock → point the nose (±30° lock cone) → wait for SHOOT
@@ -18,7 +18,7 @@ import { evalCondition } from './conditions';
 import { currentControlPrefs, formatControls } from './controlsText';
 import { aircraftHudName } from './names';
 import type { MissionState } from './state';
-import type { RearmController } from './rearm';
+import type { WinchesterWatch } from './winchester';
 
 interface AutoHint {
   id: string;
@@ -133,24 +133,15 @@ const AUTO: AutoHint[] = [
     },
   },
   {
-    id: 'rearming',
-    always: true,
-    cooldown: 0,
-    test(p, _s, h) {
-      const r = h.rearm;
-      if (!r || !r.inGateNow(p) || r.holdTime <= 0) return null;
-      return `REARMING — hold over ${r.homeName} (${Math.max(1, Math.ceil(5 - r.holdTime))} s)`;
-    },
-  },
-  {
     id: 'winchester',
     always: true,
     cooldown: 20,
-    test(_p, _s, h) {
-      const r = h.rearm;
-      if (!r) return null;
-      if (r.current === 'winchester') return `WINCHESTER: follow the steering cue to ${r.homeName} — hold over the field below 5,000 ft to rearm`;
-      if (r.current === 'bingo') return `BINGO FUEL: RTB to ${r.homeName} — hold over the field below 5,000 ft to refuel`;
+    test(p, _s, h) {
+      const w = h.winchester;
+      if (!w) return null;
+      // no rearming (issue #63): what's left is the gun and the wingmen
+      if (w.current === 'winchester') return p.gunAmmo > 0 ? 'WINCHESTER: missiles and bombs gone — the gun is all you have left' : 'WINCHESTER: no weapons left — stay clear of the threats';
+      if (w.current === 'bingo') return 'BINGO FUEL: finish the job before the tanks run dry';
       return null;
     },
   },
@@ -264,8 +255,8 @@ export class HintSystem {
 
   constructor(
     private readonly s: MissionState,
-    /** Winchester / rearm state (always-on hints). */
-    readonly rearm: RearmController | null = null,
+    /** Winchester / bingo state (always-on hints). */
+    readonly winchester: WinchesterWatch | null = null,
   ) {}
 
   /** Launch zone of the selected weapon vs the designation (cached per evaluation). */
@@ -304,7 +295,7 @@ export class HintSystem {
       this.forced = null;
     }
 
-    // always-on hints (Winchester / rearming) pre-empt scripted and weapon hints
+    // always-on hints (Winchester / bingo) pre-empt scripted and weapon hints
     const cur = ruleById(this.currentId);
     if (!cur?.always && this.tryAuto(p, true)) return;
 
@@ -339,7 +330,7 @@ export class HintSystem {
     this.tryAuto(p, false);
   }
 
-  /** A more urgent rule (defend / rearm) applies while `rule` is showing. */
+  /** A more urgent rule (defend / Winchester) applies while `rule` is showing. */
   private preempted(rule: AutoHint, p: AircraftEntity): boolean {
     const idx = AUTO.indexOf(rule);
     for (let i = 0; i < idx; i++) {

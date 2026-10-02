@@ -26,7 +26,7 @@ export const C01: MissionDef = mission({
   briefing: [
     '04:12. A hostile expeditionary force came ashore on Rangitoto, Motutapu and Waiheke in the dark. Within the hour their fighters were probing the Waitematā, and Auckland woke up to sirens and jet noise over the harbour.',
     'Operation Southern Cross starts now. You and Viper 2 are the first F-35As off the runway at Whenuapai. Climb to CAP ALPHA over the upper harbour and let DARKSTAR, the AWACS orbiting over the Hunua Ranges, talk you onto a pair of MiG-29s sweeping in from the Gulf.',
-    'A clean F-35 is almost invisible to a Fulcrum radar, so see them first: tap the TD box (or TGT) to lock — keep the nose within 30° while it locks — wait for SHOOT, fire, then crank 50° to support the missile. Keep them off the North Shore. Expect company once the first pair goes down. Out of missiles? Hold over Whenuapai to rearm.',
+    'A clean F-35 is almost invisible to a Fulcrum radar, so see them first: tap the TD box (or TGT) to lock — keep the nose within 30° while it locks — wait for SHOOT, fire, then crank 50° to support the missile. Keep them off the North Shore. Expect company once the first pair goes down. Make every missile count: there is no rearming.',
   ],
   recommendedLoadout: 'a2a_stealth',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],

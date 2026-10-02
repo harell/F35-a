@@ -4,7 +4,8 @@
  *  - 1.1-k: it never used the GBU-53/B StormBreaker, so a strike_sdb2 loadout dropped nothing
  *    (0 wins in 16 runs, 7 HUNG);
  *  - 1.1-l: its rearm leg always flew to Whenuapai, so in the procedural Instant Action theatres
- *    (rearm at the scenery's first airbase) it never rearmed (16 of 17 HUNG rows in an IA sweep);
+ *    (rearm at the scenery's first airbase) it never rearmed (16 of 17 HUNG rows in an IA sweep).
+ *    Rearming is gone since (issue #63): out of weapons, the bot now goes to the same home base;
  *  - 1.1-m: `ia_<mode>_<theater>` ids built a fresh random mission on every missionById() call,
  *    so the same id, difficulty and seed gave different runs (and the sweep built the terrain
  *    from one mission and flew another).
@@ -12,13 +13,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildInstantMission, missionById, terrainPadsFor } from '../src/missions';
-import { rearmHome } from '../src/missions/runtime/rearm';
 import { AKL } from '../src/core/auckland';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
-import { runPlaythrough } from './missions-bot';
+import { homeBase, runPlaythrough } from './missions-bot';
 
 function terrainFor(id: string): TerrainQuery {
   const def = missionById(id)!;
@@ -50,24 +50,24 @@ describe('1.1-k: the bot flies the GBU-53/B StormBreaker', () => {
   });
 });
 
-describe('1.1-l: the bot rearms where the mission rearms it', () => {
+describe('1.1-l: out of weapons, the bot goes home (no rearming, issue #63)', () => {
   it('procedural theatre: home is the first scenery airbase (Auckland: Whenuapai)', () => {
     const def = missionById('ia_strike_islands')!;
     const base = def.features.find((f) => f.type === 'airbase')!;
-    expect(rearmHome(def)).toMatchObject({ x: base.x, z: base.z });
+    expect(homeBase(def)).toMatchObject({ x: base.x, z: base.z });
     expect(Math.hypot(base.x - AKL.whenuapai.x, base.z - AKL.whenuapai.z)).toBeGreaterThan(5_000);
-    expect(rearmHome(missionById('c04')!)).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
+    expect(homeBase(missionById('c04')!)).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
   });
-  it('ia_strike_islands: Winchester after the first sortie, the bot flies to the home base (was Whenuapai)', { timeout: 60_000 }, () => {
-    // (one sortie now wins on Recruit since the Tor is Veteran+, so check the rearm leg, not a completed rearm)
+  it('ia_strike_islands: Winchester after the first sortie, the bot flies to the home base and is never rearmed', { timeout: 60_000 }, () => {
     const def = missionById('ia_strike_islands')!;
-    const home = rearmHome(def)!;
+    const home = homeBase(def)!;
     const r = runPlaythrough(def, 'recruit', 0, terrainFor('ia_strike_islands'), { maxT: 620, log: true });
     const w = r.events.findIndex((l) => /WINCHESTER/.test(l));
     expect(w, r.objectives).toBeGreaterThan(0);
+    expect(r.events.some((l) => /REARM/.test(l))).toBe(false);
     const leg = r.events
       .slice(w)
-      .map((l) => / BOT REARM pos=\((-?[\d.]+),(-?[\d.]+)\)km/.exec(l))
+      .map((l) => / BOT RTB pos=\((-?[\d.]+),(-?[\d.]+)\)km/.exec(l))
       .filter((m): m is RegExpExecArray => !!m)
       .map((m) => Math.hypot(Number(m[1]) * 1000 - home.x, Number(m[2]) * 1000 - home.z));
     expect(leg.length, JSON.stringify(r.modes)).toBeGreaterThan(3);

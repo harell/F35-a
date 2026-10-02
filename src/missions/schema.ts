@@ -4,8 +4,7 @@
  * A MissionDef (core/contracts.ts) carries the briefing/UI data; its `script` field is a
  * MissionScript: everything the MissionRunner needs to populate and drive the mission —
  * aircraft spawn groups, SAM sites, ground targets, objectives, waypoints, triggers
- * (condition → actions), contextual hints, the AWACS controller, the area of operations
- * and (for Instant Action) the endless survival wave generator.
+ * (condition → actions), contextual hints, the AWACS controller and the area of operations.
  *
  * Units: metres, seconds, m/s. Positions are world XZ (+X east, −Z north, origin = the Sky
  * Tower in the Auckland theatre). Headings are DEGREES (0 = north, clockwise). Altitudes are
@@ -324,7 +323,7 @@ export interface HintDef {
   duration?: number;
 }
 
-/* ───────────────────────────── AWACS, AO, survival ───────────────────────────── */
+/* ───────────────────────────── AWACS, AO ───────────────────────────── */
 
 export interface AwacsDef {
   /** Default "DARKSTAR". */
@@ -338,24 +337,6 @@ export interface AwacsDef {
   pictureInterval?: number;
   /** Disable the controller entirely. */
   silent?: boolean;
-}
-
-export interface SurvivalDef {
-  /** Enemy types drawn from for each wave. */
-  types: AircraftType[];
-  /** Aircraft in wave 1; each wave adds `growth` (fractional ok). */
-  baseCount: number;
-  growth: number;
-  maxCount: number;
-  /** AI skill of wave 1 and increment per wave (clamped to 1). */
-  skillStart: number;
-  skillStep: number;
-  /** Spawn ring distance from the player (m). */
-  spawnDistance: number;
-  /** Seconds between a wave being cleared and the next one arriving. */
-  interWaveDelay: number;
-  /** Rearm the player (stores/flares/some fuel/health) after each wave. */
-  rearm: boolean;
 }
 
 export interface MissionScript {
@@ -375,8 +356,6 @@ export interface MissionScript {
   parTime?: number;
   /** Radio callsign of the player (default "Viper 1"). */
   playerCallsign?: string;
-  /** Endless survival waves (Instant Action). */
-  survival?: SurvivalDef;
   /**
    * Scale the TOTAL of the non-fixed red aircraft groups by difficulty.enemyCountScale instead of
    * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit, 6 on Ace; per-group

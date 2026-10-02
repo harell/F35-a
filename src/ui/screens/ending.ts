@@ -15,14 +15,14 @@ import { loadProgress, skyTowerRuin } from '../../missions';
 
 const EPILOGUE = [
   'The last enemy battalion on the Hauraki Gulf islands has surrendered. Rangitoto, Motutapu and Waiheke are back in New Zealand hands.',
-  'For twelve sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands, the Sky Tower still lights the city, and the ferries are running again.',
+  'For ten sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands, the Sky Tower still lights the city, and the ferries are running again.',
   'Operation Southern Cross is complete. Welcome home, Lightning.',
 ];
 
 /** The same epilogue when the player brought the Sky Tower down along the way. */
 const EPILOGUE_TOWER_DOWN = [
   EPILOGUE[0],
-  'For twelve sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands and the ferries are running again. Where the Sky Tower stood, there is a gap in the skyline and a stump of broken concrete above Victoria Street.',
+  'For ten sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands and the ferries are running again. Where the Sky Tower stood, there is a gap in the skyline and a stump of broken concrete above Victoria Street.',
   'Operation Southern Cross is complete. The city will rebuild. Welcome home, Lightning.',
 ];
 

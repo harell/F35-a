@@ -154,7 +154,7 @@ export function validateMission(def: MissionDef): string[] {
     checkCond(g.spawn, `ground ${g.id}`);
   }
   // objectives
-  if (!sc.survival && !sc.objectives.some((o) => o.primary)) err('no primary objective');
+  if (!sc.objectives.some((o) => o.primary)) err('no primary objective');
   for (const o of sc.objectives) {
     const where = `objective ${o.id}`;
     checkCond(o.activeAt, where);

@@ -169,7 +169,7 @@ export const T03: MissionDef = mission({
   briefing: [
     'Live-fire SAM training. An SA-6 battery and a Shilka are defending a fuel depot on the eastern slope of Rangitoto. The missiles are real.',
     'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and descend — the radar loses you in the notch, and the notch works best low. Save the CHAFF for the last few seconds before impact: chaff at launch is wasted. Against a heat-seeker, FLARES late and a hard break into the missile.',
-    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. Out of bombs? Hold over Whenuapai to rearm.',
+    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. There is no rearming, so make each release count.',
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'sead_stealth', 'strike_beast', 'strike_sdb2'],

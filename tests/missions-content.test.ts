@@ -4,15 +4,17 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { InstantActionOptions } from '../src/core/contracts';
-import { CAMPAIGN, TRAINING, buildInstantMission, buildInstantMissionSeeded, terrainPadsFor, validateMission } from '../src/missions';
+import { CAMPAIGN, TRAINING, buildInstantMission, buildInstantMissionSeeded, missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { mergePads } from '../src/missions/pads';
 import type { TheaterId } from '../src/core/types';
 
 const ALL = [...CAMPAIGN, ...TRAINING];
 
 describe('missions: campaign & training content', () => {
-  it('has 12 campaign missions and 3 training missions in order', () => {
-    expect(CAMPAIGN).toHaveLength(12);
+  it('has 10 campaign missions and 3 training missions in order; only the last is the finale', () => {
+    // c07 and c12 were removed with rearming (issue #63); the other ids keep their numbers
+    expect(CAMPAIGN.map((m) => m.id)).toEqual(['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c08', 'c09', 'c10', 'c11']);
+    expect(CAMPAIGN.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual(['c11']);
     expect(TRAINING).toHaveLength(3);
     CAMPAIGN.forEach((m, i) => {
       expect(m.kind).toBe('campaign');
@@ -86,7 +88,7 @@ describe('missions: campaign & training content', () => {
 });
 
 describe('missions: instant action generator', () => {
-  const modes: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
+  const modes: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend'];
   const theaters: TheaterId[] = ['auckland', 'desert', 'islands', 'mountains', 'arctic'];
 
   it('builds a valid mission for every mode × theatre × size', () => {
@@ -112,10 +114,8 @@ describe('missions: instant action generator', () => {
     expect(def.timeOfDay).toBe('dusk');
   });
 
-  it('survival uses endless waves', () => {
-    const def = buildInstantMission({ mode: 'survival', theater: 'desert', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 2 });
-    expect(def.script.survival).toBeTruthy();
-    expect(def.id.startsWith('ia_survival')).toBe(true);
+  it('Survival is gone (it rearmed the player between waves; issue #63)', () => {
+    expect(missionById('ia_survival_auckland')).toBeNull();
   });
 
   it('sam gauntlet and strike have ground targets and SAMs', () => {

@@ -100,7 +100,7 @@ place that decides how long it stays down.
 
 Whenuapai, Auckland Airport, Ardmore and North Shore (Dairy Flat) come in two layers. **`src/core/airfields.ts`** holds
 their runway thresholds (from OSM), synchronous and always present. Gameplay reads only this table: the home base
-`FEATURES.whenuapai`, the `AKL` landmarks at the runway centres, the rearm point, and the civil traffic on 05R/23L.
+`FEATURES.whenuapai`, the `AKL` landmarks at the runway centres, and the civil traffic on 05R/23L.
 **`src/world/scenery/data/auckland-osm.bin`** (baked by `tools/osm`, ODbL, loaded by `aucklandOsm.ts`) adds the
 taxiways, aprons, hangars, terminals and a levelled outline. `allFeatures('auckland', …)` always adds the four airfields
 (a mission airbase within 2.5 km of one is dropped as a duplicate). Each gets an `outline` the terrain levels

@@ -80,7 +80,7 @@ Don't make up a score to keep the loop going. Don't hold one back to make it loo
 ## 3. Wrap-up and retro (the reserved time)
 
 1. **Efficiency retro.** Add up the reviewers' `time_log` and `time_sinks` and your own phase timings. Give the top 3 time sinks, each with a fix:
-   - **A missing shortcut** (e.g. "had to fly 4 minutes to reach the target area", "had to win c01–c11 to see c12"): build a test mechanism when it's small (a `window.__f35` method, a URL parameter, a `bot-sweep`/`browser-run` flag). Otherwise file an issue.
+   - **A missing shortcut** (e.g. "had to fly 4 minutes to reach the target area", "had to win c01–c10 to see the finale"): build a test mechanism when it's small (a `window.__f35` method, a URL parameter, a `bot-sweep`/`browser-run` flag). Otherwise file an issue.
    - **A slow tool** (screenshots, page loads, sweeps that repeat work): a flag, caching, or a smaller default.
    - **Wasted orientation** (re-learning how to start a mission, which script does what): add it to `play-f35` (routing table, Gotchas or Learned). That's the stable "how we play" knowledge. Run-specific facts go in the ledger, never in the skill.
    - **Scheduling** (charters waited on each other, the CPU was idle or oversubscribed): change the parallel limits or charter sizes here.

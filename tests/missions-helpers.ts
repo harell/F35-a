@@ -10,7 +10,8 @@ import type { Difficulty, LoadoutId } from '../src/core/types';
 import type { AiBrain, AiRole, AiTask, CreateAiBrain, SimWorld, TerrainQuery } from '../src/sim/api';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
-import { createMissionRunner } from '../src/missions';
+import { createMissionRunner, missionById } from '../src/missions';
+import { flight } from '../src/missions/content/common';
 
 /** Flat land at `height` m everywhere (no water). */
 export function flatLand(height = 20): TerrainQuery {
@@ -114,4 +115,26 @@ export function shieldPlayer(h: Harness): void {
     p.health = p.maxHealth;
     p.damage.fire = false;
   }
+}
+
+/**
+ * A test-only mission: c01 plus an A-50 Mainstay to shoot down, bullseye AWACS calls and a 720 s
+ * time limit. Those features have no campaign mission since c07 was removed (issue #63).
+ */
+export function mainstayFixture(): MissionDef {
+  const base = missionById('c01')!;
+  return {
+    ...base,
+    id: 'fx_mainstay',
+    timeLimit: 720,
+    script: {
+      ...base.script,
+      awacs: { style: 'bullseye', bullseye: { x: 0, z: 0, name: 'Tower' } },
+      groups: [
+        ...base.script.groups,
+        flight('mainstay', 'a50', 1, { x: 9000, z: -29000 }, 9000, 0, 190, 'awacs', { fixedCount: true, task: { kind: 'patrol', x: 8000, z: -29000, radius: 5000, altitude: 9000 } }),
+      ],
+      objectives: [...base.script.objectives, { id: 'o_awacs', kind: 'destroy', groups: ['mainstay'], label: 'Shoot down the A-50 Mainstay', primary: true }],
+    },
+  };
 }

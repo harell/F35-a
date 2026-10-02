@@ -1,5 +1,5 @@
 /**
- * F35-A — Instant Action generator: dogfight / SAM gauntlet / strike / defend / survival, in any theatre
+ * F35-A — Instant Action generator: dogfight / SAM gauntlet / strike / defend, in any theatre
  * (Auckland uses real landmarks; the procedural theatres use generic layouts — pads and
  * features keep every SAM site and compound on dry, flat land).
  */
@@ -27,7 +27,6 @@ const MODE_TITLE: Record<InstantActionOptions['mode'], string> = {
   sam_gauntlet: 'SAM Gauntlet',
   strike: 'Strike',
   defend: 'Defend',
-  survival: 'Survival',
 };
 
 interface Layout {
@@ -242,25 +241,6 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       script.successText = d.successText;
       briefing = d.briefing;
       script.parTime = 360;
-      break;
-    }
-    case 'survival': {
-      const types = opts.enemyType === 'mixed' ? FIGHTERS : [opts.enemyType];
-      script.survival = {
-        types,
-        baseCount: Math.max(1, Math.round(n / 2)),
-        growth: 0.5,
-        maxCount: 8,
-        skillStart: 0.3,
-        skillStep: 0.06,
-        spawnDistance: 30000,
-        interWaveDelay: 8,
-        rearm: true,
-      };
-      objectives.push({ id: 'o_survive', kind: 'survive', seconds: 36000, label: 'Survive as many waves as you can', primary: true });
-      briefing = ['Endless waves of bandits, each bigger and sharper than the last. You are rearmed between waves.', 'How long can you last?'];
-      script.parTime = 600;
-      script.awacs = { pictureInterval: 0 };
       break;
     }
   }

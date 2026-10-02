@@ -1,7 +1,7 @@
 /**
  * The Sky Tower in the mission runtime and saved progress (issue #16): stood up in every Auckland
  * sortie, destroying it fails the mission at once (AWACS check-fire call, debrief reason and tip),
- * survival runs end, and the ruin persists in the save.
+ * and the ruin persists in the save.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -28,7 +28,7 @@ function knockDown(h: Harness): void {
 
 describe('Sky Tower in Auckland sorties', () => {
   it('every Auckland mode stands the tower up; other theatres do not', () => {
-    for (const def of [byId('c01'), byId('t01'), byId('ia_strike_auckland'), byId('ia_survival_auckland')]) {
+    for (const def of [byId('c01'), byId('t01'), byId('ia_strike_auckland'), byId('ia_defend_auckland')]) {
       const h = harness(def);
       expect(h.world.landmarks.map((l) => l.id), def.id).toEqual(['skytower']);
       expect(h.world.landmarks[0].base.x).toBeCloseTo(AKL.skytower.x, 6);
@@ -66,15 +66,6 @@ describe('Sky Tower in Auckland sorties', () => {
     h.run(8);
     expect(h.runner.state).toBe('failed');
     expect(impacts).toHaveLength(1);
-  });
-
-  it('survival ends the run', () => {
-    const h = harness(byId('ia_survival_auckland'));
-    h.run(2);
-    knockDown(h);
-    h.run(0.5);
-    expect(h.runner.state).toBe('failed');
-    expect(h.runner.result(h.world).reason).toMatch(/^Destroyed the Sky Tower — survived 0 waves$/);
   });
 
   it('a save with the tower down: no tower, no collision, nothing to destroy', () => {

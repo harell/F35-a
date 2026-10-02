@@ -3,7 +3,7 @@
  *
  * Every Auckland sortie stands the tower up as a sim landmark (unless the save says it is already
  * down: then the scenery shows the stump and rubble and there is nothing to hit). The player
- * bringing it down is an immediate mission failure in every mode (survival ends the run): AWACS
+ * bringing it down is an immediate mission failure in every mode: AWACS
  * calls check fire, the HUD flags it, and the runner fails with REASONS.skytower while the
  * collapse plays on.
  */
@@ -52,9 +52,6 @@ export class LandmarkWatch {
     s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, the Sky Tower is coming down!`, priority: URGENT_PRIORITY });
     s.hud('SKY TOWER DESTROYED', 'bad', 4);
     if (s.state !== 'running') return;
-    if (s.script.survival) {
-      const n = s.waves;
-      this.fail(`${REASONS.skytower} — survived ${n} wave${n === 1 ? '' : 's'}`);
-    } else this.fail(REASONS.skytower);
+    this.fail(REASONS.skytower);
   }
 }

@@ -1,11 +1,11 @@
 /**
  * MISSIONS — MissionRunner with the real SimWorld + CombatSystem (flat fake terrain, stub AI):
  * spawning, objectives → success, failure paths, triggers, callouts, AWACS, hints, AO, bridge
- * bonus, survival waves, stale-listener safety.
+ * bonus, stale-listener safety.
  */
 import { describe, expect, it } from 'vitest';
 import { CAMPAIGN, TRAINING, buildInstantMissionSeeded } from '../src/missions';
-import { harness, killGroup, shieldPlayer } from './missions-helpers';
+import { harness, killGroup, mainstayFixture, shieldPlayer } from './missions-helpers';
 import { AKL, BRIDGE_SPAN_T } from '../src/core/auckland';
 
 const byId = (id: string) => [...CAMPAIGN, ...TRAINING].find((m) => m.id === id)!;
@@ -198,11 +198,12 @@ describe('MissionRunner: objectives and outcome', () => {
     expect(h.runner.result(h.world).reason).toMatch(/area of operations/);
   });
 
-  it('time limit fails the mission (c07)', () => {
-    const h = harness(byId('c07'));
+  it('time limit fails the mission', () => {
+    const def = mainstayFixture();
+    const h = harness(def);
     h.world.player!.position.set(-30000, 7000, 30000); // far from the fight
     h.run(0.2);
-    const limit = byId('c07').timeLimit!; // 720 s since i1 (room for a Winchester trip)
+    const limit = def.timeLimit!;
     (h.world as unknown as { time: number }).time = limit - 0.5;
     h.run(1, () => shieldPlayer(h));
     expect(h.runner.state).toBe('failed');
@@ -241,8 +242,8 @@ describe('MissionRunner: presentation', () => {
     expect(call!.voice).toBe('a_bandits');
   });
 
-  it('AWACS uses bullseye when the mission asks for it (c07)', () => {
-    const h = harness(byId('c07'));
+  it('AWACS uses bullseye when the mission asks for it', () => {
+    const h = harness(mainstayFixture());
     h.run(10, () => shieldPlayer(h));
     expect(h.of('radio').some((r) => /bullseye \d{3}, \d+ miles, angels \d+, track [a-z]+/.test(r.text))).toBe(true);
   });
@@ -273,28 +274,6 @@ describe('MissionRunner: presentation', () => {
     expect(h.of('hud:message').some((m) => /UNDER THE HARBOUR BRIDGE/.test(m.text))).toBe(true);
     const before = h.runner.result(h.world).score;
     expect(before).toBeGreaterThan(0);
-  });
-
-  it('survival mode spawns escalating waves and rearms the player', () => {
-    const def = buildInstantMissionSeeded({ mode: 'survival', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 99);
-    const h = harness(def);
-    h.run(7, () => shieldPlayer(h));
-    const wave1 = h.world.aircraft.filter((a) => a.groupId === 'wave1');
-    expect(wave1.length).toBe(1);
-    const p = h.world.player!;
-    p.stores.forEach((s) => (s.count = 0));
-    killGroup(h, 'wave1');
-    h.run(0.5);
-    expect(h.of('hud:message').some((m) => m.text === 'WAVE 1 CLEARED')).toBe(true);
-    expect(p.stores.some((s) => s.count > 0)).toBe(true);
-    h.run(9, () => shieldPlayer(h));
-    expect(h.world.aircraft.filter((a) => a.groupId === 'wave2').length).toBeGreaterThanOrEqual(1);
-    h.world.applyDamage(p, 99999, null, 'collision');
-    h.run(0.3);
-    const res = h.runner.result(h.world);
-    expect(res.success).toBe(false);
-    expect(res.reason).toMatch(/survived 1 wave/);
-    expect(res.grade).toBe('D');
   });
 
   it('ignores events from a disposed world (stale runner)', () => {

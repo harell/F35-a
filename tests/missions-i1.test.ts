@@ -24,11 +24,10 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { remainingRoute, scaleTotal } from '../src/missions/runtime/spawner';
 import { WINCHESTER_CREDIT, WITHDRAW_CREDIT } from '../src/missions/runtime/withdrawal';
-import { REARM_HOLD } from '../src/missions/runtime/rearm';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { P } from '../src/missions/content/common';
-import { flatLand, harness, killGroup, shieldPlayer, stubAi, type Harness } from './missions-helpers';
+import { flatLand, harness, killGroup, mainstayFixture, shieldPlayer, stubAi, type Harness } from './missions-helpers';
 
 const byId = (id: string) => [...CAMPAIGN, ...TRAINING].find((m) => m.id === id)!;
 const WH = AKL.whenuapai;
@@ -98,8 +97,8 @@ describe('i1: MissionRunner.dispose() — no leak across restarts', () => {
   });
 });
 
-describe('i1: Winchester → RTB to Whenuapai → rearm', () => {
-  it('Winchester triggers the DARKSTAR call, a HUD cue and steers to the rearm point', () => {
+describe('Winchester and bingo: calls only, no rearming (issue #63)', () => {
+  it('Winchester triggers the DARKSTAR call and a HUD cue; the steering cue stays on the mission', () => {
     const h = harness(byId('c01'));
     h.run(1, () => shieldPlayer(h));
     expect(h.runner.currentWaypoint?.id).toBe('wp_cap');
@@ -110,65 +109,37 @@ describe('i1: Winchester → RTB to Whenuapai → rearm', () => {
       if (h.runner.hint) hints.add(h.runner.hint);
     });
     const radio = h.of('radio').map((r) => r.text);
-    expect(radio.some((t) => /Winchester — RTB to Whenuapai to rearm/.test(t))).toBe(true);
-    expect(radio.some((t) => /Viper 2 has the fight/.test(t))).toBe(true);
-    expect(h.of('hud:message').some((m) => /WINCHESTER — RTB WHENUAPAI/.test(m.text))).toBe(true);
-    const wp = h.runner.currentWaypoint!;
-    expect(wp.id).toBe('rearm');
-    expect(Math.hypot(wp.position.x - WH.x, wp.position.z - WH.z)).toBeLessThan(10);
+    expect(radio.some((t) => /Winchester\. Viper 2 has the fight\./.test(t))).toBe(true);
+    expect(radio.some((t) => /rearm|RTB/i.test(t))).toBe(false);
+    expect(h.of('hud:message').some((m) => m.text === 'WINCHESTER — GUNS ONLY')).toBe(true);
+    expect(h.runner.currentWaypoint?.id).toBe('wp_cap');
     // the Winchester hint pre-empts the scripted briefing hint
-    expect([...hints].some((t) => /^WINCHESTER: follow the steering cue to Whenuapai/.test(t))).toBe(true);
+    expect([...hints].some((t) => /^WINCHESTER: missiles and bombs gone/.test(t))).toBe(true);
+    expect([...hints].some((t) => /rearm|Whenuapai/i.test(t))).toBe(false);
   });
 
-  it(`holding over the field below 1,500 m AGL for ${REARM_HOLD} s re-applies the loadout and refuels`, () => {
+  it('bingo fuel: a call, no RTB steering', () => {
+    const h = harness(byId('c01'));
+    h.run(1, () => shieldPlayer(h));
+    h.world.player!.flight.fuel = 100;
+    h.run(3, () => shieldPlayer(h));
+    expect(h.of('hud:message').some((m) => m.text === 'BINGO FUEL')).toBe(true);
+    expect(h.of('radio').some((r) => /bingo fuel/.test(r.text) && !/refuel|RTB/i.test(r.text))).toBe(true);
+    expect(h.runner.currentWaypoint?.id).toBe('wp_cap');
+  });
+
+  it('circling low over Whenuapai with empty stores and tanks reloads and refuels nothing', () => {
     const h = harness(byId('c01'));
     const p = h.world.player!;
-    const fuel0 = p.flight.fuel;
     emptyStores(h);
-    p.flight.fuel = fuel0 * 0.3;
+    p.flight.fuel = 500;
     p.flares = 0;
     h.run(1, () => shieldPlayer(h));
-    holdOverField(h, REARM_HOLD - 1.5);
-    expect(h.of('hud:message').some((m) => m.text === 'REARMED')).toBe(false);
-    holdOverField(h, 2);
-    expect(h.of('hud:message').some((m) => m.text === 'REARMED')).toBe(true);
-    expect(h.world.combat.remaining(p, 'aim120')).toBe(4);
-    expect(p.flares).toBeGreaterThan(0);
-    expect(p.flight.fuel).toBeGreaterThanOrEqual(fuel0 - 20);
-    holdOverField(h, 8);
-    expect(h.of('radio').some((r) => /rearmed and refuelled/.test(r.text))).toBe(true);
-    // back to the mission's steering cue
-    expect(h.runner.currentWaypoint?.id).not.toBe('rearm');
-    expect(h.runner.result(h.world).medals!.some((m) => m.id === 'hot_pit')).toBe(false); // not won yet
-  });
-
-  it('leaving the gate resets the hold; too high does not count; nothing expended → no rearm', () => {
-    const h = harness(byId('c01'));
-    const p = h.world.player!;
-    emptyStores(h);
-    holdOverField(h, 3);
-    h.run(0.5, () => {
-      p.position.set(WH.x + 6000, 600, WH.z); // left the gate
-    });
-    holdOverField(h, 3);
-    expect(h.of('hud:message').some((m) => m.text === 'REARMED')).toBe(false);
-    h.run(REARM_HOLD + 1, () => {
-      p.position.set(WH.x, 3000, WH.z); // over the field but too high
-    });
-    expect(h.of('hud:message').some((m) => m.text === 'REARMED')).toBe(false);
-    holdOverField(h, REARM_HOLD + 0.5);
-    expect(h.of('hud:message').filter((m) => m.text === 'REARMED')).toHaveLength(1);
-    // fresh jet: circling the field does nothing
-    holdOverField(h, REARM_HOLD * 2);
-    expect(h.of('hud:message').filter((m) => m.text === 'REARMED')).toHaveLength(1);
-  });
-
-  it('survival mode keeps its own between-wave rearm (no Whenuapai logic)', () => {
-    const def = buildInstantMissionSeeded({ mode: 'survival', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 5);
-    const h = harness(def);
-    emptyStores(h);
-    h.run(2, () => shieldPlayer(h));
-    expect(h.of('radio').some((r) => /Winchester — RTB/.test(r.text))).toBe(false);
+    holdOverField(h, 30);
+    expect(h.of('hud:message').some((m) => /REARM/.test(m.text))).toBe(false);
+    expect(h.world.combat.remaining(p, 'aim120')).toBe(0);
+    expect(p.flares).toBe(0);
+    expect(p.flight.fuel).toBeLessThanOrEqual(500);
   });
 });
 
@@ -265,7 +236,7 @@ describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
   });
 
   it('A-50 / bombers are never "driven off" (a fleeing Mainstay is a failure, not a win)', () => {
-    const h = harness(byId('c07'));
+    const h = harness(mainstayFixture());
     const awacs = h.world.aircraft.find((x) => x.groupId === 'mainstay')!;
     h.run(60, () => {
       awacs.aiState = 'RTB';
@@ -398,7 +369,7 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     expect(r.tips!.some((t) => /Wait for SHOOT/.test(t))).toBe(true);
   });
 
-  it('flying under the Harbour Bridge earns Bridge Runner; winning c12 completes the campaign', () => {
+  it('flying under the Harbour Bridge earns Bridge Runner; winning c11 completes the campaign', () => {
     const h = harness(byId('t01'));
     h.run(0.5);
     const p = h.world.player!;
@@ -416,22 +387,21 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     });
     expect(h.runner.result(h.world).medals!.some((m) => m.id === 'bridge_runner')).toBe(true);
 
-    const c12 = harness(byId('c12'));
-    c12.run(1, () => shieldPlayer(c12));
-    killGroup(c12, 'hq');
-    c12.run(125, () => shieldPlayer(c12)); // the Felons scramble by t = 120
-    killGroup(c12, 'felons');
-    c12.run(2, () => shieldPlayer(c12));
-    expect(c12.runner.state).toBe('success');
-    const r = c12.runner.result(c12.world);
-    expect(r.campaignComplete).toBe(true);
-    expect(r.medals!.some((m) => m.id === 'southern_cross')).toBe(true);
-    // non-final missions never claim the ending
+    // c11 is the finale since c07 and c12 were removed (issue #63)
+    expect(CAMPAIGN[CAMPAIGN.length - 1].id).toBe('c11');
     const c11 = harness(byId('c11'));
     killGroup(c11, 'sa10');
     c11.run(1, () => shieldPlayer(c11));
     expect(c11.runner.state).toBe('success');
-    expect(c11.runner.result(c11.world).campaignComplete).toBeUndefined();
+    const r = c11.runner.result(c11.world);
+    expect(r.campaignComplete).toBe(true);
+    expect(r.medals!.some((m) => m.id === 'southern_cross')).toBe(true);
+    // non-final missions never claim the ending
+    const c06 = harness(byId('c06'));
+    killGroup(c06, 'fleet');
+    c06.run(1, () => shieldPlayer(c06));
+    expect(c06.runner.state).toBe('success');
+    expect(c06.runner.result(c06.world).campaignComplete).toBeUndefined();
   });
 
   it('exports a MEDALS catalogue with stable ids', () => {

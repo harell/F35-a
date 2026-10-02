@@ -34,7 +34,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Sweep the whole campaign | same, `--missions=campaign --diffs=recruit,pilot,veteran,ace --json=<file>` | 144 runs ≈ 2–3 min |
 | See a mission at minute 3 without flying there | `node tools/playtest/browser-run.mjs --mission=c09 --at=0,60,180` (needs the dev server, below) | load ~7 s + ~1 s per 3 min of game time + ~4.5 s per screenshot |
 | Smoke or draw-call baseline over many missions | `browser-run.mjs --missions=c01,c02,… --at=0,120 --shots=0` (one page, `fly()` per mission) | ~23 s per mission, ~2× faster than a page load each |
-| Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `c01`–`c12`, `t01`–`t03`, `ia_<mode>_<theater>` | free |
+| Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `c01`–`c06`, `c08`–`c11` (no `c07`), `t01`–`t03`, `ia_<mode>_<theater>` | free |
 | Read the game state (objectives, player, counts, draw calls) | `window.__f35.state()` in `page.evaluate` | free |
 | Fly with scripted inputs (stall, high-g, low level) | `window.__f35.controls({pitch:1, throttle:1})`, `null` to clear; `autopilot(false)` first | free |
 | Let the AI fly the jet | `window.__f35.autopilot(true, role)` (role: `fighter`, `wingman`, `interceptor`) | free |
