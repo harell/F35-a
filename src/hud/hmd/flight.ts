@@ -3,7 +3,9 @@
  * line, bank scale, aircraft waterline, heading tape with waypoint caret, airspeed / altitude columns.
  */
 import { DEG, RAD, dirFromHeadingPitch, elevationOf, forwardOf, headingOf, toFeet, toFpm, toKnots, wrapPi } from '../../core/math';
+import { BINGO_FRACTION, JOKER_FRACTION } from '../../core/data';
 import { AB_DETENT } from '../../core/types';
+import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
 import { HDG_STR, HDG3_STR, INT_STR, NumText } from './format';
 import { blink, type HudFrame } from './frame';
 import { makeScreenPoint } from './projector';
@@ -19,6 +21,7 @@ const txt = {
   ralt: new NumText(0, 'R '),
   vvi: new NumText(0),
   thr: new NumText(0, 'THR ', '%'),
+  fuel: new NumText(1, 'FUEL '),
   vc: new NumText(0, 'Vc '),
 };
 
@@ -430,10 +433,23 @@ export function drawSpeedColumn(f: HudFrame): void {
   } else {
     pen.text(txt.thr.get((thr / AB_DETENT) * 100), right, y, pal.main, 12, 'right');
   }
+  // fuel (klb): amber at joker, red at bingo (playtest 1.2-h: the only fuel cue was the BINGO chip)
+  y += L.line;
+  const ff = fuelFraction(p);
+  const fuelCol = ff < BINGO_FRACTION ? pal.danger : ff < JOKER_FRACTION ? pal.warn : pal.main;
+  pen.text(txt.fuel.get((fl.fuel * KG_TO_LB) / 1000), right, y, fuelCol, 12, 'right');
   if (p.input.airbrake || fl.surfaces.airbrake > 0.2) {
     y += L.line;
     pen.text('SPD BRK', right, y, pal.main, 11.5, 'right');
   }
+}
+
+const KG_TO_LB = 2.20462;
+
+/** Fuel left as a share of the jet's internal fuel. */
+export function fuelFraction(p: HudFrame['p']): number {
+  const cap = AIRCRAFT_PERF[p.type]?.internalFuel ?? 0;
+  return cap > 0 ? p.flight.fuel / cap : 1;
 }
 
 const AB_STR = ['AB', 'AB 1', 'AB 2', 'AB 3', 'AB 4', 'AB 5'];

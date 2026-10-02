@@ -34,6 +34,15 @@ export const GAME_BUILD: string = (import.meta.env.VITE_BUILD_NUMBER as string |
  */
 export const TEST_HOOKS: boolean = import.meta.env.DEV || import.meta.env.VITE_TEST_HOOKS === '1';
 
+/**
+ * Bingo fuel: the share of internal fuel at which the jet must head home. One value for the sim's BINGO
+ * warning, the mission runner's RTB call (`src/missions/runtime/rearm.ts`, kept equal by
+ * tests/hud-fuel.test.ts) and the HUD's fuel cues (PCD FUEL page, HMD fuel readout).
+ */
+export const BINGO_FRACTION = 0.15;
+/** Joker fuel: the share at which the fuel cues turn amber (the sim's FUEL LOW caution). */
+export const JOKER_FRACTION = 0.3;
+
 export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   recruit: {
     id: 'recruit',

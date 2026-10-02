@@ -87,13 +87,13 @@ export function tapeBottom(f: HudFrame): number {
 }
 
 /**
- * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, and SPD BRK while
- * the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
+ * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, FUEL, and SPD BRK
+ * while the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
  */
 export function speedColumnBottom(f: HudFrame): number {
   const { L, p } = f;
   const brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
-  return L.boxY + 11 * L.u + L.line * (brake ? 6.2 : 5.2);
+  return L.boxY + 11 * L.u + L.line * (brake ? 7.2 : 6.2);
 }
 
 /**

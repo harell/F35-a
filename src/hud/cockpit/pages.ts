@@ -10,6 +10,7 @@
  */
 import { NM, RAD, toFeet, toNm } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
+import { BINGO_FRACTION } from '../../core/data';
 import { AB_DETENT } from '../../core/types';
 import type { AircraftEntity, StoreStation } from '../../sim/entities';
 import { AIRCRAFT_LABEL, WARNING_INFO, WEAPON_HUD, entityLabel, groupThousands, hmm } from '../hmd/format';
@@ -49,7 +50,6 @@ export type PageFn = (pen: Pen, x: number, y: number, w: number, h: number, d: P
 const KG_TO_LB = 2.20462;
 /** F-35A internal fuel (kg) — 18,250 lb. */
 const F35_FUEL_KG = 8_278;
-const BINGO_FRACTION = 0.18;
 
 /* ───────────────────────── TSD ───────────────────────── */
 
