@@ -177,12 +177,28 @@ first N of `FERRY_FLEET`; at night a second, unlit `InstancedMesh` on the same i
 and the `WakeBatch` (`src/render/effects/Wakes.ts`) draws the V-shaped foam wakes of every
 moving ship and ferry in one draw call (`QualitySettings.wakes`, off on `low`). Both are owned by the EntityRenderer.
 
+## IRGC Navy fast boats (moving threats)
+
+`src/sim/boats.ts` sails the IRGC campaign's boats after the ground movers each step. A **suicide boat**
+(`'suicide_boat'` ground target) chases a ship (`BoatState.chaseId`, weaving about the intercept course)
+and its contact with the hull is one hit on her (`applyDamage(…, 'collision')` from a ground entity).
+A **missile boat** (`'missile_boat'`, `BoatState.strike`) closes to its launch range, lies stopped and
+counts down, then fires a **Kowsar**: a plain `MissileEntity` flown by `boats.ts`, never by the
+CombatSystem, that always reaches its ship and scores one hit, and like every missile is never a
+sensor contact, so the only defence is killing the boat first. The countdown is announced (DARKSTAR
+call with the bearing, HUD "MISSILE BOAT LAUNCH n", a launch ring on the TSD and tac map). The
+**air-defence boat** is a SAM type (`'ad_boat'`) whose `SamSiteEntity.boat` makes it move: `SamSystem`
+runs it like any site (the SA-15's missile and envelope, plus SA-18s through `SamTypeData.manpads`),
+`boats.ts` only moves it and keeps its velocity, which the GBU-53/B and the AGM-88G use. Boats only
+ever move onto water (`TerrainQuery.isWater`), steering round land. Missions point them at a group
+(`GroundTargetDef.chase` / `.strike`, `SamSiteDef.escort`, resolved at spawn).
+
 ## Frame / sim order (Game.ts)
 
 ```
 input.update → player.input = controls
 fixed 60 Hz: world.step(dt) { AI brains (20 Hz) → flight model (sub-steps) → combat.update → movers
-                              → collisions (+ landmark collapses) → warnings → cleanup }  →  missionRunner.update
+                              → fast boats → collisions (+ landmark collapses) → warnings → cleanup }  →  missionRunner.update
 render: env.update → entities.update → cameraRig.update → effects.update → cockpit.update
         renderer.render(scene, camera) → cockpit.render (2nd pass, depth cleared) → hud.update (2D canvas) → audio.update
 ```
