@@ -19,6 +19,7 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { difficultyAtLeast } from '../src/missions/runtime/state';
+import { SAM_DATA } from '../src/sim/sam/samData';
 import type { Difficulty } from '../src/core/types';
 import { LOADOUTS } from '../src/core/data';
 import type { TerrainQuery } from '../src/sim/api';
@@ -331,4 +332,67 @@ describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the play
     expect(along(ip)).toBeGreaterThan(rangiD);
     for (const g of def.script.ground.filter((x) => x.group === 'depot')) expect(along(g), g.id).toBeGreaterThan(rangiD);
   });
+});
+
+/**
+ * #58 (Balance 5/9): c04 and c10 reach the Veteran band (≥ 25 %: at least 2 of 6 seeds; both were 0/6),
+ * and the win rate never rises from Pilot to Veteran or from Veteran to Ace. Seeds 0–5 are the ones
+ * `tools/playtest/bot-sweep.ts -- --seeds=6` flies, so a failure here reproduces with
+ *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran,ace --seeds=6 --log --json=<file>
+ * c02, c06, c08 and c09 are left to #57 and #65.
+ * Margins: c04 wins exactly 2/6 on Veteran here (seeds 0 and 3; 4/12 over seeds 0–11), c10 3/6 (6/12).
+ * A change to the bot or the AI can flip one seed and fail the c04 gate: rerun the sweep with --seeds=12
+ * before retuning. No c04/c10 run is ever rearmed (the bot's REARM mode is only its flight home), so
+ * removing rearming (#63) leaves these numbers as they are.
+ */
+describe('#58: Veteran band in c04 and c10, and a difficulty curve that only falls (6 seeds)', () => {
+  const SEEDS = [0, 1, 2, 3, 4, 5];
+  const DIFFS = ['pilot', 'veteran', 'ace'] as const;
+  type Curve = { won: Record<(typeof DIFFS)[number], number>; table: string };
+  async function curve(id: string): Promise<Curve> {
+    const won = { pilot: 0, veteran: 0, ace: 0 };
+    const log: string[] = [];
+    for (const d of DIFFS) {
+      for (const seed of SEEDS) {
+        const r = wins(id, d, [seed]);
+        won[d] += r.won;
+        log.push(...r.log);
+        await new Promise((res) => setTimeout(res, 0)); // yield: vitest's worker RPC times out on long blocks
+      }
+    }
+    return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6, ace ${won.ace}/6\n${log.join('\n')}` };
+  }
+  function expectFalling(c: Curve): void {
+    expect(c.won.veteran, `Veteran beats Pilot\n${c.table}`).toBeLessThanOrEqual(c.won.pilot);
+    expect(c.won.ace, `Ace beats Veteran\n${c.table}`).toBeLessThanOrEqual(c.won.veteran);
+  }
+
+  it("c04: the Veteran Tor's point defence doesn't cover the parked jets (it shot the two JDAMs down)", () => {
+    const def = missionById('c04')!;
+    const tor = def.script.sams.find((s) => s.type === 'sa15')!;
+    expect(tor.minDifficulty).toBe('veteran');
+    const jets = def.script.ground.filter((g) => g.group === 'parked');
+    expect(jets.length).toBeGreaterThan(0);
+    for (const j of jets) expect(Math.hypot(j.x - tor.x, j.z - tor.z), j.id).toBeGreaterThan(SAM_DATA.sa15.pointDefense!.protect);
+  });
+  it('c10: the low western raid turns for home once it loses half its bombers, like the other two raids', () => {
+    const objs = missionById('c10')!.script.objectives;
+    const west = objs.find((o) => o.id === 'o_west')!;
+    const north = objs.find((o) => o.id === 'o_north')!;
+    expect(west.kind === 'intercept' && north.kind === 'intercept').toBe(true);
+    if (west.kind !== 'intercept' || north.kind !== 'intercept') return;
+    expect(west.abortFraction).toBe(north.abortFraction);
+  });
+  for (const id of ['c04', 'c10']) {
+    it(`${id} wins at least 2/6 on Veteran (was 0/6), and Pilot ≥ Veteran ≥ Ace`, { timeout: 600_000 }, async () => {
+      const c = await curve(id);
+      expect(c.won.veteran, c.table).toBeGreaterThanOrEqual(2);
+      expectFalling(c);
+    });
+  }
+  for (const id of ['c01', 'c03', 'c05', 'c11']) {
+    it(`${id}: the win rate doesn't rise from Pilot to Veteran or from Veteran to Ace`, { timeout: 600_000 }, async () => {
+      expectFalling(await curve(id));
+    });
+  }
 });
