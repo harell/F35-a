@@ -1,5 +1,6 @@
 /**
- * F35-A UI — Instant Action setup: mode cards + city / time / weather / enemy / count pickers.
+ * F35-A UI — Instant Action setup: mode cards + city / time / weather / enemy / count pickers
+ * (the enemy rows hide for A Stroll in the Park, which has no hostiles).
  * Remembers the last setup in localStorage (per device convenience).
  */
 import type { InstantActionOptions } from '../../core/contracts';
@@ -15,6 +16,7 @@ import { screenHeader, segmented, settingRow, stagger } from '../widgets';
 const KEY = 'f35a.instant.v1';
 
 const MODES: { id: InstantActionOptions['mode']; title: string; desc: string; icon: string }[] = [
+  { id: 'stroll', title: 'A Stroll in the Park', desc: "Everyone's friendly. It's New Zealand.", icon: 'pram' },
   { id: 'dogfight', title: 'Dogfight', desc: 'Air-to-air brawl against enemy fighters', icon: 'dogfight' },
   { id: 'sam_gauntlet', title: 'SAM Gauntlet', desc: 'Punch through layered SAM belts', icon: 'sam' },
   { id: 'strike', title: 'Strike', desc: 'Hit defended ground targets and get home', icon: 'bomb' },
@@ -34,7 +36,7 @@ const CITIES: { name: string; tagline: string; art: LandmarkId; theater?: Theate
 const PLAYABLE: TheaterId[] = CITIES.flatMap((c) => (c.theater ? [c.theater] : []));
 const ENEMIES: (AircraftType | 'mixed')[] = ['mixed', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50'];
 
-const DEFAULTS: InstantActionOptions = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 };
+const DEFAULTS: InstantActionOptions = { mode: 'stroll', theater: 'auckland', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 };
 
 /**
  * The Instant Action setup from its saved JSON (localStorage 'f35a.instant.v1'), else the defaults.
@@ -100,6 +102,7 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
       b.addEventListener('click', () => {
         o.mode = m.id;
         syncModes();
+        syncEnemyRows();
         updateSummary();
       });
       modeEls.push(b);
@@ -160,7 +163,7 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
         'row-stack',
       ),
     );
-    opts.appendChild(
+    const enemyRow = opts.appendChild(
       settingRow(
         'Enemy aircraft',
         null,
@@ -191,7 +194,12 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     minus.addEventListener('click', () => setCount(o.enemyCount - 1));
     plus.addEventListener('click', () => setCount(o.enemyCount + 1));
     count.append(minus, val, plus);
-    opts.appendChild(settingRow('Enemy count', countNote(), count));
+    const countRow = opts.appendChild(settingRow('Enemy count', countNote(), count));
+    // no hostiles in A Stroll in the Park: nothing to pick
+    const syncEnemyRows = () => {
+      for (const r of [enemyRow, countRow]) r.hidden = o.mode === 'stroll';
+    };
+    syncEnemyRows();
 
     body.append(modes, opts);
     el.appendChild(body);
@@ -200,7 +208,8 @@ export function showInstantAction(host: UiHost): Promise<InstantActionOptions | 
     const updateSummary = () => {
       const mode = MODES.find((m) => m.id === o.mode);
       const enemy = o.enemyType === 'mixed' ? 'mixed bandits' : `${AIRCRAFT_INFO[o.enemyType].name}s`;
-      summary.innerHTML = `<b>${mode?.title ?? ''}</b> · ${CITIES.find((c) => c.theater === o.theater)?.name ?? ''} · ${o.timeOfDay} · ${o.enemyCount}× ${enemy}`;
+      const threat = o.mode === 'stroll' ? 'no hostiles' : `${o.enemyCount}× ${enemy}`;
+      summary.innerHTML = `<b>${mode?.title ?? ''}</b> · ${CITIES.find((c) => c.theater === o.theater)?.name ?? ''} · ${o.timeOfDay} · ${threat}`;
     };
     const start = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `${icon('play')}<span>Start</span>` });
     start.addEventListener('click', () => finish({ ...o }));

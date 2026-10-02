@@ -10,6 +10,7 @@
  *  - The player bringing it down (one bomb or missile, whatever its damage) is an immediate failure
  *    in every mode (survival ends the run): AWACS calls check fire, the HUD flags it, and the runner
  *    fails with REASONS.skytower while the collapse plays on.
+ *  - Free flight (script.freeFlight) never fails over it: the tower comes down and the sortie goes on.
  */
 import { createSkyTower, hitLandmark, type LandmarkCollapseCause, type LandmarkEntity } from '../../sim/landmarks';
 import { AKL } from '../../core/auckland';
@@ -69,7 +70,7 @@ export class LandmarkWatch {
       priority: URGENT_PRIORITY,
     });
     s.hud('SKY TOWER DESTROYED', 'bad', 4);
-    if (s.state !== 'running') return;
+    if (s.state !== 'running' || s.script.freeFlight) return;
     const reason = byPlayer ? REASONS.skytower : REASONS.skytowerLost;
     if (s.script.survival) {
       const n = s.waves;

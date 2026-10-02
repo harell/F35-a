@@ -121,7 +121,7 @@ export function findMission(id: string): MissionDef | null {
   return TRAINING.find((m) => m.id === id) ?? null;
 }
 
-const IA_MODES: InstantActionOptions['mode'][] = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
+const IA_MODES: InstantActionOptions['mode'][] = ['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
 const THEATERS: TheaterId[] = ['auckland'];
 
 /** FNV-1a hash of a string (32-bit, unsigned): a stable seed from a mission id. */

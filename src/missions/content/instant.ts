@@ -1,5 +1,5 @@
 /**
- * F35-A — Instant Action generator: dogfight / SAM gauntlet / strike / defend / survival over Auckland
+ * F35-A — Instant Action generator: stroll (free flight) / dogfight / SAM gauntlet / strike / defend / survival over Auckland
  * (real landmarks: the Gulf islands' SAM belt, the Waiheke airstrip, the Wiri oil terminal).
  */
 import type { InstantActionOptions, MissionDef, SceneryFeature } from '../../core/contracts';
@@ -19,6 +19,7 @@ const THEATER_LABEL: Record<TheaterId, string> = {
 };
 
 const MODE_TITLE: Record<InstantActionOptions['mode'], string> = {
+  stroll: 'A Stroll in the Park',
   dogfight: 'Dogfight',
   sam_gauntlet: 'SAM Gauntlet',
   strike: 'Strike',
@@ -124,9 +125,26 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
   let briefing: string[] = [];
   let player = lay.player;
   let waypoints: WaypointDef[] | null = null;
+  let objectiveText: string[] | undefined;
   const script: Partial<MissionScript> = {};
 
   switch (opts.mode) {
+    case 'stroll': {
+      // free flight: no hostiles, only the civil traffic; every loadout, the heaviest by default
+      loadout = 'strike_beast';
+      allowed = ['strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
+      script.freeFlight = true;
+      objectiveText = ['Free flight: no objectives. Explore Auckland at your own pace.'];
+      script.awacs = { silent: true };
+      script.opening = [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Nothing hostile up here today. Enjoy the view.`, priority: 1 }];
+      briefing = [
+        "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
+        'Fly where you like and take in the sights. The airliners and ships are civilians going about their day.',
+        'You are loaded to the teeth if you want to practise on the scenery: nothing counts against you. Terrain and buildings still do, so mind the ground.',
+        'The flight ends when you quit from the pause menu.',
+      ];
+      break;
+    }
     case 'dogfight': {
       // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
       // the player has fired
@@ -267,6 +285,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     weather: opts.weather,
     seed: AKL_SEED,
     briefing,
+    objectiveText,
     recommendedLoadout: loadout,
     allowedLoadouts: allowed,
     player,
