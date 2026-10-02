@@ -149,7 +149,7 @@ export interface AircraftGroupDef {
   maxCount?: number;
   /**
    * Flown by a lesser type below a difficulty (Instant Action 'mixed': Su-35 / Su-57 only on
-   * Veteran and Ace, a MiG-29 / Su-27 below).
+   * Ace, a MiG-29 / Su-27 below).
    */
   downgrade?: { below: Difficulty; type: AircraftType };
   formation?: Formation;

@@ -3,6 +3,9 @@
  * (`ia_<mode>_auckland`, seeded from the id, so these numbers reproduce):
  *  - the wingman (Viper 2) can't win Defend or Dogfight for a player who never fires: in Dogfight
  *    it holds fire until the player has fired, in Defend it fights the escort and never the strikers;
+ *  - Strike, Dogfight and Defend reach the bands (Recruit and Pilot ≥ 75 %, Veteran ≥ 25 %, 6 seeds);
+ *    SAM Gauntlet reaches them on Recruit and Veteran (Pilot is 4/6: the bot never fires its AARGMs
+ *    at the belt's SA-6s while the depot stands, a bot limit);
  *  - Defend at the top of the enemy-count slider (8) stays winnable on Recruit and Pilot.
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=ia_strike_auckland,ia_sam_gauntlet_auckland,ia_dogfight_auckland,ia_defend_auckland --diffs=recruit,pilot,veteran,ace --seeds=6
  */
@@ -126,6 +129,54 @@ describe('Instant Action: the wingman supports, it does not win the mission (iss
       }
     });
   }
+});
+
+/** Bot wins over seeds 0..5, as the sweep counts them (bot-sweep.ts --seeds=6). */
+function wins(id: string, diff: Difficulty): { won: number; log: string } {
+  const log: string[] = [];
+  let won = 0;
+  for (let seed = 0; seed < 6; seed++) {
+    const r = runPlaythrough(id, diff, seed, terrainFor(id), { maxT: 900 });
+    if (r.state === 'success') won++;
+    log.push(`${id} ${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`);
+  }
+  return { won, log: log.join('\n') };
+}
+
+describe('Instant Action balance bands over 6 seeds (issue #60; was Strike 5/2/0, Gauntlet 2/4/0, Dogfight 6/5/0)', () => {
+  // Recruit and Pilot ≥ 75 % (5 of 6), Veteran ≥ 25 % (2 of 6)
+  for (const id of ['ia_strike_auckland', 'ia_dogfight_auckland', 'ia_defend_auckland']) {
+    it(`${id}: Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 2/6`, { timeout: 300_000 }, () => {
+      const rc = wins(id, 'recruit');
+      expect(rc.won, rc.log).toBeGreaterThanOrEqual(5);
+      const p = wins(id, 'pilot');
+      expect(p.won, p.log).toBeGreaterThanOrEqual(5);
+      const v = wins(id, 'veteran');
+      expect(v.won, v.log).toBeGreaterThanOrEqual(2);
+    });
+  }
+  it('ia_sam_gauntlet_auckland: Recruit ≥ 5/6, Veteran ≥ 2/6 (Pilot is below the band, see the header)', { timeout: 300_000 }, () => {
+    const rc = wins('ia_sam_gauntlet_auckland', 'recruit');
+    expect(rc.won, rc.log).toBeGreaterThanOrEqual(5);
+    const v = wins('ia_sam_gauntlet_auckland', 'veteran');
+    expect(v.won, v.log).toBeGreaterThanOrEqual(2);
+  });
+  it("'mixed' Veteran flights fly no Su-35 / Su-57 (their R-77s decided every Veteran Dogfight, Gauntlet and Strike run)", () => {
+    for (const id of ['ia_strike_auckland', 'ia_sam_gauntlet_auckland', 'ia_dogfight_auckland', 'ia_defend_auckland']) {
+      for (const g of missionById(id)!.script.groups) {
+        if (g.team !== 'red' || (g.type !== 'su35' && g.type !== 'su57')) continue;
+        expect(g.downgrade?.below, `${id} ${g.id}`).toBe('ace');
+      }
+    }
+  });
+  it('Strike: the SA-6 is off the run-in (east of the field) and the SEAD fit carries a bomb per parked jet', () => {
+    const def = missionById('ia_strike_auckland')!;
+    const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
+    const jets = def.script.ground.filter((g) => g.group === 'parked');
+    const eastmost = Math.max(...jets.map((j) => j.x));
+    expect(sa6.x).toBeGreaterThan(eastmost);
+    expect(def.recommendedLoadout).toBe('sead_stealth');
+  });
 });
 
 describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', () => {

@@ -457,16 +457,16 @@ describe('i1: Instant Action honours the difficulty', () => {
     expect(scaleTotal([1], 0.5)).toEqual([1]);
   });
 
-  it("'mixed' flies MiG-29s / Su-27s below Veteran; Su-35 / Su-57 only on Veteran and Ace", () => {
+  it("'mixed' flies MiG-29s / Su-27s below Ace; Su-35 / Su-57 only on Ace (issue #60: their R-77s walled Veteran)", () => {
     let sawModern = false;
     for (let seed = 1; seed < 30; seed++) {
       const def = buildInstantMissionSeeded(opts, seed);
-      for (const d of ['recruit', 'pilot'] as const) {
+      for (const d of ['recruit', 'pilot', 'veteran'] as const) {
         const types = harness(def, d).world.aircraft.filter((a) => a.team === 'red').map((a) => a.type);
         expect(types.every((t) => t === 'mig29' || t === 'su27')).toBe(true);
       }
-      const vet = harness(def, 'veteran').world.aircraft.filter((a) => a.team === 'red').map((a) => a.type);
-      if (vet.some((t) => t === 'su35' || t === 'su57')) sawModern = true;
+      const ace = harness(def, 'ace').world.aircraft.filter((a) => a.team === 'red').map((a) => a.type);
+      if (ace.some((t) => t === 'su35' || t === 'su57')) sawModern = true;
     }
     expect(sawModern).toBe(true);
   });
