@@ -7,7 +7,7 @@
  */
 import type { Vector3 } from 'three';
 import type { ExplosionSize, MunitionId, Team, VoiceId, WarningId, WeaponId } from './types';
-import type { AircraftEntity, AnyEntity, DecoyEntity, MissileEntity, RwrContact } from '../sim/entities';
+import type { AircraftEntity, AnyEntity, DecoyEntity, GroundTargetEntity, MissileEntity, RwrContact } from '../sim/entities';
 import type { LandmarkCollapseCause, LandmarkEntity } from '../sim/landmarks';
 
 export interface GameEventMap {
@@ -28,6 +28,12 @@ export interface GameEventMap {
   explosion: { position: Vector3; size: ExplosionSize; surface: 'air' | 'ground' | 'water' };
   /** Entity took damage. */
   damage: { target: AnyEntity; amount: number; attackerId: number | null; weapon: WeaponId | MunitionId | 'gun' | 'collision' | 'flak' };
+  /**
+   * A bomb / missile hit counted on a civil ship that takes more than one (hitsToSink > 1, the escorted
+   * tanker): `hits` so far, including this one. `hits >= hitsToSink` = this hit sinks her ('destroyed'
+   * follows in the same step).
+   */
+  'vessel:hit': { ship: GroundTargetEntity; hits: number; hitsToSink: number; attackerId: number | null; weapon: WeaponId | MunitionId | 'gun' | 'collision' | 'flak' };
   /** Entity destroyed (aircraft shot down / crashed, SAM site / ground target destroyed). */
   destroyed: { entity: AnyEntity; attackerId: number | null; weapon: WeaponId | MunitionId | 'gun' | 'collision' | 'flak' | null };
   /** Flare/chaff released. */

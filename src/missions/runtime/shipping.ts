@@ -90,12 +90,15 @@ export function routePoints(r: ShipRoute, n = ROUTE_POINTS): Vector3[] {
 
 const CONTAINER_NAMES = ['MV Kōtuku Trader', 'MV Tasman Kererū', 'MV Hauraki Pride', 'MV Pacific Tūī', 'MV Aotea Express', 'MV Rangatira Star', 'MV Moana Carrier'];
 const CRUISE_NAMES = ['Southern Barnacle', 'Pacific Interislander', 'SuperGold Majesty'];
+/** Crude carriers (the random traffic has none; a mission's escorted tanker may take one of these). */
+export const TANKER_NAMES = ['MT Marsden Point', 'MT Tasman Spirit', 'MT Pacific Kauri'];
+const NAMES: Record<VesselClass, readonly string[]> = { container: CONTAINER_NAMES, cruise: CRUISE_NAMES, tanker: TANKER_NAMES };
 
 export class CivilShipping {
   private readonly rng: () => number;
   /** Every civil ship spawned this sortie. */
   readonly ships: GroundTargetEntity[] = [];
-  private nameIdx = { container: 0, cruise: 0 };
+  private nameIdx: Record<VesselClass, number> = { container: 0, cruise: 0, tanker: 0 };
 
   constructor(private readonly s: MissionState) {
     this.rng = mulberry32(((s.def.seed ?? 1) * 4099 + 31) >>> 0);
@@ -118,7 +121,7 @@ export class CivilShipping {
   }
 
   private nextName(v: VesselClass): string {
-    const list = v === 'cruise' ? CRUISE_NAMES : CONTAINER_NAMES;
+    const list = NAMES[v];
     return list[this.nameIdx[v]++ % list.length];
   }
 

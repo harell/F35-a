@@ -261,7 +261,10 @@ class SimWorldImpl implements SimWorld {
       radius: vessel ? vessel.length / 2 : data.radius,
       health: spec.health ?? vessel?.health ?? data.health,
     });
-    if (vessel) e.vessel = spec.vessel!;
+    if (vessel) {
+      e.vessel = spec.vessel!;
+      e.hitsToSink = Math.max(1, Math.round(spec.hitsToSink ?? 1));
+    }
     e.anchored = !!spec.anchored && !spec.path;
     e.scenery = !!spec.scenery;
     e.emitter = data.emitter;
