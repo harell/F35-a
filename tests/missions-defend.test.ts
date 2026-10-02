@@ -236,6 +236,16 @@ describe('missions: defend the Wiri oil terminal', () => {
  * the mission won itself with no player input. Over Auckland's real terrain the raid must still fly.
  */
 describe('defend: the raid survives the terrain', () => {
+  // The run below uses one seed. In Auckland the raid comes from the fixed layout: the seed only
+  // picks the escort type, so seeds 2 and 3 used to fly the same strikers over the same terrain.
+  // If the raid's geometry ever becomes seeded, this fails: loop the run below over several seeds again.
+  it('auckland: the strikers group (type, count, spawn point, route) is the same for every seed', () => {
+    const strikers = (seed: number) =>
+      buildInstantMissionSeeded({ mode: 'defend', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 }, seed).script.groups.find((g) => g.id === 'strikers');
+    expect(strikers(1)).toBeDefined();
+    for (const seed of [2, 3, 4, 5, 6, 7, 8]) expect(strikers(seed), `seed ${seed}`).toEqual(strikers(1));
+  });
+
   for (const theater of ['auckland'] as const) {
     it(`${theater}: the strikers spawn above the ground and are still flying 60 s in`, { timeout: 60_000 }, () => {
       for (const seed of [1]) {
