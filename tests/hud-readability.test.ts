@@ -5,6 +5,8 @@
  *  - the off-screen target cue's text (angle-off, type, range) never prints over the speed / altitude
  *    columns, the DLZ or another HUD text, whichever way the target lies;
  *  - the GPS bomb's azimuth steering line breaks around the centre cue ("IN RANGE", "REL 5", STEER);
+ *  - Defend's radar inset (chase view) always shows the tanks' count, even when it doesn't fit under
+ *    the site symbol or the site lies beyond the scope's rim;
  *  - a civil contact's CIV label never prints on the touch controls (GUN, CMS, FIRE, throttle, stick);
  *  - the cockpit PCD's TSD and RWR corner readouts ("10 NM", "BULL 005/6", "2 EMIT") are at least
  *    12 px tall on the 844×390 screen (they were 9–10 px, and look smaller on the tilted panel).
@@ -331,5 +333,56 @@ describe('the GPS azimuth steering line', () => {
       return false;
     });
     expect(crosses.map((s) => s.map((v) => Math.round(v)).join(','))).toEqual([]);
+  });
+});
+
+describe("Defend: the radar inset's site count", () => {
+  installPath2D();
+  it('is on the inset in the chase view at the start, wherever the site lies', () => {
+    const W = 844;
+    const H = 390;
+    const h = harness(defend());
+    h.runner.update(h.world, 0.1);
+    const p = h.world.player!;
+    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+    const hud = createHud(canvas, h.events);
+    hud.resize(W, H, 1);
+    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+    camera.position.copy(p.position).add(new Vector3(0, 4.5, 20).applyQuaternion(p.quaternion));
+    camera.up.set(0, 1, 0).applyQuaternion(p.quaternion);
+    camera.lookAt(p.position.clone().add(new Vector3(0, 0, -40).applyQuaternion(p.quaternion)));
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    const ctx: FrameContext = {
+      dt: 1 / 30,
+      time: 0,
+      world: h.world,
+      player: p,
+      camera,
+      viewMode: 'chase',
+      focusId: p.id,
+      mission: h.runner,
+      settings: { ...DEFAULT_SETTINGS },
+      quality: { ...QUALITY_PRESETS.medium },
+      paused: false,
+      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+    };
+    // the site at the start (inside or beyond the scope), then moved out to 80 km on the same bearing
+    const site = h.world.ground.filter((g) => g.groupId === 'wiri');
+    for (const far of [false, true]) {
+      if (far) {
+        for (const g of site) {
+          g.position.x = p.position.x + (g.position.x - p.position.x) * 4;
+          g.position.z = p.position.z + (g.position.z - p.position.z) * 4;
+        }
+      }
+      for (let i = 0; i < 3; i++) {
+        fake.reset();
+        ctx.time += ctx.dt;
+        hud.update(ctx);
+      }
+      const counts = fake.texts.filter((t) => /^\d+\/9$/.test(t.text));
+      expect(counts.length, far ? 'site far beyond the rim' : 'site at the start').toBeGreaterThanOrEqual(1);
+    }
   });
 });

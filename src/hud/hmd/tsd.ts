@@ -266,14 +266,31 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     pen.circle(pt.x, pt.y, 5 * s);
     pen.rect(pt.x - 1.8 * s, pt.y - 1.8 * s, 3.6 * s, 3.6 * s);
     pen.strokePlain(c.friend, 1.5 * lw);
-    // labelled pages: "DEFEND 8/9"; the unlabelled radar inset: just the count, when it fits inside
+    // labelled pages: "DEFEND 8/9"; the unlabelled radar inset: just the count, below the symbol, else
+    // above or beside it, else (the site beyond the scope's rim) pinned inside the rim on its bearing:
+    // the count never vanishes because it doesn't fit under the symbol (#62: Defend's "9/9" at t = 4)
     if (key && label(pen, site.label, pt.x, pt.y + 12 * s, c.friend, st.font * 0.85)) continue;
-    const ly = pt.y + 11 * s;
-    const hw = pen.textWidth(site.count, st.font * 0.85) / 2;
-    const inside = st.clipRect
-      ? pt.x - hw >= st.clipRect[0] && pt.x + hw <= st.clipRect[0] + st.clipRect[2] && ly + 5 * s <= st.clipRect[1] + st.clipRect[3]
-      : Math.hypot(Math.abs(pt.x - st.cx) + hw, Math.abs(ly - st.cy) + 4 * s) <= st.clipCircle;
-    if (inside) label(pen, site.count, pt.x, ly, c.friend, st.font * 0.85);
+    const size = st.font * 0.85;
+    const hw = pen.textWidth(site.count, size) / 2;
+    const hh = 5 * s;
+    const fits = (x: number, y: number): boolean =>
+      st.clipRect
+        ? x - hw >= st.clipRect[0] && x + hw <= st.clipRect[0] + st.clipRect[2] && y - hh >= st.clipRect[1] && y + hh <= st.clipRect[1] + st.clipRect[3]
+        : Math.hypot(Math.abs(x - st.cx) + hw, Math.abs(y - st.cy) + hh) <= st.clipCircle;
+    const side = 6 * s + hw;
+    let placed = false;
+    for (let k = 0; k < 4 && !placed; k++) {
+      const x = k === 2 ? pt.x + side : k === 3 ? pt.x - side : pt.x;
+      const y = k === 0 ? pt.y + 11 * s : k === 1 ? pt.y - 11 * s : pt.y;
+      if (fits(x, y)) placed = label(pen, site.count, x, y, c.friend, size);
+    }
+    if (!placed && !st.clipRect && st.clipCircle > 0) {
+      const dx = pt.x - st.cx;
+      const dy = pt.y - st.cy;
+      const d = Math.hypot(dx, dy);
+      const rr = st.clipCircle - Math.hypot(hw, hh) - 2 * s;
+      if (d > rr && rr > 0) label(pen, site.count, st.cx + (dx / d) * rr, st.cy + (dy / d) * rr, c.friend, size);
+    }
   }
 
   // hostile air tracks (sensor fused)
