@@ -1,6 +1,6 @@
 /**
  * Harbour ferries (issue #30): render-only traffic on timetable routes out of the Downtown Ferry Terminal.
- * Every hull position on every route lies on the real LINZ water, clear of the OpenStreetMap wharves,
+ * Every hull position on every route lies on the real LINZ water (the 2 m waterMask), clear of the OpenStreetMap wharves,
  * piers and breakwaters, the Harbour Bridge piers and the moored ships; the docks are the real wharves;
  * no two ferries ever overlap over the fleet's whole cycle; the motion is deterministic; the quality
  * presets tune the fleet size and switch the wakes off on 'low'.
@@ -11,12 +11,27 @@ import { QUALITY_PRESETS } from '../src/core/data';
 import { PORT_BERTHS } from '../src/missions/runtime/shipping';
 import { VESSEL_DATA } from '../src/sim/damage/tables';
 import { aucklandOsm, distToPath, OSM_BREAKWATER, OSM_PIER, OSM_PORT, pointInRing, type OsmFeature } from '../src/world/scenery/aucklandOsm';
-import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
+import { waterMask } from '../src/world/scenery/aucklandSites';
 import { FERRY_BEAM, FERRY_CYCLE, FERRY_FLEET, FERRY_LENGTH, FERRY_ROUTES, ferryAt, ferryRoutes, type FerryState } from '../src/render/traffic/ferryRoutes';
 
 const DEG = Math.PI / 180;
-const map = aucklandMapData();
 const routes = ferryRoutes();
+
+/** The 2 m LINZ water test over each route's area (the terrain mesh is too coarse near the wharves). */
+const water = routes.map((r) => {
+  let x0 = Infinity;
+  let z0 = Infinity;
+  let x1 = -Infinity;
+  let z1 = -Infinity;
+  for (const p of [...r.paths, ...r.def.docks.map((d) => new Float32Array([d.x, d.z]))])
+    for (let i = 0; i < p.length; i += 2) {
+      x0 = Math.min(x0, p[i]);
+      x1 = Math.max(x1, p[i]);
+      z0 = Math.min(z0, p[i + 1]);
+      z1 = Math.max(z1, p[i + 1]);
+    }
+  return waterMask(x0 - 200, z0 - 200, x1 + 200, z1 + 200, 2, () => 0);
+});
 
 /* ───────── obstacles: OSM wharves / piers / breakwaters / port land, bridge piers, moored ships ───────── */
 
@@ -56,9 +71,9 @@ const Sb = AKL.bridge_s;
 const Nb = AKL.bridge_n;
 const PIERS = BRIDGE_PIERS_T.map((t) => ({ x: Sb.x + (Nb.x - Sb.x) * t, z: Sb.z + (Nb.z - Sb.z) * t }));
 
-/** What a hull point at (x, z) would hit, or null on open water. */
-function blocked(x: number, z: number): string | null {
-  if (map.isLand(x, z)) return 'land';
+/** What a hull point at (x, z) of route `ri` would hit, or null on open water. */
+function blocked(ri: number, x: number, z: number): string | null {
+  if (!water[ri](x, z)) return 'land';
   for (const o of buckets.get(key(Math.floor(x / BUCKET), Math.floor(z / BUCKET))) ?? []) {
     if (x < o.x0 || x > o.x1 || z < o.z0 || z > o.z1) continue;
     if (o.f.area ? pointInRing(o.f.pts, x, z) : distToPath(o.f.pts, x, z, false) < o.pad) return `osm ${o.f.layer} ${o.f.name}`;
@@ -103,14 +118,19 @@ describe('ferry routes on the real harbour', () => {
     expect(new Set(FERRY_FLEET.slice(0, FERRY_ROUTES.length).map((f) => f.route)).size).toBe(FERRY_ROUTES.length);
   });
 
-  it('every hull position of every route lies on water (LINZ coastline, OSM wharves, bridge piers, moored ships)', () => {
+  it('every hull position of every route lies on water (2 m LINZ waterMask, OSM wharves, bridge piers, moored ships)', () => {
+    // the mask is the real coast: Devonport, the CBD and Birkenhead are land, the fairways water
+    expect(water[0](AKL.devonport.x, AKL.devonport.z)).toBe(false);
+    expect(water[0](300, -300)).toBe(false);
+    expect(water[0](1500, -1250)).toBe(true);
+    expect(water[3](-3600, -3300)).toBe(false);
     const s = st();
     const bad: string[] = [];
-    for (const r of routes) {
+    routes.forEach((r, ri) => {
       for (let t = 0; t < r.def.period; t += 1) {
         ferryAt(r, 0, t - r.def.offset, s);
         for (const [x, z] of hullPoints(s, r.def.scale)) {
-          const why = blocked(x, z);
+          const why = blocked(ri, x, z);
           if (why) {
             bad.push(`${r.def.id} t=${t} hull ${x.toFixed(0)},${z.toFixed(0)} (centre ${s.x.toFixed(0)},${s.z.toFixed(0)} hdg ${(s.heading / DEG).toFixed(0)}): ${why}`);
             break;
@@ -118,7 +138,7 @@ describe('ferry routes on the real harbour', () => {
         }
         if (bad.length > 40) break;
       }
-    }
+    });
     expect(bad.slice(0, 40)).toEqual([]);
   }, 60_000);
 
