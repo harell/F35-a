@@ -50,6 +50,12 @@ export const G01_SWARM = {
    */
   stagger: 65,
   count: 10,
+  /**
+   * Recruit flies nine (playtest 2026-10-02 bc94edd: the bot won 3/6 on Recruit with ten, below the
+   * band). One more than the eight missiles: on Recruit a flawless missile run can still win with
+   * the tower hit once (the bonus lost); a clean win, and every win from Pilot up, needs the gun.
+   */
+  recruitCount: 9,
 } as const;
 
 /** The Sky Tower's axis (the landmark stands on AKL.skytower, missions/runtime/landmarks.ts). */
@@ -107,8 +113,8 @@ export const G01: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
-    '13:40. An IRGC mother ship, a converted container ship lying off the Hauraki Gulf, has launched a swarm of ten Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the Sky Tower. Impact in under four minutes.',
-    'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are ten of them and you carry eight missiles at most. The gun is not optional today: you have extra rounds.',
+    '13:40. An IRGC mother ship, a converted container ship lying off the Hauraki Gulf, has launched a swarm of Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the Sky Tower. Impact in under four minutes.',
+    'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are more of them than the eight missiles you carry at most. The gun is not optional today: you have extra rounds.',
     'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 600 to 900 m. Don\'t go much slower: below 175 knots the jet wallows nose-high and the pipper sits above the drone. Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
   ],
@@ -125,6 +131,7 @@ export const G01: MissionDef = mission({
     groups: [
       flight('shaheds', 'shahed136', G01_SWARM.count, G01_SWARM.start, G01_SWARM.altitude, 0, SHAHED_SPEED, 'bomber', {
         fixedCount: true,
+        countFor: { recruit: G01_SWARM.recruitCount },
         formation: 'triangle',
         spacing: G01_SWARM.spacing,
         callsign: 'Shahed',
@@ -151,7 +158,7 @@ export const G01: MissionDef = mission({
       { id: 't_half', when: { kind: 'group_destroyed', group: 'shaheds', count: 5 }, actions: [{ kind: 'radio', from: DS, text: 'Half the swarm is down. Keep going, Viper.' }] },
     ],
     hints: G01_HINTS,
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Ten Shaheds over Pakuranga, heading for the Sky Tower. Weapons free.', priority: 2 }],
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. A Shahed swarm over Pakuranga, heading for the Sky Tower. Weapons free.', priority: 2 }],
     successText: 'Swarm destroyed. The tower is still standing. Good shooting, Viper.',
   },
 });

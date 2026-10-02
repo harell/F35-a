@@ -155,6 +155,8 @@ export interface AircraftGroupDef {
   /** Base size. Red groups are scaled by difficulty.enemyCountScale (rounded, min 1) unless `fixedCount`. */
   count: number;
   fixedCount?: boolean;
+  /** Size on the listed difficulties, in place of `count` and its scaling (g01's swarm is lighter on Recruit). */
+  countFor?: Partial<Record<Difficulty, number>>;
   /** Upper bound after scaling. */
   maxCount?: number;
   /**

@@ -415,15 +415,15 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
   // missiles take 7–8 of the 10 Shaheds; the rest need gun passes. The bot's 170 m/s gun chase
   // overshot a 51 m/s drone on every pass and it was 0/6 on every difficulty. With the slow-target
   // chase (ai-playerbot.ts gunChaseFloor) it measured, 6 seeds with jitter: Recruit 3/6, Pilot 6/6
-  // (no jitter: 2/6, 5/6). Recruit sits below the 75 % band (the orchestrator decides the content);
-  // the bands below are the measured floors less one seed.
-  it('Recruit ≥ 2/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
+  // (no jitter: 2/6, 5/6). Recruit then flew nine drones (G01_SWARM.recruitCount): 5/6, Pilot 6/6,
+  // Veteran 6/6, Ace 4/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
+  it('Recruit ≥ 4/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     await new Promise((r) => setTimeout(r, 0));
     const rec = wins('g01', 'recruit', seeds);
     await new Promise((r) => setTimeout(r, 0));
     const pil = wins('g01', 'pilot', seeds);
-    expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(2);
+    expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(4);
     expect(pil.won, pil.log.join('\n')).toBeGreaterThanOrEqual(5);
   });
 });

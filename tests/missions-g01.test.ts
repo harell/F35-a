@@ -125,6 +125,7 @@ describe('g01 Buzz Kill: content', () => {
       const missiles = LOADOUTS[lo].stores.filter((s) => (AAMS as readonly string[]).includes(s.weapon)).reduce((n, s) => n + s.count, 0);
       expect(missiles, lo).toBeLessThanOrEqual(8);
       expect(missiles, lo).toBeLessThan(G01_SWARM.count);
+      expect(missiles, lo).toBeLessThan(G01_SWARM.recruitCount); // the gun is required on Recruit too
     }
     // over the suburbs nearest neighbours are `spacing` apart; converging on the tower they close up
     // into single file `stagger` apart: both wider than two kill radii (the runtime test below flies it)
@@ -134,12 +135,13 @@ describe('g01 Buzz Kill: content', () => {
 });
 
 describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
-  it('spawns all 10 drones on every difficulty, in rows of 1, 2, 3, 4 (each stepped back, so no two abreast) with the nose on the Sky Tower', () => {
+  it('spawns 10 drones (9 on Recruit) in rows of 1, 2, 3, 4 (each stepped back, so no two abreast) with the nose on the Sky Tower', () => {
     const { spacing, stagger } = G01_SWARM;
     for (const diff of DIFFS) {
       const h = harness(G01, diff);
       const ds = drones(h);
-      expect(ds, diff).toHaveLength(10);
+      const n = diff === 'recruit' ? G01_SWARM.recruitCount : G01_SWARM.count;
+      expect(ds, diff).toHaveLength(n);
       const lead = ds[0];
       const heading = Math.atan2(AKL.skytower.x - lead.position.x, -(AKL.skytower.z - lead.position.z));
       const fwd = new Vector3(Math.sin(heading), 0, -Math.cos(heading));
@@ -160,9 +162,10 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
         if (gap > stagger + spacing / 2) rows.push([]);
         rows[rows.length - 1].push(slots[i]);
       }
-      expect(rows.map((r) => r.length), diff).toEqual([1, 2, 3, 4]);
-      // each row spread across the lead's track, `spacing` apart: a triangle seen from above
+      expect(rows.map((r) => r.length), diff).toEqual(n === 10 ? [1, 2, 3, 4] : [1, 2, 3, 3]);
+      // each full row spread across the lead's track, `spacing` apart: a triangle seen from above
       rows.forEach((row, r) => {
+        if (row.length !== r + 1) return; // Recruit's short last row
         const xs = row.map((q) => q.right).sort((a, b) => a - b);
         xs.forEach((x, j) => expect(x).toBeCloseTo((j - r / 2) * spacing, 0));
       });
@@ -270,9 +273,10 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
 describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runner)', () => {
   it('missiles alone can\'t win: the bot fires its whole load with no gun rounds, and the drones left bring the tower down', { timeout: 180_000 }, () => {
     const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: G01.theater, seed: G01.seed, resolution: 512, features: allFeatures(G01.theater, []), pads: terrainPadsFor(G01) })));
+    // (Pilot: Recruit's nine drones let a flawless missile run win with the tower hit once)
     for (const seed of [1, 2]) {
       const events = new EventBus();
-      const d = DIFFICULTIES.recruit;
+      const d = DIFFICULTIES.pilot;
       const world = createSimWorld({ terrain, difficulty: d, events, combat: createCombatSystemSeeded(seed) });
       const runner = createMissionRunner({ ...G01, gunAmmo: 0 }, { createAi: createAiBrain, difficulty: d, events });
       runner.setup(world, 'a2a_beast');
