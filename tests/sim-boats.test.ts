@@ -21,6 +21,7 @@ import { framingDistance } from '../src/render/targetCam/pose';
 import { getGroundPrototype } from '../src/render/models/ground';
 import { getSamPrototype } from '../src/render/models/sams';
 import { groundHudName, samHudName } from '../src/missions/runtime/names';
+import { pipName } from '../src/hud/hmd/pip';
 import { FlatTerrain } from './combat-helpers';
 import type { MissionDef } from '../src/core/contracts';
 import { missionById } from '../src/missions';
@@ -362,6 +363,11 @@ describe('boat presentation and mission options', () => {
       expect(d).toBeLessThan(45);
     }
     expect(getSamPrototype('ad_boat').root.children.length).toBeGreaterThan(0);
+    // PiP titles: one name each (no "AD BOAT AD BOAT")
+    const w = seaWorld();
+    expect(pipName(w.spawnSam({ type: 'ad_boat', team: 'red', position: new Vector3() }))).toBe('AD BOAT');
+    expect(pipName(w.spawnGround({ type: 'suicide_boat', team: 'red', position: new Vector3() }))).toBe('SUICIDE BOAT');
+    expect(pipName(w.spawnGround({ type: 'missile_boat', team: 'red', position: new Vector3() }))).toBe('MSL BOAT');
     expect(framingDistance({ kind: 'sam', type: 'ad_boat', id: 1, position: new Vector3(), quaternion: new Vector3() as never, radius: 11 })).toBeLessThan(45);
   });
 
