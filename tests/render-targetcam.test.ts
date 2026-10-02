@@ -216,9 +216,11 @@ describe('target camera labels', () => {
     expect(pipName(new SamSiteEntity(2, 'sa6', 'red'))).toBe('SA-6 GAINFUL');
     expect(pipName(new SamSiteEntity(2, 'sa10', 'red'))).toBe('SA-10 GRUMBLE');
     expect(pipName(new GroundTargetEntity(3, 'ship', 'red'))).toBe('SHIP');
-    // every military type has a reporting name (the civil A320 shows its callsign instead)
+    // every military type has a reporting name (the civil A320 shows its callsign instead; the IRGC
+    // Navy air-defence boat has no confirmed class or reporting name, so its PiP title is "AD BOAT")
     for (const k of Object.keys(NATO_AIR)) if (k !== 'a320') expect(NATO_AIR[k as AircraftType].length).toBeGreaterThan(2);
-    for (const k of Object.keys(NATO_SAM)) expect(NATO_SAM[k as SamType].length).toBeGreaterThan(2);
+    for (const k of Object.keys(NATO_SAM)) if (k !== 'ad_boat') expect(NATO_SAM[k as SamType].length).toBeGreaterThan(2);
+    expect(pipName(new SamSiteEntity(2, 'ad_boat', 'red'))).toBe('AD BOAT');
   });
 
   it('shows civil airliners as civil traffic: callsign, flight phase, CHECK FIRE when locked', () => {
