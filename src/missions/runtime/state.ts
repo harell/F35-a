@@ -118,7 +118,8 @@ export function newSortieStats(): SortieStats {
   };
 }
 
-const DIFF_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+/** Difficulties, easiest first. */
+export const DIFF_ORDER: readonly Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
 /** True if `current` is at least `min` (undefined min = always). */
 export function difficultyAtLeast(current: Difficulty, min: Difficulty | undefined): boolean {
   return !min || DIFF_ORDER.indexOf(current) >= DIFF_ORDER.indexOf(min);

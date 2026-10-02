@@ -5,6 +5,7 @@
 import { clamp, mulberry32 } from '../../core/math';
 import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
 import type { AircraftGroupDef } from '../schema';
+import { armMissionGun } from './gunAmmo';
 import { spawnAirGroup } from './spawner';
 import { aliveCount, drivenOffCount, type GroupRt, type MissionState } from './state';
 import { aircraftHudName } from './names';
@@ -50,7 +51,10 @@ export class SurvivalDirector {
   private rearm(): void {
     const s = this.s;
     const p = s.player!;
-    if (p.loadout) s.world.combat.applyLoadout(p, p.loadout);
+    if (p.loadout) {
+      s.world.combat.applyLoadout(p, p.loadout);
+      armMissionGun(p, s.def, s.difficulty.id);
+    }
     p.health = Math.min(p.maxHealth, p.health + 20);
     p.damage.fire = false;
     // top the tanks up to at least half
