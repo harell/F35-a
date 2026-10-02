@@ -1,9 +1,10 @@
 /**
  * Issue #65 (playtest 3.3-c): the GPS / glide bomb STEER cue gives a direction (STEER LEFT /
- * STEER RIGHT), reads BOMB AWAY instead while the player's own bomb is still guiding onto the
- * designated target, and the player's release follows the cue's geometry: a target off the release
- * cone is refused with the same STEER words (the bomb is kept), one inside the bomb's turn circle
- * with OUT OF RANGE. AI releases keep their old range-only rule.
+ * STEER RIGHT) and reads BOMB AWAY instead while the player's own bomb is still guiding onto the
+ * designated target. The release doesn't follow the cue's cone or turn circle: from altitude the
+ * bombs turn onto targets the cue calls off the cone or inside the turn, so the release reads the
+ * range only, as before. The 1.1 × range pad on Recruit / Pilot stays for the JDAM, which still
+ * reaches there, and is gone for the glide bombs, which fall short past the cue.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -12,6 +13,8 @@ import { DIFFICULTIES } from '../src/core/data';
 import type { LoadoutId } from '../src/core/types';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
+import { MUNITIONS } from '../src/sim/weapons/defs';
+import { gpsMaxRange } from '../src/sim/weapons/dlz';
 import type { SimWorld } from '../src/sim/api';
 import type { AircraftEntity, MissileEntity } from '../src/sim/entities';
 import { FlatTerrain } from './combat-helpers';
@@ -82,29 +85,36 @@ describe('STEER gives a direction (issue #65)', () => {
   });
 });
 
-describe("the player's GPS / glide bomb release follows the cue (issue #65)", () => {
-  it('off the release cone the release is refused with STEER LEFT / STEER RIGHT and the bomb is kept', () => {
+/** Let the bomb fly out (300 s at most); true when the target it was released at is destroyed. */
+function hits(w: SimWorld, m: MissileEntity, tgt: number): boolean {
+  const target = w.getEntity(tgt)!;
+  run(w, 300, () => !m.alive);
+  return !target.alive;
+}
+
+describe("the player's GPS / glide bomb release reads the range, not the cue's cone or turn circle (issue #65)", () => {
+  it('off the release cone from altitude the release goes and the bomb turns onto the target', () => {
     for (const [weapon, deg] of [
       ['gbu53', 90],
       ['gbu53', -90],
       ['gbu39', 120],
       ['gbu31', -45],
     ] as const) {
-      const { w, p } = setup(weapon, 7_000, 9_000, deg);
-      const before = w.combat.remaining(p, weapon);
+      const { w, p, tgt } = setup(weapon, 7_000, 9_000, deg);
+      expect(w.combat.bombImpactPoint(p, w), `${weapon} ${deg}°`).toMatchObject({ offAxis: true, steer: deg > 0 ? 1 : -1 });
       const r = pickle(w, p, weapon, 7_000, 9_000, deg);
-      expect(r.denied, `${weapon} ${deg}°`).toEqual([deg > 0 ? 'STEER RIGHT' : 'STEER LEFT']);
-      expect(r.launched).toHaveLength(0);
-      expect(w.combat.remaining(p, weapon)).toBe(before);
+      expect(r.denied, `${weapon} ${deg}°`).toEqual([]);
+      expect(r.launched, `${weapon} ${deg}°`).toHaveLength(1);
+      expect(hits(w, r.launched[0], tgt), `${weapon} ${deg}°`).toBe(true);
     }
   });
 
-  it('inside the bomb\'s turn circle (run past it at low level) the release is refused with OUT OF RANGE', () => {
-    const { w, p } = setup('gbu53', 400, 700, 50);
-    expect(w.combat.bombImpactPoint(p, w)).toMatchObject({ inRange: false, offAxis: false });
-    const r = pickle(w, p, 'gbu53', 400, 700, 50);
-    expect(r.denied).toEqual(['OUT OF RANGE']);
-    expect(r.launched).toHaveLength(0);
+  it("a JDAM from 7,600 m with the target 1.2 km ahead and 14° off (inside the cue's turn circle) is released and hits", () => {
+    const { w, p, tgt } = setup('gbu31', 7_600, 1_200, 14);
+    const r = pickle(w, p, 'gbu31', 7_600, 1_200, 14);
+    expect(r.denied).toEqual([]);
+    expect(r.launched).toHaveLength(1);
+    expect(hits(w, r.launched[0], tgt)).toBe(true);
   });
 
   it('inside the cone and in range it releases, as before', () => {
@@ -122,9 +132,24 @@ describe("the player's GPS / glide bomb release follows the cue (issue #65)", ()
     }
   });
 
-  it('an AI jet is not held to the cone (its release rule reads the range only)', () => {
-    const { w, p, tgt } = setup('gbu31', 7_000, 6_000, -45, false);
-    expect(w.combat.fire(p, w, 'gbu31', tgt)).not.toBeNull();
+  it('on Pilot a JDAM may go 1.1 × past the cue and still hits; a glide bomb gets no pad (it falls short there)', () => {
+    const jdamD = 1.09 * gpsMaxRange(MUNITIONS.gbu31, 7_000, 250, 0);
+    const jdam = setup('gbu31', 7_000, jdamD, 0);
+    expect(jdam.w.combat.bombImpactPoint(jdam.p, jdam.w)!.inRange).toBe(false);
+    const r = pickle(jdam.w, jdam.p, 'gbu31', 7_000, jdamD, 0);
+    expect(r.denied).toEqual([]);
+    expect(r.launched).toHaveLength(1);
+    expect(hits(jdam.w, r.launched[0], jdam.tgt)).toBe(true);
+    // from 7,000 m a StormBreaker or SDB released 1.05 × past the cue 45° off the nose falls short
+    for (const weapon of ['gbu53', 'gbu39'] as const) {
+      const d = 1.05 * gpsMaxRange(MUNITIONS[weapon], 7_000, 250, 0);
+      const { w, p } = setup(weapon, 7_000, d, 45);
+      const before = w.combat.remaining(p, weapon);
+      const g = pickle(w, p, weapon, 7_000, d, 45);
+      expect(g.denied, weapon).toEqual(['OUT OF RANGE']);
+      expect(g.launched, weapon).toHaveLength(0);
+      expect(w.combat.remaining(p, weapon)).toBe(before);
+    }
   });
 });
 

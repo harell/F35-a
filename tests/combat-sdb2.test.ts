@@ -411,13 +411,12 @@ describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to 
     expect(cue('gbu53', 7_000, 35_000, 80)).toMatchObject({ inRange: false, offAxis: true, rel: -1 });
   });
 
-  it('a StormBreaker released 55° off the nose turns onto the ship instead of orbiting it (c06: 14 km, 4,700 m)', () => {
+  it('a StormBreaker released 60° off the nose turns onto the ship instead of orbiting it (c06: 14 km, 4,700 m)', () => {
     const w = makeWorld(12);
     const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: 5 });
     run(w, 0.2);
-    // 14 km from the ship, ground track 55° left of it (just inside the 60° release cone: the
-    // player's release follows the cue since #65, so 60° off is refused with STEER RIGHT)
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_700, 14_000), heading: -55 * DEG, speed: 250, loadout: 'strike_sdb2' });
+    // 14 km from the ship, ground track 60° left of it
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_700, 14_000), heading: -60 * DEG, speed: 250, loadout: 'strike_sdb2' });
     run(w, 0.5);
     w.combat.designate(p, cv.id, w);
     const m = release(w, p, 'gbu53', cv.id);

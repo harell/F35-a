@@ -277,7 +277,9 @@ export function gpsReleaseCone(def: CombatMunitionDef): number {
  * can't be turned onto, as when the jet has run past a target it tossed at from low level. Gravity
  * does the turn down, so only the horizontal turn counts. `side` is the way to turn toward the
  * point: +1 right of the ground track, −1 left, 0 dead ahead or straight below (issue #65: STEER
- * gives a direction).
+ * gives a direction). This drives the HUD cue only: from altitude the fall gives the bomb time to
+ * turn onto many points this calls off the cone or unreachable, so the release reads the range
+ * only (release.ts, gpsReleasePad).
  */
 export function gpsReleaseGeometry(def: CombatMunitionDef, ac: AircraftEntity, point: Vector3): { offAxis: boolean; reachable: boolean; side: -1 | 0 | 1 } {
   const dx = point.x - ac.position.x;
@@ -299,27 +301,6 @@ export function gpsReleaseGeometry(def: CombatMunitionDef, ac: AircraftEntity, p
 }
 /** Margin on the bomb's turn circle (autopilot lag, lift lost to the turn). */
 const TURN_MARGIN = 1.15;
-
-/** The STEER cue / denial for a point `side` of the ground track (gpsReleaseGeometry). */
-export function steerText(side: number): string {
-  return side < 0 ? 'STEER LEFT' : 'STEER RIGHT';
-}
-
-/**
- * Why the player's GPS / glide bomb release at `point` is refused, or null when the bomb can make it.
- * The release follows the HUD cue's geometry (issue #65): a target off the release cone is refused
- * with the cue's STEER LEFT / RIGHT, and one inside the bomb's turn circle with OUT OF RANGE (a bomb
- * released there can't turn onto it). The range keeps `pad` (1.1 on the generous-cue difficulties):
- * gpsMaxRange already keeps 7 % in hand, so a release a little past the cue still reaches.
- * A refused release keeps the bomb.
- */
-export function gpsReleaseDenial(def: CombatMunitionDef, ac: AircraftEntity, point: Vector3, pad = 1): string | null {
-  const geo = gpsReleaseGeometry(def, ac, point);
-  if (geo.offAxis) return steerText(geo.side);
-  const horiz = Math.hypot(point.x - ac.position.x, point.z - ac.position.z);
-  if (!geo.reachable || horiz > pad * gpsMaxRange(def, ac.position.y - point.y, ac.velocity.length(), point.y)) return 'OUT OF RANGE';
-  return null;
-}
 
 /* ───────────────────────── CCIP ───────────────────────── */
 
