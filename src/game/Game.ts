@@ -728,7 +728,7 @@ export class Game {
     // after a view change the 3D image moves with the frame instead of a frame late (#62)
     // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
     const q = this.quality;
-    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit), s.env.targetCamLandmarks);
     this.audio.update(ctx2);
   }
 
@@ -905,7 +905,7 @@ export class Game {
             triangles: this.renderer.info.render.triangles,
             pip: {
               open: pipView.open,
-              drawn: s?.targetCam.lastTargetId != null,
+              drawn: s?.targetCam.lastTargetId != null || s?.targetCam.lastLandmark != null,
               calls: s?.targetCam.lastStats.calls ?? 0,
               triangles: s?.targetCam.lastStats.triangles ?? 0,
             },
@@ -1032,6 +1032,7 @@ export class Game {
         open: pipView.open,
         anim: pipView.anim,
         targetId: pipView.targetId,
+        landmark: pipView.landmark?.id ?? null,
         rect: [pipView.vx, pipView.vy, pipView.vw, pipView.vh],
         rendered: this.session?.targetCam.lastTargetId ?? null,
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,

@@ -11,12 +11,14 @@
  * (QualitySettings.targetCamRange past the target, or far enough to keep the ground in the frame for a
  * high target, see targetCamFar) that culls distant terrain patches and models, and it leaves out the static scenery detail (EnvironmentApi.targetCamOmit: the
  * city, roads, scatter and night lights are merged world-wide meshes a far plane can't cull).
+ * The Sky Tower shot (pipView.landmark: the tower hit or collapsing) keeps the tower's own visual
+ * (EnvironmentApi.targetCamLandmarks) when its scenery group is left out.
  */
 import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
-import { TARGET_CAM_FOV, makePose, targetCamFar, targetCamGroundDepth, targetCamPose, type CamTarget } from './targetCam/pose';
+import { TARGET_CAM_FOV, landmarkCamPose, makePose, targetCamFar, targetCamGroundDepth, targetCamPose, type CamLandmark, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
 export interface TargetCamRect {
@@ -27,6 +29,14 @@ export interface TargetCamRect {
   vh: number;
   /** Full (open) window height — the open animation crops the view instead of squashing it. */
   h: number;
+  /** A landmark shot (the Sky Tower hit / collapsing) instead of targetId. */
+  landmark?: (CamLandmark & { readonly id: string }) | null;
+}
+
+/** Is `a` the object `o` or one of its ancestors? */
+function holds(a: Object3D, o: Object3D): boolean {
+  for (let n: Object3D | null = o; n; n = n.parent) if (n === a) return true;
+  return false;
 }
 
 const _size = new Vector2();
@@ -46,8 +56,12 @@ export class TargetCam {
   private readonly pose = makePose();
   /** visible flags of the omitted objects, restored after the pass */
   private readonly shown: boolean[] = [];
+  /** objects hidden for the pass (the omit list, or its parts round a kept landmark) */
+  private readonly hidden: Object3D[] = [];
   /** Last rendered target (debug / tests). */
   lastTargetId: number | null = null;
+  /** Last rendered landmark (the Sky Tower shot; debug / tests). */
+  lastLandmark: string | null = null;
   /** Draw calls / triangles of the last render() (0 when nothing was drawn; test hooks read them). */
   readonly lastStats = { calls: 0, triangles: 0 };
   private readonly surfaceAt: (x: number, z: number) => number;
@@ -66,17 +80,21 @@ export class TargetCam {
    * @param far    far plane of the main camera (the fog reaches the horizon colour there)
    * @param range  metres drawn past the target (QualitySettings.targetCamRange); 0 = up to `far`
    * @param omit   objects hidden for this pass (EnvironmentApi.targetCamOmit on low quality)
+   * @param keep   landmark visuals kept in a landmark shot even inside `omit` (EnvironmentApi.targetCamLandmarks)
    * @returns true if something was drawn
    */
-  render(renderer: WebGLRenderer, scene: Scene, rect: TargetCamRect, far: number, range = 0, omit: readonly Object3D[] = NONE): boolean {
+  render(renderer: WebGLRenderer, scene: Scene, rect: TargetCamRect, far: number, range = 0, omit: readonly Object3D[] = NONE, keep: readonly Object3D[] = NONE): boolean {
     this.lastTargetId = null;
+    this.lastLandmark = null;
     this.lastStats.calls = 0;
     this.lastStats.triangles = 0;
-    if (rect.targetId === null || rect.vw < 2 || rect.vh < 2) return false;
-    const t = this.world.getEntity(rect.targetId);
-    if (!t || t.kind === 'missile' || t.kind === 'decoy') return false;
+    if (rect.vw < 2 || rect.vh < 2) return false;
+    const lm = rect.landmark ?? null;
+    const t = lm || rect.targetId === null ? null : this.world.getEntity(rect.targetId);
+    if (!lm && (!t || t.kind === 'missile' || t.kind === 'decoy')) return false;
     const cam = this.camera;
-    targetCamPose(t as CamTarget, this.world.time, this.pose, this.surfaceAt, this.waterAt);
+    if (lm) landmarkCamPose(lm, this.world.time, this.pose, this.surfaceAt);
+    else targetCamPose(t as CamTarget, this.world.time, this.pose, this.surfaceAt, this.waterAt);
     cam.position.copy(this.pose.position);
     cam.up.copy(this.pose.up);
     cam.lookAt(this.pose.look);
@@ -110,24 +128,38 @@ export class TargetCam {
     const info = renderer.info.render;
     const calls0 = renderer.info.autoReset ? 0 : info.calls;
     const tris0 = renderer.info.autoReset ? 0 : info.triangles;
-    const shown = this.shown;
-    shown.length = 0;
-    for (const o of omit) {
-      shown.push(o.visible);
-      o.visible = false;
-    }
+    this.shown.length = 0;
+    this.hidden.length = 0;
+    for (const o of omit) this.hide(o, lm ? keep : NONE);
     try {
       renderer.render(scene, cam);
       this.lastStats.calls = info.calls - calls0;
       this.lastStats.triangles = info.triangles - tris0;
     } finally {
-      for (let i = 0; i < omit.length; i++) omit[i].visible = shown[i];
+      for (let i = 0; i < this.hidden.length; i++) this.hidden[i].visible = this.shown[i];
       renderer.autoClear = autoClear;
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, _size.x, _size.y);
       renderer.shadowMap.autoUpdate = autoShadow;
     }
-    this.lastTargetId = t.id;
+    if (lm) this.lastLandmark = lm.id;
+    else if (t) this.lastTargetId = t.id;
     return true;
+  }
+
+  /** Hide `o` for the pass — or, when it holds a kept object, everything in it but that object. */
+  private hide(o: Object3D, keep: readonly Object3D[]): void {
+    let inside = false;
+    for (const k of keep) {
+      if (k === o) return;
+      if (holds(o, k)) inside = true;
+    }
+    if (inside) {
+      for (const c of o.children) this.hide(c, keep);
+      return;
+    }
+    this.hidden.push(o);
+    this.shown.push(o.visible);
+    o.visible = false;
   }
 }

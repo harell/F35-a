@@ -1,9 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { Quaternion, Vector3 } from 'three';
+import { Group, Quaternion, Scene, Vector2, Vector3, type WebGLRenderer } from 'three';
+import { TargetCam } from '../src/render/TargetCam';
+import type { EntityRendererApi } from '../src/core/contracts';
+import type { SimWorld } from '../src/sim/api';
 import { computeLayout, makeLayout, type HudLayout } from '../src/hud/hmd/layout';
 import { computeTouchLayout } from '../src/input/touch/layout';
-import { NATO_AIR, NATO_SAM, pipName, pipStatus, pipView, resetPip, stepPip, PIP_DESTROYED_HOLD } from '../src/hud/hmd/pip';
-import { TARGET_CAM_FOV, TARGET_CAM_MIN_AGL, framingDistance, makePose, targetCamPose } from '../src/render/targetCam/pose';
+import {
+  NATO_AIR,
+  NATO_SAM,
+  pipLandmarkFocus,
+  pipName,
+  pipStatus,
+  pipView,
+  resetPip,
+  stepPip,
+  PIP_DESTROYED_HOLD,
+  PIP_TOWER_DOWN_HOLD,
+  PIP_TOWER_HIT_HOLD,
+} from '../src/hud/hmd/pip';
+import { TARGET_CAM_FOV, TARGET_CAM_MIN_AGL, framingDistance, landmarkCamPose, makePose, targetCamPose } from '../src/render/targetCam/pose';
+import { COLLAPSE, headingDir } from '../src/core/skyTower';
+import { createSkyTower } from '../src/sim/landmarks';
 import { AircraftEntity, GroundTargetEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
 import type { AircraftType, SamType } from '../src/core/types';
 
@@ -272,5 +289,178 @@ describe('target camera labels', () => {
     expect(pipStatus(a, me).text).toBe('FLANK');
     a.velocity.set(0, 0, 250);
     expect(pipStatus(a, me).text).toBe('COLD');
+  });
+});
+
+describe('target camera: the Sky Tower cut', () => {
+  const L = computeLayout(makeLayout(), W, H, noSafe, tan30, false, { pip: true });
+  const DT = 0.05;
+
+  it('cuts from the target to the tower when an enemy hit damages it, holds, then cuts back with the blink', () => {
+    resetPip();
+    const t = jet();
+    const lookup = (id: number) => (id === t.id ? t : null);
+    const lm = createSkyTower(0);
+    let time = 100;
+    const step = () => {
+      time += DT;
+      return stepPip(L, t, lookup, true, DT, pipLandmarkFocus([lm], time));
+    };
+    for (let i = 0; i < 20; i++) expect(step()).toBe(t);
+    expect(pipView.anim).toBe(1);
+    // the first enemy hit
+    lm.hits = 1;
+    lm.damagedAt = time;
+    lm.damagePoint.set(lm.base.x + 10, 150, lm.base.z);
+    expect(step()).toBe(lm);
+    expect(pipView.landmark).toBe(lm);
+    expect(pipView.targetId).toBe(null);
+    expect(pipView.anim).toBeLessThan(1); // the "new shot" blink
+    // held for the whole hit
+    for (let s = DT; s < PIP_TOWER_HIT_HOLD - 2 * DT; s += DT) expect(step()).toBe(lm);
+    expect(pipView.anim).toBe(1);
+    // then back to the target, with the blink again
+    let back = 0;
+    while (step() !== t && back < 5) back++;
+    expect(back).toBeLessThan(5);
+    expect(pipView.targetId).toBe(t.id);
+    expect(pipView.landmark).toBe(null);
+    expect(pipView.anim).toBeLessThan(1);
+  });
+
+  it('opens on the collapse with nothing designated, holds through the whole fall, then closes', () => {
+    resetPip();
+    const lm = createSkyTower(0);
+    const lookup = () => null;
+    let time = 50;
+    const step = () => {
+      time += DT;
+      return stepPip(L, null, lookup, true, DT, pipLandmarkFocus([lm], time));
+    };
+    for (let i = 0; i < 10; i++) expect(step()).toBe(null);
+    expect(pipView.vh).toBe(0);
+    lm.alive = false;
+    lm.destroyedAt = time;
+    lm.cause = 'player'; // whoever brought it down
+    step();
+    expect(pipView.open).toBe(true);
+    expect(PIP_TOWER_DOWN_HOLD).toBeGreaterThan(COLLAPSE.ruinsAt);
+    for (let s = DT; s < COLLAPSE.ruinsAt; s += DT) expect(step()).toBe(lm);
+    expect(pipView.vh).toBe(L.pipH);
+    for (let s = 0; s < PIP_TOWER_DOWN_HOLD - COLLAPSE.ruinsAt + 1; s += DT) step();
+    expect(pipView.open).toBe(false);
+    expect(pipView.vh).toBe(0);
+    expect(pipView.landmark).toBe(null);
+  });
+
+  it('respects the setting / no room', () => {
+    resetPip();
+    const lm = createSkyTower(0);
+    lm.hits = 1;
+    lm.damagedAt = 10;
+    for (let i = 0; i < 10; i++) stepPip(L, null, () => null, false, DT, pipLandmarkFocus([lm], 10 + i * DT));
+    expect(pipView.open).toBe(false);
+    expect(pipView.vh).toBe(0);
+  });
+
+  it('is a function of the sim state: an old hit or collapse never replays', () => {
+    const lm = createSkyTower(0);
+    expect(pipLandmarkFocus([lm], 5)).toBe(null);
+    lm.damagedAt = 5;
+    expect(pipLandmarkFocus([lm], 5 + PIP_TOWER_HIT_HOLD - 0.1)).toBe(lm);
+    expect(pipLandmarkFocus([lm], 5 + PIP_TOWER_HIT_HOLD + 0.1)).toBe(null);
+    lm.alive = false;
+    lm.destroyedAt = 30;
+    expect(pipLandmarkFocus([lm], 30 + PIP_TOWER_DOWN_HOLD - 0.1)).toBe(lm);
+    expect(pipLandmarkFocus([lm], 30 + PIP_TOWER_DOWN_HOLD + 0.1)).toBe(null);
+  });
+});
+
+describe('target camera pose: the Sky Tower', () => {
+  const aspect = 16 / 9;
+  /** Is the world point inside the PiP frame of `pose` (32° vertical FOV)? */
+  function inFrame(pose: ReturnType<typeof makePose>, pt: Vector3): boolean {
+    const fwd = pose.look.clone().sub(pose.position).normalize();
+    const right = new Vector3().crossVectors(fwd, pose.up).normalize();
+    const up = new Vector3().crossVectors(right, fwd);
+    const v = pt.clone().sub(pose.position);
+    const z = v.dot(fwd);
+    if (z <= 0) return false;
+    const th = Math.tan((TARGET_CAM_FOV * Math.PI) / 360);
+    return Math.abs(v.dot(up) / z) <= th && Math.abs(v.dot(right) / z) <= th * aspect;
+  }
+
+  it('frames the whole standing tower from the side the hit came from', () => {
+    const lm = createSkyTower(20);
+    lm.damagePoint.set(lm.base.x + 8, 170, lm.base.z); // east face
+    const pose = landmarkCamPose(lm, 3, makePose(), () => 0);
+    expect(inFrame(pose, lm.base)).toBe(true);
+    expect(inFrame(pose, lm.base.clone().setY(lm.base.y + lm.height))).toBe(true);
+    expect(pose.position.x).toBeGreaterThan(lm.base.x); // the east side
+    expect(pose.position.y).toBeGreaterThan(lm.base.y + 200); // over the CBD roofs
+  });
+
+  it('frames the fall side-on: the stump, the top as it starts to fall and where it lands', () => {
+    const lm = createSkyTower(20);
+    lm.alive = false;
+    for (const heading of [0, 1, 2.5, 4]) {
+      lm.fallHeading = heading;
+      const pose = landmarkCamPose(lm, 3, makePose(), () => 0);
+      const [fx, fz] = headingDir(heading);
+      const at = (along: number, y: number) => new Vector3(lm.base.x + fx * along, lm.base.y + y, lm.base.z + fz * along);
+      expect(inFrame(pose, at(0, 0))).toBe(true);
+      expect(inFrame(pose, at(0, lm.height))).toBe(true);
+      // the top lands about (height - break) out along the fall
+      expect(inFrame(pose, at(COLLAPSE.breakHeight + (lm.height - COLLAPSE.breakHeight) * Math.sin(COLLAPSE.tiltAtImpact), 5))).toBe(true);
+      // side-on: the view axis is roughly square to the fall
+      const view = pose.look.clone().sub(pose.position).setY(0).normalize();
+      expect(Math.abs(view.x * fx + view.z * fz)).toBeLessThan(0.5);
+    }
+  });
+});
+
+describe('target camera pass: the Sky Tower shot on low quality', () => {
+  it('keeps the tower visual drawn when the scenery group is left out, and only for the tower shot', () => {
+    const scenery = new Group();
+    const city = new Group();
+    const tower = new Group();
+    scenery.add(city, tower);
+    const reflections = new Group();
+    const scene = new Scene();
+    scene.add(scenery, reflections);
+    const seen: { city: boolean; tower: boolean; refl: boolean }[] = [];
+    const renderer = {
+      getSize: (v: Vector2) => v.set(844, 390),
+      shadowMap: { autoUpdate: true },
+      setScissorTest() {},
+      setScissor() {},
+      setViewport() {},
+      autoClear: true,
+      info: { autoReset: true, render: { calls: 0, triangles: 0 } },
+      render: () => {
+        const on = (o: Group) => {
+          for (let n: Group | null = o; n; n = n.parent as Group | null) if (!n.visible) return false;
+          return true;
+        };
+        seen.push({ city: on(city), tower: on(tower), refl: on(reflections) });
+      },
+    } as unknown as WebGLRenderer;
+    const lm = createSkyTower(0);
+    const jetT = jet();
+    const world = { time: 1, getEntity: (id: number) => (id === jetT.id ? jetT : null), terrain: { surfaceHeightAt: () => 0, isWater: () => false } } as unknown as SimWorld;
+    const cam = new TargetCam(world, {} as EntityRendererApi);
+    const rect = { targetId: null as number | null, landmark: lm as typeof lm | null, vx: 600, vy: 10, vw: 200, vh: 112, h: 112 };
+    expect(cam.render(renderer, scene, rect, 30_000, 4000, [scenery, reflections], [tower])).toBe(true);
+    expect(seen.at(-1)).toEqual({ city: false, tower: true, refl: false });
+    expect(cam.lastLandmark).toBe('skytower');
+    // restored after the pass
+    expect(scenery.visible && city.visible && tower.visible && reflections.visible).toBe(true);
+    // an entity shot leaves the whole scenery group out
+    rect.landmark = null;
+    rect.targetId = jetT.id;
+    expect(cam.render(renderer, scene, rect, 30_000, 4000, [scenery, reflections], [tower])).toBe(true);
+    expect(seen.at(-1)).toEqual({ city: false, tower: false, refl: false });
+    expect(cam.lastTargetId).toBe(jetT.id);
+    expect(scenery.visible && city.visible).toBe(true);
   });
 });

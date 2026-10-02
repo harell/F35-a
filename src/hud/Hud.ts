@@ -29,7 +29,7 @@ import { computeLayout, makeLayout } from './hmd/layout';
 import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
-import { drawPip, pipView, resetPip, stepPip } from './hmd/pip';
+import { drawPip, pipLandmarkFocus, pipView, resetPip, stepPip } from './hmd/pip';
 import { Pen } from './hmd/pen';
 import { PICK_RADIUS, PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
@@ -287,7 +287,9 @@ export const createHud: CreateHud = (canvas, events) => {
       const v = ctx.viewMode;
       const pipAllowed =
         ctx.settings.targetCam !== false && p?.alive === true && (v === 'cockpit' || v === 'hud' || v === 'chase' || v === 'orbit' || v === 'flyby') && !(cockpit && pcdZoom.open);
-      layoutOpts.pip = pipAllowed && (pipView.open || pipView.anim > 0 || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null);
+      // (the Sky Tower being hit or falling opens it too, with nothing designated)
+      const pipLandmark = pipLandmarkFocus(ctx.world.landmarks, ctx.world.time);
+      layoutOpts.pip = pipAllowed && (pipView.open || pipView.anim > 0 || pipLandmark !== null || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null);
       computeLayout(L, W, H, ctx.screen.safe, proj.tanHalfV, cockpit, layoutOpts);
       pen.fontScale = L.u;
       picks.begin();
@@ -323,7 +325,7 @@ export const createHud: CreateHud = (canvas, events) => {
         f.zone = null;
       }
 
-      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt);
+      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt, pipLandmark);
 
       if (mode === 'tactical') {
         reserveRadio(f);

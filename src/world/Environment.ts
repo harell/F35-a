@@ -370,6 +370,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     // what the low-quality target camera leaves out (the Wiri tanks are scenery-drawn, but friendly:
     // never a PiP target)
     targetCamOmit: [scenery.group, ...(reflections ? [reflections.mesh] : []), ...(towerReflections ? [towerReflections.mesh] : [])],
+    // …but a PiP shot of the Sky Tower being hit or falling keeps the tower itself
+    targetCamLandmarks: scenery.skyTower ? [scenery.skyTower.group] : [],
     heightfield: hf,
     stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle }),
 

@@ -18,6 +18,7 @@
  * Everything here is allocation-free and three.js-math only so it can be unit tested without WebGL.
  */
 import { Quaternion, Vector3 } from 'three';
+import { COLLAPSE, headingDir } from '../../core/skyTower';
 import type { AircraftType, GroundTargetType, SamType, VesselClass } from '../../core/types';
 import { shipDims } from '../visuals/shipMotion';
 
@@ -267,5 +268,70 @@ export function targetCamPose(
   _fwd.copy(out.look).sub(out.position).normalize();
   _right.crossVectors(_fwd, out.up);
   if (_right.lengthSq() < 1e-6) out.up.set(0, 0, -1);
+  return out;
+}
+
+/** Minimal landmark shape the tower shot needs (sim/landmarks.ts LandmarkEntity). */
+export interface CamLandmark {
+  /** Base of the axis (y = ground). */
+  readonly base: Vector3;
+  readonly height: number;
+  readonly alive: boolean;
+  /** Fall heading (rad, 0 = north, clockwise). */
+  readonly fallHeading: number;
+  /** Where the first enemy hit burns. */
+  readonly damagePoint: Vector3;
+}
+
+/**
+ * Sky Tower shot: distance (m) and look-at height (fraction of the tower's height). At 32° the whole
+ * 328 m tower fits the frame from ~720 m; the camera sits ~9° up, above the CBD roofs (≤ ~190 m).
+ */
+export const LANDMARK_FRAMING = { dist: 760, lookK: 0.47, el: (9 * Math.PI) / 180, side: (25 * Math.PI) / 180 };
+
+/**
+ * Camera pose for a landmark the PiP cuts to (the Sky Tower hit or collapsing). Standing (hit): the
+ * whole tower from the side the hit came from, a little off it, so the blast and the fire on its face
+ * show. Falling: side-on to the fall heading (a little behind square), looking at a point out along
+ * the fall, so the upper section's whole arc down to the ground stays in the frame.
+ */
+export function landmarkCamPose(lm: CamLandmark, time: number, out: CamPose, surfaceAt?: (x: number, z: number) => number): CamPose {
+  const F = LANDMARK_FRAMING;
+  const d = F.dist;
+  const lookY = lm.base.y + lm.height * F.lookK;
+  let ax: number;
+  let az: number;
+  if (!lm.alive) {
+    // side-on to the fall: the fall direction turned 90° (and F.side back towards the stump)
+    const [fx, fz] = headingDir(lm.fallHeading);
+    const reach = (COLLAPSE.breakHeight + lm.height) * 0.33; // about the middle of the fall's footprint
+    out.look.set(lm.base.x + fx * reach, lookY, lm.base.z + fz * reach);
+    const a = Math.PI / 2 + F.side;
+    ax = fx * Math.cos(a) - fz * Math.sin(a);
+    az = fx * Math.sin(a) + fz * Math.cos(a);
+  } else {
+    // from the hit's side (east face by default), swung F.side off it, drifting slowly
+    let hx = lm.damagePoint.x - lm.base.x;
+    let hz = lm.damagePoint.z - lm.base.z;
+    const r = Math.hypot(hx, hz);
+    if (r < 1e-3) {
+      hx = 1;
+      hz = 0;
+    } else {
+      hx /= r;
+      hz /= r;
+    }
+    const a = F.side + 0.06 * Math.sin(time * 0.2);
+    ax = hx * Math.cos(a) - hz * Math.sin(a);
+    az = hx * Math.sin(a) + hz * Math.cos(a);
+    out.look.set(lm.base.x, lookY, lm.base.z);
+  }
+  const ch = Math.cos(F.el) * d;
+  out.position.set(out.look.x + ax * ch, lookY + Math.sin(F.el) * d, out.look.z + az * ch);
+  out.up.set(0, 1, 0);
+  if (surfaceAt) {
+    const floor = surfaceAt(out.position.x, out.position.z) + TARGET_CAM_MIN_AGL;
+    if (out.position.y < floor) out.position.y = floor;
+  }
   return out;
 }
