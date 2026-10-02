@@ -50,7 +50,7 @@ const g01Dir = (() => {
   return { x: (G01_SWARM.start.x - TOWER.x) / d, z: (G01_SWARM.start.z - TOWER.z) / d };
 })();
 
-/** The player: on CAP over the upper Waitematā, nose east; the swarm is about 20 km away, off the right side. */
+/** The player: on CAP over the upper Waitematā, nose east-south-east; the swarm is about 22 km away, 20° right. */
 const g01Start = { x: -9000, z: -5500, altitude: 3000, heading: 100, speed: 230, fuel: 0.9 };
 
 export const G01: MissionDef = mission({
