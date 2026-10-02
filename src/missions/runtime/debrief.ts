@@ -6,7 +6,9 @@
 import type { MissionResult } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, SamType } from '../../core/types';
+import type { MissionScript } from '../schema';
 import { REASONS } from './reasons';
+import { parTimeFor } from './scoring';
 import type { MissionState } from './state';
 
 export interface MedalDef {
@@ -76,6 +78,15 @@ export function deathReason(s: MissionState, reason: 'crash' | 'shot' | 'collisi
   return k ? `${base} by ${k}` : base;
 }
 
+/**
+ * The mission asks for air-to-air kills: a 'destroy' or 'intercept' objective on a hostile aircraft
+ * group (T02, c01, a Dogfight…). T01's rings or a pure strike are not.
+ */
+export function hasAirToAirObjective(script: Pick<MissionScript, 'objectives' | 'groups'>): boolean {
+  const air = new Set(script.groups.filter((g) => g.team === 'red').map((g) => g.id));
+  return script.objectives.some((o) => (o.kind === 'destroy' || o.kind === 'intercept') && o.groups.some((id) => air.has(id)));
+}
+
 /** 1–3 specific tips for the debrief. */
 export function buildTips(s: MissionState, r: MissionResult): string[] {
   const tips: string[] = [];
@@ -123,7 +134,12 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
       add(`Your wingman scored ${s.flightKills} of the flight's kills: S and A grades need at least half of them to be yours — lead the fight.`);
     if (r.grade === 'S' && r.difficulty !== 'ace') add('Perfect sortie — try it on a harder difficulty.');
   }
-  if (tips.length === 0) add(r.success ? 'Faster missions score higher: fly the steering cue and use the AMRAAM’s reach.' : 'Fly Training first: T02 teaches the lock and SHOOT cue, T03 how to survive SAMs.');
+  if (tips.length === 0) {
+    if (!r.success) add('Fly Training first: T02 teaches the lock and SHOOT cue, T03 how to survive SAMs.');
+    // the time tip only when there was time to gain, and the AMRAAM advice only where there is something to shoot
+    else if (r.time > parTimeFor(s.def))
+      add(hasAirToAirObjective(s.script) ? 'Faster missions score higher: fly the steering cue and use the AMRAAM’s reach.' : 'Faster missions score higher: fly the steering cue.');
+  }
   return tips;
 }
 

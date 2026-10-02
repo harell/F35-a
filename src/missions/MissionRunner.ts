@@ -29,7 +29,7 @@ import { HintSystem } from './runtime/hints';
 import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS } from './runtime/reasons';
-import { computeScore } from './runtime/scoring';
+import { computeScore, parTimeFor } from './runtime/scoring';
 import { awardMedals, buildTips, deathReason } from './runtime/debrief';
 import { RearmController } from './runtime/rearm';
 import { WithdrawalMonitor } from './runtime/withdrawal';
@@ -46,7 +46,6 @@ const EVAL_PERIOD = 0.1;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
 const DEFAULT_AO = 38_000;
-const DEFAULT_PAR = 480;
 /** Seconds before a patrolling enemy fighter group is vectored onto the player. */
 const DEFAULT_COMMIT = 150;
 
@@ -245,7 +244,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const sc = computeScore({
       success,
       time,
-      parTime: s.script.parTime ?? this.def.timeLimit ?? DEFAULT_PAR,
+      parTime: parTimeFor(this.def),
       kills: { ...s.kills },
       enemiesSpawned: s.enemiesSpawned,
       objectiveBonus: sum.bonus,

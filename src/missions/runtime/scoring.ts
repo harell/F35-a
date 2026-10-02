@@ -22,7 +22,7 @@
  * (the enemy was only driven off, or someone else did the killing) rates a share of 0 and an
  * accuracy of 0, so it caps at C (playtest 2026-10-02, 2.3-b: a parked Defend win graded A).
  */
-import type { MissionResult } from '../../core/contracts';
+import type { MissionDef, MissionResult } from '../../core/contracts';
 
 export const POINTS = {
   air: 100,
@@ -41,6 +41,14 @@ export const POINTS = {
 } as const;
 
 export type Grade = MissionResult['grade'];
+
+/** Par time (s) when a mission sets neither `script.parTime` nor `timeLimit`. */
+export const DEFAULT_PAR = 480;
+
+/** A mission's nominal completion time (s): what the time bonus and the debrief's time tip measure against. */
+export function parTimeFor(def: Pick<MissionDef, 'script' | 'timeLimit'>): number {
+  return def.script.parTime ?? def.timeLimit ?? DEFAULT_PAR;
+}
 
 export interface ScoreInput {
   success: boolean;

@@ -8,12 +8,15 @@
  *    "use the AMRAAM's reach" time tip stays out of missions with nothing to shoot or under par (2.3-e).
  */
 import { describe, expect, it } from 'vitest';
+import { EventBus } from '../src/core/events';
 import { AKL } from '../src/core/auckland';
 import { DIFFICULTIES } from '../src/core/data';
-import type { MissionDef } from '../src/core/contracts';
-import { CAMPAIGN, TRAINING, missionById, nextMissionLabel, validateMission } from '../src/missions';
+import type { MissionDef, MissionResult } from '../src/core/contracts';
+import { CAMPAIGN, TRAINING, buildInstantMissionSeeded, missionById, nextMissionLabel, validateMission } from '../src/missions';
 import { computeScore, type ScoreInput } from '../src/missions/runtime/scoring';
-import { flatLand, harness, killGroup, shieldPlayer } from './missions-helpers';
+import { buildTips, hasAirToAirObjective } from '../src/missions/runtime/debrief';
+import { MissionState } from '../src/missions/runtime/state';
+import { flatLand, harness, killGroup, shieldPlayer, stubAi } from './missions-helpers';
 
 const byId = (id: string): MissionDef => missionById(id)!;
 
@@ -167,5 +170,48 @@ describe('#64: training debrief', () => {
     for (const m of CAMPAIGN.slice(0, -1)) expect(nextMissionLabel(m.id), m.id).toBe('Next mission');
     expect(nextMissionLabel(CAMPAIGN[CAMPAIGN.length - 1].id)).toBeNull();
     expect(nextMissionLabel('ia_dogfight_auckland')).toBeNull();
+  });
+
+  it('knows which missions have an air-to-air objective', () => {
+    expect(hasAirToAirObjective(byId('t01').script)).toBe(false);
+    expect(hasAirToAirObjective(byId('t03').script)).toBe(false);
+    expect(hasAirToAirObjective(byId('t02').script)).toBe(true);
+    expect(hasAirToAirObjective(byId('c01').script)).toBe(true);
+    const dogfight = buildInstantMissionSeeded({ mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 2 }, 3);
+    expect(hasAirToAirObjective(dogfight.script)).toBe(true);
+  });
+
+  const state = (id: string) => new MissionState(byId(id), { createAi: stubAi({ created: [], retasked: [] }), difficulty: DIFFICULTIES.pilot, events: new EventBus() });
+  const win = (id: string, time: number): MissionResult => ({
+    missionId: id,
+    title: byId(id).title,
+    success: true,
+    reason: 'All objectives complete',
+    difficulty: 'pilot',
+    time,
+    score: 1000,
+    grade: 'A',
+    kills: { air: 0, sam: 0, ground: 0 },
+    friendlyLosses: 0,
+    shotsFired: 0,
+    hits: 0,
+    accuracy: 0,
+    damageTaken: 0,
+    objectives: [],
+  });
+  const amraam = (tips: string[]) => tips.some((t) => /AMRAAM/.test(t));
+
+  it('the AMRAAM time tip never shows in T01 (no weapons, no air-to-air objective)', () => {
+    expect(amraam(buildTips(state('t01'), win('t01', 3)))).toBe(false);
+    const slow = buildTips(state('t01'), win('t01', 900));
+    expect(amraam(slow)).toBe(false);
+    expect(slow.some((t) => /Faster missions score higher/.test(t))).toBe(true); // over par: the plain time tip
+    expect(amraam(buildTips(state('t03'), win('t03', 900)))).toBe(false);
+  });
+
+  it('the time tip only shows over par', () => {
+    const par = byId('c01').script.parTime!;
+    expect(buildTips(state('c01'), win('c01', par - 30)).some((t) => /Faster missions/.test(t))).toBe(false);
+    expect(amraam(buildTips(state('c01'), win('c01', par + 60)))).toBe(true);
   });
 });
