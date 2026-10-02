@@ -43,10 +43,10 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Change camera | `window.__f35.setView('cockpit')` (also `hud`, `chase`, `orbit`, …) or `&view=` | free |
 | Check the Sky Tower collapse | `window.__f35.destroySkyTower(y)` | free (writes the ruin to that browser context's save) |
 | Keep the player alive through a scripted run | `window.__f35.invulnerable(true)` (weapons only; crashing still kills; per mission) | free |
-| Force an event (a tank lost, a group dead, an objective done) | `window.__f35.destroy(entityId)` or `destroy('groupId', byPlayer?)` | free |
+| Force an event (a tank lost, a group dead, an objective done) | `window.__f35.destroy(entityId)` or `destroy('groupId', byPlayer?)` (credited as an AIM-120 kill, so debrief stats after it are skewed) | free |
 | Reach the debrief after `simulate()` ended the mission | `window.__f35.skipOutro()` (the outro counts render frames, so headless it takes ~60 s otherwise) | free |
 | Look at a place without writing a driver | `window.__f35.camera([x,y,z], [lookX,lookY,lookZ])`, `camera(null)` to hand back | free |
-| Prove a HUD string is drawn (blinking cues, text that screenshots miss) | `browser-run.mjs … --text` (adds `hudText`: every `fillText` string over 8 frames) | free |
+| Prove a HUD string is drawn (blinking cues, text that screenshots miss) | `browser-run.mjs … --text` (adds `hudText`: every `fillText` string over 8 frames; the HUD upper-cases and wraps, so match case-insensitively on `hudText.join(' ')`) | free |
 | Smoke-test that every mission starts | `node e2e/missions.mjs --base=http://localhost:5190/ --only=c01,c02` | *est.* ~20 s per mission (load + `--seconds`, default 12) |
 | Check menus, briefing, touch controls | `node e2e/ui-touch.mjs --base=http://localhost:5190/ --part=menus` (or `flight`) | *est.* 1–2 min |
 | One screenshot of any URL | `node e2e/shot.mjs --url='http://localhost:5190/?mission=c01&autostart=1' --out=e2e/screenshots/x.png` | ~17 s |
@@ -77,6 +77,7 @@ npx vite --config vite.e2e.config.ts --port 5190 &       # stable dev server for
 - Screenshots go in `e2e/screenshots/` (git-ignored). Never commit them.
 - **`simulate()` doesn't advance the HUD clock.** Hint paging, objective fades and message timers stay frozen, so whether a HUD element is visible *over time* can't be judged from headless shots.
 - **`autopilot(true)` picks its own weapon (AIM-120).** For air-to-ground cues, use `autopilot(false)`, scripted `controls()`, and `w=__f35.game.session.world; w.combat.selectWeapon(w.player,'gbu53',w)`.
+- **Draw calls are noisy.** Reads vary ±10–20 % frame to frame and up to 3× between runs (the target-camera PiP adds 20–55 calls while it's open, and browser runs aren't seeded). Compare several missions or reruns, not one read.
 - **`state().renderer` is the last rendered frame.** Right after a start, a `fly()` or a `simulate()` it can be stale or half-loaded. Wait two `requestAnimationFrame`s (browser-run does) or take the screenshot first.
 - **Under load, everything is 2–3× slower.** With a sweep and two browsers on 4 cores, screenshots took 8–14 s and `simulate()` ~5 s per game minute. Budget charters for the box as it will be, not idle.
 - **Don't `pgrep -f`/`pkill -f` on a pattern that's in your own command line.** The wait loop matches itself, and the kill takes out the next job.
