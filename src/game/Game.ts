@@ -71,7 +71,7 @@ import {
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { FlowInterrupt } from './flow';
-import { testSeed } from './testParams';
+import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -672,7 +672,7 @@ export class Game {
       // Player controls → sim (not while the clock is held: simulate() feeds them per step, and the
       // frames before it must not leave a frame-count-dependent input on the jet)
       const p = s.world.player;
-      if (p?.alive && !this.autopilot && !this.simHeld) {
+      if (p?.alive && frameTakesControls(this.autopilot, this.simHeld)) {
         Object.assign(p.input, this.input.controls);
         if (this.controlOverride) Object.assign(p.input, this.controlOverride);
       }
@@ -683,7 +683,7 @@ export class Game {
       for (const tap of this.input.consumeTaps()) this.handleTap(tap.x, tap.y, s);
 
       // Fixed-step simulation (test hooks: a held clock only moves with simulate())
-      this.accumulator = this.simHeld ? 0 : this.accumulator + dt;
+      this.accumulator = frameAccumulator(this.accumulator, dt, this.simHeld);
       let steps = 0;
       while (this.accumulator >= FIXED_DT && steps < MAX_STEPS_PER_FRAME) {
         s.world.step(FIXED_DT);
@@ -939,7 +939,8 @@ export class Game {
       autopilot: (on: boolean, role: 'fighter' | 'wingman' | 'interceptor' = 'fighter') => {
         const p = this.session?.world.player;
         this.autopilot = on;
-        if (p) p.ai = on ? createAiBrain(role, { skill: 0.9 }) : null;
+        // (`?seed=`: seeded too, so a mission reruns the same whatever flew before it in the page)
+        if (p) p.ai = on ? createAiBrain(role, autopilotBrainOpts(testSeed(this.params, TEST_HOOKS))) : null;
       },
       /**
        * Fast-forward the simulation by `seconds` without rendering (fixed 60 Hz steps, player

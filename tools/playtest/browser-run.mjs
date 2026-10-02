@@ -21,9 +21,11 @@
  * camera window was open and drawn in that frame and what its pass cost (`calls`, `triangles`): compare
  * reads with the same PiP state. A mission that fails to start is reported and skipped; the run exits 1
  * at the end.
- * --seed: a fixed combat RNG seed (`?seed=`), and the sim clock held at t = 0 until each simulate(), so
- * two runs of the same mission read the same game time and the same draw calls (#66). Without it every
- * run rolls its own seed and the real-time loop runs a few frames first.
+ * --seed: a fixed combat RNG seed (`?seed=`, the autopilot brain's too), and the sim clock held at t = 0
+ * until each simulate(), so two runs of the same mission reach the same game state at the same game time,
+ * whatever missions flew before it in the page, and read the same draw calls within frame-to-frame noise
+ * (seen up to ±8) (#66). Without it every run rolls its own seed and the real-time loop runs a few frames
+ * first.
  * --text: also record every string the HUD draws (canvas fillText) over 8 frames at each checkpoint, as
  * `hudText`, so a blinking cue (IN RANGE, SHOOT) is caught even when a screenshot lands on its off phase.
  * Exit code 1 on page errors or if a mission never starts.

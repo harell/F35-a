@@ -14,7 +14,7 @@ import { createEntityRenderer } from '../src/render/EntityRenderer';
 import { TARGET_CAM_GROUND_K, TARGET_CAM_MIN_FAR, framingDistance, targetCamFar, targetCamGroundDepth } from '../src/render/targetCam/pose';
 import { AircraftEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
 import type { SimWorld } from '../src/sim/api';
-import { testSeed } from '../src/game/testParams';
+import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from '../src/game/testParams';
 
 /** A renderer stand-in that records what the PiP pass would draw with. */
 function fakeRenderer(callsPerPass = 40) {
@@ -194,6 +194,22 @@ describe('test hook ?seed=', () => {
     for (const q of ['', 'seed=', 'seed=abc', 'seed=-3', 'seed=1.5', 'seed=4294967296', 'seed=99999999999']) {
       expect(testSeed(p(q), true), q).toBeNull();
     }
+  });
+});
+
+describe('test hooks: autopilot seed and the held clock', () => {
+  it('the autopilot brain takes the ?seed= seed, so a mission reruns the same after other missions in the page', () => {
+    expect(autopilotBrainOpts(7)).toEqual({ skill: 0.9, seed: 7 });
+    expect(autopilotBrainOpts(0)).toEqual({ skill: 0.9, seed: 0 });
+    expect(autopilotBrainOpts(null)).toEqual({ skill: 0.9 });
+  });
+
+  it('a held clock never accumulates sim time and the frame loop leaves the controls alone', () => {
+    expect(frameAccumulator(0.01, 0.02, false)).toBeCloseTo(0.03, 9);
+    expect(frameAccumulator(0.01, 0.02, true)).toBe(0);
+    expect(frameTakesControls(false, false)).toBe(true);
+    expect(frameTakesControls(true, false)).toBe(false);
+    expect(frameTakesControls(false, true)).toBe(false);
   });
 });
 
