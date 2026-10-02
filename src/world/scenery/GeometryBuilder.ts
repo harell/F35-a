@@ -161,9 +161,10 @@ export class GeometryBuilder {
   /**
    * Vertical prism over a footprint polygon in world XZ (flat [x0, z0, ...], either winding): walls from
    * y0 up to the roof, roof triangulated (earcut). `roof(x, z)` gives the roof height at a vertex (a
-   * tilted plane for a sloped crown). Bottom face omitted. Returns the triangle count.
+   * tilted plane for a sloped crown). Bottom face omitted; `walls = false` draws the roof alone (a flat
+   * slab: pontoons). Returns the triangle count.
    */
-  prism(ring: ArrayLike<number>, y0: number, roof: (x: number, z: number) => number, color: Color | number, roofColor: Color | number, win = WIN_NONE): number {
+  prism(ring: ArrayLike<number>, y0: number, roof: (x: number, z: number) => number, color: Color | number, roofColor: Color | number, win = WIN_NONE, walls = true): number {
     const n = ring.length / 2;
     if (n < 3) return 0;
     const t0 = this.triangleCount;
@@ -174,7 +175,7 @@ export class GeometryBuilder {
     for (let i = 0; i < n; i++) top.push(roof(ring[i * 2], ring[i * 2 + 1]));
     // walls face out: with a positive shoelace area (x, z) the outside is on the right of a → b, so
     // the quad runs b → a (quad's normal = (p1 − p0) × (p3 − p0))
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; walls && i < n; i++) {
       const j = (i + 1) % n;
       const [a, b] = area > 0 ? [j, i] : [i, j];
       const ax = ring[a * 2];

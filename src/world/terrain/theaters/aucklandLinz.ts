@@ -51,6 +51,8 @@ export const COVER_SCRUB = 3; // scrub (Topo50 "scrub")
 let current: LinzData | null = null;
 let currentBytes: Uint8Array | null = null;
 let version = 0;
+/** The load in flight (shared by concurrent callers). */
+let pending: Promise<boolean> | null = null;
 
 /** Decoded LINZ data, or null when it has not been (or could not be) loaded. */
 export function aucklandLinz(): LinzData | null {
@@ -94,15 +96,23 @@ export async function fetchMaybeGzip(url: string): Promise<Uint8Array> {
  * Fetch, decompress and install the data. Resolves to false (and leaves the procedural fallback in
  * place) on any failure. Safe to call repeatedly: the first successful load is reused.
  */
-export async function loadAucklandLinz(url = LINZ_URL): Promise<boolean> {
-  if (current) return true;
-  try {
-    setAucklandLinz(await fetchMaybeGzip(url));
-    return true;
-  } catch (err) {
-    console.warn('[world] LINZ Auckland data unavailable, using the procedural map', err);
-    return false;
-  }
+export function loadAucklandLinz(url = LINZ_URL): Promise<boolean> {
+  if (current) return Promise.resolve(true);
+  // One fetch at a time: the app-start prefetch and a mission start share the request in flight.
+  // A failed load is forgotten, so the next call tries again.
+  pending ??= fetchMaybeGzip(url)
+    .then((bytes) => {
+      setAucklandLinz(bytes);
+      return true;
+    })
+    .catch((err) => {
+      console.warn('[world] LINZ Auckland data unavailable, using the procedural map', err);
+      return false;
+    })
+    .finally(() => {
+      pending = null;
+    });
+  return pending;
 }
 
 export function decodeLinz(bytes: Uint8Array): LinzData {

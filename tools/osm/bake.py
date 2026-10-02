@@ -8,8 +8,10 @@ earlier ones lack (same OSM id = same object), so a small supplement can fill a 
 Output (gzip): src/world/scenery/data/auckland-osm.bin, decoded by src/world/scenery/aucklandOsm.ts.
 Only the layers the game reads are kept (roads, streets and buildings come from LINZ, tools/linz):
   aeroway   aerodrome, runway, taxiway, apron, hangar (+ building=hangar), terminal, control tower, helipad
-  waterside man_made=pier, man_made=breakwater, leisure=marina, landuse=port
-  sites     man_made=storage_tank (>= 8 m across), landuse=military, military=naval_base
+  waterside man_made=pier, man_made=breakwater, leisure=marina, landuse=port (or industrial=port), waterway=dock
+  sites     man_made=storage_tank (>= 8 m across), landuse=military, military=naval_base, industrial=oil (fuel
+            terminals), leisure=stadium (>= 1 ha) and its building=grandstand, and the buildings inside the
+            port, military / naval and fuel-terminal areas (with their height)
 plus, per aerodrome, a derived "airfield core" outline: the union of its runway strips, taxiways, aprons
 and hangars, buffered and simplified, which the terrain flattener follows (src/world/terrain/features.ts).
 
@@ -35,12 +37,21 @@ BBOX = (174.31, -37.21, 175.21, -36.49)  # min lon, min lat, max lon, max lat
 Q = 0.5             # vertex quantum (m)
 SIMPLIFY = 1.0      # Douglas-Peucker tolerance (m)
 MIN_TANK = 8.0      # storage tanks narrower than this (farm water tanks) are dropped (m)
+MIN_STADIUM = 10_000.0  # stadiums smaller than this (m²) are dropped (club grounds)
+MIN_SITE_RING = 2_000.0  # outer rings of multi-part port / depot / dock areas smaller than this (m²) are dropped
+LEVEL_M = 3.5       # storey height (m) when a building has building:levels but no height
 VERSION = 1
 
 # Layer ids: keep in sync with OSM_* in src/world/scenery/aucklandOsm.ts
 L = dict(aerodrome=0, runway=1, taxiway=2, apron=3, hangar=4, terminal=5, tower=6, helipad=7,
-         pier=8, breakwater=9, marina=10, port=11, tank=12, military=13, naval=14, core=15)
-AREA_LAYERS = {'aerodrome', 'apron', 'hangar', 'terminal', 'marina', 'port', 'tank', 'military', 'naval', 'core'}
+         pier=8, breakwater=9, marina=10, port=11, tank=12, military=13, naval=14, core=15,
+         dock=16, depot=17, stadium=18, grandstand=19, building=20)
+AREA_LAYERS = {'aerodrome', 'apron', 'hangar', 'terminal', 'marina', 'port', 'tank', 'military', 'naval', 'core',
+               'dock', 'depot', 'stadium', 'grandstand', 'building'}
+# Areas whose buildings are kept (layer 'building'): the strategic sites and the port
+SITE_LAYERS = ('port', 'military', 'naval', 'depot')
+# Areas that keep every sizeable outer ring (one feature each), not only the largest
+MULTI_LAYERS = ('port', 'depot', 'dock')
 PAVED = {'asphalt', 'concrete', 'paved', 'sealed', 'concrete:plates', 'paving_stones', 'metal'}
 # Default widths (m) when the tag is missing
 DEF_WIDTH = {'runway': 45.0, 'taxiway': 18.0}
@@ -82,8 +93,16 @@ def layer_of(t, area):
         return 'breakwater'
     if t.get('leisure') == 'marina' and area:
         return 'marina'
-    if t.get('landuse') == 'port' and area:
+    if (t.get('landuse') == 'port' or t.get('industrial') == 'port') and area:
         return 'port'
+    if t.get('waterway') == 'dock' and area:
+        return 'dock'
+    if t.get('industrial') == 'oil' and t.get('landuse') == 'industrial' and area:
+        return 'depot'
+    if t.get('leisure') == 'stadium' and area:
+        return 'stadium'
+    if t.get('building') == 'grandstand' and area:
+        return 'grandstand'
     if mm == 'storage_tank' and area:
         return 'tank'
     if t.get('military') == 'naval_base' and area:
@@ -139,22 +158,68 @@ class Collector(osmium.SimpleHandler):
         if lay in ('pier', 'breakwater') and tags.get('area') != 'yes' and a.from_way():
             return  # an open-style closed pier way stays a line (handled in way())
         best = None
+        rings = []
         try:
             for outer in a.outer_rings():
                 ring = [(n.lat, n.lon) for n in outer]
                 if not any(in_box(la, lo) for la, lo in ring):
                     continue
                 pts = [world(la, lo) for la, lo in ring]
+                rings.append(pts)
                 if best is None or len(pts) > len(best):
                     best = pts
-                if lay not in ('aerodrome', 'military', 'naval', 'port', 'marina'):
+                if lay not in ('aerodrome', 'military', 'naval', 'port', 'marina', 'depot', 'dock'):
                     break
         except osmium.InvalidLocationError:
             return
         if best is None:
             return
         key = ('w' if a.from_way() else 'r', a.orig_id())
+        if lay in MULTI_LAYERS and len(rings) > 1:
+            for i, pts in enumerate(rings):
+                if Polygon(pts).buffer(0).area >= MIN_SITE_RING:
+                    self._add(key + (i,), lay, tags, pts, True)
+            return
         self._add(key, lay, tags, best, True)
+
+class SiteBuildings(osmium.SimpleHandler):
+    """Second pass: the buildings (OSM building=*) whose centre lies inside one of the site areas."""
+
+    def __init__(self, store, sites):
+        super().__init__()
+        from shapely.prepared import prep
+        self.store = store
+        self.sites = [prep(Polygon(s).buffer(0)) for s in sites]
+        self.box = [unary_union([Polygon(s).buffer(0) for s in sites]).bounds] if sites else []
+
+    def area(self, a):
+        t = a.tags
+        if 'building' not in t or t.get('building') in ('grandstand', 'hangar', 'roof', 'no') or 'aeroway' in t:
+            return
+        if t.get('man_made') == 'storage_tank':
+            return
+        key = ('w' if a.from_way() else 'r', a.orig_id())
+        if key in self.store:
+            return
+        try:
+            outer = next(iter(a.outer_rings()))
+            pts = [world(n.lat, n.lon) for n in outer]
+        except (osmium.InvalidLocationError, StopIteration):
+            return
+        if len(pts) < 4:
+            return
+        cx = sum(p[0] for p in pts) / len(pts)
+        cz = sum(p[1] for p in pts) / len(pts)
+        x0, z0, x1, z1 = self.box[0]
+        if not (x0 <= cx <= x1 and z0 <= cz <= z1):
+            return
+        c = Point(cx, cz)
+        if not any(s.contains(c) for s in self.sites):
+            return
+        tags = dict(t)
+        h = num(tags.get('height')) or num(tags.get('building:levels')) * LEVEL_M
+        tags['width'] = str(round(h, 1)) if h else ''
+        self.store[key] = dict(layer='building', tags=tags, pts=pts, area=True)
 
 def simplify(pts, area):
     if len(pts) <= 2:
@@ -349,6 +414,9 @@ def main():
     store = {}
     for p in inputs:
         Collector(store).apply_file(p, locations=True, idx='flex_mem')
+    sites = [it['pts'] for it in store.values() if it['layer'] in SITE_LAYERS and it['area']]
+    for p in inputs:
+        SiteBuildings(store, sites).apply_file(p, locations=True, idx='flex_mem')
     items = []
     for it in store.values():
         lay = it['layer']
@@ -359,6 +427,8 @@ def main():
             g = Polygon(pts)
             if 2 * math.sqrt(g.area / math.pi) < MIN_TANK:
                 continue
+        if lay == 'stadium' and Polygon(pts).buffer(0).area < MIN_STADIUM:
+            continue
         items.append(dict(it, pts=pts))
     items = merge_runways(items)
     items += airfield_cores(items)

@@ -1,10 +1,11 @@
 /**
  * F35-A UI art — animated "tactical display" menu background: the Auckland chart in AWACS colours,
  * a slow drift, a rotating radar sweep that paints hostile/friendly blips over the Hauraki Gulf,
- * and range rings. Cheap: the chart is pre-rendered once per resize into an offscreen canvas; each
+ * and range rings. Cheap: the chart is pre-rendered once per resize (and once more when the LINZ
+ * coastline arrives) into an offscreen canvas; each
  * frame (capped at 30 fps, paused when hidden) blits it and draws a handful of shapes.
  */
-import { CHART_LABELS, drawAucklandChart, type ChartView } from './aucklandChart';
+import { CHART_LABELS, chartVersion, drawAucklandChart, type ChartView } from './aucklandChart';
 
 interface Blip {
   x: number;
@@ -26,6 +27,8 @@ export class MenuBackground {
   readonly canvas: HTMLCanvasElement;
   private readonly g: CanvasRenderingContext2D;
   private chart: HTMLCanvasElement | null = null;
+  /** chartVersion() the offscreen chart was drawn with (the LINZ coastline arriving redraws it). */
+  private chartVer = -1;
   private w = 0;
   private h = 0;
   private dpr = 1;
@@ -83,7 +86,8 @@ export class MenuBackground {
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     const dpr = Math.min(1.5, window.devicePixelRatio || 1);
-    if (w === this.w && h === this.h && dpr === this.dpr && this.chart) return false;
+    if (w === this.w && h === this.h && dpr === this.dpr && this.chart && this.chartVer === chartVersion()) return false;
+    this.chartVer = chartVersion();
     this.w = w;
     this.h = h;
     this.dpr = dpr;
