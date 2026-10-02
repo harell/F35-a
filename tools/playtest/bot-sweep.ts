@@ -50,7 +50,7 @@ const args = Object.fromEntries(
 
 /**
  * Ids and groups, comma-separated in any mix (e.g. campaign,training,ia_defend_auckland): campaign
- * (Operation Southern Cross, c01–c12), irgc (the IRGC campaign, g01…), campaigns (every campaign),
+ * (Operation Southern Cross, c01–c06 and c08–c11), irgc (the IRGC campaign, g01…), campaigns (every campaign),
  * training, all (every campaign and training).
  */
 function missionIds(spec: string): string[] {
@@ -121,7 +121,7 @@ if (args.shard) {
           if (!line.startsWith('{')) continue;
           const r = JSON.parse(line) as Row;
           rows.push(r);
-          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  rearms=${r.rearms}  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
+          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
         }
       });
       return new Promise<void>((resolve) => child.on('close', () => resolve()));

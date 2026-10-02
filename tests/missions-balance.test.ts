@@ -2,7 +2,6 @@
  * MISSIONS i2 — campaign difficulty walls (reviewer sweep with the project's MissionBot):
  *  - c04 'Broken Wing' was 0/2 on Pilot (SA-6 / SA-15 point defence shooting down the JDAMs);
  *  - c10 'Night Harbour' was 0/2 on Pilot (Su-27 sweep R-27s at 137/159 s) and failed on Recruit;
- *  - c07 'Mainstay' on Veteran/Ace was an unavoidable Su-35 R-77 kill at 51–58 s.
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  *
  * Issue #57 (playtest 2026-10-02): the Pilot band (≥ 75 % over 6 seeds) in c02, c09 and t03, and no
@@ -96,11 +95,6 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
       expect(difficultyAtLeast('veteran', sa15.minDifficulty)).toBe(true);
     }
   });
-  it('c12: the Motutapu SA-15 is Pilot+, so the Recruit finale is forgiving (playtest 2026-10-02, 3.2-b: Recruit 4/8 → 7/8)', () => {
-    const sa15 = missionById('c12')!.script.sams.find((s) => s.id === 'sa15')!;
-    expect(difficultyAtLeast('recruit', sa15.minDifficulty)).toBe(false);
-    expect(difficultyAtLeast('pilot', sa15.minDifficulty)).toBe(true);
-  });
   it('c10: the Flanker sweep is Veteran+ and the eastern raid leaves time for the northern one', () => {
     const def = missionById('c10')!;
     const sweep = def.script.groups.find((g) => g.id === 'sweep')!;
@@ -108,11 +102,6 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
     const raidE = def.script.groups.find((g) => g.id === 'raidE')!;
     expect(raidE.spawn).toMatchObject({ kind: 'time' });
     expect((raidE.spawn as { t: number }).t).toBeGreaterThanOrEqual(150);
-  });
-  it('c07: the Su-35 CAP starts beyond first-shot range of the player start (> 40 km)', () => {
-    const def = missionById('c07')!;
-    const cap = def.script.groups.find((g) => g.id === 'cap')!;
-    expect(Math.hypot(cap.x - def.player.x, cap.z - def.player.z)).toBeGreaterThan(40_000);
   });
 });
 
@@ -126,12 +115,6 @@ describe('i2: MissionBot playthroughs (real World / Combat / AI, 3 seeds)', () =
     expect(p.won, p.log.join('\n')).toBeGreaterThanOrEqual(2);
     const rc = wins('c10', 'recruit', [1, 2]);
     expect(rc.won, rc.log.join('\n')).toBeGreaterThanOrEqual(1);
-  });
-  it('c07 on Veteran: no scripted R-77 ambush in the first 80 s (was dead at 51–58 s in every run)', { timeout: 300_000 }, () => {
-    for (const seed of [1, 2, 3]) {
-      const r = runPlaythrough('c07', 'veteran', seed, terrainFor('c07'), { maxT: 80 });
-      expect(r.state === 'failed' && r.t < 80, `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`).toBe(false);
-    }
   });
 });
 
@@ -356,8 +339,8 @@ describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the play
  * c02, c06, c08 and c09 are left to #57 and #65.
  * Margins: c04 wins exactly 2/6 on Veteran here (seeds 0 and 3; 4/12 over seeds 0–11), c10 3/6 (6/12).
  * A change to the bot or the AI can flip one seed and fail the c04 gate: rerun the sweep with --seeds=12
- * before retuning. No c04/c10 run is ever rearmed (the bot's REARM mode is only its flight home), so
- * removing rearming (#63) leaves these numbers as they are.
+ * before retuning. No c04/c10 run was ever rearmed, so removing rearming (#63) left these numbers as
+ * they were.
  */
 describe('#58: Veteran band in c04 and c10, and a difficulty curve that only falls (6 seeds)', () => {
   const SEEDS = [0, 1, 2, 3, 4, 5];

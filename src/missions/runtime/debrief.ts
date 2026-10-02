@@ -31,7 +31,6 @@ export const MEDALS = {
   sharpshooter: { id: 'sharpshooter', name: 'Sharpshooter', description: 'Four or more shots with 80 % or better accuracy.' },
   gunslinger: { id: 'gunslinger', name: 'Gunslinger', description: 'Shot down an enemy aircraft with the GAU-22 gun.' },
   shepherd: { id: 'shepherd', name: 'Good Shepherd', description: 'Brought every friendly aircraft home.' },
-  hot_pit: { id: 'hot_pit', name: 'Hot Pit', description: 'Rearmed at Whenuapai and went back to finish the job.' },
   southern_cross: { id: 'southern_cross', name: 'Southern Cross Campaign Medal', description: 'Completed Operation Southern Cross — Auckland is safe.' },
 } as const satisfies Record<string, MedalDef>;
 
@@ -107,7 +106,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   else if (r.reason.startsWith(REASONS.skytower))
     add('The Sky Tower is a protected landmark: check what is behind your target before you pickle, and never let a missile or bomb fly through the CBD.');
   if (died) {
-    if (st.downReason === 'fuel') add('Afterburner drinks fuel: cruise at MIL power and RTB to Whenuapai when BINGO shows — hold over the field to refuel.');
+    if (st.downReason === 'fuel') add('Afterburner drinks fuel and there is no refuelling: cruise at MIL power, and when BINGO shows finish the job and head home.');
     else if (st.downReason === 'crash' || st.downReason === 'collision')
       add('Watch your altitude and let Auto-GCAS fly the pull-up — don’t fight the stick when it takes over.');
     else if (samType === 'sa10') add('Stay below 300 ft and keep Rangitoto between you and Motutapu: the SA-10 cannot see through the volcano.');
@@ -136,7 +135,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
 
   if (st.aamShots >= 2 && st.longShots >= Math.max(2, st.aamShots * 0.4)) add('Wait for SHOOT before firing: AMRAAMs launched from max range run out of energy and miss.');
   if (st.aamShots >= 3 && st.misses >= st.aamShots * 0.5) add('Your missiles were defeated: shoot inside SHOOT, then crank 50° so the bandit can’t turn cold on the missile.');
-  if (st.winchester > 0 && st.rearms === 0 && !r.success && !s.script.noRearm) add('Out of weapons? Follow the steering cue to Whenuapai and hold over the field below 5,000 ft for 5 s to rearm.');
+  if (st.winchester > 0 && !r.success) add('You ran out of weapons with targets left, and there is no rearming: wait for SHOOT or IN RANGE so every shot counts.');
 
   if (r.success) {
     if (r.damageTaken > 40) add('You took heavy damage: defend every missile warning at once — chaff and a hard beam turn beat a missile at range.');
@@ -186,7 +185,6 @@ export function awardMedals(s: MissionState, r: MissionResult, campaignFinale: b
     let friendlies = 0;
     for (const g of s.groups.values()) if (g.team === 'blue' && g.air && g.air.role !== 'wingman') friendlies += g.expected;
     if (friendlies > 0 && r.friendlyLosses === 0) give(MEDALS.shepherd);
-    if (s.stats.rearms > 0) give(MEDALS.hot_pit);
     if (finale) give(MEDALS.southern_cross);
   }
   return out;

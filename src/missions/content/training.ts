@@ -172,7 +172,7 @@ export const T03: MissionDef = mission({
   briefing: [
     'Live-fire SAM training. An SA-6 battery and a Shilka on Rangitoto cover a fuel depot on Motutapu, the island behind it. The missiles are real. The steering cue takes you north round the SA-6, beyond the range its radar can pick up a clean F-35, to an IP north-east of Motutapu: run in from there.',
     'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and descend — the radar loses you in the notch, and the notch works best low. Save the CMS for the last few seconds before impact: one press drops chaff and flares together, and at launch they are wasted. Against a heat-seeker, CMS late and a hard break into the missile.',
-    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. Out of bombs? Hold over Whenuapai to rearm.',
+    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. There is no rearming, so make each release count.',
   ],
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'sead_stealth', 'strike_beast', 'strike_sdb2'],

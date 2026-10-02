@@ -212,7 +212,7 @@ export class AwacsController {
       else this.callPicture();
     }
 
-    if (this.sawAir && groups.length === 0 && s.pendingAir.every((g) => g.team !== 'red') && !this.cleanCalled && !s.script.survival) {
+    if (this.sawAir && groups.length === 0 && s.pendingAir.every((g) => g.team !== 'red') && !this.cleanCalled) {
       this.cleanCalled = true;
       s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}, picture clean.`, priority: 1 });
     }

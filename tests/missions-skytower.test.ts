@@ -2,7 +2,7 @@
  * The Sky Tower in the mission runtime and saved progress (issues #16, #75): stood up intact in
  * every Auckland sortie; one enemy hit damages it (radio call, HUD) and the sortie goes on, a second
  * collapses it and fails the mission; the player destroying it (damaged or not) fails the mission at
- * once (AWACS check-fire call, debrief reason and tip); survival runs end; and it is never destroyed
+ * once (AWACS check-fire call, debrief reason and tip); and it is never destroyed
  * for good: nothing goes in the save, so a restart (or an old save that has it down) finds it standing.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ const enemyHit = (h: Harness): number => hitSkyTower(h.world, { attackerId: 999 
 
 describe('Sky Tower in Auckland sorties', () => {
   it('every mission (all Auckland) stands the tower up', () => {
-    for (const def of [byId('c01'), byId('t01'), byId('ia_strike_auckland'), byId('ia_survival_auckland')]) {
+    for (const def of [byId('c01'), byId('t01'), byId('ia_strike_auckland'), byId('ia_defend_auckland')]) {
       const h = harness(def);
       expect(h.world.landmarks.map((l) => l.id), def.id).toEqual(['skytower']);
       expect(h.world.landmarks[0].base.x).toBeCloseTo(AKL.skytower.x, 6);
@@ -67,15 +67,6 @@ describe('Sky Tower in Auckland sorties', () => {
     h.run(8);
     expect(h.runner.state).toBe('failed');
     expect(impacts).toHaveLength(1);
-  });
-
-  it('survival ends the run', () => {
-    const h = harness(byId('ia_survival_auckland'));
-    h.run(2);
-    knockDown(h);
-    h.run(0.5);
-    expect(h.runner.state).toBe('failed');
-    expect(h.runner.result(h.world).reason).toMatch(/^Destroyed the Sky Tower — survived 0 waves$/);
   });
 
   it('one enemy hit: damaged, "Sky Tower is hit!", SKY TOWER HIT, and the sortie goes on', () => {
@@ -127,16 +118,6 @@ describe('Sky Tower in Auckland sorties', () => {
     expect(h.of('mission:end')).toEqual([{ success: false, reason: REASONS.skytower }]);
     h.run(3);
     expect(h.of('radio').some((r) => /Check fire.*Sky Tower/.test(r.text))).toBe(true);
-  });
-
-  it('survival: enemy hits bringing it down end the run too', () => {
-    const h = harness(byId('ia_survival_auckland'));
-    h.run(2);
-    enemyHit(h);
-    enemyHit(h);
-    h.run(0.5);
-    expect(h.runner.state).toBe('failed');
-    expect(h.runner.result(h.world).reason).toMatch(/^The Sky Tower fell — survived 0 waves$/);
   });
 });
 

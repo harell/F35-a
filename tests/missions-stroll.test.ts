@@ -53,7 +53,6 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(def.script.sams).toEqual([]);
     expect(def.script.ground).toEqual([]);
     expect(def.script.objectives).toEqual([]);
-    expect(def.script.survival).toBeUndefined();
     expect(def.intel.filter((i) => i.kind === 'sam' || i.kind === 'air')).toEqual([]);
     expect(def.recommendedLoadout).toBe('strike_beast');
     expect(def.allowedLoadouts).toContain('strike_sdb2_full');
@@ -151,7 +150,7 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(m.radio.some((t) => /area of operations/.test(t))).toBe(false);
   });
 
-  it('a low pass over Whenuapai is no pit stop, and a refuel at bingo sends no one back into a fight', () => {
+  it('a pass over Whenuapai is no pit stop, even at bingo (there is no rearming, #63), and bingo sends no one into a fight', () => {
     const m = setup();
     m.tick(1);
     const p = m.world.player!;
@@ -159,14 +158,12 @@ describe('Instant Action: A Stroll in the Park', () => {
       p.position.set(AKL.whenuapai.x, 400, AKL.whenuapai.z);
       m.tick(1);
     };
-    p.flight.fuel *= 0.7; // a real amount used, but not bingo
+    p.flight.fuel = 100; // bingo
     for (let i = 0; i < 8; i++) over();
+    expect(p.flight.fuel).toBeLessThan(100);
     expect(m.hud.some((t) => /REARM/.test(t))).toBe(false);
-    p.flight.fuel = 100; // bingo: the gate refuels
-    for (let i = 0; i < 8; i++) over();
-    expect(m.hud).toContain('REARMED');
-    expect(m.radio.some((t) => /rearmed and refuelled\. Enjoy the rest of your flight\./.test(t))).toBe(true);
-    expect(m.radio.some((t) => /into the fight/.test(t))).toBe(false);
+    expect(m.hud).toContain('BINGO FUEL');
+    expect(m.radio.some((t) => /rearm|refuel|make it quick|into the fight/i.test(t))).toBe(false);
   });
 
   it('crashing still ends it', () => {

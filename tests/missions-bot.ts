@@ -1,7 +1,7 @@
 /**
  * MISSIONS — a scripted "competent player" that can fly every mission type end to end with the
  * REAL SimWorld / CombatSystem / AI / MissionRunner (winnability checks, the soft-lock hunt and
- * the Winchester / rearm loop):
+ * going home when Winchester — there is no rearming):
  *
  *  - air-to-air: the simai team's calibrated PlayerBot (tests/ai-playerbot.ts) — taps the TD box,
  *    fires on the calibrated SHOOT cue, cranks, defends on the MAWS after a human reaction time;
@@ -11,10 +11,8 @@
  *    (the StormBreaker is flown like the SDB: same glide envelope, it just also follows a mover);
  *    under a live SA-10 it flies the whole attack low and pops up only to toss the bombs;
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
- *  - Winchester / low fuel: flies to the mission's rearm point (Whenuapai over Auckland, the
- *    scenery's first airbase in the procedural theatres: rearmHome() of the rearm runtime),
- *    descends through the rearm gate and circles the field until the mission rearms it, then goes
- *    back to work.
+ *  - Winchester / low fuel: there is no rearming (issue #63), so it flies home to Whenuapai
+ *    (homeBase()) and circles the field, out of the fight, until the mission ends.
  *
  * Flying is delegated to the AI Autopilot (the same "hands" the AI uses).
  */
@@ -37,7 +35,6 @@ import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
 import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
-import { rearmHome } from '../src/missions/runtime/rearm';
 import { spawnFloor } from '../src/missions/runtime/spawner';
 
 const _h = new Vector3();
@@ -74,18 +71,25 @@ function turnLimited(p: AircraftEntity, h: Vector3, maxDeg = 100): Vector3 {
   return h.set(Math.cos(a), 0, Math.sin(a));
 }
 
+/**
+ * Where the bot goes when it is out of weapons or fuel (x, z m): Whenuapai (Auckland is the only
+ * theatre, issue #73).
+ */
+export function homeBase(_def: MissionDef): { x: number; z: number; name: string } {
+  return { x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' };
+}
+
 export interface MissionBotOptions {
   /** MAWS reaction time (s). */
   reaction?: number;
-  /** Go home to rearm when Winchester (default true). */
-  rearm?: boolean;
+  /** Go home when Winchester or bingo (default true). */
+  rtb?: boolean;
 }
 
 export class MissionBot {
   readonly air: PlayerBot;
   readonly pilot = new Autopilot();
   mode = 'NAV';
-  rearmTrips = 0;
   private lastRelease = -99;
   private lastCm = -99;
   private beamSide = 0;
@@ -97,7 +101,7 @@ export class MissionBot {
   private readonly opts: Required<MissionBotOptions>;
   /** The briefed loadout carries air-to-ground stores. */
   private readonly agLoadout: boolean;
-  /** Where the mission rearms us (y = 0). */
+  /** Home base (y = 0): where we go when out of weapons or fuel. */
   readonly home: Vector3;
 
   constructor(
@@ -106,9 +110,9 @@ export class MissionBot {
     private readonly p: AircraftEntity,
     opts: MissionBotOptions = {},
   ) {
-    this.opts = { reaction: 0.8, rearm: true, ...opts };
+    this.opts = { reaction: 0.8, rtb: true, ...opts };
     this.agLoadout = this.agLeft() > 0;
-    const h = rearmHome(runner.def);
+    const h = homeBase(runner.def);
     this.home = new Vector3(h.x, 0, h.z);
     const wp = runner.currentWaypoint;
     this.air = new PlayerBot({ home: this.home.clone().setY(3000), cap: wp ? wp.position.clone() : null, reaction: this.opts.reaction, rtbWhenWinchester: true });
@@ -273,16 +277,16 @@ export class MissionBot {
     this.air.opts.rtbWhenWinchester = !guns;
     if (guns) return bandit ? this.fight('GUNS', dt) : this.huntDrone(dt);
 
-    // 3. Winchester / bingo: rearm at home (a gun kill of an overshooting bandit is still taken)
+    // 3. Winchester / bingo: go home, out of the fight (a gun kill of an overshooting bandit is still taken)
     const agUseless = ag === 0 || (surfaceNeeded && !surface);
     const out = (aa === 0 && (airNeeded || (bandit && bandit.d < 25_000))) || (surfaceNeeded && agUseless && aa === 0) || (surfaceNeeded && ag === 0 && !airNeeded);
-    if (this.opts.rearm && (out || fuelLow)) {
+    if (this.opts.rtb && (out || fuelLow)) {
       if (bandit && bandit.d < 1_500 && aa === 0 && p.gunAmmo > 0) {
         _h.subVectors(bandit.e.position, p.position);
         _q.set(0, 0, -1).applyQuaternion(p.quaternion);
         if (_q.dot(_h) > 0.85 * _h.length()) return this.fight('GUNS', dt);
       }
-      return this.rearmLeg(dt);
+      return this.homeLeg(dt);
     }
 
     // 3b. a raid to stop (intercept objective): bombers first, fighters only when on top of us
@@ -532,7 +536,7 @@ export class MissionBot {
     this.pilot.fly(p, this.world, dt);
   }
 
-  private rearmLeg(dt: number): void {
+  private homeLeg(dt: number): void {
     const p = this.p;
     const home = this.home;
     this.clearTriggers();
@@ -541,7 +545,7 @@ export class MissionBot {
     const low = this.sa10Threat();
     const it = this.pilot.begin(p, low ? 40 : 150);
     if (d > 3_500) {
-      // head home; start down so we arrive below the rearm gate (under the SA-10: on the deck)
+      // head home; start down early (under the SA-10: on the deck)
       _h.set(home.x - p.position.x, 0, home.z - p.position.z);
       turnLimited(p, _h, 70);
       const alt = low ? ground + 50 : d > 20_000 ? Math.max(3_000, ground + 1_000) : ground + 600;
@@ -549,7 +553,7 @@ export class MissionBot {
       it.speed = 260;
       it.gMax = 4;
     } else {
-      // circle the field inside the rearm gate
+      // circle the field
       _h.set(p.position.x - home.x, 0, p.position.z - home.z).normalize();
       const tx = -_h.z * this.orbitSign;
       const tz = _h.x * this.orbitSign;
@@ -560,7 +564,7 @@ export class MissionBot {
       it.gMax = 3;
     }
     it.gain = 1;
-    this.mode = 'REARM';
+    this.mode = 'RTB';
     this.pilot.fly(p, this.world, dt);
   }
 
@@ -717,7 +721,6 @@ export interface PlaythroughResult {
   reason: string;
   t: number;
   alive: boolean;
-  rearms: number;
   playerKills: number;
   friendlyLost: number;
   objectives: string;
@@ -770,7 +773,6 @@ export function runPlaythrough(
   const bot = new MissionBot(runner, world, p, opts.bot);
   const log: string[] = [];
   const T = () => world.time.toFixed(0).padStart(3);
-  let rearms = 0;
   let friendlyLost = 0;
   let playerKills = 0;
   const launches: PlaythroughResult['launches'] = [];
@@ -780,7 +782,6 @@ export function runPlaythrough(
     launches.push({ t: world.time, weapon: e.missile.def.id, targetId: e.targetId, group: (tgt as { groupId?: string } | undefined)?.groupId ?? null });
   });
   events.on('hud:message', (e) => {
-    if (e.text.startsWith('REARMED')) rearms++;
     if (opts.log) log.push(`${T()} HUD ${e.text}`);
   });
   events.on('destroyed', (e) => {
@@ -840,7 +841,6 @@ export function runPlaythrough(
     reason: result?.reason ?? '',
     t: Math.round(world.time),
     alive: p.alive,
-    rearms,
     playerKills,
     friendlyLost,
     objectives: runner.objectives.map((o) => `${o.primary ? 'P' : 'b'}:${o.id}=${o.state}${o.progress ? ` ${o.progress.done}/${o.progress.total}` : ''}`).join(' '),

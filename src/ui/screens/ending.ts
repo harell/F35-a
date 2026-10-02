@@ -15,7 +15,7 @@ import { CAMPAIGNS, campaignOf, loadProgress } from '../../missions';
 
 const EPILOGUE = [
   'The last enemy battalion on the Hauraki Gulf islands has surrendered. Rangitoto, Motutapu and Waiheke are back in New Zealand hands.',
-  'For twelve sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands, the Sky Tower still lights the city, and the ferries are running again.',
+  'For ten sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands, the Sky Tower still lights the city, and the ferries are running again.',
   'Operation Southern Cross is complete. Welcome home, Lightning.',
 ];
 

@@ -8,7 +8,7 @@
  *    hit: the sim reports the impact ('drone:impact' with the landmark) and this watch registers it.
  *  - The second enemy hit brings it down: the mission fails with REASONS.skytowerLost.
  *  - The player bringing it down (one bomb or missile, whatever its damage) is an immediate failure
- *    in every mode (survival ends the run): AWACS calls check fire, the HUD flags it, and the runner
+ *    in every mode: AWACS calls check fire, the HUD flags it, and the runner
  *    fails with REASONS.skytower while the collapse plays on.
  *  - Free flight (script.freeFlight) never fails over it: the tower comes down and the sortie goes on.
  */
@@ -72,9 +72,6 @@ export class LandmarkWatch {
     s.hud('SKY TOWER DESTROYED', 'bad', 4);
     if (s.state !== 'running' || s.script.freeFlight) return;
     const reason = byPlayer ? REASONS.skytower : REASONS.skytowerLost;
-    if (s.script.survival) {
-      const n = s.waves;
-      this.fail(`${reason} — survived ${n} wave${n === 1 ? '' : 's'}`);
-    } else this.fail(reason);
+    this.fail(reason);
   }
 }

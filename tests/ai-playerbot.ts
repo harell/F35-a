@@ -547,8 +547,8 @@ export function runBalanceMission(
     /** Randomise red spawn positions (default true). */
     jitter?: boolean;
     /**
-     * Gun-only probe: the player's stores are emptied every step (so a mission rearm adds no
-     * missiles), the pilot presses on with the gun (as 'committed') and the run doesn't end as
+     * Gun-only probe: the player's stores are emptied every step (no missile is ever fired),
+     * the pilot presses on with the gun (as 'committed') and the run doesn't end as
      * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02), on Pilot: over a flat sea (seeds
      * 0-15) the bot fires the gun in 5 c01 runs (3 gun kills) and 1 ia_dogfight_auckland run (6
      * rounds); over the real Auckland terrain (seeds 0-11) in 2 c01 runs (1 gun kill) and 1

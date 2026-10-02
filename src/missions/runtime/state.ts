@@ -1,6 +1,6 @@
 /**
  * F35-A — mission runtime state shared by the MissionRunner and its helper modules
- * (spawner, conditions, objectives, AWACS, hints, callouts, survival).
+ * (spawner, conditions, objectives, AWACS, hints, callouts).
  *
  * Plain data + tiny helpers; all logic lives in the helper modules.
  */
@@ -85,9 +85,8 @@ export interface SortieStats {
   longShots: number;
   /** Player missiles that ended decoyed / self-destructed / in the dirt. */
   misses: number;
-  /** Player went Winchester / was rearmed at Whenuapai. */
+  /** Times the player went Winchester (out of missiles and bombs). */
   winchester: number;
-  rearms: number;
   /** Flew under the Harbour Bridge. */
   bridge: boolean;
   /** Player gun kills. */
@@ -108,7 +107,6 @@ export function newSortieStats(): SortieStats {
     longShots: 0,
     misses: 0,
     winchester: 0,
-    rearms: 0,
     bridge: false,
     gunKills: 0,
     drivenOff: 0,
@@ -164,8 +162,6 @@ export class MissionState {
   civilianKills = 0;
   /** Of which civil ships (container ships, cruise liners). */
   civilianShipKills = 0;
-  /** Survival waves cleared. */
-  waves = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */
   scriptedStrike = false;
 

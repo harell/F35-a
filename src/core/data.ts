@@ -36,7 +36,7 @@ export const TEST_HOOKS: boolean = import.meta.env.DEV || import.meta.env.VITE_T
 
 /**
  * Bingo fuel: the share of internal fuel at which the jet must head home. One value for the sim's BINGO
- * warning, the mission runner's RTB call (`src/missions/runtime/rearm.ts`, kept equal by
+ * warning, the mission runner's bingo call (`src/missions/runtime/winchester.ts`, kept equal by
  * tests/hud-fuel.test.ts) and the HUD's fuel cues (PCD FUEL page, HMD fuel readout).
  */
 export const BINGO_FRACTION = 0.15;

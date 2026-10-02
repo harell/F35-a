@@ -83,4 +83,4 @@ byte for byte apart from that download's timestamp.
 When the file is missing (offline without a cache, an old browser without `DecompressionStream`), the four airfields
 fall back to the template layout (`buildAirbase` in `src/world/scenery/airbase.ts`) laid on their **real** main
 runways from `src/core/airfields.ts`, with the real secondary runways (Whenuapai 08/26) as extra strips. Spawn points,
-rearm, civil traffic and approaches stay correct either way, because they use that table and never the baked file.
+civil traffic and approaches stay correct either way, because they use that table and never the baked file.

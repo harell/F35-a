@@ -398,7 +398,7 @@ export type CreateMissionRunner = (
 
 export interface InstantActionOptions {
   /** 'stroll' is A Stroll in the Park: free flight with no hostiles (enemyType / enemyCount unused). */
-  mode: 'stroll' | 'dogfight' | 'sam_gauntlet' | 'strike' | 'defend' | 'survival';
+  mode: 'stroll' | 'dogfight' | 'sam_gauntlet' | 'strike' | 'defend';
   theater: TheaterId;
   timeOfDay: TimeOfDay;
   weather: Weather;

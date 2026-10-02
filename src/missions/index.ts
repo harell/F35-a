@@ -35,7 +35,7 @@ export { missionGunAmmo } from './runtime/gunAmmo';
 export { MEDALS, MEDAL_LIST, type MedalDef, type MedalId } from './runtime/debrief';
 export type { MissionScript } from './schema';
 
-/** Operation Southern Cross — 12 missions over Auckland, in order. */
+/** Operation Southern Cross — 10 missions over Auckland, in order (ids c01–c06, c08–c11: c07 and c12 were removed with rearming, issue #63). */
 export const CAMPAIGN: MissionDef[] = [...CAMPAIGN_PART1, ...CAMPAIGN_PART2];
 
 /** Training missions (always unlocked). */
@@ -121,7 +121,7 @@ export function findMission(id: string): MissionDef | null {
   return TRAINING.find((m) => m.id === id) ?? null;
 }
 
-const IA_MODES: InstantActionOptions['mode'][] = ['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'];
+const IA_MODES: InstantActionOptions['mode'][] = ['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend'];
 const THEATERS: TheaterId[] = ['auckland'];
 
 /** FNV-1a hash of a string (32-bit, unsigned): a stable seed from a mission id. */

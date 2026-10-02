@@ -5,7 +5,7 @@
  * Missions: g01 "Buzz Kill", the Shahed swarm on the Sky Tower (#78); g02 "Straight Outta
  * Hauraki" (#82, irgcHauraki.ts), the escort through the boat swarm and the campaign's finale.
  * Mission ids are g01, g02, … ("Gulf"), next to Southern Cross's
- * c01–c12; every id must stay unique across campaigns (progress is keyed by mission id).
+ * c01–c11; every id must stay unique across campaigns (progress is keyed by mission id).
  */
 import { AKL } from '../../core/auckland';
 import type { CampaignDef, MissionDef } from '../../core/contracts';
@@ -133,8 +133,6 @@ export const G01: MissionDef = mission({
   // the gun is required (10 drones, at most 8 missiles): more than the real 180 rounds (#77)
   gunAmmo: { recruit: 400, pilot: 400, veteran: 380, ace: 360 },
   script: {
-    // 3.6 minutes against the swarm: no time to rearm, Winchester means the gun (playtest 1.3-j)
-    noRearm: true,
     autoHints: true,
     parTime: 210,
     groups: [

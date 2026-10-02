@@ -21,7 +21,6 @@ const MODES: { id: InstantActionOptions['mode']; title: string; desc: string; ic
   { id: 'sam_gauntlet', title: 'SAM Gauntlet', desc: 'Punch through layered SAM belts', icon: 'sam' },
   { id: 'strike', title: 'Strike', desc: 'Hit defended ground targets and get home', icon: 'bomb' },
   { id: 'defend', title: 'Defend', desc: 'Stop a strike on the Wiri fuel terminal', icon: 'shield' },
-  { id: 'survival', title: 'Survival', desc: 'Endless waves — how long can you last?', icon: 'waves' },
 ];
 
 /**
@@ -48,6 +47,8 @@ export function parseInstantSetup(raw: string | null): InstantActionOptions {
     if (raw) {
       const v = { ...DEFAULTS, ...JSON.parse(raw) } as InstantActionOptions;
       if (!PLAYABLE.includes(v.theater)) v.theater = 'auckland';
+      // a save from before Survival was removed (issue #63) falls back to the default mode
+      if (!MODES.some((m) => m.id === v.mode)) v.mode = DEFAULTS.mode;
       v.enemyCount = Math.max(1, Math.min(8, Math.round(v.enemyCount) || 4));
       return v;
     }
@@ -262,7 +263,7 @@ function cityPicker(value: TheaterId, onChange: (v: TheaterId) => void): HTMLEle
 /**
  * Enemy-count note from the live DIFFICULTIES numbers: dogfight and strike flights scale their
  * total by enemyCountScale (missions/content/instant.ts script.scaleEnemyTotal); the gauntlet's
- * number is its SAM sites and survival's is the first wave.
+ * number is its SAM sites.
  */
 export function countNote(): string {
   const scales = DIFFICULTY_ORDER.map((id) => DIFFICULTIES[id]).filter(Boolean);
@@ -270,5 +271,5 @@ export function countNote(): string {
   const hi = scales[scales.length - 1];
   const scaled = scales.some((d) => d.enemyCountScale !== 1);
   if (!scaled || !lo || !hi) return 'Exact number of bandits';
-  return `Dogfight/strike: ×${lo.enemyCountScale} on ${lo.label} … ×${hi.enemyCountScale} on ${hi.label} · Gauntlet: SAM sites · Defend: strikers + escort · Survival: first wave`;
+  return `Dogfight/strike: ×${lo.enemyCountScale} on ${lo.label} … ×${hi.enemyCountScale} on ${hi.label} · Gauntlet: SAM sites · Defend: strikers + escort`;
 }
