@@ -70,6 +70,8 @@ import {
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
+import { initFlight } from '../sim/flight/FlightModel';
+import { AKL } from '../core/auckland';
 import { FlowInterrupt } from './flow';
 import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
 
@@ -988,6 +990,20 @@ export class Game {
         const hit = [...w.aircraft, ...w.sams, ...w.ground].filter((e) => e.alive && (typeof target === 'number' ? e.id === target : e.groupId === target));
         for (const e of hit) forceDestroy(w, e, byPlayer ? (w.player?.id ?? null) : null);
         return hit.length;
+      },
+      /**
+       * Put the player's jet at (x, z) and `alt` m MSL, flying level on `headingDeg` (0 = north) at
+       * `speed` m/s: trimmed by the flight model, so no overstress (playtest retro: every reviewer
+       * hand-wrote this). Pass a place name from AKL (e.g. 'skytower') for x to fly over it.
+       */
+      place: (x: number | string, alt = 600, z = 0, headingDeg = 0, speed = 150) => {
+        const p = this.session?.world.player;
+        if (!p) return false;
+        const at = typeof x === 'string' ? AKL[x] : { x, z };
+        if (!at) throw new Error(`no place ${x}`);
+        p.position.set(at.x, alt, at.z);
+        initFlight(p, { heading: (headingDeg * Math.PI) / 180, speed });
+        return true;
       },
       /** Pin the camera at `pos` looking at `look` (scenery checks without a driver); null hands it back to the rig. */
       camera: (pos: [number, number, number] | null, look: [number, number, number] = [0, 0, 0]) => {
