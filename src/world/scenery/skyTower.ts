@@ -247,7 +247,7 @@ const _q = new Quaternion();
  */
 export class SkyTowerVisual {
   readonly group = new Group();
-  /** Bright tower lights near / above the water, for the harbour reflections (empty when down). */
+  /** Bright tower lights near / above the water, for the harbour reflections (they go out when it falls). */
   readonly reflectionSources: ReflectionSource[] = [];
   private readonly pieces: Pieces;
   private ruin: Mesh | null = null;
