@@ -419,7 +419,10 @@ export function runBalanceMission(
     /**
      * Gun-only probe: the player's stores are emptied every step (so a mission rearm adds no
      * missiles), the pilot presses on with the gun (as 'committed') and the run doesn't end as
-     * 'rtb' at home. Answers "is the gun useless or dominant" with a sweep.
+     * 'rtb' at home. Counts `gunRounds`. Note (2026-10-02): the bot tracks and kills bandits in
+     * trail, and fires in real fights on Recruit, but on Pilot it still loses the fights it would
+     * need to win to get a gun shot (0 rounds in c01 / ia_dogfight_auckland), so a Pilot sweep
+     * measures the bot's dogfighting more than the gun.
      */
     gunOnly?: boolean;
     onStep?: (world: SimWorld, p: AircraftEntity, bot: PlayerBot) => void;
