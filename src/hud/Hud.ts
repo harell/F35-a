@@ -25,7 +25,7 @@ import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, dra
 import { HudState, makeFrame, type HudMode } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
-import { Vignettes, drawHint, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom } from './hmd/overlays';
+import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
 import { drawPip, pipView, resetPip, stepPip } from './hmd/pip';
@@ -427,13 +427,21 @@ export const createHud: CreateHud = (canvas, events) => {
       // top-left column: objectives (briefly), damage, mission hint — not in the missile / target cams
       // (the fight fills the frame there)
       const colTop = colY;
+      let objHold = false;
       if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') {
-        colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
-        colY = drawDamage(f, L.colX, colY);
         // (never down onto the weapon block, which rises above the throttle cluster on short screens)
         const hintMax = hmd && Number.isFinite(zoneExt.wpnTop) ? Math.min(L.colBottom, zoneExt.wpnTop - 10 * L.u) : L.colBottom;
+        // a lesson's hint outranks the objectives summary: when both don't fit under the radio, the
+        // summary waits (its time held) until the hint has gone (playtest 2026-10-02, 4.2-c)
+        if (ctx.mission?.def?.kind === 'training') {
+          const need = hintHeight(f, L.colW);
+          objHold = need > 0 && drawObjectives(f, L.colX, colY, false, L.colW, 6, true) + need > hintMax;
+        }
+        if (!objHold) colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
+        colY = drawDamage(f, L.colX, colY);
         colY = drawHint(f, L.colX, colY + 2 * L.u, L.colW, hintMax);
       } else colY = drawDamage(f, L.colX, colY);
+      st.objHold = objHold;
       zoneExt.colBottom = colY > colTop + 1 ? colY : NaN;
 
       // target camera window chrome (the 3D view itself is rendered by Game → TargetCam)

@@ -381,7 +381,7 @@ export function objectiveLines(o: { label: string; state: string; progress?: { d
  * Compact objective summary (top-left column), shown only for a few seconds at mission start and after
  * an objective changes (the full list lives on the pause screen / tactical map). Returns the next free y.
  */
-export function drawObjectives(f: HudFrame, x: number, y: number, force = false, maxW = f.L.colW, maxLines = 7): number {
+export function drawObjectives(f: HudFrame, x: number, y: number, force = false, maxW = f.L.colW, maxLines = 7, measure = false): number {
   const { pen, pal, L, st, ctx } = f;
   const objs = ctx.mission?.objectives;
   if (!objs || objs.length === 0) return y;
@@ -391,8 +391,12 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
   const size = 11;
   const lh = 13.5 * u;
   const maxChars = Math.max(14, Math.floor(maxW / pen.charWidth(size)));
-  pen.g.globalAlpha = show;
-  pen.text('OBJECTIVES', x, y, pal.dim, 10, 'left');
+  // measure: where the summary would end, without drawing it
+  const draw = !measure;
+  if (draw) {
+    pen.g.globalAlpha = show;
+    pen.text('OBJECTIVES', x, y, pal.dim, 10, 'left');
+  }
   y += 14 * u;
   let used = 0;
   let bonusHead = false;
@@ -413,7 +417,7 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
       if (used + head + lines.length > maxLines) continue;
       if (head) {
         bonusHead = true;
-        if (!f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text('BONUS', x, y, pal.dim, 10, 'left');
+        if (draw && !f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text('BONUS', x, y, pal.dim, 10, 'left');
         y += lh;
         used++;
       }
@@ -421,14 +425,14 @@ export function drawObjectives(f: HudFrame, x: number, y: number, force = false,
       const col = o.state === 'complete' ? pal.good : o.state === 'failed' ? (primary ? pal.danger : pal.dim) : o.state === 'active' ? pal.main : pal.dim;
       for (const l of lines) {
         // (a line that would print over the target box / pipper / jet is left out)
-        if (!f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text(l, x, y, col, size, 'left');
+        if (draw && !f.occ.hits(x, y - lh / 2, x + maxW, y + lh / 2, 1)) pen.text(l, x, y, col, size, 'left');
         y += lh;
       }
       used += lines.length;
       if (used >= maxLines) break;
     }
   }
-  pen.g.globalAlpha = 1;
+  if (draw) pen.g.globalAlpha = 1;
   return y + 4 * u;
 }
 
@@ -441,16 +445,32 @@ const HINT_PAGE = 4;
  * Mission / tutorial hint: a left-aligned block in the top-left column (outside the pitch-ladder window
  * and away from the fight), max 3 lines per page, long hints page every few seconds.
  */
+const HINT_SIZE = 11.5;
+
+/** The hint's lines in a column `maxW` wide (wrap() caches them). */
+function hintLines(f: HudFrame, hint: string, maxW: number): string[] {
+  const u = f.L.u;
+  // (room at the right end for the "1/2" page counter: it never sits on the last word)
+  const maxChars = Math.max(16, Math.floor((maxW - 16 * u - 24 * u) / f.pen.charWidth(HINT_SIZE)));
+  return wrap(hint, maxChars);
+}
+
+/** Height drawHint needs for the current hint (one page, at most 3 lines), plus its gaps; 0 = no hint. */
+export function hintHeight(f: HudFrame, maxW = f.L.colW): number {
+  const hint = f.ctx.mission?.hint;
+  if (!hint || !f.ctx.settings.hints) return 0;
+  const u = f.L.u;
+  return Math.min(3, hintLines(f, hint, maxW).length) * 15 * u + 8 * u + 10 * u;
+}
+
 export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMax = f.L.colBottom): number {
   const hint = f.ctx.mission?.hint;
   if (!hint || !f.ctx.settings.hints) return y;
   const { pen, pal, L, st } = f;
   const u = L.u;
-  const size = 11.5;
+  const size = HINT_SIZE;
   const cw = pen.charWidth(size);
-  // (room at the right end for the "1/2" page counter: it never sits on the last word)
-  const maxChars = Math.max(16, Math.floor((maxW - 16 * u - 24 * u) / cw));
-  const lines = wrap(hint, maxChars);
+  const lines = hintLines(f, hint, maxW);
   if (hint !== hintRef) {
     hintRef = hint;
     hintStart = st.clock;

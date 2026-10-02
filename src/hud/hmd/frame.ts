@@ -46,6 +46,8 @@ export class HudState {
   warnAge = 99;
   /** Seconds left to show the objective summary. */
   objShow = 8;
+  /** The summary is held back (a lesson's hint has the column): its time doesn't run. */
+  objHold = false;
   /** Objective that changed last (highlighted in the summary) and when. */
   objChangedId = '';
   /** Sticky DLZ scale (m). */
@@ -102,7 +104,7 @@ export class HudState {
     this.brevityAge += dt;
     this.warnAge += dt;
     this.titleAge += dt;
-    this.objShow = Math.max(0, this.objShow - dt);
+    if (!this.objHold) this.objShow = Math.max(0, this.objShow - dt);
     this.radio.update(dt);
     this.messages.update(dt);
     this.kills.update(dt);
@@ -121,6 +123,7 @@ export class HudState {
     this.brevityAge = 99;
     this.warnAge = 99;
     this.objShow = 8;
+    this.objHold = false;
     this.objChangedId = '';
     this.dlzScale = 0;
     this.threats.reset();
@@ -136,6 +139,7 @@ export class HudState {
     this.brevityAge = 99;
     this.warnAge = 99;
     this.objShow = 8;
+    this.objHold = false;
     this.objChangedId = '';
     this.dlzScale = 0;
     this.radio.clear();
