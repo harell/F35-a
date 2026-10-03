@@ -108,9 +108,13 @@ export function outOfFightAction(o: { aa: number; gunAmmo: number; banditD: numb
   return d < OUT_EXTEND_RANGE || o.hot ? 'extend' : 'home';
 }
 
-/** Crippled (health below CRIPPLED_FRACTION) with a live friendly aircraft left to finish the job: stop attacking, egress. */
-export function shouldEgress(p: AircraftEntity, friendliesAlive: number): boolean {
-  return p.health < CRIPPLED_FRACTION * p.maxHealth && friendliesAlive > 0;
+/**
+ * Crippled (health below CRIPPLED_FRACTION): stop attacking and egress, so a sweep measures the
+ * mission and not a bot flying a wreck into the defences. There is no rearm or repair to go home
+ * for: the wingmen finish the job, or nobody does (the run then fails or hangs, not "Crashed").
+ */
+export function shouldEgress(p: AircraftEntity): boolean {
+  return p.health < CRIPPLED_FRACTION * p.maxHealth;
 }
 
 export interface MissionBotOptions {
@@ -323,11 +327,11 @@ export class MissionBot {
 
     // 3. Winchester / bingo / crippled: out of the fight, home (there is no rearming, #63). A bandit
     //    close by is dealt with first — shot with what's left, gunned in a merge, or run from low —
-    //    instead of turning a straight back on it (playtest 2.1-i). A crippled jet with friendlies
-    //    left to finish the job stops attacking and egresses (2.1-d)
+    //    instead of turning a straight back on it (playtest 2.1-i). A crippled jet stops attacking and
+    //    egresses, leaving the job to the wingmen (2.1-d)
     const agUseless = ag === 0 || (surfaceNeeded && !surface);
     const out = (aa === 0 && (airNeeded || (bandit && bandit.d < OUT_THREAT_RANGE))) || (surfaceNeeded && agUseless && aa === 0) || (surfaceNeeded && ag === 0 && !airNeeded);
-    const crippled = shouldEgress(p, this.friendliesAlive());
+    const crippled = shouldEgress(p);
     if (this.opts.rtb && (out || fuelLow || crippled)) {
       // (only a fighter is a threat: a drone, bomber or AWACS left behind is no reason to turn round)
       const threat = this.nearestBandit(true);
@@ -614,13 +618,6 @@ export class MissionBot {
     it.gain = 1;
     this.mode = crippled ? 'CRIPPLED' : 'RTB';
     this.pilot.fly(p, this.world, dt);
-  }
-
-  /** Live friendly F-35s other than the player (wingmen, packages) that can still finish the job. */
-  private friendliesAlive(): number {
-    let n = 0;
-    for (const a of this.world.aircraft) if (a.alive && a !== this.p && a.team === this.p.team && a.type === 'f35a') n++;
-    return n;
   }
 
   /**

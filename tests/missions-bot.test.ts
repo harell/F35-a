@@ -206,12 +206,10 @@ describe('#63: out of the fight (no rearming) — Winchester with a bandit close
     expect(a(0, 180, 20_000)).toBe('home');
   });
 
-  it('shouldEgress: below a quarter of its health, and only with a friendly F-35 left to finish the job', () => {
-    const p = { health: 20, maxHealth: 100 } as AircraftEntity;
+  it('shouldEgress: below a quarter of its health', () => {
     expect(CRIPPLED_FRACTION).toBe(0.25);
-    expect(shouldEgress(p, 1)).toBe(true);
-    expect(shouldEgress(p, 0)).toBe(false);
-    expect(shouldEgress({ ...p, health: 30 } as AircraftEntity, 1)).toBe(false);
+    expect(shouldEgress({ health: 20, maxHealth: 100 } as AircraftEntity)).toBe(true);
+    expect(shouldEgress({ health: 30, maxHealth: 100 } as AircraftEntity)).toBe(false);
   });
 
   /** ia_sam_gauntlet_auckland (stub AI, flat land): a MiG-29 `R` m ahead of the bot, nose on it; the bot's modes over `secs` s. */
@@ -254,7 +252,7 @@ describe('#63: out of the fight (no rearming) — Winchester with a bandit close
     expect([...r.modes]).toEqual(['AIR']);
   });
 
-  it('crippled (hp 20) on a strike: egresses when a wingman is left, presses on when it is alone', () => {
+  it('crippled (hp 20) on a strike: stops attacking and egresses, with or without a wingman left', () => {
     for (const wingman of [true, false]) {
       const h = harness(missionById('ia_strike_auckland')!);
       const p = h.world.player!;
@@ -268,8 +266,7 @@ describe('#63: out of the fight (no rearming) — Winchester with a bandit close
         modes.add(bot.mode);
         h.run(0.05);
       }
-      if (wingman) expect([...modes], 'with a wingman').toEqual(['CRIPPLED']);
-      else expect(modes.has('CRIPPLED'), [...modes].join()).toBe(false);
+      expect([...modes], wingman ? 'with a wingman' : 'alone').toEqual(['CRIPPLED']);
     }
   });
 });
