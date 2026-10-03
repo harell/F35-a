@@ -54,8 +54,8 @@ import { createInput } from '../input/Input';
 import { createUi } from '../ui/Ui';
 import { tag as analyticsTag, track, upgrade } from '../analytics/clarity';
 import {
-  CAMPAIGN,
   CAMPAIGNS,
+  PLAYABLE_CAMPAIGNS,
   TRAINING,
   buildInstantMission,
   createMissionRunner,
@@ -238,7 +238,7 @@ export class Game {
       const { conditions, invalid } = testConditions(this.params, TEST_HOOKS);
       if (invalid.length) console.warn(`[f35] ignored ${invalid.join(', ')}`);
       if ((conditions.timeOfDay || conditions.weather) && !missionId.startsWith('ia_')) console.warn('[f35] tod / weather apply to Instant Action ids (ia_<mode>_<theatre>) only');
-      const def = missionById(missionId, conditions) ?? CAMPAIGN[0];
+      const def = missionById(missionId, conditions) ?? PLAYABLE_CAMPAIGNS[0].missions[0];
       const loadout = (this.params.get('loadout') as LoadoutId | null) ?? def.recommendedLoadout;
       await this.flow.run(() => (autostart ? this.missionFlow(def, loadout) : this.missionFlow(def)));
     }
@@ -295,10 +295,17 @@ export class Game {
     }
   }
 
-  /** Campaign picker → that campaign's mission list; Back on the list returns to the picker. */
+  /**
+   * Campaign picker → that campaign's mission list; Back on the list returns to the picker. Only playable
+   * campaigns are offered (Southern Cross is disabled); with just one, its mission list opens directly.
+   */
   private async campaignMenu(): Promise<void> {
+    if (PLAYABLE_CAMPAIGNS.length === 1) {
+      await this.pickAndFly(() => this.ui.showCampaign(PLAYABLE_CAMPAIGNS[0], this.progress));
+      return;
+    }
     for (;;) {
-      const campaign = await this.flow.ask(this.ui.showCampaigns(CAMPAIGNS, this.progress));
+      const campaign = await this.flow.ask(this.ui.showCampaigns(PLAYABLE_CAMPAIGNS, this.progress));
       if (!campaign) return;
       if ((await this.pickAndFly(() => this.ui.showCampaign(campaign, this.progress))) === 'menu') return;
       this.progress = loadProgress();

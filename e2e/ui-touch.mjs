@@ -7,8 +7,8 @@
  *         TGT/WPN/RADAR, CAM tap + long-press padlock, look drag, tap designation in the target (padlock)
  *         view, pause → resume, then the fly() hook from the pause menu → c02's pause menu → quit → main menu.
  * menus:  first launch (fresh context): New pilot card → Start training → Training list → briefing → back
- *         → Training list; then splash → main menu (Not now on the card) → settings round-trip → campaign
- *         picker (both campaigns listed) → Southern Cross
+ *         → Training list; then splash → main menu (Not now on the card) → settings round-trip → Campaign
+ *         (one playable campaign since Southern Cross was disabled, so no picker) → the IRGC campaign's list
  *         → briefing → back → campaign list → briefing (tabs, loadout) → FLY → pause → quit → main menu,
  *         instant action → briefing → back → setup → back → main menu, credits, fly() from the main
  *         menu → quit → main menu.
@@ -454,23 +454,27 @@ async function menus() {
   const diff = await page.evaluate(() => window.__f35.game.settings.difficulty);
   check(diff === 'ace', 'settings resolve with the edited object and the game applies it', diff);
 
-  // campaign → campaign picker → Southern Cross → briefing
+  // campaign → the IRGC campaign's mission list (Southern Cross is disabled, so there is no picker) → briefing
   await page.tap('.mm-item[data-id="campaign"]');
-  await page.waitForSelector('.scr-campaigns:not(.is-leaving) .cp-item');
-  const campaigns = await page.evaluate(() => [...document.querySelectorAll('.scr-campaigns .cp-item')].map((b) => b.dataset.id));
-  check(campaigns.includes('southern_cross') && campaigns.includes('irgc'), 'the campaign picker lists both campaigns', campaigns.join(','));
-  await page.tap('.scr-campaigns .cp-item[data-id="southern_cross"]');
   await page.waitForSelector('.scr-missions:not(.is-leaving) .mcard');
+  check(!(await page.$('.scr-campaigns:not(.is-leaving)')), 'one playable campaign: Campaign opens its mission list, no picker');
+  const missionCards = await page.evaluate(() => document.querySelectorAll('.scr-missions:not(.is-leaving) .mcard').length);
+  check(missionCards === 2, 'the list is the IRGC campaign (g01, g02), not the disabled Southern Cross', String(missionCards));
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-3-campaign.png' });
   const row = await rectOf(page, '.ml-row');
+  const scrollable = await page.evaluate(() => {
+    const r = document.querySelector('.ml-row');
+    return r.scrollWidth > r.clientWidth + 40;
+  });
   const sl0 = await page.evaluate(() => document.querySelector('.ml-row').scrollLeft);
   await t.down(2, row.x + row.w - 60, row.cy);
   await t.move(2, row.x + 60, row.cy, 8);
   await t.up(2);
   await page.waitForTimeout(500);
   const sl1 = await page.evaluate(() => document.querySelector('.ml-row').scrollLeft);
-  check(Math.abs(sl1 - sl0) > 40, 'mission cards scroll with a horizontal swipe (and the swipe is not a tap)', `scrollLeft ${Math.round(sl0)} → ${Math.round(sl1)}`);
+  // two cards may fit the row without scrolling: then the check is only that the swipe isn't a tap
+  if (scrollable) check(Math.abs(sl1 - sl0) > 40, 'mission cards scroll with a horizontal swipe (and the swipe is not a tap)', `scrollLeft ${Math.round(sl0)} → ${Math.round(sl1)}`);
   check(!!(await page.evaluate(() => document.querySelector('.scr-missions:not(.is-leaving)'))), 'swiping over a card does not open it');
   const lockedCount = await page.evaluate(() => document.querySelectorAll('.mcard.st-locked').length);
   if (lockedCount) {

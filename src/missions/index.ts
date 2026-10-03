@@ -41,16 +41,24 @@ export const CAMPAIGN: MissionDef[] = [...CAMPAIGN_PART1, ...CAMPAIGN_PART2];
 /** Training missions (always unlocked). */
 export const TRAINING: MissionDef[] = TRAINING_MISSIONS;
 
-/** Operation Southern Cross, the first campaign (its missions are CAMPAIGN). */
+/**
+ * Operation Southern Cross, the first campaign (its missions are CAMPAIGN). Disabled (owner's decision,
+ * 2026-10-03): its code, missions and tests stay, but players don't see it and playtests don't cover it
+ * until it is enabled again. To enable it, delete `enabled: false`.
+ */
 export const SOUTHERN_CROSS: CampaignDef = {
   id: 'southern_cross',
   name: 'Operation Southern Cross',
   description: 'Drive the hostile force off the Hauraki Gulf islands and defend Auckland',
   missions: CAMPAIGN,
+  enabled: false,
 };
 
-/** Every campaign, in menu order. Each has its own unlock chain and ending. */
+/** Every campaign, in menu order, disabled ones included. Each has its own unlock chain and ending. */
 export const CAMPAIGNS: CampaignDef[] = [SOUTHERN_CROSS, IRGC_CAMPAIGN];
+
+/** The campaigns the player sees (CampaignDef.enabled not false), in menu order. */
+export const PLAYABLE_CAMPAIGNS: CampaignDef[] = CAMPAIGNS.filter((c) => c.enabled !== false);
 
 /** Each campaign's ordered mission list (what progress.ts unlocks along). */
 const chains = (): MissionDef[][] => CAMPAIGNS.map((c) => c.missions);
@@ -84,7 +92,7 @@ export function skipMission(p: CampaignProgress, id: string): CampaignProgress {
 
 /**
  * What the debrief's NEXT button flies: the next mission of the same campaign, the next training
- * lesson (the last lesson leads into Southern Cross's first mission, which is always unlocked), or
+ * lesson (the last lesson leads into the first playable campaign's first mission, which is always unlocked), or
  * null after a campaign's last mission (never into another campaign) / for Instant Action ids.
  */
 export function nextMissionAfter(id: string): MissionDef | null {
@@ -95,7 +103,7 @@ export function nextMissionAfter(id: string): MissionDef | null {
   }
   const t = TRAINING.findIndex((m) => m.id === id);
   if (t < 0) return null;
-  return t + 1 < TRAINING.length ? TRAINING[t + 1] : (CAMPAIGN[0] ?? null);
+  return t + 1 < TRAINING.length ? TRAINING[t + 1] : (PLAYABLE_CAMPAIGNS[0]?.missions[0] ?? null);
 }
 
 /**

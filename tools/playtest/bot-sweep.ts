@@ -4,11 +4,11 @@
  * (~0.5–3 s per run). The fast way to answer "is this mission winnable / too easy / did my change
  * break it" before spending minutes per mission in Playwright.
  *
- *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=c01,c04|campaign|irgc|campaigns|training|all]
+ *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=g01,g02|irgc|campaigns|training|all|southern_cross]
  *       [--diffs=recruit,pilot,veteran,ace] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
  *       [--loadout=strike_sdb2] [--log] [--nojitter] [--park[=start|far] | --gunonly]
  *
- * Defaults: every campaign mission, pilot, 3 seeds, all cores. Prints one line per run and a
+ * Defaults: every playable campaign mission and training (not the disabled Southern Cross), pilot, 3 seeds, all cores. Prints one line per run and a
  * win-rate table per mission × difficulty; --json writes every PlaythroughResult (minus the raw
  * MissionResult) for the playtest ledger. --jobs splits the runs over child processes.
  *   --loadout   fly this loadout instead of each mission's recommended one; missions that don't
@@ -38,7 +38,7 @@ import '../../tests/linz-setup';
 import { runPlaythrough, type PlaythroughResult } from '../../tests/missions-bot';
 import { MAX_DEAD_STRETCH, deadStretchText, longestDeadStretch, type DeadStretch } from '../../tests/missions-pacing';
 import { parseProbe, probeLabel } from '../../tests/missions-probes';
-import { CAMPAIGN, CAMPAIGNS, TRAINING, missionById, terrainPadsFor } from '../../src/missions';
+import { CAMPAIGN, CAMPAIGNS, PLAYABLE_CAMPAIGNS, TRAINING, missionById, terrainPadsFor } from '../../src/missions';
 import { generateTerrain, runSync } from '../../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../../src/world/scenery/Scenery';
@@ -57,24 +57,26 @@ const args = Object.fromEntries(
 ) as Record<string, string>;
 
 /**
- * Ids and groups, comma-separated in any mix (e.g. campaign,training,ia_defend_auckland): campaign
- * (Operation Southern Cross, c01–c06 and c08–c11), irgc (the IRGC campaign, g01…), campaigns (every campaign),
- * training, all (every campaign and training).
+ * Ids and groups, comma-separated in any mix (e.g. campaigns,training,ia_defend_auckland): campaigns (every
+ * playable campaign: today the IRGC campaign only), irgc (g01, g02), training, all (every playable campaign and
+ * training; the default). Operation Southern Cross is disabled (CampaignDef.enabled false): it is in no group but
+ * its own, campaign / southern_cross (c01–c06 and c08–c11), which playtests don't sweep until it is enabled again.
  */
 function missionIds(spec: string): string[] {
-  const every = CAMPAIGNS.flatMap((c) => c.missions);
+  const playable = PLAYABLE_CAMPAIGNS.flatMap((c) => c.missions);
   const groups: Record<string, readonly { id: string }[]> = {
     campaign: CAMPAIGN,
+    southern_cross: CAMPAIGN,
     irgc: CAMPAIGNS.find((c) => c.id === 'irgc')?.missions ?? [],
-    campaigns: every,
+    campaigns: playable,
     training: TRAINING,
-    all: [...every, ...TRAINING],
+    all: [...playable, ...TRAINING],
   };
   const group = (s: string) => groups[s] ?? null;
   return [...new Set(spec.split(',').filter(Boolean).flatMap((s) => group(s)?.map((m) => m.id) ?? [s]))];
 }
 
-const missions = missionIds(args.missions || 'campaign');
+const missions = missionIds(args.missions || 'all');
 const diffs = (args.diffs || 'pilot').split(',') as Difficulty[];
 const seeds = Number(args.seeds || 3);
 const maxT = Number(args.maxT || 900);

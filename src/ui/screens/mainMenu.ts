@@ -11,12 +11,12 @@ import { logoBlock } from '../art/logo';
 import { basicTrainingDone, careerRank, dismissOnboarding, isFirstLaunch } from '../career';
 import { escapeHtml, h } from '../dom';
 import type { UiHost } from '../host';
-import { CAMPAIGNS } from '../../missions';
+import { PLAYABLE_CAMPAIGNS } from '../../missions';
 import { stagger } from '../widgets';
 import { showServiceRecord } from './serviceRecord';
 
 const ITEMS: { id: MainMenuChoice; title: string; sub: string; icon: string; primary?: boolean }[] = [
-  { id: 'campaign', title: 'Campaign', sub: 'Operation Southern Cross — defend Auckland', icon: 'flag', primary: true },
+  { id: 'campaign', title: 'Campaign', sub: 'Defend Auckland', icon: 'flag', primary: true },
   { id: 'instant', title: 'Instant Action', sub: 'Free flight · dogfight · strike · defend', icon: 'crosshair' },
   { id: 'training', title: 'Training', sub: 'Learn to fly and fight the F-35A', icon: 'book' },
   { id: 'settings', title: 'Settings', sub: 'Difficulty · controls · audio · display', icon: 'gear' },
@@ -82,8 +82,8 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
     const list = h('nav', { class: 'mm-list', attrs: { 'aria-label': 'Main menu' } });
     let first: HTMLButtonElement | null = null;
     for (const it of ITEMS) {
-      // the Campaign line names every campaign (the campaign picker follows)
-      const sub = it.id === 'campaign' && CAMPAIGNS.length > 1 ? CAMPAIGNS.map((c) => c.name).join(' · ') : it.sub;
+      // the Campaign line names every playable campaign (a disabled one, like Southern Cross, isn't shown)
+      const sub = it.id === 'campaign' && PLAYABLE_CAMPAIGNS.length > 0 ? PLAYABLE_CAMPAIGNS.map((c) => c.name).join(' · ') : it.sub;
       const recBadge = it.id === 'training' && needsTraining ? '<span class="badge mm-recb">RECOMMENDED</span>' : '';
       const b = h('button', {
         class: `mm-item ${it.primary ? 'is-primary' : ''} ${recBadge ? 'is-rec' : ''}`,
@@ -108,7 +108,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
       card.innerHTML =
         `<div class="mo-k">${icon('book')} NEW PILOT?</div>` +
         `<div class="mo-t">Start with Training</div>` +
-        `<div class="mo-s">Three short lessons — basic flight, air-to-air, surviving SAMs — teach the controls before Operation Southern Cross. About 10 minutes.</div>`;
+        `<div class="mo-s">Three short lessons — basic flight, air-to-air, surviving SAMs — teach the controls before the campaign. About 10 minutes.</div>`;
       const go = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `${icon('play')}<span>Start training</span>` });
       const skip = h('button', { class: 'ui-btn ghost', attrs: { type: 'button' }, html: `<span>Not now</span>` });
       go.addEventListener('click', () => {

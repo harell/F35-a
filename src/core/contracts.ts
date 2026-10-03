@@ -329,6 +329,11 @@ export interface CampaignDef {
   description: string;
   /** In order (MissionDef.index is the mission number within this campaign). Empty = coming soon. */
   missions: MissionDef[];
+  /**
+   * false = disabled: the code, the missions and their tests stay, but the player never sees the
+   * campaign (no menu entry, training doesn't lead into it) and playtests skip it. Default true.
+   */
+  enabled?: boolean;
 }
 
 export interface ObjectiveStatus {

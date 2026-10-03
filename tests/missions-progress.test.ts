@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MissionResult } from '../src/core/contracts';
-import { CAMPAIGN, TRAINING, loadProgress, nextMissionAfter, recordResult, saveProgress } from '../src/missions';
+import { CAMPAIGN, PLAYABLE_CAMPAIGNS, TRAINING, loadProgress, nextMissionAfter, recordResult, saveProgress } from '../src/missions';
 import { PROGRESS_KEY, sanitizeProgress } from '../src/missions/progress';
 
 function result(missionId: string, over: Partial<MissionResult> = {}): MissionResult {
@@ -126,7 +126,7 @@ describe('campaign progress', () => {
     expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03']);
     expect(nextMissionAfter('t01')?.id).toBe('t02');
     expect(nextMissionAfter('t02')?.id).toBe('t03');
-    expect(nextMissionAfter('t03')?.id).toBe(CAMPAIGN[0].id);
+    expect(nextMissionAfter('t03')?.id).toBe(PLAYABLE_CAMPAIGNS[0].missions[0].id);
     // the campaign's first mission is always unlocked, so NEXT after T03 never hits a locked mission
     expect(loadProgress().unlocked).toContain(CAMPAIGN[0].id);
     expect(nextMissionAfter('ia_dogfight_auckland')).toBeNull();
