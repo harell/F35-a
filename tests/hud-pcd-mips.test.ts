@@ -38,3 +38,29 @@ describe('PCD texture mipmaps (#116 1.2-g)', () => {
     });
   }
 });
+
+describe('PCD: ICAWS paged on battle damage (#116 suggestion 4)', () => {
+  for (const w of ['damage', 'engine_fire', 'hydraulics'] as const) {
+    it(`the RWR portal jumps to ICAWS once when '${w}' comes on`, () => {
+      for (const leftHanded of [false, true]) {
+        const pcd = new PcdDisplay({ ...QUALITY_PRESETS.medium });
+        const mock = buildMock('aa');
+        const p = mock.player;
+        p.warnings.clear();
+        const ctx = { world: mock.world, player: p, settings: { ...DEFAULT_SETTINGS, leftHanded }, mission: mock.mission } as unknown as FrameContext;
+        pcd.update(ctx, 0.1);
+        const rwr = pcd.pages().indexOf('RWR');
+        expect(rwr).toBeGreaterThanOrEqual(0);
+        p.warnings.add(w);
+        pcd.update(ctx, 0.1);
+        expect(pcd.pages()[rwr]).toBe('ICAWS');
+        // the pilot pages back: it stays there while the damage stays, whatever else comes on
+        pcd.setPage(rwr, 0);
+        const back = pcd.pages()[rwr];
+        p.warnings.add('spike');
+        pcd.update(ctx, 0.1);
+        expect(pcd.pages()[rwr]).toBe(back);
+      }
+    });
+  }
+});
