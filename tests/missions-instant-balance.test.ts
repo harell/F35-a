@@ -230,6 +230,9 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
   it('Defend at 8: four strikers, at most two escorts, and Vipers 2 and 3 on the wing', () => {
     const g = defend(8).script.groups;
     expect(g.find((x) => x.id === 'strikers')!.count).toBe(4);
+    // three of them below Veteran (Pilot at 8: 4/6 with four, 5/6 with three)
+    expect(g.find((x) => x.id === 'strikers')!.countFor).toEqual({ recruit: 3, pilot: 3 });
+    expect(defend(6).script.groups.find((x) => x.id === 'strikers')!.countFor).toBeUndefined();
     expect(g.find((x) => x.id === 'escort')!.count).toBeLessThanOrEqual(2);
     expect(g.find((x) => x.role === 'wingman')!.count).toBe(2);
     expect(defend(4).script.groups.find((x) => x.role === 'wingman')!.count).toBe(1);
@@ -252,12 +255,13 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
       }
     }
   });
-  // Measured with Beast mode (the recommended fit from 6): Recruit 3/3, Pilot 2/3 (0/3 with the
-  // stealth fit: Winchester with a striker left, gunned down on the way home). Floors one win under.
-  it('Defend at 8 is winnable on Recruit (≥ 2/3; was 1/2) and Pilot (≥ 1/3; was 0/2)', { timeout: 300_000 }, async () => {
+  // Measured with Beast mode (the recommended fit from 6) and three bombers below Veteran: Recruit
+  // 3/3, Pilot 3/3 here and 5/6 over seeds 0-5 (0/3 with the stealth fit and four bombers:
+  // Winchester with a striker left, gunned down on the way home). Floors one win under.
+  it('Defend at 8 is winnable on Recruit (≥ 2/3; was 1/2) and Pilot (≥ 2/3; was 0/2)', { timeout: 300_000 }, async () => {
     const def = defend(8);
     const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
-    for (const [diff, need] of [['recruit', 2], ['pilot', 1]] as const) {
+    for (const [diff, need] of [['recruit', 2], ['pilot', 2]] as const) {
       const log: string[] = [];
       let won = 0;
       for (const seed of [0, 1, 2]) {

@@ -398,6 +398,8 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
   const groups: AircraftGroupDef[] = [
     flight('strikers', strikeType, strikers, from, low, inbound, 235, 'fighter', {
       maxCount: 4,
+      // three bombers at most below Veteran (issue #60: at 8, Pilot went 4/6 with four, 5/6 with three)
+      ...(strikers > 3 ? { countFor: { recruit: 3, pilot: 3 } } : {}),
       formation: 'echelon',
       spacing: 400,
       enemyLoadout: 'strike',
@@ -476,10 +478,10 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     successText: 'Wiri is still standing. The airport keeps its fuel.',
     briefing: [
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
-      `About ${strikers} Flankers loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
+      `About ${strikers} Flankers${strikers > 3 ? ' (three below Veteran)' : ''} loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
       ...(wings > 0 ? [`${wings > 1 ? 'Vipers 2 and 3 are' : 'Viper 2 is'} on your wing and takes the escort. The bombers are yours.`] : []),
-      ...(n >= DEFEND_BEAST_FROM ? [`Beast mode recommended: ${strikers} bombers armed with R-73s take more than the four AMRAAMs of the stealth fit.`] : []),
+      ...(n >= DEFEND_BEAST_FROM ? ["Beast mode recommended: a raid this size, bombers and escort, takes more than the stealth fit's four AMRAAMs."] : []),
     ],
   };
 }
@@ -487,7 +489,8 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
 /**
  * Defend from this enemy count on recommends Beast mode (6 AMRAAMs and 2 AIM-9Xs, issue #60): at 8
  * the 4 strikers and 2 escorts left the stealth fit's 4 AMRAAMs a bomber short, and the bot was
- * 0/3 on Pilot (Winchester, then gunned by the last striker); with Beast 2/3.
+ * 0/3 on Pilot (Winchester, then gunned by the last striker); with Beast 4/6, and 5/6 with the
+ * raid capped at three bombers below Veteran.
  */
 export const DEFEND_BEAST_FROM = 6;
 
