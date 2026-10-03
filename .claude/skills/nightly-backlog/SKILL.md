@@ -17,6 +17,14 @@ The night has three phases: **cultivate** the backlog, **implement** issues in i
 - `.claude/skills/pull-request/SKILL.md`: each layer's description.
 - `.claude/skills/play-f35/SKILL.md`: only when an issue needs the game run.
 
+## How the routine is wired
+
+A routine runs this skill. Keep the wiring as it is, because the simpler setups fail:
+- The routine **"F35-a nightly backlog run (02:00–04:00 NZ)"** fires at 02:00 Pacific/Auckland into the **launcher** session "F35-a nightly launcher (do not archive)". The launcher only calls `create_session` with `source_url: https://github.com/harell/F35-a` and the night's prompt, then ends its turn.
+- The **worker** session it starts has the repository attached: a clone, push access, the GitHub MCP tools and the launcher's model. That's the session that follows this skill.
+- A routine that starts a fresh session on its own gets no repository and no `create_session`: pushes and GitHub API writes fail with 403. Pressing **"Run now"** on the routine does exactly that, even with the launcher configured. To test the chain, schedule a one-off run into the launcher instead.
+- Archiving the launcher breaks the routine. If it's gone, create a new launcher with `create_session` (with `source_url`) and point the routine's `persistent_session_id` at it.
+
 ## Standing rules
 
 - **Only the owner's issues.** Implement only issues opened by `harell` (`user.login`). Cultivation also changes only `harell`'s issues; other issues are read for context (duplicates, dependencies) and never edited or closed.
