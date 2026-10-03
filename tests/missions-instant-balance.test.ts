@@ -135,9 +135,9 @@ describe('Instant Action: the wingman supports, it does not win the mission (iss
   // shot from the player some raids end with strikers that keep their bombs and never attack, and
   // the mission runs on (issue #60 comment 3.2-c, a follow-up).
   for (const id of ['ia_dogfight_auckland', 'ia_defend_auckland']) {
-    it(`${id}: a player who never fires${id === 'ia_dogfight_auckland' ? ' (bar one stray gun burst)' : ''} does not win (Recruit and Pilot, 3 seeds each)`, { timeout: 240_000 }, async () => {
+    it(`${id}: a player who never fires${id === 'ia_dogfight_auckland' ? ' (bar one stray gun burst)' : ''} does not win (Recruit and Pilot${id === 'ia_dogfight_auckland' ? ', and Ace with Vipers 2 and 3' : ''}, 3 seeds each)`, { timeout: 240_000 }, async () => {
       const log: string[] = [];
-      for (const diff of ['recruit', 'pilot'] as const) {
+      for (const diff of id === 'ia_dogfight_auckland' ? (['recruit', 'pilot', 'ace'] as const) : (['recruit', 'pilot'] as const)) {
         for (const seed of [0, 1, 2]) {
           const r = noFireRun(id, diff, seed, 600, id === 'ia_dogfight_auckland' ? 5 : -1);
           await yieldToVitest();
