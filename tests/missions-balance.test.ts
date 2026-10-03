@@ -19,14 +19,14 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { difficultyAtLeast } from '../src/missions/runtime/state';
+import { hangarLoadouts } from '../src/ui/hangar';
+import { C08_ACE_SCRAMBLE_T } from '../src/missions/content/campaign2';
+import { scaledCount } from '../src/missions/runtime/spawner';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import type { Difficulty } from '../src/core/types';
 import { LOADOUTS } from '../src/core/data';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
-import { hangarLoadouts } from '../src/ui/hangar';
-import { C08_ACE_SCRAMBLE_T } from '../src/missions/content/campaign2';
-import { scaledCount } from '../src/missions/runtime/spawner';
 
 const terrains = new Map<string, TerrainQuery>();
 function terrainFor(id: string): TerrainQuery {
