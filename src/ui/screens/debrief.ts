@@ -165,7 +165,8 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       stats.push(...civilLossRows(ext));
       if (ext.playerShare !== undefined && (ext.teamKills ?? []).some((t) => t.flight && t.kills > 0)) stats.push(['star', 'Your share', formatPercent(ext.playerShare)]);
     }
-    const grid = h('div', { class: 'db-stats' });
+    // (free flight: one row each, so the sightseer's long values keep their labels whole)
+    const grid = h('div', { class: r.freeFlight ? 'db-stats is-flight' : 'db-stats' });
     stats.forEach(([ic, k, v], i) => {
       const cell = h('div', { class: 'db-stat', html: `<span class="db-si">${icon(ic)}</span><span class="db-sk">${k}</span><span class="db-sv mono">${v}</span>` });
       cell.style.setProperty('--i', String(i));
