@@ -10,9 +10,12 @@ import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
+import { MUNITIONS } from '../../sim/weapons/defs';
+import { glideTimeToGo, type MunitionDefLike } from '../../sim/weapons/dlz';
 import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
 import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
 import { hitsBankOrWaterline } from './flight';
+import { reticle } from './weapons';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
@@ -28,7 +31,8 @@ const FRIEND_RANGE = 35_000;
 const rangeTxt = new NumText(1);
 const rangeTxtInt = new NumText(0);
 const wpDist = new NumText(1, '', ' NM');
-const mTxt = new NumText(0, 'M ');
+// missile time to impact: 'T', not 'M' (Mach in the speed column; playtest 1.2-n)
+const mTxt = new NumText(0, 'T ');
 const ttiTxt = new NumText(0, 'TTI ');
 const offTxt = new NumText(0, '', '°');
 const edge = { x: 0, y: 0 };
@@ -76,7 +80,8 @@ function boxHalf(f: HudFrame, e: AnyEntity, min: number): number {
  * Register into f.sym the boxes of the conformal symbols drawn after the centre cues are planned (air
  * contact boxes, ground diamonds, SAM tents, the sites to defend, the steering waypoint), with the
  * draw functions' own projection and visibility rules: IN RANGE / SHOOT never print over one
- * (playtest 2.2-a: "IN□RANGE" over a contact box near the boresight). Call before planCues.
+ * (playtest 2.2-a: "IN□RANGE" over a contact box near the boresight), and the friendly markers. Call
+ * before drawDesignated (its off-screen cue dodges them too) and planCues.
  */
 export function reserveSymbols(f: HudFrame): void {
   const { p, world, L, sym } = f;
@@ -119,6 +124,22 @@ export function reserveSymbols(f: HudFrame): void {
     f.proj.point(wp.position, f.sp);
     if (drawable(f)) sym.add(f.sp.x - 9 * u, f.sp.y - 14 * u, f.sp.x + 9 * u, f.sp.y + 9 * u);
   }
+  // wingmen and friendly traffic (their half-circle marker): the off-screen cue's text dodges them too
+  // (playtest 1.2-l: a wingman marker over the cue's range)
+  for (const a of world.aircraft) {
+    if (!a.alive || a === p || a.team !== p.team) continue;
+    if (a.position.distanceToSquared(p.position) > FRIEND_RANGE * FRIEND_RANGE) continue;
+    f.proj.point(a.position, f.sp);
+    if (!drawable(f)) continue;
+    const r = friendRadius(f, a);
+    sym.add(f.sp.x - r - 2 * u, f.sp.y - r - 2 * u, f.sp.x + r + 2 * u, f.sp.y + 3 * u);
+  }
+}
+
+/** Friendly marker radius (px) at the last projected point. */
+function friendRadius(f: HudFrame, a: AircraftEntity): number {
+  const u = f.L.u;
+  return Math.max(5 * u, Math.min(14 * u, (a.radius / Math.max(1, f.sp.depth)) * f.proj.pxPerRad));
 }
 
 /* ───────────────────────── Sensor tracks ───────────────────────── */
@@ -128,14 +149,25 @@ export function drawContacts(f: HudFrame): void {
   const u = L.u;
   const now = world.time;
   const tid = f.target?.id ?? -1;
-  // text labels only on the two nearest contacts (plus the designated target): the rest keep their box
+  // text labels only on the two nearest contacts (plus the designated target): the rest keep their box.
+  // Civil traffic likewise: the two nearest say CIV, the rest keep their white box (a stack of CIV labels
+  // over the city: playtest 1.2-o)
   let d1 = Infinity;
   let d2 = Infinity;
+  let c1 = Infinity;
+  let c2 = Infinity;
   for (const c of p.radar.contacts) {
     if (c.id === tid) continue;
     const e = world.getEntity(c.id);
     if (!e || !e.alive || e.team === p.team || e.kind !== 'aircraft') continue;
     const d = c.position.distanceToSquared(p.position);
+    if (e.team === 'neutral') {
+      if (d < c1) {
+        c2 = c1;
+        c1 = d;
+      } else if (d < c2) c2 = d;
+      continue;
+    }
     if (d < d1) {
       d2 = d1;
       d1 = d;
@@ -150,7 +182,7 @@ export function drawContacts(f: HudFrame): void {
     // civil traffic: white box, always labelled CIV so it is never mistaken for a bandit
     const civil = e.team === 'neutral';
     // (a tagged jet, e.g. a STRK striker, is always labelled: it's the one to tell from its escort)
-    const labelled = civil || !!e.hudTag || c.position.distanceToSquared(p.position) <= d2;
+    const labelled = !!e.hudTag || c.position.distanceToSquared(p.position) <= (civil ? c2 : d2);
     const stale = now - c.lastSeen > 1.5;
     if (stale) f.proj.point(c.position, f.sp);
     else project(f, e);
@@ -163,7 +195,7 @@ export function drawContacts(f: HudFrame): void {
     pen.strokeGlow(civil ? pal.white : stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
     // engaged: our missile is in flight at it — a flag in the box's top-right corner, and its time to
-    // impact ("M 12") beside the box where it fits, so a swarm shows which drones are already taken
+    // impact ("T 12") beside the box where it fits, so a swarm shows which drones are already taken
     const m = civil ? null : ownMissileOn(f, e.id);
     if (m) drawEngaged(f, m, e, sp.x, sp.y, h);
     const lbl = labelled ? trackShort(e) : '';
@@ -180,7 +212,7 @@ export function drawContacts(f: HudFrame): void {
 }
 
 /**
- * Engaged marker on a (non-designated) contact box: a filled corner flag, always, and "M n" (the newest
+ * Engaged marker on a (non-designated) contact box: a filled corner flag, always, and "T n" (the newest
  * missile's time to impact) right of the box, or left of it, wherever no reserved text or symbol is.
  */
 function drawEngaged(f: HudFrame, m: MissileEntity, e: AnyEntity, x: number, y: number, h: number): void {
@@ -225,8 +257,18 @@ export function drawGroundAndSams(f: HudFrame): void {
     drawSamSymbol(f, s, f.sp.x, f.sp.y, d);
     picks.add(s.id, f.sp.x, f.sp.y, 9 * u);
   }
-  // ground targets (sensor tracks + known intel)
+  // ground targets (sensor tracks + known intel); civil ships: the two nearest say CIV (1.2-o)
   let labelled = 0;
+  let c1 = Infinity;
+  let c2 = Infinity;
+  for (const g of world.ground) {
+    if (!g.alive || g.team !== 'neutral' || g.id === tid || (!g.known && !hasContact(f, g.id))) continue;
+    const d = Math.hypot(g.position.x - px, g.position.z - pz);
+    if (d < c1) {
+      c2 = c1;
+      c1 = d;
+    } else if (d < c2) c2 = d;
+  }
   for (const g of world.ground) {
     if (!g.alive || g.team === p.team || g.id === tid) continue;
     if (!g.known && !hasContact(f, g.id)) continue;
@@ -241,7 +283,7 @@ export function drawGroundAndSams(f: HudFrame): void {
     if (civil) pen.rect(f.sp.x - r, f.sp.y - r, r * 2, r * 2);
     else pen.diamond(f.sp.x, f.sp.y, r);
     pen.strokeGlow(civil ? pal.white : pal.main, 1.4);
-    if (civil || (d < 12_000 && labelled < 4)) {
+    if (civil ? d <= c2 : d < 12_000 && labelled < 4) {
       const t = entityLabel(g);
       if (placeLabel(f, t, 10, f.sp.x, f.sp.y + r + 8 * u, f.sp.y - r - 8 * u)) {
         if (!civil) labelled++;
@@ -431,35 +473,31 @@ export function drawDesignated(f: HudFrame): void {
     pen.strokeGlow(pal.main, 2.2);
   }
   // labels: type above, range below, missile TOF / PITBULL below that; range + TOF stack above the
-  // type label instead when they would print into reserved text under a low box (the radio pill, 3.3-a)
+  // type label instead when they would print into reserved text under a low box (the radio pill, 3.3-a),
+  // or all below; pushed out from the box when the gun pipper / AIM-9X seeker ring would cut them
+  // (3.1-c, 1.2-c). See boxLabelLayout.
   const label = trackLabel(t);
   const m = ownMissileOn(f, t.id);
   const pit = !!m && m.seekerLocked && (m.def.guidance === 'active_radar' || m.def.guidance === 'anti_radiation');
   const tof = m && !pit ? impactLabel(f, m, t) : '';
   const lw = Math.max(h * 1.5, (pen.textWidth(label, 12) / 2) + 2 * u, pen.textWidth('88.8', 12.5) / 2);
   const sw = Math.max(lw, pen.textWidth(pit ? 'PITBULL' : tof, 11.5) / 2);
-  const typeY = y - h - 9 * u;
-  const below = y + h + 10 * u;
-  const span = (m ? 14 : 0) * u;
-  const up = occ.hits(x - sw, below - 7 * u, x + sw, below + span + 7 * u, 0, 0) && !occ.hits(x - sw, typeY - 21 * u - span, x + sw, typeY - 7 * u, 0, 0);
-  const dy = up ? -14 * u : 14 * u;
   const rng = rangeLabel(dist);
+  boxLabelLayout(f, x, y, h, sw, !!m);
   // the labels (not the box) slide off the speed / altitude columns, which print on top (#62: "MIG-29"
   // into "M 0.77", the range into "THR 76%" with the target near the screen side)
   const tw = Math.max(pen.textWidth(label, 12), pen.textWidth(rng, 12.5), pen.textWidth(pit ? 'PITBULL' : tof, 11.5)) / 2 + 2 * u;
-  const tx = slideOffColumns(f, x, tw, (up ? typeY - 14 * u - span : typeY) - 8 * u, (up ? typeY : below + span) + 8 * u);
-  pen.text(label, tx, typeY, col, 12);
-  let ly = up ? typeY - 14 * u : below;
-  pen.text(rng, tx, ly, col, 12.5);
-  if (m) {
-    ly += dy;
+  const tx = slideOffColumns(f, x, tw, lay.top - 8 * u, lay.bottom + 8 * u);
+  if (Number.isFinite(lay.typeY)) pen.text(label, tx, lay.typeY, col, 12);
+  if (Number.isFinite(lay.rngY)) pen.text(rng, tx, lay.rngY, col, 12.5);
+  if (m && Number.isFinite(lay.tofY)) {
     if (pit) {
-      if (blink(f, 3, 0.75)) pen.text('PITBULL', tx, ly, pal.bright, 11.5);
-    } else pen.text(tof, tx, ly, pal.main, 11.5);
+      if (blink(f, 3, 0.75)) pen.text('PITBULL', tx, lay.tofY, pal.bright, 11.5);
+    } else pen.text(tof, tx, lay.tofY, pal.main, 11.5);
   }
   // right of the box: "LOCK" flash after the lock event, LOCKING while it builds, NOSE ON when the
   // commanded lock can't build because the target is outside the ±30° lock cone
-  // (right of the box, or left of it when the altitude column / screen edge is in the way)
+  // (right of the box, or left of it when the altitude column / screen edge / pipper ring is in the way)
   const side = Math.max(h * 1.5, h + 6 * u) + 6 * u;
   let label2 = '';
   let size2 = 12;
@@ -479,12 +517,19 @@ export function drawDesignated(f: HudFrame): void {
   }
   const rw = label2 ? pen.textWidth(label2, size2) : 0;
   const rightLimit = f.mode === 'hmd' && y > L.boxY - 30 * u && y < L.boxY + 90 * u && x < L.altLeft ? L.altLeft - 12 * u : L.right;
-  const rLeft = rw > 0 && x + side + rw > rightLimit;
+  // (the left too when the right is under the ring or reserved text, the kill feed, and the left isn't)
+  const rLeft =
+    rw > 0 &&
+    (x + side + rw > rightLimit ||
+      ((ringCuts(f, x + side, y - 8 * u, x + side + rw, y + 8 * u) || occ.hits(x + side, y - 8 * u, x + side + rw, y + 8 * u, 0, 0)) &&
+        !ringCuts(f, x - side - rw, y - 8 * u, x - side, y + 8 * u) &&
+        !occ.hits(x - side - rw, y - 8 * u, x - side, y + 8 * u, 0, 0)));
   const rx = rLeft ? x - side : x + side;
   if (label2 && show2) pen.text(label2, rx, y, col2, size2, rLeft ? 'right' : 'left');
   // protected: the box, its ring and every label (text zones never cover it)
-  const top = up ? ly - 8 * u : typeY - 8 * u;
-  const bottom = up ? y + (building ? h * 1.5 : h) + 3 * u : ly + 8 * u;
+  const hb = building ? h * 1.5 : h;
+  const top = Math.min(y - hb - 3 * u, lay.top - 8 * u);
+  const bottom = Math.max(y + hb + 3 * u, lay.bottom + 8 * u);
   occ.add(
     Math.min(x - lw - 2 * u, tx - tw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity),
     top,
@@ -493,6 +538,84 @@ export function drawDesignated(f: HudFrame): void {
     1,
   );
   picks.add(t.id, x, y, h);
+}
+
+/**
+ * The designated box's label rows this frame (centre y of the type label, the range and the missile
+ * TOF / PITBULL; NaN = left out), and the rows' top / bottom centre y.
+ */
+const lay = { typeY: 0, rngY: 0, tofY: NaN, top: 0, bottom: 0 };
+
+/** Layouts boxLabelLayout tries: type above + range below, all above, all below. */
+const LAYOUTS = 3;
+/** Extra gaps (× u) between the box and its labels, tried after the plain layouts. */
+const LABEL_GAPS = [0, 8, 16, 24];
+
+/**
+ * Lay the designated box's labels out (into `lay`) against what is already on the screen: reserved text
+ * (the radio pill and the target camera window, level 0) and the gun pipper / AIM-9X seeker ring
+ * (`reticle`), which cut the drone's name and range as the pipper came onto it (3.1-c). Tries type above
+ * + range below, all above, all below, each with the labels pushed 0 / 8 / 16 / 24 u off the box; the
+ * first clear one wins, else the first clear of the ring. None: the plain layout, with any row the ring
+ * would cut left out (the name is in the PiP and the info block; the gun's range is the pipper's arc).
+ */
+function boxLabelLayout(f: HudFrame, x: number, y: number, h: number, sw: number, withTof: boolean): void {
+  const u = f.L.u;
+  // clear of everything, else (a crowded screen) clear of the ring at least
+  for (let ringOnly = 0; ringOnly < 2; ringOnly++) {
+    for (const g of LABEL_GAPS) {
+      for (let k = 0; k < LAYOUTS; k++) {
+        setLayout(k, y, h, g * u, withTof, u);
+        if (rowBlocked(f, x, sw, lay.typeY, ringOnly) || rowBlocked(f, x, sw, lay.rngY, ringOnly) || (withTof && rowBlocked(f, x, sw, lay.tofY, ringOnly))) continue;
+        return;
+      }
+    }
+    if (reticle.frame !== f.st.frame) break;
+  }
+  setLayout(0, y, h, 0, withTof, u);
+  if (ringCuts(f, x - sw, lay.typeY - 7 * u, x + sw, lay.typeY + 7 * u)) lay.typeY = NaN;
+  if (ringCuts(f, x - sw, lay.rngY - 7 * u, x + sw, lay.rngY + 7 * u)) lay.rngY = NaN;
+  if (withTof && ringCuts(f, x - sw, lay.tofY - 7 * u, x + sw, lay.tofY + 7 * u)) lay.tofY = NaN;
+  // (the rows' extent: whatever is left, else the box itself)
+  lay.top = Math.min(Number.isFinite(lay.typeY) ? lay.typeY : y, Number.isFinite(lay.rngY) ? lay.rngY : y);
+  lay.bottom = Math.max(Number.isFinite(lay.rngY) ? lay.rngY : y, withTof && Number.isFinite(lay.tofY) ? lay.tofY : y);
+}
+
+function setLayout(k: number, y: number, h: number, g: number, withTof: boolean, u: number): void {
+  const typeY = y - h - 9 * u - g;
+  const below = y + h + 10 * u + g;
+  if (k === 0) {
+    lay.typeY = typeY;
+    lay.rngY = below;
+    lay.tofY = below + 14 * u;
+  } else if (k === 1) {
+    lay.typeY = typeY;
+    lay.rngY = typeY - 14 * u;
+    lay.tofY = typeY - 28 * u;
+  } else {
+    lay.rngY = below;
+    lay.tofY = below + 14 * u;
+    lay.typeY = below + (withTof ? 28 : 14) * u;
+  }
+  if (!withTof) lay.tofY = NaN;
+  lay.top = Math.min(lay.typeY, lay.rngY, withTof ? lay.tofY : Infinity);
+  lay.bottom = Math.max(lay.typeY, lay.rngY, withTof ? lay.tofY : -Infinity);
+}
+
+/** Is a label row centred at `ly` (± sw wide) on reserved text (the radio pill, the target camera window) or a reticle ring? */
+function rowBlocked(f: HudFrame, x: number, sw: number, ly: number, ringOnly: number): boolean {
+  const u = f.L.u;
+  const y0 = ly - 7 * u;
+  const y1 = ly + 7 * u;
+  return (!ringOnly && f.occ.hits(x - sw, y0, x + sw, y1, 0, 0)) || ringCuts(f, x - sw, y0, x + sw, y1);
+}
+
+/** Does the reticle ring drawn this frame (gun pipper, AIM-9X seeker) reach into the rect? */
+function ringCuts(f: HudFrame, x0: number, y0: number, x1: number, y1: number): boolean {
+  if (reticle.frame !== f.st.frame) return false;
+  const nx = Math.max(x0, Math.min(x1, reticle.x));
+  const ny = Math.max(y0, Math.min(y1, reticle.y));
+  return Math.hypot(nx - reticle.x, ny - reticle.y) < reticle.r;
 }
 
 /** Target within the player's ±30° radar lock cone (nose). */
@@ -610,10 +733,16 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   const ax1 = Math.max(edge.x + sp.dirX * 10 * u, edge.x - sp.dirX * 4 * u + Math.abs(sp.dirY) * 7 * u) + 2 * u;
   const ay0 = Math.min(edge.y + sp.dirY * 10 * u, edge.y - sp.dirY * 4 * u - Math.abs(sp.dirX) * 7 * u) - 2 * u;
   const ay1 = Math.max(edge.y + sp.dirY * 10 * u, edge.y - sp.dirY * 4 * u + Math.abs(sp.dirX) * 7 * u) + 2 * u;
+  // two passes: clear of everything, then (a crowded screen) of all but the contact / friendly symbols:
+  // the protected ones, the incoming-missile arrows and TTIs among them, stay clear (1.2-d); none: inward
   const last = 2 + 2 * CUE_STEPS;
   let tx = 0;
   let ty = 0;
-  for (let c = 0; c < last; c++) {
+  for (let c = 0, pass = 0; c < last; c++) {
+    if (c === last - 1 && pass === 0) {
+      pass = 1;
+      c = 0;
+    }
     if (c === 0 || c === last - 1) {
       tx = edge.x - sp.dirX * reach;
       ty = edge.y - sp.dirY * reach - hh + 8 * u;
@@ -632,7 +761,8 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
     const x1 = tx + hw;
     const y0 = ty - 8 * u;
     const y1 = ty + below;
-    if (f.occ.hits(x0, y0, x1, y1, 1) || hitsBankOrWaterline(f, x0, y0, x1, y1)) continue;
+    if (f.occ.hits(x0, y0, x1, y1, 1)) continue;
+    if (hitsBankOrWaterline(f, x0, y0, x1, y1) || (pass === 0 && f.sym.hits(x0, y0, x1, y1))) continue;
     if (x0 < ax1 && x1 > ax0 && y0 < ay1 && y1 > ay0) continue; // slid or clamped back over the arrow
     break;
   }
@@ -689,18 +819,44 @@ function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | null {
   return best;
 }
 
-/** "TTI 42" for our bomb on its target, "M 12" for a missile (seconds to impact, cached strings). */
+/** "TTI 42" for our bomb on its target, "T 12" for a missile (seconds to impact, cached strings). */
 function impactLabel(f: HudFrame, m: MissileEntity, t: AnyEntity): string {
   const s = Math.max(0, Math.ceil(timeToImpact(f, m, t)));
   return m.def.category === 'bomb' ? ttiTxt.get(s) : mTxt.get(s);
 }
 
 function timeToImpact(f: HudFrame, m: MissileEntity, t: AnyEntity): number {
+  if (m.def.category === 'bomb') return bombTimeToGo(m, t.position, f.world.time);
   const r = f.v1.subVectors(t.position, m.position);
   const d = r.length();
   if (d < 1) return 0;
   const closing = -f.v2.subVectors(t.velocity, m.velocity).dot(r) / d;
   return d / Math.max(80, closing);
+}
+
+/** Last bomb TTI per munition id: { world time it was computed, seconds to go then }. */
+const bombTti = new Map<number, { at: number; tti: number }>();
+
+/**
+ * A bomb's predicted time of flight to `target` (its own glide law flown from its present state:
+ * glideTimeToGo), not range ÷ closing speed, which read 99 s on a StormBreaker from 12 NM that took
+ * 113 s (1.2-j). Re-flown at 4 Hz per bomb and counted down in between.
+ */
+export function bombTimeToGo(m: MissileEntity, target: { x: number; y: number; z: number }, now: number): number {
+  const c = bombTti.get(m.id);
+  if (c && now >= c.at && now - c.at < 0.25) return Math.max(0, c.tti - (now - c.at));
+  const dx = target.x - m.position.x;
+  const dz = target.z - m.position.z;
+  const horiz = Math.hypot(dx, dz);
+  const vh = horiz > 1 ? (m.velocity.x * dx + m.velocity.z * dz) / horiz : Math.hypot(m.velocity.x, m.velocity.z);
+  const def = (MUNITIONS as Record<string, MunitionDefLike | undefined>)[m.def.id] ?? m.def;
+  const tti = glideTimeToGo(def, horiz, m.position.y - target.y, vh, m.velocity.y, target.y, def.maxFlightTime - (m.age || 0));
+  if (bombTti.size > 32) bombTti.clear();
+  if (c) {
+    c.at = now;
+    c.tti = tti;
+  } else bombTti.set(m.id, { at: now, tti });
+  return tti;
 }
 
 /* ───────────────────────── Own missiles in flight ───────────────────────── */
@@ -733,7 +889,7 @@ export function drawFriendlies(f: HudFrame): void {
     if (d > FRIEND_RANGE) continue;
     f.proj.point(a.position, f.sp);
     if (!drawable(f)) continue;
-    const r = Math.max(5 * u, Math.min(14 * u, (a.radius / Math.max(1, f.sp.depth)) * f.proj.pxPerRad));
+    const r = friendRadius(f, a);
     pen.begin();
     pen.arc(f.sp.x, f.sp.y, r, Math.PI, Math.PI * 2);
     pen.line(f.sp.x - r, f.sp.y, f.sp.x + r, f.sp.y);

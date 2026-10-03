@@ -48,10 +48,10 @@ import {
   waypointNamed,
   nextWaypointText,
 } from './hmd/targets';
-import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
-import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
+import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveIncoming, reserveWarningBand } from './hmd/threats';
+import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawSeekerLabel, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
-import { clearBandExt, reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
+import { clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
 import { TEST_HOOKS } from '../core/data';
 import { beginDrawn, drawnLast, type DrawnCue } from './hmd/drawn';
 
@@ -173,10 +173,11 @@ export const createHud: CreateHud = (canvas, events) => {
         st.dlzScale = 0;
       }
     }),
-    events.on('weapon:denied', ({ ownerId, reason }) => {
+    events.on('weapon:denied', ({ ownerId, weapon, reason }) => {
       if (isPlayer(ownerId)) {
         st.deniedText = reason.toUpperCase();
         st.deniedAge = 0;
+        st.deniedWeapon = weapon;
       }
     }),
     events.on('destroyed', ({ entity, attackerId }) => {
@@ -406,10 +407,15 @@ export const createHud: CreateHud = (canvas, events) => {
         g2.clip();
         pen.reset();
       }
-      // 0) the radio pill first: the target box labels and the centre message make way for it (3.3-a/b)
+      // 0) the radio pill first: the target box labels and the centre message make way for it (3.3-a/b);
+      // the target camera window likewise
       reserveRadio(f);
-      // 1) protected symbols (they register in the occupancy pass): FPM, pipper / seeker, target box
+      reservePip(f);
+      // 1) protected symbols (they register in the occupancy pass): FPM, the incoming-missile arrows and
+      // their TTIs (the target box's labels, off-screen cue and centre cues dodge them), pipper / seeker,
+      // target box
       drawFpm(f);
+      reserveIncoming(f);
       if (hmd) {
         drawAim9x(f);
         drawGun(f);
@@ -419,18 +425,21 @@ export const createHud: CreateHud = (canvas, events) => {
         // point) from any outside camera, the funnel and gun cross (directions) only from one near the jet
         if (ctx.viewMode !== 'missile') drawGun(f, ctx.camera.position.distanceToSquared(p.position) < GUN_DIR_CAM_RANGE * GUN_DIR_CAM_RANGE);
       }
+      // the world symbols' boxes (contacts, sites, waypoint, friendlies): the off-screen cue and the
+      // centre cues dodge them
+      const zoomed = cockpit && pcdZoom.open;
+      if (!zoomed) reserveSymbols(f);
       drawDesignated(f);
       drawGunCues(f);
+      drawSeekerLabel(f);
       g2.globalAlpha = 1;
       // 1b) fixed text blocks (tape, columns, DLZ, weapon block, objectives / hint, kill feed, external
       // info block + inset): every label placed after this dodges them, the ladder knocks out under them
       reserveFixedZones(f);
       // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
-      const zoomed = cockpit && pcdZoom.open;
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
       reserveWarningBand(f);
       if (!zoomed) {
-        reserveSymbols(f);
         const below = planCues(f);
         const cur = st.messages.current;
         if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));

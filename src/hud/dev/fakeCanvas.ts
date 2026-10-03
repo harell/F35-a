@@ -22,6 +22,9 @@ export interface ArcRec {
   y: number;
   r: number;
   dashed: boolean;
+  /** Start / end angle (rad). */
+  a0: number;
+  a1: number;
 }
 
 export interface Box {
@@ -107,9 +110,9 @@ export class FakeContext2D {
     });
   }
   strokeText(): void {}
-  arc(x: number, y: number, r: number): void {
+  arc(x: number, y: number, r: number, a0 = 0, a1 = Math.PI * 2): void {
     const [X, Y] = this.map(x, y);
-    this.arcs.push({ x: X, y: Y, r: r * this.scale(), dashed: this.dash.length > 0 });
+    this.arcs.push({ x: X, y: Y, r: r * this.scale(), dashed: this.dash.length > 0, a0, a1 });
   }
   setLineDash(d: number[]): void {
     this.dash = d;

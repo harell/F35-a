@@ -30,16 +30,12 @@ const ROW1_RED: WarningId[] = ['engine_fire', 'over_g', 'altitude', 'engine_fail
 
 /* ───────────────────────── Missile approach warning ───────────────────────── */
 
-/** Draws the DAS threat cue. Returns true when a missile is inbound. */
-export function drawIncoming(f: HudFrame): boolean {
-  const { p, pen, pal, L, proj, world, st } = f;
-  const inc = p.incoming;
-  const marks = st.threats.marks;
-  let anyMark = false;
-  for (const m of marks) anyMark = anyMark || m.active;
-  if ((!inc || inc.length === 0) && !anyMark) return false;
+const ring = { cx: 0, cy: 0, R: 0, aLen: 0, tr: 0 };
+
+/** The DAS threat ring's centre and radius, its arrows' length and the TTI radius, into `ring`. */
+function incomingRing(f: HudFrame): void {
+  const { L } = f;
   const u = L.u;
-  // ring centre: the FPM in the HMD, the radar inset in external views (never over the jet / target)
   let cx = L.cx;
   let cy = L.cy;
   let R = 62 * u;
@@ -57,6 +53,47 @@ export function drawIncoming(f: HudFrame): boolean {
     cy = L.insetCy;
     R = L.insetR + 3 * u;
   }
+  ring.cx = cx;
+  ring.cy = cy;
+  ring.R = R;
+  ring.aLen = (hmd ? 20 : 12) * u;
+  ring.tr = hmd ? R - 14 * u : R - 12 * u;
+}
+
+/**
+ * Register the incoming-missile arrows, their chevrons and red TTI numbers as protected symbols. Call
+ * right after the FPM, before the target box, its off-screen cue and the centre cues are placed: those
+ * dodge them, where they used to print into them ("90° FUEL DEPOT" + TTI "32" read "90°32", 1.2-d).
+ */
+export function reserveIncoming(f: HudFrame): void {
+  const inc = f.p.incoming;
+  if (!inc || inc.length === 0) return;
+  incomingRing(f);
+  const { cx, cy, R, aLen, tr } = ring;
+  const u = f.L.u;
+  const n = Math.min(inc.length, ttiTxt.length);
+  for (let i = 0; i < n; i++) {
+    const sx = Math.sin(inc[i].bearing);
+    const sy = -Math.cos(inc[i].bearing);
+    f.occ.addBox(cx + sx * tr, cy + sy * tr, 10 * u, 8 * u, 1);
+    // the arrow (R .. R + aLen) and the chevrons outside it
+    f.occ.addBox(cx + sx * (R + aLen * 0.5), cy + sy * (R + aLen * 0.5), aLen * 0.5 + 3 * u, aLen * 0.5 + 3 * u, 1);
+    f.occ.addBox(cx + sx * (R + aLen + 14 * u), cy + sy * (R + aLen + 14 * u), 14 * u, 14 * u, 1);
+  }
+}
+
+/** Draws the DAS threat cue. Returns true when a missile is inbound. */
+export function drawIncoming(f: HudFrame): boolean {
+  const { p, pen, pal, L, proj, world, st } = f;
+  const inc = p.incoming;
+  const marks = st.threats.marks;
+  let anyMark = false;
+  for (const m of marks) anyMark = anyMark || m.active;
+  if ((!inc || inc.length === 0) && !anyMark) return false;
+  const u = L.u;
+  const hmd = f.mode === 'hmd';
+  incomingRing(f);
+  const { cx, cy, R } = ring;
   let nearest = Infinity;
   for (let i = 0; i < inc.length; i++) nearest = Math.min(nearest, inc[i].timeToImpact);
   const urgentAll = nearest < 5;
@@ -67,7 +104,7 @@ export function drawIncoming(f: HudFrame): boolean {
     pen.strokeGlow(withAlpha(pal.danger, urgentAll && !blink(f, 5) ? 0.35 : 0.8), 1.4);
     pen.setDash('solid');
   }
-  const aLen = (hmd ? 20 : 12) * u;
+  const aLen = ring.aLen;
   const n = Math.min(inc.length, ttiTxt.length);
   for (let i = 0; i < n; i++) {
     const m = inc[i];
@@ -98,11 +135,9 @@ export function drawIncoming(f: HudFrame): boolean {
     }
     pen.strokeGlow(col, 2.2);
     // time to impact inside the ring (HMD) / next to the arrow (inset)
-    const tr = hmd ? R - 14 * u : R - 12 * u;
+    const tr = ring.tr;
     pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), cx + sx * tr, cy + sy * tr, col, hmd ? 13 : 11);
-    // labels near the ring make way for the arrow / chevrons / time to impact
-    f.occ.addBox(cx + sx * tr, cy + sy * tr, 9 * u, 8 * u);
-    f.occ.addBox(cx + sx * (R + aLen + 8 * u), cy + sy * (R + aLen + 8 * u), 16 * u, 16 * u);
+    // (labels near the ring make way for the arrow / chevrons / time to impact: reserveIncoming)
     // conformal marker when the missile is in view (DAS)
     const e = world.getEntity(m.missileId);
     if (e && e.alive && proj.point(e.position, f.sp) && f.sp.onScreen) {

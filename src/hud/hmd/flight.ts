@@ -15,7 +15,8 @@ const txt = {
   kcas: new NumText(0),
   mach: new NumText(2, 'M '),
   g: new NumText(1, 'G '),
-  gmax: new NumText(1),
+  // peak g, labelled (a lone number under 'G' read as nothing: playtest 1.2-n)
+  gmax: new NumText(1, 'GMAX '),
   aoa: new NumText(1, 'α '),
   alt: new NumText(0, '', '', true),
   ralt: new NumText(0, 'R '),
@@ -230,6 +231,8 @@ function rung(f: HudFrame, th: number, a: HudFrame['sp'], b: HudFrame['sp'], mar
 /* ───────────────────────── Bank scale + waterline ───────────────────────── */
 
 const BANK_TICKS = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+/** Pieces the bank arc is tested in against the protected symbols (3° each). */
+const BANK_STEPS = 40;
 
 /** Bank scale radius, or 0 when it is not drawn this frame. */
 function bankRadius(f: HudFrame): number {
@@ -300,12 +303,37 @@ export function drawBankScale(f: HudFrame): void {
   const R = Math.max(60 * u, Math.min(L.H * 0.25, L.cockpitTop - cy - 16 * u));
   pen.setDash('solid');
   pen.begin();
-  pen.arc(cx, cy, R, Math.PI / 2 - 60 * DEG, Math.PI / 2 + 60 * DEG);
+  // the arc and its ticks break under the protected symbols (the target box and its labels, the
+  // pipper, the incoming-missile TTIs): the arc ran through the target box (playtest 1.2-o)
+  const occ = f.occ;
+  let run0 = NaN;
+  for (let i = 0; i <= BANK_STEPS; i++) {
+    const a = Math.PI / 2 - 60 * DEG + (i * 120 * DEG) / BANK_STEPS;
+    let free = i < BANK_STEPS;
+    if (free) {
+      const b = a + (120 * DEG) / BANK_STEPS;
+      const x0 = cx + Math.cos(a) * R;
+      const y0 = cy + Math.sin(a) * R;
+      const x1 = cx + Math.cos(b) * R;
+      const y1 = cy + Math.sin(b) * R;
+      free = !occ.hits(Math.min(x0, x1) - 1, Math.min(y0, y1) - 1, Math.max(x0, x1) + 1, Math.max(y0, y1) + 1, 1, 1);
+    }
+    if (free && !Number.isFinite(run0)) run0 = a;
+    else if (!free && Number.isFinite(run0)) {
+      pen.arc(cx, cy, R, run0, a);
+      run0 = NaN;
+    }
+  }
   for (const t of BANK_TICKS) {
     const ang = Math.PI / 2 + t * DEG;
     const major = t % 30 === 0;
     const r2 = R + (major ? 8 : 4.5) * u;
-    pen.line(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+    const ax = cx + Math.cos(ang) * R;
+    const ay = cy + Math.sin(ang) * R;
+    const bx = cx + Math.cos(ang) * r2;
+    const by = cy + Math.sin(ang) * r2;
+    if (occ.hits(Math.min(ax, bx) - 1, Math.min(ay, by) - 1, Math.max(ax, bx) + 1, Math.max(ay, by) + 1, 1, 1)) continue;
+    pen.line(ax, ay, bx, by);
   }
   pen.strokeGlow(pal.dim, 1.3);
   // pointer (ground direction)
@@ -318,6 +346,19 @@ export function drawBankScale(f: HudFrame): void {
     pen.arrow(px, py, Math.cos(pa), Math.sin(pa), 8 * u, 4.5 * u);
     pen.strokeGlow(pal.main, 1.5);
   }
+}
+
+/**
+ * Reserve the aircraft waterline ("W") as a protected symbol (level 2, like the FPM: text dodges it, the
+ * ladder runs through it). Drawn last, it went unregistered and REL n / SHOOT printed into its notch
+ * (playtest 1.2-k).
+ */
+export function reserveWaterline(f: HudFrame): void {
+  if (f.mode !== 'hmd') return;
+  forwardOf(f.p.quaternion, f.v1);
+  if (!f.proj.dir(f.v1, noseSp) || !noseSp.onScreen || noseSp.y > f.L.cockpitTop - 8) return;
+  const u = f.L.u;
+  f.occ.add(noseSp.x - 18 * u, noseSp.y - 3 * u, noseSp.x + 18 * u, noseSp.y + 8 * u, 2);
 }
 
 /** Aircraft waterline ("W") at the nose direction. */

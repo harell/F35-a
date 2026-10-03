@@ -7,7 +7,7 @@ import { dlzLayout, makeDlzGeometry } from './dlz';
 import { HDG3_STR, INT_STR, NumText, WEAPON_IS_BOMB, entityLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
-import { nextWaypointText, rangeLabel, rangeLabelNm } from './targets';
+import { bombTimeToGo, nextWaypointText, rangeLabel, rangeLabelNm } from './targets';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from './tsd';
 import { drawWeaponBlock } from './weapons';
 
@@ -187,7 +187,8 @@ export function drawMissileCam(f: HudFrame): void {
   if (t && t.alive) {
     const d = t.position.distanceTo(m.position);
     const closing = Math.max(80, m.velocity.length() - 0);
-    info += '  ' + ttiTxt.get(d / closing) + '  ' + rangeLabel(d) + ' NM';
+    // (a bomb: its predicted time of flight, 1.2-j)
+    info += '  ' + ttiTxt.get(m.def.category === 'bomb' ? bombTimeToGo(m, t.position, world.time) : d / closing) + '  ' + rangeLabel(d) + ' NM';
     if (f.proj.point(t.position, f.sp) && f.sp.onScreen) {
       const h = 16 * u;
       pen.begin();

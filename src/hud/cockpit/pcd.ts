@@ -14,7 +14,7 @@
  */
 import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace } from 'three';
 import type { FrameContext } from '../../core/contracts';
-import type { QualitySettings } from '../../core/types';
+import type { QualitySettings, WarningId } from '../../core/types';
 import { Pen } from '../hmd/pen';
 import { PAGE_FNS, PC, type PageId, type PcdData } from './pages';
 import { PCD } from './geometry';
@@ -48,6 +48,9 @@ export const PORTAL_INSET = 4;
 const SMS_PAGES: PageId[] = ['SMS', 'FUEL', 'ENG', 'ICAWS'];
 const RWR_PAGES: PageId[] = ['RWR', 'ICAWS', 'FUEL', 'ENG'];
 
+/** Warnings that page the ICAWS display when they come on (battle damage). */
+const DAMAGE_WARNINGS: WarningId[] = ['engine_fire', 'engine_fail', 'hydraulics', 'damage'];
+
 export class PcdDisplay {
   readonly canvas: HTMLCanvasElement;
   readonly texture: CanvasTexture;
@@ -62,7 +65,8 @@ export class PcdDisplay {
   private dirty = true;
   private readonly period: number;
   private readonly data: PcdData = { ctx: null as unknown as FrameContext, p: null as unknown as PcdData['p'], flash: false, zoom: false };
-  private lastWarnCount = 0;
+  /** Bit k: DAMAGE_WARNINGS[k] was on at the last update. */
+  private lastDamage = 0;
   private lastBingo = false;
 
   constructor(quality: QualitySettings) {
@@ -74,9 +78,11 @@ export class PcdDisplay {
     this.pen.outlineExtra = 0;
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
-    const mips = quality.level !== 'low';
-    this.texture.generateMipmaps = mips;
-    this.texture.minFilter = mips ? LinearMipmapLinearFilter : LinearFilter;
+    // mipmaps on every quality level: without them the minified PCD text broke up at 844×390 on low
+    // ('GDU-31', 'RVR': playtest 1.2-g). Their cost is one GPU mip generation per upload, and uploads
+    // follow the throttled redraw (5 Hz on low), never the frame rate.
+    this.texture.generateMipmaps = true;
+    this.texture.minFilter = LinearMipmapLinearFilter;
     this.texture.magFilter = LinearFilter;
     this.texture.anisotropy = quality.level === 'high' ? 4 : 1;
     this.period = quality.level === 'low' ? 0.2 : quality.level === 'medium' ? 0.125 : 0.1;
@@ -170,13 +176,16 @@ export class PcdDisplay {
     if (!p || !ctx.world) return;
     this.setLeftHanded(!!ctx.settings?.leftHanded);
     this.acc += dt;
-    // new warnings: jump the RWR portal to ICAWS once so the pilot sees it
-    const wc = p.warnings.size;
-    if (wc > this.lastWarnCount && (p.warnings.has('engine_fire') || p.warnings.has('hydraulics') || p.warnings.has('engine_fail'))) {
+    // battle damage: a new damage warning (fire, engine, hydraulics, airframe below half) jumps the RWR
+    // portal to ICAWS once so the pilot sees it, as BINGO jumps it to FUEL (#116 suggestion 4: the
+    // airframe damage alone never paged it)
+    let dmg = 0;
+    for (let k = 0; k < DAMAGE_WARNINGS.length; k++) if (p.warnings.has(DAMAGE_WARNINGS[k])) dmg |= 1 << k;
+    if (dmg & ~this.lastDamage) {
       const i = this.portals[0].pages === RWR_PAGES ? 0 : 2;
       this.setPage(i, this.portals[i].pages.indexOf('ICAWS'));
     }
-    this.lastWarnCount = wc;
+    this.lastDamage = dmg;
     // bingo: the RWR portal jumps to FUEL once (playtest 1.2-h: the fuel state was a tap away)
     const bingo = p.warnings.has('bingo');
     if (bingo && !this.lastBingo) {

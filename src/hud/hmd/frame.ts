@@ -39,6 +39,8 @@ export class HudState {
   lockId: number | null = null;
   deniedText = '';
   deniedAge = 99;
+  /** The weapon the last release denial was for: it shows only while that weapon is selected (2.1-e). */
+  deniedWeapon = '';
   weaponAge = 99;
   brevity = '';
   brevityAge = 99;
