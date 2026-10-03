@@ -26,9 +26,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
-      # the tests, with coverage (a longer per-test timeout: instrumented runs are ~3× slower); the summary becomes
-      # the README's badge (tools/coverage-badge.mjs)
-      - run: npm run coverage
+      # The tests, with coverage (npm run coverage: a longer per-test timeout, instrumented runs are ~3× slower); the
+      # summary becomes the README's badge (tools/coverage-badge.mjs). Under coverage Vitest can exit 1 on internal
+      # worker RPC timeouts after every test passed, so the gate is the JSON results, not the exit code: the next
+      # step fails the job on any failed test or on missing results (PRs still run the plain `vitest run`, ci.yml).
+      - run: npm run coverage -- --reporter=default --reporter=json --outputFile.json=coverage/test-results.json || true
+      - run: node tools/check-test-results.mjs coverage/test-results.json
       - run: npx vite build
         env:
           # Shown in-game as "Build N" and tagged in Clarity; trace it back to run #N of this workflow.
