@@ -57,7 +57,7 @@ For a different window, scale the phases to the same proportions, keeping the 15
 ## 0. Setup and the open stack (≤ 25 min)
 
 1. `git fetch origin`. Start `npm ci` in the background; it takes a few minutes.
-2. **Find the open stack** (stacked-pr section 2). If there is one, the night builds on its top layer. If not, the first issue tonight starts a new stack on `master`.
+2. **Find the open stack** (stacked-pr section 2): the stack with `open: true`. If there is one, the night builds on its top layer, even if it has waited days for review; keep adding layers to it. If several are open, extend the one whose bottom PR carries the earlier nightly reports. If none is open, the first issue tonight starts a new stack on `master`, and the second one links it (stacked-pr section 3).
 3. **Merged layers:** for each merged layer, check that its issues closed (stacked-pr section 5) and close them if not.
 4. **Red layers:** read the check runs of every open layer (`pull_request_read get_check_runs`). Fix a red layer before any new work: lowest red layer first, fix on its branch, merge the fix upward (stacked-pr section 4). If a fix doesn't fit in this phase's cap, comment on that PR what fails and why, and don't stack new layers on top tonight. Instead start a fresh stack on `master` only if tonight's issues don't depend on the red layer's code; otherwise skip to wrap-up.
 5. **Review comments** on open layers from the owner: do the small asks on that layer and merge upward. Reply on the thread to larger ones; don't act on them alone.
@@ -89,13 +89,13 @@ For each issue in rank order:
 
 ## 3. Wrap-up (the last 15 minutes)
 
-1. Everything finished is pushed and linked. Run `curl -sS "$API/stacks?pull_request=<top PR>"` and check the stack lists every layer in order.
+1. Everything finished is pushed and linked: the stacked-pr checklist's `curl` on the top PR prints the top PR, and the stack lists every layer in order. A new stack with only one layer tonight isn't linked yet; that's expected.
 2. **Report** as one comment on the stack's **bottom** PR (the entry point the owner reads), ending with your session's attribution footer:
 
 ```
 ## Nightly run <YYYY-MM-DD> (<start>–<end> NZ)
 
-**Stack:** #<bottom> … #<top> (<n> layers, <k> added tonight)
+**Stack #<S>:** #<bottom> … #<top> (<n> layers, <k> added tonight)
 
 ### Added tonight
 - #<PR>: #<issue> <title> (S, est. 20 / took 26 min, checks green)
