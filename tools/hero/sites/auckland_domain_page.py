@@ -38,11 +38,9 @@ def jpeg(img, q):
     return 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--site', required=True)
-    ap.add_argument('--tex', type=int, default=3072)
-    a = ap.parse_args()
+def build(site, tex=3072):
+    """(data, hero texture, game texture, port texture, today shots, stats) for the Domain pages."""
+    a = argparse.Namespace(site=site, tex=tex)
     S = json.load(open(os.path.join(a.site, 'site.json')))
     E0, N1 = S['box_nztm'][0], S['box_nztm'][3]
     SIZE = S['box_nztm'][2] - E0
@@ -132,7 +130,10 @@ def main():
         'ponds': M['ponds'],
     }
     full = Image.open(os.path.join(a.site, 'aerial.jpg')).convert('RGB')
-    hero_tex = jpeg(Image.open(os.path.join(a.site, 'aerial_nomuseum.jpg')).convert('RGB').resize((a.tex, a.tex), Image.LANCZOS), 80)
+    nomus = Image.open(os.path.join(a.site, 'aerial_nomuseum.jpg')).convert('RGB')
+    hero_tex = jpeg(nomus.resize((a.tex, a.tex), Image.LANCZOS), 80)
+    # after the port: the game's photo (1.25 m / px on the high tier) with the museum filled, like the hero ground
+    port_tex = jpeg(nomus.resize((SIZE * 4 // 5, SIZE * 4 // 5), Image.LANCZOS), 82)
     # the game's high tier draws the photo at 1.25 m / px, with the museum in it
     game_tex = jpeg(full.resize((SIZE * 4 // 5, SIZE * 4 // 5), Image.LANCZOS), 82)
     shots = {}
@@ -142,6 +143,15 @@ def main():
         if side == 'sw':  # the keyboard help card covers the bottom-left
             im = im.crop((240, 0, 1280, 720))
         shots[side] = jpeg(im, 80)
+    return data, hero_tex, game_tex, port_tex, shots, stats
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--site', required=True)
+    ap.add_argument('--tex', type=int, default=3072)
+    a = ap.parse_args()
+    data, hero_tex, game_tex, _, shots, stats = build(a.site, a.tex)
     page = open(os.path.join(HERE, '..', 'examples', 'auckland-domain.html')).read()
     script = 'const DATA=' + json.dumps(data, separators=(',', ':')) + ';const AERIAL_HERO="' + hero_tex + '";const AERIAL_GAME="' + game_tex + '";'
     page = page.replace('__DATA__', script).replace('__TODAY_SW__', shots['sw']).replace('__TODAY_NE__', shots['ne'])

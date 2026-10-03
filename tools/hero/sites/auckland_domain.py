@@ -6,15 +6,18 @@ tools/hero/examples/auckland-domain.html.
   curl -o /tmp/hero/auckland_domain/map.osm "https://api.openstreetmap.org/api/0.6/map?bbox=174.76655,-36.86659,174.78306,-36.85282"
   python3 tools/hero/sites/auckland_domain.py --site /tmp/hero/auckland_domain    → <site>/domain_model.json
 
-Scope: the OSM park way 6029919 "Pukekawa / Auckland Domain". The Auckland War Memorial Museum (way 23906678)
-is left out on purpose: it gets its own hero model; its footprint (+6 m) is cleared of trees and buildings and
-the aerial under it is filled with one tone taken from the ground around it. Everything is in the site frame (x = E − E0 east,
+Scope: the OSM park way 6029919 "Pukekawa / Auckland Domain". The Auckland War Memorial Museum is left out on
+purpose: it is its own layer (tools/hero/sites/auckland_museum.py) that stands on top of this one. Pass its model with
+--exclude <museum site>/museum_model.json (else the OSM way 23906678 stands in): inside its footprint + 3 m there are no
+trees or park buildings, no crown reaches over it, and the aerial under its footprint + 2 m is filled with one tone
+taken from the ground around it (the top layer covers the fill; the forecourt round it stays the photo). Everything is in the site frame (x = E − E0 east,
 z = N1 − N south, metres; heights metres above NZVD2016):
   ground     LiDAR 1 m DEM (bare earth), 3 m grid
   trees      one crown per LiDAR tree: canopy = nDSM > 2.5 m inside the park, off buildings; tops = local maxima of
              the smoothed nDSM (window grows with height), crowns = watershed of the canopy from those tops;
              [x, z, ground, top, radius, crown base, r, g, b]: radius from the crown's area (+10 %: equal-area circles
-             leave gaps in a closed canopy), base 30 % of the top (50 % for crowns under 6 m), colour = the 2024 aerial's mean over the crown
+             leave gaps in a closed canopy), base 30 % of the top (50 % for crowns under 6 m), colour = the 2024 aerial's mean over the crown;
+             pale crowns that aren't green (mean > 150, 2g − r − b < 15) are structures, not trees (the Cenotaph), and dropped
   buildings  OSM building ways inside the park (not the museum): walls from the lowest DEM in the ring, roof at the
              median nDSM (p90 for the two glasshouses: glass lets the LiDAR through); the glasshouses carry a
              barrel vault along their long axis from the eave (p12) to the ridge (p98)
@@ -28,6 +31,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from scipy import ndimage
 from shapely.geometry import Polygon, Point
+from shapely.ops import unary_union
 from skimage.segmentation import watershed
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -69,6 +73,7 @@ def load_osm(site, S):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--site', required=True)
+    ap.add_argument('--exclude', nargs='*', default=[], help="model.json of layers standing on top (their 'footprint', 'E0', 'N1')")
     a = ap.parse_args()
     S = json.load(open(os.path.join(a.site, 'site.json')))
     L = np.load(os.path.join(a.site, 'lidar.npz'))
@@ -81,9 +86,17 @@ def main():
 
     park = next(f for f in feats if f['id'] == PARK)
     museum = next(f for f in feats if f['id'] == MUSEUM)
-    park_poly, mus_poly = Polygon(park['ring']), Polygon(museum['ring'])
+    park_poly = Polygon(park['ring'])
+    # the footprints of the layers on top, moved into this frame (both frames are NZTM: a pure translation)
+    tops = []
+    for path in a.exclude:
+        T = json.load(open(path))
+        dx, dz = T['E0'] - S['box_nztm'][0], S['box_nztm'][3] - T['N1']
+        tops.append(Polygon([(x + dx, z + dz) for x, z in T['footprint']]).buffer(0))
+    mus_poly = unary_union(tops) if tops else Polygon(museum['ring'])
+    museum = {'ring': [[round(x, 2), round(z, 2)] for x, z in mus_poly.exterior.coords]}
     park_m = ring_mask(nd.shape, park['ring'])
-    mus_m = ring_mask(nd.shape, list(mus_poly.buffer(6).exterior.coords))
+    mus_m = ring_mask(nd.shape, list(mus_poly.buffer(3).exterior.coords))
 
     # ── buildings inside the park ──
     bld_m = np.zeros_like(park_m)
@@ -93,7 +106,7 @@ def main():
         if 'building' not in t or f['id'] == MUSEUM or len(f['ring']) < 4:
             continue
         P = Polygon(f['ring'])
-        if not P.is_valid or P.area < 12 or not park_poly.contains(P.representative_point()) or mus_poly.buffer(6).contains(P.representative_point()):
+        if not P.is_valid or P.area < 12 or not park_poly.contains(P.representative_point()) or mus_poly.buffer(3).intersects(P):
             continue
         m = ring_mask(nd.shape, f['ring'])
         bld_m |= ndimage.binary_dilation(m, iterations=2)
@@ -159,6 +172,10 @@ def main():
         rad = float(np.clip(1.1 * math.sqrt(area[i] / math.pi), 1.2, 17))
         base = h * (0.5 if h < 6 else 0.3)
         g = float(dem[int(r), int(c)])
+        if mus_poly.distance(Point(x, z)) < 0.6 * rad:  # no crown reaches over a layer on top
+            continue
+        if (cr[i] + cg[i] + cb[i]) / 3 > 150 and 2 * cg[i] - cr[i] - cb[i] < 15:  # pale and not green: stone (the Cenotaph), a pole, a car
+            continue
         trees.append([round(x, 1), round(z, 1), round(g, 1), round(g + h, 1), round(rad, 1), round(g + base, 1),
                       int(cr[i]), int(cg[i]), int(cb[i])])
 
@@ -167,7 +184,7 @@ def main():
     fw, fh = full.size
     k = fw / W
     hole = Image.new('L', full.size, 0)
-    ImageDraw.Draw(hole).polygon([(x * k, z * k) for x, z in mus_poly.buffer(4).exterior.coords], fill=255)
+    ImageDraw.Draw(hole).polygon([(x * k, z * k) for x, z in mus_poly.buffer(2).exterior.coords], fill=255)
     arr = np.asarray(full).copy()
     hm = np.asarray(hole) > 0
     # one flat tone: the median of the ring 4–20 m around it (forecourt, car park and lawn), with a little grain
