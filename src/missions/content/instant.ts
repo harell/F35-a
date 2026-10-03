@@ -133,11 +133,12 @@ const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
  * difficulty's: Ace flies Pilot's numbers (issue #60). At Ace's ×1.5 the bot was 0/6 in every mode:
  * six Flankers against four AIM-120s in Dogfight, a third MiG-29 inside R-73 range in Strike, a
  * third Su-35 on the Gauntlet's CAP, a third striker in Defend. Ace stays the hardest setting
- * through its pilots (sharper, GCI-vectored, Su-35s and Su-57s in 'mixed'), its SAMs and one-hit kills.
+ * through its pilots (sharper and GCI-vectored), its SAMs and one-hit kills; Dogfight adds Viper 3,
+ * the Gauntlet a third CAP jet a minute behind the pair (both Ace only).
  */
 export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = { ace: 1 };
 
-const BELT_TYPES: SamType[] =['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
+const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
 
 export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: number): MissionDef {
   const rng = mulberry32(seed >>> 0);

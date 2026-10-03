@@ -4,11 +4,14 @@
  *  - the wingman (Viper 2) can't win Defend or Dogfight for a player who never fires: in Dogfight
  *    it holds fire until the player engages a bandit (a stray gun burst doesn't count), in Defend it
  *    fights the escort and never the strikers;
- *  - balance floors over 6 seeds, one win under what the sweep measures (Strike 5/5/3, Gauntlet
- *    6/4/3, Dogfight 6/6/5, Defend 6/5/6 on Recruit/Pilot/Veteran) so a bot tweak or #63's
+ *  - balance floors over 6 seeds, one win under what the sweep measures (Strike 6/6/5, Gauntlet
+ *    6/6/4, Dogfight 6/6/4, Defend 6/5/5 on Recruit/Pilot/Veteran) so a bot tweak or #63's
  *    no-rearm bot (which measured Defend Pilot 4/6) doesn't flip them; the issue's bands are
  *    Recruit and Pilot ≥ 75 % (5/6) and Veteran ≥ 25 % (2/6);
- *  - Defend at the top of the enemy-count slider (8) is winnable on Recruit, with 2 escorts at most.
+ *  - the Ace band, 20-60 % (2-3 of 6; measured Strike 2, Gauntlet 3, Dogfight 3, Defend 3), with
+ *    one win of slack each way;
+ *  - the enemy-count extremes: Defend at 8 (Beast mode, three bombers below Veteran, 2 escorts at
+ *    most) is winnable on Recruit and Pilot; enemyCount 1 is accepted as the easy end.
  * The heavy tests are async and yield after every playthrough: a long synchronous stretch starves
  * vitest's worker RPC (60 s timeout) and fails the run with "Timeout calling onTaskUpdate".
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=ia_strike_auckland,ia_sam_gauntlet_auckland,ia_dogfight_auckland,ia_defend_auckland --diffs=recruit,pilot,veteran,ace --seeds=6
