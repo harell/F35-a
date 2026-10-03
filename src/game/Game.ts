@@ -70,6 +70,8 @@ import {
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
+import { initFlight } from '../sim/flight/FlightModel';
+import { AKL } from '../core/auckland';
 import { FlowInterrupt } from './flow';
 import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
 
@@ -728,7 +730,7 @@ export class Game {
     // after a view change the 3D image moves with the frame instead of a frame late (#62)
     // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
     const q = this.quality;
-    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit), s.env.targetCamLandmarks);
     this.audio.update(ctx2);
   }
 
@@ -905,7 +907,7 @@ export class Game {
             triangles: this.renderer.info.render.triangles,
             pip: {
               open: pipView.open,
-              drawn: s?.targetCam.lastTargetId != null,
+              drawn: s?.targetCam.lastTargetId != null || s?.targetCam.lastLandmark != null,
               calls: s?.targetCam.lastStats.calls ?? 0,
               triangles: s?.targetCam.lastStats.triangles ?? 0,
             },
@@ -989,6 +991,20 @@ export class Game {
         for (const e of hit) forceDestroy(w, e, byPlayer ? (w.player?.id ?? null) : null);
         return hit.length;
       },
+      /**
+       * Put the player's jet at (x, z) and `alt` m MSL, flying level on `headingDeg` (0 = north) at
+       * `speed` m/s: trimmed by the flight model, so no overstress (playtest retro: every reviewer
+       * hand-wrote this). Pass a place name from AKL (e.g. 'skytower') for x to fly over it.
+       */
+      place: (x: number | string, alt = 600, z = 0, headingDeg = 0, speed = 150) => {
+        const p = this.session?.world.player;
+        if (!p) return false;
+        const at = typeof x === 'string' ? AKL[x] : { x, z };
+        if (!at) throw new Error(`no place ${x}`);
+        p.position.set(at.x, alt, at.z);
+        initFlight(p, { heading: (headingDeg * Math.PI) / 180, speed });
+        return true;
+      },
       /** Pin the camera at `pos` looking at `look` (scenery checks without a driver); null hands it back to the rig. */
       camera: (pos: [number, number, number] | null, look: [number, number, number] = [0, 0, 0]) => {
         const rig = this.session?.rig as (CameraRigApi & { rigUpdate?: CameraRigApi['update'] }) | undefined;
@@ -1032,6 +1048,7 @@ export class Game {
         open: pipView.open,
         anim: pipView.anim,
         targetId: pipView.targetId,
+        landmark: pipView.landmark?.id ?? null,
         rect: [pipView.vx, pipView.vy, pipView.vw, pipView.vh],
         rendered: this.session?.targetCam.lastTargetId ?? null,
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,

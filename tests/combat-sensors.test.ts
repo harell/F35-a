@@ -1,3 +1,4 @@
+import { createOneWay } from '../src/sim/drone/oneWay';
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { FakeWorld, FlatTerrain, v3 } from './combat-helpers';
@@ -228,6 +229,74 @@ describe('combat: radar & stealth', () => {
     // look-designate
     w.combat.designateNearestTo(f35, new Vector3(0, 0, -1), w);
     expect([nearFront.id, farFront.id]).toContain(f35.radar.designatedId);
+  });
+});
+
+describe('combat: shoot list', () => {
+  /**
+   * Player F-35 heading north at three bandits coming head-on (A nearest): one-way drones flying a
+   * route past the jet (the swarm the shoot list is for), or fighters.
+   */
+  function threeBandits(drones = true) {
+    const w = new FakeWorld({ difficulty: 'veteran' });
+    const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 6000, 0), heading: 0, speed: 250, loadout: 'a2a_stealth' });
+    const a = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, -15000), heading: Math.PI, speed: 250 });
+    const b = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(1500, 6000, -20000), heading: Math.PI, speed: 250 });
+    const c = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(-1500, 6000, -25000), heading: Math.PI, speed: 250 });
+    if (drones) for (const x of [a, b, c]) x.oneWay = createOneWay({ target: v3(x.position.x, 0, 40_000), altitude: 6000, speed: 250 });
+    w.run(0.5);
+    return { w, f35, a, b, c };
+  }
+  const shotAt = (w: FakeWorld, f35: AircraftEntity) => w.missiles.filter((m) => m.alive && m.shooterId === f35.id).map((m) => m.targetId);
+
+  it('after an AMRAAM launch the TD box steps to the next unengaged bandit; FIRE goes at it at once, TGT steps on', () => {
+    const { w, f35, a, b, c } = threeBandits();
+    expect(f35.radar.designatedId).toBe(a.id);
+    w.combat.fire(f35, w, 'aim120'); // bay doors open, then the release
+    w.run(0.5);
+    expect(shotAt(w, f35)).toEqual([a.id]);
+    expect(f35.radar.designatedId).toBe(b.id);
+    w.combat.fire(f35, w, 'aim120'); // off the TWS track, no lock needed
+    w.run(0.5);
+    expect(shotAt(w, f35)).toEqual([a.id, b.id]);
+    expect(f35.radar.designatedId).toBe(c.id);
+    // the box was commanded: TGT steps on (every other bandit is engaged → the full list)
+    w.combat.cycleTarget(f35, w);
+    expect(f35.radar.designatedId).toBe(a.id);
+  });
+
+  it('against fighters the box stays on the bandit just fired at (playtest r2: the step dropped that lock)', () => {
+    const { w, f35, a } = threeBandits(false);
+    expect(f35.radar.designatedId).toBe(a.id);
+    w.combat.fire(f35, w, 'aim120');
+    w.run(0.5);
+    expect(shotAt(w, f35)).toEqual([a.id]);
+    expect(f35.radar.designatedId).toBe(a.id);
+  });
+
+  it('an AI launch leaves its own designation alone', () => {
+    const w = new FakeWorld();
+    const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, 0), heading: 0, speed: 250 });
+    const f1 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 6000, -12000), heading: 0, speed: 250, loadout: 'a2a_beast' });
+    w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(800, 6000, -14000), heading: 0, speed: 250, loadout: 'a2a_beast' });
+    w.run(0.5);
+    w.combat.designate(mig, f1.id, w);
+    w.combat.fire(mig, w, 'aim9x', f1.id);
+    w.run(0.2);
+    expect(mig.radar.designatedId).toBe(f1.id);
+  });
+
+  it('TGT NEXT skips a bandit our missile is already flying at', () => {
+    const { w, f35, a, b, c } = threeBandits();
+    w.combat.designate(f35, a.id, w);
+    w.combat.fire(f35, w, 'aim120', b.id); // a shot at B; the box stays on A (unengaged)
+    w.run(0.5);
+    expect(shotAt(w, f35)).toEqual([b.id]);
+    expect(f35.radar.designatedId).toBe(a.id);
+    w.combat.cycleTarget(f35, w);
+    expect(f35.radar.designatedId).toBe(c.id);
+    w.combat.cycleTarget(f35, w);
+    expect(f35.radar.designatedId).toBe(a.id);
   });
 });
 

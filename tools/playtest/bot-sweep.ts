@@ -4,7 +4,7 @@
  * (~0.5–3 s per run). The fast way to answer "is this mission winnable / too easy / did my change
  * break it" before spending minutes per mission in Playwright.
  *
- *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=c01,c04|campaign|training|all]
+ *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=c01,c04|campaign|irgc|campaigns|training|all]
  *       [--diffs=recruit,pilot,veteran,ace] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
  *       [--loadout=strike_sdb2] [--log] [--nojitter]
  *
@@ -30,7 +30,7 @@ import os from 'node:os';
 import '../../tests/linz-setup';
 import { runPlaythrough, type PlaythroughResult } from '../../tests/missions-bot';
 import { MAX_DEAD_STRETCH, deadStretchText, longestDeadStretch, type DeadStretch } from '../../tests/missions-pacing';
-import { CAMPAIGN, TRAINING, missionById, terrainPadsFor } from '../../src/missions';
+import { CAMPAIGN, CAMPAIGNS, TRAINING, missionById, terrainPadsFor } from '../../src/missions';
 import { generateTerrain, runSync } from '../../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../../src/world/scenery/Scenery';
@@ -48,9 +48,21 @@ const args = Object.fromEntries(
     }),
 ) as Record<string, string>;
 
-/** Ids and the groups campaign / training / all, comma-separated in any mix (e.g. campaign,training,ia_defend_auckland). */
+/**
+ * Ids and groups, comma-separated in any mix (e.g. campaign,training,ia_defend_auckland): campaign
+ * (Operation Southern Cross, c01–c12), irgc (the IRGC campaign, g01…), campaigns (every campaign),
+ * training, all (every campaign and training).
+ */
 function missionIds(spec: string): string[] {
-  const group = (s: string) => (s === 'campaign' ? CAMPAIGN : s === 'training' ? TRAINING : s === 'all' ? [...CAMPAIGN, ...TRAINING] : null);
+  const every = CAMPAIGNS.flatMap((c) => c.missions);
+  const groups: Record<string, readonly { id: string }[]> = {
+    campaign: CAMPAIGN,
+    irgc: CAMPAIGNS.find((c) => c.id === 'irgc')?.missions ?? [],
+    campaigns: every,
+    training: TRAINING,
+    all: [...every, ...TRAINING],
+  };
+  const group = (s: string) => groups[s] ?? null;
   return [...new Set(spec.split(',').filter(Boolean).flatMap((s) => group(s)?.map((m) => m.id) ?? [s]))];
 }
 

@@ -7,6 +7,7 @@ import type { HudFrame } from './frame';
 import { RADIO_FONT, RADIO_LINE } from './layout';
 import { vignetteParams } from './gEffects';
 import { withAlpha, type Palette } from './palette';
+import { altColumnBottom, bandExt, dlzShown, hitsWarningBand } from './zones';
 
 /* ───────────────────────── Vignettes ───────────────────────── */
 
@@ -330,17 +331,69 @@ function pageLabel(page: number, pages: number): string {
 
 /* ───────────────────────── Kill feed ───────────────────────── */
 
-/** Kill feed (max 3 lines, newest first), right aligned at (x, y). Returns the next free y. */
-export function drawKillFeed(f: HudFrame, x: number, y: number): number {
+/** Where the kill feed was drawn this frame: its right edge (NaN = nothing drawn). */
+export const killFeedAt = { x: NaN };
+
+/**
+ * Is [x0, x1] × [y0, y1] free for a kill-feed line that had to leave its slot: off the warning band, the
+ * protected symbols (FPM, target box, pipper), the HMD altitude column and the DLZ scale?
+ */
+function killSpotFree(f: HudFrame, x0: number, y0: number, x1: number, y1: number): boolean {
+  const { L, occ } = f;
+  const u = L.u;
+  if (hitsWarningBand(x0, y0, x1, y1) || occ.hits(x0, y0, x1, y1, 1)) return false;
+  if (f.mode === 'hmd' && x0 < L.altLeft + 92 * u && x1 > L.altLeft - 3 * u && y1 > L.boxY - 13 * u && y0 < altColumnBottom(f)) return false;
+  return !(dlzShown(f) && x0 < L.dlzX + 62 * u && x1 > L.dlzX - 10 * u && y0 < L.dlzBottom + 18 * u && y1 > L.dlzTop - 18 * u);
+}
+
+/**
+ * Kill feed (max 3 lines, newest first), right aligned at (x, y). Returns the next free y.
+ *
+ * It never prints on the warning band drawn this frame (playtest 1.2-a: under the target camera window
+ * it ran into the MISSILE line and the SPIKE / FLARES LOW chips during a missile defence). Blocked, it
+ * moves right to `xAlt` (the right edge, under the window) when that is free (no DLZ scale there), else
+ * down under the band with the newest lines that fit; with no room at all it holds back while the
+ * warnings are up — they outrank it.
+ */
+export function drawKillFeed(f: HudFrame, x: number, y: number, xAlt = x): number {
   const { pen, pal, L, st } = f;
   const u = L.u;
+  killFeedAt.x = NaN;
+  let n = 0;
+  let w = 0;
   for (const e of st.kills.items) {
+    if (st.kills.alpha(e) * (0.4 + 0.6 * f.declutter) <= 0.02) continue;
+    n++;
+    w = Math.max(w, pen.textWidth(e.text, 13));
+  }
+  if (n === 0) return y;
+  const hh = 9 * u;
+  const dy = 17 * u;
+  if (hitsWarningBand(x - w, y - hh, x, y + (n - 1) * dy + hh)) {
+    if (xAlt > x && killSpotFree(f, xAlt - w, y - hh, xAlt, y + (n - 1) * dy + hh)) x = xAlt;
+    else {
+      // under the band rows this column crosses
+      const b = bandExt;
+      let yb = y;
+      if (x - w < b.r1x1 && x > b.r1x0) yb = Math.max(yb, b.r1y1 + hh + 2 * u);
+      if (x - w < b.chx1 && x > b.chx0) yb = Math.max(yb, b.chy1 + hh + 2 * u);
+      let k = 0;
+      while (k < n && killSpotFree(f, x - w, yb + k * dy - hh, x, yb + k * dy + hh)) k++;
+      if (k === 0) return y;
+      n = k;
+      y = yb;
+    }
+  }
+  killFeedAt.x = x;
+  for (const e of st.kills.items) {
+    if (n === 0) break;
     const a = st.kills.alpha(e) * (0.4 + 0.6 * f.declutter);
     if (a <= 0.02) continue;
     pen.g.globalAlpha = a;
     pen.text(e.text, x, y, toneColor(pal, e.tone), 13, 'right');
     pen.g.globalAlpha = 1;
-    y += 17 * u;
+    y += dy;
+    n--;
   }
   return y;
 }

@@ -46,6 +46,8 @@ const EVAL_PERIOD = 0.1;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
 const DEFAULT_AO = 38_000;
+/** Free flight has no AO: past this half-size (m, near the edge of the 88 km terrain) a nudge back towards the city. */
+const FREE_FLIGHT_EDGE = 42_000;
 /** Seconds before a patrolling enemy fighter group is vectored onto the player. */
 const DEFAULT_COMMIT = 150;
 
@@ -169,6 +171,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.world = world;
     buildGroups(s);
     const p = spawnPlayer(s, loadout);
+    // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
+    // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
+    if (s.script.freeFlight) world.combat.selectWeapon(p, 'gun', world);
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
     markObjectiveTargets(s);
@@ -290,8 +295,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
-    r.tips = buildTips(s, r);
-    r.medals = awardMedals(s, r, finale);
+    // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
+    if (s.script.freeFlight) r.freeFlight = true;
+    r.tips = r.freeFlight ? [] : buildTips(s, r);
+    r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
     this.finalResult = r;
     return r;
@@ -479,9 +486,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
   }
 
-  /** Plain nav / IP / CAP points can be skipped; rings and RTB points cannot. */
+  /** Plain nav / IP / CAP points can be skipped; rings, RTB points and a free-flight tour's stops cannot. */
   private skippable(w: WaypointRt): boolean {
-    if (w.def.kind === 'rtb') return false;
+    // the stroll's tour: a detour past a later stop doesn't end the tour (playtest r2, 2.2-3)
+    if (w.def.kind === 'rtb' || this.s.script.freeFlight) return false;
     for (const o of this.s.objectives) if (o.def.kind === 'waypoints' && o.def.waypoints.includes(w.def.id)) return false;
     return true;
   }
@@ -494,6 +502,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
   /** HUD tick for ring/waypoint captures that belong to a 'waypoints' objective. */
   private announceCapture(w: WaypointRt): void {
     const s = this.s;
+    if (s.script.freeFlight) {
+      // the tour: tick each stop off, and say when it's done
+      const n = s.waypoints.length;
+      const i = s.waypoints.indexOf(w);
+      s.hud(i === n - 1 ? 'TOUR COMPLETE' : `${w.def.label.toUpperCase()} ✓  ${i + 1}/${n}`, 'good', i === n - 1 ? 3 : 1.8);
+      return;
+    }
     for (const o of s.objectives) {
       if (o.def.kind !== 'waypoints' || o.status.state !== 'active') continue;
       const idx = o.def.waypoints.indexOf(w.def.id);
@@ -507,15 +522,24 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const s = this.s;
     const p = s.player;
     if (!p || !p.alive) return;
-    const half = s.script.aoHalfSize ?? DEFAULT_AO;
+    // free flight never fails over the AO: past the edge of the map, a nudge back (no countdown)
+    const free = !!s.script.freeFlight;
+    const half = free ? FREE_FLIGHT_EDGE : (s.script.aoHalfSize ?? DEFAULT_AO);
     const outside = Math.abs(p.position.x) > half || Math.abs(p.position.z) > half;
     if (!outside) {
-      if (this.outsideAo > 0) s.hud('BACK IN THE AO', 'info', 2);
+      if (this.outsideAo > 0) s.hud(free ? 'BACK OVER AUCKLAND' : 'BACK IN THE AO', 'info', 2);
       this.outsideAo = 0;
       this.aoWarnAt = 0;
       return;
     }
     this.outsideAo += dt;
+    if (free) {
+      if (this.outsideAo >= this.aoWarnAt) {
+        s.hud('EDGE OF THE MAP — TURN BACK', 'info', 2.5);
+        this.aoWarnAt += 10;
+      }
+      return;
+    }
     if (!this.aoRadioDone) {
       this.aoRadioDone = true;
       s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}, you are leaving the area of operations. Turn back now.`, priority: 3 });
@@ -604,8 +628,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.endTime = s.time;
     this.hints.clear();
     failOpenObjectives(s);
-    s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Mission failed.`, voice: 'a_mission_failed', priority: URGENT_PRIORITY });
-    s.hud('MISSION FAILED', 'bad', 5);
+    if (s.script.freeFlight) {
+      // free flight has no mission to fail: a crash is just the end of the flight (playtest r2, 2.2-4)
+      s.hud('FLIGHT OVER', 'info', 5);
+    } else {
+      s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Mission failed.`, voice: 'a_mission_failed', priority: URGENT_PRIORITY });
+      s.hud('MISSION FAILED', 'bad', 5);
+    }
     s.events.emit('mission:end', { success: false, reason });
   }
 

@@ -7,7 +7,7 @@ import { dlzLayout, makeDlzGeometry } from './dlz';
 import { HDG3_STR, INT_STR, NumText, WEAPON_IS_BOMB, entityLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
-import { rangeLabel, rangeLabelNm } from './targets';
+import { nextWaypointText, rangeLabel, rangeLabelNm } from './targets';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from './tsd';
 import { drawWeaponBlock } from './weapons';
 
@@ -83,6 +83,15 @@ export function drawExternalBlock(f: HudFrame): number {
   pen.text(HDG3_STR[hdg], tx, y, pal.main, 12, 'left');
   if (fl.afterburner > 0.02) pen.text('AB', tx + pen.textWidth('000', 12) + 10 * u, y, pal.warn, 12, 'left');
   y += 18 * u;
+  // the steering waypoint, when its diamond had no room for its name (playtest 2.2-1)
+  const next = nextWaypointText(f);
+  if (next) {
+    pen.text('NEXT', x, y, pal.dim, 11, 'left');
+    const nx = x + pen.textWidth('NEXT', 11) + 6 * u;
+    pen.text(next.name, nx, y, pal.main, 12, 'left');
+    pen.text(next.dist, nx + pen.textWidth(next.name, 12) + 8 * u, y, pal.dim, 11, 'left');
+    y += 16 * u;
+  }
   // weapon
   y = drawWeaponBlock(f, x, y, true);
   // target

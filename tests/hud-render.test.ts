@@ -22,6 +22,7 @@ import { computeTouchLayout } from '../src/input/touch/layout';
 import { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
 import { paletteFor } from '../src/hud/hmd/palette';
 import { PLAYER_LOCK_CONE } from '../src/sim/sensors/Sensors';
+import { gunOvershoot } from '../src/hud/hmd/weapons';
 
 installPath2D();
 
@@ -972,5 +973,171 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     expect(again).toContain('IN RANGE');
     expect(again).not.toContain('BOMB AWAY');
     expect(cueTexts({ timeToRelease: 12, bombAway: true })).toContain('REL 12');
+  });
+});
+
+describe('engaged marker: own missile in flight at a contact', () => {
+  it('marks a non-designated contact our missile is guiding on with M n beside its box, clear of other text', () => {
+    const r = rig('aa', 'hud');
+    const p = r.mock.player;
+    const su = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
+    expect(p.radar.designatedId).not.toBe(su.id);
+    expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+    const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+    const m = new MissileEntity(950, def, 'blue', p.id, su.id);
+    // 12 km out, closing at ~1,200 m/s: about 10 s to go
+    m.position.copy(su.position).addScaledVector(new Vector3().subVectors(p.position, su.position).normalize(), 12_000);
+    m.velocity.subVectors(su.position, m.position).setLength(1000);
+    (r.mock.world.missiles as MissileEntity[]).push(m);
+    const texts = r.run(0.1);
+    const ms = find(texts, /^M \d+$/);
+    expect(ms.length).toBe(1);
+    const s = Number(ms[0].text.slice(2));
+    expect(s).toBeGreaterThanOrEqual(8);
+    expect(s).toBeLessThanOrEqual(12);
+    // beside the su-35's box
+    const proj = new Projector();
+    proj.update(r.camera, r.W, r.H);
+    const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+    proj.point(p.radar.contacts.find((c) => c.id === su.id)!.position, sp);
+    expect(Math.abs(ms[0].y - sp.y)).toBeLessThan(30);
+    expect(Math.abs(ms[0].x - sp.x)).toBeLessThan(60);
+    // never printed over other text
+    const mb = textBox(ms[0]);
+    for (const t of texts) if (t !== ms[0]) expect(overlaps(mb, textBox(t)), `M n over "${t.text}"`).toBe(false);
+    // a dead missile: the mark goes
+    m.alive = false;
+    expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+  });
+});
+
+describe('gun closure cue', () => {
+  const kt = 0.514444;
+  /** The gun cue's Vc texts: those the gun adds (the altitude column / info block has its own). */
+  const gunVcs = (r: Rig) => {
+    const p = r.mock.player;
+    p.selectedWeapon = 'aim120';
+    const base = find(r.run(0.1), /^Vc \d+$/).map((t) => `${Math.round(t.x)},${Math.round(t.y)}`);
+    p.selectedWeapon = 'gun';
+    const texts = r.run(0.1);
+    return { texts, vc: find(texts, /^Vc \d+$/).filter((t) => !base.includes(`${Math.round(t.x)},${Math.round(t.y)}`)) };
+  };
+  /** Put the target `range` m dead ahead, a little high, closing at `closureKt`. */
+  const place = (r: Rig, range: number, closureKt: number) => {
+    const p = r.mock.player;
+    const mig = r.mock.world.getEntity(p.radar.lockedId)!;
+    const fwd = p.velocity.clone().normalize();
+    mig.position.copy(p.position).addScaledVector(fwd, range).add(new Vector3(0, range * 0.06, 0));
+    mig.velocity.copy(p.velocity).addScaledVector(fwd, -closureKt * kt);
+    const c = p.radar.contacts.find((k) => k.id === mig.id);
+    if (c) c.position.copy(mig.position);
+    return mig;
+  };
+  const clear = (texts: TextRec[], t: TextRec) => {
+    for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
+  };
+
+  it('OVERSHOOT is a time-to-close cue: under 4 s to the 150 m break-off at the present closure', () => {
+    expect(gunOvershoot(600, 100 * kt)).toBe(false); // 8.8 s
+    expect(gunOvershoot(580, 154 * kt)).toBe(false); // 5.4 s (lit too early before: playtest 2.1-b)
+    expect(gunOvershoot(300, 154 * kt)).toBe(true); // 1.9 s
+    expect(gunOvershoot(300, -20)).toBe(false); // opening
+  });
+
+  for (const view of ['hud', 'chase'] as const) {
+    it(`${view}: Vc (knots) by the gun cue inside 3 km of an air target, OVERSHOOT only when about to overshoot, clear of every text`, () => {
+      const r = rig('gun', view);
+      place(r, 600, 100);
+      let { texts, vc } = gunVcs(r);
+      expect(vc.length, 'gun Vc drawn').toBe(1);
+      expect(Math.abs(Number(vc[0].text.slice(3)) - 100)).toBeLessThanOrEqual(15);
+      expect(find(texts, 'OVERSHOOT').length).toBe(0);
+      clear(texts, vc[0]);
+      // 580 m at Vc 154: still time to pull the pipper on (no cue)
+      place(r, 580, 154);
+      ({ texts, vc } = gunVcs(r));
+      expect(vc.length).toBe(1);
+      expect(find(texts, 'OVERSHOOT').length).toBe(0);
+      // 300 m at Vc 154: OVERSHOOT, clear of the target's labels and every other text
+      place(r, 300, 154);
+      ({ texts, vc } = gunVcs(r));
+      clear(texts, one(texts, 'OVERSHOOT'));
+      clear(texts, vc[0]);
+      // beyond 3 km: no closure cue
+      place(r, 4000, 154);
+      ({ texts, vc } = gunVcs(r));
+      expect(vc.length).toBe(0);
+      expect(find(texts, 'OVERSHOOT').length).toBe(0);
+    });
+  }
+});
+
+describe('target waypoint labels with the bandits in reach', () => {
+  it('drops the target waypoint\'s name / distance once a hostile aircraft is within 5 km (the boxes take over)', () => {
+    const r = rig('gun', 'hud');
+    const p = r.mock.player;
+    const fwd = p.velocity.clone().normalize();
+    const wp = { id: 'wp_swarm', label: 'Swarm', position: p.position.clone().addScaledVector(fwd, 4000).add(new Vector3(0, -900, 0)).addScaledVector(new Vector3(-fwd.z, 0, fwd.x).normalize(), 1200), radius: 2000, kind: 'target' as const };
+    (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
+    // the MiG at 700 m (a contact): no labels
+    expect(find(r.run(0.1), 'Swarm').length).toBe(0);
+    // nothing within 5 km: the labels come back
+    const mig = r.mock.world.getEntity(p.radar.lockedId)!;
+    mig.position.copy(p.position).addScaledVector(fwd, 9000).add(new Vector3(2000, 0, 0));
+    r.mock.player.radar.contacts.find((c) => c.id === mig.id)!.position.copy(mig.position);
+    expect(find(r.run(0.1), 'Swarm').length).toBe(1);
+  });
+});
+
+describe('own missiles in flight: a count that always reads', () => {
+  for (const view of ['hud', 'chase'] as const) {
+    it(`${view}: "3 IN FLT" in the weapon block with three of our missiles in the air, clear of other text`, () => {
+      const r = rig('aa', view);
+      const p = r.mock.player;
+      expect(find(r.run(0.1), /IN FLT$/).length).toBe(0);
+      const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+      const targets = r.mock.world.aircraft.filter((a) => a.team === 'red');
+      for (let i = 0; i < 3; i++) {
+        const m = new MissileEntity(960 + i, def, 'blue', p.id, targets[i % targets.length].id);
+        m.position.copy(p.position).add(new Vector3(0, 0, -200 * (i + 1)).applyQuaternion(p.quaternion));
+        m.velocity.copy(p.velocity).multiplyScalar(4);
+        (r.mock.world.missiles as MissileEntity[]).push(m);
+      }
+      const texts = r.run(0.1);
+      const t = one(texts, '3 IN FLT');
+      for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
+    });
+  }
+});
+
+describe('the steering waypoint always has its name on screen', () => {
+  for (const view of ['cockpit', 'hud', 'chase'] as const) {
+    it(`${view}: with no room by the diamond (here: behind the jet), the name and distance go to the fixed NEXT slot`, () => {
+      const r = rig('nav', view);
+      const p = r.mock.player;
+      const wp = { id: 'wp_bridge', label: 'Harbour Bridge', position: p.position.clone().add(new Vector3(0, 0, 4400).applyQuaternion(p.quaternion)), radius: 900, kind: 'nav' as const };
+      (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
+      const texts = r.run(0.1);
+      const name = one(texts, 'HARBOUR BRIDGE');
+      const dist = one(texts, /^2\.\d NM$/);
+      for (const t of [name, dist]) for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
+      // in sight with room by the diamond: named there, once
+      wp.position.copy(p.position).add(new Vector3(-600, -300, -4400).applyQuaternion(p.quaternion));
+      const t2 = r.run(0.1);
+      expect(find(t2, /^(HARBOUR BRIDGE|Harbour Bridge)$/).length).toBe(1);
+    });
+  }
+});
+
+describe('NEXT slot with the bandits in reach', () => {
+  it('stays empty for a target waypoint off screen while a hostile aircraft is within 5 km (chase)', () => {
+    const r = rig('gun', 'chase');
+    const p = r.mock.player;
+    const wp = { id: 'wp_swarm', label: 'Swarm', position: p.position.clone().add(new Vector3(0, 0, 5000).applyQuaternion(p.quaternion)), radius: 2000, kind: 'target' as const };
+    (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
+    expect(find(r.run(0.1), /^swarm$/i).length).toBe(0);
+    // a nav waypoint behind: named in the NEXT slot
+    (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = { ...wp, kind: 'nav' };
+    expect(find(r.run(0.1), /^swarm$/i).length).toBe(1);
   });
 });

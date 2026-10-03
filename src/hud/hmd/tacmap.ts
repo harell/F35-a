@@ -177,6 +177,38 @@ const LANDMARKS: { id: string; text: string }[] = [
   { id: 'motuihe', text: 'MOTUIHE' },
 ];
 
+/**
+ * Free flight (A Stroll in the Park) also names the city's sights and suburbs, so a sightseer can
+ * find a place (playtest 2026-10-02 bc94edd, 1.1-c); combat missions keep the sparse chart.
+ */
+const SIGHTS: { id: string; text: string }[] = [
+  { id: 'skytower', text: 'SKY TOWER' },
+  { id: 'bridge_n', text: 'HARBOUR BRIDGE' },
+  { id: 'eden_park', text: 'EDEN PARK' },
+  { id: 'domain', text: 'MUSEUM' },
+  { id: 'mt_eden', text: 'MT EDEN' },
+  { id: 'one_tree_hill', text: 'ONE TREE HILL' },
+  { id: 'north_head', text: 'NORTH HEAD' },
+  { id: 'tamaki_drive', text: 'MISSION BAY' },
+  { id: 'ponsonby', text: 'PONSONBY' },
+  { id: 'parnell', text: 'PARNELL' },
+  { id: 'newmarket', text: 'NEWMARKET' },
+  { id: 'st_heliers', text: 'ST HELIERS' },
+  { id: 'northcote', text: 'NORTHCOTE' },
+  { id: 'mt_albert', text: 'MT ALBERT' },
+  { id: 'mt_roskill', text: 'MT ROSKILL' },
+  { id: 'mt_wellington', text: 'MT WELLINGTON' },
+  { id: 'onehunga', text: 'ONEHUNGA' },
+  { id: 'otahuhu', text: 'OTAHUHU' },
+  { id: 'titirangi', text: 'TITIRANGI' },
+  { id: 'hobsonville', text: 'HOBSONVILLE' },
+  { id: 'browns_bay', text: 'BROWNS BAY' },
+  { id: 'long_bay', text: 'LONG BAY' },
+  { id: 'piha', text: 'PIHA' },
+  { id: 'muriwai', text: 'MURIWAI' },
+  { id: 'beachlands', text: 'BEACHLANDS' },
+];
+
 /* ───────────────────────── colours ───────────────────────── */
 
 const C = {
@@ -635,7 +667,8 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   /* landmark names last, only where they don't collide with a symbol or label */
   pen.setFont(9);
   pen.setAlign('center', 'middle');
-  for (const lm of LANDMARKS) {
+  const names = f.ctx.mission?.def?.script?.freeFlight ? [...LANDMARKS, ...SIGHTS] : LANDMARKS;
+  for (const lm of names) {
     const a = AKL[lm.id];
     if (!a) continue;
     tacProject(proj, a.x, a.z, pt);

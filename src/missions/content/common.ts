@@ -191,7 +191,8 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
   for (const f of features) {
     if (f.type !== 'airbase') continue;
     const home = Math.hypot(f.x - P.whenuapai.x, f.z - P.whenuapai.z) < 3000;
-    out.push({ kind: 'airbase', label: home ? 'Whenuapai (home)' : 'Enemy airstrip', x: f.x, z: f.z });
+    // free flight has no enemy: the Waiheke strip is just an airstrip
+    out.push({ kind: 'airbase', label: home ? 'Whenuapai (home)' : script.freeFlight ? 'Waiheke airstrip' : 'Enemy airstrip', x: f.x, z: f.z });
   }
   for (const s of script.sams) {
     const known = s.known ?? !s.emcon;

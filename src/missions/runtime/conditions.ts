@@ -97,6 +97,10 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       if (!e || !e.alive || e.kind !== 'aircraft' || !isHostile(p.team, e.team)) return false;
       return c.state === 'locked' || p.radar.lockedId !== id;
     }
+    case 'player_weapon': {
+      const p = s.player;
+      return !!p && p.alive && p.selectedWeapon === c.weapon;
+    }
     case 'all':
       for (const sub of c.of) if (!evalCondition(sub, s)) return false;
       return true;

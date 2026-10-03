@@ -160,6 +160,10 @@ export function drawContacts(f: HudFrame): void {
     pen.rect(sp.x - h, sp.y - h, h * 2, h * 2);
     pen.strokeGlow(civil ? pal.white : stale ? pal.dim : pal.main, 1.4);
     pen.setDash('solid');
+    // engaged: our missile is in flight at it — a flag in the box's top-right corner, and its time to
+    // impact ("M 12") beside the box where it fits, so a swarm shows which drones are already taken
+    const m = civil ? null : ownMissileOn(f, e.id);
+    if (m) drawEngaged(f, m, e, sp.x, sp.y, h);
     const lbl = labelled ? trackShort(e) : '';
     if (lbl) {
       const lw = pen.textWidth(lbl, 10.5) / 2 + 2;
@@ -170,6 +174,34 @@ export function drawContacts(f: HudFrame): void {
       }
     }
     picks.add(e.id, sp.x, sp.y, h);
+  }
+}
+
+/**
+ * Engaged marker on a (non-designated) contact box: a filled corner flag, always, and "M n" (the newest
+ * missile's time to impact) right of the box, or left of it, wherever no reserved text or symbol is.
+ */
+function drawEngaged(f: HudFrame, m: MissileEntity, e: AnyEntity, x: number, y: number, h: number): void {
+  const { pen, pal, L, occ } = f;
+  const u = L.u;
+  const k = Math.min(6 * u, h * 0.8);
+  const g = pen.g;
+  pen.begin();
+  g.moveTo(x + h, y - h);
+  g.lineTo(x + h - k, y - h);
+  g.lineTo(x + h, y - h + k);
+  g.closePath();
+  pen.fillPlain(pal.main);
+  const txt = impactLabel(f, m, e);
+  const tw = pen.textWidth(txt, 10);
+  const ty = y - h + 4 * u;
+  const gap = 3 * u;
+  for (let side = 0; side < 2; side++) {
+    const x0 = side === 0 ? x + h + gap : x - h - gap - tw;
+    if (occ.hits(x0 - 1, ty - 6 * u, x0 + tw + 1, ty + 6 * u)) continue;
+    pen.text(txt, side === 0 ? x0 : x0 + tw, ty, pal.main, 10, side === 0 ? 'left' : 'right');
+    occ.add(x0 - 1, ty - 6 * u, x0 + tw + 1, ty + 6 * u);
+    return;
   }
 }
 
@@ -713,11 +745,29 @@ export function drawFriendlies(f: HudFrame): void {
 
 /* ───────────────────────── Steering waypoint ───────────────────────── */
 
+/**
+ * Did drawWaypoint print the steering waypoint's name this frame (or leave it out on purpose: a target
+ * waypoint with the bandits in reach)? When not, the fixed NEXT line (by the heading box in the HMD, in
+ * the outside views' info block) names it instead: a tour is useless without its names (playtest 2.2-1).
+ */
+const wpName = { frame: -1, done: false };
+
+export function waypointNamed(f: HudFrame): boolean {
+  return wpName.frame === f.st.frame && wpName.done;
+}
+
 export function drawWaypoint(f: HudFrame): void {
+  wpName.frame = f.st.frame;
+  wpName.done = false;
   const wp = f.ctx.mission?.currentWaypoint;
   if (!wp) return;
   const { p, pen, pal, L, occ } = f;
   const u = L.u;
+  // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
+  // would only print into them (playtest: over the drone boxes through the g01 gun pass), and the NEXT
+  // slot stays empty too
+  const engaged = wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE);
+  wpName.done = engaged;
   f.proj.point(wp.position, f.sp);
   if (!drawable(f)) return;
   const x = f.sp.x;
@@ -730,6 +780,7 @@ export function drawWaypoint(f: HudFrame): void {
   pen.diamond(x, y, r);
   pen.line(x, y - r, x, y - r - 5 * u);
   pen.strokeGlow(pal.main, 1.6);
+  if (engaged) return;
   const dx = wp.position.x - p.position.x;
   const dz = wp.position.z - p.position.z;
   const d = Math.hypot(dx, dz);
@@ -749,8 +800,10 @@ export function drawWaypoint(f: HudFrame): void {
   if (!occ.hits(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u)) {
     pen.text(name, lx, aboveY, pal.main, 11);
     occ.add(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u);
+    wpName.done = true;
   } else if (infoFree) {
     pen.text(name, lx, belowY, pal.main, 11);
+    wpName.done = true;
     occ.add(lx - nw, belowY - 7 * u, lx + nw, belowY + 7 * u);
     belowY += 13 * u;
   }
@@ -759,6 +812,21 @@ export function drawWaypoint(f: HudFrame): void {
     pen.text(mmss(d / gs), dx2, belowY + 12 * u, pal.dim, 10.5);
     occ.add(dx2 - dw, belowY - 6 * u, dx2 + dw, belowY + 18 * u);
   }
+}
+
+/** A target waypoint keeps only its diamond once a hostile aircraft is this close (m). */
+export const WP_ENGAGED_RANGE = 5_000;
+
+/** Is a live hostile aircraft contact within `range` (m) of the player? */
+function airContactWithin(f: HudFrame, range: number): boolean {
+  const { p, world } = f;
+  const r2 = range * range;
+  for (const c of p.radar.contacts) {
+    if (c.team === p.team || c.team === 'neutral') continue;
+    const e = world.getEntity(c.id);
+    if (e && e.alive && e.kind === 'aircraft' && c.position.distanceToSquared(p.position) < r2) return true;
+  }
+  return false;
 }
 
 /** Is (x, y) inside one of the fixed text blocks (external info block / top-left column)? */
@@ -778,4 +846,15 @@ export function waypointBearing(f: HudFrame): number | null {
   let b = Math.atan2(dx, -dz);
   if (b < 0) b += Math.PI * 2;
   return b;
+}
+
+/**
+ * The fixed NEXT line: the steering waypoint's name and distance ("NEXT HARBOUR BRIDGE 2.4 NM"), for
+ * when its diamond has no room for them (waypointNamed). Text only; the caller places it.
+ */
+export function nextWaypointText(f: HudFrame): { name: string; dist: string } | null {
+  const wp = f.ctx.mission?.currentWaypoint;
+  if (!wp || waypointNamed(f)) return null;
+  const d = Math.hypot(wp.position.x - f.p.position.x, wp.position.z - f.p.position.z);
+  return { name: (wp.label || wp.id).toUpperCase(), dist: wpDist.get(toNm(d)) };
 }

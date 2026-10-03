@@ -87,7 +87,7 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
   return new Promise((resolve) => {
     let done = false;
     let raf = 0;
-    const el = h('section', { class: `scr-debrief ${r.success ? 'is-win' : 'is-loss'}` });
+    const el = h('section', { class: `scr-debrief ${r.success || r.freeFlight ? 'is-win' : 'is-loss'}` });
     const finish = (c: 'next' | 'retry' | 'menu') => {
       if (done) return;
       done = true;
@@ -100,14 +100,18 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
 
     // ── left: banner + grade + score ──
     const left = h('div', { class: 'db-left' });
+    // free flight (A Stroll in the Park): 'FLIGHT OVER', no grade or score, nothing to beat
+    const banner = r.freeFlight ? 'FLIGHT OVER' : r.success ? (r.campaignComplete ? 'CAMPAIGN COMPLETE' : 'MISSION ACCOMPLISHED') : 'MISSION FAILED';
     left.innerHTML =
-      `<div class="db-banner"><span class="db-b-line"></span><span class="db-b-t">${r.success ? (r.campaignComplete ? 'CAMPAIGN COMPLETE' : 'MISSION ACCOMPLISHED') : 'MISSION FAILED'}</span><span class="db-b-line"></span></div>` +
+      `<div class="db-banner"><span class="db-b-line"></span><span class="db-b-t">${banner}</span><span class="db-b-line"></span></div>` +
       `<div class="db-mission">${escapeHtml(r.title)}</div>` +
       `<div class="db-reason">${escapeHtml(r.reason)}</div>` +
-      `<div class="db-grade-wrap"><div class="db-ring tone-${tone}"></div><div class="db-grade tone-${tone}">${r.grade}</div></div>` +
-      `<div class="db-gword tone-${tone}">${GRADE_WORD[r.grade]}</div>` +
-      `<div class="db-score"><span class="db-score-k">SCORE</span><span class="db-score-v mono">0</span></div>` +
-      `<div class="db-diff"><span class="badge diff-${r.difficulty}">${diff?.label ?? r.difficulty}</span><span class="mono">×${diff?.scoreMultiplier ?? 1}</span></div>`;
+      (r.freeFlight
+        ? ''
+        : `<div class="db-grade-wrap"><div class="db-ring tone-${tone}"></div><div class="db-grade tone-${tone}">${r.grade}</div></div>` +
+          `<div class="db-gword tone-${tone}">${GRADE_WORD[r.grade]}</div>` +
+          `<div class="db-score"><span class="db-score-k">SCORE</span><span class="db-score-v mono">0</span></div>` +
+          `<div class="db-diff"><span class="badge diff-${r.difficulty}">${diff?.label ?? r.difficulty}</span><span class="mono">×${diff?.scoreMultiplier ?? 1}</span></div>`);
 
     // ── right: stats + objectives ──
     const right = h('div', { class: 'db-right ui-panel ui-scroll' });
@@ -213,7 +217,8 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
     host.present(el, { bg: true, back: () => finish('menu'), focus: focusEl });
 
     // score count-up (starts once the grade has landed)
-    const scoreEl = left.querySelector('.db-score-v') as HTMLElement;
+    const scoreEl = left.querySelector('.db-score-v') as HTMLElement | null;
+    if (!scoreEl) return;
     const t0 = performance.now() + 650;
     const dur = 1200;
     const step = (now: number) => {

@@ -5,7 +5,7 @@
 import { Vector3 } from 'three';
 import { AIRCRAFT_INFO } from '../../core/data';
 import { DEG, clamp } from '../../core/math';
-import { isHostile, type DifficultyParams, type LoadoutId, type Team } from '../../core/types';
+import { isHostile, type Difficulty, type DifficultyParams, type LoadoutId, type Team } from '../../core/types';
 import type { AiTask, TerrainQuery } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
@@ -37,7 +37,9 @@ export function spawnFloor(terrain: TerrainQuery, x: number, z: number, fx: numb
 }
 
 /** Difficulty-scaled size of an aircraft group. */
-export function scaledCount(def: AircraftGroupDef, enemyCountScale: number): number {
+export function scaledCount(def: AircraftGroupDef, enemyCountScale: number, difficulty?: Difficulty): number {
+  const set = difficulty !== undefined ? def.countFor?.[difficulty] : undefined;
+  if (set !== undefined) return Math.max(1, set);
   let n = def.count;
   if (def.team === 'red' && !def.fixedCount) n = Math.max(1, Math.round(def.count * enemyCountScale));
   if (def.maxCount !== undefined) n = Math.min(n, def.maxCount);
@@ -474,7 +476,7 @@ export function buildGroups(s: MissionState): void {
     }
     const g = ensure(def.id, def.team);
     g.air = def;
-    g.expected = scaledCount(def, scale);
+    g.expected = scaledCount(def, scale, diff);
   }
   if (sc.scaleEnemyTotal) {
     const list = sc.groups.filter((d) => d.team === 'red' && !d.fixedCount && difficultyAtLeast(diff, d.minDifficulty));

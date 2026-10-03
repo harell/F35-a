@@ -246,6 +246,20 @@ describe('issue #57: c02 Shepherd — Kiwi has to be protected for real', () => 
   }
 });
 
+describe('c02 Shepherd: Viper 2 holds fire until the player engages (playtest 2026-10-02 bc94edd, 1.3-b)', () => {
+  // parked over the player's own start with no shot fired, Viper 2 used to kill all four bandits:
+  // Recruit 3/3 and Pilot 1/3 wins, grade C, 0 shots (the far park above already failed)
+  it('parked at the start with no shot fired: no win on Recruit', { timeout: 300_000 }, async () => {
+    for (const seed of [0, 1, 2]) {
+      await breathe();
+      const r = parkedRun('c02', 'recruit', seed, 900, { x: -6000, y: 4500, z: -14000 });
+      const msg = `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason} ${r.objectives.map((o) => `${o.id}=${o.state}`).join(' ')}`;
+      expect(r.shots, msg).toBe(0);
+      expect(r.state, msg).not.toBe('success');
+    }
+  });
+});
+
 describe('issue #57: c09 Hammer Down — needs its escort, and ends once Hammer is clear', () => {
   // parked with no shot fired: far away (the charter's spot), at the player's own start (17 km from the
   // push point) and 35 km west of the strip (19 km from it). Review: a 25 km escort circle held the start.
@@ -395,4 +409,21 @@ describe('#58: Veteran band in c04 and c10, and a difficulty curve that only fal
       expectFalling(await curve(id));
     });
   }
+});
+
+describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-10-02)', () => {
+  // missiles take 7–8 of the 10 Shaheds; the rest need gun passes. The bot's 170 m/s gun chase
+  // overshot a 51 m/s drone on every pass and it was 0/6 on every difficulty. With the slow-target
+  // chase (ai-playerbot.ts gunChaseFloor) it measured, 6 seeds with jitter: Recruit 3/6, Pilot 6/6
+  // (no jitter: 2/6, 5/6). Recruit then flew nine drones (G01_SWARM.recruitCount): 5/6, Pilot 6/6,
+  // Veteran 6/6, Ace 4/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
+  it('Recruit ≥ 4/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
+    const seeds = [0, 1, 2, 3, 4, 5];
+    await new Promise((r) => setTimeout(r, 0));
+    const rec = wins('g01', 'recruit', seeds);
+    await new Promise((r) => setTimeout(r, 0));
+    const pil = wins('g01', 'pilot', seeds);
+    expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(4);
+    expect(pil.won, pil.log.join('\n')).toBeGreaterThanOrEqual(5);
+  });
 });

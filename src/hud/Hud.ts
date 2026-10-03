@@ -26,12 +26,12 @@ import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, dra
 import { HudState, makeFrame, type HudMode } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
-import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
+import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, killFeedAt, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
-import { drawPip, pipView, resetPip, stepPip } from './hmd/pip';
+import { drawPip, pipLandmarkFocus, pipView, resetPip, stepPip } from './hmd/pip';
 import { Pen } from './hmd/pen';
-import { PickRegistry } from './hmd/picking';
+import { PICK_RADIUS, PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
 import { TacMapState, drawTacticalMap } from './hmd/tacmap';
 import {
@@ -45,11 +45,15 @@ import {
   lockCommandedOf,
   reserveSymbols,
   waypointBearing,
+  nextWaypointText,
 } from './hmd/targets';
 import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
-import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
+import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
-import { reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
+import { clearBandExt, reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
+
+/** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit). */
+const GUN_DIR_CAM_RANGE = 120;
 
 const _q = new Quaternion();
 const _fwd = new Vector3();
@@ -96,6 +100,12 @@ export const createHud: CreateHud = (canvas, events) => {
   const missileDist = (id: number) => {
     const m = curWorld?.getEntity(id);
     return m && curPlayer ? m.position.distanceTo(curPlayer.position) : Infinity;
+  };
+  // tap picking in a cluster: one of our missiles is already flying at this contact
+  const engagedByPlayer = (id: number) => {
+    if (!curWorld || !curPlayer) return false;
+    for (const m of curWorld.missiles) if (m.alive && m.shooterId === curPlayer.id && m.targetId === id) return true;
+    return false;
   };
 
   void loadHudFont(() => {
@@ -281,12 +291,15 @@ export const createHud: CreateHud = (canvas, events) => {
       const v = ctx.viewMode;
       const pipAllowed =
         ctx.settings.targetCam !== false && p?.alive === true && (v === 'cockpit' || v === 'hud' || v === 'chase' || v === 'orbit' || v === 'flyby') && !(cockpit && pcdZoom.open);
-      layoutOpts.pip = pipAllowed && (pipView.open || pipView.anim > 0 || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null);
+      // (the Sky Tower being hit or falling opens it too, with nothing designated)
+      const pipLandmark = pipLandmarkFocus(ctx.world.landmarks, ctx.world.time);
+      layoutOpts.pip = pipAllowed && (pipView.open || pipView.anim > 0 || pipLandmark !== null || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null);
       computeLayout(L, W, H, ctx.screen.safe, proj.tanHalfV, cockpit, layoutOpts);
       pen.fontScale = L.u;
       picks.begin();
       f.occ.clear();
       f.sym.clear();
+      clearBandExt(); // (the kill feed reads the warning band drawn this frame; none drawn yet)
       dirty = true;
 
       f.ctx = ctx;
@@ -317,7 +330,7 @@ export const createHud: CreateHud = (canvas, events) => {
         f.zone = null;
       }
 
-      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt);
+      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt, pipLandmark);
 
       if (mode === 'tactical') {
         reserveRadio(f);
@@ -360,8 +373,14 @@ export const createHud: CreateHud = (canvas, events) => {
       if (hmd) {
         drawAim9x(f);
         drawGun(f);
-      } else protectJet(ctx);
+      } else {
+        protectJet(ctx);
+        // the gun pass is flown from the chase view on a phone too (playtest 2.1-c): the pipper (a world
+        // point) from any outside camera, the funnel and gun cross (directions) only from one near the jet
+        if (ctx.viewMode !== 'missile') drawGun(f, ctx.camera.position.distanceToSquared(p.position) < GUN_DIR_CAM_RANGE * GUN_DIR_CAM_RANGE);
+      }
       drawDesignated(f);
+      drawGunCues(f);
       g2.globalAlpha = 1;
       // 1b) fixed text blocks (tape, columns, DLZ, weapon block, objectives / hint, kill feed, external
       // info block + inset): every label placed after this dodges them, the ladder knocks out under them
@@ -410,7 +429,7 @@ export const createHud: CreateHud = (canvas, events) => {
       let colY: number;
       if (hmd) {
         g2.globalAlpha = declutter;
-        drawHeadingTape(f, waypointBearing(f));
+        drawHeadingTape(f, waypointBearing(f), nextWaypointText(f));
         drawSpeedColumn(f);
         drawAltColumn(f);
         drawDlz(f, L.dlzX, L.dlzTop, L.dlzBottom);
@@ -469,9 +488,12 @@ export const createHud: CreateHud = (canvas, events) => {
         drawCues(f);
         drawMessages(f);
       }
+      // (HMD: under the target camera window it sits left of the DLZ scale; the right edge under the
+      // window is its way out of the warning band)
       const kx = hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u;
-      const kb = drawKillFeed(f, kx, L.killY);
-      zoneExt.killLeft = kx - 230 * L.u;
+      const kb = drawKillFeed(f, kx, L.killY, hmd ? L.right : kx);
+      zoneExt.killLeft = killFeedAt.x - 230 * L.u;
+      zoneExt.killRight = killFeedAt.x;
       zoneExt.killBottom = kb > L.killY + 1 ? kb - 8 * L.u : NaN;
       drawHitMarkers(f);
       drawRadio(f);
@@ -498,13 +520,13 @@ export const createHud: CreateHud = (canvas, events) => {
       if (lastMode === 'tactical') {
         // tap a symbol = designate it; tap the map = next range (10 / 20 / 40 km)
         if (tac.tapLegend(x, y, st.clock)) return null;
-        const id = picks.pick(x, y, TAC_PICK_RADIUS);
+        const id = picks.pick(x, y, TAC_PICK_RADIUS, st.clock, engagedByPlayer);
         if (id == null) tac.cycle();
         return id;
       }
       // the PCD zoom overlay swallows taps (the cockpit handles them first)
       if (pcdZoom.open) return null;
-      return picks.pick(x, y);
+      return picks.pick(x, y, PICK_RADIUS, st.clock, engagedByPlayer);
     },
 
     dispose() {

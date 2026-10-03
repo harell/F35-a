@@ -10,6 +10,7 @@
  */
 import { NM, RAD, toFeet, toNm } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
+import { BINGO_FRACTION } from '../../core/data';
 import { AB_DETENT } from '../../core/types';
 import type { AircraftEntity, StoreStation } from '../../sim/entities';
 import { AIRCRAFT_LABEL, WARNING_INFO, WEAPON_HUD, entityLabel, groupThousands, hmm } from '../hmd/format';
@@ -49,7 +50,6 @@ export type PageFn = (pen: Pen, x: number, y: number, w: number, h: number, d: P
 const KG_TO_LB = 2.20462;
 /** F-35A internal fuel (kg) — 18,250 lb. */
 const F35_FUEL_KG = 8_278;
-const BINGO_FRACTION = 0.18;
 
 /* ───────────────────────── TSD ───────────────────────── */
 
@@ -140,15 +140,20 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   const hw = pen.textWidth(hdgTxt, PCD_CORNER);
   reserveRect(1, x + w - 10 - hw, y + 19, hw, hc);
   reserveRect(2, x + 10, y + 51, pen.textWidth(bull, PCD_CORNER), hc);
-  const lw = tgt ? pen.textWidth(lbl, 22) : 0;
-  if (tgt) reserveRect(3, x + w - 10 - lw, y + 51, lw, 22 * 0.6);
+  // the target name: beside the bullseye call with two ems between them, else on its own row below it
+  // (1.2-f: "BULL 136/8 TGT FUEL DEPOT" read as one line), shrunk only if wider than the portal
+  const bw = pen.textWidth(bull, PCD_CORNER);
+  const lsz = tgt ? Math.min(22, (22 * (w - 20)) / Math.max(1, pen.textWidth(lbl, 22))) : 22;
+  const lw = tgt ? pen.textWidth(lbl, lsz) : 0;
+  const ly = bw + lw + 2 * PCD_CORNER + 20 <= w ? y + 51 : y + 51 + PCD_CORNER - 2;
+  if (tgt) reserveRect(3, x + w - 10 - lw, ly, lw, lsz * 0.6);
   s.reserve = tsdReserve;
   s.reserveN = tgt ? 4 : 3;
   drawTsd(pen, ctx, p, s, TSD_COLORS, d.flash);
   pen.text(rng, x + 10, y + 19, PC.label, PCD_CORNER, 'left');
   pen.text(hdgTxt, x + w - 10, y + 19, PC.value, PCD_CORNER, 'right');
   pen.text(bull, x + 10, y + 51, PC.cyan, PCD_CORNER, 'left');
-  if (tgt) pen.text(lbl, x + w - 10, y + 51, p.radar.lockedId === t.id ? PC.green : PC.value, 22, 'right');
+  if (tgt) pen.text(lbl, x + w - 10, ly, p.radar.lockedId === t.id ? PC.green : PC.value, lsz, 'right');
 };
 
 /** The TSD page's corner readout rects, reserved on the plot (x0, y0, x1, y1 each). */
@@ -545,9 +550,21 @@ export const drawRwrPage: PageFn = (pen, x, y, w, h, d) => {
     g.closePath();
     pen.fillPlain(m.guidance === 'ir' ? '#ff8a1c' : PC.red);
   }
-  pen.text(p.rwr.length + ' EMIT', x + 10, y + 19, PC.label, PCD_CORNER, 'left');
-  if (launch && d.flash) pen.text('LAUNCH', x + w - 10, y + 19, PC.red, PCD_CORNER, 'right');
-  else if (!p.radar.emitting) pen.text('EMCON', x + w - 10, y + 19, PC.amber, PCD_CORNER, 'right');
+  const emit = p.rwr.length + ' EMIT';
+  pen.text(emit, x + 10, y + 19, PC.label, PCD_CORNER, 'left');
+  // LAUNCH / EMCON top right; on the next row, on a plate over the scope, when it can't sit beside
+  // "n EMIT" with two ems between them (1.2-e: "2 EMITLAUNCH", LAUNCH clipped at the portal edge)
+  const tag = launch ? 'LAUNCH' : !p.radar.emitting ? 'EMCON' : '';
+  if (tag && (!launch || d.flash)) {
+    const tw = pen.textWidth(tag, PCD_CORNER);
+    const oneRow = pen.textWidth(emit, PCD_CORNER) + tw + 2 * PCD_CORNER + 20 <= w;
+    const ty = oneRow ? y + 19 : y + 19 + PCD_CORNER + 2;
+    if (!oneRow) {
+      pen.setFill(PC.portal);
+      g.fillRect(x + w - 14 - tw, ty - PCD_CORNER * 0.55, tw + 8, PCD_CORNER * 1.1);
+    }
+    pen.text(tag, x + w - 10, ty, launch ? PC.red : PC.amber, PCD_CORNER, 'right');
+  }
 };
 
 export const PAGE_FNS: Record<PageId, PageFn> = {

@@ -12,7 +12,13 @@ import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import type { Difficulty } from '../src/core/types';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, missionGunAmmo, terrainPadsFor, validateMission } from '../src/missions';
-import { G01, G01_SWARM } from '../src/missions/content/irgc';
+import { G01, G01_GUN_PASS, G01_SWARM } from '../src/missions/content/irgc';
+import { evalCondition } from '../src/missions/runtime/conditions';
+import { slowGunPass } from '../src/missions/runtime/hints';
+import type { MissionState } from '../src/missions/runtime/state';
+import { SHAHED_SPEED } from '../src/sim/drone/oneWay';
+import { stallSpeedIas } from '../src/sim/flight/performance';
+import { AircraftEntity as AircraftEntityC } from '../src/sim/entities';
 import { REASONS } from '../src/missions/runtime/reasons';
 import { createAiBrain } from '../src/ai';
 import { createSimWorld } from '../src/sim/World';
@@ -20,6 +26,7 @@ import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { MUNITIONS } from '../src/sim/weapons/defs';
 import { AIRCRAFT_HEALTH } from '../src/sim/damage/tables';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
+import { initFlight } from '../src/sim/flight/FlightModel';
 import type { AircraftEntity } from '../src/sim/entities';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
@@ -119,6 +126,7 @@ describe('g01 Buzz Kill: content', () => {
       const missiles = LOADOUTS[lo].stores.filter((s) => (AAMS as readonly string[]).includes(s.weapon)).reduce((n, s) => n + s.count, 0);
       expect(missiles, lo).toBeLessThanOrEqual(8);
       expect(missiles, lo).toBeLessThan(G01_SWARM.count);
+      expect(missiles, lo).toBeLessThan(G01_SWARM.recruitCount); // the gun is required on Recruit too
     }
     // over the suburbs nearest neighbours are `spacing` apart; converging on the tower they close up
     // into single file `stagger` apart: both wider than two kill radii (the runtime test below flies it)
@@ -128,12 +136,13 @@ describe('g01 Buzz Kill: content', () => {
 });
 
 describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
-  it('spawns all 10 drones on every difficulty, in rows of 1, 2, 3, 4 (each stepped back, so no two abreast) with the nose on the Sky Tower', () => {
+  it('spawns 10 drones (9 on Recruit) in rows of 1, 2, 3, 4 (each stepped back, so no two abreast) with the nose on the Sky Tower', () => {
     const { spacing, stagger } = G01_SWARM;
     for (const diff of DIFFS) {
       const h = harness(G01, diff);
       const ds = drones(h);
-      expect(ds, diff).toHaveLength(10);
+      const n = diff === 'recruit' ? G01_SWARM.recruitCount : G01_SWARM.count;
+      expect(ds, diff).toHaveLength(n);
       const lead = ds[0];
       const heading = Math.atan2(AKL.skytower.x - lead.position.x, -(AKL.skytower.z - lead.position.z));
       const fwd = new Vector3(Math.sin(heading), 0, -Math.cos(heading));
@@ -154,9 +163,10 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
         if (gap > stagger + spacing / 2) rows.push([]);
         rows[rows.length - 1].push(slots[i]);
       }
-      expect(rows.map((r) => r.length), diff).toEqual([1, 2, 3, 4]);
-      // each row spread across the lead's track, `spacing` apart: a triangle seen from above
+      expect(rows.map((r) => r.length), diff).toEqual(n === 10 ? [1, 2, 3, 4] : [1, 2, 3, 3]);
+      // each full row spread across the lead's track, `spacing` apart: a triangle seen from above
       rows.forEach((row, r) => {
+        if (row.length !== r + 1) return; // Recruit's short last row
         const xs = row.map((q) => q.right).sort((a, b) => a - b);
         xs.forEach((x, j) => expect(x).toBeCloseTo((j - r / 2) * spacing, 0));
       });
@@ -189,6 +199,28 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
     expect(tower(h).alive).toBe(false);
     expect(h.runner.state).toBe('failed');
     expect(h.of('mission:end')).toEqual([{ success: false, reason: REASONS.skytowerLost }]);
+  });
+
+  it('Winchester means the gun, not a trip home: no RTB call, no rearm cue, and the loss tip says how to beat the swarm (playtest 1.3-j, 1.4-h)', { timeout: 60_000 }, () => {
+    const h = harness(G01);
+    const hud: string[] = [];
+    const radio: string[] = [];
+    h.events.on('hud:message', (e) => hud.push(e.text));
+    h.events.on('radio', (e) => radio.push(e.text));
+    h.run(1);
+    const p = h.world.player!;
+    for (const st of p.stores) st.count = 0; // every missile fired
+    h.run(2);
+    expect(hud).toContain('WINCHESTER MISSILES — GUNS');
+    expect(radio.some((t) => /finish them with the gun/.test(t))).toBe(true);
+    expect(hud.some((t) => /RTB/.test(t))).toBe(false);
+    expect(radio.some((t) => /RTB|rearm/i.test(t))).toBe(false);
+    expect(h.runner.currentWaypoint?.id).not.toBe('rearm');
+    runParked(h, 300);
+    const r = h.runner.result(h.world);
+    expect(r.reason).toBe(REASONS.skytowerLost);
+    expect(r.tips?.[0]).toMatch(/swarm got through.*about 200 kt/);
+    expect(r.tips?.some((t) => /Whenuapai/.test(t))).toBe(false);
   });
 
   it('one missile never takes two drones: live drones stay more than two missile kill radii apart all the way into the tower', { timeout: 60_000 }, () => {
@@ -242,9 +274,10 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
 describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runner)', () => {
   it('missiles alone can\'t win: the bot fires its whole load with no gun rounds, and the drones left bring the tower down', { timeout: 180_000 }, () => {
     const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: G01.theater, seed: G01.seed, resolution: 512, features: allFeatures(G01.theater, []), pads: terrainPadsFor(G01) })));
+    // (Pilot: Recruit's nine drones let a flawless missile run win with the tower hit once)
     for (const seed of [1, 2]) {
       const events = new EventBus();
-      const d = DIFFICULTIES.recruit;
+      const d = DIFFICULTIES.pilot;
       const world = createSimWorld({ terrain, difficulty: d, events, combat: createCombatSystemSeeded(seed) });
       const runner = createMissionRunner({ ...G01, gunAmmo: 0 }, { createAi: createAiBrain, difficulty: d, events });
       runner.setup(world, 'a2a_beast');
@@ -273,5 +306,100 @@ describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runne
       expect(runner.result(world).reason, why).toBe(REASONS.skytowerLost);
       runner.dispose?.();
     }
+  });
+});
+
+describe('g01 Buzz Kill: the briefed gun pass lines the pipper up (playtest r3, 3.1-a)', () => {
+  // the jet flies ~12° nose-up at 200 kt: level behind a drone the pipper sits above it. From the
+  // briefed 400 ft below at 200 kt the drone rises into the pipper inside the briefed burst window.
+  it(`${G01_GUN_PASS.belowFt} ft below at ${G01_GUN_PASS.approachKt} kt: the pipper crosses the drone between ${G01_GUN_PASS.burstFrom} and ${G01_GUN_PASS.burstTo} m`, { timeout: 60_000 }, () => {
+    const err = (range: number) => {
+      const h = harness(G01, 'pilot');
+      h.run(1);
+      const w = h.world;
+      const p = w.player!;
+      const d = drones(h)[0];
+      const v = d.velocity.clone().setY(0).normalize();
+      p.position.copy(d.position).addScaledVector(v, -range).setY(d.position.y - G01_GUN_PASS.belowFt * 0.3048);
+      initFlight(p, { heading: Math.atan2(v.x, -v.z), speed: (G01_GUN_PASS.approachKt * 1852) / 3600 });
+      w.combat.selectWeapon(p, 'gun', w);
+      w.combat.designate(p, d.id, w);
+      h.run(0.25);
+      const lp = w.combat.gunLeadPoint(p, w)!;
+      const el = (q: Vector3) => (Math.atan2(q.y - p.position.y, Math.hypot(q.x - p.position.x, q.z - p.position.z)) * 180) / Math.PI;
+      return el(lp) - el(d.position); // + : the pipper above the drone
+    };
+    const far = err(G01_GUN_PASS.burstTo + 50);
+    const near = err(G01_GUN_PASS.burstFrom - 50);
+    expect(far, 'still above the drone just outside the window').toBeGreaterThan(0);
+    expect(near, 'below it just inside the near end').toBeLessThan(0);
+    expect(Math.abs(err(600)), 'on the drone at 600 m').toBeLessThan(1.5);
+  });
+});
+
+describe('g01 Buzz Kill: gun pass and swarm hints', () => {
+  const KT = 1.943844;
+  const hint = (id: string) => G01.script.hints!.find((h) => h.id === id)!;
+  const state = (weapon: string, shotsFired = 0) => ({ player: { alive: true, selectedWeapon: weapon, shotsFired } }) as unknown as MissionState;
+
+  it('gives the real numbers: the Shahed\'s cruise speed, an approach speed well above the F-35\'s stall, no "throttle right back"', () => {
+    const shahedKt = SHAHED_SPEED * KT;
+    const f35 = new AircraftEntityC(1, 'f35a', 'blue');
+    // half the internal fuel (mid-mission), clean: about the measured 1 g stall (~72 m/s, ~140 kt)
+    f35.flight.fuel = AIRCRAFT_PERF.f35a.internalFuel * 0.5;
+    const stallKt = stallSpeedIas(f35) * KT;
+    expect(stallKt).toBeGreaterThan(120);
+    expect(stallKt).toBeLessThan(160);
+    // ~200 kt from behind: clear of the stall (the jet wallows below ~175 kt), closing at ~100 kt
+    expect(G01_GUN_PASS.approachKt).toBeGreaterThanOrEqual(stallKt * 1.3);
+    expect(Math.abs(G01_GUN_PASS.approachKt - shahedKt - G01_GUN_PASS.closureKt)).toBeLessThanOrEqual(10);
+    const gun = hint('h_gun').text;
+    expect(gun).toContain(`~${Math.round(shahedKt / 10) * 10} kt`);
+    expect(gun).toContain(`${G01_GUN_PASS.approachKt} kt`);
+    expect(gun).toContain(`Vc ${G01_GUN_PASS.closureKt}`);
+    expect(gun).toContain(`${G01_GUN_PASS.burstFrom}–${G01_GUN_PASS.burstTo} m`);
+    expect(hint('h_overshoot').text).toMatch(new RegExp(`${G01_GUN_PASS.belowFt} ft below it: the drone rises into the pipper near 600 m. Overshot\\? Pull up, come round`));
+    expect(G01.briefing.join(' ')).toContain(`${G01_GUN_PASS.burstFrom} to ${G01_GUN_PASS.burstTo} m`);
+    expect(G01.briefing.join(' ')).toContain(`about ${G01_GUN_PASS.belowFt} ft below the drone`);
+    expect(hint('h_9x').text).toMatch(/AIM-9X.*inside about 2 km/); // NO SEEKER beyond ~2 km head-on (playtest r2, 2.1-e)
+    const all = [...G01.briefing, ...G01.script.hints!.map((h) => h.text)].join(' ');
+    expect(all).not.toMatch(/throttle right back/i);
+    expect(G01.briefing.join(' ')).toContain(`${G01_GUN_PASS.approachKt} knots`);
+  });
+
+  it('times them: the swarm hint after the first launch (missiles), the gun pass hints once the GUN is selected', () => {
+    const swarm = hint('h_swarm');
+    expect(swarm.text).toBe('After each launch the next drone is boxed: keep pressing FIRE. TGT steps through them.');
+    expect(evalCondition(swarm.when, state('aim120', 0))).toBe(false);
+    expect(evalCondition(swarm.when, state('aim120', 1))).toBe(true);
+    expect(evalCondition(swarm.when, state('gun', 3))).toBe(false);
+    for (const id of ['h_gun', 'h_overshoot']) {
+      expect(evalCondition(hint(id).when, state('aim120', 8))).toBe(false);
+      expect(evalCondition(hint(id).when, state('gun', 8))).toBe(true);
+    }
+    // the gun hint first, then what to do on an overshoot (scripted hints show once each, in order)
+    const ids = G01.script.hints!.map((h) => h.id);
+    expect(ids.indexOf('h_gun')).toBeLessThan(ids.indexOf('h_overshoot'));
+  });
+
+  it('"Too slow" keeps quiet on a gun pass (air target designated within 2 km, IAS above stall + 10 %), not when really slow', () => {
+    const p = new AircraftEntityC(1, 'f35a', 'blue');
+    const drone = new AircraftEntityC(2, 'shahed136', 'red');
+    p.position.set(0, 300, 0);
+    drone.position.set(0, 300, -800);
+    p.radar.designatedId = drone.id;
+    p.warnings.add('speed_low');
+    const s = { player: p, world: { getEntity: (id: number | null) => (id === drone.id ? drone : null) } } as unknown as MissionState;
+    const stall = stallSpeedIas(p);
+    p.flight.ias = stall * 1.2;
+    expect(slowGunPass(p, s)).toBe(true);
+    p.flight.ias = stall * 1.05; // too close to the stall: the hint stands
+    expect(slowGunPass(p, s)).toBe(false);
+    p.flight.ias = stall * 1.2;
+    drone.position.set(0, 300, -3000); // nothing close: the hint stands
+    expect(slowGunPass(p, s)).toBe(false);
+    drone.position.set(0, 300, -800);
+    p.radar.designatedId = null;
+    expect(slowGunPass(p, s)).toBe(false);
   });
 });

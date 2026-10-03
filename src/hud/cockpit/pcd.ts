@@ -63,6 +63,7 @@ export class PcdDisplay {
   private readonly period: number;
   private readonly data: PcdData = { ctx: null as unknown as FrameContext, p: null as unknown as PcdData['p'], flash: false, zoom: false };
   private lastWarnCount = 0;
+  private lastBingo = false;
 
   constructor(quality: QualitySettings) {
     this.canvas = document.createElement('canvas');
@@ -171,6 +172,13 @@ export class PcdDisplay {
       this.setPage(i, this.portals[i].pages.indexOf('ICAWS'));
     }
     this.lastWarnCount = wc;
+    // bingo: the RWR portal jumps to FUEL once (playtest 1.2-h: the fuel state was a tap away)
+    const bingo = p.warnings.has('bingo');
+    if (bingo && !this.lastBingo) {
+      const i = this.portals[0].pages === RWR_PAGES ? 0 : 2;
+      this.setPage(i, this.portals[i].pages.indexOf('FUEL'));
+    }
+    this.lastBingo = bingo;
     if (!this.dirty && this.acc < this.period) return;
     this.acc = 0;
     this.dirty = false;

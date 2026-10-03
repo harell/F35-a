@@ -6,6 +6,7 @@
  * 'warning' {id, active} events.
  */
 import { Vector3 } from 'three';
+import { BINGO_FRACTION, JOKER_FRACTION } from '../core/data';
 import { G } from '../core/math';
 import type { WarningId } from '../core/types';
 import type { SimWorld } from './api';
@@ -47,8 +48,8 @@ export const WARNING_THRESHOLDS = {
   pullUpTime: 4,
   /** 500 ft AGL. */
   altitudeAgl: 152.4,
-  bingoFraction: 0.18,
-  fuelLowFraction: 0.3,
+  bingoFraction: BINGO_FRACTION,
+  fuelLowFraction: JOKER_FRACTION,
   /** 140 kt. */
   speedLowIas: 72,
   countermeasuresLow: 4,

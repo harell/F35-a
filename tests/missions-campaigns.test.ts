@@ -3,7 +3,7 @@
  * side. Each campaign unlocks along its own chain, NEXT and the ending stay inside it, every lookup
  * finds missions in any campaign, and a save from the one-campaign days keeps its progress.
  *
- * The IRGC campaign has a single mission so far (g01, #78), so this file swaps its content module
+ * The IRGC campaign has two missions (g01, g02), so this file swaps its content module
  * for a three-mission fixture (g01–g03, copies of c01–c03; g03 is the campaign's finale). The real
  * file is checked separately.
  */

@@ -21,6 +21,7 @@ import type {
   Team,
   VesselClass,
   VoiceId,
+  WeaponId,
 } from '../core/types';
 import type { WaypointKind } from '../core/contracts';
 
@@ -81,6 +82,8 @@ export type Condition =
    * 'locked' = hard (STT) lock on a hostile aircraft.
    */
   | { kind: 'player_radar'; state: 'designated' | 'locked' }
+  /** The player has this weapon selected (e.g. the GUN: down to the gun, or lining up a gun pass). */
+  | { kind: 'player_weapon'; weapon: WeaponId }
   | { kind: 'all'; of: Condition[] }
   | { kind: 'any'; of: Condition[] }
   | { kind: 'not'; of: Condition };
@@ -152,6 +155,8 @@ export interface AircraftGroupDef {
   /** Base size. Red groups are scaled by difficulty.enemyCountScale (rounded, min 1) unless `fixedCount`. */
   count: number;
   fixedCount?: boolean;
+  /** Size on the listed difficulties, in place of `count` and its scaling (g01's swarm is lighter on Recruit). */
+  countFor?: Partial<Record<Difficulty, number>>;
   /** Upper bound after scaling. */
   maxCount?: number;
   /**
@@ -486,6 +491,11 @@ export interface MissionScript {
    * down doesn't end the sortie.
    */
   freeFlight?: boolean;
+  /**
+   * No rearm point: a short sortie against the clock (g01). Winchester calls for the gun instead of
+   * sending the player home, and there is no rearm gate; bingo still calls RTB.
+   */
+  noRearm?: boolean;
 }
 
 /** Empty script (helper for builders). */

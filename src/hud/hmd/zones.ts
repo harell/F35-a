@@ -23,8 +23,9 @@ export const zoneExt = {
   /** External info block right edge / bottom. */
   extRight: NaN,
   extBottom: NaN,
-  /** Kill feed left edge / bottom. */
+  /** Kill feed left / right edge and bottom. */
   killLeft: NaN,
+  killRight: NaN,
   killBottom: NaN,
   /** HMD weapon block top / bottom / right edge. */
   wpnTop: NaN,
@@ -32,12 +33,48 @@ export const zoneExt = {
   wpnRight: NaN,
 };
 
+/**
+ * The warning band rows drawn THIS frame (drawWarningBand): row 1 (PULL UP / MISSILE / title …) and the
+ * row-2 chips (SPIKE, FLARES LOW, …). NaN = not drawn. The kill feed, drawn after it, keeps clear of
+ * them (playtest 1.2-a: under the target camera window it printed over SPIKE / FLARES LOW).
+ */
+export const bandExt = {
+  r1x0: NaN,
+  r1y0: NaN,
+  r1x1: NaN,
+  r1y1: NaN,
+  chx0: NaN,
+  chy0: NaN,
+  chx1: NaN,
+  chy1: NaN,
+};
+
+/** Forget this frame's warning band rows (start of drawWarningBand). */
+export function clearBandExt(): void {
+  bandExt.r1x0 = bandExt.r1y0 = bandExt.r1x1 = bandExt.r1y1 = NaN;
+  bandExt.chx0 = bandExt.chy0 = bandExt.chx1 = bandExt.chy1 = NaN;
+}
+
+/** Does [x0, x1] × [y0, y1] overlap a warning band row drawn this frame? */
+export function hitsWarningBand(x0: number, y0: number, x1: number, y1: number): boolean {
+  const b = bandExt;
+  if (x0 < b.r1x1 && x1 > b.r1x0 && y0 < b.r1y1 && y1 > b.r1y0) return true;
+  return x0 < b.chx1 && x1 > b.chx0 && y0 < b.chy1 && y1 > b.chy0;
+}
+
+/** HMD: is the DLZ scale drawn this frame (a launch zone for a missile, not the gun or a bomb)? */
+export function dlzShown(f: HudFrame): boolean {
+  const z = f.zone;
+  return f.mode === 'hmd' && !!z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon];
+}
+
 /** Forget the measured extents (mode change / teardown). */
 export function resetZoneExtents(): void {
   zoneExt.colBottom = NaN;
   zoneExt.extRight = NaN;
   zoneExt.extBottom = NaN;
   zoneExt.killLeft = NaN;
+  zoneExt.killRight = NaN;
   zoneExt.killBottom = NaN;
   zoneExt.wpnTop = NaN;
   zoneExt.wpnBottom = NaN;
@@ -50,13 +87,13 @@ export function tapeBottom(f: HudFrame): number {
 }
 
 /**
- * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, and SPD BRK while
- * the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
+ * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, FUEL, and SPD BRK
+ * while the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
  */
 export function speedColumnBottom(f: HudFrame): number {
   const { L, p } = f;
   const brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
-  return L.boxY + 11 * L.u + L.line * (brake ? 6.2 : 5.2);
+  return L.boxY + 11 * L.u + L.line * (brake ? 7.2 : 6.2);
 }
 
 /**
@@ -85,8 +122,7 @@ export function reserveFixedZones(f: HudFrame): void {
     occ.add(L.spdRight - 78 * u, L.boxY - 13 * u, L.spdRight + 3 * u, speedColumnBottom(f));
     occ.add(L.altLeft - 3 * u, L.boxY - 13 * u, L.altLeft + 92 * u, altColumnBottom(f));
     // DLZ scale (only while a launch zone is shown)
-    const z = f.zone;
-    if (z && z.rMax > 0 && z.weapon !== 'gun' && !WEAPON_IS_BOMB[z.weapon]) {
+    if (dlzShown(f)) {
       occ.add(L.dlzX - 10 * u, L.dlzTop - 18 * u, L.dlzX + 62 * u, L.dlzBottom + 18 * u);
     }
     reserveBankScale(f);
@@ -101,7 +137,7 @@ export function reserveFixedZones(f: HudFrame): void {
   // top-left column (objectives / damage / hint), as drawn last frame
   if (Number.isFinite(zoneExt.colBottom)) occ.add(L.colX - 6 * u, L.colY - 10 * u, L.colX + L.colW, zoneExt.colBottom);
   // kill feed (top right)
-  if (Number.isFinite(zoneExt.killBottom)) occ.add(zoneExt.killLeft - 4 * u, L.killY - 10 * u, L.killX + 4 * u, zoneExt.killBottom);
+  if (Number.isFinite(zoneExt.killBottom)) occ.add(zoneExt.killLeft - 4 * u, L.killY - 10 * u, zoneExt.killRight + 4 * u, zoneExt.killBottom);
   // the touch controls in the bottom band (throttle, FIRE, GUN, CMS, stick base): a contact's CIV or
   // type label moves or drops rather than print under a thumb (#62)
   for (const r of controlRects()) occ.add(r.x - 2 * u, r.y - 2 * u, r.x + r.w + 2 * u, r.y + r.h + 2 * u);

@@ -156,7 +156,11 @@ export class Callouts {
           s.civilianKills++;
           if (ship) s.civilianShipKills++;
         }
-        if (ship) {
+        if (s.script.freeFlight) {
+          // free flight: no scolding, just a dry word from Darkstar
+          s.hud(ship ? 'CIVILIAN SHIP DESTROYED' : 'CIVILIAN AIRLINER DOWN', 'warn', 3);
+          s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, Darkstar. ${who} won't be making it home. Let's keep the sightseeing friendly.`, priority: 2 });
+        } else if (ship) {
           s.hud('CIVILIAN SHIP DESTROYED', 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian vessel ${who}!`, priority: 4 });
         } else {
@@ -164,7 +168,8 @@ export class Callouts {
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${who}!`, priority: 4 });
         }
       } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {
-        s.hud(ship ? `CIVIL SHIP ${who.toUpperCase()} DESTROYED` : `CIVIL ${who} DOWN`, 'bad', 2.5);
+        // (not 'CIVIL SHIP … DESTROYED': read as if the player had sunk her — playtest 1.4-i)
+        s.hud(ship ? `${who.toUpperCase()} SUNK` : `CIVIL ${who} DOWN`, 'bad', 2.5);
       }
       return;
     }

@@ -96,6 +96,11 @@ export interface EnvironmentApi {
    * here.
    */
   readonly targetCamOmit?: readonly Object3D[];
+  /**
+   * Landmark visuals (the Sky Tower) inside targetCamOmit that the target camera still draws when it
+   * shows that landmark (the tower hit or collapsing, hud/hmd/pip.ts pipLandmarkFocus).
+   */
+  readonly targetCamLandmarks?: readonly Object3D[];
   update(ctx: FrameContext): void;
   dispose(): void;
 }
@@ -360,6 +365,8 @@ export interface MissionResult {
   medals?: { id: string; name: string; description: string }[];
   /** Final mission of a campaign completed (show that campaign's ending: the mission id names it). */
   campaignComplete?: boolean;
+  /** Free flight (A Stroll in the Park): no grade, no score, nothing recorded in the career. */
+  freeFlight?: boolean;
 }
 
 export interface MissionRunnerApi {

@@ -8,6 +8,7 @@ import type { AircraftType, LoadoutId, SamType, TheaterId } from '../../core/typ
 import type { WingmanOrders } from '../../sim/api';
 import { WIRI_TANKS } from '../../core/sites';
 import type { AircraftGroupDef, Condition, GroundTargetDef, HintDef, MissionScript, ObjectiveDef, SamSiteDef, TriggerDef, WaypointDef, XZ } from '../schema';
+import { AKL } from '../../core/auckland';
 import { AKL_SEED, BASE_FEATURES, FEATURES, P, WAIHEKE_RUNWAY_HDG, flight, mission, runwayPoint, site, target, wingmen } from './common';
 
 const FIGHTERS: AircraftType[] = ['mig29', 'su27', 'su35', 'su57'];
@@ -55,6 +56,29 @@ function aucklandLayout(): Layout {
     // the raid comes in low from the Firth of Thames, over Whitford and Flat Bush
     defend: { site: P.wiri, player: { x: -5000, z: 5000, altitude: 5000, heading: 125, speed: 240 }, raidFrom: { x: 35000, z: 10000 }, low: 300 },
   };
+}
+
+/**
+ * A Stroll in the Park: a sightseeing tour for the steering cue, in the order a resident would show a
+ * visitor round (playtest 2026-10-02 bc94edd, 1.1-c: nothing helped a sightseer find a named place).
+ * Plain nav waypoints, so each advances as the jet passes; ignoring them costs nothing.
+ */
+const STROLL_TOUR: [label: string, place: string, altitude: number][] = [
+  ['Harbour Bridge', 'bridge_s', 500],
+  ['Sky Tower', 'skytower', 600],
+  ['North Head', 'north_head', 500],
+  ['Rangitoto', 'rangitoto', 700],
+  ['Mission Bay', 'tamaki_drive', 500],
+  ['Museum', 'domain', 500],
+  ['Eden Park', 'eden_park', 500],
+  ['Mt Eden', 'mt_eden', 600],
+  ['One Tree Hill', 'one_tree_hill', 600],
+  ['Airport', 'akl_airport', 600],
+  ['Whenuapai', 'whenuapai', 900],
+];
+
+export function strollTour(): WaypointDef[] {
+  return STROLL_TOUR.map(([label, place, altitude], i) => ({ id: `wp_tour${i + 1}`, label, kind: 'nav', x: Math.round(AKL[place].x), z: Math.round(AKL[place].z), altitude, radius: 1500 }));
 }
 
 /** Enemy type for a flight ('mixed' draws from every fighter type). */
@@ -135,13 +159,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       allowed = ['strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
       script.freeFlight = true;
       objectiveText = ['Free flight: no objectives. Explore Auckland at your own pace.'];
+      // start low and steady over the upper Waitematā, the Harbour Bridge ahead (not 5,000 m at 470 kt)
+      player = { x: -6000, z: -2800, altitude: 600, heading: 100, speed: 150 };
+      waypoints = strollTour();
       script.awacs = { silent: true };
       script.opening = [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Nothing hostile up here today. Enjoy the view.`, priority: 1 }];
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
-        'Fly where you like and take in the sights. The airliners and ships are civilians going about their day.',
+        'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. The airliners and ships are civilians going about their day.',
         'You are loaded to the teeth if you want to practise on the scenery: nothing counts against you. Terrain and buildings still do, so mind the ground.',
-        'The flight ends when you quit from the pause menu.',
+        'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
       break;
     }
