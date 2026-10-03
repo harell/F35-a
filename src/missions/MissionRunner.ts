@@ -655,7 +655,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.playerDied = true;
     if (s.state !== 'running') return;
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, eject, eject!`, voice: 'a_eject', priority: URGENT_PRIORITY + 1 });
-    const base = deathReason(s, reason);
+    const base = reason === 'structure' ? REASONS.structure : deathReason(s, reason);
     if (this.survival) {
       const n = s.waves;
       this.fail(`${base} — survived ${n} wave${n === 1 ? '' : 's'}`);

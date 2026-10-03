@@ -170,3 +170,22 @@ describe('A Stroll in the Park: the view (1.1-j)', () => {
     expect(['cockpit', 'hud', 'chase', 'orbit', 'tactical', 'target', 'missile'].filter((v) => isHomeView(v as never))).toEqual(['cockpit', 'hud', 'chase']);
   });
 });
+
+describe('A Stroll in the Park: the Sky Tower as an obstacle (1.1-l)', () => {
+  it('flying into the shaft ends the flight as a crash into the Sky Tower, not an Auto-GCAS lesson', () => {
+    const m = setup();
+    m.tick(1);
+    const p = m.world.player!;
+    const tower = m.world.landmarks[0];
+    // 300 m short of the shaft at 120 m, flying at it
+    p.position.copy(tower.base).addScaledVector(ahead(p), -300).setY(tower.base.y + 120);
+    for (let i = 0; i < 10 && p.alive; i++) m.tick(0.25);
+    expect(p.alive).toBe(false);
+    expect(tower.alive).toBe(true);
+    expect(tower.hits).toBe(1); // burning where the jet went in
+    const r = m.runner.result(m.world);
+    expect(r.reason).toBe('Crashed into the Sky Tower');
+    expect(r.tips ?? []).toEqual([]);
+    expect(m.hud).toContain('FLIGHT OVER');
+  });
+});
