@@ -19,9 +19,10 @@ export const drawnLast = {
   pipper: { drawn: false, x: 0, y: 0, r: 0 },
   /**
    * The steering waypoint (mission steering cue): its label, whether its diamond was drawn and where
-   * (centre), and whether its name was printed beside it and where (text centre).
+   * (centre), whether its name was printed beside it and where (text centre), and `next`: the fixed
+   * NEXT line names it instead (Hud.ts sets it after drawWaypoint).
    */
-  steer: { label: '', diamond: false, x: 0, y: 0, named: false, nameX: 0, nameY: 0 },
+  steer: { label: '', diamond: false, x: 0, y: 0, named: false, nameX: 0, nameY: 0, next: false },
   cues: Array.from({ length: 4 }, (): DrawnCue => ({ text: '', x: 0, y: 0, drawn: false })),
   cueCount: 0,
 };
@@ -33,6 +34,7 @@ export function beginDrawn(frame: number): void {
   drawnLast.steer.label = '';
   drawnLast.steer.diamond = false;
   drawnLast.steer.named = false;
+  drawnLast.steer.next = false;
   drawnLast.cueCount = 0;
 }
 

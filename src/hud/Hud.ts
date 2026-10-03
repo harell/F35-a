@@ -445,6 +445,7 @@ export const createHud: CreateHud = (canvas, events) => {
       drawContacts(f);
       drawGroundAndSams(f);
       drawWaypoint(f);
+      if (TEST_HOOKS) drawnLast.steer.next = !waypointNamed(f);
       drawFriendlies(f);
       drawOwnMissiles(f);
       if (hmd) drawAirToGround(f);
@@ -580,7 +581,8 @@ export const createHud: CreateHud = (canvas, events) => {
   if (TEST_HOOKS) {
     const hooks: HudTestHooks = {
       layoutRead() {
-        const fresh = drawnLast.frame === st.frame;
+        // (the records of the last update: a hidden HUD or a no-player frame leaves them empty; stepClock
+        // doesn't touch them)
         const { pipper: pp, steer: sw } = drawnLast;
         const r1 = (v: number) => Math.round(v * 10) / 10;
         const rect = (x: number, y: number, r: number): HudRect => [r1(x - r), r1(y - r), r1(2 * r), r1(2 * r)];
@@ -588,16 +590,13 @@ export const createHud: CreateHud = (canvas, events) => {
         const p = curPlayer;
         const tid = p ? (p.radar.lockedId ?? p.radar.designatedId) : null;
         return {
-          frame: st.frame,
+          frame: drawnLast.frame,
           clock: st.clock,
           visible,
           mode: lastMode,
-          pipper: fresh && pp.drawn ? { x: r1(pp.x), y: r1(pp.y), r: r1(pp.r) } : null,
-          steer:
-            fresh && sw.label
-              ? { label: sw.label, diamond: sw.diamond ? [r1(sw.x), r1(sw.y)] : null, name: sw.named ? [r1(sw.nameX), r1(sw.nameY)] : null, next: lastMode !== 'tactical' && !waypointNamed(f) }
-              : null,
-          cues: fresh ? drawnLast.cues.slice(0, drawnLast.cueCount).map((c) => ({ ...c, x: r1(c.x), y: r1(c.y) })) : [],
+          pipper: pp.drawn ? { x: r1(pp.x), y: r1(pp.y), r: r1(pp.r) } : null,
+          steer: sw.label ? { label: sw.label, diamond: sw.diamond ? [r1(sw.x), r1(sw.y)] : null, name: sw.named ? [r1(sw.nameX), r1(sw.nameY)] : null, next: sw.next } : null,
+          cues: drawnLast.cues.slice(0, drawnLast.cueCount).map((c) => ({ ...c, x: r1(c.x), y: r1(c.y) })),
           designated: tid == null ? null : { id: tid, rect: boxes.find((b) => b.id === tid)?.rect ?? null },
           boxes,
         };

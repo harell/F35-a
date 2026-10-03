@@ -182,6 +182,11 @@ describe('HUD layout read (state().hud)', () => {
     expect(Math.abs(x + w / 2 - t.x)).toBeLessThan(1);
     expect(Math.abs(y + h / 2 - t.y)).toBeLessThan(1);
     expect(read.boxes.some((b) => b.id === tid && b.kind === 'aircraft')).toBe(true);
+    // stepping the HUD clock (simulate with { hud: true }) draws nothing: the read stays the last drawn frame's
+    for (let i = 0; i < 10; i++) r.hud.stepClock({ ...r.ctx, dt: 1 / 60 });
+    const after = r.hud.layoutRead();
+    expect({ ...after, clock: 0 }).toEqual({ ...read, clock: 0 });
+    expect(after.clock - read.clock).toBeCloseTo(10 / 60, 6);
   });
 
   it('every target box drawn is listed with its rect; no pipper without the gun', () => {
