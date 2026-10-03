@@ -144,7 +144,7 @@ class SimWorldImpl implements SimWorld {
         if (e.kind === 'aircraft' && AIRCRAFT_WARHEAD[e.type]) this.warheadBlast(e);
       },
     });
-    this.collisions = new CollisionSystem(o.terrain, this.damage);
+    this.collisions = new CollisionSystem(o.terrain, this.damage, this);
     for (let i = 0; i < PROJECTILE_POOL_SIZE; i++) this.projectiles.push(createProjectile());
   }
 

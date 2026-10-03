@@ -39,6 +39,7 @@ import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type Waypoin
 import { CivilTraffic } from './runtime/civil';
 import { CivilShipping } from './runtime/shipping';
 import { LandmarkWatch } from './runtime/landmarks';
+import { SightseeingLog } from './runtime/sightseeing';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
@@ -78,6 +79,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly shipping: CivilShipping | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
+  /** Free flight: tour stops, distance and passes for the debrief. */
+  private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
   private evalAcc = 0;
   private outsideAo = 0;
@@ -120,6 +123,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
+    this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
   /* ───────────────────────────── API ───────────────────────────── */
@@ -163,7 +167,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const p = spawnPlayer(s, loadout);
     // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
     // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
-    if (s.script.freeFlight) world.combat.selectWeapon(p, 'gun', world);
+    if (s.script.freeFlight) {
+      world.combat.selectWeapon(p, 'gun', world);
+      // a calm cockpit (#113): radar off at the start (the player can turn it on) and no CIV boxes on
+      // the civil traffic, so TGT can't steer a bomb onto a moored cruise ship
+      world.combat.setRadarEmitting(p, false, world);
+      p.ignoresCivil = true;
+    }
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
     markObjectiveTargets(s);
@@ -195,6 +205,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const edt = this.evalAcc;
     this.evalAcc = 0;
 
+    this.sightseeing?.update(edt);
     if (s.state !== 'running') {
       this.hints.update();
       return;
@@ -284,6 +295,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
     if (s.script.freeFlight) r.freeFlight = true;
+    if (this.sightseeing) (r as MissionResultExt).sightseeing = this.sightseeing.result();
     r.tips = r.freeFlight ? [] : buildTips(s, r);
     r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
@@ -629,7 +641,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.playerDied = true;
     if (s.state !== 'running') return;
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, eject, eject!`, voice: 'a_eject', priority: URGENT_PRIORITY + 1 });
-    this.fail(deathReason(s, reason));
+    this.fail(reason === 'structure' ? REASONS.structure : deathReason(s, reason));
   }
 }
 

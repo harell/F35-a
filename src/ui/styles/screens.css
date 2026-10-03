@@ -593,6 +593,7 @@
 .db-right { flex: 1; min-width: 0; padding: 4px 14px 12px; }
 .db-h { margin: 10px 0 6px; font: 800 10.5px/1 var(--sans); letter-spacing: 0.22em; text-transform: uppercase; color: var(--acc); }
 .db-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.db-stats.is-flight { grid-template-columns: minmax(0, 1fr); }
 .db-stat { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 9px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); animation: item-in 420ms var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms + 500ms); min-width: 0; }
 .db-si { color: var(--acc); display: flex; flex: none; }
 .db-si .ico { width: 16px; height: 16px; }

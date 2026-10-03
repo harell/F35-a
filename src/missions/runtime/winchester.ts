@@ -25,6 +25,8 @@ export function storesLeft(p: AircraftEntity): number {
 
 export class WinchesterWatch {
   private state: WinchesterState = null;
+  /** The jet has carried missiles or bombs (a clean jet took off with nothing to run out of, #113). */
+  private armed = false;
 
   constructor(private readonly s: MissionState) {}
 
@@ -39,7 +41,9 @@ export class WinchesterWatch {
     if (!p || !p.alive || s.state !== 'running') return;
     // edge-triggered: one call each time the state changes
     const bingoFuel = AIRCRAFT_PERF[p.type].internalFuel * BINGO_FRACTION;
-    const next: WinchesterState = storesLeft(p) === 0 ? 'winchester' : p.flight.fuel < bingoFuel ? 'bingo' : null;
+    const left = storesLeft(p);
+    if (left > 0) this.armed = true;
+    const next: WinchesterState = left === 0 && this.armed ? 'winchester' : p.flight.fuel < bingoFuel ? 'bingo' : null;
     if (next && next !== this.state) this.announce(next, p);
     this.state = next;
   }

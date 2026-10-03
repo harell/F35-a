@@ -270,16 +270,36 @@ describe('aircraft vs Sky Tower', () => {
     return { events, world, tower };
   }
 
-  it('flying into the shaft crashes the jet; the tower is unharmed', () => {
+  it("flying into the shaft crashes the jet ('structure'), leaves the tower burning there and the wreck falls (#113)", () => {
     const { events, world, tower } = realWorld();
     const downs: GameEventMap['player:down'][] = [];
     events.on('player:down', (e) => downs.push(e));
     const p = world.spawnAircraft({ type: 'f35a', team: 'blue', position: at(400, 120, 0), heading: WEST, speed: 220, isPlayer: true });
     for (let i = 0; i < 240 && p.alive; i++) world.step(DT);
     expect(p.alive).toBe(false);
-    expect(downs).toEqual([{ reason: 'crash' }]);
-    expect(tower.alive).toBe(true);
+    expect(downs).toEqual([{ reason: 'structure' }]);
     expect(Math.abs(p.position.x - TX)).toBeLessThan(20);
+    // standing, but hit: it burns where the jet went in (a second hit would bring it down)
+    expect(tower.alive).toBe(true);
+    expect(tower.hits).toBe(1);
+    expect(tower.damagePoint.y - tower.base.y).toBeGreaterThan(100);
+    expect(tower.damagePoint.y - tower.base.y).toBeLessThan(140);
+    // the wreck doesn't hang on the shaft: it falls to the ground
+    const y0 = p.position.y;
+    for (let i = 0; i < 600; i++) world.step(DT);
+    expect(p.position.y).toBeLessThan(y0 - 80);
+  });
+
+  it('an AI jet flying into it crashes; the tower is unharmed', () => {
+    const { events, world, tower } = realWorld();
+    const downs: GameEventMap['player:down'][] = [];
+    events.on('player:down', (e) => downs.push(e));
+    const a = world.spawnAircraft({ type: 'mig29', team: 'red', position: at(400, 120, 0), heading: WEST, speed: 220 });
+    for (let i = 0; i < 240 && a.alive; i++) world.step(DT);
+    expect(a.alive).toBe(false);
+    expect(downs).toEqual([]);
+    expect(tower.alive).toBe(true);
+    expect(tower.hits).toBe(0);
   });
 
   it('flying past it does not', () => {
