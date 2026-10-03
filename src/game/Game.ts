@@ -77,7 +77,9 @@ import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { initFlight } from '../sim/flight/FlightModel';
 import { AKL } from '../core/auckland';
 import { FlowInterrupt } from './flow';
-import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testConditions, testSeed } from './testParams';
+import { autopilotBrainOpts, frameAccumulator, frameTakesControls, hudShown, testConditions, testSeed } from './testParams';
+import type { HudTestHooks } from '../hud/Hud';
+import type { CockpitTestHooks } from '../hud/Cockpit';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -144,6 +146,8 @@ export class Game {
   /** Test hooks: the real-time loop doesn't step the sim; only simulate() moves its clock (`?seed=`, hold()). */
   private simHeld = false;
   private controlOverride: Partial<ControlInput> | null = null;
+  /** Test hooks: `__f35.hud(false)` hid the HMD overlay until hud(true) or the next mission (a setView() keeps it hidden). */
+  private hudHidden = false;
   private screen = { width: 1, height: 1, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } };
   private safeProbe: HTMLDivElement;
 
@@ -375,6 +379,7 @@ export class Game {
     // test hooks (autopilot, controls override) belong to one mission: never leak into the next
     this.autopilot = false;
     this.controlOverride = null;
+    this.hudHidden = false;
     // training always flies at Pilot, whatever the setting (missionDifficulty)
     const difficultyId = missionDifficulty(def, this.settings.difficulty);
     const difficulty = DIFFICULTIES[difficultyId];
@@ -452,7 +457,7 @@ export class Game {
     }
     this.input.setThrottle(0.68);
     this.input.setEnabled(true);
-    this.hud.setVisible(true);
+    this.hud.setVisible(!this.hudHidden);
     this.paused = false;
     this.accumulator = 0;
     this.lastFrame = performance.now();
@@ -655,7 +660,7 @@ export class Game {
     const inside = mode === 'cockpit' || mode === 'hud';
     s.entities.setPlayerVisible(!inside);
     s.cockpit.visible = mode === 'cockpit';
-    this.hud.setVisible(mode !== 'tactical');
+    this.hud.setVisible(hudShown(mode, this.hudHidden));
   }
 
   /* ─────────────────────────── Main loop ─────────────────────────── */
@@ -921,6 +926,15 @@ export class Game {
             },
           },
           held: this.simHeld,
+          // what the HUD drew last frame (#118): gun pipper, steering waypoint, centre cues, the designated
+          // box and every target box (CSS px, recorded where they are drawn), and the PCD's pages
+          hud: s
+            ? {
+                ...(this.hud as HudApi & HudTestHooks).layoutRead(),
+                hidden: this.hudHidden,
+                pcd: (s.cockpit as CockpitApi & CockpitTestHooks).pcdRead(),
+              }
+            : null,
         };
       },
       /**
@@ -937,6 +951,24 @@ export class Game {
       setView: (mode: CameraMode) => {
         this.session?.rig.setMode(mode);
         if (this.session) this.applyViewMode(this.session.rig.mode);
+      },
+      /** Hide (false) or show the HMD overlay for clean frames; the hide survives setView() and view changes, until hud(true) or the next mission. */
+      hud: (visible = true) => {
+        this.hudHidden = !visible;
+        const s = this.session;
+        this.hud.setVisible(hudShown(s?.rig.mode ?? 'cockpit', this.hudHidden));
+        return visible;
+      },
+      /**
+       * Show a PCD page: `pcd(portal, page, zoom?)` with portal 0-2 or 'left' / 'centre' / 'right' and page
+       * FUEL, ENG, ICAWS, SMS, RWR, TSD or RDR (each portal has its own set; an unknown one throws and
+       * lists them). `zoom` opens it in the zoom overlay, which stays open only in the cockpit view.
+       * No arguments: just the read. Returns `state().hud.pcd`.
+       */
+      pcd: (portal?: number | 'left' | 'centre' | 'right', page?: string, zoom = false) => {
+        const c = this.session?.cockpit as (CockpitApi & CockpitTestHooks) | undefined;
+        if (!c) return null;
+        return portal === undefined || page === undefined ? c.pcdRead() : c.pcdPage(portal, page, zoom);
       },
       command: (cmd: 'cycleWeapon' | 'cycleTarget' | 'radar') => {
         const s = this.session;
@@ -961,11 +993,14 @@ export class Game {
       /**
        * Fast-forward the simulation by `seconds` without rendering (fixed 60 Hz steps, player
        * controls from autopilot/override/current input). For automated playtests on slow GPUs.
+       * `{ hud: true }` advances the HUD's clock and feeds with it (message fades, hint paging, kill-feed
+       * and radio lifetimes), still without drawing; without it the HUD stays where it was.
        */
-      simulate: (seconds: number) => {
+      simulate: (seconds: number, opts: { hud?: boolean } = {}) => {
         const s = this.session;
         if (!s) return null;
         const steps = Math.round(seconds / FIXED_DT);
+        const hud = opts.hud ? (this.hud as HudApi & HudTestHooks) : null;
         for (let i = 0; i < steps && s.runner.state === 'running'; i++) {
           const p = s.world.player;
           if (p?.alive && !this.autopilot) {
@@ -974,6 +1009,7 @@ export class Game {
           }
           s.world.step(FIXED_DT);
           s.runner.update(s.world, FIXED_DT);
+          hud?.stepClock(this.frameContext(FIXED_DT, s));
         }
         return (window as unknown as { __f35: { state: () => unknown } }).__f35.state();
       },

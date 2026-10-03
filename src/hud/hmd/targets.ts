@@ -17,6 +17,8 @@ import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
 import { protectedSites } from './sites';
+import { TEST_HOOKS } from '../../core/data';
+import { noteSteer, noteSteerDiamond, noteSteerName } from './drawn';
 
 /** Max distance (m) at which ground targets / friendlies are drawn on the HMD. */
 const GROUND_RANGE = 30_000;
@@ -761,6 +763,7 @@ export function drawWaypoint(f: HudFrame): void {
   wpName.done = false;
   const wp = f.ctx.mission?.currentWaypoint;
   if (!wp) return;
+  if (TEST_HOOKS) noteSteer(wp.label || wp.id);
   const { p, pen, pal, L, occ } = f;
   const u = L.u;
   // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
@@ -780,6 +783,7 @@ export function drawWaypoint(f: HudFrame): void {
   pen.diamond(x, y, r);
   pen.line(x, y - r, x, y - r - 5 * u);
   pen.strokeGlow(pal.main, 1.6);
+  if (TEST_HOOKS) noteSteerDiamond(x, y);
   if (engaged) return;
   const dx = wp.position.x - p.position.x;
   const dz = wp.position.z - p.position.z;
@@ -799,10 +803,12 @@ export function drawWaypoint(f: HudFrame): void {
   const dx2 = Math.max(L.left + dw, Math.min(L.right - dw, x));
   if (!occ.hits(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u)) {
     pen.text(name, lx, aboveY, pal.main, 11);
+    if (TEST_HOOKS) noteSteerName(lx, aboveY);
     occ.add(lx - nw, aboveY - 7 * u, lx + nw, aboveY + 7 * u);
     wpName.done = true;
   } else if (infoFree) {
     pen.text(name, lx, belowY, pal.main, 11);
+    if (TEST_HOOKS) noteSteerName(lx, belowY);
     wpName.done = true;
     occ.add(lx - nw, belowY - 7 * u, lx + nw, belowY + 7 * u);
     belowY += 13 * u;

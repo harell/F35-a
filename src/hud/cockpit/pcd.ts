@@ -160,6 +160,11 @@ export class PcdDisplay {
     return this.portals.map((p) => p.pages[p.index]);
   }
 
+  /** The pages portal `i` can show (for tests / the test hooks), or null. */
+  portalPages(i: number): readonly PageId[] | null {
+    return this.portals[i]?.pages ?? null;
+  }
+
   update(ctx: FrameContext, dt: number): void {
     const p = ctx.player;
     if (!p || !ctx.world) return;

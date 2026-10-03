@@ -39,6 +39,8 @@ import { loadHudFont } from './font';
 import { PCD, buildCockpit, pcdFrame } from './cockpit/geometry';
 import { PcdDisplay } from './cockpit/pcd';
 import { pcdZoom } from './cockpit/zoom';
+import type { PageId } from './cockpit/pages';
+import { TEST_HOOKS } from '../core/data';
 
 /** Cockpit lighting per time of day (sun azimuth/elevation in degrees, colours sRGB). */
 const LIGHT: Record<TimeOfDay, { az: number; el: number; sun: number; sunI: number; sky: number; ground: number; hemiI: number; glow: number }> = {
@@ -226,5 +228,49 @@ export const createCockpit: CreateCockpit = (events, quality) => {
       scene.clear();
     },
   };
+  if (TEST_HOOKS) {
+    const read = (): PcdRead => ({
+      pages: pcd.pages(),
+      portals: [0, 1, 2].map((i) => [...(pcd.portalPages(i) ?? [])]),
+      zoom: pcdZoom.open ? { portal: pcdZoom.portal, page: pcdZoom.page! } : null,
+    });
+    const hooks: CockpitTestHooks = {
+      pcdRead: read,
+      pcdPage(portal, page, zoom = false) {
+        const i = typeof portal === 'number' ? portal : PCD_PORTAL_NAMES.indexOf(portal);
+        const pages = pcd.portalPages(i);
+        if (!pages) throw new Error(`no PCD portal ${portal} (0-2 or ${PCD_PORTAL_NAMES.join(', ')})`);
+        const index = pages.indexOf(page.toUpperCase() as PageId);
+        if (index < 0) throw new Error(`PCD portal ${portal} has no ${page} page (${pages.join(', ')})`);
+        pcd.setPage(i, index);
+        if (zoom) pcd.openZoom(i);
+        return read();
+      },
+    };
+    Object.assign(api, hooks);
+  }
   return api;
 };
+
+/** PCD portals by name, left to right (the outer ones swap their pages when left-handed). */
+const PCD_PORTAL_NAMES = ['left', 'centre', 'right'] as const;
+
+/** The PCD's state (test hooks, `__f35.state().hud.pcd`; #118). */
+export interface PcdRead {
+  /** The page on show in each portal, left to right. */
+  pages: PageId[];
+  /** The pages each portal can show. */
+  portals: PageId[][];
+  /** The zoom overlay (cockpit view): its portal and page; null = closed. */
+  zoom: { portal: number; page: PageId } | null;
+}
+
+/** Cockpit methods that exist only with the test hooks (#118). */
+export interface CockpitTestHooks {
+  pcdRead(): PcdRead;
+  /**
+   * Show `page` (FUEL, ENG, ICAWS…) on `portal` (0-2 or 'left' / 'centre' / 'right'); `zoom` opens it in
+   * the zoom overlay too, which only stays open in the cockpit view. Throws on a page the portal lacks.
+   */
+  pcdPage(portal: number | 'left' | 'centre' | 'right', page: string, zoom?: boolean): PcdRead;
+}

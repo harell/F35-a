@@ -2,7 +2,7 @@
  * F35-A — URL parameters that only exist with the test hooks (dev server / VITE_TEST_HOOKS=1, see
  * TEST_HOOKS in core/data.ts). Kept out of Game.ts so they can be unit tested without a renderer.
  */
-import type { TimeOfDay, Weather } from '../core/types';
+import type { CameraMode, TimeOfDay, Weather } from '../core/types';
 import { TIMES_OF_DAY, WEATHERS, type InstantConditions } from '../missions';
 
 /**
@@ -66,4 +66,13 @@ export function testConditions(params: URLSearchParams, testHooks: boolean): { c
     else invalid.push(`weather=${weather} (${WEATHERS.join('|')})`);
   }
   return { conditions, invalid };
+}
+
+/**
+ * Whether the HMD overlay shows in camera `mode`: not in the tactical map (which draws its own), and not
+ * while `__f35.hud(false)` hides it. That hide is sticky: a setView(), a view change of the rig's own
+ * (death cam, missile cam hand-back) or the mission becoming ready doesn't bring the HUD back (#118).
+ */
+export function hudShown(mode: CameraMode, hiddenByHook: boolean): boolean {
+  return mode !== 'tactical' && !hiddenByHook;
 }
