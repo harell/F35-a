@@ -1,5 +1,5 @@
 /**
- * Auckland landmarks (primary theatre): SkyCity (the Sky Tower is in skyTower.ts), Harbour Bridge, CBD high-rise cluster, Ports of
+ * Auckland landmarks (primary theatre): SkyCity (the Sky Tower is in skyTower.ts; the Harbour Bridge in harbourBridge.ts), CBD high-rise cluster, Ports of
  * Auckland container terminal, Westhaven & Viaduct marinas (both from OpenStreetMap when loaded: aucklandSites.ts,
  * which also has the naval base, the Wiri terminal and Eden Park), Auckland War Memorial Museum, One Tree
  * Hill obelisk. Positions come from src/core/auckland.ts (origin = Sky Tower). The CBD's buildings are
@@ -8,12 +8,13 @@
  */
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
-import { AKL, BRIDGE_PIERS_T, BRIDGE_SPAN_T } from '../../core/auckland';
+import { AKL } from '../../core/auckland';
 import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfields';
 import { airfieldLayout } from './aucklandOsm';
 import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, GeometryBuilder, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
@@ -53,93 +54,6 @@ export function isDuplicateOfAuckland(f: SceneryFeature): boolean {
 export function buildSkyCityPodium(B: GeometryBuilder, height: HeightFn): void {
   const { x, z } = AKL.skytower;
   B.box(IDENT, x + 10, height(x, z) - 2, z + 35, 80, 24, 60, 0xb9b2a4, 0x6f6f6c, WIN_OFFICE);
-}
-
-/** Auckland Harbour Bridge: 1 km, piers where OpenStreetMap has them, steel truss hump over the 43 m navigation span. */
-export function buildHarbourBridge(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
-  const S = AKL.bridge_s;
-  const N = AKL.bridge_n;
-  const dx = N.x - S.x;
-  const dz = N.z - S.z;
-  const len = Math.hypot(dx, dz);
-  const heading = Math.atan2(dx, -dz);
-  const f = frameFromHeading(S.x, 0, S.z, heading); // local −Z runs S → N
-  const at = (s: number) => [S.x + (dx * s) / len, S.z + (dz * s) / len] as const;
-  const gS = Math.max(4, height(S.x, S.z)) + 1;
-  const gN = Math.max(4, height(N.x, N.z)) + 1;
-  const sm = len * BRIDGE_SPAN_T;
-  const eMax = 48; // deck top → 43 m clearance under the girders
-  const deck = (s: number) => {
-    if (s <= sm) {
-      const t = s / sm;
-      return gS + (eMax - gS) * Math.sin((t * Math.PI) / 2) ** 1.2;
-    }
-    const t = (len - s) / (len - sm);
-    return gN + (eMax - gN) * Math.sin((t * Math.PI) / 2) ** 1.2;
-  };
-  const halfW = 15; // incl. the clip-on lanes
-  const thick = 4;
-  const road = new Color(0x3b3d40);
-  const girder = new Color(0x8d9294);
-  const steel = new Color(0x62706e);
-  const pierCol = new Color(0xb8b6ae);
-  const seg = 24;
-  for (let i = 0; i < seg; i++) {
-    const s0 = (i / seg) * len;
-    const s1 = ((i + 1) / seg) * len;
-    const y0 = deck(s0);
-    const y1 = deck(s1);
-    // road surface (top), girder sides and underside
-    B.quad(f, [-halfW, y0, -s0, halfW, y0, -s0, halfW, y1, -s1, -halfW, y1, -s1], road);
-    B.quad(f, [halfW, y0 - thick, -s0, halfW, y1 - thick, -s1, halfW, y1, -s1, halfW, y0, -s0], girder);
-    B.quad(f, [-halfW, y1 - thick, -s1, -halfW, y0 - thick, -s0, -halfW, y0, -s0, -halfW, y1, -s1], girder);
-    B.quad(f, [-halfW, y0 - thick, -s0, -halfW, y1 - thick, -s1, halfW, y1 - thick, -s1, halfW, y0 - thick, -s0], girder);
-  }
-  // Piers (concrete, founded on the harbour floor)
-  const piers = BRIDGE_PIERS_T.map((t) => t * len);
-  for (const s of piers) {
-    const [wx, wz] = at(s);
-    const gy = Math.min(0, height(wx, wz)) - 2;
-    const top = deck(s) - thick;
-    B.box(f, 0, gy, -s, 24, top - gy, 9, pierCol, pierCol);
-  }
-  // Steel truss from its first pier to the north abutment (two trusses under the old four-lane deck)
-  const t0 = BRIDGE_PIERS_T[3] * len;
-  const t1 = 0.98 * len;
-  const top = (s: number) => {
-    const main = Math.max(0, 1 - Math.abs(s - sm) / (0.21 * len));
-    return deck(s) + 5 + 17 * Math.sin((main * Math.PI) / 2);
-  };
-  const panel = 22;
-  for (const side of [-7.5, 7.5]) {
-    let prev: [number, number, number] | null = null;
-    for (let s = t0, k = 0; s <= t1 + 0.1; s += panel, k++) {
-      const yb = deck(s);
-      const yt = top(s);
-      B.beam(f, side, yb, -s, side, yt, -s, 1.1, steel); // vertical
-      if (prev) {
-        B.beam(f, side, prev[1], -prev[0], side, yt, -s, 1.3, steel); // top chord
-        B.beam(f, side, prev[2], -prev[0], side, yt, -s, 0.8, steel); // diagonal
-      }
-      prev = [s, yt, yb];
-    }
-  }
-  // Cross bracing on top of the main span
-  for (let s = sm - 90; s <= sm + 90; s += 44) B.beam(f, -7.5, top(s), -s, 7.5, top(s), -s, 0.8, steel);
-  // Lamps along both edges, aviation lights on the truss crown, channel lights under the span
-  for (let s = 20; s < len; s += 45) {
-    for (const side of [-halfW + 0.5, halfW - 0.5]) {
-      const [wx, wz] = at(s);
-      const ox = side * f.c;
-      const oz = -side * f.s;
-      lights.add(wx + ox, deck(s) + 9, wz + oz, 0xffb060, 5);
-    }
-  }
-  {
-    const [wx, wz] = at(sm);
-    lights.add(wx, top(sm) + 1.5, wz, 0xff2a18, 4, 0.2);
-    lights.add(wx, deck(sm) - thick - 1, wz, 0x40ff70, 3.5);
-  }
 }
 
 type TowerStyle = 'box' | 'setback' | 'slab' | 'round' | 'wedge';
@@ -696,6 +610,25 @@ const ringHash = (r: Float32Array) => {
  * Mobile budget (`detail` = sceneryDensity): the medium tier simplifies the footprints by 0.5 m, the
  * low tier by 1.5 m and drops the smallest prisms (< 60 m²).
  */
+/** Facade colour and window style of the Scene apartments' parts (Mapillary street imagery, 2021–25). */
+const HERO_FACADE: Record<SceneTerraceKind, [number, number]> = {
+  tower: [0xe9ebe8, WIN_BALCONY],
+  bay: [0x6fb3ad, WIN_LOBBY],
+  podium_high: [0xd5d6d1, WIN_OFFICE],
+  podium: [0xd5d6d1, WIN_OFFICE],
+  low: [0xbfbfba, WIN_NONE],
+};
+
+/** The lime-green fins on the Scene towers' Beach Road faces: 2.6 m wide, 0.9 m proud, from the colonnade to over the roof. */
+function buildSceneFins(B: GeometryBuilder, height: HeightFn): void {
+  for (const [x, z, ax, az, nx, nz, top] of SCENE_FINS) {
+    const g = height(x, z);
+    const f = frameFromHeading(x, 0, z, Math.atan2(az, ax));
+    const out = Math.sign(nx * -az + nz * ax) || 1;
+    B.box(f, 0, g + 5, out * 0.45, 2.6, top - 5, 0.9, 0x6cc04a, 0x6cc04a);
+  }
+}
+
 function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, bs: Building[]): CbdStats {
   const tol = detail >= 0.9 ? 0 : detail >= 0.5 ? 0.5 : 1.5;
   const minArea = detail >= 0.5 ? 0 : 60;
@@ -740,6 +673,14 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       if (minArea && Math.abs(ringArea(p.ring)) < minArea) continue;
       const ring = simplifyRing(p.ring, tol);
       const roof = (x: number, z: number) => g + roofHeight(p, x, z);
+      if (b.hero === 'scene') {
+        // the Scene apartments (core/sceneApartments.ts): white balcony bands on the towers, Scene One's teal glass bay
+        const [c, w] = HERO_FACADE[p.kind ?? 'podium'];
+        B.prism(ring, y0, roof, c, p.kind === 'tower' ? 0xd8dbdb : 0x9a9b97, w);
+        prisms.push({ ...p, y0, y1: g + p.h });
+        heights.push(p.h);
+        continue;
+      }
       // towers on a podium: a little darker, the crown's roof the facade colour
       const c = p === base ? col : tmp.setHex(col).multiplyScalar(0.92).getHex();
       B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win);
@@ -755,6 +696,7 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       lights.add(t.cx, g + roofHeight(t, t.cx, t.cz) + 4, t.cz, 0xff2a18, 3.5, hsh);
     }
   }
+  if (bs.some((b) => b.hero === 'scene')) buildSceneFins(B, height);
   // street lamps, not inside a building: a 20 m bucket grid of the footprints
   const grid = new Map<number, BuildingPrism[]>();
   const key = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);

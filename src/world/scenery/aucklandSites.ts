@@ -20,6 +20,8 @@ import { Color } from 'three';
 import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
 import { sparkArenaCovers } from '../../core/sparkArena';
+import { CONTAINER_TIER, PORT_CRANES, PORT_MASTS, type PortCrane } from '../../core/portOfAuckland';
+import { aucklandPortStacks } from './aucklandPort';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, IDENT_FRAME, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
 import type { DecalBuilder, HeightFn, LightList } from './builders';
@@ -285,73 +287,157 @@ export function buildRealPort(B: GeometryBuilder, lights: LightList, height: Hei
     const isWater = waterMask(ring.x0 - 100, ring.z0 - 100, ring.x1 + 100, ring.z1 + 100, 2, height);
     const faces = berthFaces(ring, isWater, s.port).sort((a, b) => b.length - a.length);
     allFaces.push(...faces);
-    // Gantry cranes along the longest faces, booms out over the water
-    let cranes = detail > 0.5 ? 9 : 5;
-    const craneCol = new Color(0xdad8d2);
-    const boomCol = new Color(0xc0392b);
+    // The measured port (core/portOfAuckland.ts): its ring is the one the real cranes stand on
+    const hero = PORT_CRANES.some((c) => inRing(ring, c.x - c.ux * 10, c.z - c.uz * 10));
     const cranePos: [number, number][] = [];
-    for (const f of faces) {
-      if (cranes <= 0) break;
-      const k = Math.min(cranes, 4, Math.floor(f.length / 85));
-      cranes -= k;
-      for (let i = 0; i < k; i++) {
-        const t = f.length / 2 + (i - (k - 1) / 2) * 80;
-        const x = f.ax + f.ux * t - f.nx * 18;
-        const z = f.az + f.uz * t - f.nz * 18;
-        cranePos.push([x, z]);
-        // local −Z = out over the water, local X = along the face
-        const fr = frameFromHeading(x, y, z, Math.atan2(f.nx, -f.nz));
-        const legH = 44;
-        for (const ox of [-9, 9]) for (const oz of [-12, 12]) B.beam(fr, ox, 0, oz, ox, legH, oz, 1.6, craneCol);
-        B.beam(fr, -9, legH, -12, 9, legH, -12, 1.8, craneCol);
-        B.beam(fr, -9, legH, 12, 9, legH, 12, 1.8, craneCol);
-        B.beam(fr, -9, 16, -12, -9, 16, 12, 1.2, craneCol);
-        B.beam(fr, 9, 16, -12, 9, 16, 12, 1.2, craneCol);
-        // boom out over the water and backreach; a raised boom on every third (idle) crane
-        if (i % 3 === 2) B.beam(fr, 0, legH + 2, -10, 0, legH + 58, -30, 2.4, boomCol);
-        else B.beam(fr, 0, legH + 2, 40, 0, legH + 2, -62, 2.4, boomCol);
-        B.box(fr, 0, legH - 1, 10, 14, 7, 12, craneCol, craneCol, WIN_INDUSTRIAL);
-        B.beam(fr, 0, legH + 2, 8, 0, legH + 20, 2, 1.2, craneCol);
-        lights.add(x - f.nx * 2, y + legH + 22, z - f.nz * 2, 0xff2a18, 3, rnd());
+    if (hero) {
+      for (const c of PORT_CRANES) {
+        portCrane(B, c, y, lights, rnd);
+        cranePos.push([c.x - c.ux * 18, c.z - c.uz * 18]);
+      }
+    } else {
+      // Gantry cranes along the longest faces, booms out over the water
+      let cranes = detail > 0.5 ? 9 : 5;
+      const craneCol = new Color(0xdad8d2);
+      const boomCol = new Color(0xc0392b);
+      for (const f of faces) {
+        if (cranes <= 0) break;
+        const k = Math.min(cranes, 4, Math.floor(f.length / 85));
+        cranes -= k;
+        for (let i = 0; i < k; i++) {
+          const t = f.length / 2 + (i - (k - 1) / 2) * 80;
+          const x = f.ax + f.ux * t - f.nx * 18;
+          const z = f.az + f.uz * t - f.nz * 18;
+          cranePos.push([x, z]);
+          // local −Z = out over the water, local X = along the face
+          const fr = frameFromHeading(x, y, z, Math.atan2(f.nx, -f.nz));
+          const legH = 44;
+          for (const ox of [-9, 9]) for (const oz of [-12, 12]) B.beam(fr, ox, 0, oz, ox, legH, oz, 1.6, craneCol);
+          B.beam(fr, -9, legH, -12, 9, legH, -12, 1.8, craneCol);
+          B.beam(fr, -9, legH, 12, 9, legH, 12, 1.8, craneCol);
+          B.beam(fr, -9, 16, -12, -9, 16, 12, 1.2, craneCol);
+          B.beam(fr, 9, 16, -12, 9, 16, 12, 1.2, craneCol);
+          // boom out over the water and backreach; a raised boom on every third (idle) crane
+          if (i % 3 === 2) B.beam(fr, 0, legH + 2, -10, 0, legH + 58, -30, 2.4, boomCol);
+          else B.beam(fr, 0, legH + 2, 40, 0, legH + 2, -62, 2.4, boomCol);
+          B.box(fr, 0, legH - 1, 10, 14, 7, 12, craneCol, craneCol, WIN_INDUSTRIAL);
+          B.beam(fr, 0, legH + 2, 8, 0, legH + 20, 2, 1.2, craneCol);
+          lights.add(x - f.nx * 2, y + legH + 22, z - f.nz * 2, 0xff2a18, 3, rnd());
+        }
       }
     }
-    // Container stacks on the open deck, aligned with the nearest berth face
-    const step = detail > 0.5 ? 40 : 52;
-    for (let x = ring.x0 + step / 2; x < ring.x1; x += step) {
-      for (let z = ring.z0 + step / 2; z < ring.z1; z += step) {
-        if (rnd() < 0.15 || !pointInRing(ring.pts, x, z) || distToPath(ring.pts, x, z, true) < 45) continue;
-        if (sheds.some((b) => x > b.x0 - 15 && x < b.x1 + 15 && z > b.z0 - 15 && z < b.z1 + 15)) continue;
-        if (cranePos.some(([cx, cz]) => Math.hypot(cx - x, cz - z) < 40)) continue;
-        let face: BerthFace | null = null;
-        let best = 400;
-        for (const f of faces) {
-          const d = distToPath([f.ax, f.az, f.bx, f.bz], x, z, false);
-          if (d < best) {
-            best = d;
-            face = f;
+    // Container stacks: the LiDAR's blocks where the baked file is in (aucklandPort.ts), else procedural ones
+    const stacks = hero ? aucklandPortStacks() : null;
+    if (stacks) {
+      const tmp = new Color();
+      const minArea = detail < 0.5 ? 40 : 0; // the low tier keeps the bigger blocks (≈ 2 containers and up)
+      for (const st of stacks) {
+        if (st.w * st.d < minArea || !inRing(ring, st.x, st.z)) continue;
+        const fr = frameFromHeading(st.x, 0, st.z, st.angle);
+        tmp.setHex(st.color);
+        B.box(fr, 0, y, 0, st.w, st.tiers * CONTAINER_TIER, st.d, tmp, tmp.clone().multiplyScalar(0.9));
+      }
+    } else {
+      // Container stacks on the open deck, aligned with the nearest berth face
+      const step = detail > 0.5 ? 40 : 52;
+      for (let x = ring.x0 + step / 2; x < ring.x1; x += step) {
+        for (let z = ring.z0 + step / 2; z < ring.z1; z += step) {
+          if (rnd() < 0.15 || !pointInRing(ring.pts, x, z) || distToPath(ring.pts, x, z, true) < 45) continue;
+          if (sheds.some((b) => x > b.x0 - 15 && x < b.x1 + 15 && z > b.z0 - 15 && z < b.z1 + 15)) continue;
+          if (cranePos.some(([cx, cz]) => Math.hypot(cx - x, cz - z) < 40)) continue;
+          let face: BerthFace | null = null;
+          let best = 400;
+          for (const f of faces) {
+            const d = distToPath([f.ax, f.az, f.bx, f.bz], x, z, false);
+            if (d < best) {
+              best = d;
+              face = f;
+            }
+          }
+          const fr = frameFromHeading(x, y, z, face ? Math.atan2(face.ux, -face.uz) : 0);
+          const tiers = 1 + ((rnd() * 4) | 0);
+          for (const c of [-0.5, 0.5]) {
+            const col = CONTAINER_COLORS[(rnd() * CONTAINER_COLORS.length) | 0];
+            B.box(fr, c * 12.5, 0, 0, 12, 2.6 * tiers, 24.4, col, new Color(col).multiplyScalar(0.8));
           }
         }
-        const fr = frameFromHeading(x, y, z, face ? Math.atan2(face.ux, -face.uz) : 0);
-        const tiers = 1 + ((rnd() * 4) | 0);
-        for (const c of [-0.5, 0.5]) {
-          const col = CONTAINER_COLORS[(rnd() * CONTAINER_COLORS.length) | 0];
-          B.box(fr, c * 12.5, 0, 0, 12, 2.6 * tiers, 24.4, col, new Color(col).multiplyScalar(0.8));
-        }
       }
     }
-    // Flood light towers behind the berths
-    let floods = 0;
-    for (const f of faces) {
-      for (let t = 60; t < f.length - 30 && floods < 14; t += 150, floods++) {
-        const x = f.ax + f.ux * t - f.nx * 75;
-        const z = f.az + f.uz * t - f.nz * 75;
+    // Flood light masts: where the LiDAR found them on the measured port, else behind the berths
+    if (hero) {
+      for (const [x, z, h] of PORT_MASTS) {
         if (!inRing(ring, x, z)) continue;
-        B.beam(IDENT_FRAME, x, y, z, x, y + 30, z, 1, 0x9a9a98);
-        lights.add(x, y + 31, z, 0xfff0d0, 10);
+        B.beam(IDENT_FRAME, x, y, z, x, y + h - 1.5, z, 0.8, 0x9a9a98);
+        B.box(IDENT_FRAME, x, y + h - 2.2, z, 4, 2.2, 1.2, 0x55595d, 0x55595d);
+        lights.add(x, y + h, z, 0xfff0d0, 10);
+      }
+    } else {
+      // Flood light towers behind the berths
+      let floods = 0;
+      for (const f of faces) {
+        for (let t = 60; t < f.length - 30 && floods < 14; t += 150, floods++) {
+          const x = f.ax + f.ux * t - f.nx * 75;
+          const z = f.az + f.uz * t - f.nz * 75;
+          if (!inRing(ring, x, z)) continue;
+          B.beam(IDENT_FRAME, x, y, z, x, y + 30, z, 1, 0x9a9a98);
+          lights.add(x, y + 31, z, 0xfff0d0, 10);
+        }
       }
     }
   }
   return allFaces;
+}
+
+/**
+ * A ship-to-shore crane as measured (core/portOfAuckland.ts): legs on a 30.5 m gauge behind the quay edge, the girder
+ * over the backreach and the boom (lowered over the berth, or raised), the A-frame over the waterside legs with its
+ * stays, the machinery house on the backreach, the trolley and spreader under a lowered boom. White frame, dark blue
+ * girder and boom (photos). Local frame: x along the boom (towards the water), z along the rails.
+ */
+function portCrane(B: GeometryBuilder, c: PortCrane, deck: number, lights: LightList, rnd: () => number): void {
+  const f = frameFromHeading(c.x, 0, c.z, Math.atan2(c.uz, c.ux));
+  const g = deck + c.girder, apexY = deck + c.apex, big = c.girder > 50;
+  const uw = -3, ul = uw - 30.5, half = big ? 10 : 9, hinge = 4;
+  const white = 0xe6e8e6, blue = 0x214d8c, grey = 0x8c9396;
+  const beam = (a: number[], b: number[], w: number, col: number) => B.beam(f, a[0], a[1], a[2], b[0], b[1], b[2], w, col);
+  for (const v of [-half, half]) {
+    beam([uw, deck, v], [uw, g - 2, v], 2.2, white);
+    beam([ul, deck, v], [ul, g - 2, v], 2.2, white);
+    beam([ul, deck + 1.5, v], [uw, deck + 1.5, v], 1.6, white);
+    beam([ul, g - 14, v], [uw, g - 14, v], 1.8, white);
+    beam([ul, g - 2, v], [uw, g - 2, v], 2.2, white);
+  }
+  for (const u of [uw, ul]) {
+    beam([u, g - 2, -half], [u, g - 2, half], 2.4, white);
+    beam([u, g - 14, -half], [u, g - 14, half], 1.6, white);
+  }
+  const end = c.boomTop === null ? c.tip : hinge;
+  for (const v of [-3.6, 3.6]) beam([c.back, g, v], [end, g, v], 2.4, blue);
+  for (let u = c.back + 8; u < end - 4; u += 12) beam([u, g, -3.6], [u, g, 3.6], 0.8, blue);
+  let tip: number[];
+  if (c.boomTop !== null) {
+    const rise = c.boomTop - c.girder, L = Math.max(rise + 1, big ? 66 : 60), du = Math.sqrt(Math.max(0, L * L - rise * rise));
+    for (const v of [-3.6, 3.6]) beam([hinge, g, v], [hinge + du, deck + c.boomTop, v], 2.2, blue);
+    tip = [hinge + du, deck + c.boomTop, 0];
+  } else tip = [c.tip, g, 0];
+  const ua = uw - 6;
+  for (const v of [-4, 4]) {
+    beam([uw, g, v], [ua, apexY, v * 0.4], 1.4, white);
+    beam([ul + 8, g, v], [ua, apexY, v * 0.4], 1.4, white);
+  }
+  for (const v of [-3, 3]) {
+    beam([ua, apexY - 0.5, v * 0.4], [tip[0], tip[1], v], 0.45, grey);
+    beam([ua, apexY - 0.5, v * 0.4], [c.back + 2, g + 1, v], 0.45, grey);
+  }
+  B.box(f, c.back + 9, g + 1, 0, 14, 6, 11, white, white);
+  if (c.boomTop === null) {
+    const ut = Math.min(c.tip - 8, 25);
+    B.box(f, ut, g - 4, 0, 4, 2.8, 4, 0x52595f, 0x52595f);
+    B.box(f, ut, g - 14, 0, 2.8, 1, 12, 0xd9a626, 0xd9a626);
+  }
+  const [ax, az] = [c.x + c.ux * ua, c.z + c.uz * ua];
+  lights.add(ax, apexY + 1, az, 0xff2a18, 3, rnd());
+  lights.add(c.x + c.ux * tip[0], tip[1] + 1, c.z + c.uz * tip[0], 0xff2a18, 3, rnd());
 }
 
 /**
