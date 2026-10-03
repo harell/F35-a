@@ -3,9 +3,11 @@
  *
  * An oil tanker leaves the Ports of Auckland for Singapore, out through the Rangitoto Channel into
  * the Hauraki Gulf. Fast boats from the IRGC mother ship come for her: three suicide boats on the
- * short clock (they reach her about 2 minutes in), three Peykaap II missile boats on the long one
- * (in launch range 3–4 minutes in, and a Kowsar can't be shot down: kill the boat first) and two
- * air-defence boats escorting them, the only boats that shoot back. Two hits sink the tanker.
+ * short clock (they reach her about 2 minutes in; two on Recruit), three Peykaap II missile boats on
+ * the long one (they come in a minute into the mission, too late for the opening ripple, and are in
+ * launch range 3–4 minutes in; a Kowsar can't be shot down: kill the boat first) and two air-defence
+ * boats escorting the waves, the only boats that shoot back, and they see a stealth jet up close
+ * (SamTypeData.closeCue). Two hits sink the tanker.
  *
  * The geometry is tuned on the real LINZ coast (tests/missions-g02.test.ts): every boat starts in
  * open water with a clear run to the tanker, and the clocks above hold untouched.
@@ -40,11 +42,15 @@ export const G02_GROUPS = { suicide: 'suicide_boats', missile: 'missile_boats', 
 
 /**
  * The missile boats and their air-defence escort come in on a trigger (#115): the mother ship puts
- * them in the water this many seconds into the mission, about 9 km north of the tanker, so one
- * opening ripple can't cover both waves. From there they reach launch range at about 3 minutes and
- * launch at about 3.5 (the 3–4 minute clock of #82). A time, not "half the suicide wave gone": the
- * long clock stays the same whatever the player does about the short one, and an untouched suicide
- * wave still meets them (tests/missions-g02.test.ts).
+ * them in the water this many seconds into the mission, about 10 km north of the tanker, so one
+ * opening ripple can't cover both waves. Untouched, they reach launch range and start counting down
+ * at about 3.6 minutes and launch at about 3.9 (the 3–4 minute clock of #82). A StormBreaker from
+ * 20 km glides about two minutes onto a stopped boat, so the second release has to come within about
+ * a minute of their arrival, or from closer in, inside the escort's reach.
+ * A time, not "half the suicide wave gone": the long clock stays the same whatever the player does
+ * about the short one (the bot's first bombs land at 95–105 s, which would push the launch past 4
+ * minutes), and an untouched suicide wave still meets them (tests/missions-g02.test.ts). 60 s, not 90:
+ * at 90 the bot, egressing from its first ripple, was 0/24 (its second release came too late).
  */
 export const G02_MISSILE_WAVE_AT = 60;
 
@@ -74,7 +80,7 @@ export const G02: MissionDef = mission({
   briefing: [
     `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The IRGC mother ship has put its fast boats in the water to stop her. Clear the way.`,
     'Suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Peykaap II missile boats come in from the north about a minute and a half after that first wave, too late for your first release. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. An air-defence boat rides with each wave, with a Tor-type radar SAM good to 20,000 ft and 12 km and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you. Stealth will not hide you from them up close: their trackers pick you up inside about 9 km, and inside 12 km the moment your bay opens.',
-    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. Bring StormBreakers. A GBU-53/B tracks a moving boat; a JDAM or a GBU-39 does not, and this mission does not offer them. The StormBreaker glides slowly from long range, so release early on the suicide boats. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today.',
+    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. Bring StormBreakers. A GBU-53/B tracks a moving boat; a JDAM or a GBU-39 does not, and this mission does not offer them. The StormBreaker glides slowly from long range, so release early on the suicide boats. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today. Take all eight StormBreakers: with four, the boats they cannot cover are gun passes under the escorts\' missiles.',
   ],
   recommendedLoadout: 'strike_sdb2_full',
   // only loadouts with a bomb that can hit a moving boat (GBU-31 / GBU-39 can't: #65's c08 trap)
