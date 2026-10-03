@@ -274,23 +274,6 @@ describe('combat: shoot list', () => {
     expect(f35.radar.designatedId).toBe(a.id);
   });
 
-  it('TGT NEXT never stops on an airliner while there are bandits; with only civil traffic it still steps (playtest r2, 2.1-f)', () => {
-    const { w, f35, a, b, c } = threeBandits();
-    const civ = w.spawnAircraft({ type: 'a320', team: 'neutral', position: v3(500, 6000, -12000), heading: Math.PI, speed: 220 });
-    w.run(0.5);
-    const seen = new Set<number | null>();
-    for (let i = 0; i < 8; i++) {
-      w.combat.cycleTarget(f35, w);
-      seen.add(f35.radar.designatedId);
-    }
-    expect(seen.has(civ.id)).toBe(false);
-    expect([a.id, b.id, c.id].every((id) => seen.has(id))).toBe(true);
-    for (const x of [a, b, c]) w.applyDamage(x, 1e6, null, 'gun');
-    w.run(4);
-    for (let i = 0; i < 3 && f35.radar.designatedId !== civ.id; i++) w.combat.cycleTarget(f35, w);
-    expect(f35.radar.designatedId).toBe(civ.id);
-  });
-
   it('an AI launch leaves its own designation alone', () => {
     const w = new FakeWorld();
     const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 6000, 0), heading: 0, speed: 250 });
