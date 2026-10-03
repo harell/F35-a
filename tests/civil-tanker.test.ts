@@ -314,14 +314,14 @@ describe('protecting the tanker (mission)', { timeout: 30_000 }, () => {
 /* ───────────────────────── HUD counter, model, framing ───────────────────────── */
 
 describe('tanker on screen', () => {
-  it('HUD hit counter: TANKER 0/2 → 1/2 → SUNK; ordinary civil ships get none', () => {
+  it('HUD hit counter: TANKER HITS 0/2 → 1/2 → SUNK; ordinary civil ships get none', () => {
     const w = seaWorld();
     w.spawnGround({ type: 'ship', team: 'neutral', vessel: 'container', position: new Vector3(3000, 0, -4000), name: 'MV Kōtuku Trader' });
     expect(vesselCounters(w)).toHaveLength(0);
     const t = spawnTanker(w);
-    expect(vesselCounters(w).map((c) => [c.text, c.tone])).toEqual([['TANKER 0/2', 'main']]);
+    expect(vesselCounters(w).map((c) => [c.text, c.tone])).toEqual([['TANKER HITS 0/2', 'main']]);
     w.applyDamage(t, 50, null, 'gbu31');
-    expect(vesselCounters(w).map((c) => [c.text, c.tone])).toEqual([['TANKER 1/2', 'warn']]);
+    expect(vesselCounters(w).map((c) => [c.text, c.tone])).toEqual([['TANKER HITS 1/2', 'warn']]);
     w.applyDamage(t, 50, null, 'gbu31');
     expect(vesselCounters(w).map((c) => [c.text, c.tone])).toEqual([['TANKER SUNK', 'danger']]);
   });
@@ -346,7 +346,7 @@ describe('tanker on screen', () => {
 });
 
 describe('tanker counter on the HMD', () => {
-  it('"TANKER 1/2" is drawn in the top-left column, clear of every other HUD text', () => {
+  it('"TANKER HITS 1/2" is drawn in the top-left column, clear of every other HUD text', () => {
     installPath2D();
     const W = 844;
     const H = 390;
@@ -379,7 +379,7 @@ describe('tanker counter on the HMD', () => {
       hud.update(ctx);
     }
     const texts = fake.texts.slice();
-    const counter = texts.find((r) => r.text === 'TANKER 1/2');
+    const counter = texts.find((r) => r.text === 'TANKER HITS 1/2');
     expect(counter).toBeDefined();
     expect(counter!.x).toBeLessThan(W / 3); // the left column
     const box = textBox(counter!);

@@ -206,15 +206,21 @@ sensor contact, so the only defence is killing the boat first. The countdown is 
 call with the bearing, HUD "MISSILE BOAT LAUNCH n", a launch ring on the TSD and tac map). The
 **air-defence boat** is a SAM type (`'ad_boat'`) whose `SamSiteEntity.boat` makes it move: `SamSystem`
 runs it like any site (the SA-15's missile and envelope, plus SA-18s through `SamTypeData.manpads`),
-`boats.ts` only moves it and keeps its velocity, which the GBU-53/B and the AGM-88G use. Boats only
+`boats.ts` only moves it and keeps its velocity, which the GBU-53/B and the AGM-88G use. Its close-in
+cue (`SamTypeData.closeCue`, #115: an electro-optical tracker) detects any jet inside 9 km whatever its
+shaping, and inside 12 km while its weapon bay is open (× `samRangeScale`), so a stand-off release is
+safe and a closer pass is not. Boats only
 ever move onto water (`TerrainQuery.isWater`), steering round land. Missions point them at a group
 (`GroundTargetDef.chase` / `.strike`, `SamSiteDef.escort`): `boats.ts` takes the group's first live
 member, and looks it up again each step the boat has no live target, so spawn order doesn't matter.
 The IRGC campaign's g02 "Straight Outta Hauraki" (`src/missions/content/irgcHauraki.ts`, appended to the campaign at the
 end of `irgc.ts`) puts all three round the two-hit tanker leaving the Rangitoto Channel: suicide boats on a 2-minute
 clock, missile boats in launch range 3–4 minutes in, AD boats escorting each wave (a bonus objective, not the job).
-The player starts at 10,000 ft with no boat in StormBreaker reach; on Ace nine boats must be sunk with eight bombs, so the
-gun is part of the plan. The briefing map marks a neutral ground group (the tanker) friendly, by name (`autoIntel`).
+The missile boats and their escort spawn at `G02_MISSILE_WAVE_AT` (60 s, #115), so one opening ripple can't cover both
+waves; the tanker's protect objective completes only once no Kowsar is still in the air.
+The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies a suicide boat fewer; on Ace nine boats
+must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
+friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 
 ## Frame / sim order (Game.ts)
 

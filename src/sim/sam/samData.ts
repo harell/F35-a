@@ -66,6 +66,14 @@ export interface SamTypeData {
    * `protect` m of the site: engagement range, and kill probability per interceptor that fuzes.
    */
   pointDefense: { range: number; minRange: number; protect: number; pkAgm: number; pkBomb: number } | null;
+  /**
+   * Close-in acquisition that stealth shaping doesn't beat (the IRGC Navy AD boat's electro-optical
+   * tracker and lookouts, #115): any hostile aircraft inside `range` m with line of sight is
+   * detected, and one with its weapon bay open inside `bayRange` m (the doors' radar flash and the
+   * bomb leaving). A track found this way is held out to `bayRange`. Both scale with the difficulty's
+   * samRangeScale, like the engagement range. Null = the radar equation alone.
+   */
+  closeCue: { range: number; bayRange: number } | null;
 }
 
 const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageMin' | 'engageMax' | 'altMin' | 'altMax'> = {
@@ -89,6 +97,7 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
   ammo: 0,
   manpads: null,
   pointDefense: null,
+  closeCue: null,
 };
 
 export const SAM_DATA: Record<SamType, SamTypeData> = {
@@ -275,6 +284,9 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     armDiscipline: 0.4,
     mastHeight: 4,
     manpads: { missile: 'm_igla', minRange: 500, range: 5_000, refire: 12, rounds: 4 },
+    // a stand-off release (13 km and out) stays safe; a closer pass costs something (#115): the crew
+    // picks the jet up inside 9 km whatever its shaping, and inside 12 km the moment its bay opens
+    closeCue: { range: 9_000, bayRange: 12_000 },
   },
 };
 

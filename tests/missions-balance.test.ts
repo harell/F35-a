@@ -23,6 +23,7 @@ import type { Difficulty } from '../src/core/types';
 import { LOADOUTS } from '../src/core/data';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
+import { G02_MISSILE_WAVE_AT } from '../src/missions/content/irgcHauraki';
 
 const terrains = new Map<string, TerrainQuery>();
 function terrainFor(id: string): TerrainQuery {
@@ -408,5 +409,39 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
     const pil = wins('g01', 'pilot', seeds);
     expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(4);
     expect(pil.won, pil.log.join('\n')).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
+  // The bot won 24/24 (Ace by rearming) by rippling all eight StormBreakers in the first 20–39 s, before
+  // any missile boat counted down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes
+  // a second pass against a ~3.9-minute launch, and Recruit flies a suicide boat fewer. Measured with
+  // no rearming (#63), 6 seeds: Recruit 6/6, Pilot 6/6, Veteran 6/6, Ace 0/6 (nine boats for eight
+  // bombs: Ace needs the gun, which the bot doesn't use on boats). The bands are the measured floors
+  // less one seed, and the campaign's: Recruit and Pilot ≥ 75 %, Veteran ≥ 25 %, Ace under 90 %.
+  it('Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 2/6, Ace ≤ 5/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+    const seeds = [0, 1, 2, 3, 4, 5];
+    const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+    const won: Record<string, number> = {};
+    const log: string[] = [];
+    for (const d of diffs) {
+      won[d] = 0;
+      for (const seed of seeds) {
+        await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
+        const r = runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600, bot: { rearm: false } });
+        if (r.state === 'success') won[d]++;
+        log.push(`g02 ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+        // the opening ripple can't cover both waves: every bomb on a missile boat goes after they came in
+        for (const l of r.launches) if (l.group === 'missile_boats') expect(l.t, `${d} seed ${seed}`).toBeGreaterThan(G02_MISSILE_WAVE_AT);
+      }
+    }
+    const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
+    expect(won.recruit, table).toBeGreaterThanOrEqual(5);
+    expect(won.pilot, table).toBeGreaterThanOrEqual(5);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
+    expect(won.ace, table).toBeLessThanOrEqual(5);
+    expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
+    expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+    expect(won.ace, table).toBeLessThanOrEqual(won.veteran);
   });
 });

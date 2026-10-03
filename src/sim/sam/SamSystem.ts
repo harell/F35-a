@@ -242,6 +242,13 @@ function detects(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircraf
       if (lineOfSight(world.terrain, _eye, t.position)) return true;
     }
   }
+  // close-in cue that ignores stealth shaping (the AD boat's EO tracker: SamTypeData.closeCue)
+  const cue = data.closeCue;
+  if (cue && agl >= data.altMin * 0.5) {
+    const scale = ctx.world.difficulty.samRangeScale;
+    const r = tracking || t.bayDoors > 0.05 ? cue.bayRange : cue.range;
+    if (d <= r * scale && lineOfSight(world.terrain, _eye, t.position)) return true;
+  }
   if (!data.radar) {
     // MANPADS team: eyes + seeker
     const R = (s.detectRange ?? data.detectRange) * clamp(Math.sqrt(irIntensity(t, s.position)), 0.6, 1.4);

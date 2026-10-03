@@ -488,7 +488,7 @@ export const createHud: CreateHud = (canvas, events) => {
         drawInset(f);
         if (ctx.viewMode === 'missile') drawMissileCam(f);
       }
-      // the escorted ship's hit counter ("TANKER 1/2") heads the top-left column for the whole sortie,
+      // the escorted ship's hit counter ("TANKER HITS 1/2") heads the top-left column for the whole sortie,
       // so it never jumps when the objectives come and go — not in the missile / target cams
       const escortTop = colY;
       if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') colY = drawVesselCounters(f, L.colX, colY);

@@ -388,6 +388,66 @@ describe('air-defence boat (moving SAM)', { timeout: 60_000 }, () => {
 
 /* ───────────────────────── GBU-53/B vs a weaving boat ───────────────────────── */
 
+/**
+ * The AD boat's close-in cue (#115, SamTypeData.closeCue): its electro-optical tracker sees the jet
+ * inside 9 km whatever its shaping, and inside 12 km while the weapon bay is open, so a stand-off
+ * release stays safe and a closer pass costs something. Veteran (samRangeScale 1): the ranges as
+ * written. A clean (internal stores) F-35 is held at a fixed point, nose on the boat, 4,000 m up.
+ */
+describe('air-defence boat: close-in cue (#115)', { timeout: 60_000 }, () => {
+  const ALT = 4_000;
+  /** Seconds until the boat holds a full track on the jet (−1 = never in `seconds`), and whether it fired. */
+  function cue(slant: number, opts: { bay?: boolean; noCue?: boolean; seconds?: number } = {}): { trackedAt: number; fired: boolean } {
+    const data = SAM_DATA.ad_boat;
+    const saved = data.closeCue;
+    if (opts.noCue) data.closeCue = null;
+    try {
+      const w = createSimWorld({ terrain: new SeaTerrain(-20), difficulty: DIFFICULTIES.veteran, events: new EventBus(), combat: createCombatSystemSeeded(3) });
+      const ad = w.spawnSam({ type: 'ad_boat', team: 'red', position: new Vector3(0, 0, 0), known: true, boat: {} });
+      const at = new Vector3(0, ALT, Math.sqrt(slant * slant - ALT * ALT));
+      const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: at.clone(), heading: 0, speed: 250, loadout: 'a2a_stealth' });
+      let fired = false;
+      w.events.on('munition:launch', (e) => {
+        if (e.shooter === ad) fired = true;
+      });
+      let trackedAt = -1;
+      run(w, opts.seconds ?? 12, () => {
+        p.position.copy(at);
+        p.health = p.maxHealth;
+        if (opts.bay) p.bayDoors = 1;
+        if (trackedAt < 0 && ad.trackedTargetId === p.id && ad.trackProgress >= 1) trackedAt = w.time;
+      });
+      return { trackedAt, fired };
+    } finally {
+      data.closeCue = saved;
+    }
+  }
+
+  it('is AD-boat only: every other SAM type keeps the radar equation alone', () => {
+    expect(SAM_DATA.ad_boat.closeCue).toEqual({ range: 9_000, bayRange: 12_000 });
+    for (const [type, d] of Object.entries(SAM_DATA)) if (type !== 'ad_boat') expect(d.closeCue, type).toBeNull();
+    // a stand-off release stays outside it: the bay range is the radar SAM's reach
+    expect(SAM_DATA.ad_boat.closeCue!.bayRange).toBeLessThanOrEqual(SAM_DATA.ad_boat.engageMax);
+  });
+
+  it('inside 9 km it tracks and fires at a clean F-35 its radar alone would not see', () => {
+    const near = cue(8_500);
+    expect(near.trackedAt).toBeGreaterThan(0);
+    expect(near.fired).toBe(true);
+    // the same jet, the same place, without the cue: stealth wins
+    expect(cue(8_500, { noCue: true }).trackedAt).toBe(-1);
+  });
+
+  it('between 9 and 12 km only an open bay gives the jet away; beyond 12 km not even that', () => {
+    expect(cue(11_500).trackedAt).toBe(-1);
+    expect(cue(11_500, { bay: true }).trackedAt).toBeGreaterThan(0);
+    // without the cue the radar doesn't see even the open bay at that range
+    expect(cue(11_500, { bay: true, noCue: true }).trackedAt).toBe(-1);
+    // a stand-off release from 13 km is safe
+    expect(cue(13_000, { bay: true }).trackedAt).toBe(-1);
+  });
+});
+
 describe('GBU-53/B vs a weaving boat', { timeout: 60_000 }, () => {
   it('a designated StormBreaker follows a weaving suicide boat and sinks it', () => {
     const w = seaWorld(3);
