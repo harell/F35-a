@@ -128,6 +128,15 @@ export const WARNING_INFO: Record<WarningId, WarningInfo> = {
   chaff_low: { label: 'CHAFF LOW', level: 0, order: 14, detail: 'Chaff low' },
 };
 
+/**
+ * Type label of a hostile ground target ("SHIP", "FUEL"). A parked jet the mission names after its type
+ * ("MiG-29") reads as that type, as the briefing calls it, not the generic "JET" (playtest 1.2-m).
+ */
+export function groundLabel(g: { type: GroundTargetType; name: string }): string {
+  if (g.type === 'parked_jet' && g.name && !/^parked jet$/i.test(g.name)) return g.name.toUpperCase();
+  return GROUND_LABEL[g.type] ?? g.type.toUpperCase();
+}
+
 /** Short HMD label of an entity ("MIG-29", "SA-6", "SHIP", "CIV" for a civil ship). */
 export function entityLabel(e: AnyEntity | null | undefined): string {
   if (!e) return '';
@@ -138,7 +147,7 @@ export function entityLabel(e: AnyEntity | null | undefined): string {
       return SAM_LABEL[e.type] ?? e.type.toUpperCase();
     case 'ground':
       if (e.team === 'neutral') return 'CIV'; // civil ship
-      return GROUND_LABEL[e.type] ?? e.type.toUpperCase();
+      return groundLabel(e);
     case 'missile':
       return e.def.short;
     default:

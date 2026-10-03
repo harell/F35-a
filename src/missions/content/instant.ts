@@ -1,10 +1,10 @@
 /**
- * F35-A — Instant Action generator: stroll (free flight) / dogfight / SAM gauntlet / strike / defend / survival over Auckland
+ * F35-A — Instant Action generator: stroll (free flight) / dogfight / SAM gauntlet / strike / defend over Auckland
  * (real landmarks: the Gulf islands' SAM belt, the Waiheke airstrip, the Wiri oil terminal).
  */
 import type { InstantActionOptions, MissionDef, SceneryFeature } from '../../core/contracts';
 import { mulberry32 } from '../../core/math';
-import type { AircraftType, LoadoutId, SamType, TheaterId } from '../../core/types';
+import type { AircraftType, Difficulty, LoadoutId, SamType, TheaterId } from '../../core/types';
 import type { WingmanOrders } from '../../sim/api';
 import { WIRI_TANKS } from '../../core/sites';
 import type { AircraftGroupDef, Condition, GroundTargetDef, HintDef, MissionScript, ObjectiveDef, SamSiteDef, TriggerDef, WaypointDef, XZ } from '../schema';
@@ -25,7 +25,6 @@ const MODE_TITLE: Record<InstantActionOptions['mode'], string> = {
   sam_gauntlet: 'SAM Gauntlet',
   strike: 'Strike',
   defend: 'Defend',
-  survival: 'Survival',
 };
 
 interface Layout {
@@ -81,20 +80,18 @@ export function strollTour(): WaypointDef[] {
   return STROLL_TOUR.map(([label, place, altitude], i) => ({ id: `wp_tour${i + 1}`, label, kind: 'nav', x: Math.round(AKL[place].x), z: Math.round(AKL[place].z), altitude, radius: 1500 }));
 }
 
-/** Enemy type for a flight ('mixed' draws from every fighter type). */
+/**
+ * 'mixed' flights: MiG-29s and Su-27s on every difficulty. The Su-35 and Su-57 fly only when the
+ * player picks them (issue #60): their IRST and R-77s find the stealth F-35 at 12-15 km, before its
+ * SHOOT cue, and decided every Ace run (0/6 in each mode, also at Pilot's numbers), as they had
+ * walled Veteran Dogfight, Gauntlet and Strike before they became Ace-only.
+ */
+const MIXED: AircraftType[] = ['mig29', 'su27'];
+
+/** Enemy type for a flight. */
 function pickType(opts: InstantActionOptions, rng: () => number): AircraftType {
   if (opts.enemyType !== 'mixed') return opts.enemyType;
-  return FIGHTERS[Math.floor(rng() * FIGHTERS.length) % FIGHTERS.length];
-}
-
-/**
- * 'mixed' only: the modern Su-35 / Su-57 are Ace opponents — below that the flight is a MiG-29 or
- * Su-27 instead (resolved by the runner for the difficulty being flown). Issue #60: on Veteran
- * their R-77s decided every Dogfight, Gauntlet and Strike run (the bot was 0/6 in each).
- */
-function mixedDowngrade(opts: InstantActionOptions, type: AircraftType, rng: () => number): Partial<AircraftGroupDef> {
-  if (opts.enemyType !== 'mixed' || (type !== 'su35' && type !== 'su57')) return {};
-  return { downgrade: { below: 'ace', type: rng() < 0.5 ? 'mig29' : 'su27' } };
+  return MIXED[Math.floor(rng() * MIXED.length) % MIXED.length];
 }
 
 /** Split `n` enemies into pairs (last group may be a single). */
@@ -119,7 +116,6 @@ function enemyFlights(opts: InstantActionOptions, n: number, lay: Layout, rng: (
       // sizes follow the difficulty (script.scaleEnemyTotal: the total scales, not each pair)
       flight(`bandits${i + 1}`, type, size, at, 5500 + ((i * 700) % 2800), lay.enemyHeading, 245, i % 2 === 0 ? 'fighter' : 'interceptor', {
         task: i % 2 === 0 ? { kind: 'patrol', x: Math.round((lay.enemyAt.x + lay.player.x) / 2), z: Math.round((lay.enemyAt.z + lay.player.z) / 2), radius: 9000, altitude: 5500 } : { kind: 'attack_player' },
-        ...mixedDowngrade(opts, type, rng),
         ...extra,
       }),
     );
@@ -130,6 +126,16 @@ function enemyFlights(opts: InstantActionOptions, n: number, lay: Layout, rng: (
 
 /** Instant Action wingman (issue #60): it backs the player up and can't win the mission for a player who never fires. */
 const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
+
+/**
+ * Instant Action's own enemy-count scale (MissionScript.enemyCountScale), in place of the
+ * difficulty's: Ace flies Pilot's numbers (issue #60). At Ace's ×1.5 the bot was 0/6 in every mode:
+ * six Flankers against four AIM-120s in Dogfight, a third MiG-29 inside R-73 range in Strike, a
+ * third Su-35 on the Gauntlet's CAP, a third striker in Defend. Ace stays the hardest setting
+ * through its pilots (sharper and GCI-vectored), its SAMs and one-hit kills; Dogfight adds Viper 3,
+ * the Gauntlet a third CAP jet a minute behind the pair (both Ace only).
+ */
+export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = { ace: 1 };
 
 const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
 
@@ -154,9 +160,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
 
   switch (opts.mode) {
     case 'stroll': {
-      // free flight: no hostiles, only the civil traffic; every loadout, the heaviest by default
-      loadout = 'strike_beast';
-      allowed = ['strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
+      // free flight: no hostiles, only the civil traffic; every loadout, a clean jet first and by
+      // default (a calm cockpit and the slowest flight, #113)
+      loadout = 'clean';
+      allowed = ['clean', 'strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
       script.freeFlight = true;
       objectiveText = ['Free flight: no objectives. Explore Auckland at your own pace.'];
       // start low and steady over the upper Waitematā, the Harbour Bridge ahead (not 5,000 m at 470 kt)
@@ -167,22 +174,24 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
         'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. The airliners and ships are civilians going about their day.',
-        'You are loaded to the teeth if you want to practise on the scenery: nothing counts against you. Terrain and buildings still do, so mind the ground.',
+        // (playtest 1.1-d: until the suburbs' streets are baked from LINZ data, say so)
+        "The CBD, the motorways and the main roads follow Auckland's real streets. The suburbs between them are stylised, so your own street isn't there yet.",
+        'The jet is clean, radar off, for the slowest and quietest flight. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',
         'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
       break;
     }
     case 'dogfight': {
       // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
-      // the player has fired
-      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
+      // the player has fired. On Ace Viper 3 joins (issue #60: the bot was 1/6 there alone with Viper 2)
+      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS, countFor: { ace: 2 } }));
       const flights = enemyFlights(opts, n, lay, rng);
       groups.push(...flights);
       objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
       briefing = [
-        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, more on Ace). Weapons free — splash them all.`,
-        opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s — Su-35s and Su-57s join on Ace.' : '',
-        n >= 3 ? 'Viper 2 is on your wing. It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
+        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
+        opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
+        n >= 3 ? 'Viper 2 is on your wing (Vipers 2 and 3 on Ace). It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
@@ -213,13 +222,20 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
           flight('cap', capType, 2, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', {
             spawn: { kind: 'time', t: 120 },
             task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
-            ...mixedDowngrade(opts, capType, rng),
+          }),
+        );
+        // Ace: a third fighter a minute behind them (issue #60: 3 at once made Ace 1/6, 2 made it 5/6)
+        groups.push(
+          flight('cap2', pickType(opts, rng), 1, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', {
+            spawn: { kind: 'time', t: 180 },
+            minDifficulty: 'ace',
+            task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
           }),
         );
       }
       briefing = [
         `A belt of ${count} SAM sites guards a depot. Some sites are silent until you are close.`,
-        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
+        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in (a third a minute later on Ace): keep your AMRAAMs for them.'] : []),
         'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.',
       ];
       script.parTime = 420;
@@ -276,29 +292,13 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       script.opening = d.opening;
       script.successText = d.successText;
       briefing = d.briefing;
+      if (n >= DEFEND_BEAST_FROM) loadout = 'a2a_beast';
       script.parTime = 360;
       break;
     }
-    case 'survival': {
-      const types = opts.enemyType === 'mixed' ? FIGHTERS : [opts.enemyType];
-      script.survival = {
-        types,
-        baseCount: Math.max(1, Math.round(n / 2)),
-        growth: 0.5,
-        maxCount: 8,
-        skillStart: 0.3,
-        skillStep: 0.06,
-        spawnDistance: 30000,
-        interWaveDelay: 8,
-        rearm: true,
-      };
-      objectives.push({ id: 'o_survive', kind: 'survive', seconds: 36000, label: 'Survive as many waves as you can', primary: true });
-      briefing = ['Endless waves of bandits, each bigger and sharper than the last. You are rearmed between waves.', 'How long can you last?'];
-      script.parTime = 600;
-      script.awacs = { pictureInterval: 0 };
-      break;
-    }
   }
+
+  script.enemyCountScale = IA_ENEMY_COUNT_SCALE;
 
   const title = `${MODE_TITLE[opts.mode]} — ${THEATER_LABEL[opts.theater]}`;
   return mission({
@@ -382,6 +382,8 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
   const groups: AircraftGroupDef[] = [
     flight('strikers', strikeType, strikers, from, low, inbound, 235, 'fighter', {
       maxCount: 4,
+      // three bombers at most below Veteran (issue #60: at 8, Pilot went 4/6 with four, 5/6 with three)
+      ...(strikers > 3 ? { countFor: { recruit: 3, pilot: 3 } } : {}),
       formation: 'echelon',
       spacing: 400,
       enemyLoadout: 'strike',
@@ -404,7 +406,6 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
         // capped at 2 on every difficulty (Ace's 1.5x count scaling made it 3)
         maxCount: 2,
         task: { kind: 'escort_group', group: 'strikers' },
-        ...mixedDowngrade(opts, escortType, rng),
       }),
     );
   }
@@ -461,12 +462,21 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     successText: 'Wiri is still standing. The airport keeps its fuel.',
     briefing: [
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
-      `About ${strikers} Flankers loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
+      `About ${strikers} Flankers${strikers > 3 ? ' (three below Veteran)' : ''} loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
       ...(wings > 0 ? [`${wings > 1 ? 'Vipers 2 and 3 are' : 'Viper 2 is'} on your wing and takes the escort. The bombers are yours.`] : []),
+      ...(n >= DEFEND_BEAST_FROM ? ["Beast mode recommended: a raid this size, bombers and escort, takes more than the stealth fit's four AMRAAMs."] : []),
     ],
   };
 }
+
+/**
+ * Defend from this enemy count on recommends Beast mode (6 AMRAAMs and 2 AIM-9Xs, issue #60): at 8
+ * the 4 strikers and 2 escorts left the stealth fit's 4 AMRAAMs a bomber short, and the bot was
+ * 0/3 on Pilot (Winchester, then gunned by the last striker); with Beast 4/6, and 5/6 with the
+ * raid capped at three bombers below Veteran.
+ */
+export const DEFEND_BEAST_FROM = 6;
 
 /** Instant Action mission (fresh random seed each time). */
 export function buildInstantMission(opts: InstantActionOptions): MissionDef {

@@ -58,8 +58,7 @@ describe('strike_sdb2_full: the loadout', () => {
   });
 
   it('no mission offers it yet (only one that lists it, #82): campaign, training and every Instant Action mode', () => {
-    // by id, so a mode that is removed later (#63 drops Survival) just drops out of the list
-    const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend', 'survival'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
+    const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
     expect(instant.length).toBeGreaterThanOrEqual(4);
     for (const m of [...CAMPAIGN, ...TRAINING, ...instant]) {
       expect(m.allowedLoadouts, m.id).not.toContain(FULL);

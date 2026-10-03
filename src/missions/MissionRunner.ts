@@ -5,12 +5,12 @@
  * enemy flights, SAM sites and ground targets.
  * update(): called after every 60 Hz sim step. The radio queue runs every step; the mission
  * logic runs at 10 Hz: delayed spawns → triggers → Harbour Bridge stunt → objectives → waypoint
- * sequencing → AO / time limit → AWACS → hints → survival waves → win/lose check.
+ * sequencing → AO / time limit → AWACS → hints → win/lose check.
  * result(): score, grade and statistics for the debrief.
  *
  * Helper modules live in ./runtime (state, spawner, conditions, objectives, awacs, hints,
- * callouts, survival, scoring, rearm (Winchester / Whenuapai rearm point), withdrawal (bandits
- * that bug out count as driven off), debrief (tips, medals), landmarks (the Sky Tower: an enemy hit
+ * callouts, scoring, winchester (out-of-weapons and bingo calls; there is no rearming),
+ * withdrawal (bandits that bug out count as driven off), debrief (tips, medals), landmarks (the Sky Tower: an enemy hit
  * damages it, a second or the player's own munition brings it down and fails the mission)).
  * dispose(): detaches every event handler and drops the world / entity references (Game calls it
  * on teardown — restarts must not leak the previous session).
@@ -31,15 +31,15 @@ import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
 import { awardMedals, buildTips, deathReason } from './runtime/debrief';
-import { RearmController } from './runtime/rearm';
+import { WinchesterWatch } from './runtime/winchester';
 import { WithdrawalMonitor } from './runtime/withdrawal';
 import { attemptSeed, nextAttempt } from './runtime/variation';
 import { assignGroundAttack, buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
-import { SurvivalDirector } from './runtime/survival';
 import { CivilTraffic } from './runtime/civil';
 import { CivilShipping } from './runtime/shipping';
 import { LandmarkWatch } from './runtime/landmarks';
+import { SightseeingLog } from './runtime/sightseeing';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
@@ -71,8 +71,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly awacs: AwacsController;
   private readonly hints: HintSystem;
   private readonly callouts: Callouts;
-  private readonly survival: SurvivalDirector | null;
-  private readonly rearm: RearmController;
+  private readonly winchester: WinchesterWatch;
   private readonly withdrawal: WithdrawalMonitor;
   /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
   private readonly civil: CivilTraffic | null;
@@ -80,6 +79,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly shipping: CivilShipping | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
+  /** Free flight: tour stops, distance and passes for the debrief. */
+  private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
   private evalAcc = 0;
   private outsideAo = 0;
@@ -114,15 +115,15 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
     for (const t of def.script.triggers) this.s.triggers.push({ def: t, since: -1, fired: false, nextRepeat: 0 });
     this.awacs = new AwacsController(this.s);
-    this.rearm = new RearmController(this.s);
+    this.winchester = new WinchesterWatch(this.s);
     this.withdrawal = new WithdrawalMonitor(this.s);
-    this.hints = new HintSystem(this.s, this.rearm);
+    this.hints = new HintSystem(this.s, this.winchester);
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
-    this.survival = def.script.survival ? new SurvivalDirector(this.s) : null;
     const civilTraffic = def.theater === 'auckland' && deps.civilTraffic !== false;
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
+    this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
   /* ───────────────────────────── API ───────────────────────────── */
@@ -134,18 +135,11 @@ class MissionRunnerImpl implements MissionRunnerApi {
   get currentWaypoint(): Waypoint | null {
     const s = this.s;
     if (s.disposed) return null;
-    // Winchester / bingo: steer home to the rearm point
-    if (s.state === 'running' && this.rearm.current) return this.rearm.waypoint;
     return s.waypoints[s.waypointIndex]?.wp ?? null;
   }
 
   get hint(): string | null {
     return this.s.disposed ? null : this.hints.current;
-  }
-
-  /** Winchester / bingo state and the rearm point (HUD / tests). */
-  get rearmState(): { need: 'winchester' | 'bingo' | null; waypoint: Waypoint; holding: number } {
-    return { need: this.rearm.current, waypoint: this.rearm.waypoint, holding: this.rearm.holdTime };
   }
 
   dispose(): void {
@@ -173,14 +167,19 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const p = spawnPlayer(s, loadout);
     // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
     // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
-    if (s.script.freeFlight) world.combat.selectWeapon(p, 'gun', world);
+    if (s.script.freeFlight) {
+      world.combat.selectWeapon(p, 'gun', world);
+      // a calm cockpit (#113): radar off at the start (the player can turn it on) and no CIV boxes on
+      // the civil traffic, so TGT can't steer a bomb onto a moored cruise ship
+      world.combat.setRadarEmitting(p, false, world);
+      p.ignoresCivil = true;
+    }
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
     markObjectiveTargets(s);
     this.civil?.setup();
     this.shipping?.setup();
     this.landmarks.setup();
-    this.rearm.init(p, loadout);
     this.callouts.attach();
     // ground-level steering for target waypoints without an explicit altitude
     for (const w of s.waypoints) {
@@ -206,6 +205,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const edt = this.evalAcc;
     this.evalAcc = 0;
 
+    this.sightseeing?.update(edt);
     if (s.state !== 'running') {
       this.hints.update();
       return;
@@ -225,9 +225,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.updateBoundary(edt);
     this.updateTimeLimit();
     this.withdrawal.update();
-    this.rearm.update(edt);
+    this.winchester.update();
     this.awacs.update();
-    this.survival?.update();
     this.civil?.update();
     this.checkEnd();
     this.hints.update();
@@ -265,7 +264,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
       bonus: s.bonus,
       scoreMultiplier: s.difficulty.scoreMultiplier,
       flightKills: s.flightKills,
-      waves: this.survival ? s.waves : undefined,
     });
     const finale = success && this.def.kind === 'campaign' && !!s.script.campaignFinale;
     const r: MissionResult = {
@@ -297,6 +295,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
     if (s.script.freeFlight) r.freeFlight = true;
+    if (this.sightseeing) (r as MissionResultExt).sightseeing = this.sightseeing.result();
     r.tips = r.freeFlight ? [] : buildTips(s, r);
     r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
@@ -595,7 +594,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private checkEnd(): void {
     const s = this.s;
     if (s.state !== 'running') return;
-    if (this.survival) return; // survival only ends when the player goes down
     const sum = objectiveSummary(s);
     if (sum.primaryFailed) {
       this.fail(`Objective failed: ${sum.primaryFailed.def.label}`);
@@ -643,11 +641,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.playerDied = true;
     if (s.state !== 'running') return;
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, eject, eject!`, voice: 'a_eject', priority: URGENT_PRIORITY + 1 });
-    const base = deathReason(s, reason);
-    if (this.survival) {
-      const n = s.waves;
-      this.fail(`${base} — survived ${n} wave${n === 1 ? '' : 's'}`);
-    } else this.fail(base);
+    this.fail(reason === 'structure' ? REASONS.structure : deathReason(s, reason));
   }
 }
 

@@ -27,7 +27,7 @@ export const C01: MissionDef = mission({
   briefing: [
     '04:12. A hostile expeditionary force came ashore on Rangitoto, Motutapu and Waiheke in the dark. Within the hour their fighters were probing the Waitematā, and Auckland woke up to sirens and jet noise over the harbour.',
     'Operation Southern Cross starts now. You and Viper 2 are the first F-35As off the runway at Whenuapai. Climb to CAP ALPHA over the upper harbour and let DARKSTAR, the AWACS orbiting over the Hunua Ranges, talk you onto a pair of MiG-29s sweeping in from the Gulf.',
-    'A clean F-35 is almost invisible to a Fulcrum radar, so see them first: tap the TD box (or TGT) to lock — keep the nose within 30° while it locks — wait for SHOOT, fire, then crank 50° to support the missile. Keep them off the North Shore. Expect company once the first pair goes down. Out of missiles? Hold over Whenuapai to rearm.',
+    'A clean F-35 is almost invisible to a Fulcrum radar, so see them first: tap the TD box (or TGT) to lock — keep the nose within 30° while it locks — wait for SHOOT, fire, then crank 50° to support the missile. Keep them off the North Shore. Expect company once the first pair goes down. Make every missile count: there is no rearming.',
   ],
   recommendedLoadout: 'a2a_stealth',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
@@ -194,6 +194,8 @@ export const C02: MissionDef = mission({
 /* ───────────────────────── 3. Iron Hand — SEAD on Rangitoto ───────────────────────── */
 
 const c03Start = { x: -13000, z: -2000, altitude: 4000, heading: 80, speed: 240 };
+/** c03's time limit (s): 15 minutes, Darkstar warns at 3 minutes left (#114). */
+export const C03_TIME_LIMIT = 900;
 
 export const C03: MissionDef = mission({
   id: 'c03',
@@ -206,11 +208,14 @@ export const C03: MissionDef = mission({
   briefing: [
     "From the slopes of Rangitoto an SA-6 battery and an SA-8 now cover the whole harbour. Nothing can fly over the city while they live — not our tankers, not the rescue helicopters, not the ferries' air cover.",
     "You're going in with AARGM anti-radiation missiles and GBU-39 small diameter bombs. The SA-6 sits on the south-west slope facing the city; the SA-8 is on the eastern shore. Shilkas guard the approaches and an early-warning radar near the summit is feeding them.",
-    'Fire the AARGM while a radar is emitting — it rides the beam home, and keeps going even if they shut down. SDBs glide 30 km from altitude. Stay in the bays and stay stealthy.',
+    'Fire the AARGM while a radar is emitting — it rides the beam home, and keeps going even if they shut down. SDBs glide 30 km from altitude. Stay in the bays and stay stealthy. The tankers launch in fifteen minutes: Rangitoto has to be quiet by then.',
   ],
   recommendedLoadout: 'sead_stealth',
   allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
   player: c03Start,
+  // #114: with no rearming, a player whose bombs all fall to the SA-8 had nothing left to do and the
+  // sortie never ended. The slowest bot win over 6 seeds × 4 difficulties is 675 s (Pilot seed 3).
+  timeLimit: C03_TIME_LIMIT,
   script: {
     autoHints: true,
     parTime: 420,
@@ -250,6 +255,25 @@ export const C03: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Straight Flush is off the air. The SA-8 is next.' }],
       },
       { id: 't_cap', when: { kind: 'time', t: 148 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. MiGs launching to cover Rangitoto. Viper 2, engage.' }] },
+      // #114: the SA-8's point defence shoots down an SDB 3 times in 10 and an AARGM 2 in 10 (SAM_DATA),
+      // but only a bomb its radar can see, 1.2–4.5 km out. After the second loss Darkstar marks it and
+      // calls a low run-in from the west: Rangitoto (260 m) hides the jet, and the bombs only show over
+      // the summit, 1.6 km from the site, so the Osa has seconds to shoot. There is no rearming.
+      {
+        id: 't_sa8_eating',
+        when: { kind: 'all', of: [{ kind: 'munitions_shot_down', group: 'rangi_sa8', count: 2 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa8', state: 'complete' } }] },
+        delay: 2,
+        actions: [
+          { kind: 'radio', from: DS, text: "Viper 1, Darkstar. The Gecko is shooting your weapons down. It's on Rangitoto's east shore: come in low from the west, behind the volcano.", priority: 3 },
+          { kind: 'reveal', group: 'rangi_sa8' },
+          { kind: 'set_waypoint', id: 'wp_sa8' },
+        ],
+      },
+      {
+        id: 't_time_warn',
+        when: { kind: 'time', t: C03_TIME_LIMIT - 180 },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Three minutes. If Rangitoto is still up then, the tankers stay home and we call it off.', priority: 3 }],
+      },
     ],
     hints: [
       { id: 'h_arm', text: 'SEAD: WPN selects AARGM. Tap TGT on the SA-6 while its radar is on, then fire', when: { kind: 'time', t: 5 }, duration: 10 },
@@ -265,6 +289,9 @@ export const C03: MissionDef = mission({
 const c04Start = { x: 2500, z: -1500, altitude: 5000, heading: 95, speed: 240 };
 const strip = P.waiAirstrip;
 const rw = (v: number, u: number) => runwayPoint(strip, WAIHEKE_RUNWAY_HDG, v, u);
+// the southern route's turn points (waypoints and the pacing calls)
+const c04Strait = { x: 15000, z: 3000 };
+const c04Ip = { x: 23500, z: 6500 };
 
 export const C04: MissionDef = mission({
   id: 'c04',
@@ -343,8 +370,8 @@ export const C04: MissionDef = mission({
     waypoints: [
       // the southern route at 25,000 ft (above the SA-8 / Tor / Shilka envelopes; the SA-6 is
       // Weasel's), then a northbound run-in from the IP off Beachlands, ~13 km out (12.9 km from the Tor)
-      { id: 'wp_strait', label: 'Tāmaki Strait', kind: 'nav', x: 15000, z: 3000, altitude: 7500 },
-      { id: 'wp_ip', label: 'IP Beachlands', kind: 'ip', x: 23500, z: 6500, altitude: 7500 },
+      { id: 'wp_strait', label: 'Tāmaki Strait', kind: 'nav', x: c04Strait.x, z: c04Strait.z, altitude: 7500 },
+      { id: 'wp_ip', label: 'IP Beachlands', kind: 'ip', x: c04Ip.x, z: c04Ip.z, altitude: 7500 },
       { id: 'wp_strip', label: 'Airstrip', kind: 'target', x: rw(0, 320).x, z: rw(0, 320).z, objective: 'o_jets' },
     ],
     triggers: [
@@ -360,6 +387,32 @@ export const C04: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. Good hits! Those Fulcrums aren't flying again." }],
       },
       { id: 't_sa6', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, delay: 2, actions: [{ kind: 'radio', from: 'Weasel 1', text: 'Weasel 1: the SA-6 is down. Your turn, Viper.' }] },
+      // Pacing (#59): the transit from the CAP fight to the bomb run was silent for 108–131 s (bot, 6 seeds,
+      // every difficulty). Darkstar talks the player along the southern route: over the strait, then at the IP
+      // (or on the clock, for a player who strays off the route)
+      {
+        id: 't_pace_strait',
+        when: {
+          kind: 'all',
+          of: [
+            { kind: 'any', of: [{ kind: 'area', x: c04Strait.x, z: c04Strait.z, radius: 4000 }, { kind: 'time', t: 85 }] },
+            { kind: 'not', of: { kind: 'objective', id: 'o_jets', state: 'complete' } },
+          ],
+        },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Tāmaki Strait. Stay high and push to the IP off Beachlands: the apron is 13 km north of it.', priority: 2 }],
+      },
+      {
+        id: 't_pace_ip',
+        when: {
+          kind: 'all',
+          of: [
+            { kind: 'any', of: [{ kind: 'area', x: c04Ip.x, z: c04Ip.z, radius: 3000 }, { kind: 'time', t: 130 }] },
+            { kind: 'trigger', id: 't_pace_strait' },
+            { kind: 'not', of: { kind: 'objective', id: 'o_jets', state: 'complete' } },
+          ],
+        },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Turn north for the strip. Designate the parked Fulcrums, release on IN RANGE, then turn away.', priority: 2 }],
+      },
     ],
     hints: [
       { id: 'h_high', text: 'Climb to 25,000 ft on the way in: the higher you release, the further the JDAM glides', when: { kind: 'time', t: 6 }, duration: 8 },

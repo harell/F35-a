@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
-import { POINTS, computeScore, gradeForRating, gradeForWaves, timeFactor, type ScoreInput } from '../src/missions/runtime/scoring';
+import { POINTS, computeScore, gradeForRating, timeFactor, type ScoreInput } from '../src/missions/runtime/scoring';
 import { angels, aspectOf, bearingText, compassWord } from '../src/missions/runtime/awacs';
 import { groupNoun } from '../src/missions/runtime/names';
 import { RadioQueue } from '../src/missions/runtime/radio';
@@ -72,15 +72,6 @@ describe('scoring', () => {
     expect(timeFactor(100, 480)).toBe(1);
     expect(timeFactor(720, 480)).toBe(0);
     expect(timeFactor(480, 480)).toBeCloseTo(0.5);
-  });
-
-  it('survival is graded by waves', () => {
-    expect(gradeForWaves(0)).toBe('F');
-    expect(gradeForWaves(3)).toBe('C');
-    expect(gradeForWaves(12)).toBe('S');
-    const r = computeScore({ ...base, success: false, waves: 7 });
-    expect(r.grade).toBe('A');
-    expect(r.breakdown.waves).toBe(7 * POINTS.wave);
   });
 });
 

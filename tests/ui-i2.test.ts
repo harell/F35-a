@@ -121,15 +121,15 @@ describe('i2: player-centric grading', () => {
 describe('i2: retries vary', () => {
   it('attempt 0 is the designed mission, retries get new seeds; off in node unless enabled', () => {
     setAttemptVariation(false);
-    expect(nextAttempt('c07')).toBe(0);
-    expect(nextAttempt('c07')).toBe(0);
+    expect(nextAttempt('c06')).toBe(0);
+    expect(nextAttempt('c06')).toBe(0);
     setAttemptVariation(true);
-    expect(nextAttempt('c07')).toBe(0);
-    expect(nextAttempt('c07')).toBe(1);
-    expect(nextAttempt('c07')).toBe(2);
+    expect(nextAttempt('c06')).toBe(0);
+    expect(nextAttempt('c06')).toBe(1);
+    expect(nextAttempt('c06')).toBe(2);
     expect(nextAttempt('c08')).toBe(0);
     setAttemptVariation(false);
-    const s = missionById('c07')!.seed;
+    const s = missionById('c06')!.seed;
     expect(attemptSeed(s, 0)).toBe(s);
     expect(new Set([0, 1, 2, 3].map((n) => attemptSeed(s, n))).size).toBe(4);
   });

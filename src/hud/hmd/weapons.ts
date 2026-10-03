@@ -12,6 +12,8 @@ import { dlzLayout, makeDlzGeometry } from './dlz';
 import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
+import { TEST_HOOKS } from '../../core/data';
+import { noteCue, notePipper } from './drawn';
 
 const dlzGeom = makeDlzGeometry();
 const tofTxt = new NumText(0, 'TOF ');
@@ -61,8 +63,17 @@ export function weaponBlockLines(f: HudFrame): number {
   if (p.selectedWeapon !== 'gun') n++;
   if (!p.radar.emitting) n++;
   if (p.bayDoors > 0.05) n++;
-  if (f.st.deniedAge < 1.8 && f.st.deniedText) n++;
+  if (deniedShown(f)) n++;
   return n;
+}
+
+/**
+ * The release denial ("NO SEEKER") shows for 1.8 s, and only while the weapon it was for is still
+ * selected: under 'GUN 400' after a switch it read as the gun's (playtest 2.1-e).
+ */
+export function deniedShown(f: HudFrame): boolean {
+  const st = f.st;
+  return st.deniedAge < 1.8 && !!st.deniedText && (!st.deniedWeapon || st.deniedWeapon === f.p.selectedWeapon);
 }
 
 const inFltTxt = new NumText(0, '', ' IN FLT');
@@ -93,7 +104,7 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
     pen.box(x - 4 * u, y - 9 * u, tw, 18 * u, pal.bright, 1.4, pal.back);
   }
   pen.text(label, x, y, col, 14, 'left');
-  // our weapons in flight ("3 IN FLT"): a fixed place that always reads, where the per-box "M n" marks
+  // our weapons in flight ("3 IN FLT"): a fixed place that always reads, where the per-box "T n" marks
   // in a tight swarm find no room (playtest 2.1-a)
   const flying = ownInFlight(f);
   if (flying > 0) pen.text(inFltTxt.get(flying), x + pen.textWidth(label, 14) + 10 * u, y + 0.5, pal.main, 11.5, 'left');
@@ -118,7 +129,7 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
     pen.text('BAY OPEN', x, y, pal.dim, 11, 'left');
     y += L.line * 0.9;
   }
-  if (st.deniedAge < 1.8 && st.deniedText) {
+  if (deniedShown(f)) {
     if (blink(f, 4, 0.7)) pen.text(st.deniedText, x, y, pal.warn, 12.5, 'left');
     y += L.line;
   }
@@ -162,20 +173,42 @@ export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): vo
   if (z.timeOfFlight > 0) pen.text(tofTxt.get(z.timeOfFlight), x, bottom + 11 * u, pal.main, 11);
 }
 
+/** Centre x of the last line placeCueLine placed. */
+export const cueAt = { x: 0 };
+
+/** Sideways offsets (× the line's width) placeCueLine tries when the centre column has no room. */
+const CUE_SHIFTS = [0, 1, -1, 2, -2];
+
 /**
  * Place one centre-cue text line near `yPref` (fixed slot below the FPM / above the jet), dodging the
- * protected symbols. Returns the centre y (and registers the line).
+ * protected symbols: in the centre column, else beside it (a target box, the incoming-missile TTIs and
+ * the bank arc can fill the column on a phone: 1.2-d). Returns the centre y (cueAt.x the centre x) and
+ * registers the line. Nowhere clear: an `optional` line (the FOX call) returns NaN and is left out (it
+ * printed over the target box's type label: 'FOX 23', 1.2-b), any other goes in the centre slot anyway.
  */
-export function placeCueLine(f: HudFrame, text: string, size: number, yPref: number): number {
+export function placeCueLine(f: HudFrame, text: string, size: number, yPref: number, optional = false): number {
   const { pen, L, occ } = f;
   const u = L.u;
   const hw = pen.textWidth(text, size) / 2 + 4 * u;
   const h = (size + 4) * u;
   const lo = L.row2Y + 16 * u;
+  const hi = Math.max(L.msgFloor, yPref + h);
   // (clear of the protected symbols and text, and of the contact / ground / waypoint symbols)
-  let top = occ.freeY(L.cx - hw, L.cx + hw, h, yPref - h / 2, lo, Math.max(L.msgFloor, yPref + h), 'down', 4, f.sym);
-  if (!Number.isFinite(top)) top = yPref - h / 2;
-  occ.add(L.cx - hw, top, L.cx + hw, top + h);
+  let top = NaN;
+  let x = L.cx;
+  for (const k of CUE_SHIFTS) {
+    x = L.cx + k * (hw * 2 + 6 * u);
+    if (x - hw < L.left || x + hw > L.right) continue;
+    top = occ.freeY(x - hw, x + hw, h, yPref - h / 2, lo, hi, 'down', 4, f.sym);
+    if (Number.isFinite(top)) break;
+  }
+  if (!Number.isFinite(top)) {
+    if (optional) return NaN;
+    x = L.cx;
+    top = yPref - h / 2;
+  }
+  occ.add(x - hw, top, x + hw, top + h);
+  cueAt.x = x;
   return top + h / 2;
 }
 
@@ -188,12 +221,16 @@ interface CueLine {
   /** Blink rate (0 = steady). */
   hz: number;
   alpha: number;
+  /** Left out when there is no room for it (the FOX call). */
+  optional: boolean;
+  x: number;
+  /** NaN = not placed this frame. */
   y: number;
 }
-const cues: CueLine[] = Array.from({ length: 3 }, () => ({ text: '', size: 0, col: '', hz: 0, alpha: 1, y: 0 }));
+const cues: CueLine[] = Array.from({ length: 3 }, () => ({ text: '', size: 0, col: '', hz: 0, alpha: 1, optional: false, x: 0, y: 0 }));
 let cueCount = 0;
 
-function addCue(text: string, size: number, col: string, hz: number, alpha = 1): void {
+function addCue(text: string, size: number, col: string, hz: number, alpha = 1, optional = false): void {
   if (cueCount >= cues.length || !text) return;
   const c = cues[cueCount++];
   c.text = text;
@@ -201,6 +238,7 @@ function addCue(text: string, size: number, col: string, hz: number, alpha = 1):
   c.col = col;
   c.hz = hz;
   c.alpha = alpha;
+  c.optional = optional;
 }
 
 /**
@@ -236,14 +274,19 @@ export function planCues(f: HudFrame): number {
     }
   }
   // brevity flash after a release ("FOX 3")
-  if (st.brevityAge <= 1.3 && st.brevity) addCue(st.brevity, 15, pal.white, 0, Math.max(0, Math.min(1, (1.3 - st.brevityAge) / 0.4)));
+  if (st.brevityAge <= 1.3 && st.brevity) addCue(st.brevity, 15, pal.white, 0, Math.max(0, Math.min(1, (1.3 - st.brevityAge) / 0.4)), true);
   let y = L.cueY;
+  let placed = 0;
   for (let i = 0; i < cueCount; i++) {
     const c = cues[i];
-    c.y = placeCueLine(f, c.text, c.size, y);
-    y = c.y + (c.size + 4) * L.u;
+    c.y = placeCueLine(f, c.text, c.size, y, c.optional);
+    c.x = cueAt.x;
+    if (!Number.isFinite(c.y)) continue;
+    placed++;
+    // (a line moved aside leaves the centre column's next slot where it was)
+    if (c.x === L.cx) y = c.y + (c.size + 4) * L.u;
   }
-  return cueCount > 0 ? y : L.msgY;
+  return placed > 0 ? y : L.msgY;
 }
 
 const gapT = new Float32Array(cues.length * 2);
@@ -260,6 +303,7 @@ function lineAroundCues(f: HudFrame, ax: number, ay: number, bx: number, by: num
   let n = 0;
   for (let i = 0; i < cueCount; i++) {
     const c = cues[i];
+    if (!Number.isFinite(c.y)) continue;
     const hw = pen.textWidth(c.text, c.size) / 2 + 4 * u;
     const hh = (c.size / 2 + 2) * u;
     let t0 = 0;
@@ -271,7 +315,7 @@ function lineAroundCues(f: HudFrame, ax: number, ay: number, bx: number, by: num
       else t1 = Math.min(t1, r);
       return t0 <= t1;
     };
-    if (clip(-dx, ax - (L.cx - hw)) && clip(dx, L.cx + hw - ax) && clip(-dy, ay - (c.y - hh)) && clip(dy, c.y + hh - ay) && t1 > t0) {
+    if (clip(-dx, ax - (c.x - hw)) && clip(dx, c.x + hw - ax) && clip(-dy, ay - (c.y - hh)) && clip(dy, c.y + hh - ay) && t1 > t0) {
       gapT[n * 2] = t0;
       gapT[n * 2 + 1] = t1;
       n++;
@@ -295,9 +339,12 @@ export function drawCues(f: HudFrame): void {
   const { pen, L } = f;
   for (let i = 0; i < cueCount; i++) {
     const c = cues[i];
-    if (c.hz > 0 && !blink(f, c.hz, 0.7)) continue;
+    if (!Number.isFinite(c.y)) continue;
+    const on = c.hz <= 0 || blink(f, c.hz, 0.7);
+    if (TEST_HOOKS) noteCue(c.text, c.x, c.y, on);
+    if (!on) continue;
     pen.g.globalAlpha = c.alpha * f.declutter;
-    pen.text(c.text, L.cx, c.y, c.col, c.size);
+    pen.text(c.text, c.x, c.y, c.col, c.size);
     pen.g.globalAlpha = 1;
   }
 }
@@ -319,27 +366,79 @@ export function drawAim9x(f: HudFrame): void {
   if (!proj.dir(dir, f.sp) || !f.sp.onScreen) return;
   const x = f.sp.x;
   const y = f.sp.y;
-  if (ir.state === 'locked') {
-    const r = 17 * u + Math.sin(f.st.clock * 12) * 1.2 * u;
+  const locked = ir.state === 'locked';
+  const r = locked ? 17 * u + Math.sin(f.st.clock * 12) * 1.2 * u : 24 * u + Math.sin(f.st.clock * 7) * 1.5 * u;
+  if (locked) {
     pen.setDash('solid');
     pen.begin();
     pen.circle(x, y, r);
     pen.line(x - 5 * u, y, x + 5 * u, y);
     pen.line(x, y - 5 * u, x, y + 5 * u);
     pen.strokeGlow(pal.bright, 2);
-    pen.text('TONE', x, y + r + 10 * u, pal.bright, 11);
-    f.occ.add(x - r - 3 * u, y - r - 3 * u, x + r + 3 * u, y + r + 17 * u, 1);
   } else {
     // searching: dashed wobbling circle ("growl")
-    const r = 24 * u + Math.sin(f.st.clock * 7) * 1.5 * u;
     pen.setDash('dash');
     pen.begin();
     pen.circle(x, y, r);
     pen.strokeGlow(pal.main, 1.6);
     pen.setDash('solid');
-    pen.text('GROWL', x, y + r + 10 * u, pal.dim, 10.5);
-    f.occ.add(x - r - 3 * u, y - r - 3 * u, x + r + 3 * u, y + r + 17 * u, 1);
   }
+  f.occ.add(x - r - 3 * u, y - r - 3 * u, x + r + 3 * u, y + r + 3 * u, 1);
+  setReticle(f, x, y, r + 2 * u);
+  // TONE / GROWL goes on once the target box has laid its labels out (drawSeekerLabel): under the
+  // circle it covered the box's range readout (1.2-c)
+  seekerLabel.frame = f.st.frame;
+  seekerLabel.text = locked ? 'TONE' : 'GROWL';
+  seekerLabel.col = locked ? pal.bright : pal.dim;
+  seekerLabel.size = locked ? 11 : 10.5;
+  seekerLabel.x = x;
+  seekerLabel.y = y;
+  seekerLabel.r = r;
+}
+
+/** The ring of the reticle drawn this frame (gun pipper / AIM-9X seeker): the target box labels keep out of it. */
+export const reticle = { frame: -1, x: 0, y: 0, r: 0 };
+
+function setReticle(f: HudFrame, x: number, y: number, r: number): void {
+  reticle.frame = f.st.frame;
+  reticle.x = x;
+  reticle.y = y;
+  reticle.r = r;
+}
+
+const seekerLabel = { frame: -1, text: '', col: '', size: 11, x: 0, y: 0, r: 0 };
+
+/**
+ * The AIM-9X seeker's TONE / GROWL, after the target box: under the circle, else left / right of it,
+ * else above it (then the same 8 u further out), wherever nothing registered is (the box's range readout
+ * included); none: under it.
+ */
+export function drawSeekerLabel(f: HudFrame): void {
+  const sl = seekerLabel;
+  if (sl.frame !== f.st.frame || f.p.selectedWeapon !== 'aim9x') return;
+  const { pen, L, occ } = f;
+  const u = L.u;
+  const w = pen.textWidth(sl.text, sl.size);
+  const hh = 7 * u;
+  let lx = sl.x;
+  let ly = sl.y + sl.r + 11 * u;
+  // (each side in turn, then each again 8 u further out; clear of everything, else of the protected
+  // symbols and the target box's labels at least: a fixed zone's reserved rect is wider than its text)
+  search: for (let minLevel = 0; minLevel < 2; minLevel++) {
+    for (let k = 0; k < 16; k++) {
+      const d = (k >> 2) * 8 * u;
+      const s = k & 3;
+      const cx = s === 0 || s === 3 ? sl.x : s === 1 ? sl.x - sl.r - 6 * u - w / 2 - d : sl.x + sl.r + 6 * u + w / 2 + d;
+      const cy = s === 0 ? sl.y + sl.r + 11 * u + d : s === 3 ? sl.y - sl.r - 11 * u - d : sl.y;
+      if (cx - w / 2 < L.left || cx + w / 2 > L.right || cy - hh < L.row2Y || cy + hh > L.H) continue;
+      if (occ.hits(cx - w / 2 - u, cy - hh, cx + w / 2 + u, cy + hh, minLevel)) continue;
+      lx = cx;
+      ly = cy;
+      break search;
+    }
+  }
+  pen.text(sl.text, lx, ly, sl.col, sl.size);
+  occ.add(lx - w / 2 - u, ly - hh, lx + w / 2 + u, ly + hh, 1);
 }
 
 /* ───────────────────────── Gun ───────────────────────── */
@@ -549,6 +648,7 @@ function drawPipper(f: HudFrame, crossX: number, crossY: number): void {
   const y = sp.y;
   const R = 19 * u;
   f.occ.add(x - R - 7 * u, y - R - 7 * u, x + R + 7 * u, y + R + 7 * u, 1);
+  setReticle(f, x, y, R + 2 * u);
   const t = f.target;
   const range = t ? t.position.distanceTo(p.position) : GUN_EFFECTIVE * 2;
   const inRange = range < GUN_EFFECTIVE;
@@ -570,6 +670,7 @@ function drawPipper(f: HudFrame, crossX: number, crossY: number): void {
   pen.line(x + Math.cos(ta) * (R + 1), y + Math.sin(ta) * (R + 1), x + Math.cos(ta) * (R + 6 * u), y + Math.sin(ta) * (R + 6 * u));
   pen.strokeGlow(pal.main, 1.4);
   setAnchor(f, x, y, R + 7 * u);
+  if (TEST_HOOKS) notePipper(x, y, R);
 }
 
 function setAnchor(f: HudFrame, x: number, y: number, r: number): void {

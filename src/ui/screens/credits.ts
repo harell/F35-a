@@ -12,7 +12,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
     title: 'Game',
     items: [
       ['F35-A', 'A mobile-browser combat flight simulator. Design, code and procedural art built with AI-assisted development.'],
-      ['Setting', 'Operation Southern Cross — a fictional defence of Auckland (Tāmaki Makaurau), New Zealand. All scenarios are fiction.'],
+      ['Setting', 'A fictional defence of Auckland (Tāmaki Makaurau), New Zealand. All scenarios are fiction.'],
       ['Inspiration', 'NovaLogic’s F-22 Raptor (1997) — mission-based campaign, AWACS radio calls, SAM-infested skies.'],
     ],
   },

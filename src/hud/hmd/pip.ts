@@ -25,7 +25,7 @@ import type { AircraftType, SamType } from '../../core/types';
 import type { CivilPhase } from '../../sim/civil/route';
 import type { AnyEntity } from '../../sim/entities';
 import type { LandmarkEntity } from '../../sim/landmarks';
-import { AIRCRAFT_LABEL, GROUND_LABEL, SAM_LABEL } from './format';
+import { AIRCRAFT_LABEL, SAM_LABEL, groundLabel } from './format';
 import type { HudFrame } from './frame';
 import type { HudLayout } from './layout';
 
@@ -125,7 +125,7 @@ export function pipName(t: AnyEntity, short = false): string {
   if (short && t.kind === 'sam') return SAM_LABEL[t.type] ?? t.type.toUpperCase();
   if (t.kind === 'aircraft') return `${AIRCRAFT_LABEL[t.type] ?? t.type.toUpperCase()} ${NATO_AIR[t.type] ?? ''}`.trim();
   if (t.kind === 'sam') return `${SAM_LABEL[t.type] ?? t.type.toUpperCase()} ${NATO_SAM[t.type] ?? ''}`.trim();
-  if (t.kind === 'ground') return GROUND_LABEL[t.type] ?? t.type.toUpperCase();
+  if (t.kind === 'ground') return groundLabel(t);
   return t.name.toUpperCase();
 }
 

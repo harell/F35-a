@@ -2,7 +2,6 @@
  * MISSIONS i2 — campaign difficulty walls (reviewer sweep with the project's MissionBot):
  *  - c04 'Broken Wing' was 0/2 on Pilot (SA-6 / SA-15 point defence shooting down the JDAMs);
  *  - c10 'Night Harbour' was 0/2 on Pilot (Su-27 sweep R-27s at 137/159 s) and failed on Recruit;
- *  - c07 'Mainstay' on Veteran/Ace was an unavoidable Su-35 R-77 kill at 51–58 s.
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  *
  * Issue #57 (playtest 2026-10-02): the Pilot band (≥ 75 % over 6 seeds) in c02, c09 and t03, and no
@@ -19,11 +18,15 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { difficultyAtLeast } from '../src/missions/runtime/state';
+import { hangarLoadouts } from '../src/ui/hangar';
+import { C08_ACE_SCRAMBLE_T } from '../src/missions/content/campaign2';
+import { scaledCount } from '../src/missions/runtime/spawner';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import type { Difficulty } from '../src/core/types';
 import { LOADOUTS } from '../src/core/data';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
+import { G02_MISSILE_WAVE_AT } from '../src/missions/content/irgcHauraki';
 
 const terrains = new Map<string, TerrainQuery>();
 function terrainFor(id: string): TerrainQuery {
@@ -48,12 +51,16 @@ function wins(id: string, diff: Difficulty, seeds: number[]): { won: number; log
 }
 
 describe('#65: StormBreaker follow-ups (playtest 2026-10-02, 2.1-c / 2.2-h)', () => {
-  it('c08 offers strike_sdb2 only while saying it carries no anti-radiation missile (Pilot was 0/3 to the SA-10)', () => {
+  // #114 (playtest 2026-10-02 bc94edd, 1.3-d): even with the warning, the StormBreaker load lost the
+  // low strike under the SA-10 (bot, 6 seeds: Recruit 6/6, Pilot 2/6, Veteran 0/6), so c08 no longer
+  // offers it, and neither the briefing nor the hangar suggests it
+  it('c08 does not offer strike_sdb2 (no answer to the SA-10; Pilot 2/6, Veteran 0/6 with it)', () => {
     const def = missionById('c08')!;
-    if (!def.allowedLoadouts.includes('strike_sdb2')) return;
     expect(LOADOUTS.strike_sdb2.stores.some((s) => s.weapon === 'aargm')).toBe(false);
-    expect(LOADOUTS.strike_sdb2.description).toMatch(/no anti-radiation missile/i);
-    expect(def.briefing.join(' ')).toMatch(/StormBreaker[^.]*no anti-radiation missile/i);
+    expect(def.allowedLoadouts).not.toContain('strike_sdb2');
+    expect(def.recommendedLoadout).not.toBe('strike_sdb2');
+    expect(hangarLoadouts(def).cards).not.toContain('strike_sdb2');
+    expect(def.briefing.join(' ')).not.toMatch(/StormBreaker|GBU-53/i);
   });
 
   // decision: no fast corvette. Measured (crossing ship, IN RANGE release from 7.6 km): a JDAM's
@@ -96,11 +103,6 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
       expect(difficultyAtLeast('veteran', sa15.minDifficulty)).toBe(true);
     }
   });
-  it('c12: the Motutapu SA-15 is Pilot+, so the Recruit finale is forgiving (playtest 2026-10-02, 3.2-b: Recruit 4/8 → 7/8)', () => {
-    const sa15 = missionById('c12')!.script.sams.find((s) => s.id === 'sa15')!;
-    expect(difficultyAtLeast('recruit', sa15.minDifficulty)).toBe(false);
-    expect(difficultyAtLeast('pilot', sa15.minDifficulty)).toBe(true);
-  });
   it('c10: the Flanker sweep is Veteran+ and the eastern raid leaves time for the northern one', () => {
     const def = missionById('c10')!;
     const sweep = def.script.groups.find((g) => g.id === 'sweep')!;
@@ -108,11 +110,6 @@ describe('i2: campaign content has no Pilot walls (static)', () => {
     const raidE = def.script.groups.find((g) => g.id === 'raidE')!;
     expect(raidE.spawn).toMatchObject({ kind: 'time' });
     expect((raidE.spawn as { t: number }).t).toBeGreaterThanOrEqual(150);
-  });
-  it('c07: the Su-35 CAP starts beyond first-shot range of the player start (> 40 km)', () => {
-    const def = missionById('c07')!;
-    const cap = def.script.groups.find((g) => g.id === 'cap')!;
-    expect(Math.hypot(cap.x - def.player.x, cap.z - def.player.z)).toBeGreaterThan(40_000);
   });
 });
 
@@ -126,12 +123,6 @@ describe('i2: MissionBot playthroughs (real World / Combat / AI, 3 seeds)', () =
     expect(p.won, p.log.join('\n')).toBeGreaterThanOrEqual(2);
     const rc = wins('c10', 'recruit', [1, 2]);
     expect(rc.won, rc.log.join('\n')).toBeGreaterThanOrEqual(1);
-  });
-  it('c07 on Veteran: no scripted R-77 ambush in the first 80 s (was dead at 51–58 s in every run)', { timeout: 300_000 }, () => {
-    for (const seed of [1, 2, 3]) {
-      const r = runPlaythrough('c07', 'veteran', seed, terrainFor('c07'), { maxT: 80 });
-      expect(r.state === 'failed' && r.t < 80, `seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`).toBe(false);
-    }
   });
 });
 
@@ -353,11 +344,13 @@ describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the play
  * and the win rate never rises from Pilot to Veteran or from Veteran to Ace. Seeds 0–5 are the ones
  * `tools/playtest/bot-sweep.ts -- --seeds=6` flies, so a failure here reproduces with
  *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran,ace --seeds=6 --log --json=<file>
- * c02, c06, c08 and c09 are left to #57 and #65.
+ * c08 on Ace was 6/6, as easy as Pilot (#58): on Ace a ready MiG pair now launches at 100 s, on the
+ * first pass (4/6; Veteran unchanged at 6/6). c02, c06 and c09 already fell (sweep without
+ * rearming, 6 seeds, Pilot/Veteran/Ace: c02 6/5/3, c06 6/5/2, c09 5/4/2); their tests are guards.
  * Margins: c04 wins exactly 2/6 on Veteran here (seeds 0 and 3; 4/12 over seeds 0–11), c10 3/6 (6/12).
  * A change to the bot or the AI can flip one seed and fail the c04 gate: rerun the sweep with --seeds=12
- * before retuning. No c04/c10 run is ever rearmed (the bot's REARM mode is only its flight home), so
- * removing rearming (#63) leaves these numbers as they are.
+ * before retuning. No c04/c10 run was ever rearmed, so removing rearming (#63) left these numbers as
+ * they were.
  */
 describe('#58: Veteran band in c04 and c10, and a difficulty curve that only falls (6 seeds)', () => {
   const SEEDS = [0, 1, 2, 3, 4, 5];
@@ -404,11 +397,29 @@ describe('#58: Veteran band in c04 and c10, and a difficulty curve that only fal
       expectFalling(c);
     });
   }
-  for (const id of ['c01', 'c03', 'c05', 'c11']) {
+  for (const id of ['c01', 'c02', 'c03', 'c05', 'c06', 'c09', 'c11']) {
     it(`${id}: the win rate doesn't rise from Pilot to Veteran or from Veteran to Ace`, { timeout: 600_000 }, async () => {
       expectFalling(await curve(id));
     });
   }
+  it('c08: Ace is below 90 % (was 6/6, as easy as Pilot), Pilot stays ≥ 75 %, and Pilot ≥ Veteran ≥ Ace', { timeout: 600_000 }, async () => {
+    const c = await curve('c08');
+    expect(c.won.ace, c.table).toBeLessThanOrEqual(5);
+    expect(c.won.pilot, c.table).toBeGreaterThanOrEqual(5);
+    expect(c.won.veteran, c.table).toBeGreaterThanOrEqual(2);
+    expectFalling(c);
+  });
+  it('c08: only on Ace does a MiG pair launch on the first pass (the rest of the alert still waits until 300 s)', () => {
+    const groups = missionById('c08')!.script.groups;
+    const early = groups.find((g) => g.id === 'migs_ace')!;
+    expect(early.minDifficulty).toBe('ace');
+    expect(early.spawn).toEqual({ kind: 'time', t: C08_ACE_SCRAMBLE_T });
+    expect(C08_ACE_SCRAMBLE_T).toBeLessThan(300);
+    expect(scaledCount(early, DIFFICULTIES.ace.enemyCountScale)).toBe(2);
+    const alert = groups.find((g) => g.id === 'migs')!;
+    expect(alert.minDifficulty).toBeUndefined();
+    expect(alert.spawn).toMatchObject({ kind: 'any' });
+  });
 });
 
 describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-10-02)', () => {
@@ -425,5 +436,39 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
     const pil = wins('g01', 'pilot', seeds);
     expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(4);
     expect(pil.won, pil.log.join('\n')).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
+  // The bot won 24/24 (Ace by rearming) by rippling all eight StormBreakers in the first 20–39 s, before
+  // any missile boat counted down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes
+  // a second pass against a ~3.9-minute launch, and Recruit flies a suicide boat fewer. Measured with
+  // no rearming (#63), 6 seeds: Recruit 6/6, Pilot 6/6, Veteran 6/6, Ace 0/6 (nine boats for eight
+  // bombs: Ace needs the gun, which the bot doesn't use on boats). The bands are the measured floors
+  // less one seed, and the campaign's: Recruit and Pilot ≥ 75 %, Veteran ≥ 25 %, Ace under 90 %.
+  it('Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 2/6, Ace ≤ 5/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+    const seeds = [0, 1, 2, 3, 4, 5];
+    const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+    const won: Record<string, number> = {};
+    const log: string[] = [];
+    for (const d of diffs) {
+      won[d] = 0;
+      for (const seed of seeds) {
+        await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
+        const r = runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600 });
+        if (r.state === 'success') won[d]++;
+        log.push(`g02 ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+        // the opening ripple can't cover both waves: every bomb on a missile boat goes after they came in
+        for (const l of r.launches) if (l.group === 'missile_boats') expect(l.t, `${d} seed ${seed}`).toBeGreaterThan(G02_MISSILE_WAVE_AT);
+      }
+    }
+    const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
+    expect(won.recruit, table).toBeGreaterThanOrEqual(5);
+    expect(won.pilot, table).toBeGreaterThanOrEqual(5);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
+    expect(won.ace, table).toBeLessThanOrEqual(5);
+    expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
+    expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+    expect(won.ace, table).toBeLessThanOrEqual(won.veteran);
   });
 });

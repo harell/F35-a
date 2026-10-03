@@ -12,7 +12,7 @@ Pick from this menu. "Agent can judge" says how far an agent's verdict can be tr
 |---|---|---|---|---|
 | **Smoke** | Does every touched mission and screen start without errors? | `browser-run.mjs --at=0`, `e2e/missions.mjs --only=` | ~15–20 s per mission | yes |
 | **Winnability** | Can a competent player win it at each difficulty? Is anything a wall? | `bot-sweep.ts` | ~4 s per run, parallel | yes |
-| **Difficulty curve** | Do win rates fall from Recruit to Ace, and does the campaign get harder in order without spikes? | `bot-sweep.ts --missions=campaign --diffs=recruit,pilot,veteran,ace` | 2–3 min | yes |
+| **Difficulty curve** | Do win rates fall from Recruit to Ace, and do the playable campaigns get harder in order without spikes? | `bot-sweep.ts --diffs=recruit,pilot,veteran,ace` (default `all`: playable campaigns + training, not the disabled Southern Cross) | 2–3 min | yes |
 | **Soft-lock / flow** | Does every objective progress, or does a mission hang? | `bot-sweep.ts`: `HUNG` rows (still running at `maxT`), `reason`, `events` in `--json` | with the sweep | yes |
 | **Exploit / dominant strategy** | Is there a cheap way to win that skips the intended play (stay low, stand off, gun-only, ignore the escort)? | `browser-run.mjs --autopilot=off --controls=…` plus `simulate()`; a bot variant in a scratch test | 5–20 min | partly: it finds what it tries |
 | **Regression** | Are last run's findings still fixed? | the repro line of each finding in the last `docs/playtests/` file | per finding | yes |
@@ -29,7 +29,7 @@ Start from `git diff --stat <last-sha>..HEAD` and `git log --oneline <last-sha>.
 | Changed path | Likely breaks | Types |
 |---|---|---|
 | `src/missions/content/`, `src/missions/runtime/` | one mission's winnability, objectives, soft-locks | Winnability, Soft-lock, Smoke for that mission, Pacing |
-| `src/ai/`, `src/sim/` (combat, sam, flight) | balance everywhere | Difficulty curve (whole campaign), Exploit, Regression |
+| `src/ai/`, `src/sim/` (combat, sam, flight) | balance everywhere | Difficulty curve (every playable mission), Exploit, Regression |
 | `src/core/data.ts` (DIFFICULTIES, weapons) | difficulty bands | Difficulty curve |
 | `src/hud/` | readability, clutter, wrong symbols | HUD/readability, Visual |
 | `src/ui/`, `src/input/` | menus, onboarding, touch | First-time experience, Smoke |
@@ -50,7 +50,7 @@ gap:        +2 if this type/area wasn't tested in the last 3 runs (coverage tabl
 
 Sort by `risk / estimated minutes` and take charters from the top until the round's review budget is spent. Name what you are **not** testing and why. That list goes into the ledger and seeds the gap score of the next run.
 
-With no previous run (no SHA in the ledger), the first run is a **baseline**: a full-campaign Difficulty curve sweep, Smoke on all missions, and one HUD and one First-time charter. Then the risk model has something to compare against.
+With no previous run (no SHA in the ledger), the first run is a **baseline**: a Difficulty curve sweep of every playable mission, Smoke on all playable missions (not the disabled Southern Cross), and one HUD and one First-time charter. Then the risk model has something to compare against.
 
 ## 3. Charter format
 
@@ -82,14 +82,14 @@ Output (one JSON block, then at most 10 lines of prose):
 {
   "charter": "2.1",
   "findings": [
-    { "id": "2.1-a", "severity": "blocker|major|minor|polish", "area": "c09 balance",
-      "summary": "c09 is 0/3 on Pilot: two R-77 kills before the first Flanker is in range",
-      "evidence": "bot-sweep rows …; e2e/screenshots/playtest/r2-1/c09-60s.png",
-      "repro": "npx vite-node tools/playtest/bot-sweep.ts -- --missions=c09 --diffs=pilot --seeds=3",
+    { "id": "2.1-a", "severity": "blocker|major|minor|polish", "area": "g02 balance",
+      "summary": "g02 is 0/3 on Pilot: an AD boat kills the jet on the second pass",
+      "evidence": "bot-sweep rows …; e2e/screenshots/playtest/r2-1/g02-60s.png",
+      "repro": "npx vite-node tools/playtest/bot-sweep.ts -- --missions=g02 --diffs=pilot --seeds=3",
       "suggested_fix": "optional" }
   ],
   "scores": { "stability": 8, "balance": 5 },
-  "not_covered": ["c09 on Veteran/Ace", "cockpit view"],
+  "not_covered": ["g02 on Veteran/Ace", "cockpit view"],
   "time_log": [ { "step": "server start", "s": 12 }, { "step": "waiting on screenshots", "s": 140 } ],
   "time_sinks": ["had to fly 4 min to reach the strike: no way to start at the IP"]
 }

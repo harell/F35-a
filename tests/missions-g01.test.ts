@@ -201,7 +201,7 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
     expect(h.of('mission:end')).toEqual([{ success: false, reason: REASONS.skytowerLost }]);
   });
 
-  it('Winchester means the gun, not a trip home: no RTB call, no rearm cue, and the loss tip says how to beat the swarm (playtest 1.3-j, 1.4-h)', { timeout: 60_000 }, () => {
+  it('Winchester means the gun, not a trip home (there is no rearming, #63): no RTB call, no home cue, and the loss tip says how to beat the swarm (playtest 1.3-j, 1.4-h)', { timeout: 60_000 }, () => {
     const h = harness(G01);
     const hud: string[] = [];
     const radio: string[] = [];
@@ -211,11 +211,11 @@ describe('g01 Buzz Kill: the swarm in the mission runtime', () => {
     const p = h.world.player!;
     for (const st of p.stores) st.count = 0; // every missile fired
     h.run(2);
-    expect(hud).toContain('WINCHESTER MISSILES — GUNS');
-    expect(radio.some((t) => /finish them with the gun/.test(t))).toBe(true);
+    expect(hud).toContain('WINCHESTER — GUNS ONLY');
+    expect(radio.some((t) => /Winchester\. (Guns only|.* has the fight)/.test(t))).toBe(true);
     expect(hud.some((t) => /RTB/.test(t))).toBe(false);
     expect(radio.some((t) => /RTB|rearm/i.test(t))).toBe(false);
-    expect(h.runner.currentWaypoint?.id).not.toBe('rearm');
+    expect(h.runner.currentWaypoint?.kind).not.toBe('rtb');
     runParked(h, 300);
     const r = h.runner.result(h.world);
     expect(r.reason).toBe(REASONS.skytowerLost);
@@ -282,7 +282,7 @@ describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runne
       const runner = createMissionRunner({ ...G01, gunAmmo: 0 }, { createAi: createAiBrain, difficulty: d, events });
       runner.setup(world, 'a2a_beast');
       const p = world.player!;
-      const bot = new MissionBot(runner, world, p, { rearm: false, rtb: false } as MissionBotOptions);
+      const bot = new MissionBot(runner, world, p, { rtb: false } as MissionBotOptions);
       let kills = 0;
       events.on('destroyed', (e) => {
         if (e.attackerId === p.id && e.entity.kind === 'aircraft') kills++;

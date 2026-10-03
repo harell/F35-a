@@ -45,12 +45,15 @@ import {
   lockCommandedOf,
   reserveSymbols,
   waypointBearing,
+  waypointNamed,
   nextWaypointText,
 } from './hmd/targets';
-import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveWarningBand } from './hmd/threats';
-import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
+import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveIncoming, reserveWarningBand } from './hmd/threats';
+import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawSeekerLabel, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
-import { clearBandExt, reserveFixedZones, resetZoneExtents, zoneExt } from './hmd/zones';
+import { clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
+import { TEST_HOOKS } from '../core/data';
+import { beginDrawn, drawnLast, type DrawnCue } from './hmd/drawn';
 
 /** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit). */
 const GUN_DIR_CAM_RANGE = 120;
@@ -66,6 +69,42 @@ const TAC_PICK_RADIUS = 26;
 
 /** Seconds a lesson's objectives summary waits for the column to stay clear of hints before it shows. */
 const OBJ_SETTLE = 0.4;
+
+/** A rect in CSS px: left, top, width, height. */
+export type HudRect = [number, number, number, number];
+
+/** What the HUD drew last frame (test hooks, `__f35.state().hud`; #118). */
+export interface HudLayoutRead {
+  /** HUD frame counter of the last drawn frame (HudState.frame). */
+  frame: number;
+  /** The HUD's animation clock (s): message fades, hint paging, blinking. */
+  clock: number;
+  visible: boolean;
+  mode: HudMode;
+  /** Gun LCOS pipper: centre and ring radius (CSS px); null = not drawn. */
+  pipper: { x: number; y: number; r: number } | null;
+  /**
+   * Steering waypoint: label, its diamond's centre (null = not drawn), its name's text centre (null = not
+   * printed by it), and `next`: the fixed NEXT line (by the heading box / in the info block) names it instead.
+   */
+  steer: { label: string; diamond: [number, number] | null; name: [number, number] | null; next: boolean } | null;
+  /** Centre cue lines (SHOOT, IN RANGE, STEER LEFT, FOX 3…), `drawn` false in a blink's off phase. */
+  cues: DrawnCue[];
+  /** The designated / locked target: its box as drawn (null = off screen or not drawn). */
+  designated: { id: number; rect: HudRect | null } | null;
+  /** Every tappable target symbol drawn (contact boxes, ground diamonds, SAM symbols; map symbols in the tactical view). */
+  boxes: { id: number; kind: string; rect: HudRect }[];
+}
+
+/** HUD methods that exist only with the test hooks (Hud.ts attaches them under TEST_HOOKS). */
+export interface HudTestHooks {
+  layoutRead(): HudLayoutRead;
+  /**
+   * Advance the HUD's clocks and feeds by ctx.dt without drawing (`__f35.simulate(n, { hud: true })`):
+   * message and kill-feed lifetimes, the objectives summary, hint paging, radio subtitles.
+   */
+  stepClock(ctx: FrameContext): void;
+}
 
 export const createHud: CreateHud = (canvas, events) => {
   const g2 = canvas.getContext('2d', { alpha: true });
@@ -134,10 +173,11 @@ export const createHud: CreateHud = (canvas, events) => {
         st.dlzScale = 0;
       }
     }),
-    events.on('weapon:denied', ({ ownerId, reason }) => {
+    events.on('weapon:denied', ({ ownerId, weapon, reason }) => {
       if (isPlayer(ownerId)) {
         st.deniedText = reason.toUpperCase();
         st.deniedAge = 0;
+        st.deniedWeapon = weapon;
       }
     }),
     events.on('destroyed', ({ entity, attackerId }) => {
@@ -237,6 +277,7 @@ export const createHud: CreateHud = (canvas, events) => {
       if (dirty) clear();
       dirty = false;
       st.step(ctx.dt, ctx.paused);
+      if (TEST_HOOKS) beginDrawn(st.frame);
       if (!ctx.world || !ctx.camera) {
         // no session (teardown): forget everything from the previous mission
         if (st.playerId !== null) {
@@ -366,10 +407,15 @@ export const createHud: CreateHud = (canvas, events) => {
         g2.clip();
         pen.reset();
       }
-      // 0) the radio pill first: the target box labels and the centre message make way for it (3.3-a/b)
+      // 0) the radio pill first: the target box labels and the centre message make way for it (3.3-a/b);
+      // the target camera window likewise
       reserveRadio(f);
-      // 1) protected symbols (they register in the occupancy pass): FPM, pipper / seeker, target box
+      reservePip(f);
+      // 1) protected symbols (they register in the occupancy pass): FPM, the incoming-missile arrows and
+      // their TTIs (the target box's labels, off-screen cue and centre cues dodge them), pipper / seeker,
+      // target box
       drawFpm(f);
+      reserveIncoming(f);
       if (hmd) {
         drawAim9x(f);
         drawGun(f);
@@ -379,18 +425,21 @@ export const createHud: CreateHud = (canvas, events) => {
         // point) from any outside camera, the funnel and gun cross (directions) only from one near the jet
         if (ctx.viewMode !== 'missile') drawGun(f, ctx.camera.position.distanceToSquared(p.position) < GUN_DIR_CAM_RANGE * GUN_DIR_CAM_RANGE);
       }
+      // the world symbols' boxes (contacts, sites, waypoint, friendlies): the off-screen cue and the
+      // centre cues dodge them
+      const zoomed = cockpit && pcdZoom.open;
+      if (!zoomed) reserveSymbols(f);
       drawDesignated(f);
       drawGunCues(f);
+      drawSeekerLabel(f);
       g2.globalAlpha = 1;
       // 1b) fixed text blocks (tape, columns, DLZ, weapon block, objectives / hint, kill feed, external
       // info block + inset): every label placed after this dodges them, the ladder knocks out under them
       reserveFixedZones(f);
       // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
-      const zoomed = cockpit && pcdZoom.open;
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
       reserveWarningBand(f);
       if (!zoomed) {
-        reserveSymbols(f);
         const below = planCues(f);
         const cur = st.messages.current;
         if (!critical || (cur && cur.priority >= 4)) reserveMessage(f, Math.max(L.msgY, below + 10 * L.u));
@@ -405,6 +454,7 @@ export const createHud: CreateHud = (canvas, events) => {
       drawContacts(f);
       drawGroundAndSams(f);
       drawWaypoint(f);
+      if (TEST_HOOKS) drawnLast.steer.next = !waypointNamed(f);
       drawFriendlies(f);
       drawOwnMissiles(f);
       if (hmd) drawAirToGround(f);
@@ -447,7 +497,7 @@ export const createHud: CreateHud = (canvas, events) => {
         drawInset(f);
         if (ctx.viewMode === 'missile') drawMissileCam(f);
       }
-      // the escorted ship's hit counter ("TANKER 1/2") heads the top-left column for the whole sortie,
+      // the escorted ship's hit counter ("TANKER HITS 1/2") heads the top-left column for the whole sortie,
       // so it never jumps when the objectives come and go — not in the missile / target cams
       const escortTop = colY;
       if (ctx.viewMode !== 'missile' && ctx.viewMode !== 'target') colY = drawVesselCounters(f, L.colX, colY);
@@ -537,5 +587,44 @@ export const createHud: CreateHud = (canvas, events) => {
       picks.begin();
     },
   };
+  if (TEST_HOOKS) {
+    const hooks: HudTestHooks = {
+      layoutRead() {
+        // (the records of the last update: a hidden HUD or a no-player frame leaves them empty; stepClock
+        // doesn't touch them)
+        const { pipper: pp, steer: sw } = drawnLast;
+        const r1 = (v: number) => Math.round(v * 10) / 10;
+        const rect = (x: number, y: number, r: number): HudRect => [r1(x - r), r1(y - r), r1(2 * r), r1(2 * r)];
+        const boxes = picks.entries().map((e) => ({ id: e.id, kind: curWorld?.getEntity(e.id)?.kind ?? '?', rect: rect(e.x, e.y, e.r) }));
+        const p = curPlayer;
+        const tid = p ? (p.radar.lockedId ?? p.radar.designatedId) : null;
+        return {
+          frame: drawnLast.frame,
+          clock: st.clock,
+          visible,
+          mode: lastMode,
+          pipper: pp.drawn ? { x: r1(pp.x), y: r1(pp.y), r: r1(pp.r) } : null,
+          steer: sw.label ? { label: sw.label, diamond: sw.diamond ? [r1(sw.x), r1(sw.y)] : null, name: sw.named ? [r1(sw.nameX), r1(sw.nameY)] : null, next: sw.next } : null,
+          cues: drawnLast.cues.slice(0, drawnLast.cueCount).map((c) => ({ ...c, x: r1(c.x), y: r1(c.y) })),
+          designated: tid == null ? null : { id: tid, rect: boxes.find((b) => b.id === tid)?.rect ?? null },
+          boxes,
+        };
+      },
+      stepClock(ctx) {
+        st.step(ctx.dt, false);
+        const p = ctx.player;
+        if (p && p.id !== st.playerId) {
+          st.resetPlayer();
+          st.playerId = p.id;
+        }
+        playerTeam = p?.team ?? null;
+        curWorld = ctx.world;
+        curPlayer = p;
+        routeInbox(ctx);
+        if (p) st.threats.update(p.incoming, missileAlive, ctx.dt, missileDist);
+      },
+    };
+    Object.assign(hud, hooks);
+  }
   return hud;
 };

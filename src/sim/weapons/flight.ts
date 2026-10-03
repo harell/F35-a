@@ -365,6 +365,7 @@ function interceptCheck(ctx: CombatCtx, m: CombatMissile, mun: CombatMissile, dt
   const site = ctx.world.getEntity(m.shooterId);
   const pk = site && site.kind === 'sam' ? pointDefensePk(site, mun.cdef.category) : 0.5;
   if (!mun.ended && ctx.rng() < pk) {
+    if (site && site.kind === 'sam') mun.interceptedBy = site.id;
     finish(ctx, mun, mun.position, 'selfdestruct', 'air', 'small');
     const shooter = ctx.world.getEntity(mun.shooterId);
     if (shooter && shooter.kind === 'aircraft' && shooter.isPlayer && ctx.time - ctx.chatter.sam > 3) {

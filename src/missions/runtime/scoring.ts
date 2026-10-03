@@ -36,8 +36,6 @@ export const POINTS = {
   friendlyLoss: 150,
   /** Civil airliner or ship destroyed by the player. */
   civilian: 500,
-  /** Survival: points per wave cleared. */
-  wave: 300,
 } as const;
 
 export type Grade = MissionResult['grade'];
@@ -77,8 +75,6 @@ export interface ScoreInput {
   scoreMultiplier: number;
   /** Hostiles killed by the player's own flight (AI wingmen); 0/undefined = the player fought alone. */
   flightKills?: number;
-  /** Survival mode: waves cleared (switches to wave-based grading). */
-  waves?: number;
 }
 
 export interface ScoreOutput {
@@ -92,7 +88,7 @@ export interface ScoreOutput {
    * existed and the player neither hit nor killed anything (see noFight()).
    */
   playerShare: number;
-  breakdown: { kills: number; objectives: number; time: number; accuracy: number; damage: number; friendly: number; bonus: number; waves: number };
+  breakdown: { kills: number; objectives: number; time: number; accuracy: number; damage: number; friendly: number; bonus: number };
 }
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -109,16 +105,6 @@ export function gradeForRating(rating: number): Grade {
   if (rating >= 0.64) return 'B';
   if (rating >= 0.5) return 'C';
   if (rating >= 0.35) return 'D';
-  return 'F';
-}
-
-/** Survival grading by waves cleared. */
-export function gradeForWaves(waves: number): Grade {
-  if (waves >= 10) return 'S';
-  if (waves >= 7) return 'A';
-  if (waves >= 5) return 'B';
-  if (waves >= 3) return 'C';
-  if (waves >= 1) return 'D';
   return 'F';
 }
 
@@ -152,8 +138,7 @@ export function computeScore(i: ScoreInput): ScoreOutput {
   const dmg = Math.max(0, Math.min(100, i.damageTaken));
   const dmgPts = -Math.round(dmg * POINTS.damagePerHp);
   const friendlyPts = -i.friendlyLosses * POINTS.friendlyLoss - (i.civilianKills ?? 0) * POINTS.civilian;
-  const wavePts = (i.waves ?? 0) * POINTS.wave;
-  const raw = killPts + i.objectiveBonus + timePts + accPts + dmgPts + friendlyPts + i.bonus + wavePts;
+  const raw = killPts + i.objectiveBonus + timePts + accPts + dmgPts + friendlyPts + i.bonus;
   const score = Math.max(0, Math.round(raw * i.scoreMultiplier));
 
   // Size-independent performance rating.
@@ -177,15 +162,11 @@ export function computeScore(i: ScoreInput): ScoreOutput {
   if (i.bonus > 0) rating += 0.03;
   rating = clamp01(rating);
 
-  let grade: Grade;
-  if (i.waves !== undefined) grade = gradeForWaves(i.waves);
+  let grade = gradeForRating(rating);
+  if (!i.success) grade = i.primaryDone > 0 && gradeRank(grade) >= gradeRank('D') ? 'D' : 'F';
   else {
-    grade = gradeForRating(rating);
-    if (!i.success) grade = i.primaryDone > 0 && gradeRank(grade) >= gradeRank('D') ? 'D' : 'F';
-    else {
-      const cap = contributionCap(playerShare);
-      if (gradeRank(grade) > gradeRank(cap)) grade = cap;
-    }
+    const cap = contributionCap(playerShare);
+    if (gradeRank(grade) > gradeRank(cap)) grade = cap;
   }
   return {
     score,
@@ -193,6 +174,6 @@ export function computeScore(i: ScoreInput): ScoreOutput {
     rating,
     accuracy,
     playerShare,
-    breakdown: { kills: killPts, objectives: i.objectiveBonus, time: timePts, accuracy: accPts, damage: dmgPts, friendly: friendlyPts, bonus: i.bonus, waves: wavePts },
+    breakdown: { kills: killPts, objectives: i.objectiveBonus, time: timePts, accuracy: accPts, damage: dmgPts, friendly: friendlyPts, bonus: i.bonus },
   };
 }

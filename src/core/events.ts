@@ -75,7 +75,8 @@ export interface GameEventMap {
    */
   'drone:impact': { drone: AircraftEntity; position: Vector3; landmark: LandmarkEntity | null };
   /** Player was destroyed (crash / shot down). */
-  'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' };
+  /** 'structure': flew into the Sky Tower (#113). */
+  'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' | 'structure' };
 }
 
 export type GameEventName = keyof GameEventMap;

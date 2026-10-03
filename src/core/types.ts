@@ -123,7 +123,9 @@ export type LoadoutId =
   /** 8× GBU-53/B + 2× AIM-120D: only in missions that list it in allowedLoadouts (the boat swarm, #82). */
   | 'strike_sdb2_full'
   | 'a2a_beast'
-  | 'strike_beast';
+  | 'strike_beast'
+  /** Nothing in the bays or on the pylons: the gun only (free flight's default, #113). */
+  | 'clean';
 
 /** Throttle axis 0..1. 0 = idle, AB_DETENT = 100% military (dry) power, 1 = max afterburner. */
 export const AB_DETENT = 0.9;

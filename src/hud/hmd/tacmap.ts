@@ -15,10 +15,11 @@ import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
 import type { AnyEntity } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
-import { GROUND_LABEL, NumText, SAM_LABEL, trackLabel } from './format';
+import { NumText, SAM_LABEL, groundLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { protectedSites } from './sites';
+import type { Occupancy } from './occupancy';
 
 /** Map range choices (km, ownship → outer ring). */
 export const TAC_SCALES_KM = [10, 20, 40] as const;
@@ -468,22 +469,25 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
       first = false;
     }
     pen.strokePlain(withAlpha(C.route, 0.55), 1.4);
-    for (const w of mission.waypoints) {
+    // every marker first, then the names round them (the steering point's first, then the ones
+    // still ahead): a name tries above, below, beside and the diagonals, so a crowded tour keeps its
+    // stop names (#113, playtest 2.2-2: 4–5 of the stroll's 11 fitted at 10 km)
+    const wps = mission.waypoints;
+    for (const w of wps) {
       tacProject(proj, w.position.x, w.position.z, pt);
       const isCur = w === cur;
-      const col = isCur ? pal.bright : C.route;
       pen.begin();
       if (w.kind === 'target') pen.diamond(pt.x, pt.y, (isCur ? 8 : 6) * u);
       else pen.circle(pt.x, pt.y, (isCur ? 6.5 : 5) * u);
-      pen.strokeGlow(col, isCur ? 2.2 : 1.4);
+      pen.strokeGlow(isCur ? pal.bright : C.route, isCur ? 2.2 : 1.4);
       occ.addBox(pt.x, pt.y, 7 * u, 7 * u);
-      const lbl = w.label || w.id;
-      const hw = pen.textWidth(lbl, 10) / 2 + 2;
-      const ly = pt.y - 13 * u;
-      if (isCur || !occ.hits(pt.x - hw, ly - 6, pt.x + hw, ly + 6)) {
-        pen.text(lbl, pt.x, ly, col, 10);
-        occ.add(pt.x - hw, ly - 6, pt.x + hw, ly + 6);
-      }
+    }
+    const from = cur ? Math.max(0, wps.indexOf(cur)) : 0;
+    for (let n = 0; n < wps.length; n++) {
+      const w = wps[(from + n) % wps.length];
+      tacProject(proj, w.position.x, w.position.z, pt);
+      const isCur = w === cur;
+      labelAround(f, w.label || w.id, pt.x, pt.y, isCur ? pal.bright : C.route, isCur);
     }
     if (cur) {
       tacProject(proj, cur.position.x, cur.position.z, pt);
@@ -507,7 +511,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     pen.rect(pt.x - r, pt.y - r, r * 2, r * 2);
     pen.strokeGlow(col, 1.5);
     occ.addBox(pt.x, pt.y, r + 2, r + 2);
-    const lbl = civil ? 'CIV' : GROUND_LABEL[gt.type] ?? '';
+    const lbl = civil ? 'CIV' : groundLabel(gt);
     const hw = pen.textWidth(lbl, 9.5) / 2 + 2;
     const ly = pt.y + r + 7 * u;
     if (lbl && !occ.hits(pt.x - hw, ly - 5, pt.x + hw, ly + 5)) {
@@ -724,6 +728,58 @@ function labelNear(f: HudFrame, text: string, x: number, y: number, col: string)
     pen.text(text, sx, sy, col, 10, al);
     occ.add(x0 - 1, sy - h, x0 + w + 1, sy + h);
     return;
+  }
+}
+
+/**
+ * Slots round a map marker for its name, in order of preference: above, below, right, left, then the
+ * four diagonals. dx/dy in layout units from the marker's centre to the text anchor.
+ */
+export const LABEL_SLOTS: readonly { dx: number; dy: number; align: 'left' | 'right' | 'center' }[] = [
+  { dx: 0, dy: -13, align: 'center' },
+  { dx: 0, dy: 13, align: 'center' },
+  { dx: 10, dy: 0, align: 'left' },
+  { dx: -10, dy: 0, align: 'right' },
+  { dx: 7, dy: -11, align: 'left' },
+  { dx: -7, dy: -11, align: 'right' },
+  { dx: 7, dy: 11, align: 'left' },
+  { dx: -7, dy: 11, align: 'right' },
+];
+
+/**
+ * The first free slot round a marker at (x, y) for a label `w` px wide (null = all taken): the label's
+ * box [x0, y0, x1, y1] and its anchor.
+ */
+export function freeLabelSlot(
+  occ: Occupancy,
+  w: number,
+  x: number,
+  y: number,
+  u: number,
+): { x: number; y: number; align: 'left' | 'right' | 'center'; box: [number, number, number, number] } | null {
+  const h = 6;
+  for (const s of LABEL_SLOTS) {
+    const sx = x + s.dx * u;
+    const sy = y + s.dy * u;
+    const x0 = s.align === 'left' ? sx : s.align === 'right' ? sx - w : sx - w / 2;
+    const box: [number, number, number, number] = [x0 - 2, sy - h, x0 + w + 2, sy + h];
+    if (!occ.hits(box[0], box[1], box[2], box[3])) return { x: sx, y: sy, align: s.align, box };
+  }
+  return null;
+}
+
+/** A waypoint's name in the first free slot round its marker; the steering point's is always drawn (above when crowded). */
+function labelAround(f: HudFrame, text: string, x: number, y: number, col: string, always: boolean): void {
+  const { pen, occ, L } = f;
+  const w = pen.textWidth(text, 10);
+  const slot = freeLabelSlot(occ, w, x, y, L.u);
+  if (slot) {
+    pen.text(text, slot.x, slot.y, col, 10, slot.align);
+    occ.add(...slot.box);
+  } else if (always) {
+    const ly = y - 13 * L.u;
+    pen.text(text, x, ly, col, 10);
+    occ.add(x - w / 2 - 2, ly - 6, x + w / 2 + 2, ly + 6);
   }
 }
 

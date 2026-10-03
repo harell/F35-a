@@ -32,7 +32,9 @@ await page.goto(base + '?autostart=1', { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__f35, null, { timeout: 30000 });
 let missions = await page.evaluate(() => window.__f35.missions());
 await page.close();
+// --only picks any ids; without it, the missions the player can reach (not the disabled Southern Cross)
 if (args.only) missions = missions.filter((m) => String(args.only).split(',').includes(m.id));
+else missions = missions.filter((m) => m.playable !== false);
 
 let failures = 0;
 for (const m of missions) {

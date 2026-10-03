@@ -301,8 +301,11 @@ describe('strike_sdb2 loadout', () => {
       buildInstantMissionSeeded({ mode, theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3),
     );
     let withIt = 0;
+    // #114: c08's low strike under the SA-10 is the exception: the StormBreaker load has no answer to
+    // the Grumble there (bot, 6 seeds: Pilot 2/6, Veteran 0/6), so c08 doesn't offer it
+    const without = new Set(['c08']);
     for (const m of [...CAMPAIGN, ...TRAINING, ...instant]) {
-      const ag = m.allowedLoadouts.includes('strike_stealth') || m.allowedLoadouts.includes('sead_stealth');
+      const ag = (m.allowedLoadouts.includes('strike_stealth') || m.allowedLoadouts.includes('sead_stealth')) && !without.has(m.id);
       expect(m.allowedLoadouts.includes('strike_sdb2'), m.id).toBe(ag);
       if (ag) withIt++;
       expect(validateMission(m), m.id).toEqual([]);

@@ -10,6 +10,7 @@
  *   ?quality=low|medium|high                 override quality
  *   ?view=cockpit|hud|chase|orbit|...        initial camera
  *   ?fps=1                                   FPS counter
+ *   ?tod=night&weather=clear                 (test hooks) an Instant Action id's time of day / weather
  *   ?seed=<n>                                (test hooks) fixed combat RNG seed, and the sim clock held:
  *                                            only __f35.simulate() advances it (__f35.hold(false) lets
  *                                            it run), so browser perf reads reproduce (#66)
@@ -53,8 +54,8 @@ import { createInput } from '../input/Input';
 import { createUi } from '../ui/Ui';
 import { tag as analyticsTag, track, upgrade } from '../analytics/clarity';
 import {
-  CAMPAIGN,
   CAMPAIGNS,
+  PLAYABLE_CAMPAIGNS,
   TRAINING,
   buildInstantMission,
   createMissionRunner,
@@ -67,13 +68,19 @@ import {
   saveProgress,
   terrainPadsFor,
   followActiveScheme,
+  TIMES_OF_DAY,
+  WEATHERS,
+  type InstantConditions,
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { initFlight } from '../sim/flight/FlightModel';
 import { AKL } from '../core/auckland';
 import { FlowInterrupt } from './flow';
-import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
+import { isHomeView, sortieHomeView, type HomeView } from './views';
+import { autopilotBrainOpts, frameAccumulator, frameTakesControls, hudShown, testConditions, testSeed } from './testParams';
+import type { HudTestHooks } from '../hud/Hud';
+import type { CockpitTestHooks } from '../hud/Cockpit';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -139,7 +146,11 @@ export class Game {
   private autopilot = false;
   /** Test hooks: the real-time loop doesn't step the sim; only simulate() moves its clock (`?seed=`, hold()). */
   private simHeld = false;
+  /** The view the player picked during a free flight, kept for the next one (#113). */
+  private freeFlightView: HomeView | null = null;
   private controlOverride: Partial<ControlInput> | null = null;
+  /** Test hooks: `__f35.hud(false)` hid the HMD overlay until hud(true) or the next mission (a setView() keeps it hidden). */
+  private hudHidden = false;
   private screen = { width: 1, height: 1, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } };
   private safeProbe: HTMLDivElement;
 
@@ -223,7 +234,11 @@ export class Game {
     void this.audio.load();
     const missionId = TEST_HOOKS ? this.params.get('mission') : null;
     if (missionId && !this.pendingFly) {
-      const def = missionById(missionId) ?? CAMPAIGN[0];
+      // `&tod=` / `&weather=`: an Instant Action id's conditions (#118)
+      const { conditions, invalid } = testConditions(this.params, TEST_HOOKS);
+      if (invalid.length) console.warn(`[f35] ignored ${invalid.join(', ')}`);
+      if ((conditions.timeOfDay || conditions.weather) && !missionId.startsWith('ia_')) console.warn('[f35] tod / weather apply to Instant Action ids (ia_<mode>_<theatre>) only');
+      const def = missionById(missionId, conditions) ?? PLAYABLE_CAMPAIGNS[0].missions[0];
       const loadout = (this.params.get('loadout') as LoadoutId | null) ?? def.recommendedLoadout;
       await this.flow.run(() => (autostart ? this.missionFlow(def, loadout) : this.missionFlow(def)));
     }
@@ -280,10 +295,17 @@ export class Game {
     }
   }
 
-  /** Campaign picker → that campaign's mission list; Back on the list returns to the picker. */
+  /**
+   * Campaign picker → that campaign's mission list; Back on the list returns to the picker. Only playable
+   * campaigns are offered (Southern Cross is disabled); with just one, its mission list opens directly.
+   */
   private async campaignMenu(): Promise<void> {
+    if (PLAYABLE_CAMPAIGNS.length === 1) {
+      await this.pickAndFly(() => this.ui.showCampaign(PLAYABLE_CAMPAIGNS[0], this.progress));
+      return;
+    }
     for (;;) {
-      const campaign = await this.flow.ask(this.ui.showCampaigns(CAMPAIGNS, this.progress));
+      const campaign = await this.flow.ask(this.ui.showCampaigns(PLAYABLE_CAMPAIGNS, this.progress));
       if (!campaign) return;
       if ((await this.pickAndFly(() => this.ui.showCampaign(campaign, this.progress))) === 'menu') return;
       this.progress = loadProgress();
@@ -367,6 +389,7 @@ export class Game {
     // test hooks (autopilot, controls override) belong to one mission: never leak into the next
     this.autopilot = false;
     this.controlOverride = null;
+    this.hudHidden = false;
     // training always flies at Pilot, whatever the setting (missionDifficulty)
     const difficultyId = missionDifficulty(def, this.settings.difficulty);
     const difficulty = DIFFICULTIES[difficultyId];
@@ -408,7 +431,7 @@ export class Game {
     scene.add(rig.camera);
     const cockpit = createCockpit(this.events, this.quality);
 
-    const initialView = (this.params.get('view') as CameraMode | null) ?? this.settings.defaultView;
+    const initialView = (this.params.get('view') as CameraMode | null) ?? this.homeView(def);
     rig.setMode(initialView);
 
     const endPromise = new Promise<'ended' | 'restart' | 'quit'>((resolve) => {
@@ -444,7 +467,7 @@ export class Game {
     }
     this.input.setThrottle(0.68);
     this.input.setEnabled(true);
-    this.hud.setVisible(true);
+    this.hud.setVisible(!this.hudHidden);
     this.paused = false;
     this.accumulator = 0;
     this.lastFrame = performance.now();
@@ -532,17 +555,18 @@ export class Game {
       const s = this.session;
       if (!s || this.paused) return;
       this.applyViewMode(s.rig.nextMode());
+      if (s.def.script.freeFlight && isHomeView(s.rig.mode)) this.freeFlightView = s.rig.mode;
     });
     i.on('padlock', () => {
       const s = this.session;
       if (!s || this.paused) return;
-      s.rig.setMode(s.rig.mode === 'target' ? this.settings.defaultView : 'target');
+      s.rig.setMode(s.rig.mode === 'target' ? this.homeView(s.def) : 'target');
       this.applyViewMode(s.rig.mode);
     });
     i.on('missileCam', () => {
       const s = this.session;
       if (!s || this.paused) return;
-      s.rig.setMode(s.rig.mode === 'missile' ? this.settings.defaultView : 'missile');
+      s.rig.setMode(s.rig.mode === 'missile' ? this.homeView(s.def) : 'missile');
       this.applyViewMode(s.rig.mode);
     });
     i.on('lookReset', () => this.session?.rig.resetLook());
@@ -640,6 +664,11 @@ export class Game {
     void this.flow.run(loop);
   }
 
+  /** The view a sortie starts in and the padlock / missile camera hand back to (free flight: chase, #113). */
+  private homeView(def: MissionDef): HomeView {
+    return sortieHomeView(!!def.script.freeFlight, this.settings.defaultView, this.freeFlightView);
+  }
+
   private applyViewMode(mode: CameraMode): void {
     const s = this.session;
     if (!s) return;
@@ -647,7 +676,7 @@ export class Game {
     const inside = mode === 'cockpit' || mode === 'hud';
     s.entities.setPlayerVisible(!inside);
     s.cockpit.visible = mode === 'cockpit';
-    this.hud.setVisible(mode !== 'tactical');
+    this.hud.setVisible(hudShown(mode, this.hudHidden));
   }
 
   /* ─────────────────────────── Main loop ─────────────────────────── */
@@ -860,7 +889,8 @@ export class Game {
   }
 
   private debugApi() {
-    return {
+    // (a constant `TEST_HOOKS ?`: the production build drops the whole API, not only its install)
+    return TEST_HOOKS ? {
       game: this,
       state: () => {
         const s = this.session;
@@ -913,17 +943,49 @@ export class Game {
             },
           },
           held: this.simHeld,
+          // what the HUD drew last frame (#118): gun pipper, steering waypoint, centre cues, the designated
+          // box and every target box (CSS px, recorded where they are drawn), and the PCD's pages
+          hud: s
+            ? {
+                ...(this.hud as HudApi & HudTestHooks).layoutRead(),
+                hidden: this.hudHidden,
+                pcd: (s.cockpit as CockpitApi & CockpitTestHooks).pcdRead(),
+              }
+            : null,
         };
       },
-      /** Programmatically start a mission (tests), from any screen or mission; quitting it returns to the main menu. */
-      fly: (id: string, loadout?: LoadoutId) => {
-        const def = missionById(id);
+      /**
+       * Programmatically start a mission (tests), from any screen or mission; quitting it returns to the
+       * main menu. `conditions`: an Instant Action id's time of day and weather (`{ timeOfDay: 'night' }`).
+       */
+      fly: (id: string, loadout?: LoadoutId, conditions?: InstantConditions) => {
+        if (conditions?.timeOfDay && !TIMES_OF_DAY.includes(conditions.timeOfDay)) throw new Error(`no time of day ${conditions.timeOfDay} (${TIMES_OF_DAY.join(', ')})`);
+        if (conditions?.weather && !WEATHERS.includes(conditions.weather)) throw new Error(`no weather ${conditions.weather} (${WEATHERS.join(', ')})`);
+        const def = missionById(id, conditions);
         if (!def) throw new Error(`no mission ${id}`);
         this.flyFromHook(def, loadout ?? def.recommendedLoadout);
       },
       setView: (mode: CameraMode) => {
         this.session?.rig.setMode(mode);
         if (this.session) this.applyViewMode(this.session.rig.mode);
+      },
+      /** Hide (false) or show the HMD overlay for clean frames; the hide survives setView() and view changes, until hud(true) or the next mission. */
+      hud: (visible = true) => {
+        this.hudHidden = !visible;
+        const s = this.session;
+        this.hud.setVisible(hudShown(s?.rig.mode ?? 'cockpit', this.hudHidden));
+        return visible;
+      },
+      /**
+       * Show a PCD page: `pcd(portal, page, zoom?)` with portal 0-2 or 'left' / 'centre' / 'right' and page
+       * FUEL, ENG, ICAWS, SMS, RWR, TSD or RDR (each portal has its own set; an unknown one throws and
+       * lists them). `zoom` opens it in the zoom overlay, which stays open only in the cockpit view.
+       * No arguments: just the read. Returns `state().hud.pcd`.
+       */
+      pcd: (portal?: number | 'left' | 'centre' | 'right', page?: string, zoom = false) => {
+        const c = this.session?.cockpit as (CockpitApi & CockpitTestHooks) | undefined;
+        if (!c) return null;
+        return portal === undefined || page === undefined ? c.pcdRead() : c.pcdPage(portal, page, zoom);
       },
       command: (cmd: 'cycleWeapon' | 'cycleTarget' | 'radar') => {
         const s = this.session;
@@ -948,11 +1010,14 @@ export class Game {
       /**
        * Fast-forward the simulation by `seconds` without rendering (fixed 60 Hz steps, player
        * controls from autopilot/override/current input). For automated playtests on slow GPUs.
+       * `{ hud: true }` advances the HUD's clock and feeds with it (message fades, hint paging, kill-feed
+       * and radio lifetimes), still without drawing; without it the HUD stays where it was.
        */
-      simulate: (seconds: number) => {
+      simulate: (seconds: number, opts: { hud?: boolean } = {}) => {
         const s = this.session;
         if (!s) return null;
         const steps = Math.round(seconds / FIXED_DT);
+        const hud = opts.hud ? (this.hud as HudApi & HudTestHooks) : null;
         for (let i = 0; i < steps && s.runner.state === 'running'; i++) {
           const p = s.world.player;
           if (p?.alive && !this.autopilot) {
@@ -961,6 +1026,7 @@ export class Game {
           }
           s.world.step(FIXED_DT);
           s.runner.update(s.world, FIXED_DT);
+          hud?.stepClock(this.frameContext(FIXED_DT, s));
         }
         return (window as unknown as { __f35: { state: () => unknown } }).__f35.state();
       },
@@ -1054,9 +1120,14 @@ export class Game {
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,
       }),
       // + the Instant Action scenario built on a fixed site (Wiri defence) so the e2e sweep covers it
-      missions: () => [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
+      // every campaign's missions (a disabled campaign's too, with playable: false: the smoke skips them)
+      missions: () =>
+        [
+          ...CAMPAIGNS.flatMap((c) => c.missions.map((m) => ({ m, playable: c.enabled !== false }))),
+          ...[...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ m, playable: true })),
+        ].map(({ m, playable }) => ({ id: m.id, title: m.title, kind: m.kind, playable })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
-    };
+    } : null;
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * Hit counters of the mission's protected civil ships that take more than one hit (the escorted
- * tanker, GroundTargetEntity.hitsToSink > 1): "TANKER 1/2" in the HMD's top-left column for the whole
+ * tanker, GroundTargetEntity.hitsToSink > 1): "TANKER HITS 1/2" in the HMD's top-left column for the whole
  * sortie (hits taken / hits that sink her), amber once she is hit, red "TANKER SUNK" after.
  * Ordinary civil ships (one hit sinks them) never show one.
  */
@@ -11,7 +11,7 @@ import type { HudFrame } from './frame';
 
 export interface VesselCounter {
   readonly ship: GroundTargetEntity;
-  /** "TANKER 1/2" / "TANKER SUNK" (cached string). */
+  /** "TANKER HITS 1/2" / "TANKER SUNK" (cached string). */
   readonly text: string;
   /** 'main' untouched, 'warn' hit, 'danger' sunk. */
   readonly tone: 'main' | 'warn' | 'danger';
@@ -29,7 +29,8 @@ function counterText(g: GroundTargetEntity): string {
   let s = texts.get(key);
   if (!s) {
     const noun = vesselNoun(g.vessel).toUpperCase();
-    texts.set(key, (s = g.alive ? `${noun} ${g.hits}/${g.hitsToSink}` : `${noun} SUNK`));
+    // "HITS": the count is hits taken, not ships or boats left (#115)
+    texts.set(key, (s = g.alive ? `${noun} HITS ${g.hits}/${g.hitsToSink}` : `${noun} SUNK`));
   }
   return s;
 }

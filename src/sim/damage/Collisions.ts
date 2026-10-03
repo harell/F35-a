@@ -1,12 +1,14 @@
 /**
  * F35-A — collision detection (SIM-CORE): aircraft vs terrain / sea (crash, wreck impact),
  * mid-air collisions between aircraft (swept closest-approach test over the last step) and
- * aircraft vs landmarks (the Sky Tower: crashes the aircraft, the tower is unharmed).
+ * aircraft vs landmarks (the Sky Tower: crashes the aircraft; the player's jet is also a hit on the
+ * tower, which burns where it went in and comes down on a second hit, like a drone's, #113).
  */
 import { Vector3 } from 'three';
+import type { EventBus } from '../../core/events';
 import type { TerrainQuery } from '../api';
 import type { AircraftEntity } from '../entities';
-import { firstLandmarkHit, type LandmarkEntity } from '../landmarks';
+import { firstLandmarkHit, hitLandmark, type LandmarkEntity } from '../landmarks';
 import type { DamageSystem } from './Damage';
 
 /** Height of the aircraft centre above the surface at which it touches down (m). */
@@ -24,6 +26,8 @@ export class CollisionSystem {
   constructor(
     private readonly terrain: TerrainQuery,
     private readonly damage: DamageSystem,
+    /** Events and clock for a jet's hit on a landmark (none: landmarks are never hurt). */
+    private readonly host: { readonly events: EventBus; readonly time: number } | null = null,
   ) {}
 
   update(aircraft: readonly AircraftEntity[], dt: number, landmarks?: readonly LandmarkEntity[]): void {
@@ -32,7 +36,12 @@ export class CollisionSystem {
     if (landmarks?.length) this.landmarkImpacts(aircraft, dt, landmarks);
   }
 
-  /** Flying into a standing landmark: the aircraft is destroyed (a wreck tumbles down from there). */
+  /**
+   * Flying into a standing landmark: the aircraft is destroyed (a wreck tumbles down from there). The
+   * player's jet is also a hit on the structure (burning at the impact; the second hit brings it
+   * down), so a crash into the shaft doesn't leave an unmarked tower; its down reason is 'structure'.
+   * (AI aircraft and drones keep the old rule: a drone's warhead is its own hit, drone:impact.)
+   */
   private landmarkImpacts(aircraft: readonly AircraftEntity[], dt: number, landmarks: readonly LandmarkEntity[]): void {
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
@@ -41,9 +50,10 @@ export class CollisionSystem {
       const hit = firstLandmarkHit(landmarks, _mid, ac.position, ac.radius * LANDMARK_FACTOR);
       if (!hit) continue;
       ac.position.lerpVectors(_mid, ac.position, hit.s);
-      this.damage.destroyAircraft(ac, null, 'collision', 'crash');
+      this.damage.destroyAircraft(ac, null, 'collision', ac.isPlayer ? 'structure' : 'crash');
       // the structure stops it dead: the wreck drops from the impact point
       ac.velocity.multiplyScalar(-0.08);
+      if (ac.isPlayer && this.host) hitLandmark(hit.landmark, this.host.events, this.host.time, { attackerId: ac.id, point: ac.position });
     }
   }
 

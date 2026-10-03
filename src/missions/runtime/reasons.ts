@@ -13,6 +13,8 @@ export const REASONS = {
   skytower: 'Destroyed the Sky Tower',
   /** Enemy hits brought the Sky Tower down (sim/landmarks.ts hitLandmark). */
   skytowerLost: 'The Sky Tower fell',
+  /** The player flew into the Sky Tower (a 'structure' down reason, #113): no Auto-GCAS tip, it can't see buildings. */
+  structure: 'Crashed into the Sky Tower',
 } as const;
 
 const DEATH_WORDS = ['shot down', 'crashed', 'collision', 'out of fuel'];

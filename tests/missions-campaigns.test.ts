@@ -186,8 +186,8 @@ describe('campaigns', () => {
     expect(nextMissionAfter('c01')?.id).toBe('c02');
     expect(nextMissionLabel('g01')).toBe('Next mission');
     expect(nextMissionLabel('g03')).toBeNull();
-    // training still leads into Southern Cross
-    expect(nextMissionAfter('t03')?.id).toBe('c01');
+    // training leads into the first playable campaign: Southern Cross is disabled (2026-10-03)
+    expect(nextMissionAfter('t03')?.id).toBe('g01');
     expect(IRGC().missions.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
   });
 

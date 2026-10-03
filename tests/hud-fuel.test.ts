@@ -15,7 +15,7 @@ import { buildMock, type Scenario } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas, type TextRec } from '../src/hud/dev/fakeCanvas';
 import { paletteFor } from '../src/hud/hmd/palette';
 import { PCD_W, PcdDisplay } from '../src/hud/cockpit/pcd';
-import { BINGO_FRACTION as RUNNER_BINGO } from '../src/missions/runtime/rearm';
+import { BINGO_FRACTION as RUNNER_BINGO } from '../src/missions/runtime/winchester';
 import { WARNING_THRESHOLDS } from '../src/sim/Warnings';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 

@@ -4,8 +4,7 @@
  * A MissionDef (core/contracts.ts) carries the briefing/UI data; its `script` field is a
  * MissionScript: everything the MissionRunner needs to populate and drive the mission —
  * aircraft spawn groups, SAM sites, ground targets, objectives, waypoints, triggers
- * (condition → actions), contextual hints, the AWACS controller, the area of operations
- * and (for Instant Action) the endless survival wave generator.
+ * (condition → actions), contextual hints, the AWACS controller and the area of operations.
  *
  * Units: metres, seconds, m/s. Positions are world XZ (+X east, −Z north, origin = the Sky
  * Tower in the Auckland theatre). Headings are DEGREES (0 = north, clockwise). Altitudes are
@@ -77,6 +76,11 @@ export type Condition =
   | { kind: 'trigger'; id: string }
   /** Player fired at least `count` weapons of any kind. */
   | { kind: 'player_fired'; count?: number }
+  /**
+   * At least `count` (default 1) of the player's bombs / missiles have been shot down by the point
+   * defence of a SAM site in `group` (SA-8 / SA-15 interceptors).
+   */
+  | { kind: 'munitions_shot_down'; group: string; count?: number }
   /**
    * The player's radar: 'designated' = a hostile aircraft has the TD box but no lock yet,
    * 'locked' = hard (STT) lock on a hostile aircraft.
@@ -420,7 +424,7 @@ export interface HintDef {
   duration?: number;
 }
 
-/* ───────────────────────────── AWACS, AO, survival ───────────────────────────── */
+/* ───────────────────────────── AWACS, AO ───────────────────────────── */
 
 export interface AwacsDef {
   /** Default "DARKSTAR". */
@@ -434,24 +438,6 @@ export interface AwacsDef {
   pictureInterval?: number;
   /** Disable the controller entirely. */
   silent?: boolean;
-}
-
-export interface SurvivalDef {
-  /** Enemy types drawn from for each wave. */
-  types: AircraftType[];
-  /** Aircraft in wave 1; each wave adds `growth` (fractional ok). */
-  baseCount: number;
-  growth: number;
-  maxCount: number;
-  /** AI skill of wave 1 and increment per wave (clamped to 1). */
-  skillStart: number;
-  skillStep: number;
-  /** Spawn ring distance from the player (m). */
-  spawnDistance: number;
-  /** Seconds between a wave being cleared and the next one arriving. */
-  interWaveDelay: number;
-  /** Rearm the player (stores/flares/some fuel/health) after each wave. */
-  rearm: boolean;
 }
 
 export interface MissionScript {
@@ -471,14 +457,18 @@ export interface MissionScript {
   parTime?: number;
   /** Radio callsign of the player (default "Viper 1"). */
   playerCallsign?: string;
-  /** Endless survival waves (Instant Action). */
-  survival?: SurvivalDef;
   /**
    * Scale the TOTAL of the non-fixed red aircraft groups by difficulty.enemyCountScale instead of
    * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit, 6 on Ace; per-group
    * rounding would leave pairs unchanged). Groups that lose all members don't spawn.
    */
   scaleEnemyTotal?: boolean;
+  /**
+   * The mission's own enemy-count scale on the listed difficulties, in place of
+   * difficulty.enemyCountScale for its red aircraft groups (Instant Action on Ace: Pilot's
+   * numbers, the enemies get better instead of more numerous; issue #60).
+   */
+  enemyCountScale?: Partial<Record<Difficulty, number>>;
   /** Opening radio calls at mission start (convenience for a 'start' trigger). */
   opening?: Action[];
   /** Radio line on success (after "Mission complete, RTB"). */
@@ -491,11 +481,6 @@ export interface MissionScript {
    * down doesn't end the sortie.
    */
   freeFlight?: boolean;
-  /**
-   * No rearm point: a short sortie against the clock (g01). Winchester calls for the gun instead of
-   * sending the player home, and there is no rearm gate; bingo still calls RTB.
-   */
-  noRearm?: boolean;
 }
 
 /** Empty script (helper for builders). */

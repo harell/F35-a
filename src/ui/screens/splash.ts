@@ -12,7 +12,7 @@ export function showSplash(host: UiHost, build: string): Promise<void> {
     const el = h('section', { class: 'scr-splash', dataset: { bg: '1' }, attrs: { 'data-click': '', role: 'button', 'aria-label': 'Tap to start' } });
     el.innerHTML =
       `<div class="spl-center">${logoBlock()}` +
-      `<div class="spl-op">OPERATION SOUTHERN CROSS <span>·</span> AOTEAROA</div>` +
+      `<div class="spl-op">AUCKLAND <span>·</span> AOTEAROA</div>` +
       `<div class="spl-start"><span class="spl-start-line"></span><span class="spl-start-text">TAP TO START</span><span class="spl-start-line"></span></div></div>` +
       `<div class="spl-foot"><span class="spl-note">${icon('headphones')} Best with headphones <i>·</i> ${icon('rotate')} Landscape</span>` +
       `<span class="spl-ver mono">Build ${build}</span></div>`;

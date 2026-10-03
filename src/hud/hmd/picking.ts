@@ -45,6 +45,11 @@ export class PickRegistry {
     return this.n;
   }
 
+  /** The symbols registered this frame: entity id, centre and half-size (CSS px). Tests / test hooks (#118). */
+  entries(): { id: number; x: number; y: number; r: number }[] {
+    return Array.from({ length: this.n }, (_, i) => ({ id: this.ids[i], x: this.xs[i], y: this.ys[i], r: this.rs[i] }));
+  }
+
   /** Start a new frame (forget last frame's symbols). */
   begin(): void {
     this.n = 0;

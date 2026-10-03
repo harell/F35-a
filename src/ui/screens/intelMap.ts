@@ -36,6 +36,20 @@ export function routeOf(m: MissionDef): RoutePoint[] {
   return wps.filter((w) => Number.isFinite(w.x) && Number.isFinite(w.z)).map((w) => ({ x: w.x, z: w.z, label: w.label, kind: w.kind }));
 }
 
+/** A waypoint this close to an intel marker of the same name (m) leaves the naming to the marker. */
+const SAME_PLACE = 3_000;
+
+/**
+ * The label printed next to a route point, or null when an intel marker of the same name (any case)
+ * already stands within SAME_PLACE of it: g02's boat waves were named twice, "Missile boats" and
+ * "MISSILE BOATS", over the air-defence markers (#115). The route point keeps its number.
+ */
+export function routeLabel(m: MissionDef, p: RoutePoint): string | null {
+  const name = p.label.toLowerCase();
+  for (const i of m.intel) if (i.label.toLowerCase() === name && Math.hypot(i.x - p.x, i.z - p.z) <= SAME_PLACE) return null;
+  return p.label.toUpperCase();
+}
+
 /** Bounding box (m) of everything worth showing: start, waypoints, markers incl. SAM rings. */
 export function intelBounds(m: MissionDef, minSpan = 24_000): Bounds {
   const b: Bounds = { minX: m.player.x, maxX: m.player.x, minZ: m.player.z, maxZ: m.player.z };
@@ -289,7 +303,8 @@ export function drawIntelMap(canvas: HTMLCanvasElement, m: MissionDef, w: number
       g.stroke();
       label(g, String(i + 1), x, y + 0.5, p.kind === 'target' ? COL.target : COL.route, Math.round(9 * u), 'center');
       placer.block(x - r, y - r, r * 2, r * 2);
-      later.push(() => placer.place(p.label.toUpperCase(), x, y, r, 'rgba(210,245,255,0.95)', true));
+      const text = routeLabel(m, p);
+      if (text) later.push(() => placer.place(text, x, y, r, 'rgba(210,245,255,0.95)', true));
     });
   }
 

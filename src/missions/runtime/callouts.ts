@@ -80,6 +80,14 @@ export class Callouts {
       ev.on('munition:end', (e) => {
         if (!this.guard()) return;
         const p = this.s.player;
+        if (!p || e.missile.shooterId !== p.id || e.missile.interceptedBy === undefined) return;
+        // a point-defence SAM shot our bomb / missile down (the 'munitions_shot_down' condition)
+        const site = this.s.world.getEntity(e.missile.interceptedBy);
+        if (site && site.kind === 'sam' && site.groupId) this.s.munitionsShotDown.set(site.groupId, (this.s.munitionsShotDown.get(site.groupId) ?? 0) + 1);
+      }),
+      ev.on('munition:end', (e) => {
+        if (!this.guard()) return;
+        const p = this.s.player;
         if (!p || e.missile.shooterId !== p.id || e.missile.def.category !== 'aam') return;
         if (e.reason === 'decoyed' || e.reason === 'selfdestruct' || e.reason === 'ground' || e.reason === 'water') this.s.stats.misses++;
       }),

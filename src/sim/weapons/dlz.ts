@@ -262,6 +262,87 @@ export function gpsMaxRange(def: CombatMunitionDef, height: number, speed: numbe
 }
 
 /**
+ * Predicted time to impact (s) of a GPS / glide bomb in flight: the bomb's own best-glide law (as
+ * gpsMaxRange and the guidance's bombCommand) flown in the vertical plane through the target from its
+ * present state, `horiz` m short of the target and `height` m above it, at `vh` m/s horizontal (toward
+ * the target) and `vy` m/s vertical: best glide while above the glide slope, then straight down the line
+ * of sight. Range over closing speed read 99 s on a StormBreaker that took ~120 s (#116, 1.2-j): it
+ * leaves out the slow glide and the steep final dive. Capped at the bomb's flight time left.
+ */
+export function glideTimeToGo(def: MunitionDefLike, horiz: number, height: number, vh: number, vy: number, targetAlt: number, timeLeft = def.maxFlightTime): number {
+  if (horiz <= 1 && height <= 1) return 0;
+  const gr = Math.max(0.5, def.glideRatio * 0.75);
+  const glide = Math.atan(1 / gr);
+  const tau = def.autopilotTau ?? 0.3;
+  const fullGQ = def.fullGQ ?? 25_000;
+  let x = 0;
+  let y = Math.max(0, height);
+  let vx = Math.max(1, vh);
+  let vz = vy;
+  const dt = 0.25;
+  let aLx = 0;
+  let aLy = 0;
+  const k = 1 - Math.exp(-dt / tau);
+  let t = 0;
+  const tMax = Number.isFinite(timeLeft) ? Math.max(1, timeLeft) : def.maxFlightTime || 300;
+  for (; t < tMax; t += dt) {
+    const rx = horiz - x;
+    if (rx <= 0 || y <= 0) break;
+    const v = Math.hypot(vx, vz);
+    const hx = vx / v;
+    const hy = vz / v;
+    const rho = airDensity(targetAlt + y);
+    const q = 0.5 * rho * v * v;
+    const aMax = def.maxG * G * Math.min(1, q / fullGQ);
+    // desired direction: best glide, or the line of sight once below the glide slope / close in
+    const dep = Math.atan2(y, rx);
+    let dx: number;
+    let dy: number;
+    let gc: number;
+    if (dep > glide + 0.05 || rx < 1_500) {
+      const r = Math.hypot(rx, y);
+      dx = rx / r;
+      dy = -y / r;
+      gc = G * Math.cos(dep);
+    } else {
+      dx = Math.cos(glide);
+      dy = -Math.sin(glide);
+      gc = G * Math.cos(glide);
+    }
+    const dot = dx * hx + dy * hy;
+    let cx = (dx - hx * dot) * v * 1.2;
+    let cy = (dy - hy * dot) * v * 1.2 + gc;
+    const cd = cx * hx + cy * hy;
+    cx -= hx * cd;
+    cy -= hy * cd;
+    const cl = Math.hypot(cx, cy);
+    if (cl > aMax) {
+      cx *= aMax / cl;
+      cy *= aMax / cl;
+    }
+    aLx += (cx - aLx) * k;
+    aLy += (cy - aLy) * k;
+    const aL = Math.hypot(aLx, aLy);
+    const axial = -def.drag * rho * v * v - aL / Math.max(0.3, def.glideRatio);
+    vx += (hx * axial + aLx) * dt;
+    vz += (hy * axial + aLy - G) * dt;
+    x += vx * dt;
+    y += vz * dt;
+  }
+  return t;
+}
+
+/** The munition fields glideTimeToGo reads (a HUD-side MunitionDef has no autopilot / q data). */
+export interface MunitionDefLike {
+  glideRatio: number;
+  drag: number;
+  maxG: number;
+  maxFlightTime: number;
+  autopilotTau?: number;
+  fullGQ?: number;
+}
+
+/**
  * Widest angle (rad) between the jet's ground track and the bearing to the target at which a GPS /
  * glide bomb release still reaches it out to gpsMaxRange: a winged glide bomb (SDB, StormBreaker)
  * turns hard onto a point well off the nose, a JDAM's strakes much less (playtest 2.1-b).

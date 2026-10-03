@@ -3,6 +3,7 @@
  * Orchestrator: fold these into MissionResult in src/core/contracts.ts.
  */
 import type { MissionResult } from '../../core/contracts';
+import type { SightseeingStats } from './sightseeing';
 
 export interface TeamKill {
   /** "Viper 2", "Weasel 1"… */
@@ -23,4 +24,6 @@ export type MissionResultExt = MissionResult & {
   civilianShipKills?: number;
   /** Protect objectives with a debrief tally: how many of the group survived ("Fuel tanks saved 7/9"). */
   saved?: { label: string; saved: number; total: number }[];
+  /** Free flight: what the sightseer did (tour stops, distance, highest and lowest pass), shown instead of the combat stats. */
+  sightseeing?: SightseeingStats;
 };

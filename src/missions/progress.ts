@@ -2,8 +2,8 @@
  * F35-A — campaign progress (localStorage 'f35a.progress.v1').
  *
  * The first campaign mission and every training mission are always unlocked; completing a
- * campaign mission unlocks the next one. Best score/grade per mission (successful runs, and
- * every survival run) plus career totals.
+ * campaign mission unlocks the next one. Best score/grade per mission (successful runs) plus
+ * career totals.
  */
 import type { CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
 import { isDeathReason } from './runtime/reasons';
@@ -111,6 +111,17 @@ export function sanitizeProgress(raw: unknown, campaigns: CampaignChains, traini
   }
   if (Array.isArray(ext.skipped)) out.skipped = ext.skipped.filter((id): id is string => typeof id === 'string');
   // (an old save's `skyTowerDown` is not copied: the tower stands again)
+  // a won or skipped mission unlocks the next one of its campaign: repairs saves made while c07 sat
+  // between c06 and c08 (c07 and c12 were removed with rearming, issue #63)
+  for (const campaign of campaigns) {
+    for (let i = 0; i + 1 < campaign.length; i++) {
+      const id = campaign[i].id;
+      if ((best[id] || out.skipped?.includes(id)) && !unlocked.has(campaign[i + 1].id)) {
+        unlocked.add(campaign[i + 1].id);
+        out.unlocked.push(campaign[i + 1].id);
+      }
+    }
+  }
   return out;
 }
 
@@ -158,8 +169,7 @@ export function applyResult(p: CampaignProgress, r: MissionResult, campaigns: Ca
   if (r.success) next.totals.missions += 1;
   if (!r.success && isDeathReason(r.reason)) next.totals.deaths += 1;
 
-  const survival = r.missionId.startsWith('ia_survival');
-  if (r.success || survival) {
+  if (r.success) {
     const prev = next.best[r.missionId];
     const better = !prev || r.score > prev.score || (r.score === prev.score && gradeRank(r.grade) > gradeRank(prev.grade));
     if (better) next.best[r.missionId] = { score: r.score, grade: r.grade, difficulty: r.difficulty };

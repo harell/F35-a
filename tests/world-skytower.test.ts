@@ -12,7 +12,8 @@ import { createSkyTower, destroyLandmark, hitLandmark } from '../src/sim/landmar
 import { EventBus } from '../src/core/events';
 import type { SimWorld } from '../src/sim/api';
 import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
-import { SkyTowerVisual, buildSkyTowerRuins, buildTowerSection, skyTowerGround } from '../src/world/scenery/skyTower';
+import { SkyTowerVisual, buildSkyTowerLights, buildSkyTowerRuins, buildTowerSection, skyTowerGround } from '../src/world/scenery/skyTower';
+import { LightList } from '../src/world/scenery/builders';
 
 /** The issue's OSM table: [y0, y1, r] per part (r = mean radius about the axis). */
 const OSM_TABLE: [string, number, number, number][] = [
@@ -198,5 +199,30 @@ describe('Sky Tower visual', () => {
     const b2 = new GeometryBuilder();
     buildSkyTowerRuins(b2, height, heading);
     expect(b2.triangleCount).toBe(b.triangleCount);
+  });
+});
+
+describe('floodlit at night (#113, playtest 1.1-k)', () => {
+  it('lights the shaft on every side every few metres, the pod and the mast, without more harbour reflections', () => {
+    const lights = new LightList();
+    buildSkyTowerLights(lights, 0);
+    const shaft: { y: number; a: number }[] = [];
+    let high = 0;
+    let reflecting = 0;
+    lights.forEach((x, y, z, _r, _g, _b, size, blink) => {
+      const dx = x - AKL.skytower.x;
+      const dz = z - AKL.skytower.z;
+      if (y < 152 && Math.hypot(dx, dz) > 5 && Math.hypot(dx, dz) < 8) shaft.push({ y, a: Math.atan2(dz, dx) });
+      if (y > 240) high++;
+      if (blink < 0 && size >= 2.4 && y >= 150) reflecting++;
+    });
+    // up the shaft, no gap over 10 m, from at least four sides
+    const ys = [...new Set(shaft.map((l) => Math.round(l.y)))].sort((a, b) => a - b);
+    expect(ys[0]).toBeLessThanOrEqual(15);
+    expect(ys[ys.length - 1]).toBeGreaterThanOrEqual(140);
+    for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeLessThanOrEqual(10);
+    expect(new Set(shaft.map((l) => Math.round((l.a * 4) / Math.PI))).size).toBeGreaterThanOrEqual(4);
+    expect(high).toBeGreaterThanOrEqual(10); // the mast
+    expect(reflecting).toBe(17); // the Orbit ring and the top shaft floodlight, as before
   });
 });

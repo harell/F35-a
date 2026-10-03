@@ -660,8 +660,8 @@ describe('bomb release cue in every view (playtest 1.3-a: none in the default ch
         const s = Number(tti[0].text.slice(4));
         expect(s).toBeGreaterThan(40);
         expect(s).toBeLessThan(55);
-        // a missile keeps its M n
-        expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+        // a missile keeps its T n
+        expect(find(r.run(0.1), /^T \d+$/).length).toBe(0);
       }
     }
   });
@@ -977,12 +977,12 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
 });
 
 describe('engaged marker: own missile in flight at a contact', () => {
-  it('marks a non-designated contact our missile is guiding on with M n beside its box, clear of other text', () => {
+  it('marks a non-designated contact our missile is guiding on with T n beside its box, clear of other text', () => {
     const r = rig('aa', 'hud');
     const p = r.mock.player;
     const su = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
     expect(p.radar.designatedId).not.toBe(su.id);
-    expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+    expect(find(r.run(0.1), /^T \d+$/).length).toBe(0);
     const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
     const m = new MissileEntity(950, def, 'blue', p.id, su.id);
     // 12 km out, closing at ~1,200 m/s: about 10 s to go
@@ -990,7 +990,7 @@ describe('engaged marker: own missile in flight at a contact', () => {
     m.velocity.subVectors(su.position, m.position).setLength(1000);
     (r.mock.world.missiles as MissileEntity[]).push(m);
     const texts = r.run(0.1);
-    const ms = find(texts, /^M \d+$/);
+    const ms = find(texts, /^T \d+$/);
     expect(ms.length).toBe(1);
     const s = Number(ms[0].text.slice(2));
     expect(s).toBeGreaterThanOrEqual(8);
@@ -1004,10 +1004,10 @@ describe('engaged marker: own missile in flight at a contact', () => {
     expect(Math.abs(ms[0].x - sp.x)).toBeLessThan(60);
     // never printed over other text
     const mb = textBox(ms[0]);
-    for (const t of texts) if (t !== ms[0]) expect(overlaps(mb, textBox(t)), `M n over "${t.text}"`).toBe(false);
+    for (const t of texts) if (t !== ms[0]) expect(overlaps(mb, textBox(t)), `T n over "${t.text}"`).toBe(false);
     // a dead missile: the mark goes
     m.alive = false;
-    expect(find(r.run(0.1), /^M \d+$/).length).toBe(0);
+    expect(find(r.run(0.1), /^T \d+$/).length).toBe(0);
   });
 });
 
