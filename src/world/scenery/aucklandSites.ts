@@ -19,6 +19,7 @@
 import { Color } from 'three';
 import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
+import { sparkArenaCovers } from '../../core/sparkArena';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, IDENT_FRAME, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
 import type { DecalBuilder, HeightFn, LightList } from './builders';
@@ -160,14 +161,14 @@ export function siteLayout(): SiteLayout | null {
 
 /**
  * Keeps the scattered houses and trees off the sites (sources.ts `blocked`): port land, the naval
- * base's land, the oil terminal's hardstand and the stadium grounds. Without the OSM data only the
- * terminal's fallback hardstand, which is drawn either way (#61).
+ * base's land, the oil terminal's hardstand, the stadium grounds and Spark Arena (core/sparkArena.ts,
+ * always). Without the OSM data only the terminal's fallback hardstand and the arena (#61).
  */
 export function siteBlocker(): (x: number, z: number, margin: number) => boolean {
   const s = siteLayout();
   const pad = ringOf(Float32Array.from(wiriHardstand(s)));
   const rings = s ? [...s.port, ...(s.naval ? [s.naval] : []), pad, ...s.stadiums.map((st) => st.outline)] : [pad];
-  return (x, z) => rings.some((r) => inRing(r, x, z));
+  return (x, z) => sparkArenaCovers(x, z, 15) || rings.some((r) => inRing(r, x, z));
 }
 
 /**

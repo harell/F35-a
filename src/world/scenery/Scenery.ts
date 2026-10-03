@@ -20,13 +20,15 @@ import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayo
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
+import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTexture } from './sparkArena';
+import { sparkArenaCovers } from '../../core/sparkArena';
 import { CbdCollapseVisual } from './cbdCollapse';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { LotMask, urbanBounds } from './lotMask';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
-import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial } from './materials';
+import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial, createSignMaterial } from './materials';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
@@ -178,11 +180,27 @@ export class Scenery {
       this.stats.meshes++;
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
       buildMuseumAndObelisk(city, lights, height);
+      // Spark Arena (hand-built from the LiDAR, sparkArena.ts) rides in the CBD mesh; its three signs are one small mesh
+      buildSparkArena(city, lights, height, detail);
       const cityGeo = addMesh(city, 'akl-cbd');
+      {
+        const tex = createSparkArenaSignTexture(o.cfg.anisotropy);
+        this.textures.push(tex);
+        const mat = createSignMaterial(o.atmo, tex, new Color(0xf4f1ea), new Color(0xa65cff));
+        this.materials.push(mat);
+        const geo = buildSparkArenaSignGeometry(height);
+        this.geometries.push(geo);
+        const sign = new Mesh(geo, mat);
+        sign.name = 'akl-spark-arena-sign';
+        sign.matrixAutoUpdate = false;
+        this.group.add(sign);
+        this.stats.meshes++;
+      }
       const cs = this.cbdStats;
       if (cityGeo && cs.buildingVerts && cs.buildingGround) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts, cs.buildingGround);
       const centres = new GeometryBuilder();
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? aerialCovers : null);
+      // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) : (x, z) => sparkArenaCovers(x, z, 20));
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
       const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail');
       // railway ribbons (+ bridges over the water): one more draw call
@@ -283,7 +301,8 @@ export class Scenery {
       // the real CBD buildings: lit windows on their facades instead of the carpet inside the CBD region
       const real = this.cbdStats?.prisms.length ? this.cbdStats.prisms : null;
       const region = real ? o.style.cbd?.streets ?? null : null;
-      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, region ? (x, z) => region.inRegion(x, z) : undefined);
+      // (none inside the CBD region, which has its facade lights, nor under Spark Arena's roof)
+      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z));
       if (real) buildFacadeLightPoints(real, o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
       const cityMat = createLightsMaterial(o.atmo);
       cityMat.uniforms.uIntensity.value = o.lights;

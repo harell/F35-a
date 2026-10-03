@@ -4,10 +4,11 @@
  *  - building: vertex colours, procedural facade windows (glass by day, randomly lit at night),
  *    works for merged meshes and InstancedMesh (instanceMatrix / instanceColor)
  *  - decal: textured ground overlays (runways, taxiways, aprons) with polygon offset
+ *  - sign: lit letters from a canvas texture (Spark Arena)
  *  - foliage: instanced low-poly trees with wrap lighting
  *  - lights: point sprites sized in metres with a pixel minimum (runway / city / aviation lights)
  */
-import { AdditiveBlending, ShaderMaterial, type Texture, type Vector4 } from 'three';
+import { AdditiveBlending, ShaderMaterial, type Color, type Texture, type Vector4 } from 'three';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { AERIAL_LIGHT_GLSL } from '../terrain/terrainShader';
 import { AERIAL_NIGHT_MIX } from '../terrain/theaters/aucklandAerial';
@@ -159,6 +160,30 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit, detail);
     }
+  } else if (vWin > 5.5) {
+    // curtain-wall glass (aWin 6): sky reflections between the mullions of a 3 m × 2.7 m grid by day;
+    // at night lit from inside, panel columns warm white or the arena's purple
+    vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
+    vec2 g = vec2(dot(vWorld.xz, t) / 3.0, vWorld.y / 2.7);
+    vec2 f = abs(fract(g) - 0.5) * 2.0;
+    vec2 aa = vec2(mpp / 3.0, mpp / 2.7) * 2.0;
+    vec2 bar = smoothstep(1.0 - vec2(0.12, 0.09) - aa, 1.0 - vec2(0.12, 0.09) + aa, f);
+    float frame = max(bar.x, bar.y) * (1.0 - smoothstep(0.4, 1.0, mpp / 2.7));
+    vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
+    vec3 glass = mix(base * 0.6, sky * 0.6, 0.45);
+    base = mix(glass, vec3(0.62, 0.65, 0.67), frame);
+    if (uNight > 0.0) {
+      float col = hash12(vec2(floor(g.x), 3.0));
+      vec3 inside = mix(vec3(1.0, 0.62, 0.3), vec3(0.42, 0.12, 1.0), step(0.45, col)) * (0.5 + 0.5 * hash12(floor(g) + 7.0));
+      emissive += uNight * inside * (1.0 - frame * 0.9) * 0.55;
+    }
+  } else if (vWin > 4.5) {
+    // ribbed sheet metal (aWin 5): a bright seam every 0.63 m across the face's fall line (the ribs run
+    // down a sloped roof and up a wall), blending into the sheet's average once a rib is under a pixel
+    vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
+    float seam = pow(0.5 + 0.5 * cos(6.2831853 * dot(vWorld.xz, t) / 0.63), 6.0);
+    // (the mean of the seam profile is 924 / 4096: the sheet's colour on average stays its own)
+    base *= 1.0 + 0.35 * (mix(seam, 0.2256, smoothstep(0.2, 0.6, mpp / 0.63)) - 0.2256);
   } else if (vWin > 3.5) {
     emissive += base * uNight * 1.6;
   }
@@ -296,6 +321,57 @@ export function createDecalMaterial(atmo: AtmosphereUniforms, map: Texture): Sha
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -6,
+  });
+}
+
+const signVertex = /* glsl */ `
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec2 vUv;
+void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vWorld = w.xyz;
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vUv = uv;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}
+`;
+
+const signFragment = /* glsl */ `
+${ATMOSPHERE_GLSL}
+uniform sampler2D uMap;
+uniform vec3 uDayInk;
+uniform vec3 uNightInk;
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec2 vUv;
+void main() {
+  vec4 t = texture2D(uMap, vUv);
+  float a = max(t.r, t.g);
+  if (a < 0.4) discard;
+  // red channel = letters (cream by day, purple LED at night), green = the white mark
+  vec3 ink = mix(uDayInk, uNightInk, smoothstep(0.2, 0.8, uNight));
+  vec3 base = mix(ink, vec3(1.0), clamp(t.g / a, 0.0, 1.0));
+  vec3 col = atmoNight(atmoDiffuse(base, normalize(vNormal), 1.0));
+  col = atmoApplyFog(col, vWorld);
+  col += base * (0.12 + 1.6 * uNight) * (1.0 - atmoFogFactor(distance(vWorld, uCamPos) * 0.45, uCamPos.y, vWorld.y));
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+/**
+ * Lit sign letters on a building (Spark Arena): a canvas texture whose red channel is the letters and
+ * green channel a white mark, alpha-tested; the letters glow a little by day and brightly at night
+ * (`dayInk` / `nightInk`, linear RGB).
+ */
+export function createSignMaterial(atmo: AtmosphereUniforms, map: Texture, dayInk: Color, nightInk: Color): ShaderMaterial {
+  return new ShaderMaterial({
+    name: 'WorldSign',
+    vertexShader: signVertex,
+    fragmentShader: signFragment,
+    uniforms: { ...atmo, uMap: { value: map }, uDayInk: { value: dayInk }, uNightInk: { value: nightInk } },
   });
 }
 
