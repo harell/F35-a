@@ -11,7 +11,7 @@ Every `/playtest` run (`.claude/skills/playtest/SKILL.md`) records itself here s
 
 | Date | Tested SHA | Rounds | Final score | Result | Run file |
 |---|---|---|---|---|---|
-| 2026-10-02 | bc94edd | 2 + 1 check | see the run file | TIME UP | [2026-10-02-bc94edd.md](2026-10-02-bc94edd.md) |
+| 2026-10-02 | bc94edd | 2 + 1 check | 7.1 / 10 (5.2 → 6.8 → 7.1) | STOPPED (token budget) | [2026-10-02-bc94edd.md](2026-10-02-bc94edd.md) |
 | 2026-10-02 | 796f92b | 3 + 1 extra | 6.4 / 10 (5.9 → 6.0 → 6.5 → 6.4) | TIME UP | [2026-10-02-796f92b.md](2026-10-02-796f92b.md) |
 
 ## Coverage
