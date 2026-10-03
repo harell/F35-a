@@ -641,7 +641,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.playerDied = true;
     if (s.state !== 'running') return;
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, eject, eject!`, voice: 'a_eject', priority: URGENT_PRIORITY + 1 });
-    this.fail(reason === 'structure' ? REASONS.structure : deathReason(s, reason));
+    this.fail(reason === 'structure' ? REASONS.structure : reason === 'building' ? REASONS.building : deathReason(s, reason));
   }
 }
 

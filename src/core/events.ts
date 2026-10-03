@@ -75,8 +75,13 @@ export interface GameEventMap {
    */
   'drone:impact': { drone: AircraftEntity; position: Vector3; landmark: LandmarkEntity | null };
   /** Player was destroyed (crash / shot down). */
-  /** 'structure': flew into the Sky Tower (#113). */
-  'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' | 'structure' };
+  /** 'structure': flew into the Sky Tower (#113); 'building': flew into a CBD skyscraper (#128). */
+  'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' | 'structure' | 'building' };
+  /**
+   * An aircraft flew into a CBD skyscraper (sim/buildings.ts, #128): the aircraft is destroyed and
+   * the building collapses. `building` = index into aucklandBuildings(); `top` = its roof (world Y).
+   */
+  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; top: number };
 }
 
 export type GameEventName = keyof GameEventMap;
