@@ -14,6 +14,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { sightseeingRows } from '../src/ui/screens/debrief';
 import { hangarLoadouts } from '../src/ui/hangar';
+import { isHomeView, sortieHomeView } from '../src/game/views';
 import { FlatTerrain } from './combat-helpers';
 
 const DT = 1 / 60;
@@ -154,5 +155,18 @@ describe('A Stroll in the Park: a calm cockpit (1.1-g)', () => {
     const seen = civilContacts(m);
     expect(seen.ships).toBeGreaterThan(0);
     expect(seen.airliner).toBe(true);
+  });
+});
+
+describe('A Stroll in the Park: the view (1.1-j)', () => {
+  it('free flight starts in chase whatever the default view, or in the view the player picked in one', () => {
+    expect(sortieHomeView(true, 'cockpit', null)).toBe('chase');
+    expect(sortieHomeView(true, 'hud', null)).toBe('chase');
+    expect(sortieHomeView(true, 'cockpit', 'cockpit')).toBe('cockpit');
+    // every other sortie keeps the settings' default view
+    expect(sortieHomeView(false, 'cockpit', 'chase')).toBe('cockpit');
+    expect(sortieHomeView(false, 'hud', null)).toBe('hud');
+    // the orbit, tactical, padlock and missile cameras aren't views to fly in
+    expect(['cockpit', 'hud', 'chase', 'orbit', 'tactical', 'target', 'missile'].filter((v) => isHomeView(v as never))).toEqual(['cockpit', 'hud', 'chase']);
   });
 });

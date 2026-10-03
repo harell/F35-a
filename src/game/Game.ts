@@ -73,6 +73,7 @@ import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { initFlight } from '../sim/flight/FlightModel';
 import { AKL } from '../core/auckland';
 import { FlowInterrupt } from './flow';
+import { isHomeView, sortieHomeView, type HomeView } from './views';
 import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
 
 const FIXED_DT = 1 / 60;
@@ -139,6 +140,8 @@ export class Game {
   private autopilot = false;
   /** Test hooks: the real-time loop doesn't step the sim; only simulate() moves its clock (`?seed=`, hold()). */
   private simHeld = false;
+  /** The view the player picked during a free flight, kept for the next one (#113). */
+  private freeFlightView: HomeView | null = null;
   private controlOverride: Partial<ControlInput> | null = null;
   private screen = { width: 1, height: 1, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } };
   private safeProbe: HTMLDivElement;
@@ -408,7 +411,7 @@ export class Game {
     scene.add(rig.camera);
     const cockpit = createCockpit(this.events, this.quality);
 
-    const initialView = (this.params.get('view') as CameraMode | null) ?? this.settings.defaultView;
+    const initialView = (this.params.get('view') as CameraMode | null) ?? this.homeView(def);
     rig.setMode(initialView);
 
     const endPromise = new Promise<'ended' | 'restart' | 'quit'>((resolve) => {
@@ -532,17 +535,18 @@ export class Game {
       const s = this.session;
       if (!s || this.paused) return;
       this.applyViewMode(s.rig.nextMode());
+      if (s.def.script.freeFlight && isHomeView(s.rig.mode)) this.freeFlightView = s.rig.mode;
     });
     i.on('padlock', () => {
       const s = this.session;
       if (!s || this.paused) return;
-      s.rig.setMode(s.rig.mode === 'target' ? this.settings.defaultView : 'target');
+      s.rig.setMode(s.rig.mode === 'target' ? this.homeView(s.def) : 'target');
       this.applyViewMode(s.rig.mode);
     });
     i.on('missileCam', () => {
       const s = this.session;
       if (!s || this.paused) return;
-      s.rig.setMode(s.rig.mode === 'missile' ? this.settings.defaultView : 'missile');
+      s.rig.setMode(s.rig.mode === 'missile' ? this.homeView(s.def) : 'missile');
       this.applyViewMode(s.rig.mode);
     });
     i.on('lookReset', () => this.session?.rig.resetLook());
@@ -638,6 +642,11 @@ export class Game {
     };
     // a fly() that takes over closes the menu itself (see flyFromHook) and ends this loop
     void this.flow.run(loop);
+  }
+
+  /** The view a sortie starts in and the padlock / missile camera hand back to (free flight: chase, #113). */
+  private homeView(def: MissionDef): HomeView {
+    return sortieHomeView(!!def.script.freeFlight, this.settings.defaultView, this.freeFlightView);
   }
 
   private applyViewMode(mode: CameraMode): void {
