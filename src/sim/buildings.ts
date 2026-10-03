@@ -221,6 +221,32 @@ export class BuildingIndex {
     this.version++;
   }
 
+  /**
+   * Highest standing roof (world Y) whose footprint bounds come within `r` of (x, z), or -Infinity:
+   * the AI's ground floor over the CBD (ai/pilot/safety.ts), so AI pilots keep their clearance over
+   * the towers as over the terrain.
+   */
+  roofNear(x: number, z: number, r: number): number {
+    const g = this.geo;
+    if (x < g.minX - r || x > g.maxX + r || z < g.minZ - r || z > g.maxZ + r) return -Infinity;
+    let best = -Infinity;
+    for (let ix = Math.floor((x - r) / CELL); ix <= Math.floor((x + r) / CELL); ix++) {
+      for (let iz = Math.floor((z - r) / CELL); iz <= Math.floor((z + r) / CELL); iz++) {
+        const c = g.cells.get(cellKey(ix, iz));
+        if (!c) continue;
+        for (const k of c) {
+          if (this.collapsed.has(k)) continue;
+          const b = g.buildings[k];
+          if (b.top <= best) continue;
+          for (const p of b.prisms) {
+            if (p.y1 > best && x > p.minX - r && x < p.maxX + r && z > p.minZ - r && z < p.maxZ + r) best = p.y1;
+          }
+        }
+      }
+    }
+    return best;
+  }
+
   /** Standing building whose prisms the segment a→b enters first (and the contact fraction), or null. */
   firstHit(a: Vector3, b: Vector3): { building: SolidBuilding; index: number; s: number } | null {
     const g = this.geo;
