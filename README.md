@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/harell/F35-a/actions/workflows/ci.yml/badge.svg)](https://github.com/harell/F35-a/actions/workflows/ci.yml)
 [![Deploy](https://github.com/harell/F35-a/actions/workflows/deploy.yml/badge.svg)](https://github.com/harell/F35-a/actions/workflows/deploy.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fharell.github.io%2FF35-a%2Fbadges%2Fcoverage.json)](https://github.com/harell/F35-a/actions/workflows/deploy.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fharell%2FF35-a%2Fbadges%2Fcoverage.json)](https://github.com/harell/F35-a/actions/workflows/coverage.yml)
 
 <p align="center"><img src="docs/cover.jpg" width="420" alt="F-35-a Ratites game cover: an F-35A over Auckland's Sky Tower and skyline, with a kiwi in the flames"></p>
 
@@ -77,8 +77,9 @@ node e2e/hd-terrain.mjs  # HD terrain download scope per quality tier (against `
 npm run voices       # regenerate voice clips (needs a local TTS + ffmpeg, see tools/)
 ```
 
-CI runs the lint, the type check, the tests and the build on every pull request. The deploy to GitHub Pages also runs the
-coverage and publishes the badge's numbers next to the game (`badges/coverage.json`, see `tools/coverage-badge.mjs`).
+CI runs the lint, the type check, the tests and the build on every pull request, and the deploy runs them again before
+publishing. A separate workflow (`coverage.yml`) measures the coverage after each push to `master` and publishes the
+badge's numbers on the `badges` branch (`tools/coverage-badge.mjs`); it never blocks a deploy.
 
 Handy URL parameters: `?view=chase&difficulty=veteran&quality=high&fps=1` (`&hdterrain=0` turns off the high tier's HD terrain download).
 

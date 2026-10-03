@@ -1,6 +1,7 @@
 node_modules
 dist
 coverage
+badges
 *.log
 e2e/screenshots
 .DS_Store
