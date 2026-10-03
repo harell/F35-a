@@ -77,6 +77,11 @@ export type Condition =
   /** Player fired at least `count` weapons of any kind. */
   | { kind: 'player_fired'; count?: number }
   /**
+   * At least `count` (default 1) of the player's bombs / missiles have been shot down by the point
+   * defence of a SAM site in `group` (SA-8 / SA-15 interceptors).
+   */
+  | { kind: 'munitions_shot_down'; group: string; count?: number }
+  /**
    * The player's radar: 'designated' = a hostile aircraft has the TD box but no lock yet,
    * 'locked' = hard (STT) lock on a hostile aircraft.
    */

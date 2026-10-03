@@ -89,6 +89,8 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       const p = s.player;
       return !!p && p.shotsFired >= (c.count ?? 1);
     }
+    case 'munitions_shot_down':
+      return (s.munitionsShotDown.get(c.group) ?? 0) >= (c.count ?? 1);
     case 'player_radar': {
       const p = s.player;
       if (!p || !p.alive) return false;
@@ -128,6 +130,7 @@ export function conditionRefs(c: Condition, out: { groups: string[]; objectives:
     case 'group_defeated':
     case 'group_spawned':
     case 'munitions_clear':
+    case 'munitions_shot_down':
       out.groups.push(c.group);
       break;
     case 'waypoint':

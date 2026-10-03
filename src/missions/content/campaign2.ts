@@ -21,6 +21,8 @@ const c08Start = { x: -24500, z: 4000, altitude: 1200, heading: 70, speed: 230 }
  * AGL around the wharf). Everything north / east of Rangitoto, or above ~1,500 ft, is in view.
  */
 const wharf = { x: 4200, z: -4700 };
+/** Ace only: when the ready MiG pair launches (s); the rest of the alert launches at 300 s on every difficulty. */
+export const C08_ACE_SCRAMBLE_T = 100;
 
 export const C08: MissionDef = mission({
   id: 'c08',
@@ -33,11 +35,15 @@ export const C08: MissionDef = mission({
   features: [FEATURES.whenuapai, FEATURES.waihekeStrip, FEATURES.motutapuDepot],
   briefing: [
     'The enemy has brought an SA-10 Grumble onto Motutapu. At medium altitude it can kill anything over Auckland, and under its umbrella landing ships in the Rangitoto Channel are loading troops from Rangitoto Wharf for a push onto the North Shore.',
-    'We cannot touch the SA-10 yet. So we go under it. Rangitoto rises 260 metres out of the harbour: stay below 300 feet in the harbour and the Rangitoto Channel and the volcano hides you from Motutapu. Climb above 1,500 feet, or stray north or east of the island, and the Grumble sees you. The StormBreaker load carries no anti-radiation missile, so nothing on it can reach the Grumble: with it, staying low is the only defence.',
+    'We cannot touch the SA-10 yet. So we go under it. Rangitoto rises 260 metres out of the harbour: stay below 300 feet in the harbour and the Rangitoto Channel and the volcano hides you from Motutapu. Climb above 1,500 feet, or stray north or east of the island, and the Grumble sees you.',
     'Fly the harbour at wave-top height — under the Harbour Bridge if you have the nerve — pass North Head and turn north into the channel. Pop up to about 800 feet only for the release: the GBU-39 small diameter bombs glide 1.5 km from there, so let them go the moment IN RANGE shows, then get straight back down. One SDB sinks a landing ship. MANPADS guard the Rangitoto shore: flares ready.',
   ],
   recommendedLoadout: 'sead_stealth',
-  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
+  // no StormBreaker load (#114, the loadout trap #65 flagged): it carries no answer to the SA-10, and
+  // from the 800 ft pop-up only every other GBU-53 sank a ship, so two ships took four passes where
+  // the GBU-39s take two, each egress climbing into the Grumble's view (bot, 6 seeds: Pilot 2/6,
+  // Veteran 0/6)
+  allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
   player: c08Start,
   script: {
     parTime: 540,
@@ -46,6 +52,16 @@ export const C08: MissionDef = mission({
         skillOffset: 0.1,
         // scramble once the ships are hit (a hot egress), or when the strike is taking too long
         spawn: { kind: 'any', of: [{ kind: 'objective', id: 'o_ships', state: 'complete' }, { kind: 'time', t: 300 }] },
+        task: { kind: 'patrol', x: 8000, z: -6000, radius: 6000, altitude: 5000 },
+      }),
+      // Ace: a ready pair is already launching at 100 s, on the first pass (#58: Ace was 6/6, as easy
+      // as Pilot; with it 4/6, Veteran unchanged at 6/6). The alert call ("take too long and they
+      // launch") stays true; Darkstar announces the pair as it pops up.
+      flight('migs_ace', 'mig29', 2, { x: 20000, z: -16000 }, 6500, 225, 240, 'fighter', {
+        skillOffset: 0.1,
+        maxCount: 2,
+        minDifficulty: 'ace',
+        spawn: { kind: 'time', t: C08_ACE_SCRAMBLE_T },
         task: { kind: 'patrol', x: 8000, z: -6000, radius: 6000, altitude: 5000 },
       }),
     ],
@@ -85,7 +101,8 @@ export const C08: MissionDef = mission({
       // first release: 95 s (7–102 s) on Pilot seed 0, over 90 s in every run swept (playtest
       // 2026-10-02, 1.1-i). Darkstar now calls the ships and the MiG alert part-way across, then the
       // run-in when the player nears the Harbour Bridge (or at 80 s, wherever the player is). Both lines
-      // stay true until the ships are sunk. The MiGs only ever launch at 300 s with the ships still afloat:
+      // stay true until the ships are sunk. The MiGs only ever launch at 300 s with the ships still afloat
+      // (on Ace a ready pair, migs_ace, launches at 100 s as well: "take too long" is shorter there):
       // o_ships is the only primary, so sinking the ships ends the mission in the same tick and the
       // group's o_ships spawn never fires. The group is 2 MiGs up to Veteran and 3 on Ace, so the call
       // names no count (review, #59; tests/missions-pacing.test.ts).
