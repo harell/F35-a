@@ -11,8 +11,47 @@ import { hudShown, testConditions } from '../src/game/testParams';
 import { createHud, type HudTestHooks } from '../src/hud/Hud';
 import { buildMock, type Scenario } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
+import { parseProbe, probeLabel, type ProbeSpec } from './missions-probes';
+import { runPlaythrough } from './missions-bot';
+import { flat } from './ai-helpers';
 
 installPath2D();
+
+describe('bot-sweep --park / --gunonly (tests/missions-probes.ts)', () => {
+  it('parses the flags; rows and logs name the probe', () => {
+    expect(parseProbe({})).toBeNull();
+    expect(parseProbe({ park: '' })).toEqual({ kind: 'park', at: 'start' });
+    expect(parseProbe({ park: 'start' })).toEqual({ kind: 'park', at: 'start' });
+    expect(parseProbe({ park: 'far' })).toEqual({ kind: 'park', at: 'far' });
+    expect(parseProbe({ gunonly: '' })).toEqual({ kind: 'gunonly' });
+    expect(() => parseProbe({ park: 'home' })).toThrow(/start or far/);
+    expect(() => parseProbe({ park: '', gunonly: '' })).toThrow(/pick one/);
+    expect(() => parseProbe({ gunonly: '1' })).toThrow();
+    expect([null, { kind: 'park', at: 'start' }, { kind: 'park', at: 'far' }, { kind: 'gunonly' }].map((p) => probeLabel(p as ProbeSpec | null))).toEqual(['bot', 'park:start', 'park:far', 'gunonly']);
+  });
+
+  it('park: the parked jet never flies, shoots or dies; the row and log say which park', { timeout: 60_000 }, () => {
+    const r = runPlaythrough('c01', 'recruit', 1, flat(0), { maxT: 60, log: true, probe: { kind: 'park', at: 'far' } });
+    expect(r.probe?.label).toBe('park:far');
+    expect(r.events[0]).toMatch(/PROBE park:far/);
+    expect(r.launches).toEqual([]);
+    expect(r.probe?.gunRounds).toBe(0);
+    expect(Object.keys(r.modes)).toEqual(['PARKED']);
+    expect(r.alive).toBe(true);
+  });
+
+  it('gun-only: no missile or bomb ever leaves the jet', { timeout: 60_000 }, () => {
+    const r = runPlaythrough('c01', 'recruit', 0, flat(0), { maxT: 90, probe: { kind: 'gunonly' } });
+    expect(r.probe?.label).toBe('gunonly');
+    expect(r.launches).toEqual([]);
+    expect(Object.keys(r.modes)).toEqual(['GUNONLY']);
+  });
+
+  it('no probe: the plain bot, no probe field', { timeout: 60_000 }, () => {
+    const r = runPlaythrough('c01', 'recruit', 0, flat(0), { maxT: 5 });
+    expect(r.probe).toBeUndefined();
+  });
+});
 
 describe('Instant Action time of day and weather (?tod= / ?weather=, missionById conditions)', () => {
   it('missionById builds an ia_* id at the asked time of day and weather, on the same seeded layout', () => {

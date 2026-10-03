@@ -35,6 +35,7 @@ import { dirWithElevation } from '../src/ai/geom';
 import { createMissionRunner, missionById, missionDifficulty } from '../src/missions';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
+import { Probe, type ProbeSpec } from './missions-probes';
 import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { rearmHome } from '../src/missions/runtime/rearm';
@@ -727,6 +728,8 @@ export interface PlaythroughResult {
   events: string[];
   /** The player's weapon launches in order: time, weapon, target entity id and mission group. */
   launches: { t: number; weapon: string; targetId: number | null; group: string | null }[];
+  /** The probe flown instead of the plain bot (opts.probe; tests/missions-probes.ts) and the gun rounds fired in it. */
+  probe?: { label: string; gunRounds: number };
 }
 
 export function runPlaythrough(
@@ -734,7 +737,7 @@ export function runPlaythrough(
   diff: Difficulty,
   seed: number,
   terrain: TerrainQuery,
-  opts: { loadout?: LoadoutId; maxT?: number; bot?: MissionBotOptions; log?: boolean; jitter?: boolean } = {},
+  opts: { loadout?: LoadoutId; maxT?: number; bot?: MissionBotOptions; log?: boolean; jitter?: boolean; probe?: ProbeSpec | null } = {},
 ): PlaythroughResult {
   const def = typeof missionIdOrDef === 'string' ? missionById(missionIdOrDef) : missionIdOrDef;
   if (!def) throw new Error(`no mission ${String(missionIdOrDef)}`);
@@ -768,8 +771,11 @@ export function runPlaythrough(
   };
   jitterRed();
   const bot = new MissionBot(runner, world, p, opts.bot);
+  // park / gun-only probe (#118): it flies (or pins) the jet instead of the mission bot
+  const probe = opts.probe ? new Probe(opts.probe, world, p, bot) : null;
   const log: string[] = [];
   const T = () => world.time.toFixed(0).padStart(3);
+  if (opts.log && probe) log.push(`${T()} PROBE ${probe.label}`);
   let rearms = 0;
   let friendlyLost = 0;
   let playerKills = 0;
@@ -803,12 +809,14 @@ export function runPlaythrough(
   const dt = 1 / 60;
   const maxT = opts.maxT ?? 900;
   for (let i = 0; i < maxT * 60 && runner.state === 'running'; i++) {
+    probe?.beforeStep();
     if (i % 3 === 0 && p.alive) {
-      bot.update(dt * 3);
+      if (!probe?.fly(dt * 3)) bot.update(dt * 3);
       modes[bot.mode] = (modes[bot.mode] ?? 0) + dt * 3;
     }
     world.step(dt);
     runner.update(world, dt);
+    probe?.afterStep();
     if (i % 30 === 0) jitterRed();
     if (opts.log && i % 300 === 0 && p.alive) {
       const des = world.getEntity(p.radar.designatedId);
@@ -848,6 +856,7 @@ export function runPlaythrough(
     modes: Object.fromEntries(Object.entries(modes).map(([k, v]) => [k, Math.round(v)])),
     events: log,
     launches,
+    ...(probe ? { probe: { label: probe.label, gunRounds: probe.gunRounds } } : {}),
   };
   runner.dispose?.();
   return r;
