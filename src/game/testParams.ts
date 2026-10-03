@@ -2,6 +2,8 @@
  * F35-A — URL parameters that only exist with the test hooks (dev server / VITE_TEST_HOOKS=1, see
  * TEST_HOOKS in core/data.ts). Kept out of Game.ts so they can be unit tested without a renderer.
  */
+import type { CameraMode, TimeOfDay, Weather } from '../core/types';
+import { TIMES_OF_DAY, WEATHERS, type InstantConditions } from '../missions';
 
 /**
  * `?seed=<n>`: a fixed combat RNG seed for every mission started in this page, so a browser run
@@ -41,4 +43,36 @@ export function frameAccumulator(acc: number, dt: number, held: boolean): number
  */
 export function frameTakesControls(autopilot: boolean, held: boolean): boolean {
   return !autopilot && !held;
+}
+
+/**
+ * `?tod=<dawn|day|dusk|night>&weather=<clear|scattered|overcast>`: the time of day and weather of an
+ * Instant Action mission flown by `?mission=ia_<mode>_<theatre>` (missionById's conditions; #118).
+ * Unknown values are left out and listed in `invalid` (the caller warns), so a typo flies the default
+ * rather than nothing. Empty when the test hooks are off.
+ */
+export function testConditions(params: URLSearchParams, testHooks: boolean): { conditions: InstantConditions; invalid: string[] } {
+  const conditions: InstantConditions = {};
+  const invalid: string[] = [];
+  if (!testHooks) return { conditions, invalid };
+  const tod = params.get('tod')?.trim().toLowerCase();
+  if (tod) {
+    if ((TIMES_OF_DAY as readonly string[]).includes(tod)) conditions.timeOfDay = tod as TimeOfDay;
+    else invalid.push(`tod=${tod} (${TIMES_OF_DAY.join('|')})`);
+  }
+  const weather = params.get('weather')?.trim().toLowerCase();
+  if (weather) {
+    if ((WEATHERS as readonly string[]).includes(weather)) conditions.weather = weather as Weather;
+    else invalid.push(`weather=${weather} (${WEATHERS.join('|')})`);
+  }
+  return { conditions, invalid };
+}
+
+/**
+ * Whether the HMD overlay shows in camera `mode`: not in the tactical map (which draws its own), and not
+ * while `__f35.hud(false)` hides it. That hide is sticky: a setView(), a view change of the rig's own
+ * (death cam, missile cam hand-back) or the mission becoming ready doesn't bring the HUD back (#118).
+ */
+export function hudShown(mode: CameraMode, hiddenByHook: boolean): boolean {
+  return mode !== 'tactical' && !hiddenByHook;
 }

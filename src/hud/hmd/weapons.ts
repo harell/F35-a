@@ -12,6 +12,8 @@ import { dlzLayout, makeDlzGeometry } from './dlz';
 import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
+import { TEST_HOOKS } from '../../core/data';
+import { noteCue, notePipper } from './drawn';
 
 const dlzGeom = makeDlzGeometry();
 const tofTxt = new NumText(0, 'TOF ');
@@ -295,7 +297,9 @@ export function drawCues(f: HudFrame): void {
   const { pen, L } = f;
   for (let i = 0; i < cueCount; i++) {
     const c = cues[i];
-    if (c.hz > 0 && !blink(f, c.hz, 0.7)) continue;
+    const on = c.hz <= 0 || blink(f, c.hz, 0.7);
+    if (TEST_HOOKS) noteCue(c.text, L.cx, c.y, on);
+    if (!on) continue;
     pen.g.globalAlpha = c.alpha * f.declutter;
     pen.text(c.text, L.cx, c.y, c.col, c.size);
     pen.g.globalAlpha = 1;
@@ -570,6 +574,7 @@ function drawPipper(f: HudFrame, crossX: number, crossY: number): void {
   pen.line(x + Math.cos(ta) * (R + 1), y + Math.sin(ta) * (R + 1), x + Math.cos(ta) * (R + 6 * u), y + Math.sin(ta) * (R + 6 * u));
   pen.strokeGlow(pal.main, 1.4);
   setAnchor(f, x, y, R + 7 * u);
+  if (TEST_HOOKS) notePipper(x, y, R);
 }
 
 function setAnchor(f: HudFrame, x: number, y: number, r: number): void {
