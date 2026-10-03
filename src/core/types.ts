@@ -285,7 +285,7 @@ export interface QualitySettings {
   /** Enable shadow map for the player jet only. */
   shadows: boolean;
   antialias: boolean;
-  /** Enable light post processing (bloom-ish glow sprites, heat blur). */
+  /** Bloom over the world pass (src/render/Bloom.ts, #139): the sun, glints on the water, night lights. */
   postfx: boolean;
   /** Scenery object density multiplier (trees/buildings). */
   sceneryDensity: number;
