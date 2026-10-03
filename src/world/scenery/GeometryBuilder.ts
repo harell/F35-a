@@ -30,6 +30,7 @@ export const WIN_INDUSTRIAL = 3;
 export const WIN_GLOW = 4; // uniformly emissive at night (tower pod, lit sign)
 export const WIN_RIBS = 5; // standing-seam sheet metal: seams down a roof's fall line (Spark Arena)
 export const WIN_LOBBY = 6; // curtain-wall glass on a mullion grid, lit from inside at night (Spark Arena's foyer)
+export const WIN_BALCONY = 7; // apartment balcony bands: a white slab edge every 3.2 m storey over dark glazing (the Scene apartments)
 
 export class GeometryBuilder {
   private pos: number[] = [];
@@ -204,7 +205,8 @@ export class GeometryBuilder {
     const len = Math.hypot(dx, dy, dz) || 1;
     const ux = dx / len, uy = dy / len, uz = dz / len;
     // pick a helper axis not parallel to u
-    let hx = 0, hy = 1, hz = 0;
+    let hx = 0, hy = 1;
+    const hz = 0;
     if (Math.abs(uy) > 0.9) {
       hx = 1;
       hy = 0;

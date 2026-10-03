@@ -4,7 +4,7 @@
  * bonus, stale-listener safety.
  */
 import { describe, expect, it } from 'vitest';
-import { CAMPAIGN, TRAINING, buildInstantMissionSeeded } from '../src/missions';
+import { CAMPAIGN, TRAINING } from '../src/missions';
 import { harness, killGroup, mainstayFixture, shieldPlayer } from './missions-helpers';
 import { AKL, BRIDGE_SPAN_T } from '../src/core/auckland';
 

@@ -64,7 +64,7 @@ describe('combat: SAM sites', () => {
 
   it('terrain masking and the SA-6 minimum altitude: low flight under the radar is not engaged', SIM, () => {
     const w = new FakeWorld();
-    const site = w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, 0) });
+    w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, 0) });
     const ac = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(3000, 50, -25000), heading: Math.PI, speed: 250 });
     const launches = w.record('munition:launch');
     w.run(90, () => ac.position.z > 0);

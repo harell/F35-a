@@ -13,10 +13,12 @@
  *
  * Spark Arena (core/sparkArena.ts), the hand-built landmark east of the LINZ building box, joins the
  * index as a `fixed` building (id −1, after the LINZ ones): flying into it crashes the aircraft like a
- * tower does, but it never collapses. It is there with or without the LINZ building data.
+ * tower does, but it never collapses. It is there with or without the LINZ building data. So are the Ports of
+ * Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9, added before the arena): their portals up to the A-frame.
  */
 import type { Vector3 } from 'three';
 import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
+import { PORT_CRANES } from '../core/portOfAuckland';
 import { aucklandBuildings, aucklandBuildingsVersion } from '../world/scenery/aucklandBuildings';
 
 /** Roof height above the ground (m) from which a building is a skyscraper the sim knows about (≈ 12 storeys). */
@@ -124,6 +126,14 @@ export function buildBuildingGeometry(
     if (!b.prisms.length || !b.prisms.some((p) => p.h >= minHeight)) continue;
     add(id, b.prisms[0].cx, b.prisms[0].cz, b.prisms);
   }
+  // Ports of Auckland's ship-to-shore cranes: the portal between the legs, up to the A-frame (core/portOfAuckland.ts)
+  PORT_CRANES.forEach((c, i) => {
+    const u0 = -35, u1 = -1, v = c.girder > 50 ? 11.5 : 10.5;
+    const corner = (u: number, w: number) => [c.x + c.ux * u - c.uz * w, c.z + c.uz * u + c.ux * w];
+    const ring = Float32Array.from([...corner(u0, -v), ...corner(u1, -v), ...corner(u1, v), ...corner(u0, v)]);
+    const [cx, cz] = corner((u0 + u1) / 2, 0);
+    add(-2 - i, cx, cz, [{ ring, h: c.apex }], true);
+  });
   // Spark Arena: its roof outline in 10 m cells, each as high as the roof over it (core/sparkArena.ts)
   add(-1, SPARK_ARENA.x, SPARK_ARENA.z, sparkArenaSolids(), true);
   if (!buildings.length) return null;

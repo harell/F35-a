@@ -1,5 +1,9 @@
 # F35-A Ratites
 
+[![CI](https://github.com/harell/F35-a/actions/workflows/ci.yml/badge.svg)](https://github.com/harell/F35-a/actions/workflows/ci.yml)
+[![Deploy](https://github.com/harell/F35-a/actions/workflows/deploy.yml/badge.svg)](https://github.com/harell/F35-a/actions/workflows/deploy.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fharell.github.io%2FF35-a%2Fbadges%2Fcoverage.json)](https://github.com/harell/F35-a/actions/workflows/deploy.yml)
+
 <p align="center"><img src="docs/cover.jpg" width="420" alt="F-35-a Ratites game cover: an F-35A over Auckland's Sky Tower and skyline, with a kiwi in the flames"></p>
 
 **A combat flight simulator for your phone's browser.** Fly the F-35A Lightning II over Auckland, New Zealand.
@@ -65,11 +69,16 @@ npm install
 npm run dev          # http://localhost:5173 (use --host to test on a phone on the same Wi-Fi)
 npm run typecheck    # tsc --noEmit
 npm test             # vitest unit tests (flight model, missiles, radar, SAMs, AI, missions, terrain, HUD...)
+npm run coverage     # the tests with V8 coverage: summary in the terminal, HTML report in coverage/index.html
+npm run lint         # ESLint (typescript-eslint recommended); `npm run lint:fix` fixes what it can
 npm run build        # production build to dist/
 npm run e2e          # mission smoke test (headless Chromium)
 node e2e/hd-terrain.mjs  # HD terrain download scope per quality tier (against `vite preview --port 4173`)
 npm run voices       # regenerate voice clips (needs a local TTS + ffmpeg, see tools/)
 ```
+
+CI runs the lint, the type check, the tests and the build on every pull request. The deploy to GitHub Pages also runs the
+coverage and publishes the badge's numbers next to the game (`badges/coverage.json`, see `tools/coverage-badge.mjs`).
 
 Handy URL parameters: `?view=chase&difficulty=veteran&quality=high&fps=1` (`&hdterrain=0` turns off the high tier's HD terrain download).
 

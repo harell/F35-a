@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   const combat = createCombatSystem();
   const world = createSimWorld({ terrain: env.terrain, difficulty: DIFFICULTIES.pilot, events, combat });
   const h = (x: number, z: number) => env.terrain.surfaceHeightAt(x, z);
-  const player = world.spawnAircraft({ type: 'f35a', team: 'blue', position: new Vector3(0, h(0, 12000) + 1500, 12000), heading: 0, speed: 240, isPlayer: true, loadout: (q.get('loadout') ?? 'a2a_beast') as LoadoutId });
+  world.spawnAircraft({ type: 'f35a', team: 'blue', position: new Vector3(0, h(0, 12000) + 1500, 12000), heading: 0, speed: 240, isPlayer: true, loadout: (q.get('loadout') ?? 'a2a_beast') as LoadoutId });
   world.spawnAircraft({ type: 'f35a', team: 'blue', position: new Vector3(60, h(60, 12060) + 1520, 12060), heading: 0, speed: 240, ai: createAiBrain('wingman', { skill: 0.5 }) });
   world.spawnAircraft({ type: 'mig29', team: 'red', position: new Vector3(400, h(400, 3000) + 1600, 3000), heading: Math.PI, speed: 230, ai: createAiBrain('fighter', { skill: 0.5 }) });
   world.spawnAircraft({ type: 'su27', team: 'red', position: new Vector3(-900, h(-900, 2000) + 1700, 2000), heading: Math.PI, speed: 230, ai: createAiBrain('fighter', { skill: 0.5 }) });

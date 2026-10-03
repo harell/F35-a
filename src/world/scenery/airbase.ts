@@ -68,7 +68,6 @@ export function buildAirbase(spec: AirbaseSpec, out: AirbaseOutput, height: Heig
   for (const cz of [-apL * 0.7, 0, apL * 0.7]) out.concrete.quad(fr, tx + tw / 2, apU0, cz - 14, cz + 14, height, concreteUV, 60, 0.3);
 
   // ── Buildings ──
-  const concrete = new Color(spec.concrete ?? 0x9c9a92);
   const roofGrey = new Color(0x6c6e70);
   const y0 = base - 1.5; // sink foundations
   if (!civil) {

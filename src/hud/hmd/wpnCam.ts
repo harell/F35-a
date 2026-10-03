@@ -726,13 +726,12 @@ export function drawWpn(f: HudFrame, plan: WpnPlan | null, pipTargetId: number |
     pen.strokePlain(res ? pal.warn : c.label === '' ? pal.dim : pal.dim, 1);
     const my = cy + ch / 2;
     pen.text(label, x + 4 * u, my, res ? pal.warn : c.label === '' ? pal.dim : pal.white, 8.5, 'left');
-    let bx = x + 4 * u + lw + 5 * u;
+    const bx = x + 4 * u + lw + 5 * u;
     if (barW) {
       pen.setFill('rgba(255,255,255,0.18)');
       pen.g.fillRect(bx, my - 1 * u, barW, 2 * u);
       pen.setFill(pal.main);
       pen.g.fillRect(bx, my - 1 * u, barW * c.prog, 2 * u);
-      bx += barW + 5 * u;
     }
     if (val) pen.text(val, right - 4 * u, my, res ? pal.warn : pal.bright, 8.5, 'right');
     cy += ch + 2 * u;

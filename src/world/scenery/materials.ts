@@ -160,6 +160,24 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit, detail);
     }
+  } else if (vWin > 6.5) {
+    // balcony bands (aWin 7, the Scene apartments): a white slab edge (0.45 m) every 3.2 m storey, frosted balustrades
+    // and dark glazing between; blends to the band's average once a storey is a few pixels; some bays lit at night
+    float y = fract(vWorld.y / 3.2);
+    float aa = mpp / 3.2;
+    float slab = 1.0 - smoothstep(0.14 - aa, 0.14 + aa, y);
+    float rail = smoothstep(0.14 - aa, 0.14 + aa, y) * (1.0 - smoothstep(0.45 - aa, 0.45 + aa, y));
+    float detail = 1.0 - smoothstep(0.35, 0.9, mpp / 3.2);
+    vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
+    vec3 glass = mix(vec3(0.16, 0.2, 0.23), sky * 0.5, 0.4);
+    vec3 band = mix(glass, mix(glass, vec3(0.62, 0.69, 0.72), 0.6), rail);
+    base = mix(mix(base, band, 0.55), mix(band, base, slab), detail);
+    if (uNight > 0.0) {
+      vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
+      vec2 id = floor(vec2(dot(vWorld.xz, t) / 4.0, vWorld.y / 3.2));
+      float lit = step(hash12(id + floor(vWorld.xz / 37.0) * 7.0), 0.3) * (1.0 - slab);
+      emissive += uNight * mix(vec3(0.22, 0.16, 0.09), vec3(1.0, 0.7, 0.38) * 1.5 * lit, detail);
+    }
   } else if (vWin > 5.5) {
     // curtain-wall glass (aWin 6): sky reflections between the mullions of a 3 m × 2.7 m grid by day;
     // at night lit from inside, panel columns warm white or the arena's purple

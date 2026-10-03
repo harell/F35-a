@@ -42,6 +42,7 @@ import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './terrain/urbanColor';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
 import { loadAucklandOsm } from './scenery/aucklandOsm';
+import { loadAucklandPort } from './scenery/aucklandPort';
 import { runwaysOf } from '../core/airfields';
 import type { SceneryFeature } from '../core/contracts';
 import { bakeColorRows, bakeSunVisibility, bakeSurface, dilateLandColour } from './terrain/bake';
@@ -85,7 +86,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
   // the main thread while the terrain generates, needed only for the GPU objects below.
   const aerialLoad = cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
-  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm()]);
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort()]);
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain };

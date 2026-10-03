@@ -89,6 +89,7 @@ export type GameEventName = keyof GameEventMap;
 type Handler<K extends GameEventName> = (payload: GameEventMap[K]) => void;
 
 export class EventBus {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- one map holds the handlers of every event type
   private handlers = new Map<GameEventName, Set<Handler<any>>>();
 
   on<K extends GameEventName>(name: K, fn: Handler<K>): () => void {

@@ -6,7 +6,7 @@
  * No two header readouts overlap and each stays inside its portal.
  */
 import { describe, expect, it } from 'vitest';
-import { installPath2D, makeFakeCanvas, overlaps, textBox, type TextRec } from '../src/hud/dev/fakeCanvas';
+import { installPath2D, makeFakeCanvas, textBox, type TextRec } from '../src/hud/dev/fakeCanvas';
 import { buildMock } from '../src/hud/dev/mockWorld';
 import { Pen } from '../src/hud/hmd/pen';
 import { PCD_CORNER, drawRwrPage, drawTsdPage, type PcdData } from '../src/hud/cockpit/pages';

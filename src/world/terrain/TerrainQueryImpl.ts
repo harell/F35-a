@@ -48,7 +48,7 @@ export class TerrainQueryImpl implements TerrainQuery {
     const c = n - 1;
     const d = hf.data;
     // Level 0: per-cell max of the 4 corner surfaces.
-    let l0 = new Float32Array(c * c);
+    const l0 = new Float32Array(c * c);
     let gmax = 0;
     for (let j = 0; j < c; j++) {
       for (let i = 0; i < c; i++) {
@@ -87,7 +87,6 @@ export class TerrainQueryImpl implements TerrainQuery {
       this.dims.push(nd);
       this.blockSize.push(this.blockSize[this.blockSize.length - 1] * 2);
       dim = nd;
-      l0 = next;
     }
     // Start the traversal at an even level with a handful of blocks per side.
     let top = 0;

@@ -221,10 +221,10 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   }
   /** Random unit vector into _w (optionally hemisphere-biased upward). */
   function randDir(up = 0): Vector3 {
-    let x = 0;
-    let y = 0;
-    let z = 0;
-    let l = 0;
+    let x: number;
+    let y: number;
+    let z: number;
+    let l: number;
     do {
       x = rnd() * 2 - 1;
       y = rnd() * 2 - 1;

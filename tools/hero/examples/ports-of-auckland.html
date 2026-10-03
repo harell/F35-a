@@ -1,0 +1,427 @@
+<!-- Ports of Auckland hero-model prototype (LiDAR-driven: decks, sheds, container stacks, cranes, masts). Placeholders filled
+     before publishing: __DATA__ (a script defining DATA: the measured port from tools/hero/sites/ports_of_auckland.py, 4 m
+     max-pooled DSM and 6 m DEM grids, the game's terrain grid and the game's current waterfront and CBD meshes in the site
+     frame; and AERIAL, a data: URI) and __TODAY__ (a data: URI). Site: NZTM E0 1757509, N1 5921643, 2400 × 2400 m.
+     See .claude/skills/hero-building/SKILL.md. -->
+<title>Ports of Auckland Hero Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: one 3D viewer with the four stages up top, then the measured differences, then how it was made. Same system as the other hero prototypes. */
+:root {
+  --bg: #eef1f1; --surface: #ffffff; --fg: #15212a; --muted: #52606b; --line: #d5dbdb;
+  --accent: #1f4e8c; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11191e; --surface: #19242b; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #7fa8e0; --accent-ink: #11191e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11191e; --surface: #19242b; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #7fa8e0; --accent-ink: #11191e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 14.5px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; font-size: 15px; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible, .views button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+.views { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 20px); }
+.views button { font: 500 12px var(--mono); color: #15212a; background: rgba(255,255,255,.82); border: 1px solid rgba(21,33,42,.2); padding: 5px 9px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: #15212a; color: #fff; }
+.legend { position: absolute; right: 10px; top: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.85); padding: 6px 9px; border-radius: 4px; display: flex; flex-direction: column; gap: 3px; }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 14px var(--mono); color: #15212a; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.old { color: var(--old); }
+td.new { color: var(--measured); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.step img { border-radius: 6px; border: 1px solid var(--line); width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero landmark test · Waitematā waterfront, Auckland</span>
+    <h1>Ports of Auckland: the game's port next to one measured from LiDAR</h1>
+    <p class="lede">Stage 1 is the port as the game builds it today: its own waterfront mesh, exported from <span class="num">buildPort</span>, with the CBD around it. Stage 3 rebuilds the port from LINZ 2024 LiDAR and OpenStreetMap: every crane, container stack, shed and floodlight mast where the survey found it. Stage 4 lays one over the other. Drag to orbit, scroll or pinch to zoom.</p>
+  </header>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="What to show">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Current meshes on the game's terrain</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>Surface heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Hero model</b>Measured port, game CBD around it</button>
+      <button id="s3" aria-pressed="false"><b>4 · Overlay</b>Today's port in orange over the new one</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of the Ports of Auckland"></canvas>
+      <div class="loading" id="loading">building the port…</div>
+      <div class="views" role="group" aria-label="Camera">
+        <button id="v0" aria-pressed="true">From the harbour</button>
+        <button id="v1" aria-pressed="false">Fergusson cranes</button>
+        <button id="v2" aria-pressed="false">Bledisloe and Jellicoe</button>
+        <button id="v3" aria-pressed="false">From above</button>
+      </div>
+      <div class="legend" id="legend" hidden><span><i style="background:#ff7a2e"></i>in the game today</span><span><i style="background:#1f4e8c"></i>hero model</span></div>
+      <span class="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="night"><input type="checkbox" id="night"> Night</label><label for="spin"><input type="checkbox" id="spin"> Slow orbit</label></span>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">Measured differences</span>
+    <h2>Where today's port is off</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What</th><th>Game today</th><th>Measured</th><th>Source of the measurement</th></tr></thead>
+        <tbody>
+          <tr><td>Container cranes</td><td class="n old">9 generic gantries, red booms: 4 on Bledisloe, 1 on Jellicoe, 4 on Fergusson west</td><td class="n new">8, all at Fergusson: 5 on the west berth, 3 on the north berth</td><td>LiDAR blobs over 42 m, split by their A-frames; Bledisloe has no container cranes</td></tr>
+          <tr><td>Crane size</td><td class="n old">legs 44 m, boom level 46 m</td><td class="n new">west: girder 44 m, apex 66–70 m; north: girder 54 m, apex 82 m</td><td>LiDAR, above the 3.2 m deck; ZPMC gives 82.3 m for the north cranes</td></tr>
+          <tr><td>Booms</td><td class="n old">every third raised</td><td class="n new">3 raised to 102–120 m, 5 down reaching 51–65 m past the quay</td><td>LiDAR, May 2024 flight (the aerial was flown on another day and shows other positions)</td></tr>
+          <tr><td>Crane colours</td><td class="n old">white frame, red boom</td><td class="n new">white legs and house, dark blue girder and boom</td><td>Wikimedia Commons photos, 2018–2025</td></tr>
+          <tr><td>Container stacks</td><td class="n old">pairs of 1–4 tiers on a 40 m grid, random colours</td><td class="n new">≈ 10,000 blocks in the real yard layout; 23 % 1 high, 54 % 2 high, 17 % 3 high</td><td>LiDAR 1.8–17 m over the deck, 2.6 m tiers; colours from the aerial over each block</td></tr>
+          <tr><td>Floodlight masts</td><td class="n old">up to 14, 30 m</td><td class="n new">60, mostly 31 m</td><td>LiDAR: compact spikes 24–45 m on port land</td></tr>
+          <tr><td>Sheds and buildings</td><td class="n">OSM outlines, game heights</td><td class="n">74 OSM outlines at LiDAR roof heights, aerial roofs</td><td>e.g. Car Handling Building 16.9 m, Shed 2 12.6 m, Golden Bay Cement silo block 17.0 m</td></tr>
+          <tr><td>Wharf deck</td><td class="n">OSM port outline</td><td class="n">same outline at 3.2 m</td><td>LiDAR ground, p5–p95 2.7–3.7 m</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">How it was made · about 2 hours with the hero-building tools</span>
+    <h2>From public data to a port the game can use</h2>
+    <div class="steps">
+      <div class="step"><span class="n">THE GAME TODAY</span><h3>A frame from the running game</h3><img src="__TODAY__" alt="F35-A today: the port with randomly stacked containers and generic cranes"><p>Dev build, high quality, looking south-west across Fergusson. The same meshes are exported into stage 1.</p></div>
+      <div class="step"><span class="n">STEP 1 · AUTOMATIC</span><h3>LiDAR over 2.4 km</h3><p><span class="num">tools/hero/site.py</span>: 1 m DSM and DEM and the 2024 aerial. OSM gives the port's outline (relation 11815188) and 74 sheds. The wharf deck reads 3.2 m everywhere.</p></div>
+      <div class="step"><span class="n">STEP 2 · AUTOMATIC</span><h3>Cranes, masts and stacks</h3><p><span class="num">tools/hero/sites/ports_of_auckland.py</span> finds each crane's quay edge, girder, apex, backreach, outreach and boom state. It takes masts from compact spikes. Each stack group gets its own grid orientation, 2.6 m tiers and greedy-merged blocks.</p></div>
+      <div class="step"><span class="n">STEP 3 · NEEDS A HUMAN</span><h3>Check against photos</h3><p>Ten Commons photos give the crane colours, white legs and dark blue booms, and confirm the two crane classes. The aerial and the LiDAR were flown on different days, so the booms disagree; the LiDAR wins.</p></div>
+      <div class="step"><span class="n">STEP 4 · CODE</span><h3>Build it in three.js</h3><p>One parametric ship-to-shore crane and one prism builder for decks and sheds. The stacks are boxes with the aerial on top. The game's own CBD mesh stands around the port, so only the port differs between stages.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">What the hero model is made of</span>
+      <h2>Measured, read off a photo, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Crane positions, axes, girder and apex heights, backreach, outreach and boom state; stack footprints and tiers; mast positions and heights; shed roof heights; deck height (LiDAR). Port and shed outlines (OSM).</span></div>
+        <div><span class="tag r">From photos</span><span>Crane colours and the A-frame, machinery-house and boom layout; stack side colours come from the aerial.</span></div>
+        <div><span class="tag g">Guessed</span><span>Crane leg gauge (30.5 m) and leg spacing, the raised booms' length, shed wall colours, the mast lamp heads. Container doors and corrugations aren't modelled.</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Putting it in the game</span>
+      <h2>What's left after this review</h2>
+      <div class="ledger">
+        <div><span class="tag r">Shape data</span><span>Bake cranes, masts and stack blocks into a small binary like the LINZ buildings file. Stacks are about 10k boxes: merge them into one mesh, and use a cheaper LOD (the yard blocks as single prisms) far away.</span></div>
+        <div><span class="tag r">Replace</span><span>Drop the random stacks, the Bledisloe cranes and the 14 floodlights from <span class="num">buildRealPort</span>. Keep its berth faces: the ships alongside are sim entities.</span></div>
+        <div><span class="tag r">Collision</span><span>Cranes are the tallest things on the waterfront after the CBD towers (123 m with a boom up): give them collision boxes.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Port and building outlines: © <a href="https://www.openstreetmap.org/relation/11815188">OpenStreetMap</a> contributors, ODbL. Crane facts: <a href="https://www.hellenicshippingnews.com/how-ports-of-auckland-got-three-new-container-cranes-into-the-city-of-sails/">Hellenic Shipping News</a>, <a href="https://www.worldports.org/ports-of-auckland-moves-cranes-for-automation/">World Ports</a>. Reference photos (not embedded): <a href="https://commons.wikimedia.org/wiki/Category:Ports_of_Auckland">Wikimedia Commons, Category: Ports of Auckland</a>. Stages 1 and 3 use the game's own meshes from <span class="num">src/world/scenery/</span>; the game's terrain carries the same aerial for reference.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>__DATA__</script>
+<script>
+// ── site frame: metres, x east, z south from the NW corner of the 2400 m box; y = metres above NZVD2016 ──
+const SIZE = 2400;
+const b64 = (s) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+const i16 = (s, k = 0.1) => { const a = new Int16Array(b64(s)), f = new Float32Array(a.length); for (let i = 0; i < a.length; i++) f[i] = a[i] * k; return f; };
+const M = DATA.model;
+
+// ── triangle soup per material (world coordinates), flat normals ──
+class Soup {
+  constructor() { this.p = {}; this.c = {}; this.uv = {}; }
+  tri(m, a, b, c, col) {
+    (this.p[m] ||= []).push(...a, ...b, ...c);
+    if (col) (this.c[m] ||= []).push(...col, ...col, ...col);
+  }
+  quad(m, a, b, c, d, col) { this.tri(m, a, b, c, col); this.tri(m, a, c, d, col); }
+  // square beam of width w between two points
+  beam(m, a, b, w, col) {
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d); if (L < 1e-6) return;
+    const u = d.map((v) => v / L), up = Math.abs(u[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+    let x = [u[1] * up[2] - u[2] * up[1], u[2] * up[0] - u[0] * up[2], u[0] * up[1] - u[1] * up[0]]; const lx = Math.hypot(...x); x = x.map((v) => (v / lx) * w / 2);
+    const y = [u[1] * x[2] - u[2] * x[1], u[2] * x[0] - u[0] * x[2], u[0] * x[1] - u[1] * x[0]];
+    const ring = (p) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [p[0] + x[0] * i + y[0] * j, p[1] + x[1] * i + y[1] * j, p[2] + x[2] * i + y[2] * j]);
+    const A = ring(a), B = ring(b);
+    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; this.quad(m, A[i], A[j], B[j], B[i], col); }
+  }
+  // box from 4 ground corners [[x, z]…] between y0 and y1; top goes to `topM` (aerial-mapped) when given
+  block(m, P, y0, y1, col, topM) {
+    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; this.quad(m, [P[i][0], y0, P[i][1]], [P[j][0], y0, P[j][1]], [P[j][0], y1, P[j][1]], [P[i][0], y1, P[i][1]], col); }
+    const T = P.map(([x, z]) => [x, y1, z]);
+    this.quad(topM || m, T[0], T[3], T[2], T[1], topM ? null : col);
+  }
+  mesh(m, mat) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.p[m]), 3));
+    if (this.c[m]) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.c[m]), 3));
+    if (mat.map) { const p = this.p[m], uv = new Float32Array((p.length / 3) * 2); for (let i = 0, k = 0; i < p.length; i += 3, k += 2) { uv[k] = p[i] / SIZE; uv[k + 1] = 1 - p[i + 2] / SIZE; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
+    g.computeVertexNormals(); return new THREE.Mesh(g, mat);
+  }
+}
+
+// prism from a ring: walls (+ optional colour) and a triangulated top
+function prism(S, m, ring, y0, y1, col, topM) {
+  const pts = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+  const v2 = pts.map(([x, z]) => new THREE.Vector2(x, z));
+  if (THREE.ShapeUtils.isClockWise(v2)) { pts.reverse(); v2.reverse(); }
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; S.quad(m, [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [b[0], y0, b[1]], col); }
+  for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(v2, [])) S.tri(topM, [pts[a][0], y1, pts[a][1]], [pts[c][0], y1, pts[c][1]], [pts[b][0], y1, pts[b][1]]);
+}
+
+// ── the hero port ──
+const WHITE = [0.9, 0.91, 0.9], BLUE = [0.13, 0.3, 0.55], GREY = [0.55, 0.58, 0.6], DARK = [0.32, 0.35, 0.38];
+function crane(S, c, beacons) {
+  const u = [c.ux, c.uz], v = [-c.uz, c.ux];
+  const B = c.girder > 52;                       // the three ZPMC cranes on the north berth (girder 54 m over the deck)
+  const W = (uu, vv, y) => [c.x + u[0] * uu + v[0] * vv, y, c.z + u[1] * uu + v[1] * vv];
+  const y0 = c.deck, g = c.girder, gauge = 30.5, uw = -3, ul = uw - gauge, half = B ? 10 : 9;
+  // legs, sill beams, portal
+  for (const vv of [-half, half]) {
+    S.beam('crane', W(uw, vv, y0), W(uw, vv, g - 2), 2.2, WHITE);
+    S.beam('crane', W(ul, vv, y0), W(ul, vv, g - 2), 2.2, WHITE);
+    S.beam('crane', W(ul, vv, y0 + 1.5), W(uw, vv, y0 + 1.5), 1.6, WHITE);
+    S.beam('crane', W(ul, vv, g - 14), W(uw, vv, g - 14), 1.8, WHITE);
+    S.beam('crane', W(ul, vv, g - 2), W(uw, vv, g - 2), 2.2, WHITE);
+  }
+  for (const uu of [uw, ul]) { S.beam('crane', W(uu, -half, g - 2), W(uu, half, g - 2), 2.4, WHITE); S.beam('crane', W(uu, -half, g - 14), W(uu, half, g - 14), 1.6, WHITE); }
+  // girder over the backreach and the boom (down: straight out; up: raised about a hinge just past the quay)
+  const hinge = 4;
+  for (const vv of [-3.6, 3.6]) S.beam('boom', W(c.back, vv, g), W(c.boomUp ? hinge : c.tip, vv, g), 2.4, BLUE);
+  let tipW;
+  if (c.boomUp) {
+    const rise = c.boomTop - g, L = Math.max(rise + 1, B ? 66 : 60), du = Math.sqrt(Math.max(0, L * L - rise * rise));
+    for (const vv of [-3.6, 3.6]) S.beam('boom', W(hinge, vv, g), W(hinge + du, vv, c.boomTop), 2.2, BLUE);
+    tipW = (vv) => W(hinge + du, vv, c.boomTop);
+  } else tipW = (vv) => W(c.tip, vv, g);
+  for (let uu = c.back + 8; uu < (c.boomUp ? hinge : c.tip) - 4; uu += 12) S.beam('boom', W(uu, -3.6, g), W(uu, 3.6, g), 0.8, BLUE);
+  // A-frame over the waterside legs, forestays to the boom tip, backstays to the backreach
+  const ua = uw - 6, apex = W(ua, 0, c.apex);
+  for (const vv of [-4, 4]) { S.beam('crane', W(uw, vv, g), W(ua, vv * 0.4, c.apex), 1.4, WHITE); S.beam('crane', W(ul + 8, vv, g), W(ua, vv * 0.4, c.apex), 1.4, WHITE); }
+  for (const vv of [-3, 3]) { S.beam('stay', W(ua, vv * 0.4, c.apex - 0.5), tipW(vv), 0.45, GREY); S.beam('stay', W(ua, vv * 0.4, c.apex - 0.5), W(c.back + 2, vv, g + 1), 0.45, GREY); }
+  // machinery house on the backreach, cab and spreader under the boom
+  const mh = (a, b, h, col) => S.block('crane', [W(a, -5.5, 0), W(b, -5.5, 0), W(b, 5.5, 0), W(a, 5.5, 0)].map((p) => [p[0], p[2]]), g + 1, g + 1 + h, col);
+  mh(c.back + 2, c.back + 16, 6, WHITE);
+  if (!c.boomUp) {
+    const ut = Math.min(c.tip - 8, 25);
+    S.block('crane', [W(ut - 2, -2, 0), W(ut + 2, -2, 0), W(ut + 2, 2, 0), W(ut - 2, 2, 0)].map((p) => [p[0], p[2]]), g - 4, g - 1.2, DARK);
+    S.block('crane', [W(ut - 1.4, -6, 0), W(ut + 1.4, -6, 0), W(ut + 1.4, 6, 0), W(ut - 1.4, 6, 0)].map((p) => [p[0], p[2]]), g - 14, g - 13, [0.85, 0.65, 0.15]);
+  }
+  beacons.push(apex, tipW(0));
+}
+
+function buildHero() {
+  const S = new Soup(), beacons = [], lamps = [];
+  for (const d of M.decks) prism(S, 'deckSide', d.ring, -2, d.y, [0.48, 0.47, 0.44], 'deckTop');
+  for (const b of M.buildings) prism(S, 'shed', b.ring, b.y0 - 0.3, Math.max(b.y1, b.y0 + 3), [0.82, 0.83, 0.8], 'roof');
+  const T = M.tier;
+  for (const r of M.stacks) {
+    const P = [[r[0], r[1]], [r[2], r[3]], [r[4], r[5]], [r[6], r[7]]], base = r[8], t = r[9];
+    const col = [r[10] / 255, r[11] / 255, r[12] / 255].map((x) => Math.min(1, x * 1.08));
+    S.block('stack', P, base, base + t * T, col, 'stackTop');
+  }
+  for (const c of M.cranes) crane(S, c, beacons);
+  for (const [x, z, g, top] of M.masts) {
+    S.beam('mast', [x, g, z], [x, top - 1.2, z], 0.7, GREY);
+    S.block('mast', [[x - 2, z - 0.6], [x + 2, z - 0.6], [x + 2, z + 0.6], [x - 2, z + 0.6]], top - 2.2, top, DARK);
+    lamps.push([x, top - 0.6, z]);
+  }
+  return { S, beacons, lamps };
+}
+
+// ── three.js scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+const DAY_SKY = new THREE.Color('#bcd3e2'), NIGHT_SKY = new THREE.Color('#0b1620');
+scene.background = DAY_SKY.clone();
+scene.fog = new THREE.Fog(DAY_SKY.clone(), 2600, 7000);
+const camera = new THREE.PerspectiveCamera(38, 16 / 9, 2, 12000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 20; controls.maxDistance = 5000;
+const hemi = new THREE.HemisphereLight(0xeef4f7, 0x7a8580, 0.85); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e2, 0.7); sun.position.set(-700, 1000, 600); scene.add(sun);
+let dirty = true;
+const aerialTex = new THREE.TextureLoader().load(AERIAL, () => (dirty = true));
+aerialTex.anisotropy = 8;
+
+function gridMesh(nx, nz, place, hts, mat) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i, [x, z] = place(i, j);
+    pos[k * 3] = x; pos[k * 3 + 1] = Math.max(hts[k], -3); pos[k * 3 + 2] = z; uv[k * 2] = x / SIZE; uv[k * 2 + 1] = 1 - z / SIZE;
+    if (i + 1 < nx && j + 1 < nz) { idx[q++] = k; idx[q++] = k + nx; idx[q++] = k + 1; idx[q++] = k + 1; idx[q++] = k + nx; idx[q++] = k + nx + 1; }
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+const groundMat = new THREE.MeshLambertMaterial({ map: aerialTex });
+const grid = (n, r) => (i, j) => [Math.min(i * r, SIZE), Math.min(j * r, SIZE)];
+const lidarMesh = gridMesh(DATA.dsm.n, DATA.dsm.n, grid(DATA.dsm.n, DATA.dsm.res), i16(DATA.dsm.h), groundMat);
+const heroGround = gridMesh(DATA.dem.n, DATA.dem.n, grid(DATA.dem.n, DATA.dem.res), i16(DATA.dem.h), groundMat);
+const gt = DATA.gt;
+const gameGround = gridMesh(gt.nx, gt.nz, (i, j) => { const a = i / (gt.nx - 1), b = j / (gt.nz - 1); return [gt.o[0] + (gt.ex[0] - gt.o[0]) * a + (gt.ez[0] - gt.o[0]) * b, gt.o[1] + (gt.ex[1] - gt.o[1]) * a + (gt.ez[1] - gt.o[1]) * b]; }, i16(gt.h), groundMat);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshLambertMaterial({ color: 0x2f6e72, transparent: true, opacity: 0.85 }));
+water.rotation.x = -Math.PI / 2; water.position.set(SIZE / 2, 0.15, SIZE / 2); scene.add(water);
+
+// the game's meshes: vertex colours (already sRGB), the aerial on upward faces as the game's building shader does
+function gameMesh(e, skipPort) {
+  const P = i16(e.pos), C = new Uint8Array(b64(e.col)), I = new Uint32Array(b64(e.idx)), inPort = new Uint8Array(b64(e.inPort));
+  const top = { p: [], c: [] }, side = { p: [], c: [] }, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < e.n; t++) {
+    if (skipPort && (inPort[t >> 3] >> (7 - (t & 7))) & 1) continue;
+    const k = [I[t * 3], I[t * 3 + 1], I[t * 3 + 2]];
+    a.fromArray(P, k[0] * 3); b.fromArray(P, k[1] * 3); c.fromArray(P, k[2] * 3);
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+    const dst = Math.abs(n.y) > 0.7 ? top : side;
+    for (const q of k) { dst.p.push(P[q * 3], P[q * 3 + 1], P[q * 3 + 2]); dst.c.push(C[q * 3] / 255, C[q * 3 + 1] / 255, C[q * 3 + 2] / 255); }
+  }
+  const grp = new THREE.Group();
+  for (const [s, isTop] of [[side, false], [top, true]]) {
+    if (!s.p.length) continue;
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(s.p), 3));
+    if (isTop) { const uv = new Float32Array((s.p.length / 3) * 2); for (let i = 0, k = 0; i < s.p.length; i += 3, k += 2) { uv[k] = s.p[i] / SIZE; uv[k + 1] = 1 - s.p[i + 2] / SIZE; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
+    else g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(s.c), 3));
+    g.computeVertexNormals();
+    grp.add(new THREE.Mesh(g, isTop ? new THREE.MeshLambertMaterial({ map: aerialTex, side: THREE.DoubleSide }) : new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  }
+  grp.userData.geo = { P, I, n: e.n };
+  return grp;
+}
+const gamePort = gameMesh(DATA.inc.port, false);
+const gameCbd = gameMesh(DATA.inc.cbd, false);
+const gameCbdCtx = gameMesh(DATA.inc.cbd, true);
+// the overlay keeps what stands over 7 m (cranes, stacks over two high, sheds, masts): the deck would hide the new model
+const ghost = (() => {
+  const e = DATA.inc.port, P = i16(e.pos), I = new Uint32Array(b64(e.idx)), keep = [];
+  for (let t = 0; t < I.length; t += 3) if (Math.max(P[I[t] * 3 + 1], P[I[t + 1] * 3 + 1], P[I[t + 2] * 3 + 1]) > 7) keep.push(I[t], I[t + 1], I[t + 2]);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setIndex(new THREE.BufferAttribute(new Uint32Array(keep), 1)); return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff7a2e, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide })); })();
+const points = (arr, color, size) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr instanceof Float32Array ? arr : new Float32Array(arr.flat()), 3)); return new THREE.Points(g, new THREE.PointsMaterial({ color, size, sizeAttenuation: true })); };
+const gameLights = points(new Float32Array([...i16(DATA.inc.port.lights), ...i16(DATA.inc.cbd.lights)]), 0xffd9a0, 6);
+
+const { S, beacons, lamps } = buildHero();
+const hero = new THREE.Group();
+const MATS = {
+  deckSide: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  deckTop: new THREE.MeshLambertMaterial({ map: aerialTex }),
+  shed: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  roof: new THREE.MeshLambertMaterial({ map: aerialTex }),
+  stack: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  stackTop: new THREE.MeshLambertMaterial({ map: aerialTex }),
+  crane: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  boom: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  stay: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  mast: new THREE.MeshLambertMaterial({ vertexColors: true }),
+};
+let tris = 0;
+for (const m of Object.keys(S.p)) { MATS[m].side = THREE.DoubleSide; tris += S.p[m].length / 9; hero.add(S.mesh(m, MATS[m])); }
+const heroLamps = points(lamps, 0xfff1d6, 9);
+const heroBeacons = points(beacons.map((p) => [p[0], p[1] + 1, p[2]]), 0xff2a18, 5);
+hero.add(heroLamps, heroBeacons);
+
+// ── stages and camera views ──
+const NOTES = [
+  'The port as the game builds it today: its OSM wharf outline and sheds, generic cranes with red booms on the longest berth faces (four of them on Bledisloe Wharf), random container pairs on a 40 m grid, and up to 14 floodlights. Around it, the game’s LINZ CBD.',
+  'LINZ 2024 LiDAR on a 4 m grid, keeping each cell’s highest return so the cranes and masts survive, with the 2024 aerial draped. Ships at the berths are in it too; in the game they are sim entities.',
+  `The hero port: ${M.cranes.length} cranes, ${M.stacks.length.toLocaleString()} stack blocks, ${M.buildings.length} sheds and ${M.masts.length} floodlight masts, all where the LiDAR found them, about ${Math.round(tris / 1000)}k triangles. Outside the port, the game’s own CBD.`,
+  'Orange: today’s port mesh. Look at Bledisloe Wharf (cranes where there are none), the empty north berth at Fergusson (three 82 m cranes in reality) and the stack layout.',
+];
+const ALL = [gamePort, gameCbd, gameGround, gameLights, lidarMesh, hero, heroGround, gameCbdCtx, ghost];
+const ITEMS = [[gamePort, gameCbd, gameGround, gameLights], [lidarMesh], [hero, heroGround, gameCbdCtx], [hero, heroGround, gameCbdCtx, ghost]];
+for (const o of ALL) { scene.add(o); o.visible = false; }
+let stage = 2, night = false;
+function setStage(k) {
+  stage = k;
+  for (const o of ALL) o.visible = false;
+  for (const o of ITEMS[k]) o.visible = true;
+  water.visible = k !== 1;
+  gameLights.visible = k === 0 && night; heroLamps.visible = heroBeacons.visible = night;
+  document.querySelectorAll('.stages button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  document.getElementById('note').textContent = NOTES[k];
+  document.getElementById('legend').hidden = k !== 3;
+  dirty = true;
+}
+document.querySelectorAll('.stages button').forEach((b, i) => b.addEventListener('click', () => setStage(i)));
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const VIEWS = [
+  { cam: V3(1180, 240, 430), look: V3(1580, 20, 1150) },     // from the harbour, north-west of Fergusson
+  { cam: V3(1330, 75, 1120), look: V3(1620, 45, 1100) },    // the west berth cranes, from over the water
+  { cam: V3(250, 180, 560), look: V3(650, 10, 1150) },      // Bledisloe and Jellicoe from the north-west
+  { cam: V3(1200, 2600, 1101), look: V3(1200, 0, 1100) },   // straight down
+];
+function setView(k) {
+  camera.position.copy(VIEWS[k].cam); controls.target.copy(VIEWS[k].look); controls.update();
+  document.querySelectorAll('.views button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k))); dirty = true;
+}
+document.querySelectorAll('.views button').forEach((b, i) => b.addEventListener('click', () => setView(i)));
+document.getElementById('night').addEventListener('change', (e) => {
+  night = e.target.checked;
+  scene.background.copy(night ? NIGHT_SKY : DAY_SKY); scene.fog.color.copy(scene.background);
+  hemi.intensity = night ? 0.18 : 0.85; sun.intensity = night ? 0.05 : 0.7;
+  setStage(stage);
+});
+const spin = document.getElementById('spin');
+controls.addEventListener('change', () => (dirty = true));
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, pr = renderer.getPixelRatio();
+  if (canvas.width !== Math.round(w * pr) || canvas.height !== Math.round(h * pr)) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; }
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop() {
+  resize();
+  if (spin.checked && !reduce) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.0012); camera.position.copy(controls.target).add(off); dirty = true; }
+  if (controls.update()) dirty = true;
+  if (dirty) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+}
+document.getElementById('loading').hidden = true;
+setStage(2); setView(0); loop();
+</script>

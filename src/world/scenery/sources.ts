@@ -9,9 +9,9 @@ import { Color } from 'three';
 import type { TheaterId } from '../../core/types';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { VegetationField } from '../terrain/vegetation';
-import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
-import { REC, type ScatterSource, type TileInstances } from './scatter';
+import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 

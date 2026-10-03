@@ -6,7 +6,7 @@
  * by black motorways).
  */
 import { describe, expect, it } from 'vitest';
-import { DataTexture, Vector4 } from 'three';
+import { DataTexture } from 'three';
 import {
   AERIAL_GRADE_DAY,
   AERIAL_LOW_SUN_SHARE,
@@ -59,7 +59,10 @@ describe('the aerial photo is graded toward the procedural ground (#61 item 5)',
 
   it('a wildly off measurement is clamped (no neon photo)', () => {
     const g = aerialGrade([0.001, 0.5, 2], target, 'night');
-    for (let i = 0; i < 3; i++) expect(g[i]).toBeGreaterThanOrEqual(0.6), expect(g[i]).toBeLessThanOrEqual(1.8);
+    for (let i = 0; i < 3; i++) {
+      expect(g[i]).toBeGreaterThanOrEqual(0.6);
+      expect(g[i]).toBeLessThanOrEqual(1.8);
+    }
   });
 });
 

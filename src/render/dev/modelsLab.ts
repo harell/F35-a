@@ -32,7 +32,7 @@ import {
 } from 'three';
 import { AircraftEntity } from '../../sim/entities';
 import { LOADOUTS } from '../../core/data';
-import type { AircraftType, GroundTargetType, LoadoutId, MunitionId, SamType } from '../../core/types';
+import type { AircraftType, LoadoutId, MunitionId } from '../../core/types';
 import { getAircraftPrototype } from '../models/aircraft';
 import { F35_AO } from '../models/aircraft/f35a';
 import { AIRCRAFT_SPECS } from '../models/specs';

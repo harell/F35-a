@@ -55,7 +55,6 @@ import {
   AKL_URBAN,
   AKL_WATER,
 } from './aucklandMap';
-import { AKL } from '../../../core/auckland';
 import {
   COVER_EXOTIC,
   COVER_SCRUB,

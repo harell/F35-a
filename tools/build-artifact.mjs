@@ -17,7 +17,6 @@ const html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
 const head = html.match(/<head>([\s\S]*)<\/head>/)[1];
 const body = html.match(/<body>([\s\S]*)<\/body>/)[1];
 const style = head.match(/<style>[\s\S]*?<\/style>/)[0];
-const title = head.match(/<title>[\s\S]*?<\/title>/)[0];
 const scripts = [...head.matchAll(/<script[^>]*src="([^"]+)"[^>]*><\/script>/g)].map((m) => m[1]);
 const preloads = [...head.matchAll(/<link rel="modulepreload"[^>]*href="([^"]+)"[^>]*>/g)].map((m) => m[1]);
 const css = [...head.matchAll(/<link rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map((m) => m[1]);

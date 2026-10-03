@@ -18,8 +18,9 @@ import { buildAirbase, buildExtraRunway, buildRealAirfield } from './airbase';
 import { airfieldLayout } from './aucklandOsm';
 import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayout } from './aucklandSites';
 import { buildSettlement } from './settlements';
-import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
+import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
+import { buildHarbourBridge } from './harbourBridge';
 import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTexture } from './sparkArena';
 import { sparkArenaCovers } from '../../core/sparkArena';
 import { CbdCollapseVisual } from './cbdCollapse';
@@ -232,7 +233,7 @@ export class Scenery {
         this.group.add(railMesh);
       }
       const bridge = new GeometryBuilder();
-      buildHarbourBridge(bridge, lights, height);
+      buildHarbourBridge(bridge, lights, height, detail);
       addMesh(bridge, 'akl-harbour-bridge');
       const port = new GeometryBuilder();
       buildPort(port, lights, height, detail);

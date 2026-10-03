@@ -56,7 +56,7 @@ export function drawExternalBlock(f: HudFrame): number {
   const { pen, pal, L, p } = f;
   const u = L.u;
   const fl = p.flight;
-  let x = L.extX;
+  const x = L.extX;
   let y = L.extY + 11 * u;
   // speed + altitude boxes
   const cw = pen.charWidth(15);

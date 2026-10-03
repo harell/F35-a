@@ -11,7 +11,6 @@ import type { BombCue } from '../../sim/api';
 import { dlzLayout, makeDlzGeometry } from './dlz';
 import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
-import { withAlpha } from './palette';
 import { TEST_HOOKS } from '../../core/data';
 import { noteCue, notePipper } from './drawn';
 
@@ -89,7 +88,6 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
   const { pen, pal, L, p, st } = f;
   const u = L.u;
   const w = p.selectedWeapon;
-  const ag = WEAPON_IS_AG[w];
   const n = remainingOf(f, w);
   if (!compact) {
     pen.text(masterMode(f), x, y, pal.main, 13, 'left');
@@ -336,7 +334,7 @@ function lineAroundCues(f: HudFrame, ax: number, ay: number, bx: number, by: num
 
 /** Draw the planned cue lines. */
 export function drawCues(f: HudFrame): void {
-  const { pen, L } = f;
+  const { pen } = f;
   for (let i = 0; i < cueCount; i++) {
     const c = cues[i];
     if (!Number.isFinite(c.y)) continue;
@@ -634,7 +632,7 @@ function drawPipper(f: HudFrame, crossX: number, crossY: number): void {
   const { pen, pal, L, proj, p } = f;
   const u = L.u;
   const sp = f.sp;
-  let lead: ReturnType<typeof f.world.combat.gunLeadPoint> = null;
+  let lead: ReturnType<typeof f.world.combat.gunLeadPoint>;
   try {
     lead = f.world.combat.gunLeadPoint(p, f.world);
   } catch {

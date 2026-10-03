@@ -1,0 +1,367 @@
+<!-- Scene apartments (Beach Road, Auckland CBD) hero-model prototype: LiDAR terraces per OSM outline, facades from Mapillary.
+     Placeholders filled before publishing: __DATA__ (a script defining DATA: the terraces from tools/hero/sites/scene_beach_road.py,
+     1 m DSM and 2 m DEM grids, the game's terrain grid and the game's current CBD meshes in the site frame; and AERIAL, a data:
+     URI) and __TODAY__ (a data: URI). Site: NZTM E0 1757844, N1 5920955, 320 × 320 m. See .claude/skills/hero-building/SKILL.md. -->
+<title>Scene Apartments Hero Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: one 3D viewer with the four stages up top, then the measured differences, then how it was made. Same system as the other hero prototypes. */
+:root {
+  --bg: #eff1ef; --surface: #ffffff; --fg: #15212a; --muted: #52606b; --line: #d5dbd7;
+  --accent: #3b8a2f; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11191b; --surface: #19242a; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #8ccf6f; --accent-ink: #11191b; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11191b; --surface: #19242a; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #8ccf6f; --accent-ink: #11191b; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 14.5px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; font-size: 15px; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible, .views button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+.views { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 20px); }
+.views button { font: 500 12px var(--mono); color: #15212a; background: rgba(255,255,255,.82); border: 1px solid rgba(21,33,42,.2); padding: 5px 9px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: #15212a; color: #fff; }
+.legend { position: absolute; right: 10px; top: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.85); padding: 6px 9px; border-radius: 4px; display: flex; flex-direction: column; gap: 3px; }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.old { color: var(--old); }
+td.new { color: var(--measured); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.step img { border-radius: 6px; border: 1px solid var(--line); width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero building test · Beach Road, Auckland CBD</span>
+    <h1>Scene One, Two and Three: the game's blocks next to a model measured from LiDAR</h1>
+    <p class="lede">The three Scene apartment buildings at 2, 18 and 30 Beach Road form a 49 m slab along the curve of Beach Road, on a podium that holds the supermarket, the car park, a pool and a tennis court. Stage 1 is what the game builds there today. Stage 3 splits each outline into the tower and podium the LiDAR shows, with facades from street imagery. Drag to orbit, scroll or pinch to zoom.</p>
+  </header>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="What to show">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Current meshes on the game's terrain</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>1 m surface heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Hero model</b>Towers, podiums, street facades</button>
+      <button id="s3" aria-pressed="false"><b>4 · Overlay</b>Today's blocks in orange over the new ones</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of the Scene apartments on Beach Road"></canvas>
+      <div class="views" role="group" aria-label="Camera">
+        <button id="v0" aria-pressed="true">Beach Road</button>
+        <button id="v1" aria-pressed="false">From the east</button>
+        <button id="v2" aria-pressed="false">Podium side</button>
+        <button id="v3" aria-pressed="false">From above</button>
+      </div>
+      <div class="legend" id="legend" hidden><span><i style="background:#ff7a2e"></i>in the game today</span><span><i style="background:#6cc04a"></i>hero model</span></div>
+      <span class="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="night"><input type="checkbox" id="night"> Night</label><label for="spin"><input type="checkbox" id="spin"> Slow orbit</label></span>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">Measured differences</span>
+    <h2>Where today's blocks are off</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What</th><th>Game today</th><th>Measured</th><th>Source of the measurement</th></tr></thead>
+        <tbody>
+          <tr><td>Massing</td><td class="n old" id="tGame">LINZ outlines, one height each</td><td class="n new">3 towers on a podium: 8 terraces</td><td>LiDAR heights inside each OSM outline, classed and traced</td></tr>
+          <tr><td>Tower roofs (above ground)</td><td class="n old" id="tGameH">see stage 4</td><td class="n new">One 50.4 m · Two 48.2 m · Three 49.1 m</td><td>LiDAR median roof; OSM says 12, 14 and 15 levels</td></tr>
+          <tr><td>Podium roofs</td><td class="n old">part of the blocks</td><td class="n new">10.2–11.3 m deck; 15.5–16.6 m upper parts</td><td>LiDAR; the tennis court and pool sit on the Scene Two deck</td></tr>
+          <tr><td>Scene One's round bay</td><td class="n old">none</td><td class="n new">semicircle, 16.6 m, teal glass</td><td>LiDAR shape and height; glass from Mapillary</td></tr>
+          <tr><td>Facades</td><td class="n old">generic window grid</td><td class="n new">white balcony bands, lime-green vertical fins, dark retail colonnade, green-clad podium</td><td>Mapillary street imagery, 2021–25</td></tr>
+          <tr><td>Roofs from above</td><td class="n">grey, aerial on tops</td><td class="n">light grey towers; aerial on the podium decks</td><td>the 2024 aerial leans the 49 m roofs about 4 m south-east, so the towers don't take it</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">How it was made · about 1 hour with the hero-building tools</span>
+    <h2>From public data to a model the game can use</h2>
+    <div class="steps">
+      <div class="step"><span class="n">THE GAME TODAY</span><h3>A frame from the running game</h3><img src="__TODAY__" alt="F35-A today: the Beach Road blocks with the game's generic window grid"><p>Dev build, high quality, from the south-east over Beach Road. The same meshes are exported into stage 1.</p></div>
+      <div class="step"><span class="n">STEP 1 · AUTOMATIC</span><h3>Outlines and LiDAR</h3><p>OSM has one outline per building: Scene One, Two and Three, 12, 14 and 15 levels. Inside each one the LiDAR shows two clear levels: tower roofs at 46–50 m and podium decks at 8–15 m.</p></div>
+      <div class="step"><span class="n">STEP 2 · AUTOMATIC</span><h3>Terraces</h3><p><span class="num">tools/hero/sites/scene_beach_road.py</span> classes the heights inside each outline (tower, upper podium, podium, low). It cleans them with a 3 m mode filter and traces them at 0.5 m into polygons clipped to the outline, each with its median roof.</p></div>
+      <div class="step"><span class="n">STEP 3 · NEEDS A HUMAN</span><h3>Facades from the street</h3><p>Mapillary images from Beach Road show white slab edges with balconies, angled lime-green fins and the curved white west end. They also show the teal glass of Scene One's round bay, a dark retail colonnade and the green cladding of the podium on the car-park side. Listing photos show the tennis court and pool on the podium.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">What the hero model is made of</span>
+      <h2>Measured, read off a photo, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Every terrace's footprint and roof height, the ground level under each building (LiDAR); the outlines (OSM).</span></div>
+        <div><span class="tag r">From street photos</span><span>Balcony bands, the colonnade, the round bay's glass, the podium's green cladding, the fins' colour.</span></div>
+        <div><span class="tag g">Guessed</span><span>Where the green fins stand along each facade and how far they rise, the storey height (3.2 m), the colonnade's height (5 m), the walls nobody photographs (inside the block).</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Putting it in the game</span>
+      <h2>What's left after this review</h2>
+      <div class="ledger">
+        <div><span class="tag r">Shape data</span><span>The terraces are plain prisms: add them to the LINZ buildings file as building parts, which the game already extrudes, and drop the three blocks they replace.</span></div>
+        <div><span class="tag r">Facades</span><span>The game's building shader draws windows per face. It would need a balcony-band style and a green fin colour, as Spark Arena added its ribs.</span></div>
+        <div><span class="tag r">A cheaper path</span><span>The terrace step is generic: run it over every LINZ building whose LiDAR spread is wide, not just these three.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Outlines: © <a href="https://www.openstreetmap.org/way/355401752">OpenStreetMap</a> contributors, ODbL. Facades: Mapillary contributors (CC BY-SA 4.0), images 2021–2025. Addresses and podium facilities: <a href="https://apartmentspecialists.co.nz/ent-of-the-maori-leasehold-land-apartments/">Apartment Specialists</a>, <a href="https://www.bayleys.co.nz/listings/residential/auckland/auckland/506-18-beach-road-auckland-central-1650816">Bayleys listing</a>. Stages 1 and 3 use the game's own meshes from <span class="num">src/world/scenery/</span>.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>__DATA__</script>
+<script>
+// ── site frame: metres, x east, z south from the NW corner of the 320 m box; y = metres above NZVD2016 ──
+const SIZE = 320, STOREY = 3.2, BASE = 5;   // storey height and colonnade height (guessed from the street images)
+const b64 = (s) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+const i16 = (s, k = 0.1) => { const a = new Int16Array(b64(s)), f = new Float32Array(a.length); for (let i = 0; i < a.length; i++) f[i] = a[i] * k; return f; };
+const M = DATA.model;
+const inRing = (r, x, z) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, zi] = r[i], [xj, zj] = r[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; };
+
+// ── facade textures (canvas), one storey high ──
+function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; }
+const TEX = {
+  // white slab edge, dark glazing with mullions, frosted balcony balustrade
+  balcony: canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#e9ebe8'; g.fillRect(0, 0, w, h); g.fillStyle = '#4c5961'; g.fillRect(0, 10, w, 54); g.fillStyle = '#9fb0b8'; g.fillRect(0, 40, w, 24); g.fillStyle = '#d7dcdc'; for (let x = 0; x < w; x += 32) g.fillRect(x, 10, 3, 54); g.fillStyle = '#f4f5f3'; g.fillRect(0, 36, w, 4); }),
+  balconyGlow: canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); const r = (i) => (Math.sin(i * 12.9898) * 43758.5453) % 1; for (let i = 0; i < 4; i++) if (Math.abs(r(i + 3)) > 0.45) { g.fillStyle = '#ffd59a'; g.fillRect(i * 32 + 4, 12, 26, 26); } }),
+  colonnade: canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#2e3236'; g.fillRect(0, 0, w, h); g.fillStyle = '#6f8290'; g.fillRect(6, 14, 116, 50); g.fillStyle = '#9b2f2a'; g.fillRect(0, 0, w, 8); g.fillStyle = '#d6d6d1'; g.fillRect(0, 0, 6, h); }),
+  podium: canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#d9dad5'; g.fillRect(0, 0, w, h); g.fillStyle = '#5b666d'; g.fillRect(0, 26, w, 16); }),
+  podiumGreen: canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#3f9a4a'; g.fillRect(0, 0, w, h); g.fillStyle = '#358a40'; for (let x = 0; x < w; x += 16) g.fillRect(x, 0, 2, h); }),
+  teal: canvasTex(64, 64, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#9fd3cc'); gr.addColorStop(1, '#4f8f8a'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#e3ece9'; g.fillRect(0, 0, 3, h); g.fillRect(0, 0, w, 3); }),
+};
+let dirty = true;
+const aerialTex = new THREE.TextureLoader().load(AERIAL, () => (dirty = true));
+aerialTex.anisotropy = 8;
+const MATS = {
+  balcony: new THREE.MeshLambertMaterial({ map: TEX.balcony, emissiveMap: TEX.balconyGlow, emissive: 0x000000 }),
+  colonnade: new THREE.MeshLambertMaterial({ map: TEX.colonnade }),
+  podium: new THREE.MeshLambertMaterial({ map: TEX.podium }),
+  podiumGreen: new THREE.MeshLambertMaterial({ map: TEX.podiumGreen }),
+  teal: new THREE.MeshLambertMaterial({ map: TEX.teal }),
+  towerRoof: new THREE.MeshLambertMaterial({ color: 0xd8dbdb }),
+  aerial: new THREE.MeshLambertMaterial({ map: aerialTex }),
+  fin: new THREE.MeshLambertMaterial({ color: 0x6cc04a }),
+  parapet: new THREE.MeshLambertMaterial({ color: 0xeef0ee }),
+};
+for (const m of Object.values(MATS)) m.side = THREE.DoubleSide;
+
+// ── geometry: per material, positions + uvs ──
+const G = {};
+const put = (m, P, UV) => { const g = (G[m] ||= { p: [], uv: [] }); g.p.push(...P.flat()); g.uv.push(...UV.flat()); };
+function wall(m, a, b, y0, y1, u0 = 0, vh = STOREY, vb = 0) {   // a quad from a to b, uv in storeys (or vh metres from vb) and 6 m bays
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]), U0 = u0 / 6, U1 = (u0 + L) / 6, V0 = (y0 - vb) / vh, V1 = (y1 - vb) / vh;
+  put(m, [[a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y0, a[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]], [[U0, V0], [U1, V0], [U1, V1], [U0, V0], [U1, V1], [U0, V1]]);
+}
+function cap(m, ring, holes, y) {
+  const c = ring.map(([x, z]) => new THREE.Vector2(x, z)), hs = holes.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)));
+  const all = [...ring, ...holes.flat()];
+  for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(c, hs)) {
+    const P = [all[i], all[j], all[k]].map(([x, z]) => [x, y, z]);
+    put(m, P, P.map(([x, , z]) => [x / SIZE, 1 - z / SIZE]));
+  }
+}
+// outward normal of edge a→b of a ring, tested against the ring itself (OSM / traced winding varies)
+function outward(ring, a, b) {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1; let n = [dz / L, -dx / L];
+  const mx = (a[0] + b[0]) / 2 + n[0] * 0.6, mz = (a[1] + b[1]) / 2 + n[1] * 0.6;
+  if (inRing(ring, mx, mz)) n = [-n[0], -n[1]];
+  return n;
+}
+const OUT = M.outlines;
+const onOutline = (x, z) => Object.values(OUT).some((r) => r.some((p, i) => { const q = r[(i + 1) % r.length]; const dx = q[0] - p[0], dz = q[1] - p[1], l2 = dx * dx + dz * dz || 1; const t = Math.max(0, Math.min(1, ((x - p[0]) * dx + (z - p[1]) * dz) / l2)); return Math.hypot(x - p[0] - dx * t, z - p[1] - dz * t) < 1.5; }));
+const fins = [];
+for (const t of M.terraces) {
+  const ring = t.ring, y0 = t.y0, y1 = t.y1;
+  const segs = [ring, ...t.holes];
+  for (const r of segs) for (let i = 0, u = 0; i < r.length; i++) {
+    const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = outward(ring, a, b), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const street = onOutline(...mid);                        // an outer wall of the building (else a wall inside the block)
+    if (t.kind === 'tower') {
+      wall(street ? 'colonnade' : 'podium', a, b, y0, y0 + BASE, u, BASE, y0);
+      wall('balcony', a, b, y0 + BASE, y1, u, STOREY, y0 + BASE);
+      // lime-green fins: on the long street walls facing Beach Road (south half), at the middle of each long run
+      if (street && n[1] > 0.15 && L > 16) fins.push({ at: mid, n, along: [(b[0] - a[0]) / L, (b[1] - a[1]) / L], y0: y0 + BASE, y1: y1 + 2.5 });
+    } else if (t.kind === 'podium_high' && t.building === 'Scene One') wall('teal', a, b, y0, y1, u);
+    else wall(street && n[1] < -0.3 ? 'podiumGreen' : street ? 'colonnade' : 'podium', a, b, y0, y1, u);
+    u += L;
+  }
+  cap(t.kind === 'tower' ? 'towerRoof' : 'aerial', ring, t.holes, y1);
+  if (t.kind === 'tower') for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; wall('parapet', a, b, y1, y1 + 1.1); }
+}
+// fins: 2.6 m wide, 0.9 m proud, the top cut at a slant like the street photos show
+for (const f of fins) {
+  const w = 1.3, d = 0.9, [ax, az] = f.along, [nx, nz] = f.n, [cx, cz] = f.at;
+  const A = [cx - ax * w, cz - az * w], B = [cx + ax * w, cz + az * w], A2 = [A[0] + nx * d, A[1] + nz * d], B2 = [B[0] + nx * d, B[1] + nz * d];
+  const yA = f.y1, yB = f.y1 - 4;
+  for (const [p, q, ya, yb] of [[A, A2, yA, yA], [A2, B2, yA, yB], [B2, B, yB, yB]]) put('fin', [[p[0], f.y0, p[1]], [q[0], f.y0, q[1]], [q[0], yb, q[1]], [p[0], f.y0, p[1]], [q[0], yb, q[1]], [p[0], ya, p[1]]], [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]);
+  put('fin', [[A[0], yA, A[1]], [A2[0], yA, A2[1]], [B2[0], yB, B2[1]], [A[0], yA, A[1]], [B2[0], yB, B2[1]], [B[0], yB, B[1]]], [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]);
+}
+const hero = new THREE.Group();
+let tris = 0;
+for (const [m, g] of Object.entries(G)) {
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(g.p), 3)); geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.uv), 2)); geo.computeVertexNormals();
+  tris += g.p.length / 9; hero.add(new THREE.Mesh(geo, MATS[m]));
+}
+
+// ── scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+const DAY_SKY = new THREE.Color('#bcd3e2'), NIGHT_SKY = new THREE.Color('#0b1620');
+scene.background = DAY_SKY.clone();
+scene.fog = new THREE.Fog(DAY_SKY.clone(), 700, 2200);
+const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.5, 4000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 10; controls.maxDistance = 900;
+const hemi = new THREE.HemisphereLight(0xeef4f7, 0x7a8580, 0.8); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e2, 0.75); sun.position.set(-300, 500, 350); scene.add(sun);
+
+function gridMesh(nx, nz, place, hts, mat) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i, [x, z] = place(i, j);
+    pos[k * 3] = x; pos[k * 3 + 1] = hts[k]; pos[k * 3 + 2] = z; uv[k * 2] = x / SIZE; uv[k * 2 + 1] = 1 - z / SIZE;
+    if (i + 1 < nx && j + 1 < nz) { idx[q++] = k; idx[q++] = k + nx; idx[q++] = k + 1; idx[q++] = k + 1; idx[q++] = k + nx; idx[q++] = k + nx + 1; }
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+const groundMat = new THREE.MeshLambertMaterial({ map: aerialTex });
+const grid = (r) => (i, j) => [Math.min(i * r, SIZE), Math.min(j * r, SIZE)];
+const lidarMesh = gridMesh(DATA.dsm.n, DATA.dsm.n, grid(DATA.dsm.res), i16(DATA.dsm.h), groundMat);
+const heroGround = gridMesh(DATA.dem.n, DATA.dem.n, grid(DATA.dem.res), i16(DATA.dem.h), groundMat);
+const gt = DATA.gt;
+const gameGround = gridMesh(gt.nx, gt.nz, (i, j) => { const a = i / (gt.nx - 1), b = j / (gt.nz - 1); return [gt.o[0] + (gt.ex[0] - gt.o[0]) * a + (gt.ez[0] - gt.o[0]) * b, gt.o[1] + (gt.ex[1] - gt.o[1]) * a + (gt.ez[1] - gt.o[1]) * b]; }, i16(gt.h), groundMat);
+
+// the game's meshes: vertex colours (sRGB), the aerial on upward faces as the game's building shader does; optionally without the Scene blocks
+function gameMesh(e, skipScene) {
+  const P = i16(e.pos), C = new Uint8Array(b64(e.col)), I = new Uint32Array(b64(e.idx));
+  const top = [], side = { p: [], c: [] }, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < e.n; t++) {
+    const k = [I[t * 3], I[t * 3 + 1], I[t * 3 + 2]];
+    a.fromArray(P, k[0] * 3); b.fromArray(P, k[1] * 3); c.fromArray(P, k[2] * 3);
+    const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
+    const scene_ = Object.values(OUT).some((r) => inRing(r, cx, cz)) || onOutline(cx, cz);
+    if (skipScene === true && scene_) continue;
+    if (skipScene === 'only' && !scene_) continue;
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+    for (const q of k) { if (Math.abs(n.y) > 0.7) top.push(P[q * 3], P[q * 3 + 1], P[q * 3 + 2]); else { side.p.push(P[q * 3], P[q * 3 + 1], P[q * 3 + 2]); side.c.push(C[q * 3] / 255, C[q * 3 + 1] / 255, C[q * 3 + 2] / 255); } }
+  }
+  const grp = new THREE.Group();
+  if (side.p.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(side.p), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(side.c), 3)); g.computeVertexNormals(); grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))); }
+  if (top.length) { const g = new THREE.BufferGeometry(), uv = new Float32Array((top.length / 3) * 2); for (let i = 0, k = 0; i < top.length; i += 3, k += 2) { uv[k] = top[i] / SIZE; uv[k + 1] = 1 - top[i + 2] / SIZE; } g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(top), 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.computeVertexNormals(); grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: aerialTex, side: THREE.DoubleSide }))); }
+  return grp;
+}
+const gameAll = gameMesh(DATA.inc.cbd, false);
+const gameCtx = gameMesh(DATA.inc.cbd, true);
+const gameScene = gameMesh(DATA.inc.cbd, 'only');
+const ghost = gameScene.clone(); ghost.traverse((o) => { if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ color: 0xff7a2e, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }); });
+// the game's block heights at the Scene outlines, for the table
+{
+  const ys = []; gameScene.traverse((o) => { if (o.isMesh) { const p = o.geometry.attributes.position.array; for (let i = 1; i < p.length; i += 3) ys.push(p[i]); } });
+  if (ys.length) document.getElementById('tGameH').textContent = `tops up to ${Math.round(Math.max(...ys) - 3.5)} m`;
+}
+
+// ── stages and views ──
+const NOTES = [
+  'Today: the game extrudes each LINZ outline here to one LiDAR height and draws its generic window grid; the podium, the round bay and the street facades aren’t there.',
+  'LINZ 2024 LiDAR at 1 m with the 2024 aerial draped. The tower roofs lean off their walls in the photo: it is a standard orthophoto, so 49 m roofs shift about 4 m.',
+  `The hero model: ${M.terraces.length} terraces traced from the LiDAR inside the three OSM outlines, with Beach Road facades from street imagery (${Math.round(tris / 1000)}k triangles). Around it, the game’s own CBD.`,
+  'Orange: the game’s blocks on the Scene outlines today. Grey and green: the hero model.',
+];
+const ALL = [gameAll, gameGround, lidarMesh, hero, heroGround, gameCtx, ghost];
+const ITEMS = [[gameAll, gameGround], [lidarMesh], [hero, heroGround, gameCtx], [hero, heroGround, gameCtx, ghost]];
+for (const o of ALL) { scene.add(o); o.visible = false; }
+let stage = 2, night = false;
+function setStage(k) {
+  stage = k; for (const o of ALL) o.visible = false; for (const o of ITEMS[k]) o.visible = true;
+  document.querySelectorAll('.stages button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  document.getElementById('note').textContent = NOTES[k];
+  document.getElementById('legend').hidden = k !== 3; dirty = true;
+}
+document.querySelectorAll('.stages button').forEach((b, i) => b.addEventListener('click', () => setStage(i)));
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const VIEWS = [
+  { cam: V3(135, 55, 268), look: V3(195, 28, 160) },    // over Beach Road from the south-west, looking up the facades
+  { cam: V3(345, 70, 215), look: V3(200, 25, 150) },    // from the east (Beach Road / Gore Street)
+  { cam: V3(170, 95, 20), look: V3(190, 15, 140) },     // the podium side, from Quay Street
+  { cam: V3(185, 520, 151), look: V3(185, 0, 150) },    // straight down
+];
+function setView(k) { camera.position.copy(VIEWS[k].cam); controls.target.copy(VIEWS[k].look); controls.update(); document.querySelectorAll('.views button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k))); dirty = true; }
+document.querySelectorAll('.views button').forEach((b, i) => b.addEventListener('click', () => setView(i)));
+document.getElementById('night').addEventListener('change', (e) => {
+  night = e.target.checked;
+  scene.background.copy(night ? NIGHT_SKY : DAY_SKY); scene.fog.color.copy(scene.background);
+  hemi.intensity = night ? 0.15 : 0.8; sun.intensity = night ? 0.05 : 0.75;
+  MATS.balcony.emissive.setHex(night ? 0xffffff : 0x000000); dirty = true;
+});
+const spin = document.getElementById('spin');
+controls.addEventListener('change', () => (dirty = true));
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, pr = renderer.getPixelRatio();
+  if (canvas.width !== Math.round(w * pr) || canvas.height !== Math.round(h * pr)) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; }
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop() {
+  resize();
+  if (spin.checked && !reduce) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.0015); camera.position.copy(controls.target).add(off); dirty = true; }
+  if (controls.update()) dirty = true;
+  if (dirty) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+}
+setStage(2); setView(0); loop();
+</script>

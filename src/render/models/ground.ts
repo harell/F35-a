@@ -15,7 +15,6 @@ import { box, cylinder, place } from './geom/core';
 import { loftRings, prismX, prismZ } from './geom/loft';
 import { capsuleRing } from './aircraft/parts';
 import { getAircraftPrototype } from './aircraft';
-import { getMaterial } from './materials';
 import { SHIP_DIMS } from '../visuals/shipMotion';
 import { missileBoat, suicideBoat } from './boats';
 import { PALETTES, building, mast, meshFrom, nodeFrom, panel, sawtoothHall, tank, trackedChassis, wheeledChassis, type Palette, type PaletteId } from './vehicles';
