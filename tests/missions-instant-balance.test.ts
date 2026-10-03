@@ -4,11 +4,14 @@
  *  - the wingman (Viper 2) can't win Defend or Dogfight for a player who never fires: in Dogfight
  *    it holds fire until the player engages a bandit (a stray gun burst doesn't count), in Defend it
  *    fights the escort and never the strikers;
- *  - balance floors over 6 seeds, one win under what the sweep measures (Strike 5/5/3, Gauntlet
- *    6/4/3, Dogfight 6/6/5, Defend 6/5/6 on Recruit/Pilot/Veteran) so a bot tweak or #63's
+ *  - balance floors over 6 seeds, one win under what the sweep measures (Strike 6/6/5, Gauntlet
+ *    6/6/4, Dogfight 6/6/4, Defend 6/5/5 on Recruit/Pilot/Veteran) so a bot tweak or #63's
  *    no-rearm bot (which measured Defend Pilot 4/6) doesn't flip them; the issue's bands are
  *    Recruit and Pilot ≥ 75 % (5/6) and Veteran ≥ 25 % (2/6);
- *  - Defend at the top of the enemy-count slider (8) is winnable on Recruit, with 2 escorts at most.
+ *  - the Ace band, 20-60 % (2-3 of 6; measured Strike 2, Gauntlet 3, Dogfight 3, Defend 3), with
+ *    one win of slack each way;
+ *  - the enemy-count extremes: Defend at 8 (Beast mode, three bombers below Veteran, 2 escorts at
+ *    most) is winnable on Recruit and Pilot; enemyCount 1 is accepted as the easy end.
  * The heavy tests are async and yield after every playthrough: a long synchronous stretch starves
  * vitest's worker RPC (60 s timeout) and fails the run with "Timeout calling onTaskUpdate".
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=ia_strike_auckland,ia_sam_gauntlet_auckland,ia_dogfight_auckland,ia_defend_auckland --diffs=recruit,pilot,veteran,ace --seeds=6
@@ -22,6 +25,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { buildInstantMissionSeeded, createMissionRunner, missionById, terrainPadsFor } from '../src/missions';
+import { DEFEND_BEAST_FROM, IA_ENEMY_COUNT_SCALE } from '../src/missions/content/instant';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -131,9 +135,9 @@ describe('Instant Action: the wingman supports, it does not win the mission (iss
   // shot from the player some raids end with strikers that keep their bombs and never attack, and
   // the mission runs on (issue #60 comment 3.2-c, a follow-up).
   for (const id of ['ia_dogfight_auckland', 'ia_defend_auckland']) {
-    it(`${id}: a player who never fires${id === 'ia_dogfight_auckland' ? ' (bar one stray gun burst)' : ''} does not win (Recruit and Pilot, 3 seeds each)`, { timeout: 240_000 }, async () => {
+    it(`${id}: a player who never fires${id === 'ia_dogfight_auckland' ? ' (bar one stray gun burst)' : ''} does not win (Recruit and Pilot${id === 'ia_dogfight_auckland' ? ', and Ace with Vipers 2 and 3' : ''}, 3 seeds each)`, { timeout: 240_000 }, async () => {
       const log: string[] = [];
-      for (const diff of ['recruit', 'pilot'] as const) {
+      for (const diff of id === 'ia_dogfight_auckland' ? (['recruit', 'pilot', 'ace'] as const) : (['recruit', 'pilot'] as const)) {
         for (const seed of [0, 1, 2]) {
           const r = noFireRun(id, diff, seed, 600, id === 'ia_dogfight_auckland' ? 5 : -1);
           await yieldToVitest();
@@ -148,6 +152,8 @@ describe('Instant Action: the wingman supports, it does not win the mission (iss
     });
   }
 });
+
+const IA_IDS = ['ia_strike_auckland', 'ia_sam_gauntlet_auckland', 'ia_dogfight_auckland', 'ia_defend_auckland'];
 
 /** Bot wins over seeds 0..5, as the sweep counts them (bot-sweep.ts --seeds=6). */
 async function wins(id: string, diff: Difficulty): Promise<{ won: number; log: string }> {
@@ -164,7 +170,8 @@ async function wins(id: string, diff: Difficulty): Promise<{ won: number; log: s
 
 describe('Instant Action balance floors over 6 seeds (issue #60; was Strike 5/2/0, Gauntlet 2/4/0, Dogfight 6/5/0)', () => {
   // floors one win under the measured numbers (see the header): Recruit and Pilot ≥ 4/6, Veteran ≥ 2/6
-  for (const id of ['ia_strike_auckland', 'ia_dogfight_auckland', 'ia_defend_auckland']) {
+  // the Gauntlet's Pilot cell joins the others: 6/6 on today's bot (was 4/6 with #99's)
+  for (const id of IA_IDS) {
     it(`${id}: Recruit ≥ 4/6, Pilot ≥ 4/6, Veteran ≥ 2/6`, { timeout: 300_000 }, async () => {
       const rc = await wins(id, 'recruit');
       expect(rc.won, rc.log).toBeGreaterThanOrEqual(4);
@@ -174,17 +181,12 @@ describe('Instant Action balance floors over 6 seeds (issue #60; was Strike 5/2/
       expect(v.won, v.log).toBeGreaterThanOrEqual(2);
     });
   }
-  it('ia_sam_gauntlet_auckland: Recruit ≥ 4/6, Veteran ≥ 2/6 (Pilot is 4/6, below the band: the bot never fires its AARGMs at the belt while the depot stands)', { timeout: 300_000 }, async () => {
-    const rc = await wins('ia_sam_gauntlet_auckland', 'recruit');
-    expect(rc.won, rc.log).toBeGreaterThanOrEqual(4);
-    const v = await wins('ia_sam_gauntlet_auckland', 'veteran');
-    expect(v.won, v.log).toBeGreaterThanOrEqual(2);
-  });
-  it("'mixed' Veteran flights fly no Su-35 / Su-57 (their R-77s decided every Veteran Dogfight, Gauntlet and Strike run)", () => {
-    for (const id of ['ia_strike_auckland', 'ia_sam_gauntlet_auckland', 'ia_dogfight_auckland', 'ia_defend_auckland']) {
+  it("'mixed' flies no Su-35 / Su-57 on any difficulty (their R-77s decided every Veteran run, then every Ace run)", () => {
+    for (const id of IA_IDS) {
       for (const g of missionById(id)!.script.groups) {
-        if (g.team !== 'red' || (g.type !== 'su35' && g.type !== 'su57')) continue;
-        expect(g.downgrade?.below, `${id} ${g.id}`).toBe('ace');
+        if (g.team !== 'red') continue;
+        expect(['mig29', 'su27'], `${id} ${g.id}`).toContain(g.type);
+        expect(g.downgrade, `${id} ${g.id}`).toBeUndefined();
       }
     }
   });
@@ -200,16 +202,51 @@ describe('Instant Action balance floors over 6 seeds (issue #60; was Strike 5/2/
   });
 });
 
+/**
+ * The Instant Action Ace band (issue #60): 20-60 % for the competent bot, i.e. 2 or 3 of the
+ * sweep's 6 seeds. Measured: Strike 2/6, Gauntlet 3/6, Dogfight 3/6, Defend 3/6 (was 0/6 in every
+ * mode). Like the floors above, the test allows one win either side of the band (1-4 of 6), so a
+ * bot tweak doesn't flip it: below 1/6 Ace is a wall again, above 4/6 it is easier than the band.
+ */
+describe('Instant Action Ace band over 6 seeds (issue #60; was 0/6 in every mode)', () => {
+  it('Ace keeps the Pilot numbers (×1, not ×1.5); Vipers 2 and 3 in Dogfight; a third Gauntlet CAP jet a minute late', () => {
+    for (const id of IA_IDS) expect(missionById(id)!.script.enemyCountScale?.ace, id).toBe(IA_ENEMY_COUNT_SCALE.ace);
+    expect(IA_ENEMY_COUNT_SCALE.ace).toBe(1);
+    const wing = missionById('ia_dogfight_auckland')!.script.groups.find((g) => g.role === 'wingman')!;
+    expect(wing.count).toBe(1);
+    expect(wing.countFor?.ace).toBe(2);
+    const cap2 = missionById('ia_sam_gauntlet_auckland')!.script.groups.find((g) => g.id === 'cap2')!;
+    expect(cap2.minDifficulty).toBe('ace');
+    expect(cap2.spawn).toEqual({ kind: 'time', t: 180 });
+  });
+  for (const id of IA_IDS) {
+    it(`${id}: Ace wins 1-4 of 6 (band 20-60 %: 2-3 of 6)`, { timeout: 300_000 }, async () => {
+      const a = await wins(id, 'ace');
+      expect(a.won, a.log).toBeGreaterThanOrEqual(1);
+      expect(a.won, a.log).toBeLessThanOrEqual(4);
+    });
+  }
+});
+
 describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', () => {
   const defend = (enemyCount: number) => buildInstantMissionSeeded({ mode: 'defend', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount }, 1234);
   it('Defend at 8: four strikers, at most two escorts, and Vipers 2 and 3 on the wing', () => {
     const g = defend(8).script.groups;
     expect(g.find((x) => x.id === 'strikers')!.count).toBe(4);
+    // three of them below Veteran (Pilot at 8: 4/6 with four, 5/6 with three)
+    expect(g.find((x) => x.id === 'strikers')!.countFor).toEqual({ recruit: 3, pilot: 3 });
+    expect(defend(6).script.groups.find((x) => x.id === 'strikers')!.countFor).toBeUndefined();
     expect(g.find((x) => x.id === 'escort')!.count).toBeLessThanOrEqual(2);
     expect(g.find((x) => x.role === 'wingman')!.count).toBe(2);
     expect(defend(4).script.groups.find((x) => x.role === 'wingman')!.count).toBe(1);
+    // from 6 enemies Beast mode is the recommended fit: 4 strikers outnumber the stealth fit's 4 AMRAAMs
+    expect(DEFEND_BEAST_FROM).toBe(6);
+    expect(defend(8).recommendedLoadout).toBe('a2a_beast');
+    expect(defend(6).recommendedLoadout).toBe('a2a_beast');
+    expect(defend(5).recommendedLoadout).toBe('a2a_stealth');
+    expect(defend(8).allowedLoadouts).toContain('a2a_stealth');
   });
-  it('the Defend escort spawns at most two jets on every difficulty (Ace scales group counts by 1.5)', () => {
+  it('the Defend escort spawns at most two jets on every difficulty', () => {
     for (const diff of ['recruit', 'pilot', 'veteran', 'ace'] as const) {
       for (const n of [4, 6, 8]) {
         const def = defend(n);
@@ -221,12 +258,13 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
       }
     }
   });
-  // Pilot at 8 is not pinned: 0/3 with today's bot, which turns for home when Winchester and is
-  // gunned down on the way. Recruit measures 3/3 here and 2/3 merged with #63's bot: floor 2/3.
-  it('Defend at 8 is winnable on Recruit (≥ 2/3; was 1/2)', { timeout: 300_000 }, async () => {
+  // Measured with Beast mode (the recommended fit from 6) and three bombers below Veteran: Recruit
+  // 3/3, Pilot 3/3 here and 5/6 over seeds 0-5 (0/3 with the stealth fit and four bombers:
+  // Winchester with a striker left, gunned down on the way home). Floors one win under.
+  it('Defend at 8 is winnable on Recruit (≥ 2/3; was 1/2) and Pilot (≥ 2/3; was 0/2)', { timeout: 300_000 }, async () => {
     const def = defend(8);
     const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
-    for (const [diff, need] of [['recruit', 2]] as const) {
+    for (const [diff, need] of [['recruit', 2], ['pilot', 2]] as const) {
       const log: string[] = [];
       let won = 0;
       for (const seed of [0, 1, 2]) {
@@ -237,5 +275,22 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
       }
       expect(won, log.join('\n')).toBeGreaterThanOrEqual(need);
     }
+  });
+  // enemyCount 1 is accepted as the easy end of the slider (round 4 found both modes 'empty'):
+  // Defend is 2 strikers with no escort and no wingman (the bot wins in 96-98 s on Recruit and
+  // Pilot); the Gauntlet is 2 sites short of the depot, no CAP, and the bot now wins it in ~240 s,
+  // inside its 420 s par (was 625-653 s), with an SA-6 shot at it on Pilot.
+  it('enemyCount 1: Defend is 2 strikers alone, the Gauntlet 2 sites, and the Gauntlet is flown inside its par time on Pilot', { timeout: 120_000 }, async () => {
+    const d1 = defend(1).script.groups;
+    expect(d1.find((x) => x.id === 'strikers')!.count).toBe(2);
+    expect(d1.some((x) => x.id === 'escort' || x.role === 'wingman')).toBe(false);
+    const g = buildInstantMissionSeeded({ mode: 'sam_gauntlet', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 1 }, 1234);
+    expect(g.script.sams.length).toBe(2);
+    expect(g.script.groups.filter((x) => x.team === 'red')).toEqual([]);
+    const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: g.theater, seed: g.seed, resolution: 512, features: allFeatures(g.theater, []), pads: terrainPadsFor(g) })));
+    const r = runPlaythrough(g, 'pilot', 0, terrain, { maxT: 900 });
+    await yieldToVitest();
+    expect(r.state, r.reason).toBe('success');
+    expect(r.t).toBeLessThanOrEqual(g.script.parTime!);
   });
 });

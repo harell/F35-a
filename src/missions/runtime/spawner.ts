@@ -455,9 +455,9 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
  * difficulty allows (expected sizes known up front so objectives can show progress).
  */
 export function buildGroups(s: MissionState): void {
-  const scale = s.difficulty.enemyCountScale;
   const diff = s.difficulty.id;
   const sc = s.script;
+  const scale = sc.enemyCountScale?.[diff] ?? s.difficulty.enemyCountScale;
   const ensure = (id: string, team: GroupRt['team']): GroupRt => {
     let g = s.groups.get(id);
     if (!g) {
