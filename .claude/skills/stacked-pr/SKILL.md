@@ -38,10 +38,11 @@ Before starting a new stack, look for one to extend:
 
 ```bash
 curl -sS "${H[@]}" "$API/stacks" \
-  | jq -c '.[] | select(.open) | {number, prs: [.pull_requests[] | {number, state, merged_at, head: .head.ref, base: .base.ref}]}'
+  | jq -c '.[] | select(.open) | {number, prs: [.pull_requests[] | {number, state, merged_at, head: .head.ref}]}'
+curl -sS "${H[@]}" "$API/stacks/<S>" | jq -c '[.pull_requests[] | {number, head: .head.ref, base: .base.ref}]'
 ```
 
-- `pull_requests` is ordered bottom to top. The **top layer** is the last one; build on its `head.ref`.
+- `pull_requests` is ordered bottom to top. The list gives each PR's `number, state, merged_at, draft, head`; the single stack (`/stacks/<S>`) adds `base` and titles. The **top layer** is the last one; build on its `head.ref`.
 - `open: true` means the stack still has unmerged PRs. Several open stacks: extend the one the task names, or ask.
 - Stack numbers share the numbering of issues and PRs (stack #134 sits between PRs #133 and #135), so always say "stack #134", never just "#134".
 - From a PR: `curl -sS "${H[@]}" "$API/stacks?pull_request=<PR>"`, or the `stack` field of `GET $API/pulls/<PR>`: `{number, size, position}`, where position 1 is the bottom.
