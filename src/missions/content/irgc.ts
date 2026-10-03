@@ -156,7 +156,9 @@ export const G01: MissionDef = mission({
     ],
     objectives: [
       { id: 'o_swarm', kind: 'destroy', groups: ['shaheds'], label: 'Shoot down the Shahed swarm', primary: true },
-      { id: 'o_tower', kind: 'intercept', groups: ['shaheds'], x: TOWER.x, z: TOWER.z, radius: 500, label: 'Keep every Shahed off the Sky Tower', primary: false },
+      // the HUD shows this with its progress, drones shot down / in the swarm ("1/10"): the label says what
+      // that counts (it read "Keep every Shahed off the Sky Tower 1/10", playtest 1.4-k, #115)
+      { id: 'o_tower', kind: 'intercept', groups: ['shaheds'], x: TOWER.x, z: TOWER.z, radius: 500, label: 'Down every Shahed short of the Sky Tower', primary: false },
     ],
     waypoints: [
       { id: 'wp_swarm', label: 'Swarm', kind: 'target', x: 5000, z: 2900, altitude: 1500, radius: 2000, objective: 'o_swarm' },
