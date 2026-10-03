@@ -1,0 +1,474 @@
+<!-- Auckland Harbour Bridge hero-model prototype (bespoke geometry). Placeholders filled before publishing:
+     __DATA__ (a script defining DATA: 4 m DSM / ground grids, the game's terrain grid and the game's current bridge mesh
+     exported from buildHarbourBridge, all in the site frame; and AERIAL, a data: URI), __TODAY__ (a data: URI).
+     Site: NZTM E0 1754980, N1 5923071, 1300 × 1300 m. See .claude/skills/hero-building/SKILL.md. -->
+<title>Harbour Bridge Hero Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: one 3D viewer with the four stages up top, then the measured differences, then how it was made. Same system as the Spark Arena prototype. */
+:root {
+  --bg: #eef1f1; --surface: #ffffff; --fg: #15212a; --muted: #52606b; --line: #d5dbdb;
+  --accent: #2f6f86; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11191e; --surface: #19242b; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #6cb6d0; --accent-ink: #11191e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11191e; --surface: #19242b; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #6cb6d0; --accent-ink: #11191e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 14.5px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; font-size: 15px; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible, .views button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+.views { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 20px); }
+.views button { font: 500 12px var(--mono); color: #15212a; background: rgba(255,255,255,.82); border: 1px solid rgba(21,33,42,.2); padding: 5px 9px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: #15212a; color: #fff; }
+.legend { position: absolute; right: 10px; top: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.85); padding: 6px 9px; border-radius: 4px; display: flex; flex-direction: column; gap: 3px; }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.old { color: var(--old); }
+td.new { color: var(--measured); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.step img { border-radius: 6px; border: 1px solid var(--line); width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero landmark test · Waitematā Harbour, Auckland</span>
+    <h1>Auckland Harbour Bridge: the game's model next to one measured from LiDAR</h1>
+    <p class="lede">Stage 1 is the bridge exactly as the game builds it today (its own mesh, exported from <span class="num">buildHarbourBridge</span>). Stage 3 is a new model built in code from LINZ 2024 LiDAR, OpenStreetMap piers and published span lengths. Stage 4 lays one over the other. Drag to orbit, scroll or pinch to zoom.</p>
+  </header>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="What to show">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Current mesh on the game's terrain</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>1 m surface heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Hero model</b>Fitted to the LiDAR, from photos</button>
+      <button id="s3" aria-pressed="false"><b>4 · Overlay</b>Today's mesh in orange over the new one</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of the Auckland Harbour Bridge"></canvas>
+      <div class="views" role="group" aria-label="Camera">
+        <button id="v0" aria-pressed="true">Westhaven side</button>
+        <button id="v1" aria-pressed="false">Main span</button>
+        <button id="v2" aria-pressed="false">Under the deck</button>
+        <button id="v3" aria-pressed="false">From above</button>
+      </div>
+      <div class="legend" id="legend" hidden><span><i style="background:#ff7a2e"></i>in the game today</span><span><i style="background:#b4bbbb"></i>hero model</span></div>
+      <span class="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="night"><input type="checkbox" id="night"> Night</label><label for="spin"><input type="checkbox" id="spin"> Slow orbit</label></span>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">Measured differences</span>
+    <h2>Where today's bridge is off</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What</th><th>Game today</th><th>Measured</th><th>Source of the measurement</th></tr></thead>
+        <tbody>
+          <tr><td>Deck at the crest</td><td class="n old">48.0 m</td><td class="n new">46.4 m</td><td>LiDAR deck median, ±5.0 % grades meeting in a 248 m vertical curve (RMS 0.05 m)</td></tr>
+          <tr><td>Top of the truss</td><td class="n old">≈ 70 m</td><td class="n new">64.4 m</td><td>LiDAR top chord, both trusses agree to 0.5 m; Wikipedia gives 64 m above the water</td></tr>
+          <tr><td>Through truss (above the road)</td><td class="n old">≈ 520 m, pier 4 to the north end</td><td class="n new">≈ 330 m, s −204 to +130</td><td>LiDAR: where the chord rises above the deck</td></tr>
+          <tr><td>Truss under the deck</td><td class="n old">none</td><td class="n new">whole length</td><td>side photos; LiDAR can't see under the deck</td></tr>
+          <tr><td>Deck at the north end</td><td class="n old">≈ 5 m, 56 m short</td><td class="n new">33.8 m at Northcote Point</td><td>LiDAR; the deck still sits 15–20 m over the ground where the game lands it</td></tr>
+          <tr><td>Deck at the south end</td><td class="n old">≈ 7 m</td><td class="n new">13.3 m</td><td>LiDAR at the St Marys Bay shoreline</td></tr>
+          <tr><td>Deck width</td><td class="n old">30 m</td><td class="n new">35.2 m</td><td>LiDAR deck edges ±17.5 m; Wikipedia 35.4 m (13.4 m original + 2 × 11 m clip-ons)</td></tr>
+          <tr><td>Clip-on box girders</td><td class="n old">none</td><td class="n new">2, haunched at the main piers</td><td>side photos; depths guessed</td></tr>
+          <tr><td>Piers</td><td class="n">6, OSM positions</td><td class="n">6, same OSM positions</td><td>OSM <span class="num">bridge:support=pier</span> from the LINZ chart; footprints 13.1 × 6.8 m</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">How it was made · about 2 hours with the hero-building tools</span>
+    <h2>From public data to a model the game can use</h2>
+    <div class="steps">
+      <div class="step"><span class="n">THE GAME TODAY</span><h3>A frame from the running game</h3><img src="__TODAY__" alt="F35-A today: the Harbour Bridge seen from above Westhaven, a dark deck with a small truss hump"><p>Dev build, high quality. The deck is a dark slab and the truss is a small hump at the north end. The same mesh is exported into stage 1.</p></div>
+      <div class="step"><span class="n">STEP 1 · AUTOMATIC</span><h3>LiDAR profile</h3><p><span class="num">tools/hero/site.py</span>: 1 m DSM and DEM over 1.3 × 1.3 km. Sampled across the deck every metre along the pier line. The deck is two straight <span class="num">±5.0 %</span> grades joined by a <span class="num">248 m</span> vertical curve, crest <span class="num">46.4 m</span> at s = −35 m.</p></div>
+      <div class="step"><span class="n">STEP 2 · AUTOMATIC</span><h3>The truss from above</h3><p>Two chords sit <span class="num">±7.5 m</span> from the centreline and peak at <span class="num">64.4 m</span>. The top bracing repeats every <span class="num">15.3 m</span> (autocorrelation), so 16 panels across the 244 m main span. A <span class="num">73 m</span> spike is the pair of flagpoles.</p></div>
+      <div class="step"><span class="n">STEP 3 · NEEDS A HUMAN</span><h3>What's under the deck</h3><p>Five Wikimedia Commons photos show what LiDAR can't. A deck truss runs the whole length, deepest over the main piers. The clip-on box girders curve down to brackets on the piers. The piers are rough concrete shafts with a steel cap. Spans come from Structurae: <span class="num">80.8 · 103.7 · 114.4 · 124.1 · 177.3 · 244.0 · 176.9 m</span>.</p></div>
+      <div class="step"><span class="n">STEP 4 · CODE</span><h3>Build it in three.js</h3><p>About 300 lines turn these numbers into meshes: 7 spans, 68 truss panels a side, two lofted clip-on girders, 6 piers, lamps, gantries and flags. That's about 40k triangles in 6 materials, so 6 draw calls.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">What the hero model is made of</span>
+      <h2>Measured, read off a photo, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Deck profile and width, top-chord profile and spacing, panel length, where the through truss starts and ends, flagpole height, sign-gantry positions (LiDAR). Pier positions and footprints (OSM, from the LINZ chart).</span></div>
+        <div><span class="tag r">From docs</span><span>Span lengths and abutment positions (Structurae), 35.4 m width and the 13.4 m + 2 × 11 m split (Wikipedia).</span></div>
+        <div><span class="tag r">From photos</span><span>A deck truss along the whole length, deeper at the main piers; clip-on girders with curved haunches; pier shape and steel caps; lamp posts on the outer edges; pale grey paint.</span></div>
+        <div><span class="tag g">Guessed</span><span>Truss depth below the deck (8 m on the approaches, 16 m at the main piers), clip-on depths (3.4 m, 10 m at the main piers), the diagonal pattern, lamp spacing, the seabed depth at the piers.</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Putting it in the game</span>
+      <h2>What's left after this review</h2>
+      <div class="ledger">
+        <div><span class="tag r">Shape data</span><span>Move the measured numbers into <span class="num">src/core/harbourBridge.ts</span>. Fix <span class="num">bridge_n</span> in <span class="num">AKL</span>: the deck reaches Northcote Point 56 m further on, still 34 m up, so the motorway ribbon has to meet it there.</span></div>
+        <div><span class="tag r">Meshes</span><span>Replace <span class="num">buildHarbourBridge</span> with merged meshes per material. Use a cheaper truss far away, because the 68 panels a side are most of the triangles.</span></div>
+        <div><span class="tag r">Collision</span><span>Deck, through-truss envelope and piers as flyable obstacles, so flying under the main span means real 43 m clearance.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Piers and outline: © <a href="https://www.openstreetmap.org/way/302049182">OpenStreetMap</a> contributors, ODbL. Spans: <a href="https://structurae.net/en/structures/auckland-harbour-bridge">Structurae</a>; width and history: <a href="https://en.wikipedia.org/wiki/Auckland_Harbour_Bridge">Wikipedia</a>. Reference photos (not embedded): <a href="https://commons.wikimedia.org/wiki/Category:Auckland_Harbour_Bridge">Wikimedia Commons, Category: Auckland Harbour Bridge</a>. Stage 1 is the game's own mesh from <span class="num">src/world/scenery/auckland.ts</span>; its terrain is the game's heightfield with the same aerial draped on it, for reference.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>__DATA__</script>
+<script>
+// ── site frame: metres, x east, z south, from the NW corner of the 1300 m box; y = metres above NZVD2016 (≈ mean sea level) ──
+const AX = DATA.axis, O = AX.o, DV = AX.dir, NV = AX.nrm;   // bridge axis: s along the pier line (north +), t across (east-south-east +)
+const at = (s, t) => [O[0] + DV[0] * s + NV[0] * t, O[1] + DV[1] * s + NV[1] * t];
+const dec = (b64) => { const b = atob(b64), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); const a = new Int16Array(u.buffer), f = new Float32Array(a.length); for (let i = 0; i < a.length; i++) f[i] = a[i] / 10; return f; };
+
+// ── measured profiles (bridge-local s, metres) ──
+const S_S = -759.8, S_N = 276.9;                               // abutments: first pier − 80.8 m, last pier + 176.9 m (Structurae spans)
+const PIERS = [-679.0, -577.2, -459.2, -331.7, -141.4, 100.0];  // OSM bridge:support=pier centroids on the pier line
+const SUP = [S_S, ...PIERS, S_N];
+const G1 = 0.049974, C1 = 51.279, G2 = -0.050099, C2 = 47.766;  // LiDAR grades (RMS 0.05 m)
+const SV = (C2 - C1) / (G1 - G2), LV = 248, SA = SV - LV / 2, SB = SV + LV / 2;
+function deck(s) {
+  if (s <= SA) return C1 + G1 * s;
+  if (s >= SB) return C2 + G2 * s;
+  const d = s - SA; return C1 + G1 * SA + G1 * d + ((G2 - G1) / (2 * LV)) * d * d;
+}
+// top chord above the deck (LiDAR p90 of both trusses, 12 m bins)
+const CH = [[-204, 41.1], [-196, 44.2], [-184, 48.6], [-172, 50.3], [-160, 52.5], [-148, 55.6], [-136, 58.0], [-124, 60.1], [-112, 61.4], [-100, 62.5], [-88, 63.2], [-76, 63.7], [-64, 64.1], [-52, 64.3], [-40, 64.35], [-28, 64.35], [-16, 64.2], [-4, 64.1], [8, 63.7], [20, 63.1], [32, 62.3], [44, 61.4], [56, 59.8], [68, 57.7], [80, 55.1], [92, 52.2], [104, 50.0], [116, 48.1], [124, 45.0], [130, 41.5]];
+function chord(s) {
+  if (s <= CH[0][0] || s >= CH[CH.length - 1][0]) return -1e9;
+  for (let i = 1; i < CH.length; i++) if (s <= CH[i][0]) { const [a, ya] = CH[i - 1], [b, yb] = CH[i]; return ya + ((yb - ya) * (s - a)) / (b - a); }
+}
+const MAIN = [-141.4, 100.0];
+const dMain = (s) => Math.min(Math.abs(s - MAIN[0]), Math.abs(s - MAIN[1]));
+// truss depth below the road (guessed from photos): 8 m approaches, 16 m at the main piers, 2.6 m mid main span
+function depth(s) {
+  if (s > MAIN[0] && s < MAIN[1]) { const k = Math.max(0, 1 - dMain(s) / 78); return 2.6 + 13.4 * k * k; }
+  if (s <= MAIN[0] && s >= -331.7) { const k = (s + 331.7) / (MAIN[0] + 331.7); return 8 + 8 * k * k; }
+  if (s >= MAIN[1]) { const k = 1 - (s - MAIN[1]) / (S_N - MAIN[1]); return 8 + 8 * k * k; }
+  return 8;
+}
+// clip-on box girder depth (guessed from photos): 3.4 m, haunched to ~10 m at the main piers, small haunch at the others
+function clipDepth(s) {
+  const k = Math.max(0, 1 - dMain(s) / 70);
+  let h = 3.4 + 6.6 * k * k;
+  for (const p of PIERS.slice(0, 4)) { const q = Math.max(0, 1 - Math.abs(s - p) / 22); h += 1.4 * q * q; }
+  return h;
+}
+
+// ── geometry kit: triangles per material, built in bridge-local (t, y, s), flat normals ──
+class Kit {
+  constructor() { this.p = {}; }
+  tri(m, a, b, c) { (this.p[m] ||= []).push(...a, ...b, ...c); }
+  quad(m, a, b, c, d) { this.tri(m, a, b, c); this.tri(m, a, c, d); }
+  // closed polygon section lofted between two stations (each a list of [t, y, s], same count, counter-clockwise from the front)
+  loft(m, A, B, caps) {
+    const n = A.length;
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; this.quad(m, A[i], A[j], B[j], B[i]); }
+    if (caps) { for (let i = 1; i < n - 1; i++) { this.tri(m, A[0], A[i + 1], A[i]); this.tri(m, B[0], B[i], B[i + 1]); } }
+  }
+  box(m, t0, t1, y0, y1, s0, s1) {
+    const A = [[t0, y0, s0], [t1, y0, s0], [t1, y1, s0], [t0, y1, s0]], B = A.map(([t, y]) => [t, y, s1]);
+    this.loft(m, A, B, true);
+  }
+  // square beam of width w between two points
+  beam(m, a, b, w) {
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d); if (L < 1e-6) return;
+    const u = d.map((v) => v / L), up = Math.abs(u[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+    let x = [u[1] * up[2] - u[2] * up[1], u[2] * up[0] - u[0] * up[2], u[0] * up[1] - u[1] * up[0]]; const lx = Math.hypot(...x); x = x.map((v) => (v / lx) * w / 2);
+    const y = [u[1] * x[2] - u[2] * x[1], u[2] * x[0] - u[0] * x[2], u[0] * x[1] - u[1] * x[0]];
+    const ring = (p) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [p[0] + x[0] * i + y[0] * j, p[1] + x[1] * i + y[1] * j, p[2] + x[2] * i + y[2] * j]);
+    this.loft(m, ring(a), ring(b), false);
+  }
+}
+
+function buildHero() {
+  const K = new Kit();
+  const step = 5;
+  const stations = []; for (let s = S_S; s < S_N; s += step) stations.push(s); stations.push(S_N);
+  // road surface (textured, uv set later from t and s), original deck slab and clip-on box girders
+  const road = [];
+  for (let i = 0; i + 1 < stations.length; i++) {
+    const s0 = stations[i], s1 = stations[i + 1], y0 = deck(s0), y1 = deck(s1);
+    road.push([[-17.6, y0, s0], [17.6, y0, s0], [17.6, y1, s1], [-17.6, y1, s1]]);
+    // original deck slab under the road between the trusses
+    K.loft('girder', [[-7, y0 - 1.1, s0], [7, y0 - 1.1, s0], [7, y0 - 0.05, s0], [-7, y0 - 0.05, s0]], [[-7, y1 - 1.1, s1], [7, y1 - 1.1, s1], [7, y1 - 0.05, s1], [-7, y1 - 0.05, s1]], false);
+    for (const sg of [-1, 1]) {
+      const sec = (s, y) => { const h = clipDepth(s); const P = [[7.9, y - 0.05], [17.6, y - 0.05], [16.4, y - h], [9.3, y - h]].map(([t, yy]) => [sg * t, yy, s]); return sg > 0 ? P : P.reverse(); };
+      K.loft('girder', sec(s0, y0), sec(s1, y1), false);
+      // outer parapet
+      K.box('barrier', sg > 0 ? 17.25 : -17.6, sg > 0 ? 17.6 : -17.25, y0, y0 + 1.05, s0, s1 + 0.02);
+    }
+  }
+  // truss nodes: equal panels per span, ~15.25 m
+  const nodes = [];
+  for (let k = 0; k + 1 < SUP.length; k++) {
+    const a = SUP[k], b = SUP[k + 1], n = Math.max(1, Math.round((b - a) / 15.25));
+    for (let i = 0; i < n; i++) nodes.push(a + ((b - a) * i) / n);
+  }
+  nodes.push(S_N);
+  const top = (s) => Math.max(chord(s), deck(s) - 1.2), bot = (s) => deck(s) - depth(s);
+  const through = (s) => chord(s) > deck(s) + 1.5;
+  for (const tt of [-7.5, 7.5]) {
+    for (let i = 0; i < nodes.length; i++) {
+      const s = nodes[i], P = [tt, top(s), s], Q = [tt, bot(s), s];
+      K.beam('truss', Q, P, 0.7);
+      if (i + 1 < nodes.length) {
+        const s2 = nodes[i + 1], P2 = [tt, top(s2), s2], Q2 = [tt, bot(s2), s2];
+        K.beam('truss', P, P2, 1.1);
+        K.beam('truss', Q, Q2, 1.1);
+        // diagonals slope down towards the nearest support (Pratt-like), as in the photos
+        const mid = (s + s2) / 2, near = SUP.reduce((m, v) => (Math.abs(v - mid) < Math.abs(m - mid) ? v : m), SUP[0]);
+        if (near < mid) K.beam('truss', Q, P2, 0.6); else K.beam('truss', P, Q2, 0.6);
+      }
+    }
+  }
+  // lateral bracing: X between the top chords over the through truss, struts at each node; X under the deck everywhere
+  for (let i = 0; i + 1 < nodes.length; i++) {
+    const s = nodes[i], s2 = nodes[i + 1];
+    if (through(s) && through(s2)) {
+      K.beam('truss', [-7.5, top(s), s], [7.5, top(s2), s2], 0.45);
+      K.beam('truss', [7.5, top(s), s], [-7.5, top(s2), s2], 0.45);
+    }
+    if (through(s)) K.beam('truss', [-7.5, top(s), s], [7.5, top(s), s], 0.6);
+    K.beam('truss', [-7.5, bot(s), s], [7.5, bot(s2), s2], 0.4);
+    K.beam('truss', [7.5, bot(s), s], [-7.5, bot(s2), s2], 0.4);
+  }
+  // piers: concrete shafts on the OSM footprints (13.1 × 6.8 m), flared at the base; steel caps and clip-on brackets
+  for (const p of PIERS) {
+    const y1 = bot(p) - 2.4, y0 = -14;
+    const fp = (w, d, y) => [[-w, y, p - d], [w, y, p - d], [w, y, p + d], [-w, y, p + d]];
+    K.loft('concrete', fp(7.6, 4.0, y0), fp(6.55, 3.4, y1), true);
+    K.box('cap', -8.6, 8.6, y1, bot(p) + 0.2, p - 4.2, p + 4.2);
+    for (const sg of [-1, 1]) for (const ds of [-3, 3]) K.beam('cap', [sg * 6.2, y1 + 0.6, p + ds], [sg * 12.8, deck(p) - clipDepth(p) + 0.2, p + ds], 1.2);
+  }
+  // abutments
+  K.box('concrete', -18, 18, -3, deck(S_S) - 0.1, S_S - 10, S_S + 0.5);
+  K.box('concrete', -18, 18, 12, deck(S_N) - 0.1, S_N - 0.5, S_N + 12);
+  // lamp posts on both outer edges, arm over the road
+  const lamps = [];
+  for (let s = S_S + 12; s < S_N - 5; s += 33) for (const sg of [-1, 1]) {
+    const y = deck(s); K.beam('steel', [sg * 17.9, y, s], [sg * 17.9, y + 11, s], 0.3); K.beam('steel', [sg * 17.9, y + 11, s], [sg * 15.6, y + 11.4, s], 0.22);
+    lamps.push([sg * 15.4, y + 11.1, s]);
+  }
+  // sign gantries where the LiDAR shows full-width objects 8–10 m over the road
+  for (const s of [-706, -460, -159, 88]) {
+    const y = deck(s);
+    for (const t of [-17.9, 17.9]) K.beam('steel', [t, y, s], [t, y + 8.6, s], 0.6);
+    K.box('steel', -17.9, 17.9, y + 8.2, y + 9.0, s - 0.6, s + 0.6);
+    for (const sg of [-1, 1]) K.box('sign', sg > 0 ? 9.5 : -16.5, sg > 0 ? 16.5 : -9.5, y + 5.6, y + 8.2, s - 0.25, s + 0.15);
+  }
+  // flagpoles on the crest of the truss (LiDAR spike to 73 m at s ≈ −36)
+  for (const sg of [-1, 1]) {
+    const s = -36, y = top(s); K.beam('steel', [sg * 7.5, y, s], [sg * 8.5, 73.2, s], 0.25);
+    K.quad('flag', [sg * 8.6, 72.6, s], [sg * 13.4, 72.6, s], [sg * 13.4, 70.0, s], [sg * 8.6, 70.0, s]);
+  }
+  return { K, road, lamps };
+}
+
+// ── three.js scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+const DAY_SKY = new THREE.Color('#bcd3e2'), NIGHT_SKY = new THREE.Color('#0b1620');
+scene.background = DAY_SKY.clone();
+scene.fog = new THREE.Fog(DAY_SKY.clone(), 1800, 5200);
+const camera = new THREE.PerspectiveCamera(38, 16 / 9, 2, 9000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 20; controls.maxDistance = 3500;
+const hemi = new THREE.HemisphereLight(0xeef4f7, 0x7a8580, 0.85); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e2, 0.75); sun.position.set(-600, 900, 500); scene.add(sun);
+
+const aerialTex = new THREE.TextureLoader().load(AERIAL, () => (dirty = true));
+aerialTex.anisotropy = 8;
+const N = DATA.n, R = DATA.res;
+function gridMesh(nx, nz, place, hts, mat) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), idx = [];
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i, [x, z] = place(i, j);
+    pos.set([x, Math.max(hts[k], -3), z], k * 3); uv.set([x / 1300, 1 - z / 1300], k * 2);
+    if (i + 1 < nx && j + 1 < nz) idx.push(k, k + nx, k + 1, k + 1, k + nx, k + nx + 1);
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+const groundMat = new THREE.MeshLambertMaterial({ map: aerialTex });
+const site = (i, j) => [Math.min(i * R, 1300), Math.min(j * R, 1300)];
+const lidarMesh = gridMesh(N, N, site, dec(DATA.dsm), groundMat);
+const heroGround = gridMesh(N, N, site, dec(DATA.ground), groundMat);
+const gt = DATA.gt;
+const gameGround = gridMesh(gt.nx, gt.nz, (i, j) => { const a = i / (gt.nx - 1), b = j / (gt.nz - 1); return [gt.o[0] + (gt.ex[0] - gt.o[0]) * a + (gt.ez[0] - gt.o[0]) * b, gt.o[1] + (gt.ex[1] - gt.o[1]) * a + (gt.ez[1] - gt.o[1]) * b]; }, dec(gt.h), groundMat);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshLambertMaterial({ color: 0x2f6e72, transparent: true, opacity: 0.82 }));
+water.rotation.x = -Math.PI / 2; water.position.set(650, 0.15, 650); scene.add(water);
+
+// the game's current bridge (vertex colours are linear in the game: convert to sRGB for this r128 page)
+const inc = DATA.inc;
+const incGeo = (() => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(inc.pos), 3));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(inc.col.map((c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055))), 3));
+  g.setIndex(inc.idx); g.computeVertexNormals(); return g;
+})();
+const incMesh = new THREE.Mesh(incGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+const incGhost = new THREE.Mesh(incGeo, new THREE.MeshBasicMaterial({ color: 0xff7a2e, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+const incLights = (() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(inc.lights.flatMap((l) => l.slice(0, 3))), 3)); return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffb060, size: 5, sizeAttenuation: true })); })();
+
+// the hero model: local (t, y, s) → site (x, y, z) through the bridge axis
+const hero = new THREE.Group();
+hero.matrixAutoUpdate = false;
+hero.matrix.set(NV[0], 0, DV[0], O[0], 0, 1, 0, 0, NV[1], 0, DV[1], O[1], 0, 0, 0, 1);
+const { K, road, lamps } = buildHero();
+const MATS = {
+  truss: new THREE.MeshLambertMaterial({ color: 0xb4bbbb }),
+  girder: new THREE.MeshLambertMaterial({ color: 0xb3babb }),
+  barrier: new THREE.MeshLambertMaterial({ color: 0xcfd2cd }),
+  concrete: new THREE.MeshLambertMaterial({ color: 0xb6ad9b }),
+  cap: new THREE.MeshLambertMaterial({ color: 0x8f989a }),
+  steel: new THREE.MeshLambertMaterial({ color: 0x7f8789 }),
+  sign: new THREE.MeshLambertMaterial({ color: 0x1f6b45 }),
+  flag: new THREE.MeshLambertMaterial({ color: 0x1d2f6b, side: THREE.DoubleSide }),
+};
+for (const m of Object.values(MATS)) m.side = THREE.DoubleSide;
+let tris = 0;
+for (const [m, arr] of Object.entries(K.p)) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr), 3)); g.computeVertexNormals();
+  tris += arr.length / 9; hero.add(new THREE.Mesh(g, MATS[m]));
+}
+// road: lane markings drawn on a canvas, repeated every 20 m
+const roadTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256; const c = cv.getContext('2d');
+  const X = (t) => ((t + 17.6) / 35.2) * 512;
+  c.fillStyle = '#56595c'; c.fillRect(0, 0, 512, 256);
+  c.fillStyle = '#7d7f7c'; for (const t of [-7.9, 7]) c.fillRect(X(t), 0, X(t + 0.9) - X(t), 256);   // gaps where the trusses stand
+  c.fillStyle = '#e9e9e2';
+  for (const t of [-17.2, -8.1, -6.8, 6.7, 8.0, 17.1]) c.fillRect(X(t), 0, 2.5, 256);                  // edge lines
+  for (const t of [-12.75, -3.45, 0, 3.45, 12.75]) c.fillRect(X(t) - 1, 0, 2.5, 115);                  // lane dashes
+  const tx = new THREE.CanvasTexture(cv); tx.wrapS = THREE.ClampToEdgeWrapping; tx.wrapT = THREE.RepeatWrapping; tx.anisotropy = 8; return tx;
+})();
+{
+  const pos = [], uv = [];
+  for (const q of road) {
+    const [a, b, c, d] = q, v = (p) => [(p[0] + 17.6) / 35.2, p[2] / 20];
+    for (const p of [a, c, b, a, d, c]) { pos.push(...p); uv.push(...v(p)); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3)); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2)); g.computeVertexNormals();
+  tris += pos.length / 9; hero.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: roadTex, side: THREE.DoubleSide })));
+}
+const heroLights = (() => {
+  const p = lamps.flat();
+  const crest = [0, chord(-30) + 1.5, -30]; p.push(...crest);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(p), 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffc77a, size: 4, sizeAttenuation: true }));
+})();
+hero.add(heroLights);
+hero.matrixWorldNeedsUpdate = true; hero.updateMatrixWorld(true);
+
+// ── stages and camera views ──
+const NOTES = [
+  'The bridge as the game builds it today: one dark slab deck, a truss hump from pier 4 to the north end, 70 m at the top. The deck lands on the terrain at both ends, too low by about 6 m in the south and about 30 m in the north.',
+  'LINZ 2024 LiDAR, 1 m surface heights (here on a 4 m grid with each cell’s highest return) and the 7.5 cm aerial. It sees the deck, the through truss and its bracing, the flagpoles and the gantries. It can’t see anything under the deck.',
+  `The hero model: deck, through truss and piers measured, the structure under the deck taken from photos. About ${Math.round(tris / 1000)}k triangles in ${Object.keys(K.p).length + 1} materials.`,
+  'Orange: today’s mesh. Grey: the hero model. Look at the north end (the game’s deck dives into Northcote Point), the 6 m higher truss crest and the truss over the wrong spans.',
+];
+const ITEMS = [[incMesh, gameGround, incLights], [lidarMesh], [hero, heroGround], [hero, heroGround, incGhost]];
+for (const o of [incMesh, gameGround, incLights, lidarMesh, hero, heroGround, incGhost]) { scene.add(o); o.visible = false; }
+let stage = 2, night = false, dirty = true;
+function setStage(k) {
+  stage = k;
+  for (const o of [incMesh, gameGround, incLights, lidarMesh, hero, heroGround, incGhost]) o.visible = false;
+  for (const o of ITEMS[k]) o.visible = true;
+  water.visible = k !== 1;
+  incLights.visible = k === 0 && night; heroLights.visible = night;
+  document.querySelectorAll('.stages button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  document.getElementById('note').textContent = NOTES[k];
+  document.getElementById('legend').hidden = k !== 3;
+  dirty = true;
+}
+document.querySelectorAll('.stages button').forEach((b, i) => b.addEventListener('click', () => setStage(i)));
+
+const P = (s, t, y) => { const [x, z] = at(s, t); return new THREE.Vector3(x, y, z); };
+const VIEWS = [
+  { cam: () => P(-470, -430, 60), look: () => P(-230, 0, 32) },        // from the Westhaven / Herne Bay side
+  { cam: () => P(-200, -150, 70), look: () => P(-25, 0, 52) },          // the main span, closer
+  { cam: () => P(-60, -95, 8), look: () => P(-140, 0, 32) },            // low, under the main span from the west
+  { cam: () => P(-240, -1, 1300), look: () => P(-240, 0, 30) },        // straight down
+];
+function setView(k) {
+  const v = VIEWS[k]; camera.position.copy(v.cam()); controls.target.copy(v.look()); controls.update();
+  document.querySelectorAll('.views button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k))); dirty = true;
+}
+document.querySelectorAll('.views button').forEach((b, i) => b.addEventListener('click', () => setView(i)));
+document.getElementById('night').addEventListener('change', (e) => {
+  night = e.target.checked;
+  scene.background.copy(night ? NIGHT_SKY : DAY_SKY); scene.fog.color.copy(scene.background);
+  hemi.intensity = night ? 0.18 : 0.85; sun.intensity = night ? 0.06 : 0.75;
+  setStage(stage);
+});
+const spin = document.getElementById('spin');
+controls.addEventListener('change', () => (dirty = true));
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; }
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop() {
+  resize();
+  if (spin.checked && !reduce) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.0015); camera.position.copy(controls.target).add(off); dirty = true; }
+  if (controls.update()) dirty = true;
+  if (dirty) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+}
+setStage(2); setView(0); loop();
+</script>
