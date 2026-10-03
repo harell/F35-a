@@ -21,15 +21,15 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from heights import ring_mask  # noqa: E402
 
-PARTS = {  # OSM id → (wall material, bay [u, v] m, roof)
-    'way/30088824': ('precast_dark', [6, 3.3], 'aerial'),      # 277: shops under the rooftop car park
-    'way/1010450578': ('precast_light', [5, 4], 'aerial'),     # 277: north-east block on Broadway
-    'way/1010450579': ('precast_dark', [4, 4], 'aerial'),      # 277: plant/lift block on the car park
-    'way/1010450580': ('glass', [3, 4], 'aerial'),             # 277: corner rotunda (dome on top)
-    'way/720081499': ('precast_dark', [6, 4.5], 'aerial'),     # 309: the 2019 centre
-    'way/1010450575': ('precast_dark', [5, 4.5], 'aerial'),    # 309: upper levels (dining, cinema)
-    'way/1010450573': ('precast_light', [6, 4.5], 'aerial'),   # 309: department-store block
-    'way/1010450572': ('precast_dark', [6, 3.3], 'aerial'),    # 309: car-park wing along the motorway
+PARTS = {  # OSM id → (wall material, bay [u, v] m, roof, base {mat, h} or None); walls from Mapillary street imagery 2021–25
+    'way/30088824': ('lattice', [2.5, 2.5], 'aerial', {'mat': 'slate', 'h': 7}),           # 277: white diamond screen over the car park, slate base
+    'way/1010450578': ('precast_light', [5, 4], 'aerial', {'mat': 'shopfront', 'h': 6}), # 277: grey stone block on Broadway, shopfronts
+    'way/1010450579': ('precast_dark', [4, 4], 'aerial', None),                          # 277: plant/lift block on the car park
+    'way/1010450580': ('glass', [3, 4], 'aerial', None),                                 # 277: corner rotunda (dome on top)
+    'way/720081499': ('precast_light', [6, 4.5], 'aerial', {'mat': 'slate', 'h': 6}),   # 309: white precast over a slate base
+    'way/1010450575': ('precast_dark', [5, 4.5], 'aerial', None),                        # 309: upper levels (dining, cinema)
+    'way/1010450573': ('precast_light', [6, 4.5], 'aerial', {'mat': 'slate', 'h': 6}),  # 309: department-store block
+    'way/1010450572': ('carpark', [6, 3.3], 'aerial', None),                             # 309: open car-park decks with white fins (motorway side)
 }
 
 
@@ -49,10 +49,10 @@ def main():
     g0 = float(np.nanpercentile(dem[mall], 2))          # heights in the model are metres above this
 
     prisms = []
-    for k, (wall, bay, roof) in PARTS.items():
+    for k, (wall, bay, roof, base) in PARTS.items():
         m = ring_mask(dem.shape, feats[k]['ring'])
         prisms.append({'id': k, 'ring': feats[k]['ring'], 'y0': round(float(np.nanmin(dem[m])) - g0 - 0.5, 2),
-                       'y1': round(float(np.nanmedian(dsm[m])) - g0, 2), 'wall': wall, 'bay': bay, 'roof': roof})
+                       'y1': round(float(np.nanmedian(dsm[m])) - g0, 2), 'wall': wall, 'bay': bay, 'roof': roof, **({'base': base} if base else {})})
     P = {p['id']: p for p in prisms}
     # the rotunda's glass dome lets the LiDAR through (p10 ≈ 0 m inside it), so its median reads low;
     # it stands one storey above the car-park deck it sits on (renders and the aerial's shadow)
@@ -75,8 +75,8 @@ def main():
                 pa, pb = [ax + (bx - ax) * t0, az + (bz - az) * t0], [ax + (bx - ax) * t1, az + (bz - az) * t1]
                 gy = ground_at(*pa)
                 facades.append({'a': pa, 'b': pb, 'n': nrm, 'y0': gy, 'y1': gy + 5, 'mat': 'shopfront', 'bay': [4, 5]})
-                if i % 3 != 1:  # two glass bays in three, precast between (as photographed)
-                    facades.append({'a': pa, 'b': pb, 'n': nrm, 'y0': gy + 5.5, 'y1': P['way/720081499']['y1'] - 1.5, 'mat': 'glass', 'bay': [3, 4.5]})
+                # glass bays alternating with the silver perforated screen (2022 photo, Mapillary)
+                facades.append({'a': pa, 'b': pb, 'n': nrm, 'y0': gy + 5.5, 'y1': P['way/720081499']['y1'] - 1.5, 'mat': 'glass' if i % 3 != 1 else 'metal', 'bay': [3, 4.5] if i % 3 != 1 else [1, 4]})
 
     # the two-level glass air bridge over Mortimer Pass (opened Oct 2019; 12 m high), between 277 and 309
     gb = ground_at(229, 165)
@@ -118,9 +118,10 @@ def main():
             'ledger': [
                 {'cls': 'm', 'tag': 'Measured', 'text': 'Every roof height (LiDAR medians), the ground slope, outlines (OSM, checked against LiDAR).'},
                 {'cls': 'r', 'tag': 'From photos', 'text': 'Roofs (aerial), the Broadway frontage pattern, the air bridge, the rotunda dome, the signs.'},
-                {'cls': 'g', 'tag': 'Guessed', 'text': 'Walls on Mortimer Pass, the motorway side and the 277 car-park sides (no photo), the exact bay rhythm, the air bridge\'s exact ends.'},
+                {'cls': 'r', 'tag': 'From Mapillary', 'text': 'Every street side: the white diamond screen over 277\'s car park, slate plinths, white precast on 309, the open car-park decks with white fins on the motorway side, shopfronts on Broadway.'},
+                {'cls': 'g', 'tag': 'Guessed', 'text': 'The west side facing Highwic\'s trees (no street reaches it), the exact bay rhythm, the air bridge\'s exact ends, the living wall and canopies (not modelled).'},
             ],
-            'sources': 'Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and 0.075 m Urban Aerial Photos (2024), CC BY 4.0. Outlines and parts © OpenStreetMap contributors, ODbL. Frontage: Wikimedia Commons, <a href="https://commons.wikimedia.org/wiki/File:Westfield_Newmarket_20220125_163111.jpg">Westfield_Newmarket_20220125_163111.jpg</a>. Air bridge and facade materials: <a href="https://en.wikipedia.org/wiki/Westfield_Newmarket">Wikipedia</a>, <a href="https://www.retail-insight-network.com/projects/westfield-newmarket-redevelopment/">Retail Insight Network</a>. The script sign is a font stand-in, not the official logo.',
+            'sources': 'Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and 0.075 m Urban Aerial Photos (2024), CC BY 4.0. Outlines and parts © OpenStreetMap contributors, ODbL. Frontage: Wikimedia Commons, <a href="https://commons.wikimedia.org/wiki/File:Westfield_Newmarket_20220125_163111.jpg">Westfield_Newmarket_20220125_163111.jpg</a>. Air bridge and facade materials: <a href="https://en.wikipedia.org/wiki/Westfield_Newmarket">Wikipedia</a>, <a href="https://www.retail-insight-network.com/projects/westfield-newmarket-redevelopment/">Retail Insight Network</a>. Walls on every street side: <a href="https://www.mapillary.com">Mapillary</a> contributors, CC BY-SA 4.0. The script sign is a font stand-in, not the official logo.',
         },
     }
     json.dump(model, open(f'{S}/model.json', 'w'), separators=(',', ':'))
