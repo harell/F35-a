@@ -265,6 +265,9 @@ export const C03: MissionDef = mission({
 const c04Start = { x: 2500, z: -1500, altitude: 5000, heading: 95, speed: 240 };
 const strip = P.waiAirstrip;
 const rw = (v: number, u: number) => runwayPoint(strip, WAIHEKE_RUNWAY_HDG, v, u);
+// the southern route's turn points (waypoints and the pacing calls)
+const c04Strait = { x: 15000, z: 3000 };
+const c04Ip = { x: 23500, z: 6500 };
 
 export const C04: MissionDef = mission({
   id: 'c04',
@@ -343,8 +346,8 @@ export const C04: MissionDef = mission({
     waypoints: [
       // the southern route at 25,000 ft (above the SA-8 / Tor / Shilka envelopes; the SA-6 is
       // Weasel's), then a northbound run-in from the IP off Beachlands, ~13 km out (12.9 km from the Tor)
-      { id: 'wp_strait', label: 'Tāmaki Strait', kind: 'nav', x: 15000, z: 3000, altitude: 7500 },
-      { id: 'wp_ip', label: 'IP Beachlands', kind: 'ip', x: 23500, z: 6500, altitude: 7500 },
+      { id: 'wp_strait', label: 'Tāmaki Strait', kind: 'nav', x: c04Strait.x, z: c04Strait.z, altitude: 7500 },
+      { id: 'wp_ip', label: 'IP Beachlands', kind: 'ip', x: c04Ip.x, z: c04Ip.z, altitude: 7500 },
       { id: 'wp_strip', label: 'Airstrip', kind: 'target', x: rw(0, 320).x, z: rw(0, 320).z, objective: 'o_jets' },
     ],
     triggers: [
@@ -360,6 +363,32 @@ export const C04: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. Good hits! Those Fulcrums aren't flying again." }],
       },
       { id: 't_sa6', when: { kind: 'objective', id: 'o_sa6', state: 'complete' }, delay: 2, actions: [{ kind: 'radio', from: 'Weasel 1', text: 'Weasel 1: the SA-6 is down. Your turn, Viper.' }] },
+      // Pacing (#59): the transit from the CAP fight to the bomb run was silent for 108–131 s (bot, 6 seeds,
+      // every difficulty). Darkstar talks the player along the southern route: over the strait, then at the IP
+      // (or on the clock, for a player who strays off the route)
+      {
+        id: 't_pace_strait',
+        when: {
+          kind: 'all',
+          of: [
+            { kind: 'any', of: [{ kind: 'area', x: c04Strait.x, z: c04Strait.z, radius: 4000 }, { kind: 'time', t: 85 }] },
+            { kind: 'not', of: { kind: 'objective', id: 'o_jets', state: 'complete' } },
+          ],
+        },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Tāmaki Strait. Stay high and push to the IP off Beachlands: the apron is 13 km north of it.', priority: 2 }],
+      },
+      {
+        id: 't_pace_ip',
+        when: {
+          kind: 'all',
+          of: [
+            { kind: 'any', of: [{ kind: 'area', x: c04Ip.x, z: c04Ip.z, radius: 3000 }, { kind: 'time', t: 130 }] },
+            { kind: 'trigger', id: 't_pace_strait' },
+            { kind: 'not', of: { kind: 'objective', id: 'o_jets', state: 'complete' } },
+          ],
+        },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Turn north for the strip. Designate the parked Fulcrums, release on IN RANGE, then turn away.', priority: 2 }],
+      },
     ],
     hints: [
       { id: 'h_high', text: 'Climb to 25,000 ft on the way in: the higher you release, the further the JDAM glides', when: { kind: 'time', t: 6 }, duration: 8 },

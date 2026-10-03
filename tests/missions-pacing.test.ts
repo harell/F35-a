@@ -84,7 +84,7 @@ describe('pacing: c11 Grumble has no dead stretch over 90 s (#59)', () => {
   });
 });
 
-describe('pacing: c02 and c08 have no dead stretch over 90 s (#59)', () => {
+describe('pacing: c02, c04 and c08 have no dead stretch over 90 s (#59)', () => {
   it('each mission flies on its own terrain', () => {
     expect(terrainFor('c11')).toBe(terrainFor('c11'));
     expect(terrainFor('c02')).not.toBe(terrainFor('c11'));
@@ -104,7 +104,12 @@ describe('pacing: c02 and c08 have no dead stretch over 90 s (#59)', () => {
     await expectPaced('c08', [0, 1, 2]);
   });
 
-  it.todo('c04: no dead stretch over 90 s on Pilot seed 0 (after #58; Pilot seed 0 was 141 s, 86–227 s)');
+  // the transit from the CAP fight to the bomb run was silent for 108–131 s in 16 of 24 runs (6 seeds, every
+  // difficulty; Pilot seed 0 119 s, 48–167 s) until Darkstar's strait and IP calls (t_pace_strait, t_pace_ip).
+  // After them the worst of the 24 is 67 s, and every run ends the same way at the same second
+  it('c04 Broken Wing: logged Pilot runs, seeds 0–2 (seeds 0 and 2 were silent for 119 and 125 s)', { timeout: 300_000 }, async () => {
+    await expectPaced('c04', [0, 1, 2]);
+  });
 });
 
 // What Darkstar's c08 MiG alert (t_pace_alert) says must be what the mission does. The first wording,
