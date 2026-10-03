@@ -427,10 +427,15 @@ export function drawIntelMap(canvas: HTMLCanvasElement, m: MissionDef, w: number
     const size = Math.round(8.5 * u);
     g.font = `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
     const anchors = [...m.intel.map((i) => ({ x: i.x, z: i.z })), ...routeOf(m).map((p) => ({ x: p.x, z: p.z }))];
+    // the scale bar and its label (drawn below): the bar's length and the label's width
+    const barPx = niceScaleLength(1 / v.scale, Math.min(120, w * 0.25)) * v.scale;
+    g.font = `700 ${Math.round(9 * u)}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
+    const barLabel = g.measureText('00.0 km · 00.0 nm').width;
+    g.font = `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
     const blocked = [
       ...placer.taken,
       { x: w - 40 * u, y: 0, w: 40 * u, h: 46 * u }, // north arrow
-      { x: 0, y: h - 26 * u, w: Math.min(260, w * 0.45), h: 26 * u }, // scale bar
+      { x: 0, y: h - 30 * u, w: 12 * u + barPx + 12 + barLabel, h: 30 * u }, // scale bar
       // the briefing's HTML overlays on the map: the legend chips (up to two rows) and the view button
       { x: 0, y: 0, w: w * 0.75, h: 48 },
       { x: w - 56, y: h - 56, w: 56, h: 56 },
