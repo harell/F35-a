@@ -873,7 +873,8 @@ export class Game {
   }
 
   private debugApi() {
-    return {
+    // (a constant `TEST_HOOKS ?`: the production build drops the whole API, not only its install)
+    return TEST_HOOKS ? {
       game: this,
       state: () => {
         const s = this.session;
@@ -1105,7 +1106,7 @@ export class Game {
       // + the Instant Action scenario built on a fixed site (Wiri defence) so the e2e sweep covers it
       missions: () => [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
-    };
+    } : null;
   }
 }
 
