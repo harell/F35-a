@@ -13,7 +13,7 @@
  *   validate.ts        mission definition validator (tests / dev)
  */
 import type { CampaignDef, CampaignProgress, InstantActionOptions, MissionDef, MissionResult } from '../core/contracts';
-import type { TheaterId } from '../core/types';
+import type { TheaterId, TimeOfDay, Weather } from '../core/types';
 import { buildInstantMissionSeeded } from './content/instant';
 import { CAMPAIGN_PART1 } from './content/campaign1';
 import { CAMPAIGN_PART2 } from './content/campaign2';
@@ -137,12 +137,14 @@ function hashId(id: string): number {
 /**
  * Mission of any campaign or training by id, or an Instant Action mission from an id of the form
  * `ia_<mode>_<theater>` (e.g. `ia_dogfight_auckland`, `ia_sam_gauntlet_auckland`; Auckland is the
- * only theatre, any other returns null) with default options (4 mixed bandits, day, scattered cloud). Handy for `?mission=` URLs, test hooks and the
- * headless bot sweep. The Instant Action layout and terrain are seeded from a hash of the id, so
- * the same id is the same mission every time (the Instant Action menu builds its missions with
- * buildInstantMission(), a fresh random seed per flight).
+ * only theatre, any other returns null) with default options (4 mixed bandits, day, scattered cloud;
+ * `conditions` picks another time of day or weather, e.g. a night stroll). Handy for `?mission=` URLs
+ * (`&tod=night&weather=clear`), test hooks and the headless bot sweep. The Instant Action layout and
+ * terrain are seeded from a hash of the id, so the same id is the same mission every time, whatever
+ * the conditions (the Instant Action menu builds its missions with buildInstantMission(), a fresh
+ * random seed per flight). `conditions` don't apply to campaign or training missions.
  */
-export function missionById(id: string): MissionDef | null {
+export function missionById(id: string, conditions: InstantConditions = {}): MissionDef | null {
   const found = findMission(id);
   if (found) return found;
   const m = /^ia_(.+)_([a-z]+)$/.exec(id);
@@ -150,5 +152,16 @@ export function missionById(id: string): MissionDef | null {
   const mode = m[1] as InstantActionOptions['mode'];
   const theater = m[2] as TheaterId;
   if (!IA_MODES.includes(mode) || !THEATERS.includes(theater)) return null;
-  return buildInstantMissionSeeded({ mode, theater, timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 }, hashId(id));
+  const timeOfDay = conditions.timeOfDay ?? 'day';
+  const weather = conditions.weather ?? 'scattered';
+  return buildInstantMissionSeeded({ mode, theater, timeOfDay, weather, enemyType: 'mixed', enemyCount: 4 }, hashId(id));
 }
+
+/** Time of day and weather of an Instant Action mission built by missionById() (unset: day, scattered). */
+export interface InstantConditions {
+  timeOfDay?: TimeOfDay;
+  weather?: Weather;
+}
+/** Every TimeOfDay / Weather value (the Instant Action setup screen offers each). */
+export const TIMES_OF_DAY: readonly TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
+export const WEATHERS: readonly Weather[] = ['clear', 'scattered', 'overcast'];

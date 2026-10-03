@@ -10,6 +10,7 @@
  *   ?quality=low|medium|high                 override quality
  *   ?view=cockpit|hud|chase|orbit|...        initial camera
  *   ?fps=1                                   FPS counter
+ *   ?tod=night&weather=clear                 (test hooks) an Instant Action id's time of day / weather
  *   ?seed=<n>                                (test hooks) fixed combat RNG seed, and the sim clock held:
  *                                            only __f35.simulate() advances it (__f35.hold(false) lets
  *                                            it run), so browser perf reads reproduce (#66)
@@ -67,13 +68,16 @@ import {
   saveProgress,
   terrainPadsFor,
   followActiveScheme,
+  TIMES_OF_DAY,
+  WEATHERS,
+  type InstantConditions,
 } from '../missions';
 import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { initFlight } from '../sim/flight/FlightModel';
 import { AKL } from '../core/auckland';
 import { FlowInterrupt } from './flow';
-import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from './testParams';
+import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testConditions, testSeed } from './testParams';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -223,7 +227,11 @@ export class Game {
     void this.audio.load();
     const missionId = TEST_HOOKS ? this.params.get('mission') : null;
     if (missionId && !this.pendingFly) {
-      const def = missionById(missionId) ?? CAMPAIGN[0];
+      // `&tod=` / `&weather=`: an Instant Action id's conditions (#118)
+      const { conditions, invalid } = testConditions(this.params, TEST_HOOKS);
+      if (invalid.length) console.warn(`[f35] ignored ${invalid.join(', ')}`);
+      if ((conditions.timeOfDay || conditions.weather) && !missionId.startsWith('ia_')) console.warn('[f35] tod / weather apply to Instant Action ids (ia_<mode>_<theatre>) only');
+      const def = missionById(missionId, conditions) ?? CAMPAIGN[0];
       const loadout = (this.params.get('loadout') as LoadoutId | null) ?? def.recommendedLoadout;
       await this.flow.run(() => (autostart ? this.missionFlow(def, loadout) : this.missionFlow(def)));
     }
@@ -915,9 +923,14 @@ export class Game {
           held: this.simHeld,
         };
       },
-      /** Programmatically start a mission (tests), from any screen or mission; quitting it returns to the main menu. */
-      fly: (id: string, loadout?: LoadoutId) => {
-        const def = missionById(id);
+      /**
+       * Programmatically start a mission (tests), from any screen or mission; quitting it returns to the
+       * main menu. `conditions`: an Instant Action id's time of day and weather (`{ timeOfDay: 'night' }`).
+       */
+      fly: (id: string, loadout?: LoadoutId, conditions?: InstantConditions) => {
+        if (conditions?.timeOfDay && !TIMES_OF_DAY.includes(conditions.timeOfDay)) throw new Error(`no time of day ${conditions.timeOfDay} (${TIMES_OF_DAY.join(', ')})`);
+        if (conditions?.weather && !WEATHERS.includes(conditions.weather)) throw new Error(`no weather ${conditions.weather} (${WEATHERS.join(', ')})`);
+        const def = missionById(id, conditions);
         if (!def) throw new Error(`no mission ${id}`);
         this.flyFromHook(def, loadout ?? def.recommendedLoadout);
       },
