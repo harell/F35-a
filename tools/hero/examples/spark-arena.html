@@ -1,0 +1,372 @@
+<!-- Spark Arena hero-building prototype (bespoke geometry), the source of https://claude.ai/artifact/KcbdyPLaEjkGRzhHhECVRu.
+     Placeholders filled before publishing: __HF__ (heights.json-style 2 m nDSM grid of the crop), __AERIAL__, __TODAY__, __NDSM__
+     (data: URIs). Crop: NZTM E0 1758341.68, N1 5920684.24, 175 × 160 m. See .claude/skills/hero-building/SKILL.md. -->
+<title>Spark Arena Hero Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: one working 3D viewer up top, then the pipeline that made it, then what is measured vs interpreted. */
+:root {
+  --bg: #f1f2ef; --surface: #ffffff; --fg: #17212b; --muted: #55606b; --line: #d8dbd6;
+  --accent: #c2571a; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12191f; --surface: #1a232b; --fg: #e8ebe7; --muted: #a2adb6; --line: #2c3842;
+  --accent: #ef8a4c; --accent-ink: #12191f; --measured: #6cc0dd; --guess: #e2b54a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12191f; --surface: #1a232b; --fg: #e8ebe7; --muted: #a2adb6; --line: #2c3842;
+  --accent: #ef8a4c; --accent-ink: #12191f; --measured: #6cc0dd; --guess: #e2b54a; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 15px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+#todayImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #17212b; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step h3 { margin: 0; font-size: 17px; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.step img { border-radius: 6px; border: 1px solid var(--line); aspect-ratio: 175 / 160; object-fit: cover; width: 100%; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a, .step a { color: var(--measured); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero landmark test · Quay Park, Auckland</span>
+    <h1>Spark Arena, rebuilt from LINZ data in code</h1>
+    <p class="lede">The game today shows Spark Arena only as a photo on the ground. This page builds it in 3D from public LINZ LiDAR and aerial imagery, with photos used only to check materials. Drag to orbit and scroll or pinch to zoom.</p>
+  </header>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="Pipeline stage">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Aerial photo on flat ground</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>1 m heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Hero model</b>Fitted geometry, real materials</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of Spark Arena"></canvas>
+      <img id="todayImg" alt="F35-A today: the Spark Arena site is a flat aerial photo next to the port" hidden>
+      <span class="hint" id="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="night"><input type="checkbox" id="night"> Night</label><label for="spin"><input type="checkbox" id="spin" checked> Slow orbit</label></span>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">How it was made · about 40 minutes, mostly automatic</span>
+    <h2>Five steps from public data to a game-ready model</h2>
+    <div class="steps">
+      <div class="step"><span class="n">STEP 1 · AUTOMATIC</span><h3>LiDAR heights</h3><img src="__NDSM__" alt="LiDAR height map of the arena: a lens-shaped dome"><p>LINZ 2024 Auckland LiDAR, 1 m surface minus ground, read straight from the public <span class="num">nz-elevation</span> bucket. Roof tops out at <span class="num">31.1 m</span> above ground.</p></div>
+      <div class="step"><span class="n">STEP 2 · AUTOMATIC</span><h3>7.5 cm aerial photo</h3><img src="__AERIAL__" alt="LINZ 2024 aerial photo of Spark Arena from above"><p>LINZ 2024 urban aerial, tiles <span class="num">BA32_1000_3605/3606</span>. Shows the two lens-shaped roofs, the white walkway between them, the glazed foyer and the wing.</p></div>
+      <div class="step"><span class="n">STEP 3 · AUTOMATIC</span><h3>Fit the roof</h3><p>A tilted plane fitted to each lens matches the LiDAR to <span class="num">0.25 m</span> (north) and <span class="num">0.32 m</span> RMS (south). That confirms the roofing supplier's description: "two elliptical tilted planes".</p><p>Each lens is <span class="num">122 × 48 m</span>. The north one falls from <span class="num">27 m</span> to <span class="num">18 m</span>; the south one from <span class="num">28 m</span> to <span class="num">16 m</span>.</p></div>
+      <div class="step"><span class="n">STEP 4 · NEEDS A HUMAN</span><h3>Check materials in photos</h3><p>Contractor and street photos give the ribbed standing-seam roof with its dark overhanging edges, the silver ribbed walls, the curved blue foyer glass over a covered entrance, the white struts under the roof tips, and the "Spark ARENA" LED sign with its starburst (coral by day, purple at night). The ribs are drawn at <span class="num">630 mm</span>, the width of the roof sheet the supplier names. Two of the eight "Spark Arena" photos I scraped were of other venues, so a person has to check this step.</p></div>
+      <div class="step"><span class="n">STEP 5 · CODE</span><h3>Build it in three.js</h3><p>About 250 lines that turn the measurements above into meshes. The game already builds the Sky Tower this way, in <span class="num">src/core/skyTower.ts</span>. No 3D modelling tool and no hand-sculpted mesh.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span class="eyebrow">What the model is made of</span>
+      <h2>Measured, read off the photo, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Roof planes, tilt and heights; building height; the flat walkway between the lenses (all from LiDAR).</span></div>
+        <div><span class="tag r">From photo</span><span>Lens tips and outline, rim positions, foyer curve, wing and plant deck positions (from the aerial).</span></div>
+        <div><span class="tag r">From street photos</span><span>Foyer layers (entrances, canopy, glass band, silver drum), wall ribbing, dark roof edges, the struts under the roof tips, the sign and starburst and their day and night colours.</span></div>
+        <div><span class="tag g">Guessed</span><span>Exact strut count and spacing, the sign's exact size and position, the south-west wing's glazing, and the east and south walls, which no photo shows.</span></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span class="eyebrow">Putting it in the game</span>
+      <h2>What's left after this demo</h2>
+      <div class="ledger">
+        <div><span class="tag r">Placement</span><span>Game position <span class="num">x ≈ 1,319 m, z ≈ −147 m</span>, east of the LINZ building area the game loads, which is why it's missing today.</span></div>
+        <div><span class="tag r">Budget</span><span>About 1 draw call per material (5 here), a few thousand triangles. Merge into one mesh like the other scenery.</span></div>
+        <div><span class="tag r">Details</span><span>Signage, night lighting, an LOD for distance, and a collision shape for the flight model.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Roof description: <a href="https://www.dimond.co.nz/case-studies/vector-arena">Dimond Roofing case study</a>. Foyer photos: <a href="https://www.structurflex.com/projects/spark-arena/">Structurflex</a>. Facade and sign: <a href="https://www.austadiums.com/stadiums/spark-arena">Austadiums</a>, <a href="https://aucklandlive.co.nz/venue/spark-arena">Auckland Live</a>. The starburst is drawn as a simple stand-in, not the official logo file. "Today" frame: F35-A dev build, high tier, 3 October 2026.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const HF = __HF__;           // nDSM on a 2 m grid, metres above ground, row-major (south = +z)
+const AERIAL = '__AERIAL__';
+const TODAY = '__TODAY__';
+const W = 175, H = 160, CX = 92, CZ = 77;   // crop size (m) and the arena's centre in it
+
+// ── measured geometry (metres, x east, z south, origin at the crop's NW corner) ──
+function lens(A, B, hw, p, side) {
+  const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz), u = [dx / L, dz / L], n = [-u[1], u[0]];
+  const m = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], R = ((L / 2) ** 2 + hw * hw) / (2 * hw);
+  const lim = (s) => Math.max(0, Math.sqrt(Math.max(0, R * R - s * s)) - (R - hw));
+  const at = (s, t) => [m[0] + u[0] * s + n[0] * t, m[1] + u[1] * s + n[1] * t];
+  const plane = (x, z) => p[0] * x + p[1] * z + p[2];
+  const inside = (x, z) => { const s = (x - m[0]) * u[0] + (z - m[1]) * u[1], t = (x - m[0]) * n[0] + (z - m[1]) * n[1]; return Math.abs(s) < L / 2 && Math.abs(t) <= lim(s); };
+  const arc = (sgn, N = 60) => { const pts = []; for (let i = 0; i <= N; i++) { const s = -L / 2 + (L * i) / N; pts.push(at(s, sgn * lim(s))); } return pts; };
+  const outline = () => arc(1).concat(arc(-1).reverse().slice(1, -1));
+  return { A, B, L, plane, inside, arc, outline, side, p };
+}
+// Roof planes fitted to the LiDAR: h = a·x + b·z + c (rms 0.25 m and 0.32 m)
+const LN = lens([43.5, 30.8], [157.5, 73.5], 24, [-0.158, 0.227, 26.716], -1);
+const LS = lens([25.5, 78.8], [140.0, 123.0], 24, [0.021, -0.274, 49.67], 1);
+
+function hf(x, z) { // bilinear on the 2 m grid
+  const gx = Math.min(HF.w - 1.001, Math.max(0, (x - 0.5) / HF.res)), gz = Math.min(HF.h - 1.001, Math.max(0, (z - 0.5) / HF.res));
+  const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, Z = HF.z, w = HF.w;
+  return (Z[j * w + i] * (1 - fx) + Z[j * w + i + 1] * fx) * (1 - fz) + (Z[(j + 1) * w + i] * (1 - fx) + Z[(j + 1) * w + i + 1] * fx) * fz;
+}
+function quad(a, c, b, N) { const pts = []; for (let i = 0; i <= N; i++) { const t = i / N, k = 1 - t; pts.push([k * k * a[0] + 2 * k * t * c[0] + t * t * b[0], k * k * a[1] + 2 * k * t * c[1] + t * t * b[1]]); } return pts; }
+// Perimeter: north lens's outer arc, the east wall, south lens's outer arc, then the curved glass foyer on the west.
+const northArc = LN.arc(-1), southArc = LS.arc(1).reverse();
+const eastWall = quad(LN.B, [(LN.B[0] + LS.B[0]) / 2 + 1, (LN.B[1] + LS.B[1]) / 2], LS.B, 10);
+const foyer = quad(LS.A, [20, 58], LN.A, 24);
+const segs = [
+  { pts: northArc, kind: 'metal', top: (x, z) => LN.plane(x, z) },
+  { pts: eastWall, kind: 'metal', top: null },
+  { pts: southArc, kind: 'metal', top: (x, z) => LS.plane(x, z) },
+  { pts: foyer, kind: 'glass', top: null },
+];
+const perimeter = [].concat(...segs.map((s) => s.pts.slice(0, -1)));
+function inPoly(x, z, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; }
+// the walkway between the lenses: LiDAR blurred over ~14 m (walls, struts and glass make the raw edge lumpy)
+const HFB = (() => { const { w, h, z } = HF, o = new Float32Array(w * h), R = 3;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { let s = 0, n = 0;
+    for (let b = -R; b <= R; b++) for (let a = -R; a <= R; a++) { const v = z[Math.min(h - 1, Math.max(0, j + b)) * w + Math.min(w - 1, Math.max(0, i + a))]; if (v > 12) { s += v; n++; } }
+    o[j * w + i] = n ? s / n : 0; }
+  return o; })();
+function hfBlur(x, z) { const gx = Math.min(HF.w - 1, Math.max(0, Math.round((x - 0.5) / HF.res))), gz = Math.min(HF.h - 1, Math.max(0, Math.round((z - 0.5) / HF.res))); return HFB[gz * HF.w + gx]; }
+const infillH = (x, z) => Math.min(28, Math.max(20, hfBlur(x, z))) - 0.4;
+const roofAt = (x, z) => (LN.inside(x, z) ? LN.plane(x, z) : LS.inside(x, z) ? LS.plane(x, z) : infillH(x, z));
+
+// ── three.js scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#b9cfdd');
+scene.fog = new THREE.Fog('#b9cfdd', 450, 1100);
+const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 3000);
+camera.position.set(-150, 38, 70);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.set(0, 10, 0); controls.enableDamping = true; controls.maxPolarAngle = 1.48; controls.minDistance = 40; controls.maxDistance = 600;
+const hemi = new THREE.HemisphereLight('#dfeaf5', '#6f6a5e', 0.75); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff4e2', 1.35);           // Auckland sun stands in the north (−z)
+sun.position.set(-70, 130, -110); sun.castShadow = true;
+Object.assign(sun.shadow.camera, { left: -130, right: 130, top: 130, bottom: -130, near: 10, far: 450 });
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; scene.add(sun);
+
+const root = new THREE.Group(); root.position.set(-CX, 0, -CZ); scene.add(root);
+const loader = new THREE.TextureLoader();
+const aerialTex = loader.load(AERIAL); aerialTex.encoding = THREE.sRGBEncoding; aerialTex.anisotropy = 8;
+
+function canvasTex(w, h, draw, rep) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.encoding = THREE.sRGBEncoding; return t; }
+const ribTex = canvasTex(64, 4, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#dcdedf'); gr.addColorStop(0.12, '#e6e8e8'); gr.addColorStop(0.2, '#bfc3c6'); gr.addColorStop(0.3, '#d2d5d6'); gr.addColorStop(1, '#d2d5d6'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+// silver vertical ribbed cladding (u runs along the wall, so the ribs stand vertical)
+const cladTex = canvasTex(32, 4, (g, w, h) => { g.fillStyle = '#c3c8cc'; g.fillRect(0, 0, w, h); g.fillStyle = '#dfe3e5'; g.fillRect(0, 0, 9, h); g.fillStyle = '#a3a9ae'; g.fillRect(9, 0, 3, h); });
+// blue-tinted curtain wall: one panel per repeat, mullions on the left and top, a transom at mid-height
+const glassTex = canvasTex(128, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#8fb3cc'); gr.addColorStop(1, '#4f7590'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(70, 0, 30, h); g.fillStyle = '#dfe5e8'; g.fillRect(0, 0, 7, h); g.fillRect(0, 0, w, 6); g.fillRect(0, h / 2 - 2, w, 4); });
+const entryTex = canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#2e353b'; g.fillRect(0, 0, w, h); g.fillStyle = '#56636c'; g.fillRect(6, 10, 52, 54); g.fillStyle = '#2e353b'; g.fillRect(31, 10, 2, 54); });
+
+const M = {
+  ground: new THREE.MeshStandardMaterial({ map: aerialTex, roughness: 0.95 }),
+  roof: new THREE.MeshStandardMaterial({ map: ribTex, color: '#ffffff', metalness: 0.35, roughness: 0.45, side: THREE.FrontSide }),
+  under: new THREE.MeshStandardMaterial({ color: '#2a2d31', roughness: 0.8, side: THREE.BackSide }),
+  fascia: new THREE.MeshStandardMaterial({ color: '#2a2d31', roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide }),
+  entry: new THREE.MeshStandardMaterial({ map: entryTex, roughness: 0.3, metalness: 0.3, side: THREE.DoubleSide }),
+  white: new THREE.MeshStandardMaterial({ color: '#eceae4', roughness: 0.7, side: THREE.DoubleSide }),
+  clad: new THREE.MeshStandardMaterial({ map: cladTex, roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide }),
+  glass: new THREE.MeshStandardMaterial({ map: glassTex, emissiveMap: glassTex, emissive: '#000000', roughness: 0.12, metalness: 0.4, side: THREE.DoubleSide }),
+  plant: new THREE.MeshStandardMaterial({ color: '#a7aaa8', roughness: 0.8 }),
+};
+
+function mesh(pos, uv, idx, mat, shadow = true) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat); m.castShadow = shadow; m.receiveShadow = true; return m;
+}
+// a grid over the crop; keep(x,z) says which cells to include; h(x,z) gives the height
+function gridMesh(step, keep, h, mat, uvFn) {
+  const nx = Math.round(W / step), nz = Math.round(H / step), pos = [], uv = [], idx = [];
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) { const x = i * step, z = j * step; pos.push(x, h(x, z), z); uv.push(...(uvFn ? uvFn(x, z) : [x / W, 1 - z / H])); }
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const cx = (i + 0.5) * step, cz = (j + 0.5) * step; if (!keep(cx, cz)) continue;
+    const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1; idx.push(a, c, b, b, c, d);
+  }
+  return mesh(pos, uv, idx, mat);
+}
+const ground = () => { const m = gridMesh(5, () => true, () => 0, M.ground); m.castShadow = false; return m; };
+
+// Stage 2: raw LiDAR surface
+const stageLidar = new THREE.Group();
+stageLidar.add(gridMesh(2, () => true, (x, z) => Math.max(0, hf(x, z)), M.ground));
+
+// Stage 3: hero model
+const stageHero = new THREE.Group();
+stageHero.add(ground());
+for (const L of [LN, LS]) {
+  // roof sheet: the lens outline triangulated, lifted onto its fitted plane; UVs run ribs down the slope
+  const ol = L.outline(), shape = new THREE.Shape(ol.map(([x, z]) => new THREE.Vector2(x, z)));
+  const sg = new THREE.ShapeGeometry(shape, 1), pa = sg.attributes.position, gl = Math.hypot(L.p[0], L.p[1]), perp = [-L.p[1] / gl, L.p[0] / gl];
+  const pos = [], uv = [];
+  for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), z = pa.getY(i); pos.push(x, L.plane(x, z), z); uv.push((x * perp[0] + z * perp[1]) / 0.63, 0); }
+  const idx = Array.from(sg.index.array), probe = mesh(pos, uv, idx, M.roof);
+  if (probe.geometry.attributes.normal.getY(0) < 0) for (let i = 0; i < idx.length; i += 3) [idx[i + 1], idx[i + 2]] = [idx[i + 2], idx[i + 1]];
+  stageHero.add(mesh(pos, uv, idx, M.roof), mesh(pos, null, idx, M.under));
+  // dark fascia: a 1.6 m band hanging from the lens edge (the roof reads as a dark wing from the street)
+  const fp = [], fi = [];
+  ol.concat([ol[0]]).forEach(([x, z], i) => { const y = L.plane(x, z); fp.push(x, y, z, x, y - 1.6, z); if (i) { const a = 2 * (i - 1); fi.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } });
+  stageHero.add(mesh(fp, null, fi, M.fascia));
+  // white upturned rim along the lens edge
+  const curve = new THREE.CatmullRomCurve3(ol.map(([x, z]) => new THREE.Vector3(x, L.plane(x, z) + 0.5, z)), true, 'centripetal');
+  const rim = new THREE.Mesh(new THREE.TubeGeometry(curve, 320, 0.55, 6, true), M.white); rim.castShadow = true; stageHero.add(rim);
+}
+// white walkway roof between and around the lenses, from LiDAR
+stageHero.add(gridMesh(1, (x, z) => inPoly(x, z, perimeter) && !LN.inside(x, z) && !LS.inside(x, z), infillH, M.white));
+// walls around the perimeter, up to the roof edge: silver ribbed cladding
+function strip(pts, off, y0f, y1f, mat, us, vs) { // a wall ribbon along pts, pushed `off` m outward, from y0f(x,z) to y1f(x,z)
+  const pos = [], uv = [], idx = []; let run = 0;
+  pts.forEach(([x, z], i) => {
+    const [xa, za] = pts[Math.max(0, i - 1)], [xb, zb] = pts[Math.min(pts.length - 1, i + 1)];
+    let nx = zb - za, nz = -(xb - xa); const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
+    if (nx * (x - CX) + nz * (z - CZ) < 0) { nx = -nx; nz = -nz; }          // point away from the arena's centre
+    if (i) run += Math.hypot(x - pts[i - 1][0], z - pts[i - 1][1]);
+    const px = x + nx * off, pz = z + nz * off, y0 = y0f(x, z), y1 = y1f(x, z);
+    pos.push(px, y0, pz, px, y1, pz); uv.push(run / us, y0 / vs, run / us, y1 / vs);
+    if (i) { const a = 2 * (i - 1); idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  });
+  return mesh(pos, uv, idx, mat);
+}
+const edgeTop = (s) => (x, z) => (s.top ? s.top(x, z) : roofAt(x + (CX - x) * 0.04, z + (CZ - z) * 0.04)) - 0.5;
+for (const s of segs.filter((s) => s.kind !== 'glass')) stageHero.add(strip(s.pts, 0, () => 0, edgeTop(s), M.clad, 1.0, 26));
+// west foyer, bottom to top: recessed entrances, a white canopy, the curved glass band, then the silver drum
+const at = (y) => () => y;
+// the drum's top runs smoothly from the south lens tip to the north lens tip
+const tipS = LS.plane(...LS.A), tipN = LN.plane(...LN.A);
+const drumTop = (x, z) => { const t = Math.max(0, Math.min(1, (z - LS.A[1]) / (LN.A[1] - LS.A[1]))); return tipS + (tipN - tipS) * t - 1.6; };
+stageHero.add(strip(foyer, -2.5, at(0), at(5), M.entry, 4, 5));
+stageHero.add(strip(foyer, 1.2, at(5.6), at(16), M.glass, 3.2, 5.2));
+stageHero.add(strip(foyer, 0, at(16), drumTop, M.clad, 1.0, 26));
+{ // canopy slab at 5–5.6 m, from the entrances out to 3.5 m in front of the glass
+  const a = strip(foyer, -2.5, at(5.6), at(5.6), M.white, 4, 5).geometry.attributes.position, b = strip(foyer, 3.5, at(5.6), at(5.6), M.white, 4, 5).geometry.attributes.position;
+  const pos = [], idx = [];
+  for (let i = 0; i < foyer.length; i++) { pos.push(a.getX(2 * i), 5.6, a.getZ(2 * i), b.getX(2 * i), 5.6, b.getZ(2 * i)); if (i) { const k = 2 * (i - 1); idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); } }
+  stageHero.add(mesh(pos, null, idx, M.white), strip(foyer, 3.5, at(5.0), at(5.6), M.white, 4, 5));
+}
+// white tubular struts fanning from each west lens tip down to the drum wall (they carry the cantilevered tips)
+for (const [L, from, to] of [[LN, 0.62, 0.98], [LS, 0.02, 0.3]]) {
+  const tip = new THREE.Vector3(L.A[0] + (L.B[0] - L.A[0]) * 0.015, 0, L.A[1] + (L.B[1] - L.A[1]) * 0.015); tip.y = L.plane(tip.x, tip.z) - 1.0;
+  for (let k = 0; k < 6; k++) {
+    const i = Math.round((foyer.length - 1) * (from + (to - from) * k / 5)), [x, z] = foyer[i], [x2, z2] = foyer[Math.min(foyer.length - 1, i + 1)];
+    let nx = z2 - z, nz = -(x2 - x); const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl; if (nx * (x - CX) + nz * (z - CZ) < 0) { nx = -nx; nz = -nz; }
+    const foot = new THREE.Vector3(x + nx * 1.6, 17 + (k % 3) * 2.5, z + nz * 1.6), len = tip.distanceTo(foot);
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, len, 8), M.white);
+    strut.position.copy(tip).add(foot).multiplyScalar(0.5); strut.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tip.clone().sub(foot).normalize());
+    strut.castShadow = true; stageHero.add(strut);
+  }
+}
+// "Spark ARENA" sign with the starburst, on the drum above the foyer glass, facing the plaza
+const signCanvas = document.createElement('canvas'); signCanvas.width = 1024; signCanvas.height = 192;
+const signTex = new THREE.CanvasTexture(signCanvas); signTex.encoding = THREE.sRGBEncoding; signTex.anisotropy = 8;
+function drawSign(night) {
+  const g = signCanvas.getContext('2d'); g.clearRect(0, 0, 1024, 192);
+  g.save(); g.translate(96, 96); g.strokeStyle = '#ffffff'; g.lineCap = 'round';      // the scribbled starburst
+  for (let k = 0; k < 14; k++) { const a = (k / 14) * Math.PI + Math.sin(k * 7.3) * 0.12, r = 62 + 22 * Math.abs(Math.sin(k * 3.1)); g.lineWidth = 5 + (k % 3) * 2; g.beginPath(); g.moveTo(-Math.cos(a) * r, -Math.sin(a) * r); g.lineTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9); g.stroke(); }
+  g.restore();
+  g.fillStyle = night ? '#b874ff' : '#ef6b7b'; g.textBaseline = 'middle';
+  g.font = '600 118px Helvetica, Arial, sans-serif'; g.fillText('Spark', 200, 100);
+  const w = g.measureText('Spark ').width; g.font = '800 118px Helvetica, Arial, sans-serif'; g.fillText('ARENA', 200 + w, 104);
+  signTex.needsUpdate = true;
+}
+drawSign(false);
+const signMat = new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide, toneMapped: false });
+{
+  const i = Math.round((foyer.length - 1) * 0.6), [x, z] = foyer[i], [x2, z2] = foyer[i + 1];
+  let nx = z2 - z, nz = -(x2 - x); const nl = Math.hypot(nx, nz); nx /= nl; nz /= nl; if (nx * (x - CX) + nz * (z - CZ) < 0) { nx = -nx; nz = -nz; }
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(30, 5.6), signMat);
+  sign.position.set(x + nx * 1.0, 20.5, z + nz * 1.0); sign.lookAt(sign.position.x + nx, 20.5, sign.position.z + nz);
+  stageHero.add(sign);
+}
+// south-west wing (height from LiDAR ≈ 10 m) with a glazed ridge, and the plant deck on the east
+const wing = new THREE.Group(); wing.position.set(29, 0, 119); wing.rotation.y = 0.17;
+const wb = new THREE.Mesh(new THREE.BoxGeometry(37, 10, 14), [M.clad, M.clad, M.white, M.white, M.clad, M.clad]); wb.position.y = 5; wb.castShadow = wb.receiveShadow = true; wing.add(wb);
+const ridge = new THREE.Mesh(new THREE.BoxGeometry(33, 0.6, 3.5), M.glass); ridge.position.y = 10.3; wing.add(ridge); stageHero.add(wing);
+const plant = new THREE.Mesh(new THREE.BoxGeometry(12, 3.5, 26), M.plant); plant.position.set(165, 1.75, 84); plant.rotation.y = -0.35; plant.castShadow = plant.receiveShadow = true; stageHero.add(plant);
+
+root.add(stageLidar, stageHero);
+let tris = 0; stageHero.traverse((o) => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+
+const NOTES = [
+  'F35-A today, high tier: the arena sits outside the area where LINZ buildings are loaded, so it is only the aerial photo painted on the ground. Screenshot from the dev build.',
+  'LINZ 2024 LiDAR heights on a 2 m grid with the 7.5 cm aerial draped on top. The shape is already clear, but the edges are lumpy and the walls are smeared.',
+  `Hero model: two roof planes fitted to the LiDAR, outline read from the aerial, facade and sign from street photos. About ${Math.round(tris / 100) * 100} triangles.`,
+];
+const todayImg = document.getElementById('todayImg'); todayImg.src = TODAY;
+function setStage(k) {
+  ['s0', 's1', 's2'].forEach((id, i) => document.getElementById(id).setAttribute('aria-pressed', String(i === k)));
+  stageLidar.visible = k === 1; stageHero.visible = k === 2;
+  todayImg.hidden = k !== 0; document.getElementById('hint').hidden = k === 0;
+  document.getElementById('note').textContent = NOTES[k];
+}
+['s0', 's1', 's2'].forEach((id, i) => document.getElementById(id).addEventListener('click', () => setStage(i)));
+setStage(2);
+
+const nightBox = document.getElementById('night');
+function setNight(n) {
+  sun.intensity = n ? 0.04 : 1.35; hemi.intensity = n ? 0.22 : 0.75; hemi.color.set(n ? '#5a6a90' : '#dfeaf5');
+  scene.background.set(n ? '#0c1220' : '#b9cfdd'); scene.fog.color.set(n ? '#0c1220' : '#b9cfdd');
+  M.glass.emissive.set(n ? '#b9a0ff' : '#000000'); M.glass.emissiveIntensity = n ? 0.9 : 0;
+  M.entry.emissive = new THREE.Color(n ? '#ffd9a0' : '#000000'); M.entry.emissiveMap = entryTex; M.entry.needsUpdate = true;
+  drawSign(n);
+}
+nightBox.addEventListener('change', () => setNight(nightBox.checked));
+const spin = document.getElementById('spin');
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduce) spin.checked = false;
+controls.addEventListener('start', () => { spin.checked = false; });
+function resize() { const r = canvas.parentElement.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(canvas.parentElement); resize();
+renderer.setAnimationLoop(() => {
+  if (spin.checked) { const a = 0.0015, x = camera.position.x, z = camera.position.z; camera.position.x = x * Math.cos(a) - z * Math.sin(a); camera.position.z = x * Math.sin(a) + z * Math.cos(a); }
+  controls.update(); renderer.render(scene, camera);
+});
+</script>

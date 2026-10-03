@@ -1,0 +1,229 @@
+<title>__TITLE__</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* F35-A hero-building prototype viewer (tools/hero/viewer.html). Filled by tools/hero/build_prototype.py from
+   <site>/model.json; the page layout: a 3D viewer with three stages, then how it was made, then sources. */
+:root {
+  --bg: #f1f2ef; --surface: #ffffff; --fg: #17212b; --muted: #55606b; --line: #d8dbd6;
+  --accent: #c2571a; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12191f; --surface: #1a232b; --fg: #e8ebe7; --muted: #a2adb6; --line: #2c3842;
+  --accent: #ef8a4c; --accent-ink: #12191f; --measured: #6cc0dd; --guess: #e2b54a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12191f; --surface: #1a232b; --fg: #e8ebe7; --muted: #a2adb6; --line: #2c3842;
+  --accent: #ef8a4c; --accent-ink: #12191f; --measured: #6cc0dd; --guess: #e2b54a; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 15px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+#todayImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #17212b; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step h3 { margin: 0; font-size: 17px; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.step img { border-radius: 6px; border: 1px solid var(--line); aspect-ratio: 1; object-fit: cover; width: 100%; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 130px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow" id="eyebrow"></span>
+    <h1 id="title"></h1>
+    <p class="lede" id="lede"></p>
+  </header>
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="Pipeline stage">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Before</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>1 m heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Hero model</b>Fitted geometry, real materials</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model"></canvas>
+      <img id="todayImg" alt="The site in the game today" hidden>
+      <span class="hint" id="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="night"><input type="checkbox" id="night"> Night</label><label for="spin"><input type="checkbox" id="spin" checked> Slow orbit</label></span>
+    </div>
+  </section>
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">How it was made</span>
+    <div class="steps" id="steps"></div>
+  </section>
+  <section style="display:flex;flex-direction:column;gap:14px">
+    <span class="eyebrow">What the model is made of</span>
+    <div class="ledger" id="ledger"></div>
+  </section>
+  <footer id="sources"></footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const MODEL = __MODEL__;
+const IMG = { aerial: '__AERIAL__', ndsm: '__NDSM__', today: '__TODAY__' };
+const [W, H] = MODEL.size, [CX, CZ] = MODEL.centre;
+
+// ── page text from the model's meta ──
+const $ = (id) => document.getElementById(id);
+$('eyebrow').textContent = MODEL.meta.eyebrow; $('title').textContent = MODEL.meta.title; $('lede').textContent = MODEL.meta.lede;
+$('steps').innerHTML = MODEL.meta.steps.map((s) => `<div class="step"><span class="n">${s.n}</span><h3>${s.title}</h3>${s.img ? `<img src="${IMG[s.img]}" alt="${s.alt || ''}">` : ''}<p>${s.text}</p></div>`).join('');
+$('ledger').innerHTML = MODEL.meta.ledger.map((l) => `<div><span class="tag ${l.cls}">${l.tag}</span><span>${l.text}</span></div>`).join('');
+$('sources').innerHTML = MODEL.meta.sources;
+
+// ── scene ──
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#b9cfdd'); scene.fog = new THREE.Fog('#b9cfdd', 500, 1400);
+const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 4000);
+camera.position.set(...(MODEL.camera || [-160, 120, 220]));
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.set(0, 12, 0); controls.enableDamping = true; controls.maxPolarAngle = 1.48; controls.minDistance = 40; controls.maxDistance = 800;
+const hemi = new THREE.HemisphereLight('#dfeaf5', '#6f6a5e', 0.75); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff4e2', 1.35); sun.position.set(-90, 160, -140); sun.castShadow = true;  // Auckland's sun is in the north (−z)
+Object.assign(sun.shadow.camera, { left: -220, right: 220, top: 220, bottom: -220, near: 10, far: 600 });
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; scene.add(sun);
+const root = new THREE.Group(); root.position.set(-CX, 0, -CZ); scene.add(root);
+const aerialTex = new THREE.TextureLoader().load(IMG.aerial); aerialTex.encoding = THREE.sRGBEncoding; aerialTex.anisotropy = 8;
+
+function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.encoding = THREE.sRGBEncoding; return t; }
+// facade textures: one repeat = one bay (u) × one storey (v); the model sets bay and storey sizes per surface
+const TEX = {
+  precast_dark: canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#4b4f53'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a3e42'; g.fillRect(0, 0, 2, h); g.fillRect(0, 0, w, 2); }),
+  precast_light: canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#cbc6bc'; g.fillRect(0, 0, w, h); g.fillStyle = '#b3aea4'; g.fillRect(0, 0, 2, h); g.fillRect(0, 0, w, 2); }),
+  glass: canvasTex(64, 64, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#93b6cc'); gr.addColorStop(1, '#53778f'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,.15)'; g.fillRect(36, 0, 14, h); g.fillStyle = '#d9dfe2'; g.fillRect(0, 0, 3, h); g.fillRect(0, 0, w, 3); }),
+  glass_teal: canvasTex(64, 64, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#9fd3cc'); gr.addColorStop(1, '#4f8f8a'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#e3ece9'; g.fillRect(0, 0, 3, h); g.fillRect(0, 0, w, 3); }),
+  shopfront: canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#2f3438'; g.fillRect(0, 0, w, h); g.fillStyle = '#7d93a2'; g.fillRect(4, 14, 56, 50); g.fillStyle = '#e8e2d4'; g.fillRect(0, 0, w, 10); }),
+  metal: canvasTex(32, 4, (g, w, h) => { g.fillStyle = '#c3c8cc'; g.fillRect(0, 0, w, h); g.fillStyle = '#dfe3e5'; g.fillRect(0, 0, 9, h); g.fillStyle = '#a3a9ae'; g.fillRect(9, 0, 3, h); }),
+};
+const COLOR = { white: '#e9e7e1', dark: '#2a2d31', concrete: '#a9a7a1' };
+const MAT = {};
+function mat(name) {
+  if (MAT[name]) return MAT[name];
+  if (TEX[name]) MAT[name] = new THREE.MeshStandardMaterial({ map: TEX[name], emissiveMap: name.startsWith('glass') || name === 'shopfront' ? TEX[name] : null, emissive: '#000000', roughness: name.startsWith('glass') ? 0.15 : 0.75, metalness: name.startsWith('glass') ? 0.4 : 0.1, side: THREE.DoubleSide });
+  else MAT[name] = new THREE.MeshStandardMaterial({ color: COLOR[name] || name, roughness: 0.8, side: THREE.DoubleSide });
+  return MAT[name];
+}
+const groundMat = new THREE.MeshStandardMaterial({ map: aerialTex, roughness: 0.95 });
+const roofMat = new THREE.MeshStandardMaterial({ map: aerialTex, roughness: 0.85, side: THREE.DoubleSide });
+
+function mesh(pos, uv, idx, material, cast = true) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, material); m.castShadow = cast; m.receiveShadow = true; return m;
+}
+function grid(hf, material) { // a height grid ({res, w, h, z[]}) as a mesh draped with the aerial
+  const pos = [], uv = [], idx = [];
+  for (let j = 0; j < hf.h; j++) for (let i = 0; i < hf.w; i++) { const x = (i + 0.5) * hf.res, z = (j + 0.5) * hf.res; pos.push(x, hf.z[j * hf.w + i], z); uv.push(x / W, 1 - z / H); }
+  for (let j = 0; j < hf.h - 1; j++) for (let i = 0; i < hf.w - 1; i++) { const a = j * hf.w + i, b = a + 1, c = a + hf.w, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const m = mesh(pos, uv, idx, material, false); return m;
+}
+
+// ── stage 2: raw LiDAR ──
+const stageLidar = new THREE.Group(); stageLidar.add(grid(MODEL.lidar, groundMat));
+// ── stage 3: hero model ──
+const stageHero = new THREE.Group(); stageHero.add(grid(MODEL.ground, groundMat));
+for (const p of MODEL.prisms) {
+  const r = p.ring[0][0] === p.ring.at(-1)[0] && p.ring[0][1] === p.ring.at(-1)[1] ? p.ring.slice(0, -1) : p.ring;
+  const [bu, bv] = p.bay || [4, 4];
+  // walls
+  const pos = [], uv = [], idx = []; let run = 0;
+  r.concat([r[0]]).forEach(([x, z], i, a) => {
+    if (i) run += Math.hypot(x - a[i - 1][0], z - a[i - 1][1]);
+    pos.push(x, p.y0, z, x, p.y1, z); uv.push(run / bu, p.y0 / bv, run / bu, p.y1 / bv);
+    if (i) { const k = 2 * (i - 1); idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+  });
+  stageHero.add(mesh(pos, uv, idx, mat(p.wall)));
+  // roof: the outline triangulated at y1, draped with the aerial (same frame) or a flat colour
+  const sg = new THREE.ShapeGeometry(new THREE.Shape(r.map(([x, z]) => new THREE.Vector2(x, z)))), pa = sg.attributes.position;
+  const rp = [], ru = [];
+  for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), z = pa.getY(i); rp.push(x, p.y1, z); ru.push(x / W, 1 - z / H); }
+  stageHero.add(mesh(rp, ru, Array.from(sg.index.array), p.roof === 'aerial' ? roofMat : mat(p.roof || 'concrete')));
+}
+for (const f of MODEL.facades || []) { // a facade panel on one edge, pushed `off` m outward along `n` (default: the edge's right-hand normal)
+  const [ax, az] = f.a, [bx, bz] = f.b, L = Math.hypot(bx - ax, bz - az), o = f.off ?? 0.3, [ux, uz] = f.n || [(bz - az) / L, -(bx - ax) / L], nx = ux * o, nz = uz * o;  // n: outward unit normal
+  const [bu, bv] = f.bay || [3, 4.5];
+  stageHero.add(mesh([ax + nx, f.y0, az + nz, ax + nx, f.y1, az + nz, bx + nx, f.y0, bz + nz, bx + nx, f.y1, bz + nz], [0, f.y0 / bv, 0, f.y1 / bv, L / bu, f.y0 / bv, L / bu, f.y1 / bv], [0, 2, 1, 1, 2, 3], mat(f.mat)));
+}
+for (const b of MODEL.boxes || []) { // a straight box between two points (air bridges, canopies)
+  const [ax, az] = b.from, [bx, bz] = b.to, L = Math.hypot(bx - ax, bz - az);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(L, b.y1 - b.y0, b.width), mat(b.mat)); m.castShadow = m.receiveShadow = true;
+  m.position.set((ax + bx) / 2, (b.y0 + b.y1) / 2, (az + bz) / 2); m.rotation.y = -Math.atan2(bz - az, bx - ax); stageHero.add(m);
+}
+for (const d of MODEL.domes || []) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(d.r, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(d.mat || 'glass'));
+  m.position.set(d.x, d.y, d.z); m.scale.y = d.squash ?? 0.6; m.castShadow = true; stageHero.add(m);
+}
+const signs = [];
+for (const s of MODEL.signs || []) { // text signs on canvases; nightColour swaps in at night
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = Math.round(1024 * s.h / s.w);
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+  const draw = (night) => { const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); g.fillStyle = night && s.nightColour ? s.nightColour : s.colour; g.textBaseline = 'middle'; g.textAlign = 'center'; g.font = s.font.replace('{px}', Math.round(cv.height * 0.8)); g.fillText(s.text, cv.width / 2, cv.height / 2); tex.needsUpdate = true; };
+  draw(false);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, toneMapped: false }));
+  m.position.set(s.x + s.face[0] * 0.4, s.y, s.z + s.face[1] * 0.4); m.lookAt(m.position.x + s.face[0], s.y, m.position.z + s.face[1]);
+  stageHero.add(m); signs.push(draw);
+}
+root.add(stageLidar, stageHero);
+let tris = 0; stageHero.traverse((o) => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+
+const NOTES = [MODEL.meta.notes.today, MODEL.meta.notes.lidar, MODEL.meta.notes.hero.replace('{tris}', Math.round(tris / 100) * 100)];
+$('todayImg').src = IMG.today;
+function setStage(k) {
+  ['s0', 's1', 's2'].forEach((id, i) => $(id).setAttribute('aria-pressed', String(i === k)));
+  stageLidar.visible = k === 1; stageHero.visible = k === 2; $('todayImg').hidden = k !== 0; $('hint').hidden = k === 0; $('note').textContent = NOTES[k];
+}
+['s0', 's1', 's2'].forEach((id, i) => $(id).addEventListener('click', () => setStage(i)));
+setStage(2);
+function setNight(n) {
+  sun.intensity = n ? 0.04 : 1.35; hemi.intensity = n ? 0.22 : 0.75; hemi.color.set(n ? '#5a6a90' : '#dfeaf5');
+  scene.background.set(n ? '#0c1220' : '#b9cfdd'); scene.fog.color.set(n ? '#0c1220' : '#b9cfdd');
+  for (const [k, m] of Object.entries(MAT)) if (m.emissiveMap) { m.emissive.set(n ? '#ffe2b0' : '#000000'); m.emissiveIntensity = n ? 0.7 : 0; }
+  signs.forEach((d) => d(n));
+}
+$('night').addEventListener('change', (e) => setNight(e.target.checked));
+const spin = $('spin');
+if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) spin.checked = false;
+controls.addEventListener('start', () => { spin.checked = false; });
+function resize() { const r = canvas.parentElement.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(canvas.parentElement); resize();
+renderer.setAnimationLoop(() => {
+  if (spin.checked) { const a = 0.0015, x = camera.position.x, z = camera.position.z; camera.position.x = x * Math.cos(a) - z * Math.sin(a); camera.position.z = x * Math.sin(a) + z * Math.cos(a); }
+  controls.update(); renderer.render(scene, camera);
+});
+</script>
