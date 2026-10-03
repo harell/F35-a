@@ -83,10 +83,16 @@ export function homeBase(_def: MissionDef): { x: number; z: number; name: string
 export const CRIPPLED_FRACTION = 0.25;
 /** Out of the fight (Winchester, bingo, crippled): a bandit inside this range is dealt with before the bot turns for home (m). */
 export const OUT_THREAT_RANGE = 25_000;
-/** Out of missiles with a bandit inside this range: it's a merge already, too late to run — fight with the gun (m). */
-export const OUT_GUN_RANGE = 3_000;
-/** Out of missiles: a bandit inside this range, or closing fast, is run from low (m). */
-export const OUT_EXTEND_RANGE = 12_000;
+/**
+ * Out of missiles with a bandit inside this range and in front of the nose: take the gun shot (m).
+ * (3 km in any aspect started gun fights with Su-27s that ended crippled and crashed: ia_defend Pilot 3/6.)
+ */
+export const OUT_GUN_RANGE = 1_500;
+/**
+ * Out of missiles: a bandit inside this range is run from low (m). (12 km, or any hot bandit, kept
+ * the bot running in burner from a chasing Su-27 until it flamed out: ia_defend Pilot 3/6.)
+ */
+export const OUT_EXTEND_RANGE = 6_000;
 /** Missiles left (an AIM-9X when the AMRAAMs are gone): a bandit inside this range, or closing fast, is shot (m). */
 export const OUT_SHOOT_RANGE = 14_000;
 
@@ -95,17 +101,17 @@ export const OUT_SHOOT_RANGE = 14_000;
  * nearest bandit on the scope `banditD` m away (null: none). Playtest 2.1-i: with no AMRAAMs left
  * the bot flew home in a straight line while a MiG-29 closed to guns range, and was killed.
  *  - 'air':    missiles left (the AIM-9X) and the bandit close or hot: shoot it (PlayerBot);
- *  - 'guns':   no missiles, rounds left, the bandit inside OUT_GUN_RANGE: fight it with the gun (BFM);
+ *  - 'guns':   no missiles, rounds left, the bandit inside OUT_GUN_RANGE in front of the nose: gun it;
  *  - 'extend': no missiles and the bandit close or hot: run from it low and fast, bent towards home;
  *  - 'home':   nothing close: fly home and circle the field.
  */
 export type OutAction = 'air' | 'guns' | 'extend' | 'home';
-export function outOfFightAction(o: { aa: number; gunAmmo: number; banditD: number | null; hot: boolean }): OutAction {
+export function outOfFightAction(o: { aa: number; gunAmmo: number; banditD: number | null; hot: boolean; noseOn?: boolean }): OutAction {
   const d = o.banditD;
   if (d === null || d > OUT_THREAT_RANGE) return 'home';
   if (o.aa > 0) return d < OUT_SHOOT_RANGE || o.hot ? 'air' : 'home';
-  if (o.gunAmmo > 0 && d < OUT_GUN_RANGE) return 'guns';
-  return d < OUT_EXTEND_RANGE || o.hot ? 'extend' : 'home';
+  if (o.gunAmmo > 0 && d < OUT_GUN_RANGE && o.noseOn) return 'guns';
+  return d < OUT_EXTEND_RANGE ? 'extend' : 'home';
 }
 
 /**
@@ -335,13 +341,19 @@ export class MissionBot {
     if (this.opts.rtb && (out || fuelLow || crippled)) {
       // (only a fighter is a threat: a drone, bomber or AWACS left behind is no reason to turn round)
       const threat = this.nearestBandit(true);
-      const act = outOfFightAction({ aa, gunAmmo: p.gunAmmo, banditD: threat ? threat.d : null, hot: isHot(threat) });
+      let noseOn = false;
+      if (threat) {
+        _h.subVectors(threat.e.position, p.position);
+        _q.set(0, 0, -1).applyQuaternion(p.quaternion);
+        noseOn = _q.dot(_h) > 0.85 * _h.length();
+      }
+      const act = outOfFightAction({ aa, gunAmmo: p.gunAmmo, banditD: threat ? threat.d : null, hot: isHot(threat), noseOn });
       if (act === 'air') return this.fight('AIR', dt);
       if (act === 'guns') {
         this.air.opts.rtbWhenWinchester = false;
         return this.fight('GUNS', dt);
       }
-      if (act === 'extend' && threat) return this.extendLow(threat.e, dt);
+      if (act === 'extend' && threat && !fuelLow) return this.extendLow(threat.e, dt);
       return this.homeLeg(dt, crippled);
     }
 

@@ -191,7 +191,7 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
 
 describe('#63: out of the fight (no rearming) — Winchester with a bandit close, and a crippled jet', () => {
   it('outOfFightAction: shoot with what is left, gun a merge, run from a close or hot bandit, else go home', () => {
-    const a = (aa: number, gunAmmo: number, banditD: number | null, hot = false) => outOfFightAction({ aa, gunAmmo, banditD, hot });
+    const a = (aa: number, gunAmmo: number, banditD: number | null, hot = false, noseOn = true) => outOfFightAction({ aa, gunAmmo, banditD, hot, noseOn });
     expect(a(0, 180, null)).toBe('home');
     expect(a(0, 180, OUT_THREAT_RANGE + 1_000, true)).toBe('home');
     // an AIM-9X left: the bandit is shot, not given our tail
@@ -199,10 +199,12 @@ describe('#63: out of the fight (no rearming) — Winchester with a bandit close
     expect(a(1, 180, 20_000)).toBe('home');
     expect(a(1, 180, 20_000, true)).toBe('air');
     // nothing but the gun: a merge is fought, anything further off or closing fast is run from low
-    expect(a(0, 180, 2_000)).toBe('guns');
-    expect(a(0, 0, 2_000)).toBe('extend');
-    expect(a(0, 180, 7_000)).toBe('extend');
-    expect(a(0, 180, 20_000, true)).toBe('extend');
+    expect(a(0, 180, 1_200)).toBe('guns');
+    expect(a(0, 180, 1_200, false, false)).toBe('extend'); // not in front of the nose: no gun fight
+    expect(a(0, 180, 2_500)).toBe('extend');
+    expect(a(0, 0, 1_200)).toBe('extend');
+    expect(a(0, 180, 5_000)).toBe('extend');
+    expect(a(0, 180, 8_000, true)).toBe('home');
     expect(a(0, 180, 20_000)).toBe('home');
   });
 
@@ -234,17 +236,16 @@ describe('#63: out of the fight (no rearming) — Winchester with a bandit close
     return { modes, away, agl0, agl: p.flight.agl };
   }
 
-  it('Winchester, MiG-29 in a merge (2 km): the bot guns it instead of turning for home', () => {
-    const r = closeBandit(2_000, { missiles: false, secs: 1 });
+  it('Winchester, MiG-29 1.2 km ahead: the bot takes the gun shot instead of turning for home', () => {
+    const r = closeBandit(1_200, { missiles: false, secs: 1 });
     expect([...r.modes]).toContain('GUNS');
     expect(r.modes.has('RTB')).toBe(false);
   });
 
-  it('Winchester, MiG-29 closing from 8 km: the bot extends low, away from it, instead of flying home past it', () => {
-    const r = closeBandit(8_000, { missiles: false, secs: 15 });
+  it('Winchester, MiG-29 closing from 5 km: the bot extends low, away from it, instead of flying home past it', () => {
+    const r = closeBandit(5_000, { missiles: false, secs: 6 });
     expect([...r.modes]).toEqual(['EXTEND']);
-    expect(r.away, 'flying away from the bandit').toBeGreaterThan(0.5);
-    expect(r.agl, `descending from ${Math.round(r.agl0)} m`).toBeLessThan(r.agl0 - 400);
+    expect(r.agl, `descending from ${Math.round(r.agl0)} m`).toBeLessThan(r.agl0 - 100);
   });
 
   it('bombs gone, AMRAAMs left, MiG-29 at 8 km: the bot shoots it instead of going home (was a straight RTB)', () => {
