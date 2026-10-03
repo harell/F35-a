@@ -80,13 +80,15 @@ export const G02: MissionDef = mission({
   briefing: [
     `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The IRGC mother ship has put its fast boats in the water to stop her. Clear the way.`,
     'Suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Peykaap II missile boats come in from the north about a minute into the fight, too late for your first release. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. An air-defence boat rides with each wave, with a Tor-type radar SAM good to 20,000 ft and 12 km and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you. Stealth will not hide you from them up close: their trackers pick you up inside about 9 km, and inside 12 km the moment your bay opens.',
-    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. Bring StormBreakers. A GBU-53/B tracks a moving boat; a JDAM or a GBU-39 does not, and this mission does not offer them. The StormBreaker glides slowly from long range, so release early on the suicide boats. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today. Take all eight StormBreakers: with four, the boats they cannot cover are gun passes under the escorts\' missiles.',
+    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. You carry two weapons that hit a moving boat. A GBU-53/B StormBreaker tracks any boat; it glides slowly from long range, so release early on the suicide boats. An AARGM-ER homes on a radar: one for each air-defence boat, fired while its radar is on. No air-to-air missiles today: nothing hostile flies. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today. On the hardest level eight StormBreakers do not cover every boat: sink the escorts first and the rest are gun passes without their missiles.',
   ],
-  recommendedLoadout: 'strike_sdb2_full',
-  // only loadouts with a bomb that can hit a moving boat (GBU-31 / GBU-39 can't: #65's c08 trap)
-  allowedLoadouts: ['strike_sdb2_full', 'strike_sdb2'],
+  recommendedLoadout: 'strike_maritime',
+  // air-to-ground only, the weapons that kill a moving boat (#136): StormBreakers for any boat, an
+  // AARGM-ER for each air-defence boat's radar. No AMRAAM (nothing hostile flies), no GBU-31 / GBU-39
+  // (they can't hit a moving boat: #65's c08 trap).
+  allowedLoadouts: ['strike_maritime'],
   player: g02Start,
-  // up to eight bombs for six to nine boats: on Ace the gun is part of the plan (#77)
+  // eight bombs for five to nine boats: on Ace the gun is part of the plan (#77)
   gunAmmo: 360,
   script: {
     parTime: 300,
@@ -105,7 +107,7 @@ export const G02: MissionDef = mission({
       target('sb3', S.suicide, 'suicide_boat', { x: 4500, z: -10800 }, { ...chase, minDifficulty: 'pilot' }),
       // Veteran up: a fourth one (seven boats to sink, eight bombs)
       target('sb4', S.suicide, 'suicide_boat', { x: 5700, z: -10950 }, { ...chase, minDifficulty: 'veteran' }),
-      // Ace: a fifth one (nine boats to sink, eight bombs: the gun is part of the plan)
+      // Ace: a fifth one (nine boats to sink with the mb4 below, eight bombs: the gun is part of the plan)
       target('sb5', S.suicide, 'suicide_boat', { x: 4100, z: -11050 }, { ...chase, minDifficulty: 'ace' }),
       // the long clock: three missile boats come in at G02_MISSILE_WAVE_AT, ~9 km north of her, in launch range 3–4 minutes in
       target('mb1', S.missile, 'missile_boat', { x: 7420, z: -17690 }, strike),

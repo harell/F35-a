@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { AKL } from '../src/core/auckland';
-import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
+import { DIFFICULTIES, LOADOUTS, WEAPON_INFO } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import type { Difficulty } from '../src/core/types';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, missionGunAmmo, terrainPadsFor, validateMission } from '../src/missions';
@@ -102,9 +102,17 @@ describe('g01 Buzz Kill: content', () => {
     }
   });
 
-  it('air-to-air loadouts only: beast recommended, beast and stealth allowed', () => {
+  it('air-to-air only (#136): beast mode alone, carrying both air-to-air missiles, and the gun', () => {
     expect(G01.recommendedLoadout).toBe('a2a_beast');
-    expect([...G01.allowedLoadouts].sort()).toEqual(['a2a_beast', 'a2a_stealth']);
+    expect(G01.allowedLoadouts).toEqual(['a2a_beast']);
+    for (const lo of G01.allowedLoadouts) {
+      const kinds = new Set(LOADOUTS[lo].stores.map((s) => WEAPON_INFO[s.weapon].kind));
+      expect([...kinds], lo).toEqual(['aam']);
+      // the player meets every air-to-air missile the game has
+      const aams = (Object.keys(WEAPON_INFO) as (keyof typeof WEAPON_INFO)[]).filter((w) => WEAPON_INFO[w].kind === 'aam');
+      for (const w of aams) expect(LOADOUTS[lo].stores.some((s) => s.weapon === w), `${lo} ${w}`).toBe(true);
+      expect(LOADOUTS[lo].gunAmmo, lo).toBeGreaterThan(0);
+    }
   });
 
   it('carries more gun rounds than usual (360–400), on every difficulty and loadout', () => {
