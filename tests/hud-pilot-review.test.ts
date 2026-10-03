@@ -189,23 +189,30 @@ describe('#116 collisions: brevity, seeker and gun labels vs the target box', ()
 
 describe('#116 collisions: incoming missiles, waterline, wingmen, bank arc, CIV labels', () => {
   it('1.2-d: the off-screen cue\'s text never runs into an incoming missile\'s arrow / TTI, whatever its bearing', () => {
+    const bad: string[] = [];
     for (const view of ['hud', 'cockpit'] as CameraMode[]) {
-      for (let b = 0; b < 12; b++) {
-        const r = rig('threat', view);
-        const p = r.mock.player;
-        // designated: the fuel depot right under us (cue arrow at the bottom of the ellipse)
-        const fuel = r.mock.world.ground.find((g) => g.type === 'fuel')!;
-        fuel.position.copy(p.position).add(new Vector3(0, -2500, -800).applyQuaternion(p.quaternion));
-        p.radar.designatedId = fuel.id;
-        p.radar.lockedId = null;
-        const bearing = (b * Math.PI) / 6;
-        p.incoming = [{ missileId: 9999, bearing, elevation: 0, distance: 6000, timeToImpact: 32, guidance: 'radar' }];
-        const texts = r.run(1 / 30);
-        const tti = find(texts, '32');
-        expect(tti.length, `${view} b ${b}`).toBe(1);
-        expect(hitsOf(texts, tti[0], 0), `${view} bearing ${b * 30}°`).toEqual([]);
+      // the designated fuel depot 50° / 90° off the nose in 8 directions, the missile from 12 bearings
+      for (const off of [0.9, Math.PI / 2]) {
+        for (let a = 0; a < 8; a++) {
+          for (let b = 0; b < 12; b++) {
+            const r = rig('threat', view);
+            const p = r.mock.player;
+            const fuel = r.mock.world.ground.find((g) => g.type === 'fuel')!;
+            const ang = (a / 8) * Math.PI * 2;
+            const dir = new Vector3(Math.sin(ang) * Math.sin(off), Math.cos(ang) * Math.sin(off), -Math.cos(off)).applyQuaternion(p.quaternion);
+            fuel.position.copy(p.position).addScaledVector(dir, 9000);
+            p.radar.designatedId = fuel.id;
+            p.radar.lockedId = null;
+            p.incoming = [{ missileId: 9999, bearing: (b * Math.PI) / 6, elevation: 0, distance: 6000, timeToImpact: 32, guidance: 'radar' }];
+            const texts = r.run(1 / 30);
+            const tti = find(texts, '32');
+            expect(tti.length, `${view} b ${b}`).toBe(1);
+            for (const h of hitsOf(texts, tti[0], 0)) bad.push(`${view} target ${a * 45}° ${((off * 180) / Math.PI) | 0}° off, missile ${b * 30}°: ${h}`);
+          }
+        }
       }
     }
+    expect(bad).toEqual([]);
   });
 
   it('1.2-d: the centre cues (SHOOT, FOX 3) never print over an incoming missile\'s TTI', () => {
