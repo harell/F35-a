@@ -339,3 +339,46 @@ export function landmarkCamPose(lm: CamLandmark, time: number, out: CamPose, sur
   }
   return out;
 }
+
+/* ───────────────────────── Weapon window (the player's missile / bomb) ───────────────────────── */
+
+/** Vertical field of view of the weapon window's chase shot (deg): wider than the target shot. */
+export const WEAPON_CAM_FOV = 46;
+
+const _wf = new Vector3();
+const _wu = new Vector3();
+const _ws = new Vector3();
+
+/**
+ * Weapon window chase shot (hud/hmd/wpnCam.ts): behind the weapon along its flight path, a little above
+ * and to one side, looking down the path turned part of the way to the target, so the weapon sits low
+ * in the frame and the target comes into it as the weapon closes.
+ * @param len  weapon length (m): the camera sits ~2.5 lengths back
+ */
+export function weaponCamPose(
+  pos: { x: number; y: number; z: number },
+  vel: { x: number; y: number; z: number },
+  target: { x: number; y: number; z: number },
+  len: number,
+  out: CamPose,
+): CamPose {
+  _wf.set(vel.x, vel.y, vel.z);
+  if (_wf.lengthSq() < 1) _wf.set(target.x - pos.x, target.y - pos.y, target.z - pos.z);
+  if (_wf.lengthSq() < 1e-6) _wf.set(0, 0, -1);
+  _wf.normalize();
+  _wu.set(target.x - pos.x, target.y - pos.y, target.z - pos.z);
+  const dist = _wu.length();
+  if (dist > 1e-3) _wu.multiplyScalar(1 / dist);
+  else _wu.copy(_wf);
+  // side: horizontal, right of the flight path
+  _ws.set(-_wf.z, 0, _wf.x);
+  if (_ws.lengthSq() < 1e-6) _ws.set(1, 0, 0);
+  _ws.normalize();
+  const back = Math.max(6, len * 2.5);
+  out.position.set(pos.x, pos.y, pos.z).addScaledVector(_wf, -back).addScaledVector(_ws, Math.max(1, len * 0.45));
+  out.position.y += Math.max(1.2, len * 0.5);
+  const ahead = Math.max(60, Math.min(250, dist));
+  out.look.copy(_wf).multiplyScalar(0.65).addScaledVector(_wu, 0.35).normalize().multiplyScalar(ahead).add(pos as Vector3);
+  out.up.set(0, 1, 0);
+  return out;
+}

@@ -342,6 +342,11 @@ export interface Settings {
   defaultView: 'cockpit' | 'hud' | 'chase';
   /** Target camera: small picture-in-picture view of the designated / locked target. */
   targetCam: boolean;
+  /**
+   * Weapon window (hud/hmd/wpnCam.ts): your missile or bomb followed to the target, in the target
+   * camera's slot. 'compact' keeps the slot's size for the final seconds, 'dynamic' grows it.
+   */
+  missileCam: 'off' | 'compact' | 'dynamic';
   /** HD terrain on the high quality tier (see QualitySettings.hdTerrain). Off: procedural detail, no download. */
   hdTerrain: boolean;
   /** Aerial photo of the CBD and waterfront on the medium / high tier (see QualitySettings.aerialPhoto). Off: procedural ground, no download. */
