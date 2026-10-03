@@ -109,13 +109,15 @@ export function altColumnBottom(f: HudFrame): number {
 }
 
 /**
- * Reserve the target camera window (PiP, level 0). Also called before the protected symbols, so the
- * target box's labels and the AIM-9X TONE keep out of it (TONE under the window's range readout, #116).
+ * Reserve the target camera window (PiP) and the kill feed (as drawn last frame), level 0. Also called
+ * before the protected symbols, so the target box's labels and the AIM-9X TONE keep out of them (TONE
+ * under the window's range readout, the box's type label into 'SA-6 DESTROYED', #116).
  */
 export function reservePip(f: HudFrame): void {
   const { L, occ } = f;
   const u = L.u;
   if (L.pipW > 0) occ.add(L.pipX - 4 * u, L.pipY - 4 * u, L.pipX + L.pipW + 4 * u, L.pipY + L.pipH + 4 * u);
+  if (Number.isFinite(zoneExt.killBottom)) occ.add(zoneExt.killLeft - 4 * u, L.killY - 10 * u, zoneExt.killRight + 4 * u, zoneExt.killBottom);
 }
 
 /**
@@ -146,8 +148,7 @@ export function reserveFixedZones(f: HudFrame): void {
   reservePip(f);
   // top-left column (objectives / damage / hint), as drawn last frame
   if (Number.isFinite(zoneExt.colBottom)) occ.add(L.colX - 6 * u, L.colY - 10 * u, L.colX + L.colW, zoneExt.colBottom);
-  // kill feed (top right)
-  if (Number.isFinite(zoneExt.killBottom)) occ.add(zoneExt.killLeft - 4 * u, L.killY - 10 * u, zoneExt.killRight + 4 * u, zoneExt.killBottom);
+  // (the kill feed, top right, with the PiP: reservePip)
   // the touch controls in the bottom band (throttle, FIRE, GUN, CMS, stick base): a contact's CIV or
   // type label moves or drops rather than print under a thumb (#62)
   for (const r of controlRects()) occ.add(r.x - 2 * u, r.y - 2 * u, r.x + r.w + 2 * u, r.y + r.h + 2 * u);
