@@ -161,8 +161,8 @@ describe('service record', () => {
     g.localStorage!.setItem('f35a.medals.v1', '{not json');
     expect(loadMedals()).toEqual({});
   });
-  it('campaign list is intact (12 missions) for the grade strip', () => {
-    expect(CAMPAIGN.length).toBeGreaterThanOrEqual(12);
+  it('campaign list is intact (10 missions since c07 and c12 were removed, issue #63) for the grade strip', () => {
+    expect(CAMPAIGN.length).toBe(10);
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * MISSIONS — a scripted "competent player" that can fly every mission type end to end with the
  * REAL SimWorld / CombatSystem / AI / MissionRunner (winnability checks, the soft-lock hunt and
- * the Winchester / rearm loop):
+ * going home when Winchester — there is no rearming):
  *
  *  - air-to-air: the simai team's calibrated PlayerBot (tests/ai-playerbot.ts) — taps the TD box,
  *    fires on the calibrated SHOOT cue, cranks, defends on the MAWS after a human reaction time;
@@ -11,10 +11,8 @@
  *    (the StormBreaker is flown like the SDB: same glide envelope, it just also follows a mover);
  *    under a live SA-10 it flies the whole attack low and pops up only to toss the bombs;
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
- *  - Winchester / low fuel: flies to the mission's rearm point (Whenuapai over Auckland, the
- *    scenery's first airbase in the procedural theatres: rearmHome() of the rearm runtime),
- *    descends through the rearm gate and circles the field until the mission rearms it, then goes
- *    back to work.
+ *  - Winchester / low fuel: there is no rearming (issue #63), so it flies home to Whenuapai
+ *    (homeBase()) and circles the field, out of the fight, until the mission ends.
  *
  * Flying is delegated to the AI Autopilot (the same "hands" the AI uses).
  */
@@ -37,7 +35,6 @@ import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
 import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
-import { rearmHome } from '../src/missions/runtime/rearm';
 import { spawnFloor } from '../src/missions/runtime/spawner';
 
 const _h = new Vector3();
@@ -74,18 +71,59 @@ function turnLimited(p: AircraftEntity, h: Vector3, maxDeg = 100): Vector3 {
   return h.set(Math.cos(a), 0, Math.sin(a));
 }
 
+/**
+ * Where the bot goes when it is out of weapons or fuel (x, z m): Whenuapai (Auckland is the only
+ * theatre, issue #73).
+ */
+export function homeBase(_def: MissionDef): { x: number; z: number; name: string } {
+  return { x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' };
+}
+
+/** Below this share of its max health the jet is crippled: it can't hold speed (playtest 2.1-d: 14 hp, 98 → 64 m/s, crashed). */
+export const CRIPPLED_FRACTION = 0.25;
+/** Out of the fight (Winchester, bingo, crippled): a bandit inside this range is dealt with before the bot turns for home (m). */
+export const OUT_THREAT_RANGE = 25_000;
+/** Out of missiles with a bandit inside this range: it's a merge already, too late to run — fight with the gun (m). */
+export const OUT_GUN_RANGE = 3_000;
+/** Out of missiles: a bandit inside this range, or closing fast, is run from low (m). */
+export const OUT_EXTEND_RANGE = 12_000;
+/** Missiles left (an AIM-9X when the AMRAAMs are gone): a bandit inside this range, or closing fast, is shot (m). */
+export const OUT_SHOOT_RANGE = 14_000;
+
+/**
+ * What the bot does once it is out of the fight (Winchester, bingo, or a crippled jet) with the
+ * nearest bandit on the scope `banditD` m away (null: none). Playtest 2.1-i: with no AMRAAMs left
+ * the bot flew home in a straight line while a MiG-29 closed to guns range, and was killed.
+ *  - 'air':    missiles left (the AIM-9X) and the bandit close or hot: shoot it (PlayerBot);
+ *  - 'guns':   no missiles, rounds left, the bandit inside OUT_GUN_RANGE: fight it with the gun (BFM);
+ *  - 'extend': no missiles and the bandit close or hot: run from it low and fast, bent towards home;
+ *  - 'home':   nothing close: fly home and circle the field.
+ */
+export type OutAction = 'air' | 'guns' | 'extend' | 'home';
+export function outOfFightAction(o: { aa: number; gunAmmo: number; banditD: number | null; hot: boolean }): OutAction {
+  const d = o.banditD;
+  if (d === null || d > OUT_THREAT_RANGE) return 'home';
+  if (o.aa > 0) return d < OUT_SHOOT_RANGE || o.hot ? 'air' : 'home';
+  if (o.gunAmmo > 0 && d < OUT_GUN_RANGE) return 'guns';
+  return d < OUT_EXTEND_RANGE || o.hot ? 'extend' : 'home';
+}
+
+/** Crippled (health below CRIPPLED_FRACTION) with a live friendly aircraft left to finish the job: stop attacking, egress. */
+export function shouldEgress(p: AircraftEntity, friendliesAlive: number): boolean {
+  return p.health < CRIPPLED_FRACTION * p.maxHealth && friendliesAlive > 0;
+}
+
 export interface MissionBotOptions {
   /** MAWS reaction time (s). */
   reaction?: number;
-  /** Go home to rearm when Winchester (default true). */
-  rearm?: boolean;
+  /** Go home when Winchester or bingo (default true). */
+  rtb?: boolean;
 }
 
 export class MissionBot {
   readonly air: PlayerBot;
   readonly pilot = new Autopilot();
   mode = 'NAV';
-  rearmTrips = 0;
   private lastRelease = -99;
   private lastCm = -99;
   private beamSide = 0;
@@ -97,7 +135,7 @@ export class MissionBot {
   private readonly opts: Required<MissionBotOptions>;
   /** The briefed loadout carries air-to-ground stores. */
   private readonly agLoadout: boolean;
-  /** Where the mission rearms us (y = 0). */
+  /** Home base (y = 0): where we go when out of weapons or fuel. */
   readonly home: Vector3;
 
   constructor(
@@ -106,9 +144,9 @@ export class MissionBot {
     private readonly p: AircraftEntity,
     opts: MissionBotOptions = {},
   ) {
-    this.opts = { reaction: 0.8, rearm: true, ...opts };
+    this.opts = { reaction: 0.8, rtb: true, ...opts };
     this.agLoadout = this.agLeft() > 0;
-    const h = rearmHome(runner.def);
+    const h = homeBase(runner.def);
     this.home = new Vector3(h.x, 0, h.z);
     const wp = runner.currentWaypoint;
     this.air = new PlayerBot({ home: this.home.clone().setY(3000), cap: wp ? wp.position.clone() : null, reaction: this.opts.reaction, rtbWhenWinchester: true });
@@ -222,13 +260,15 @@ export class MissionBot {
     return false;
   }
 
-  private nearestBandit(): { e: AircraftEntity; d: number } | null {
+  /** Nearest hostile aircraft on the scope; `fighters`: only those that can shoot back (no drone, bomber or AWACS). */
+  private nearestBandit(fighters = false): { e: AircraftEntity; d: number } | null {
     let best: AircraftEntity | null = null;
     let bestD = Infinity;
     for (const c of this.p.radar.contacts) {
       if (!isHostile(this.p.team, c.team)) continue;
       const e = this.world.getEntity(c.id);
       if (!e || e.kind !== 'aircraft' || !e.alive) continue;
+      if (fighters && (e.oneWay || e.type === 'tu22m' || e.type === 'a50')) continue;
       const d = c.position.distanceTo(this.p.position);
       if (d < bestD) {
         bestD = d;
@@ -273,16 +313,32 @@ export class MissionBot {
     this.air.opts.rtbWhenWinchester = !guns;
     if (guns) return bandit ? this.fight('GUNS', dt) : this.huntDrone(dt);
 
-    // 3. Winchester / bingo: rearm at home (a gun kill of an overshooting bandit is still taken)
+    // a hot bandit (closing fast — DARKSTAR's "threat … hot" call)
+    const isHot = (b: { e: AircraftEntity; d: number } | null): boolean => {
+      if (!b || b.d >= 22_000) return false;
+      _q.subVectors(p.position, b.e.position);
+      return _q.dot(b.e.velocity) - _q.dot(p.velocity) > 60 * b.d;
+    };
+    const hot = isHot(bandit);
+
+    // 3. Winchester / bingo / crippled: out of the fight, home (there is no rearming, #63). A bandit
+    //    close by is dealt with first — shot with what's left, gunned in a merge, or run from low —
+    //    instead of turning a straight back on it (playtest 2.1-i). A crippled jet with friendlies
+    //    left to finish the job stops attacking and egresses (2.1-d)
     const agUseless = ag === 0 || (surfaceNeeded && !surface);
-    const out = (aa === 0 && (airNeeded || (bandit && bandit.d < 25_000))) || (surfaceNeeded && agUseless && aa === 0) || (surfaceNeeded && ag === 0 && !airNeeded);
-    if (this.opts.rearm && (out || fuelLow)) {
-      if (bandit && bandit.d < 1_500 && aa === 0 && p.gunAmmo > 0) {
-        _h.subVectors(bandit.e.position, p.position);
-        _q.set(0, 0, -1).applyQuaternion(p.quaternion);
-        if (_q.dot(_h) > 0.85 * _h.length()) return this.fight('GUNS', dt);
+    const out = (aa === 0 && (airNeeded || (bandit && bandit.d < OUT_THREAT_RANGE))) || (surfaceNeeded && agUseless && aa === 0) || (surfaceNeeded && ag === 0 && !airNeeded);
+    const crippled = shouldEgress(p, this.friendliesAlive());
+    if (this.opts.rtb && (out || fuelLow || crippled)) {
+      // (only a fighter is a threat: a drone, bomber or AWACS left behind is no reason to turn round)
+      const threat = this.nearestBandit(true);
+      const act = outOfFightAction({ aa, gunAmmo: p.gunAmmo, banditD: threat ? threat.d : null, hot: isHot(threat) });
+      if (act === 'air') return this.fight('AIR', dt);
+      if (act === 'guns') {
+        this.air.opts.rtbWhenWinchester = false;
+        return this.fight('GUNS', dt);
       }
-      return this.rearmLeg(dt);
+      if (act === 'extend' && threat) return this.extendLow(threat.e, dt);
+      return this.homeLeg(dt, crippled);
     }
 
     // 3b. a raid to stop (intercept objective): bombers first, fighters only when on top of us
@@ -299,12 +355,7 @@ export class MissionBot {
     const sa10 = this.sa10Threat();
     //    (hiding low in the terrain shadow); flying high the bandits are fought like anywhere else
     const masked = sa10 && p.flight.agl < 600;
-    // a hot bandit (closing fast — DARKSTAR's "threat … hot" call) is met with AMRAAMs from 22 km
-    let hot = false;
-    if (bandit && bandit.d < 22_000) {
-      _q.subVectors(p.position, bandit.e.position);
-      hot = _q.dot(bandit.e.velocity) - _q.dot(p.velocity) > 60 * bandit.d;
-    }
+    // a hot bandit is met with AMRAAMs from 22 km
     if (bandit && aa > 0 && (masked ? bandit.d < 4_000 : bandit.d < 14_000 || hot || !surface)) return this.fight('AIR', dt);
 
     // 5. surface attack — flying the briefed route (nav / IP steering points) first, like a human
@@ -532,7 +583,8 @@ export class MissionBot {
     this.pilot.fly(p, this.world, dt);
   }
 
-  private rearmLeg(dt: number): void {
+  /** Fly home and circle the field; `crippled`: no climb (the jet can't hold its speed), mode CRIPPLED. */
+  private homeLeg(dt: number, crippled = false): void {
     const p = this.p;
     const home = this.home;
     this.clearTriggers();
@@ -541,15 +593,15 @@ export class MissionBot {
     const low = this.sa10Threat();
     const it = this.pilot.begin(p, low ? 40 : 150);
     if (d > 3_500) {
-      // head home; start down so we arrive below the rearm gate (under the SA-10: on the deck)
+      // head home; start down early (under the SA-10: on the deck)
       _h.set(home.x - p.position.x, 0, home.z - p.position.z);
       turnLimited(p, _h, 70);
-      const alt = low ? ground + 50 : d > 20_000 ? Math.max(3_000, ground + 1_000) : ground + 600;
+      const alt = low ? ground + 50 : d > 20_000 && !crippled ? Math.max(3_000, ground + 1_000) : ground + 600;
       dirWithElevation(_h, gammaForAltitude(p, alt, 0.2, 6), it.dir);
       it.speed = 260;
       it.gMax = 4;
     } else {
-      // circle the field inside the rearm gate
+      // circle the field
       _h.set(p.position.x - home.x, 0, p.position.z - home.z).normalize();
       const tx = -_h.z * this.orbitSign;
       const tz = _h.x * this.orbitSign;
@@ -560,8 +612,44 @@ export class MissionBot {
       it.gMax = 3;
     }
     it.gain = 1;
-    this.mode = 'REARM';
+    this.mode = crippled ? 'CRIPPLED' : 'RTB';
     this.pilot.fly(p, this.world, dt);
+  }
+
+  /** Live friendly F-35s other than the player (wingmen, packages) that can still finish the job. */
+  private friendliesAlive(): number {
+    let n = 0;
+    for (const a of this.world.aircraft) if (a.alive && a !== this.p && a.team === this.p.team && a.type === 'f35a') n++;
+    return n;
+  }
+
+  /**
+   * Out of missiles with a bandit close or closing: run from it low and fast, bent towards home
+   * (descend into the clutter, burner), flares while its nose is on us inside heater range.
+   */
+  private extendLow(bandit: AircraftEntity, dt: number): void {
+    const p = this.p;
+    const w = this.world;
+    this.mode = 'EXTEND';
+    this.clearTriggers();
+    const it = this.pilot.begin(p, 60);
+    _h.set(this.home.x - p.position.x, 0, this.home.z - p.position.z).normalize();
+    _q.set(p.position.x - bandit.position.x, 0, p.position.z - bandit.position.z).normalize();
+    _h.add(_q.multiplyScalar(1.5));
+    turnLimited(p, _h, 80);
+    const ground = p.position.y - p.flight.agl;
+    dirWithElevation(_h, gammaForAltitude(p, ground + 150, 0.25, 5), it.dir);
+    it.throttle = 1;
+    it.gMax = 6;
+    it.gain = 1.4;
+    _q.set(0, 0, -1).applyQuaternion(bandit.quaternion);
+    _h.subVectors(p.position, bandit.position);
+    const R = _h.length();
+    if (R < 8_000 && _q.dot(_h) > 0.85 * R && w.time - this.lastCm > 0.8 && p.flares > 0) {
+      p.input.flare = true;
+      this.lastCm = w.time;
+    }
+    this.pilot.fly(p, w, dt);
   }
 
   /** Release range the bot plans with (m) for a weapon from strike altitude. */
@@ -717,7 +805,6 @@ export interface PlaythroughResult {
   reason: string;
   t: number;
   alive: boolean;
-  rearms: number;
   playerKills: number;
   friendlyLost: number;
   objectives: string;
@@ -770,7 +857,6 @@ export function runPlaythrough(
   const bot = new MissionBot(runner, world, p, opts.bot);
   const log: string[] = [];
   const T = () => world.time.toFixed(0).padStart(3);
-  let rearms = 0;
   let friendlyLost = 0;
   let playerKills = 0;
   const launches: PlaythroughResult['launches'] = [];
@@ -780,7 +866,6 @@ export function runPlaythrough(
     launches.push({ t: world.time, weapon: e.missile.def.id, targetId: e.targetId, group: (tgt as { groupId?: string } | undefined)?.groupId ?? null });
   });
   events.on('hud:message', (e) => {
-    if (e.text.startsWith('REARMED')) rearms++;
     if (opts.log) log.push(`${T()} HUD ${e.text}`);
   });
   events.on('destroyed', (e) => {
@@ -840,7 +925,6 @@ export function runPlaythrough(
     reason: result?.reason ?? '',
     t: Math.round(world.time),
     alive: p.alive,
-    rearms,
     playerKills,
     friendlyLost,
     objectives: runner.objectives.map((o) => `${o.primary ? 'P' : 'b'}:${o.id}=${o.state}${o.progress ? ` ${o.progress.done}/${o.progress.total}` : ''}`).join(' '),

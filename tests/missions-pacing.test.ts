@@ -90,8 +90,7 @@ describe('pacing: c02, c04 and c08 have no dead stretch over 90 s (#59)', () => 
     expect(terrainFor('c02')).not.toBe(terrainFor('c11'));
   });
 
-  // the playtest's 124 s (131–255 s) included a rearm trip; since #57's rework no bot
-  // run rearms. The longest stretch on seeds 0–2 is 47–74 s, after the last kill: Viper's return leg
+  // the playtest's 124 s (131–255 s) included a rearm trip; there is no rearming since #63. The longest stretch on seeds 0–2 is 47–74 s, after the last kill: Viper's return leg
   // until it is within 20 km of Whenuapai (kiwiSafe; Kiwi is already home at ~106 s), so it depends on
   // how far east the fight ends and how fast the player flies home (seed 2: 74 s, the closest to 90 s)
   it('c02 Shepherd: logged Pilot runs, seeds 0–2', { timeout: 300_000 }, async () => {

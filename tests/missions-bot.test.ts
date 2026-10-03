@@ -5,7 +5,8 @@
  *    (0 wins in 16 runs, 7 HUNG);
  *  - 1.1-l: its rearm leg always flew to Whenuapai, so in the procedural Instant Action theatres
  *    (rearm at the scenery's first airbase) it never rearmed (16 of 17 HUNG rows in an IA sweep).
- *    Those theatres are gone (issue #73): every mission rearms at Whenuapai again;
+ *    Those theatres are gone (issue #73), and so is rearming (issue #63): out of weapons, the bot
+ *    now flies home to Whenuapai and stays out of the fight;
  *  - 1.1-m: `ia_<mode>_<theater>` ids built a fresh random mission on every missionById() call,
  *    so the same id, difficulty and seed gave different runs (and the sweep built the terrain
  *    from one mission and flew another).
@@ -17,13 +18,14 @@
 import { describe, expect, it } from 'vitest';
 import { Autopilot } from '../src/ai/pilot/Autopilot';
 import { buildInstantMission, missionById, terrainPadsFor } from '../src/missions';
-import { rearmHome } from '../src/missions/runtime/rearm';
 import { AKL } from '../src/core/auckland';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
-import { runPlaythrough } from './missions-bot';
+import { CRIPPLED_FRACTION, MissionBot, OUT_THREAT_RANGE, homeBase, outOfFightAction, runPlaythrough, shouldEgress } from './missions-bot';
+import { harness } from './missions-helpers';
+import type { AircraftEntity } from '../src/sim/entities';
 import { PlayerBot, runBalanceMission } from './ai-playerbot';
 import { flat, makeAiWorld, v3 } from './ai-helpers';
 
@@ -38,7 +40,7 @@ describe('1.1-m: Instant Action ids are reproducible', () => {
     const b = missionById('ia_dogfight_auckland')!;
     expect(b.seed).toBe(a.seed);
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-    expect(JSON.stringify(missionById('ia_survival_auckland'))).not.toBe(JSON.stringify(a));
+    expect(JSON.stringify(missionById('ia_defend_auckland'))).not.toBe(JSON.stringify(a));
   });
   it('the Instant Action menu (buildInstantMission) still rolls a fresh mission per flight', () => {
     // Auckland's terrain seed is fixed (AKL_SEED); the layout's rng (mixed bandit types) is not
@@ -58,11 +60,26 @@ describe('1.1-k: the bot flies the GBU-53/B StormBreaker', () => {
   });
 });
 
-describe('1.1-l: the bot rearms where the mission rearms it', () => {
-  it('Auckland, the only theatre: campaign and Instant Action missions rearm at Whenuapai', () => {
+describe('1.1-l: out of weapons, the bot goes home (no rearming, issue #63)', () => {
+  it('Auckland, the only theatre: home is Whenuapai for campaign and Instant Action missions', () => {
     for (const id of ['c04', 'ia_strike_auckland', 'ia_sam_gauntlet_auckland']) {
-      expect(rearmHome(missionById(id)!), id).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
+      expect(homeBase(missionById(id)!), id).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
     }
+  });
+  it('c04 Recruit: Winchester after the strike, the bot flies to Whenuapai and is never rearmed', { timeout: 60_000 }, () => {
+    const def = missionById('c04')!;
+    const home = homeBase(def);
+    const r = runPlaythrough(def, 'recruit', 0, terrainFor('c04'), { maxT: 620, log: true });
+    const w = r.events.findIndex((l) => /WINCHESTER/.test(l));
+    expect(w, r.objectives).toBeGreaterThan(0);
+    expect(r.events.some((l) => /REARM/.test(l))).toBe(false);
+    const leg = r.events
+      .slice(w)
+      .map((l) => / BOT RTB pos=\((-?[\d.]+),(-?[\d.]+)\)km/.exec(l))
+      .filter((m): m is RegExpExecArray => !!m)
+      .map((m) => Math.hypot(Number(m[1]) * 1000 - home.x, Number(m[2]) * 1000 - home.z));
+    expect(leg.length, JSON.stringify(r.modes)).toBeGreaterThan(3);
+    expect(leg[leg.length - 1], 'closing on the home base').toBeLessThan(leg[0] - 5_000);
   });
 });
 
@@ -169,5 +186,90 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
         rows.push(`${id} seed ${seed}: ${r.state} t=${r.t.toFixed(0)} rounds=${r.gunRounds} kills=${r.playerKills}`);
       }
     expect(c01Rounds, rows.join('; ')).toBeGreaterThan(0);
+  });
+});
+
+describe('#63: out of the fight (no rearming) — Winchester with a bandit close, and a crippled jet', () => {
+  it('outOfFightAction: shoot with what is left, gun a merge, run from a close or hot bandit, else go home', () => {
+    const a = (aa: number, gunAmmo: number, banditD: number | null, hot = false) => outOfFightAction({ aa, gunAmmo, banditD, hot });
+    expect(a(0, 180, null)).toBe('home');
+    expect(a(0, 180, OUT_THREAT_RANGE + 1_000, true)).toBe('home');
+    // an AIM-9X left: the bandit is shot, not given our tail
+    expect(a(1, 180, 7_000)).toBe('air');
+    expect(a(1, 180, 20_000)).toBe('home');
+    expect(a(1, 180, 20_000, true)).toBe('air');
+    // nothing but the gun: a merge is fought, anything further off or closing fast is run from low
+    expect(a(0, 180, 2_000)).toBe('guns');
+    expect(a(0, 0, 2_000)).toBe('extend');
+    expect(a(0, 180, 7_000)).toBe('extend');
+    expect(a(0, 180, 20_000, true)).toBe('extend');
+    expect(a(0, 180, 20_000)).toBe('home');
+  });
+
+  it('shouldEgress: below a quarter of its health, and only with a friendly F-35 left to finish the job', () => {
+    const p = { health: 20, maxHealth: 100 } as AircraftEntity;
+    expect(CRIPPLED_FRACTION).toBe(0.25);
+    expect(shouldEgress(p, 1)).toBe(true);
+    expect(shouldEgress(p, 0)).toBe(false);
+    expect(shouldEgress({ ...p, health: 30 } as AircraftEntity, 1)).toBe(false);
+  });
+
+  /** ia_sam_gauntlet_auckland (stub AI, flat land): a MiG-29 `R` m ahead of the bot, nose on it; the bot's modes over `secs` s. */
+  function closeBandit(R: number, opts: { missiles: boolean; secs: number }): { modes: Set<string>; away: number; agl0: number; agl: number } {
+    const h = harness(missionById('ia_sam_gauntlet_auckland')!);
+    const p = h.world.player!;
+    for (const s of p.stores) if (!opts.missiles || (s.weapon !== 'aim120' && s.weapon !== 'aim9x')) s.count = 0;
+    const fwd = v3(p.velocity.x, 0, p.velocity.z).normalize();
+    const heading = Math.atan2(fwd.x, -fwd.z);
+    const mig = h.world.spawnAircraft({ type: 'mig29', team: 'red', position: p.position.clone().addScaledVector(fwd, R), heading: heading + Math.PI, speed: 230 });
+    const bot = new MissionBot(h.runner, h.world, p);
+    const modes = new Set<string>();
+    h.run(0.5); // the radar picks the bandit up
+    const agl0 = p.flight.agl;
+    for (let i = 0; i < opts.secs * 20; i++) {
+      bot.update(0.05);
+      modes.add(bot.mode);
+      h.run(0.05);
+    }
+    // where the bot is flying relative to the bandit: > 0 = away from it
+    const away = v3(p.position.x - mig.position.x, 0, p.position.z - mig.position.z).normalize().dot(v3(p.velocity.x, 0, p.velocity.z).normalize());
+    return { modes, away, agl0, agl: p.flight.agl };
+  }
+
+  it('Winchester, MiG-29 in a merge (2 km): the bot guns it instead of turning for home', () => {
+    const r = closeBandit(2_000, { missiles: false, secs: 1 });
+    expect([...r.modes]).toContain('GUNS');
+    expect(r.modes.has('RTB')).toBe(false);
+  });
+
+  it('Winchester, MiG-29 closing from 8 km: the bot extends low, away from it, instead of flying home past it', () => {
+    const r = closeBandit(8_000, { missiles: false, secs: 15 });
+    expect([...r.modes]).toEqual(['EXTEND']);
+    expect(r.away, 'flying away from the bandit').toBeGreaterThan(0.5);
+    expect(r.agl, `descending from ${Math.round(r.agl0)} m`).toBeLessThan(r.agl0 - 400);
+  });
+
+  it('bombs gone, AMRAAMs left, MiG-29 at 8 km: the bot shoots it instead of going home (was a straight RTB)', () => {
+    const r = closeBandit(8_000, { missiles: true, secs: 1 });
+    expect([...r.modes]).toEqual(['AIR']);
+  });
+
+  it('crippled (hp 20) on a strike: egresses when a wingman is left, presses on when it is alone', () => {
+    for (const wingman of [true, false]) {
+      const h = harness(missionById('ia_strike_auckland')!);
+      const p = h.world.player!;
+      for (const a of h.world.aircraft) if (a !== p && a.team === p.team) a.alive = false;
+      if (wingman) h.world.spawnAircraft({ type: 'f35a', team: p.team, position: p.position.clone().add(v3(500, 0, 500)), heading: 0, speed: 230 });
+      p.health = 20;
+      const bot = new MissionBot(h.runner, h.world, p);
+      const modes = new Set<string>();
+      for (let i = 0; i < 20; i++) {
+        bot.update(0.05);
+        modes.add(bot.mode);
+        h.run(0.05);
+      }
+      if (wingman) expect([...modes], 'with a wingman').toEqual(['CRIPPLED']);
+      else expect(modes.has('CRIPPLED'), [...modes].join()).toBe(false);
+    }
   });
 });

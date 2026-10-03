@@ -76,7 +76,7 @@ AWACS_FLITE=rms;  AWACS_ESPEAK="en-us+m3:155:30"
 BETTY_PIPER="${BETTY_PIPER:-en-us-kathleen-low|0|1.08}"
 PILOT_PIPER="${PILOT_PIPER:-en-us-libritts-high|19|1.02}"
 AWACS_PIPER="${AWACS_PIPER:-en-us-libritts-high|5|1.05}"
-# Hammer flight lead (a second pilot, heard on c07): another male LibriTTS speaker
+# Hammer flight lead (a second pilot, heard on c09): another male LibriTTS speaker
 HAMMER_PIPER="${HAMMER_PIPER:-en-us-libritts-high|3|1.0}"
 # Flite tempo per role (1 = native): all slightly slowed for clarity over the radio.
 BETTY_TEMPO=0.97; PILOT_TEMPO=0.97; AWACS_TEMPO=0.97

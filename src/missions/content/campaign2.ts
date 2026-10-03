@@ -1,7 +1,8 @@
 /**
- * F35-A — campaign "Operation Southern Cross", missions 7–12 (Auckland): AWACS hunt, the
- * low-level strike under the SA-10, escorting Hammer flight, the night defence of the city,
- * the SA-10 itself and the Su-57 finale.
+ * F35-A — campaign "Operation Southern Cross", missions 7–10 (Auckland): the low-level strike
+ * under the SA-10, escorting Hammer flight, the night defence of the city, and the finale: the
+ * SA-10 itself. Mission ids keep their original numbers (c08–c11) so saved progress stays valid;
+ * c07 (the A-50 hunt) and c12 (the Su-57 finale) were removed with rearming (issue #63).
  */
 import type { MissionDef } from '../../core/contracts';
 import type { Condition, TaskDef } from '../schema';
@@ -9,72 +10,7 @@ import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, fighterSweep, flight, mission, 
 
 const DS = 'DARKSTAR';
 
-/* ───────────────────────── 7. Eye in the Sky — AWACS hunt beyond Tiritiri Matangi ───────────────────────── */
-
-const c07Start = { x: -10000, z: -12000, altitude: 7500, heading: 40, speed: 250 };
-
-export const C07: MissionDef = mission({
-  id: 'c07',
-  kind: 'campaign',
-  index: 7,
-  title: 'Eye in the Sky',
-  subtitle: 'Kill the A-50 Mainstay beyond Tiritiri Matangi',
-  timeOfDay: 'dawn',
-  weather: 'scattered',
-  briefing: [
-    'An A-50 Mainstay radar plane is orbiting beyond Tiritiri Matangi Island. From up there it sees every jet that leaves Whenuapai and hands the picture straight to their fighters and SAM crews.',
-    "Kill it and they go blind. Two Su-35s fly close escort on the Mainstay and two more hold a CAP between it and the coast. An early-warning radar on Tiritiri feeds the network from the ground.",
-    'The A-50 will run as soon as it realises it is being hunted, and a relief orbit arrives in twelve minutes. The Su-35 is a far better fighter than the MiG-29: stay in the bays, stay invisible, and let DARKSTAR call the picture off bullseye — the Sky Tower.',
-  ],
-  recommendedLoadout: 'a2a_stealth',
-  allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
-  player: c07Start,
-  // 12 min: room for one Winchester trip to Whenuapai and back (≈3 min) on top of the hunt
-  timeLimit: 720,
-  script: {
-    parTime: 420,
-    awacs: { style: 'bullseye', bullseye: { x: 0, z: 0, name: 'Tower' } },
-    groups: [
-      wingmen(1, c07Start),
-      // spawn heading north: the AWACS brain lays its racetrack across the spawn heading (east–west here)
-      flight('mainstay', 'a50', 1, { x: 9000, z: -29000 }, 9000, 0, 190, 'awacs', {
-        fixedCount: true,
-        task: { kind: 'patrol', x: 8000, z: -29000, radius: 5000, altitude: 9000 },
-      }),
-      flight('guard', 'su35', 2, { x: 10500, z: -30000 }, 9500, 0, 230, 'escort', { skillOffset: -0.25, maxCount: 2, task: { kind: 'escort_group', group: 'mainstay' } }),
-      // the CAP starts well east of the Mainstay (beyond first-shot range of the player's start) and only
-      // turns in when Darkstar has called it — the i2 review found an unavoidable R-77 kill at 55 s here
-      flight('cap', 'su35', 2, { x: 34000, z: -26000 }, 7500, 90, 230, 'cap', { skillOffset: -0.15, maxCount: 2, task: { kind: 'patrol', x: 30000, z: -24000, radius: 6000, altitude: 7500 } }),
-    ],
-    sams: [site('sa8', 'tiri_sa8', 'sa8', off(P.tiritiri, 400, 200), { minDifficulty: 'veteran' })],
-    ground: [target('ewr', 'tiri_ewr', 'ewr', P.tiritiri, { name: 'EW Radar' })],
-    objectives: [
-      { id: 'o_awacs', kind: 'destroy', groups: ['mainstay'], label: 'Shoot down the A-50 Mainstay', primary: true },
-      { id: 'o_guard', kind: 'destroy', groups: ['guard'], label: 'Splash the Su-35 escort', primary: false },
-      { id: 'o_cap', kind: 'destroy', groups: ['cap'], label: 'Splash the Su-35 CAP', primary: false },
-      { id: 'o_ewr', kind: 'destroy', groups: ['tiri_ewr'], label: 'Destroy the radar on Tiritiri Matangi', primary: false },
-    ],
-    waypoints: [{ id: 'wp_orbit', label: 'Mainstay orbit', kind: 'target', x: 8000, z: -29000, altitude: 9000, objective: 'o_awacs' }],
-    triggers: [
-      {
-        id: 't_run',
-        when: { kind: 'any', of: [{ kind: 'area', x: 8000, z: -29000, radius: 22000 }, { kind: 'time', t: 400 }] },
-        actions: [
-          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Mainstay is turning north — he knows you are there. Chase him down!', priority: 2 },
-          { kind: 'retask', group: 'mainstay', task: { kind: 'rtb', x: 4000, z: -35500, altitude: 10000 } },
-        ],
-      },
-      { id: 't_cap', when: { kind: 'time', t: 20 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Su-35 CAP east of Tiritiri, 40 miles, cold. Stay low and west of them.', priority: 1 }] },
-      { id: 't_relief', when: { kind: 'time', t: 600 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two minutes until their relief orbit arrives.', priority: 2 }] },
-    ],
-    opening: [
-      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Mainstay orbiting north of Tiritiri, two Su-35s on him, two more on CAP. Bullseye is the Tower.', priority: 2 },
-    ],
-    successText: "The Mainstay is in the sea. They're flying blind now.",
-  },
-});
-
-/* ───────────────────────── 8. Under the Umbrella — low-level strike beneath the SA-10 ───────────────────────── */
+/* ───────────────────────── 7. Under the Umbrella — low-level strike beneath the SA-10 ───────────────────────── */
 
 const c08Start = { x: -24500, z: 4000, altitude: 1200, heading: 70, speed: 230 };
 /**
@@ -89,7 +25,7 @@ const wharf = { x: 4200, z: -4700 };
 export const C08: MissionDef = mission({
   id: 'c08',
   kind: 'campaign',
-  index: 8,
+  index: 7,
   title: 'Under the Umbrella',
   subtitle: 'Low-level strike beneath the Motutapu SA-10',
   timeOfDay: 'dusk',
@@ -187,7 +123,7 @@ export const C08: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── 9. Hammer Down — escort the strike package ───────────────────────── */
+/* ───────────────────────── 8. Hammer Down — escort the strike package ───────────────────────── */
 
 const c09Start = { x: -6000, z: -5000, altitude: 6500, heading: 95, speed: 240 };
 const strip = P.waiAirstrip;
@@ -249,7 +185,7 @@ const HAMMER_SCRUB_T = 420;
 export const C09: MissionDef = mission({
   id: 'c09',
   kind: 'campaign',
-  index: 9,
+  index: 8,
   title: 'Hammer Down',
   subtitle: 'Escort Hammer flight to Waiheke',
   timeOfDay: 'day',
@@ -422,14 +358,14 @@ export const C09: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── 10. Night Harbour — night defence of the CBD ───────────────────────── */
+/* ───────────────────────── 9. Night Harbour — night defence of the CBD ───────────────────────── */
 
 const c10Start = { x: -9000, z: -6500, altitude: 5000, heading: 30, speed: 240 };
 
 export const C10: MissionDef = mission({
   id: 'c10',
   kind: 'campaign',
-  index: 10,
+  index: 9,
   title: 'Night Harbour',
   subtitle: 'Defend the city from night raids',
   timeOfDay: 'night',
@@ -533,14 +469,14 @@ export const C10: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── 11. Grumble — kill the SA-10 ───────────────────────── */
+/* ───────────────────────── 10. Grumble — kill the SA-10 (finale) ───────────────────────── */
 
 const c11Start = { x: -24000, z: -2500, altitude: 6500, heading: 75, speed: 240 };
 
 export const C11: MissionDef = mission({
   id: 'c11',
   kind: 'campaign',
-  index: 11,
+  index: 10,
   title: 'Grumble',
   subtitle: 'Destroy the SA-10 on Motutapu',
   timeOfDay: 'day',
@@ -550,7 +486,7 @@ export const C11: MissionDef = mission({
     'This is the big one. The SA-10 Grumble on Motutapu is the keystone of their air defence: while it lives, nothing of ours flies over the Gulf. An SA-15 Tor sits beside it to swat incoming missiles and fighters.',
     'An early-warning radar on Rakino Island feeds the network, Su-35s hold a CAP north of Rangitoto, and a reserve pair will scramble when the Grumble is hit.',
     'Choose your weapons carefully. Clean, in the bays, the Grumble only sees you inside about 19 km — but every weapon release pops the bay doors and it will see that: fire, then beam and descend. AARGMs ride its radar home; SDBs glide in from 30 km at 30,000 ft. The Tor shoots down incoming AARGMs and SDBs aimed at anything within 3 km of it: kill the Tor first, or saturate it with everything at once.',
-    'You are not alone. Vipers 2 and 3 set up a CAP ahead of you, west of the Grumble’s umbrella, and take on the Su-35s when they come for you. Weasel flight follows with AARGMs for the Tor — when Weasel calls Magnum, put your own weapons on the Grumble so they arrive together. Out of weapons? Rearm at Whenuapai and come back.',
+    'You are not alone. Vipers 2 and 3 set up a CAP ahead of you, west of the Grumble’s umbrella, and take on the Su-35s when they come for you. Weasel flight follows with AARGMs for the Tor — when Weasel calls Magnum, put your own weapons on the Grumble so they arrive together. Every weapon you carry counts: there is no going home to rearm.',
   ],
   recommendedLoadout: 'sead_stealth',
   allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
@@ -646,95 +582,9 @@ export const C11: MissionDef = mission({
       { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Grumble is on Motutapu with a Tor beside it, Su-35s on CAP north of Rangitoto, Rakino radar feeding them. Kill the Grumble.', priority: 2 },
       { kind: 'radio', from: 'Viper 2', text: 'Two and Three, pushing ahead to CAP west of Rangitoto. We have the fighters.' },
     ],
-    successText: 'The SA-10 is scrap. The Gulf is open.',
-  },
-});
-
-/* ───────────────────────── 12. Felon — finale ───────────────────────── */
-
-const c12Start = { x: -20000, z: -3500, altitude: 6500, heading: 80, speed: 240 };
-const hq = P.motutapu;
-
-export const C12: MissionDef = mission({
-  id: 'c12',
-  kind: 'campaign',
-  index: 12,
-  title: 'Felon',
-  subtitle: 'Finale: the Motutapu bunker and the Su-57 aces',
-  timeOfDay: 'dusk',
-  weather: 'scattered',
-  features: [FEATURES.whenuapai, FEATURES.waihekeStrip, FEATURES.motutapuDepot],
-  briefing: [
-    'Southern Cross comes down to this. With their SAM belt broken and the Mainstay gone, the invasion is run from a hardened command bunker on Motutapu. Destroy it and the island garrisons are leaderless.',
-    "They know it too. Their best pilots are flying Su-57 Felons — stealthy, agile and flown by aces. DARKSTAR will struggle to hold them on radar; you will too. Everything they have left is on Motutapu: Tor, Shilkas, MANPADS, and an SA-6 on Waiheke. Another Backfire raid is expected mid-mission.",
-    'Viper 2 and Viper 3 fly with you. Put a JDAM through the bunker roof, kill the Felons, and bring everyone home.',
-  ],
-  recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
-  player: c12Start,
-  script: {
-    parTime: 600,
-    groups: [
-      wingmen(2, c12Start, { loadout: 'a2a_beast' }),
-      flight('cap', 'su35', 2, { x: 10000, z: -18000 }, 7500, 220, 240, 'cap', { skillOffset: 0.15, task: { kind: 'patrol', x: 10000, z: -16000, radius: 7000, altitude: 7500 } }),
-      flight('felons', 'su57', 2, { x: 26000, z: -20000 }, 9000, 240, 260, 'interceptor', {
-        // their best pilots: well above the difficulty's norm, but still scaled by it
-        skillOffset: 0.3,
-        maxCount: 3,
-        noun: 'Felons',
-        spawn: { kind: 'any', of: [{ kind: 'area', x: hq.x, z: hq.z, radius: 22000 }, { kind: 'time', t: 120 }] },
-        task: { kind: 'attack_player' },
-      }),
-      flight('raid', 'tu22m', 2, { x: 34000, z: -30000 }, 9000, 228, 230, 'bomber', {
-        spawn: { kind: 'time', t: 240 },
-        formation: 'wall',
-        spacing: 700,
-        task: { kind: 'route', points: [{ x: 14000, z: -14000, altitude: 8500 }, { x: 0, z: 0, altitude: 8000 }] },
-      }),
-    ],
-    sams: [
-      site('sa15', 'motu_sams', 'sa15', P.motuE, { minDifficulty: 'pilot' }),
-      site('zsu1', 'motu_sams', 'zsu23', { x: 12200, z: -8500 }),
-      site('zsu2', 'motu_sams', 'zsu23', { x: 13300, z: -9600 }, { minDifficulty: 'pilot' }),
-      site('manpads', 'motu_sams', 'sa18', P.motuS, { minDifficulty: 'pilot' }),
-      site('sa8', 'rangi_sa8', 'sa8', P.rangE),
-      site('sa6', 'wai_sa6', 'sa6', P.waiW, { heading: 250 }),
-      site('sa15pop', 'popup', 'sa15', P.motuihe, { emcon: true, minDifficulty: 'veteran' }),
-    ],
-    ground: [
-      target('bunker', 'hq', 'bunker', hq, { name: 'Command Bunker' }),
-      target('hqfuel1', 'hq_fuel', 'fuel', { x: 13300, z: -9950 }),
-      target('hqfuel2', 'hq_fuel', 'fuel', { x: 13450, z: -9850 }),
-    ],
-    objectives: [
-      { id: 'o_hq', kind: 'destroy', groups: ['hq'], label: 'Destroy the command bunker on Motutapu', primary: true },
-      { id: 'o_felons', kind: 'destroy', groups: ['felons'], label: 'Splash the Su-57 aces', primary: true, activeAt: { kind: 'group_spawned', group: 'felons' } },
-      { id: 'o_raid', kind: 'intercept', groups: ['raid'], x: 0, z: 0, radius: 10000, label: 'Stop the last Backfire raid', primary: false, activeAt: { kind: 'group_spawned', group: 'raid' } },
-      { id: 'o_sams', kind: 'destroy_sams', x: hq.x, z: hq.z, radius: 2500, label: "Destroy Motutapu's air defences", primary: false },
-      { id: 'o_cap', kind: 'destroy', groups: ['cap'], label: 'Splash the Su-35 CAP', primary: false },
-    ],
-    waypoints: [
-      { id: 'wp_ip', label: 'IP Devonport', kind: 'ip', x: P.devonport.x, z: P.devonport.z, altitude: 5000 },
-      { id: 'wp_hq', label: 'Command bunker', kind: 'target', x: hq.x, z: hq.z, objective: 'o_hq' },
-    ],
-    triggers: [
-      { id: 't_felons', when: { kind: 'group_spawned', group: 'felons' }, actions: [{ kind: 'radio', from: DS, text: "Viper 1, Darkstar. Faint contacts east… it's the Felons. They're coming for you.", priority: 3 }] },
-      { id: 't_raid', when: { kind: 'group_spawned', group: 'raid' }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Backfires inbound from the north-east — one last raid on the city!', priority: 2 }] },
-      {
-        id: 't_hq',
-        when: { kind: 'objective', id: 'o_hq', state: 'complete' },
-        delay: 2,
-        actions: [{ kind: 'radio', from: DS, text: 'All players, Darkstar. The bunker is gone! Their command net just went silent.', priority: 3 }],
-      },
-    ],
-    opening: [
-      { kind: 'radio', from: DS, text: 'All Southern Cross players, Darkstar. This is it. Command bunker on Motutapu. Viper, lead the way.', priority: 2 },
-      { kind: 'radio', from: 'Viper 2', text: 'Two.' },
-      { kind: 'radio', from: 'Viper 3', text: 'Three.' },
-    ],
-    successText: 'Southern Cross is complete. The Gulf is ours. Welcome home, Viper.',
+    successText: 'The SA-10 is scrap. The Gulf is ours. Southern Cross is complete. Welcome home, Viper.',
     campaignFinale: true,
   },
 });
 
-export const CAMPAIGN_PART2: MissionDef[] = [C07, C08, C09, C10, C11, C12];
+export const CAMPAIGN_PART2: MissionDef[] = [C08, C09, C10, C11];

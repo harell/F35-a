@@ -94,9 +94,9 @@ describe('campaign progress', () => {
     expect(p2.totals.deaths).toBe(1);
   });
 
-  it('records survival runs even though they always end in failure', () => {
-    const p = recordResult(loadProgress(), result('ia_survival_auckland', { success: false, reason: 'Shot down — survived 4 waves', score: 1800 }));
-    expect(p.best.ia_survival_auckland.score).toBe(1800);
+  it('a failed Instant Action run records no best (Survival, which did, is gone: issue #63)', () => {
+    const p = recordResult(loadProgress(), result('ia_dogfight_auckland', { success: false, reason: 'Shot down', score: 1800 }));
+    expect(p.best.ia_dogfight_auckland).toBeUndefined();
   });
 
   it('the last campaign mission unlocks nothing new', () => {
@@ -105,6 +105,21 @@ describe('campaign progress', () => {
     expect(p.unlocked.length).toBe(loadProgress().unlocked.length);
     expect(nextMissionAfter(last.id)).toBeNull();
     expect(nextMissionAfter('c01')?.id).toBe('c02');
+  });
+
+  it('an old save stuck on the removed c07 unlocks c08 (c07 and c12 were removed, issue #63)', () => {
+    const won = { score: 1500, grade: 'B', difficulty: 'pilot' };
+    // won c06 → c07 unlocked; c07 is gone, so c06's win now unlocks c08
+    const s = sanitizeProgress({ unlocked: ['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c07'], best: { c06: won } }, [CAMPAIGN], TRAINING);
+    expect(s.unlocked).toContain('c08');
+    expect(s.unlocked).not.toContain('c09');
+    // a skipped mission unlocks the next one too; nothing unlocks past an unwon mission
+    const k = sanitizeProgress({ unlocked: ['c01', 'c02'], best: {}, skipped: ['c01'] }, [CAMPAIGN], TRAINING);
+    expect(k.unlocked).toContain('c02');
+    expect(k.unlocked).not.toContain('c03');
+    // a finished campaign keeps everything unlocked and the finale is c11
+    const done = sanitizeProgress({ unlocked: CAMPAIGN.map((m) => m.id).concat('c07', 'c12'), best: { c11: won, c12: won } }, [CAMPAIGN], TRAINING);
+    for (const m of CAMPAIGN) expect(done.unlocked).toContain(m.id);
   });
 
   it('training lessons chain T01 → T02 → T03 → the first campaign mission', () => {
