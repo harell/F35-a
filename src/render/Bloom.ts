@@ -21,9 +21,11 @@ import {
 } from 'three';
 
 /** Brightness (display-referred luma, 0..1) where the glow starts, and how hard it ramps. */
-export const BLOOM_THRESHOLD = 0.78;
+export const BLOOM_THRESHOLD = 0.86;
+/** Gain on the 16 source pixels summed per quarter-size texel (1/16 would be their average). */
+export const BLOOM_BLOCK_GAIN = 0.25;
 /** Strength of the glow added back over the frame. */
-export const BLOOM_INTENSITY = 0.55;
+export const BLOOM_INTENSITY = 2;
 /** The glow is computed at 1/BLOOM_DOWNSCALE of the drawing buffer in each axis. */
 export const BLOOM_DOWNSCALE = 4;
 
@@ -40,20 +42,26 @@ void main() {
 }
 `;
 
-/** Keep what is brighter than the threshold (soft knee). */
+/**
+ * Keep what is brighter than the threshold (soft knee), per source pixel over the 4×4 block this
+ * quarter-size texel covers: thresholding after averaging would dilute a 1-2 px light below the
+ * knee and drop it. The block's bright light is summed with a gain, so a point light still glows.
+ */
 export const BLOOM_BRIGHT_FRAG = /* glsl */ `
 uniform sampler2D uSrc;
 uniform vec2 uTexel;
 uniform float uThreshold;
 varying vec2 vUv;
+vec3 bright(vec2 o) {
+  vec3 c = texture2D(uSrc, vUv + uTexel * o).rgb;
+  return c * smoothstep(uThreshold, 1.0, max(c.r, max(c.g, c.b)));
+}
 void main() {
-  // 4 bilinear taps = a 4×4 box: the quarter-size target doesn't alias small glints away
-  vec3 c = texture2D(uSrc, vUv + uTexel * vec2(-1.0, -1.0)).rgb + texture2D(uSrc, vUv + uTexel * vec2(1.0, -1.0)).rgb
-         + texture2D(uSrc, vUv + uTexel * vec2(-1.0, 1.0)).rgb + texture2D(uSrc, vUv + uTexel * vec2(1.0, 1.0)).rgb;
-  c *= 0.25;
-  float l = max(c.r, max(c.g, c.b));
-  float k = smoothstep(uThreshold, 1.0, l);
-  gl_FragColor = vec4(c * k, 1.0);
+  vec3 c = vec3(0.0);
+  for (int y = 0; y < 4; y++) {
+    for (int x = 0; x < 4; x++) c += bright(vec2(float(x) - 1.5, float(y) - 1.5));
+  }
+  gl_FragColor = vec4(c * ${BLOOM_BLOCK_GAIN.toFixed(3)}, 1.0);
 }
 `;
 

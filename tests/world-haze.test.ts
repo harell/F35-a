@@ -93,11 +93,18 @@ describe('bloom (#139 item 4)', () => {
     expect(BLOOM_THRESHOLD).toBeGreaterThan(0.6);
     expect(BLOOM_THRESHOLD).toBeLessThan(1);
     expect(BLOOM_DOWNSCALE).toBe(4);
-    expect(BLOOM_INTENSITY).toBeLessThanOrEqual(1);
-    expect(BLOOM_BRIGHT_FRAG).toMatch(/smoothstep\(uThreshold, 1\.0/);
+    expect(BLOOM_INTENSITY).toBeLessThanOrEqual(3);
+    expect(BLOOM_BRIGHT_FRAG).toMatch(/smoothstep\(uThreshold, 1\.0, max/);
     // separable Gaussian: the weights sum to 1
     const w = [...BLOOM_BLUR_FRAG.matchAll(/\* (0\.\d+);/g)].map((m) => Number(m[1]));
     expect(w).toHaveLength(5);
     expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 4);
+  });
+});
+
+describe('bloom bright pass (#139 item 4)', () => {
+  it('thresholds each source pixel before summing, so a 1-2 px light survives the downscale', () => {
+    expect(BLOOM_BRIGHT_FRAG).not.toMatch(/\$\{/);
+    expect(BLOOM_BRIGHT_FRAG).toMatch(/c \* 0\.250/);
   });
 });
