@@ -1,12 +1,12 @@
 // Coverage badge: turns Vitest's json-summary (coverage/coverage-summary.json, `npm run coverage`) into a shields.io
-// endpoint file. The deploy workflow writes it into dist/ so GitHub Pages serves it next to the game, and the README
-// badge reads it: https://img.shields.io/endpoint?url=https://harell.github.io/F35-a/badges/coverage.json
+// endpoint file. The coverage workflow (.github/workflows/coverage.yml) publishes it on the `badges` branch, and the
+// README badge reads it: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/harell/F35-a/badges/coverage.json
 //
-//   node tools/coverage-badge.mjs [out=dist/badges/coverage.json]
+//   node tools/coverage-badge.mjs [out=badges/coverage.json]
 import fs from 'node:fs';
 import path from 'node:path';
 
-const out = process.argv[2] ?? 'dist/badges/coverage.json';
+const out = process.argv[2] ?? 'badges/coverage.json';
 const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
 const pct = summary.total.lines.pct;
 const color = pct >= 80 ? 'brightgreen' : pct >= 70 ? 'green' : pct >= 60 ? 'yellowgreen' : pct >= 50 ? 'yellow' : pct >= 40 ? 'orange' : 'red';

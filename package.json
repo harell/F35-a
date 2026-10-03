@@ -11,7 +11,7 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "coverage": "vitest run --coverage --testTimeout=30000",
+    "coverage": "vitest run --coverage --testTimeout=60000",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "e2e": "node e2e/missions.mjs",

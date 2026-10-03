@@ -1,0 +1,41 @@
+name: Coverage
+
+# The README's coverage badge. Runs the tests with V8 coverage after every push to master and publishes the numbers as
+# a shields.io endpoint file on the `badges` branch (one commit, replaced each time). It never blocks a deploy:
+# instrumented runs are ~3× slower and timing-sensitive, so the deploy keeps its own plain test run (deploy.yml).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coverage
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Vitest can exit 1 under coverage (internal worker RPC timeouts, a slow test past its timeout) while the
+      # coverage summary is still written; the badge reports the coverage, the deploy reports the tests.
+      - run: npm run coverage || echo "::warning::the coverage run exited non-zero; publishing the coverage it measured"
+      - run: node tools/coverage-badge.mjs badges/coverage.json
+      - name: Publish to the badges branch
+        run: |
+          cd badges
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -q -m "Coverage badge for ${GITHUB_SHA}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" badges
