@@ -297,7 +297,7 @@ export function drawCues(f: HudFrame): void {
   const { pen, L } = f;
   for (let i = 0; i < cueCount; i++) {
     const c = cues[i];
-    const on = c.hz === 0 || blink(f, c.hz, 0.7);
+    const on = c.hz <= 0 || blink(f, c.hz, 0.7);
     if (TEST_HOOKS) noteCue(c.text, L.cx, c.y, on);
     if (!on) continue;
     pen.g.globalAlpha = c.alpha * f.declutter;
