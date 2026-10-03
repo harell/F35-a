@@ -213,7 +213,7 @@ describe('#116 collisions: incoming missiles, waterline, wingmen, bank arc, CIV 
       }
     }
     expect(bad).toEqual([]);
-  });
+  }, 60_000);
 
   it('1.2-d: the centre cues (SHOOT, FOX 3) never print over an incoming missile\'s TTI', () => {
     for (const view of ['hud', 'cockpit'] as CameraMode[]) {

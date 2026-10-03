@@ -10,6 +10,8 @@ import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
+import { MUNITIONS } from '../../sim/weapons/defs';
+import { glideTimeToGo, type MunitionDefLike } from '../../sim/weapons/dlz';
 import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
 import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
 import { hitsBankOrWaterline } from './flight';
@@ -816,11 +818,37 @@ function impactLabel(f: HudFrame, m: MissileEntity, t: AnyEntity): string {
 }
 
 function timeToImpact(f: HudFrame, m: MissileEntity, t: AnyEntity): number {
+  if (m.def.category === 'bomb') return bombTimeToGo(m, t.position, f.world.time);
   const r = f.v1.subVectors(t.position, m.position);
   const d = r.length();
   if (d < 1) return 0;
   const closing = -f.v2.subVectors(t.velocity, m.velocity).dot(r) / d;
   return d / Math.max(80, closing);
+}
+
+/** Last bomb TTI per munition id: { world time it was computed, seconds to go then }. */
+const bombTti = new Map<number, { at: number; tti: number }>();
+
+/**
+ * A bomb's predicted time of flight to `target` (its own glide law flown from its present state:
+ * glideTimeToGo), not range ÷ closing speed, which read 99 s on a StormBreaker from 12 NM that took
+ * 113 s (1.2-j). Re-flown at 4 Hz per bomb and counted down in between.
+ */
+export function bombTimeToGo(m: MissileEntity, target: { x: number; y: number; z: number }, now: number): number {
+  const c = bombTti.get(m.id);
+  if (c && now >= c.at && now - c.at < 0.25) return Math.max(0, c.tti - (now - c.at));
+  const dx = target.x - m.position.x;
+  const dz = target.z - m.position.z;
+  const horiz = Math.hypot(dx, dz);
+  const vh = horiz > 1 ? (m.velocity.x * dx + m.velocity.z * dz) / horiz : Math.hypot(m.velocity.x, m.velocity.z);
+  const def = (MUNITIONS as Record<string, MunitionDefLike | undefined>)[m.def.id] ?? m.def;
+  const tti = glideTimeToGo(def, horiz, m.position.y - target.y, vh, m.velocity.y, target.y, def.maxFlightTime - (m.age || 0));
+  if (bombTti.size > 32) bombTti.clear();
+  if (c) {
+    c.at = now;
+    c.tti = tti;
+  } else bombTti.set(m.id, { at: now, tti });
+  return tti;
 }
 
 /* ───────────────────────── Own missiles in flight ───────────────────────── */
