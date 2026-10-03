@@ -46,6 +46,7 @@ import { createEntityRenderer } from '../render/EntityRenderer';
 import { createEffects } from '../render/effects/Effects';
 import { createCameraRig } from '../render/CameraRig';
 import { TargetCam, targetCamOmitFor } from '../render/TargetCam';
+import { Bloom, bloomEnabled } from '../render/Bloom';
 import { pipView } from '../hud/hmd/pip';
 import { createHud } from '../hud/Hud';
 import { createCockpit } from '../hud/Cockpit';
@@ -117,6 +118,8 @@ export class Game {
   progress: CampaignProgress;
 
   readonly renderer: WebGLRenderer;
+  /** High-tier glow pass (#139), made on first use. */
+  private bloom: Bloom | null = null;
   readonly hud: HudApi;
   readonly audio: AudioApi;
   readonly input: InputApi;
@@ -753,6 +756,8 @@ export class Game {
     s.cockpit.update(ctx2, s.rig.headLocal);
     this.renderer.info.reset();
     this.renderer.render(s.scene, s.rig.camera);
+    // glow on the world only: before the cockpit pass, so the panel and the PCD never bloom
+    if (bloomEnabled(this.quality)) (this.bloom ??= new Bloom()).render(this.renderer);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
     this.hud.update(ctx2);
     // target camera window, after the HUD has laid out this frame (pipView: its rect and target), so

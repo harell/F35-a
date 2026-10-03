@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { aerialFactor, skyPreset } from '../src/world/sky/presets';
 import { ATMOSPHERE_GLSL, blendAtmosphere, createAtmosphereUniforms } from '../src/world/sky/atmosphere';
 import type { TimeOfDay, Weather } from '../src/core/types';
+import { QUALITY_PRESETS } from '../src/core/data';
+import { BLOOM_BLUR_FRAG, BLOOM_BRIGHT_FRAG, BLOOM_DOWNSCALE, BLOOM_INTENSITY, BLOOM_THRESHOLD, bloomEnabled } from '../src/render/Bloom';
 
 const P = (tod: TimeOfDay, w: Weather = 'clear') => skyPreset('auckland', tod, w, 20_000);
 
@@ -77,5 +79,25 @@ describe('shared atmosphere uniforms (#139)', () => {
     expect(fog).toMatch(/atmoGrade\(/);
     // the terrain and photo-roofed buildings already declare `uAerial` (the aerial photo sampler)
     expect(ATMOSPHERE_GLSL).not.toMatch(/\buAerial\b/);
+  });
+});
+
+describe('bloom (#139 item 4)', () => {
+  it('is on for the high tier only', () => {
+    expect(bloomEnabled(QUALITY_PRESETS.low)).toBe(false);
+    expect(bloomEnabled(QUALITY_PRESETS.medium)).toBe(false);
+    expect(bloomEnabled(QUALITY_PRESETS.high)).toBe(true);
+  });
+
+  it('keeps only bright pixels, at a quarter size, and adds a modest glow', () => {
+    expect(BLOOM_THRESHOLD).toBeGreaterThan(0.6);
+    expect(BLOOM_THRESHOLD).toBeLessThan(1);
+    expect(BLOOM_DOWNSCALE).toBe(4);
+    expect(BLOOM_INTENSITY).toBeLessThanOrEqual(1);
+    expect(BLOOM_BRIGHT_FRAG).toMatch(/smoothstep\(uThreshold, 1\.0/);
+    // separable Gaussian: the weights sum to 1
+    const w = [...BLOOM_BLUR_FRAG.matchAll(/\* (0\.\d+);/g)].map((m) => Number(m[1]));
+    expect(w).toHaveLength(5);
+    expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 4);
   });
 });

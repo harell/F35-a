@@ -36,8 +36,9 @@ const browser = await chromium.launch({
 const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
 const page = await context.newPage();
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+page.on('console', (m) => { if (m.type() === 'error') console.log('[console.error]', m.text().slice(0, 600)); });
 for (const [tod, weather, quality] of cases) {
-  await page.goto(`${base}/?mission=ia_stroll_auckland&autostart=1&seed=7&quality=${quality}&tod=${tod}&weather=${weather}`, { waitUntil: 'load' });
+  await page.goto(`${base}/?mission=ia_stroll_auckland&autostart=1&seed=7&quality=${quality}&tod=${tod}&weather=${weather}`, { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction(() => window.__f35?.state?.()?.mission, null, { timeout: 60000 });
   await page.evaluate(() => {
     const f = window.__f35;
