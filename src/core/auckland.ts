@@ -78,6 +78,7 @@ export const AKL_LANDMARKS: AklLandmark[] = [
   { id: 'bridge_s', name: 'Harbour Bridge (south abutment, St Marys Bay)', kind: 'bridge', lat: -36.83536, lon: 174.74254, site: 'shore' },
   { id: 'bridge_n', name: 'Harbour Bridge (north abutment, Northcote Point)', kind: 'bridge', lat: -36.82724, lon: 174.74786, note: 'Steel truss, ~1,020 m, main span 243 m, 43 m clearance over the water', site: 'shore' },
   { id: 'eden_park', name: 'Eden Park (Ngā Ana Wai)', kind: 'stadium', lat: -36.87491, lon: 174.74469, radius: 200, note: "New Zealand's national stadium; stands from OpenStreetMap" },
+  { id: 'spark_arena', name: 'Spark Arena', kind: 'stadium', lat: -36.847174, lon: 174.777001, radius: 80, note: "Auckland's 12,000-seat indoor arena, its two lens-shaped roofs; shape from the LINZ LiDAR in core/sparkArena.ts" },
   { id: 'domain', name: 'Auckland Domain (Pukekawa) & War Memorial Museum', kind: 'landmark', lat: -36.8600, lon: 174.7780 },
   { id: 'ponsonby', name: 'Ponsonby / Herne Bay', kind: 'suburb', lat: -36.8480, lon: 174.7400 },
   { id: 'parnell', name: 'Parnell', kind: 'suburb', lat: -36.8560, lon: 174.7800 },

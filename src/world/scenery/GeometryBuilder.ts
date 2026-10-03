@@ -28,6 +28,8 @@ export const WIN_OFFICE = 1;
 export const WIN_HOME = 2;
 export const WIN_INDUSTRIAL = 3;
 export const WIN_GLOW = 4; // uniformly emissive at night (tower pod, lit sign)
+export const WIN_RIBS = 5; // standing-seam sheet metal: seams down a roof's fall line (Spark Arena)
+export const WIN_LOBBY = 6; // curtain-wall glass on a mullion grid, lit from inside at night (Spark Arena's foyer)
 
 export class GeometryBuilder {
   private pos: number[] = [];

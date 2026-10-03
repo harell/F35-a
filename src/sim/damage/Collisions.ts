@@ -3,7 +3,8 @@
  * mid-air collisions between aircraft (swept closest-approach test over the last step) and
  * aircraft vs landmarks (the Sky Tower: crashes the aircraft; the player's jet is also a hit on the
  * tower, which burns where it went in and comes down on a second hit, like a drone's, #113) and
- * aircraft vs the CBD's skyscrapers (sim/buildings.ts, #128: crashes the aircraft and collapses the building).
+ * aircraft vs the CBD's skyscrapers (sim/buildings.ts, #128: crashes the aircraft and collapses the building)
+ * and Spark Arena (crashes the aircraft; the arena stands).
  */
 import { Vector3 } from 'three';
 import type { EventBus } from '../../core/events';
@@ -53,9 +54,12 @@ export class CollisionSystem {
       const hit = buildings.firstHit(_mid, ac.position);
       if (!hit) continue;
       ac.position.lerpVectors(_mid, ac.position, hit.s);
-      buildings.collapse(hit.index);
+      // a fixed landmark (Spark Arena) crashes the aircraft but stands
+      const fixed = hit.building.fixed === true;
+      if (!fixed) buildings.collapse(hit.index);
       this.damage.destroyAircraft(ac, null, 'collision', ac.isPlayer ? 'building' : 'crash');
       ac.velocity.multiplyScalar(-0.08);
+      if (fixed) continue;
       this.host?.events.emit('building:collapsed', {
         building: hit.building.id,
         aircraftId: ac.id,

@@ -10,8 +10,13 @@
  * The prisms sit in a coarse XZ grid, and a segment is tested only below the tallest roof and inside
  * the index's bounds, so it costs nothing outside the CBD. The geometry is cached per installed data
  * (aucklandBuildingsVersion) and terrain; which buildings are down is per world (BuildingIndex.collapsed).
+ *
+ * Spark Arena (core/sparkArena.ts), the hand-built landmark east of the LINZ building box, joins the
+ * index as a `fixed` building (id −1, after the LINZ ones): flying into it crashes the aircraft like a
+ * tower does, but it never collapses. It is there with or without the LINZ building data.
  */
 import type { Vector3 } from 'three';
+import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
 import { aucklandBuildings, aucklandBuildingsVersion } from '../world/scenery/aucklandBuildings';
 
 /** Roof height above the ground (m) from which a building is a skyscraper the sim knows about (≈ 12 storeys). */
@@ -40,6 +45,8 @@ export interface SolidBuilding {
   readonly z: number;
   readonly ground: number;
   readonly top: number;
+  /** A landmark that stands whatever hits it (Spark Arena): never collapsed, no 'building:collapsed'. */
+  readonly fixed?: boolean;
 }
 
 export interface BuildingGeometry {
@@ -62,7 +69,6 @@ export function buildBuildingGeometry(
   minHeight = SKYSCRAPER_MIN_HEIGHT,
   list = aucklandBuildings(),
 ): BuildingGeometry | null {
-  if (!list?.length) return null;
   const buildings: SolidBuilding[] = [];
   const cells = new Map<number, number[]>();
   let maxTop = -Infinity;
@@ -70,18 +76,15 @@ export function buildBuildingGeometry(
   let gx1 = -Infinity;
   let gz0 = Infinity;
   let gz1 = -Infinity;
-  for (let id = 0; id < list.length; id++) {
-    const b = list[id];
-    if (!b.prisms.length || !b.prisms.some((p) => p.h >= minHeight)) continue;
-    const base = b.prisms[0];
-    const ground = groundAt(base.cx, base.cz);
+  const add = (id: number, x: number, z: number, parts: readonly { ring: Float32Array; h: number }[], fixed?: boolean) => {
+    const ground = groundAt(x, z);
     const prisms: SolidPrism[] = [];
     let top = ground;
     let bx0 = Infinity;
     let bx1 = -Infinity;
     let bz0 = Infinity;
     let bz1 = -Infinity;
-    for (const p of b.prisms) {
+    for (const p of parts) {
       let minX = Infinity;
       let maxX = -Infinity;
       let minZ = Infinity;
@@ -101,7 +104,7 @@ export function buildBuildingGeometry(
       bz1 = Math.max(bz1, maxZ);
     }
     const k = buildings.length;
-    buildings.push({ id, prisms, x: base.cx, z: base.cz, ground, top });
+    buildings.push(fixed ? { id, prisms, x, z, ground, top, fixed } : { id, prisms, x, z, ground, top });
     maxTop = Math.max(maxTop, top);
     gx0 = Math.min(gx0, bx0);
     gx1 = Math.max(gx1, bx1);
@@ -115,7 +118,14 @@ export function buildBuildingGeometry(
         else cells.set(key, [k]);
       }
     }
+  };
+  for (let id = 0; list && id < list.length; id++) {
+    const b = list[id];
+    if (!b.prisms.length || !b.prisms.some((p) => p.h >= minHeight)) continue;
+    add(id, b.prisms[0].cx, b.prisms[0].cz, b.prisms);
   }
+  // Spark Arena: its roof outline in 10 m cells, each as high as the roof over it (core/sparkArena.ts)
+  add(-1, SPARK_ARENA.x, SPARK_ARENA.z, sparkArenaSolids(), true);
   if (!buildings.length) return null;
   return { buildings, maxTop, minX: gx0, maxX: gx1, minZ: gz0, maxZ: gz1, cells };
 }
@@ -208,9 +218,9 @@ export class BuildingIndex {
 
   constructor(readonly geo: BuildingGeometry) {}
 
-  /** Mark building `k` (index into geo.buildings) collapsed. */
+  /** Mark building `k` (index into geo.buildings) collapsed (a `fixed` one never is). */
   collapse(k: number): void {
-    if (this.collapsed.has(k)) return;
+    if (this.collapsed.has(k) || this.geo.buildings[k].fixed) return;
     this.collapsed.add(k);
     this.version++;
   }
