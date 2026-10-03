@@ -260,13 +260,15 @@ export class MissionBot {
     return false;
   }
 
-  private nearestBandit(): { e: AircraftEntity; d: number } | null {
+  /** Nearest hostile aircraft on the scope; `fighters`: only those that can shoot back (no drone, bomber or AWACS). */
+  private nearestBandit(fighters = false): { e: AircraftEntity; d: number } | null {
     let best: AircraftEntity | null = null;
     let bestD = Infinity;
     for (const c of this.p.radar.contacts) {
       if (!isHostile(this.p.team, c.team)) continue;
       const e = this.world.getEntity(c.id);
       if (!e || e.kind !== 'aircraft' || !e.alive) continue;
+      if (fighters && (e.oneWay || e.type === 'tu22m' || e.type === 'a50')) continue;
       const d = c.position.distanceTo(this.p.position);
       if (d < bestD) {
         bestD = d;
@@ -312,11 +314,12 @@ export class MissionBot {
     if (guns) return bandit ? this.fight('GUNS', dt) : this.huntDrone(dt);
 
     // a hot bandit (closing fast — DARKSTAR's "threat … hot" call)
-    let hot = false;
-    if (bandit && bandit.d < 22_000) {
-      _q.subVectors(p.position, bandit.e.position);
-      hot = _q.dot(bandit.e.velocity) - _q.dot(p.velocity) > 60 * bandit.d;
-    }
+    const isHot = (b: { e: AircraftEntity; d: number } | null): boolean => {
+      if (!b || b.d >= 22_000) return false;
+      _q.subVectors(p.position, b.e.position);
+      return _q.dot(b.e.velocity) - _q.dot(p.velocity) > 60 * b.d;
+    };
+    const hot = isHot(bandit);
 
     // 3. Winchester / bingo / crippled: out of the fight, home (there is no rearming, #63). A bandit
     //    close by is dealt with first — shot with what's left, gunned in a merge, or run from low —
@@ -326,13 +329,15 @@ export class MissionBot {
     const out = (aa === 0 && (airNeeded || (bandit && bandit.d < OUT_THREAT_RANGE))) || (surfaceNeeded && agUseless && aa === 0) || (surfaceNeeded && ag === 0 && !airNeeded);
     const crippled = shouldEgress(p, this.friendliesAlive());
     if (this.opts.rtb && (out || fuelLow || crippled)) {
-      const act = outOfFightAction({ aa, gunAmmo: p.gunAmmo, banditD: bandit ? bandit.d : null, hot });
+      // (only a fighter is a threat: a drone, bomber or AWACS left behind is no reason to turn round)
+      const threat = this.nearestBandit(true);
+      const act = outOfFightAction({ aa, gunAmmo: p.gunAmmo, banditD: threat ? threat.d : null, hot: isHot(threat) });
       if (act === 'air') return this.fight('AIR', dt);
       if (act === 'guns') {
         this.air.opts.rtbWhenWinchester = false;
         return this.fight('GUNS', dt);
       }
-      if (act === 'extend' && bandit) return this.extendLow(bandit.e, dt);
+      if (act === 'extend' && threat) return this.extendLow(threat.e, dt);
       return this.homeLeg(dt, crippled);
     }
 
