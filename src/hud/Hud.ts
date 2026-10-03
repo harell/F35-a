@@ -30,6 +30,8 @@ import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, killFeed
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
 import { drawPip, pipLandmarkFocus, pipView, resetPip, stepPip } from './hmd/pip';
+import { ASSET_LOSS_HOLD, ASSET_LOSS_WINDOW } from './hmd/assetLoss';
+import { drawWpn, reserveWpn, resetWpn, stepWpn, tapWpn, wpnState, wpnView } from './hmd/wpnCam';
 import { Pen } from './hmd/pen';
 import { PICK_RADIUS, PickRegistry } from './hmd/picking';
 import { Projector } from './hmd/projector';
@@ -51,7 +53,7 @@ import {
 import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveIncoming, reserveWarningBand } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawSeekerLabel, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
-import { clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
+import { bandExt, clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
 import { TEST_HOOKS } from '../core/data';
 import { beginDrawn, drawnLast, type DrawnCue } from './hmd/drawn';
 
@@ -94,6 +96,12 @@ export interface HudLayoutRead {
   designated: { id: number; rect: HudRect | null } | null;
   /** Every tappable target symbol drawn (contact boxes, ground diamonds, SAM symbols; map symbols in the tactical view). */
   boxes: { id: number; kind: string; rect: HudRect }[];
+  /**
+   * The weapon window (hmd/wpnCam.ts): strip / video / closed, the weapon shown and its outcome
+   * ('flight', 'hit', 'kill', 'miss'…), the rect drawn (video or strip), whether it owns the target
+   * camera's slot, and the chips under it.
+   */
+  wpn: { look: string; focusId: number | null; outcome: string | null; rect: HudRect | null; owns: boolean; chips: string[]; flying: number };
 }
 
 /** HUD methods that exist only with the test hooks (Hud.ts attaches them under TEST_HOOKS). */
@@ -119,6 +127,9 @@ export const createHud: CreateHud = (canvas, events) => {
   const tac = new TacMapState();
   const layoutOpts: { external: boolean; leftHanded: boolean; headPitch: number; pip: boolean } = { external: false, leftHanded: false, headPitch: 0, pip: false };
   const lookupEntity = (id: number) => curWorld?.getEntity(id) ?? null;
+  const lastBand = { chx0: NaN, chy0: NaN, chx1: NaN, chy1: NaN };
+  /** The last friendly / civil loss, and the asset whose loss failed the mission (its shot takes the slot). */
+  const loss = { id: -1, at: -1e9, assetId: -1, assetAt: -1e9 };
 
   let visible = true;
   let W = Math.max(1, canvas.clientWidth || 1);
@@ -182,6 +193,10 @@ export const createHud: CreateHud = (canvas, events) => {
     }),
     events.on('destroyed', ({ entity, attackerId }) => {
       if (entity.kind === 'missile' || entity.kind === 'decoy' || isPlayer(entity.id)) return;
+      if (entity.team === playerTeam || entity.team === 'neutral') {
+        loss.id = entity.id;
+        loss.at = curWorld?.time ?? 0;
+      }
       if (entity.team === 'neutral') return; // civil losses: the mission callouts announce them
       if (isPlayer(attackerId) && entity.team !== playerTeam) {
         const t = killText(entity);
@@ -200,6 +215,7 @@ export const createHud: CreateHud = (canvas, events) => {
     }),
     events.on('munition:end', ({ missile, targetId, reason }) => {
       st.threats.onMunitionEnd(missile.id, targetId, reason, st.playerId);
+      if (missile.shooterId === st.playerId) wpnState.tracker.onEnd(missile.id, reason);
     }),
     events.on('player:hit', ({ amount }) => hitFlash(st.g, amount)),
     events.on('warning', ({ id, active }) => {
@@ -210,6 +226,14 @@ export const createHud: CreateHud = (canvas, events) => {
       const w = missile.def.id as WeaponId;
       st.brevity = WEAPON_BREVITY[w] ?? '';
       st.brevityAge = 0;
+    }),
+    events.on('mission:end', ({ success }) => {
+      // a protected asset lost just now failed the mission: show how it went
+      const now = curWorld?.time ?? 0;
+      if (!success && loss.id >= 0 && now - loss.at <= ASSET_LOSS_WINDOW) {
+        loss.assetId = loss.id;
+        loss.assetAt = now;
+      }
     }),
     events.on('objective', ({ id }) => {
       st.objShow = 6;
@@ -286,6 +310,7 @@ export const createHud: CreateHud = (canvas, events) => {
         }
         tac.active = false;
         resetPip();
+        resetWpn();
         picks.begin();
         return;
       }
@@ -293,6 +318,8 @@ export const createHud: CreateHud = (canvas, events) => {
       if (p && p.id !== st.playerId) {
         st.resetPlayer();
         st.playerId = p.id;
+        resetWpn();
+        loss.id = loss.assetId = -1;
       }
       playerTeam = p?.team ?? null;
       routeInbox(ctx);
@@ -300,6 +327,8 @@ export const createHud: CreateHud = (canvas, events) => {
       curWorld = ctx.world;
       curPlayer = p;
       if (p && !ctx.paused) st.threats.update(p.incoming, missileAlive, ctx.dt, missileDist);
+      // the player's weapons in flight and their outcomes, likewise in every view
+      if (p) wpnState.tracker.update(ctx.world.missiles, p.id, lookupEntity, ctx.world.time, pipView.open ? pipView.targetId : null);
       const mode = modeOf(ctx);
       if (mode !== lastMode || ctx.viewMode !== lastView) resetZoneExtents();
       lastView = ctx.viewMode;
@@ -307,6 +336,8 @@ export const createHud: CreateHud = (canvas, events) => {
       if (mode !== 'tactical') tac.active = false;
       if (!visible && mode !== 'tactical') {
         resetPip();
+        wpnView.anim = 0;
+        wpnView.owns = wpnView.open = false;
         picks.begin();
         return;
       }
@@ -334,12 +365,27 @@ export const createHud: CreateHud = (canvas, events) => {
         ctx.settings.targetCam !== false && p?.alive === true && (v === 'cockpit' || v === 'hud' || v === 'chase' || v === 'orbit' || v === 'flyby') && !(cockpit && pcdZoom.open);
       // (the Sky Tower being hit or falling opens it too, with nothing designated)
       const pipLandmark = pipLandmarkFocus(ctx.world.landmarks, ctx.world.time);
-      layoutOpts.pip = pipAllowed && (pipView.open || pipView.anim > 0 || pipLandmark !== null || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null);
+      // a protected asset lost (the mission failed on it): its shot takes the slot over everything,
+      // the target camera setting and the weapon window included
+      const slotView = p?.alive === true && (v === 'cockpit' || v === 'hud' || v === 'chase' || v === 'orbit' || v === 'flyby') && !(cockpit && pcdZoom.open);
+      const lostLm = pipLandmark && !pipLandmark.alive ? pipLandmark : null;
+      const lostEnt = loss.assetId >= 0 && ctx.world.time - loss.assetAt < ASSET_LOSS_HOLD ? lookupEntity(loss.assetId) : null;
+      const asset = slotView ? (lostLm ?? lostEnt) : null;
+      // the weapon window shares the slot (its own setting; not on the tactical map)
+      const wpnSetting = ctx.settings.missileCam ?? 'dynamic';
+      const wpnAllowed = wpnSetting !== 'off' && slotView && !asset;
+      const wpnWants = wpnAllowed && (wpnView.open || wpnView.owns || wpnState.tracker.tracks.some((t) => t.outcome === 'flight'));
+      layoutOpts.pip = (pipAllowed && (pipView.open || pipView.anim > 0 || pipLandmark !== null || (p?.radar.lockedId ?? p?.radar.designatedId ?? null) !== null)) || wpnWants || !!asset;
       computeLayout(L, W, H, ctx.screen.safe, proj.tanHalfV, cockpit, layoutOpts);
       pen.fontScale = L.u;
       picks.begin();
       f.occ.clear();
       f.sym.clear();
+      // (the weapon window keeps clear of the caution chips as drawn last frame)
+      lastBand.chx0 = bandExt.chx0;
+      lastBand.chy0 = bandExt.chy0;
+      lastBand.chx1 = bandExt.chx1;
+      lastBand.chy1 = bandExt.chy1;
       clearBandExt(); // (the kill feed reads the warning band drawn this frame; none drawn yet)
       dirty = true;
 
@@ -351,6 +397,7 @@ export const createHud: CreateHud = (canvas, events) => {
 
       if (!p || !p.alive) {
         resetPip();
+        resetWpn();
         // player down: keep the feeds (mission messages, radio, kills); the message makes way for the radio
         reserveRadio(f);
         reserveMessage(f, L.msgY);
@@ -371,7 +418,31 @@ export const createHud: CreateHud = (canvas, events) => {
         f.zone = null;
       }
 
-      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt, pipLandmark);
+      const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt, pipLandmark, asset && L.pipW > 0 ? asset : null);
+      // the weapon window: a strip under the target camera, the video in its slot for the last seconds
+      // (red cues and the Sky Tower cut keep it a strip); while it owns the slot the target camera is
+      // neither rendered nor drawn (its bookkeeping, the DESTROYED hold, carries on underneath)
+      const pipShown = pipView.vh > 0;
+      const pipTgt = pipShown && !pipView.landmark ? pipView.targetId : null;
+      const redCue = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
+      const wpnPlan = stepWpn(
+        L,
+        { now: ctx.world.time, setting: wpnSetting, suppressed: redCue || (pipShown && !!pipView.landmark) },
+        wpnAllowed && mode !== 'tactical' && L.pipW > 0,
+        pipShown,
+        pipTgt,
+        ctx.paused ? 0 : ctx.dt,
+        15 * L.u,
+        mode === 'hmd' ? L.boxY - 16 * L.u : L.ctlTop - 14 * L.u,
+        Number.isFinite(lastBand.chx0) ? lastBand : null,
+      );
+      if (wpnView.owns) pipView.vh = 0;
+      if (mode === 'hmd' && wpnView.bottom > 0) {
+        // the DLZ scale moves under the window, strip and chips; the kill feed (right-aligned under the
+        // target camera) moves left of them: further down it would run into the altitude column
+        if (wpnView.bottom + 60 * L.u < L.dlzBottom) L.dlzTop = Math.max(L.dlzTop, wpnView.bottom + 20 * L.u);
+        if (wpnView.bottom > L.killY - 10 * L.u) L.killX = Math.min(L.killX, (wpnView.owns ? wpnView.vx : wpnView.sx) - 10 * L.u);
+      }
 
       if (mode === 'tactical') {
         reserveRadio(f);
@@ -411,6 +482,7 @@ export const createHud: CreateHud = (canvas, events) => {
       // the target camera window likewise
       reserveRadio(f);
       reservePip(f);
+      reserveWpn(f);
       // 1) protected symbols (they register in the occupancy pass): FPM, the incoming-missile arrows and
       // their TTIs (the target box's labels, off-screen cue and centre cues dodge them), pipper / seeker,
       // target box
@@ -528,7 +600,8 @@ export const createHud: CreateHud = (canvas, events) => {
       if (!Number.isFinite(zoneExt.colBottom) && colTop > escortTop + 1) zoneExt.colBottom = colTop; // the counter alone
 
       // target camera window chrome (the 3D view itself is rendered by Game → TargetCam)
-      drawPip(f, pipTarget);
+      if (!wpnView.owns) drawPip(f, pipTarget);
+      drawWpn(f, wpnPlan, pipTgt);
 
       // PCD zoom overlay (cockpit): above the symbology, below the warning band and radio
       if (zoomed) drawPcdZoom(f);
@@ -541,7 +614,9 @@ export const createHud: CreateHud = (canvas, events) => {
       // (HMD: under the target camera window it sits left of the DLZ scale; the right edge under the
       // window is its way out of the warning band)
       const kx = hmd ? L.killX : L.insetCx - L.insetR - 10 * L.u;
-      const kb = drawKillFeed(f, kx, L.killY, hmd ? L.right : kx);
+      // (not out to the right edge while the weapon window sits there)
+      const wpnThere = wpnView.bottom > L.killY - 10 * L.u;
+      const kb = drawKillFeed(f, kx, L.killY, hmd && !wpnThere ? L.right : kx);
       zoneExt.killLeft = killFeedAt.x - 230 * L.u;
       zoneExt.killRight = killFeedAt.x;
       zoneExt.killBottom = kb > L.killY + 1 ? kb - 8 * L.u : NaN;
@@ -576,11 +651,14 @@ export const createHud: CreateHud = (canvas, events) => {
       }
       // the PCD zoom overlay swallows taps (the cockpit handles them first)
       if (pcdZoom.open) return null;
+      // a tap on the weapon window shows the next weapon in flight
+      if (tapWpn(x, y)) return null;
       return picks.pick(x, y, PICK_RADIUS, st.clock, engagedByPlayer);
     },
 
     dispose() {
       resetPip();
+      resetWpn();
       for (const off of offs) off();
       offs.length = 0;
       clear();
@@ -608,6 +686,21 @@ export const createHud: CreateHud = (canvas, events) => {
           cues: drawnLast.cues.slice(0, drawnLast.cueCount).map((c) => ({ ...c, x: r1(c.x), y: r1(c.y) })),
           designated: tid == null ? null : { id: tid, rect: boxes.find((b) => b.id === tid)?.rect ?? null },
           boxes,
+          wpn: (() => {
+            const v = wpnView;
+            const plan = wpnState.plan;
+            const fo = plan?.focus ?? null;
+            const r: HudRect | null = v.owns && v.vh > 0 ? [v.vx, v.vy, v.vw, v.vh] : v.sw > 0 ? [v.sx, v.sy, v.sw, v.sh] : null;
+            return {
+              look: v.owns && v.vh > 0 ? 'video' : v.open ? v.look : 'closed',
+              focusId: fo?.id ?? null,
+              outcome: fo?.outcome ?? null,
+              rect: r,
+              owns: v.owns,
+              chips: (plan?.chips ?? []).map((c) => (c.label === '' ? `+${c.count}` : `${c.label}${c.count > 1 ? ' x' + c.count : ''} ${c.outcome === 'flight' ? Math.round(c.tti * 10) / 10 : c.outcome}`)),
+              flying: plan?.flying ?? 0,
+            };
+          })(),
         };
       },
       stepClock(ctx) {

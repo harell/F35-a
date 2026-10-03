@@ -228,6 +228,9 @@ function ease(t: number): number {
  * @param lookup   entity by id (to keep showing a just-destroyed target)
  * @param allowed  the setting is on and this view has room for the window (L.pipW > 0)
  * @param landmark a landmark to cut to (pipLandmarkFocus): it takes the window over the target while set
+ * @param asset    a protected asset whose loss failed the mission (the Sky Tower falling, the tanker
+ *                 sinking): it takes the window over everything, the setting included (the caller
+ *                 checks the view has room for it)
  * @returns the entity (may be dead during the hold) or landmark to show, or null
  */
 export function stepPip(
@@ -237,6 +240,7 @@ export function stepPip(
   allowed: boolean,
   dt: number,
   landmark: LandmarkEntity | null = null,
+  asset: PipSubject | null = null,
 ): PipSubject | null {
   let show: AnyEntity | null = null;
   // the target on screen just died: hold the shot for the explosion, even when the radar has already
@@ -251,7 +255,7 @@ export function stepPip(
   }
   if (!allowed) show = null;
   // the tower being hit / falling takes the window over (the entity bookkeeping above carries on under it)
-  const subject: PipSubject | null = allowed && landmark ? landmark : show;
+  const subject: PipSubject | null = asset ?? (allowed && landmark ? landmark : show);
   const shot = subject ? subject.id : null; // entity id, or the landmark's id ('skytower')
   const switched = shot !== null && track.shot !== null && shot !== track.shot && pipView.anim > 0.5;
   track.id = show ? show.id : target ? target.id : null;
