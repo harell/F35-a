@@ -146,6 +146,20 @@ export function buildSkyTowerLights(lights: LightList, g: number): void {
   }
   // shaft floodlights
   for (let y = 30; y < 155; y += 30) lights.add(x, g + y, z - 7.5, 0xaec8ff, 5);
+  // floodlit, as the real tower is at night (playtest 1.1-k: it was lost in the CBD's glow): the
+  // shaft washed in light on every side, the pod's levels and the upper pod traced, the mast lit.
+  // (Above 150 m they stay under 2.4 m, so they add no harbour reflections.)
+  const ring = (y: number, r: number, n: number, color: number, size: number, phase = 0) => {
+    for (let k = 0; k < n; k++) {
+      const a = ((k + phase) / n) * Math.PI * 2;
+      lights.add(x + Math.cos(a) * r, g + y, z + Math.sin(a) * r, color, size);
+    }
+  };
+  for (let i = 0, y = 12; y < 152; i++, y += 9) ring(y, 6.5, 6, 0xe4ecff, 3, i % 2 ? 0.5 : 0);
+  ring(157, 9.9, 12, 0xf2f6ff, 2.2);
+  ring(177, 10.9, 12, 0xf2f6ff, 2.2, 0.5);
+  for (let y = 202; y < 240; y += 8) ring(y, 10.8 * (1 - (y - 198) / 44) + 0.5, 10, 0xe4ecff, 2, y % 16 ? 0.5 : 0);
+  for (let y = 248; y < 322; y += 12) ring(y, y < 290 ? 2.4 : 1.6, 3, 0xffffff, 1.6);
 }
 
 /**
