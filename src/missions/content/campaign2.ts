@@ -6,7 +6,7 @@
  */
 import type { MissionDef } from '../../core/contracts';
 import type { Condition, TaskDef } from '../schema';
-import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, fighterSweep, flight, mission, off, runwayPoint, site, target, wingmen } from './common';
+import { FEATURES, NEVER, P, WAIHEKE_RUNWAY_HDG, fighterSweep, flight, mission, runwayPoint, site, target, wingmen } from './common';
 
 const DS = 'DARKSTAR';
 

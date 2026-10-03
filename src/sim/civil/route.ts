@@ -212,7 +212,7 @@ export function stepCivil(ac: AircraftEntity, dt: number, terrain: TerrainQuery,
   const z0 = pos.z;
   let gearTarget = ac.gear ?? 1;
   let flaps = 0;
-  let rpm = 0.6;
+  let rpm: number;
 
   if (f.kind === 'arrival') {
     if (f.phase === 'approach' || f.phase === 'flare') {

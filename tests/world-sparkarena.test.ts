@@ -125,7 +125,7 @@ describe('Spark Arena', () => {
   });
 
   it('the mesh stands on the ground, inside its footprint, on a mobile budget', () => {
-    const ground = (x: number, z: number) => 4 + 0.01 * (x - SPARK_ARENA.x);
+    const ground = (x: number, _z: number) => 4 + 0.01 * (x - SPARK_ARENA.x);
     for (const detail of [0.35, 1]) {
       const B = new GeometryBuilder();
       const lights = new LightList();

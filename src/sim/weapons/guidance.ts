@@ -470,10 +470,6 @@ function reachDist(t: number): number {
   const tc = t - reach.tb;
   return reach.sb + Math.log(1 + reach.k * reach.vb * tc) / reach.k;
 }
-function reachSpeed(t: number): number {
-  if (t <= reach.tb) return reach.v0 + reach.a * t;
-  return reach.vb / (1 + reach.k * reach.vb * (t - reach.tb));
-}
 
 const _p = new Vector3();
 

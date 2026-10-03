@@ -205,7 +205,8 @@ export class GeometryBuilder {
     const len = Math.hypot(dx, dy, dz) || 1;
     const ux = dx / len, uy = dy / len, uz = dz / len;
     // pick a helper axis not parallel to u
-    let hx = 0, hy = 1, hz = 0;
+    let hx = 0, hy = 1;
+    const hz = 0;
     if (Math.abs(uy) > 0.9) {
       hx = 1;
       hy = 0;

@@ -12,7 +12,6 @@ import { MAT_CONE, MAT_URBAN } from '../src/world/terrain/types';
 import { aucklandRoadPaths } from '../src/world/scenery/motorways';
 import { lightsForSun, skyPreset } from '../src/world/sky/presets';
 import { terrainStyle } from '../src/world/config';
-import { AKL } from '../src/core/auckland';
 import { airfieldFeature } from '../src/core/airfields';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { BARE_MIX, LEAFY_MIX, roofAverage, suburbFarAlbedo } from '../src/world/terrain/urbanColor';

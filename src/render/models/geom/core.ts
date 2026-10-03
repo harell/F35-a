@@ -30,7 +30,7 @@ const _e = new Euler();
 
 /** Convert to the canonical non-indexed layout (position, normal, uv, color). */
 export function finalize(geo: BufferGeometry, color: number | Color = 0xffffff): BufferGeometry {
-  let g = geo.index ? geo.toNonIndexed() : geo;
+  const g = geo.index ? geo.toNonIndexed() : geo;
   if (g !== geo) geo.dispose();
   // Drop attributes we do not use (uv1, tangents, ...).
   for (const name of Object.keys(g.attributes)) {

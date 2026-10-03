@@ -15,7 +15,7 @@ import { runwaysOf } from '../src/core/airfields';
 import { airfieldLayout } from '../src/world/scenery/aucklandOsm';
 import { segmentDistance } from '../src/world/terrain/coastline';
 import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
-import { aucklandLinz, decodeLinz, linzIsLand, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
+import { aucklandLinz, decodeLinz, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
 import { AKL_CONES, AKL_RANGITOTO } from '../src/world/terrain/theaters/aucklandMap';
 import { CAMPAIGN, TRAINING, terrainPadsFor } from '../src/missions';
 import { BASE_FEATURES, FEATURES } from '../src/missions/content/common';

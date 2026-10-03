@@ -427,7 +427,7 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
     setPlanes(1, ctx.quality.drawDistance);
   }
 
-  let tacticalHalf = TACTICAL_HALF_COVERAGE;
+  const tacticalHalf = TACTICAL_HALF_COVERAGE;
   function tactical(p: AircraftEntity, ctx: FrameContext, fovOut: { v: number }): void {
     // north-up top-down, centred on the player; fixed FOV so the HUD's 2D map can match the scale
     fovOut.v = TACTICAL_FOV;

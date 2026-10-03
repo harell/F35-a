@@ -8,7 +8,6 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { aucklandCoastPerturbation, aucklandMapData, bakeAucklandCoastMask } from '../src/world/terrain/theaters/auckland';
 import {
-  classify,
   decodeCoast,
   ellipsePolygon,
   encodeCoast,
@@ -21,7 +20,6 @@ import {
 } from '../src/world/terrain/coastline';
 import { signedDistance, GridSampler } from '../src/world/terrain/raster';
 import { fillPolygonGrid } from '../src/world/terrain/coastline';
-import { AKL } from '../src/core/auckland';
 import { airfieldFeature } from '../src/core/airfields';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 

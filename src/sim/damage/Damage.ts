@@ -220,7 +220,7 @@ export class DamageSystem {
     t.alive = false;
     t.velocity.set(0, 0, 0);
     if (t.kind === 'ground') t.destroyedAt = host.time;
-    let size: 'large' | 'huge' = 'large';
+    let size: 'large' | 'huge';
     let surface: 'ground' | 'water' = 'ground';
     if (t.kind === 'sam') {
       t.state = 'off';

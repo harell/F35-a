@@ -12,7 +12,7 @@
 import { Float32BufferAttribute, Vector3 } from 'three';
 import { ModelBuilder } from '../ModelBuilder';
 import { box, ellipsoid, flatNormals, merge, mirrorX, place, setColor } from '../geom/core';
-import { bandBetween, latheZ, liftingSurface, loftRings, prismX, superRing, type LoftStation, type SurfaceSection } from '../geom/loft';
+import { bandBetween, liftingSurface, loftRings, prismX, superRing, type LoftStation, type SurfaceSection } from '../geom/loft';
 import { lerp, samples, tableCurves } from '../geom/curves';
 import type { AtlasBounds } from '../geom/atlas';
 import type { AircraftPrototype, DriveDef, StoreSlot } from './types';

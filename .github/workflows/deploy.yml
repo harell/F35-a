@@ -24,12 +24,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npx tsc --noEmit
-      - run: npx vitest run
+      # the tests, with coverage (a longer per-test timeout: instrumented runs are ~3× slower); the summary becomes
+      # the README's badge (tools/coverage-badge.mjs)
+      - run: npm run coverage
       - run: npx vite build
         env:
           # Shown in-game as "Build N" and tagged in Clarity; trace it back to run #N of this workflow.
           VITE_BUILD_NUMBER: ${{ github.run_number }}
+      - run: node tools/coverage-badge.mjs dist/badges/coverage.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

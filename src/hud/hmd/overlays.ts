@@ -425,7 +425,7 @@ export function objectiveLines(
   const done = o.progress?.done ?? 0;
   const total = o.progress?.total ?? 0;
   const left = o.threat && o.state === 'active' ? o.threat.left : -1;
-  let e = objLineCache.get(o);
+  const e = objLineCache.get(o);
   if (e && e.label === o.label && e.state === o.state && e.done === done && e.total === total && e.left === left && e.maxChars === maxChars) return e.lines;
   const mark = o.state === 'complete' ? '+ ' : o.state === 'failed' ? 'x ' : o.state === 'active' ? '> ' : '- ';
   const prog = total > 1 ? ' ' + done + '/' + total : '';
@@ -433,7 +433,7 @@ export function objectiveLines(
   const wrapped = wrapFit(body, Math.max(8, maxChars - 2), 3);
   const lines = wrapped.map((l, i) => (i === 0 ? mark : '  ') + l);
   if (left >= 0 && o.threat) lines.push('  ' + o.threat.label.toUpperCase() + ' ' + left);
-  if (!e) objLineCache.set(o, (e = { label: o.label, state: o.state, done, total, left, maxChars, lines }));
+  if (!e) objLineCache.set(o, { label: o.label, state: o.state, done, total, left, maxChars, lines });
   else Object.assign(e, { label: o.label, state: o.state, done, total, left, maxChars, lines });
   return lines;
 }

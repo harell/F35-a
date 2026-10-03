@@ -109,9 +109,9 @@ export function getEnvCube(): CubeTexture | null {
       for (let i = 0; i < size; i++) {
         const a = (i + 0.5) / size * 2 - 1;
         const b = (j + 0.5) / size * 2 - 1;
-        let x = 0;
-        let y = 0;
-        let z = 0;
+        let x: number;
+        let y: number;
+        let z: number;
         switch (f) {
           case 0: x = 1; y = -b; z = -a; break;
           case 1: x = -1; y = -b; z = a; break;

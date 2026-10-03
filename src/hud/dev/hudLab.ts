@@ -133,9 +133,8 @@ for (const mi of world.missiles) {
   m.position.copy(mi.position);
   scene3.add(m);
 }
-let playerMesh: Mesh | null = null;
 if (view !== 'cockpit' && view !== 'hud') {
-  playerMesh = new Mesh(new BoxGeometry(11, 2.5, 15.7), new MeshBasicMaterial({ color: 0x555a60 }));
+  const playerMesh = new Mesh(new BoxGeometry(11, 2.5, 15.7), new MeshBasicMaterial({ color: 0x555a60 }));
   playerMesh.position.copy(player.position);
   playerMesh.quaternion.copy(player.quaternion);
   scene3.add(playerMesh);

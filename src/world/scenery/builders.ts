@@ -156,8 +156,14 @@ export class DecalBuilder {
       const len = Math.hypot(bx - ax, bz - az);
       if (len < 1e-3) continue;
       const ux = (bx - ax) / len, uz = (bz - az) / len;
-      if (i === 0 && extendStart) (ax -= ux * hw), (az -= uz * hw);
-      if (i === n - 2 && extendEnd) (bx += ux * hw), (bz += uz * hw);
+      if (i === 0 && extendStart) {
+        ax -= ux * hw;
+        az -= uz * hw;
+      }
+      if (i === n - 2 && extendEnd) {
+        bx += ux * hw;
+        bz += uz * hw;
+      }
       const segs = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
       for (let k = xs.length ? 1 : 0; k <= segs; k++) {
         xs.push(ax + ((bx - ax) * k) / segs);
@@ -175,8 +181,14 @@ export class DecalBuilder {
       let dx2 = xs[i1] - xs[i], dz2 = zs[i1] - zs[i];
       const l1 = Math.hypot(dx1, dz1) || 1, l2 = Math.hypot(dx2, dz2) || 1;
       dx1 /= l1; dz1 /= l1; dx2 /= l2; dz2 /= l2;
-      if (i === 0) (dx1 = dx2), (dz1 = dz2);
-      if (i === m - 1) (dx2 = dx1), (dz2 = dz1);
+      if (i === 0) {
+        dx1 = dx2;
+        dz1 = dz2;
+      }
+      if (i === m - 1) {
+        dx2 = dx1;
+        dz2 = dz1;
+      }
       // right-hand normals of both segments, averaged
       let nx = -(dz1 + dz2), nz = dx1 + dx2;
       const nl = Math.hypot(nx, nz) || 1;
