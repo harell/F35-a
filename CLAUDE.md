@@ -10,3 +10,8 @@ The rule that matters most: make the first line of the description `Closes #N` (
 To run, play or inspect the game as an agent (jump to a mission, fast-forward, bot sweeps), read `.claude/skills/play-f35/SKILL.md` first.
 Operation Southern Cross (c01–c11) is disabled: its code stays, but players can't reach it, so playtests and sweeps skip it until the owner enables it again (`enabled: false` in `src/missions/index.ts`).
 Test shortcuts must stay out of the deployed game: gate them behind `TEST_HOOKS` (`src/core/data.ts`).
+
+## Stacked PRs and the nightly run
+
+Work that comes in layers (one issue or one playtest round per PR) goes into a stacked PR: read `.claude/skills/stacked-pr/SKILL.md`.
+A routine runs `.claude/skills/nightly-backlog/SKILL.md` every night from 02:00 to 04:00 Pacific/Auckland. It adds one layer per issue to the open stack and never merges; only the owner merges.
