@@ -288,7 +288,7 @@ export interface SimWorld {
   readonly landmarks: LandmarkEntity[];
   /**
    * The CBD's skyscrapers as obstacles (#128, sim/buildings.ts): flying into one destroys the
-   * aircraft and collapses the building. Null without the LINZ building data. All standing in a new world.
+   * aircraft and collapses the building; Spark Arena (always there) crashes it and stands. All standing in a new world.
    */
   readonly buildings?: BuildingIndex | null;
   /** Pooled projectiles (check `active`). */

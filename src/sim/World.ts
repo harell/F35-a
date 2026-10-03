@@ -104,7 +104,7 @@ class SimWorldImpl implements SimWorld {
   readonly ground: GroundTargetEntity[] = [];
   readonly decoys: DecoyEntity[] = [];
   readonly landmarks: LandmarkEntity[] = [];
-  /** The CBD's skyscrapers as obstacles (#128); null when the building data isn't installed. All standing in a new world. */
+  /** The CBD's skyscrapers (#128) and Spark Arena as obstacles (sim/buildings.ts). All standing in a new world. */
   readonly buildings: BuildingIndex | null;
   readonly projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
