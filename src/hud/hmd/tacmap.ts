@@ -15,7 +15,7 @@ import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
 import type { AnyEntity } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
-import { GROUND_LABEL, NumText, SAM_LABEL, trackLabel } from './format';
+import { NumText, SAM_LABEL, groundLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { protectedSites } from './sites';
@@ -507,7 +507,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
     pen.rect(pt.x - r, pt.y - r, r * 2, r * 2);
     pen.strokeGlow(col, 1.5);
     occ.addBox(pt.x, pt.y, r + 2, r + 2);
-    const lbl = civil ? 'CIV' : GROUND_LABEL[gt.type] ?? '';
+    const lbl = civil ? 'CIV' : groundLabel(gt);
     const hw = pen.textWidth(lbl, 9.5) / 2 + 2;
     const ly = pt.y + r + 7 * u;
     if (lbl && !occ.hits(pt.x - hw, ly - 5, pt.x + hw, ly + 5)) {
