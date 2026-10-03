@@ -21,7 +21,7 @@ import { harness, shieldPlayer } from './missions-helpers';
 import { runPlaythrough } from './missions-bot';
 
 const c03 = missionById('c03')!;
-const CALL = /Gecko is shooting your bombs down/;
+const CALL = /Gecko is shooting your weapons down/;
 
 /** A 'munition:end' for one of the player's bombs, shot down by `siteId`'s point defence. */
 function shotDown(h: ReturnType<typeof harness>, siteId: number): void {
@@ -45,7 +45,7 @@ describe('#114: c03 — Darkstar calls the SA-8 after the second weapon it shoot
     const calls = h.of('radio').filter((r) => CALL.test(r.text));
     expect(calls).toHaveLength(1);
     expect(calls[0].text).toMatch(/east shore/);
-    expect(calls[0].text).toMatch(/low from the west/);
+    expect(calls[0].text).toMatch(/low from the west, behind the volcano/);
     expect(sa8.known).toBe(true);
     expect(h.runner.currentWaypoint?.id).toBe('wp_sa8');
   });

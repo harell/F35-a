@@ -264,7 +264,7 @@ export const C03: MissionDef = mission({
         when: { kind: 'all', of: [{ kind: 'munitions_shot_down', group: 'rangi_sa8', count: 2 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa8', state: 'complete' } }] },
         delay: 2,
         actions: [
-          { kind: 'radio', from: DS, text: "Viper 1, Darkstar. The Gecko is shooting your bombs down. It's on Rangitoto's east shore. Come in low from the west with the volcano between you, so it only sees your bombs as they come over the top.", priority: 3 },
+          { kind: 'radio', from: DS, text: "Viper 1, Darkstar. The Gecko is shooting your weapons down. It's on Rangitoto's east shore: come in low from the west, behind the volcano.", priority: 3 },
           { kind: 'reveal', group: 'rangi_sa8' },
           { kind: 'set_waypoint', id: 'wp_sa8' },
         ],
