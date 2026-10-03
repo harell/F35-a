@@ -163,7 +163,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // free flight: no hostiles, only the civil traffic; every loadout, a clean jet first and by
       // default (a calm cockpit and the slowest flight, #113)
       loadout = 'clean';
-      allowed = ['clean', 'strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
+      allowed = ['clean', 'strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_maritime', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
       script.freeFlight = true;
       objectiveText = ['Free flight: no objectives. Explore Auckland at your own pace.'];
       // start low and steady over the upper Waitematā, the Harbour Bridge ahead (not 5,000 m at 470 kt)

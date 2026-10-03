@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEventMap } from '../src/core/events';
-import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
+import { DIFFICULTIES, LOADOUTS, WEAPON_INFO } from '../src/core/data';
 import type { Difficulty } from '../src/core/types';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -92,14 +92,32 @@ describe('g02 Straight Outta Hauraki: content', () => {
   });
 
   it('offers only loadouts whose bombs can hit a moving boat (GBU-53/B), recommends all eight, and loads 360 rounds', () => {
-    expect(G02.recommendedLoadout).toBe('strike_sdb2_full');
-    expect(G02.allowedLoadouts).toContain('strike_sdb2');
+    expect(G02.recommendedLoadout).toBe('strike_maritime');
     for (const id of G02.allowedLoadouts) {
       const bombs = LOADOUTS[id].stores.filter((s) => s.weapon === 'gbu31' || s.weapon === 'gbu39' || s.weapon === 'gbu53');
       expect(bombs.length, id).toBeGreaterThan(0);
       for (const b of bombs) expect(b.weapon, id).toBe('gbu53'); // GPS-only JDAM / GBU-39 miss a moving boat (#65)
       for (const d of DIFFS) expect(missionGunAmmo(G02, d, id), `${id} ${d}`).toBe(360);
     }
+  });
+
+  it('air-to-ground only (#136): StormBreakers and an AARGM-ER per air-defence boat, no air-to-air missile', () => {
+    expect(G02.allowedLoadouts).toEqual(['strike_maritime']);
+    const l = LOADOUTS.strike_maritime;
+    expect(l.stores).toEqual([
+      { weapon: 'gbu53', count: 8, internal: true },
+      { weapon: 'aargm', count: 2, internal: true },
+    ]);
+    expect(l.role).toBe('ag');
+    expect(l.rcsMultiplier).toBe(1);
+    for (const id of G02.allowedLoadouts) {
+      for (const s of LOADOUTS[id].stores) expect(WEAPON_INFO[s.weapon].kind, `${id} ${s.weapon}`).not.toBe('aam');
+    }
+    // one anti-radiation missile for each air-defence boat (on every difficulty)
+    expect(l.stores.find((s) => s.weapon === 'aargm')!.count).toBeGreaterThanOrEqual(G02.script.sams.filter((s) => s.type === 'ad_boat').length);
+    const text = G02.briefing.join(' ');
+    expect(text).toMatch(/AARGM-ER/);
+    expect(text).toMatch(/no air-to-air missiles/i);
   });
 
   it('the briefing names the mother ship, the two-hit rule, the early release and the friendly-fire risk', () => {

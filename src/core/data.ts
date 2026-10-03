@@ -298,6 +298,24 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'ag',
   },
+  // The boat swarm's loadout (#136): strike_sdb2_full with an AARGM-ER in place of each AMRAAM, so only
+  // weapons that kill a moving boat (the mission has nothing hostile in the air). The StormBreaker
+  // tracks any boat; the AARGM-ER homes on the radar of an air-defence boat, one for each. Offered
+  // only where a mission lists it.
+  strike_maritime: {
+    id: 'strike_maritime',
+    name: 'Maritime Strike (Stealth)',
+    description: '8× GBU-53/B StormBreaker + 2× AARGM-ER internal, no air-to-air missiles. Datalinked glide bombs that chase moving boats, and anti-radiation missiles that home on an air-defence boat\'s radar.',
+    rcsMultiplier: 1,
+    stores: [
+      { weapon: 'gbu53', count: 8, internal: true },
+      { weapon: 'aargm', count: 2, internal: true },
+    ],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'ag',
+  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',

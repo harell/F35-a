@@ -128,7 +128,9 @@ export const G01: MissionDef = mission({
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
   ],
   recommendedLoadout: 'a2a_beast',
-  allowedLoadouts: ['a2a_beast', 'a2a_stealth'],
+  // air-to-air only, and every air-to-air missile the game has: the player meets both, the AIM-120
+  // and the AIM-9X, on the same jet (#136). g02 introduces the air-to-ground weapons.
+  allowedLoadouts: ['a2a_beast'],
   player: g01Start,
   // the gun is required (10 drones, at most 8 missiles): more than the real 180 rounds (#77)
   gunAmmo: { recruit: 400, pilot: 400, veteran: 380, ace: 360 },

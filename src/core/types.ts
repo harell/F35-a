@@ -122,6 +122,8 @@ export type LoadoutId =
   | 'strike_sdb2'
   /** 8× GBU-53/B + 2× AIM-120D: only in missions that list it in allowedLoadouts (the boat swarm, #82). */
   | 'strike_sdb2_full'
+  /** 8× GBU-53/B + 2× AARGM-ER, no air-to-air missile: the boat swarm's only loadout (#136). */
+  | 'strike_maritime'
   | 'a2a_beast'
   | 'strike_beast'
   /** Nothing in the bays or on the pylons: the gun only (free flight's default, #113). */
