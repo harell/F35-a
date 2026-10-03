@@ -3,7 +3,8 @@
  * type, accuracy, time, damage, objectives, medals earned (saved to the service record), debrief
  * tips; NEXT (if available, labelled by the caller: 'Next mission', 'Next lesson', 'Start the
  * campaign') / RETRY / MENU, "Retry on Recruit" after repeated failures, and the campaign ending
- * (result.campaignComplete) before returning to the menu.
+ * (result.campaignComplete) before returning to the menu. Free flight shows what the sightseer did
+ * (sightseeingRows) instead of the combat stats.
  */
 import type { MissionResultExt } from '../../missions/runtime/resultExt';
 import type { MissionResult } from '../../core/contracts';
@@ -54,6 +55,38 @@ export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   const rows: [string, string, string][] = [];
   if (airliners > 0) rows.push(['skull', 'Civil airliners downed', String(airliners)]);
   if (ships > 0) rows.push(['skull', 'Civil ships destroyed', String(ships)]);
+  return rows;
+}
+
+const FT_PER_M = 3.28084;
+const M_PER_NM = 1852;
+
+/** A height for the debrief: feet like the HMD, metres alongside ("850 ft <small>260 m</small>"). */
+function heightCell(m: number | null): string {
+  if (m === null) return '—';
+  const v = Math.max(0, m);
+  return `${Math.round(v * FT_PER_M).toLocaleString('en-US')} ft <small>${Math.round(v).toLocaleString('en-US')} m</small>`;
+}
+
+/**
+ * Debrief stat rows for free flight (A Stroll in the Park, issue #113): what a sightseer did — tour
+ * stops visited, flight time, distance flown and the highest and lowest pass above the ground —
+ * instead of accuracy, damage and kills.
+ */
+export function sightseeingRows(r: MissionResultExt): [string, string, string][] {
+  const t = r.sightseeing;
+  const rows: [string, string, string][] = [];
+  if (t) rows.push(['flag', 'Tour stops', `${t.stops}/${t.totalStops}`]);
+  rows.push(['clock', 'Flight time', formatTime(r.time)]);
+  if (t) {
+    const nm = t.distance / M_PER_NM;
+    rows.push(
+      ['jet', 'Distance flown', `${nm < 10 ? nm.toFixed(1) : Math.round(nm)} nm <small>${Math.round(t.distance / 1000)} km</small>`],
+      ['pin', 'Highest pass', heightCell(t.highestAgl)],
+      ['pin', 'Lowest pass', heightCell(t.lowestAgl)],
+    );
+  }
+  rows.push(...civilLossRows(r));
   return rows;
 }
 
@@ -115,7 +148,8 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
 
     // ── right: stats + objectives ──
     const right = h('div', { class: 'db-right ui-panel ui-scroll' });
-    const stats: [string, string, string][] = [
+    const ext = r as MissionResultExt;
+    const stats: [string, string, string][] = r.freeFlight ? sightseeingRows(ext) : [
       ['jet', 'Air kills', String(r.kills.air)],
       ['sam', 'SAM kills', String(r.kills.sam)],
       ['target', 'Ground kills', String(r.kills.ground)],
@@ -124,19 +158,20 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       ['shield', 'Damage taken', `${Math.round(r.damageTaken)}%`],
       ['skull', 'Friendly losses', String(r.friendlyLosses)],
     ];
-    // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
-    const ext = r as MissionResultExt;
-    for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
-    for (const t of ext.saved ?? []) stats.push(['shield', escapeHtml(t.label), `${t.saved}/${t.total}`]);
-    stats.push(...civilLossRows(ext));
-    if (ext.playerShare !== undefined && (ext.teamKills ?? []).some((t) => t.flight && t.kills > 0)) stats.push(['star', 'Your share', formatPercent(ext.playerShare)]);
+    if (!r.freeFlight) {
+      // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
+      for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
+      for (const t of ext.saved ?? []) stats.push(['shield', escapeHtml(t.label), `${t.saved}/${t.total}`]);
+      stats.push(...civilLossRows(ext));
+      if (ext.playerShare !== undefined && (ext.teamKills ?? []).some((t) => t.flight && t.kills > 0)) stats.push(['star', 'Your share', formatPercent(ext.playerShare)]);
+    }
     const grid = h('div', { class: 'db-stats' });
     stats.forEach(([ic, k, v], i) => {
       const cell = h('div', { class: 'db-stat', html: `<span class="db-si">${icon(ic)}</span><span class="db-sk">${k}</span><span class="db-sv mono">${v}</span>` });
       cell.style.setProperty('--i', String(i));
       grid.appendChild(cell);
     });
-    right.appendChild(h('div', { class: 'db-h', text: 'Performance' }));
+    right.appendChild(h('div', { class: 'db-h', text: r.freeFlight ? 'Your flight' : 'Performance' }));
     right.appendChild(grid);
     if (r.objectives.length) {
       right.appendChild(h('div', { class: 'db-h', text: 'Objectives' }));

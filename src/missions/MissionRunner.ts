@@ -40,6 +40,7 @@ import { SurvivalDirector } from './runtime/survival';
 import { CivilTraffic } from './runtime/civil';
 import { CivilShipping } from './runtime/shipping';
 import { LandmarkWatch } from './runtime/landmarks';
+import { SightseeingLog } from './runtime/sightseeing';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
@@ -80,6 +81,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly shipping: CivilShipping | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
+  /** Free flight: tour stops, distance and passes for the debrief. */
+  private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
   private evalAcc = 0;
   private outsideAo = 0;
@@ -123,6 +126,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
+    this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
   /* ───────────────────────────── API ───────────────────────────── */
@@ -206,6 +210,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const edt = this.evalAcc;
     this.evalAcc = 0;
 
+    this.sightseeing?.update(edt);
     if (s.state !== 'running') {
       this.hints.update();
       return;
@@ -297,6 +302,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
     if (s.script.freeFlight) r.freeFlight = true;
+    if (this.sightseeing) (r as MissionResultExt).sightseeing = this.sightseeing.result();
     r.tips = r.freeFlight ? [] : buildTips(s, r);
     r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
     if (finale) r.campaignComplete = true;
