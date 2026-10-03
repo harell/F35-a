@@ -63,13 +63,22 @@ function stallSpeed(ac: AircraftEntity, now: number): number {
 }
 
 /** Highest flight-path angle needed to clear terrain along a horizontal direction (rad). */
+/** Within this distance of a CBD skyscraper (m), its roof is the AI's ground (#128). */
+const ROOF_REACH = 60;
+
+/** The ground an AI pilot keeps its clearance over: the terrain, or a CBD tower's roof (#128). */
+function groundAt(world: SimWorld, x: number, z: number): number {
+  const h = world.terrain.surfaceHeightAt(x, z);
+  const b = world.buildings;
+  return b ? Math.max(h, b.roofNear(x, z, ROOF_REACH)) : h;
+}
+
 function floorAlong(ac: AircraftEntity, world: SimWorld, hx: number, hz: number, speedH: number, clearance: number): number {
   const pos = ac.position;
-  const terrain = world.terrain;
   let req = -Math.PI / 2;
   for (let i = 0; i < LOOK_TIMES.length; i++) {
     const d = speedH * LOOK_TIMES[i];
-    const h = terrain.surfaceHeightAt(pos.x + hx * d, pos.z + hz * d);
+    const h = groundAt(world, pos.x + hx * d, pos.z + hz * d);
     const need = Math.atan2(h + clearance - pos.y, d);
     if (need > req) req = need;
   }
@@ -144,7 +153,7 @@ export function applySafety(s: SafetyState, it: FlightIntent, ac: AircraftEntity
   /* 4. terrain floor + ceiling */
   const vh = Math.hypot(vel.x, vel.z);
   const speedH = Math.max(vh, 120);
-  const surfHere = world.terrain.surfaceHeightAt(pos.x, pos.z);
+  const surfHere = groundAt(world, pos.x, pos.z);
   const agl = pos.y - surfHere;
   const clearance = it.minAgl + Math.max(0, -vel.y) * 1.5;
   let floor = -Math.PI / 2;

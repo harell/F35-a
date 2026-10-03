@@ -20,6 +20,7 @@ import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayo
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildHarbourBridge, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { SkyTowerVisual } from './skyTower';
+import { CbdCollapseVisual } from './cbdCollapse';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { LotMask, urbanBounds } from './lotMask';
@@ -78,6 +79,8 @@ export class Scenery {
   lotMask: LotMask | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
+  /** Collapsed CBD skyscrapers flattened in the merged CBD mesh (#128); null for the procedural CBD. */
+  cbdCollapse: CbdCollapseVisual | null = null;
   cbdStats: CbdStats | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
@@ -101,13 +104,14 @@ export class Scenery {
     const lights = new LightList();
     const addMesh = (b: GeometryBuilder, name: string, mat: ShaderMaterial = buildingMat) => {
       const g = b.build();
-      if (!g) return;
+      if (!g) return null;
       this.geometries.push(g);
       const m = new Mesh(g, mat);
       m.name = name;
       m.matrixAutoUpdate = false;
       this.group.add(m);
       this.stats.meshes++;
+      return g;
     };
 
     // ── Ground decals ──
@@ -174,7 +178,9 @@ export class Scenery {
       this.stats.meshes++;
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
       buildMuseumAndObelisk(city, lights, height);
-      addMesh(city, 'akl-cbd');
+      const cityGeo = addMesh(city, 'akl-cbd');
+      const cs = this.cbdStats;
+      if (cityGeo && cs.buildingVerts && cs.buildingGround) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts, cs.buildingGround);
       const centres = new GeometryBuilder();
       buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? aerialCovers : null);
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
@@ -395,6 +401,7 @@ export class Scenery {
   /** Follow the sim's landmarks (the Sky Tower's collapse). */
   updateLandmarks(world: SimWorld | null | undefined): void {
     this.skyTower?.update(world);
+    this.cbdCollapse?.update(world);
   }
 
   get idle(): boolean {

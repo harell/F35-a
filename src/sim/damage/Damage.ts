@@ -15,7 +15,8 @@ import { GROUND_TARGET_DATA, SAM_SITE_DATA, VESSEL_HIT_SPEED_FACTOR, aircraftExp
 import { isCivilVessel } from '../civil/vessels';
 
 export type DamageWeapon = WeaponId | MunitionId | 'gun' | 'collision' | 'flak';
-export type DownReason = 'crash' | 'shot' | 'collision' | 'fuel' | 'structure';
+/** 'structure': flew into the Sky Tower (#113); 'building': flew into a CBD skyscraper (#128). */
+export type DownReason = 'crash' | 'shot' | 'collision' | 'fuel' | 'structure' | 'building';
 
 /** What the damage model needs from the world. */
 export interface DamageHost {

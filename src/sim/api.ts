@@ -26,6 +26,7 @@ import type {
   Projectile,
   SamSiteEntity,
 } from './entities';
+import type { BuildingIndex } from './buildings';
 import type { LandmarkEntity } from './landmarks';
 
 /* ───────────────────────── Terrain (implemented by WORLD agent) ───────────────────────── */
@@ -285,6 +286,11 @@ export interface SimWorld {
    * sees them; weapons, gun rounds and collisions test them (sim/landmarks.ts).
    */
   readonly landmarks: LandmarkEntity[];
+  /**
+   * The CBD's skyscrapers as obstacles (#128, sim/buildings.ts): flying into one destroys the
+   * aircraft and collapses the building. Null without the LINZ building data. All standing in a new world.
+   */
+  readonly buildings?: BuildingIndex | null;
   /** Pooled projectiles (check `active`). */
   readonly projectiles: Projectile[];
   readonly player: AircraftEntity | null;

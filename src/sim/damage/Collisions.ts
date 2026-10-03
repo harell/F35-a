@@ -2,12 +2,14 @@
  * F35-A — collision detection (SIM-CORE): aircraft vs terrain / sea (crash, wreck impact),
  * mid-air collisions between aircraft (swept closest-approach test over the last step) and
  * aircraft vs landmarks (the Sky Tower: crashes the aircraft; the player's jet is also a hit on the
- * tower, which burns where it went in and comes down on a second hit, like a drone's, #113).
+ * tower, which burns where it went in and comes down on a second hit, like a drone's, #113) and
+ * aircraft vs the CBD's skyscrapers (sim/buildings.ts, #128: crashes the aircraft and collapses the building).
  */
 import { Vector3 } from 'three';
 import type { EventBus } from '../../core/events';
 import type { TerrainQuery } from '../api';
 import type { AircraftEntity } from '../entities';
+import type { BuildingIndex } from '../buildings';
 import { firstLandmarkHit, hitLandmark, type LandmarkEntity } from '../landmarks';
 import type { DamageSystem } from './Damage';
 
@@ -30,10 +32,41 @@ export class CollisionSystem {
     private readonly host: { readonly events: EventBus; readonly time: number } | null = null,
   ) {}
 
-  update(aircraft: readonly AircraftEntity[], dt: number, landmarks?: readonly LandmarkEntity[]): void {
+  update(aircraft: readonly AircraftEntity[], dt: number, landmarks?: readonly LandmarkEntity[], buildings?: BuildingIndex | null): void {
     this.terrainImpacts(aircraft, dt);
     this.midAir(aircraft, dt);
     if (landmarks?.length) this.landmarkImpacts(aircraft, dt, landmarks);
+    if (buildings) this.buildingImpacts(aircraft, dt, buildings);
+  }
+
+  /**
+   * Flying into a CBD skyscraper (#128): any aircraft (the player's jet, AI, drones) is destroyed with
+   * its wreck dropping from the impact, and the building collapses ('building:collapsed'). The
+   * player's down reason is 'building'. Live civil traffic flies a scripted airport profile and is
+   * exempt, as it is from the terrain.
+   */
+  private buildingImpacts(aircraft: readonly AircraftEntity[], dt: number, buildings: BuildingIndex): void {
+    for (let i = 0; i < aircraft.length; i++) {
+      const ac = aircraft[i];
+      if (!ac.alive || ac.crashed || ac.civil) continue;
+      _mid.copy(ac.position).addScaledVector(ac.velocity, -dt);
+      const hit = buildings.firstHit(_mid, ac.position);
+      if (!hit) continue;
+      ac.position.lerpVectors(_mid, ac.position, hit.s);
+      buildings.collapse(hit.index);
+      this.damage.destroyAircraft(ac, null, 'collision', ac.isPlayer ? 'building' : 'crash');
+      ac.velocity.multiplyScalar(-0.08);
+      this.host?.events.emit('building:collapsed', {
+        building: hit.building.id,
+        aircraftId: ac.id,
+        isPlayer: ac.isPlayer,
+        position: ac.position.clone(),
+        x: hit.building.x,
+        z: hit.building.z,
+        ground: hit.building.ground,
+        top: hit.building.top,
+      });
+    }
   }
 
   /**

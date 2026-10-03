@@ -6,6 +6,7 @@
  * `intelBounds` / `fitIntelView` are pure (tested in tests/ui-intel.test.ts).
  */
 import type { IntelMarker, MissionDef } from '../../core/contracts';
+import { choosePlaceNames } from './placeNames';
 import { drawAucklandChart } from '../art/aucklandChart';
 import { niceScaleLength } from '../format';
 
@@ -134,6 +135,11 @@ class LabelPlacer {
   /** Reserve an area (marker icons, north arrow, legend…). */
   block(x: number, y: number, w: number, h: number): void {
     this.boxes.push({ x, y, w, h });
+  }
+
+  /** Every box taken so far (icons and placed labels). */
+  get taken(): readonly Box[] {
+    return this.boxes;
   }
 
   private hits(b: Box): boolean {
@@ -415,6 +421,37 @@ export function drawIntelMap(canvas: HTMLCanvasElement, m: MissionDef, w: number
   }
   for (const f of later) f();
   for (const f of labelFns) f();
+
+  // ── place names (#129): the lowest-priority labels, muted, only where nothing else is ──
+  {
+    const size = Math.round(8.5 * u);
+    g.font = `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+    const anchors = [...m.intel.map((i) => ({ x: i.x, z: i.z })), ...routeOf(m).map((p) => ({ x: p.x, z: p.z }))];
+    // the scale bar and its label (drawn below): the bar's length and the label's width
+    const barPx = niceScaleLength(1 / v.scale, Math.min(120, w * 0.25)) * v.scale;
+    g.font = `700 ${Math.round(9 * u)}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
+    const barLabel = g.measureText('00.0 km · 00.0 nm').width;
+    g.font = `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+    const blocked = [
+      ...placer.taken,
+      { x: w - 40 * u, y: 0, w: 40 * u, h: 46 * u }, // north arrow
+      { x: 0, y: h - 30 * u, w: 12 * u + barPx + 12 + barLabel, h: 30 * u }, // scale bar
+      // the briefing's HTML overlays on the map: the legend chips (up to two rows) and the view button
+      { x: 0, y: 0, w: w * 0.75, h: 48 },
+      { x: w - 56, y: h - 56, w: 56, h: 56 },
+    ];
+    const names = choosePlaceNames({ w, h, X, Y, anchors, blocked, measure: (t) => g.measureText(t).width, size });
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    for (const n of names) {
+      g.lineWidth = 3;
+      g.strokeStyle = 'rgba(2,6,10,0.75)';
+      g.strokeText(n.name, n.cx, n.cy);
+      g.fillStyle = n.kind === 'island' ? 'rgba(170,230,215,0.72)' : 'rgba(205,222,230,0.6)';
+      g.fillText(n.name, n.cx, n.cy);
+    }
+  }
 
   // ── north arrow ──
   {

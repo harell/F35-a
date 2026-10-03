@@ -15,6 +15,8 @@ export const REASONS = {
   skytowerLost: 'The Sky Tower fell',
   /** The player flew into the Sky Tower (a 'structure' down reason, #113): no Auto-GCAS tip, it can't see buildings. */
   structure: 'Crashed into the Sky Tower',
+  /** The player flew into a CBD skyscraper (a 'building' down reason, #128); the building collapsed. */
+  building: 'Crashed into a building',
 } as const;
 
 const DEATH_WORDS = ['shot down', 'crashed', 'collision', 'out of fuel'];

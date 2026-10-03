@@ -233,6 +233,13 @@ export interface CbdStats {
   prisms: BuiltPrism[];
   /** Triangles added for the CBD (towers, buildings; not the Sky Tower). */
   triangles: number;
+  /**
+   * LINZ buildings: the vertex range [start, end) of building i (index into aucklandBuildings()) in the
+   * builder, at [2i, 2i + 1], and its ground height at [i] of `buildingGround`, so a collapsed building
+   * can be flattened in the merged mesh (#128). Absent for the procedural CBD.
+   */
+  buildingVerts?: Int32Array;
+  buildingGround?: Float32Array;
 }
 
 /**
@@ -698,8 +705,12 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
   const heights: number[] = [];
   const prisms: BuiltPrism[] = [];
   const tmp = new Color();
-  for (const b of bs) {
+  const buildingVerts = new Int32Array(bs.length * 2);
+  const buildingGround = new Float32Array(bs.length);
+  for (let bi = 0; bi < bs.length; bi++) {
+    const b = bs[bi];
     const base = b.prisms[0];
+    buildingVerts[bi * 2] = B.vertexCount;
     // ground: the terrain at the footprint's centroid; walls down to its lowest corner
     const g = height(base.cx, base.cz);
     let gMin = g;
@@ -735,6 +746,8 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       prisms.push({ ...p, y0, y1: g + p.h });
       heights.push(p.h);
     }
+    buildingVerts[bi * 2 + 1] = B.vertexCount;
+    buildingGround[bi] = g;
     tallest = Math.max(tallest, top);
     if (top > 60) towers++;
     if (top > 95) {
@@ -767,7 +780,7 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
   }
   const inside = (x: number, z: number) => (grid.get(key(Math.floor(x / 20), Math.floor(z / 20))) ?? []).some((p) => pointInRing(p.ring, x, z));
   streetLamps(st, lights, height, inside);
-  return { towers, tallest, heights, footprints: [], prisms, triangles: B.triangleCount - t0 };
+  return { towers, tallest, heights, footprints: [], prisms, triangles: B.triangleCount - t0, buildingVerts, buildingGround };
 }
 
 interface Centre {

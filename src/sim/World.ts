@@ -40,6 +40,7 @@ import { AIRCRAFT_HEALTH, AIRCRAFT_WARHEAD, GROUND_TARGET_DATA, SAM_SITE_DATA, V
 import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
 import { stepOneWay } from './drone/oneWay';
+import { BuildingIndex, buildingGeometry } from './buildings';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
 import { BOAT_SPEED, makeBoat, stepBoats } from './boats';
 
@@ -103,6 +104,8 @@ class SimWorldImpl implements SimWorld {
   readonly ground: GroundTargetEntity[] = [];
   readonly decoys: DecoyEntity[] = [];
   readonly landmarks: LandmarkEntity[] = [];
+  /** The CBD's skyscrapers as obstacles (#128); null when the building data isn't installed. All standing in a new world. */
+  readonly buildings: BuildingIndex | null;
   readonly projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
 
@@ -145,6 +148,8 @@ class SimWorldImpl implements SimWorld {
       },
     });
     this.collisions = new CollisionSystem(o.terrain, this.damage, this);
+    const geo = buildingGeometry(o.terrain);
+    this.buildings = geo ? new BuildingIndex(geo) : null;
     for (let i = 0; i < PROJECTILE_POOL_SIZE; i++) this.projectiles.push(createProjectile());
   }
 
@@ -395,7 +400,7 @@ class SimWorldImpl implements SimWorld {
     stepBoats(this, dt);
 
     // 5. Collisions (terrain / sea, mid-air, landmarks) and landmark collapses
-    this.collisions.update(aircraft, dt, this.landmarks);
+    this.collisions.update(aircraft, dt, this.landmarks, this.buildings);
     if (this.landmarks.length) stepLandmarks(this.landmarks, this.time, this.events, (x, z) => this.terrain.surfaceHeightAt(x, z));
 
     // 6. Fire damage over time, overstress
@@ -554,6 +559,7 @@ class SimWorldImpl implements SimWorld {
     this.ground.length = 0;
     this.decoys.length = 0;
     this.landmarks.length = 0;
+    this.buildings?.reset();
     for (const p of this.projectiles) p.active = false;
     this.byId.clear();
     this.player = null;

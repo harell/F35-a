@@ -167,8 +167,9 @@ describe('AI guns & dogfight', () => {
   it('1v1 dogfight: both fight (BFM), nobody hits the ground, somebody gets shot', () => {
     const tw = makeAiWorld('veteran', undefined, 5);
     const w = tw.world;
-    const a = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 3_000, 0), heading: 0, speed: 230, ai: createAiBrain('fighter', { skill: 0.8, seed: 9 }) });
-    const b = w.spawnAircraft({ type: 'su35', team: 'red', position: v3(2_500, 3_200, -3_000), heading: Math.PI * 1.5, speed: 230, ai: createAiBrain('fighter', { skill: 0.8, seed: 3 }) });
+    // 20 km out of the CBD (the origin): its towers are the AI's ground there (#128), not part of this test
+    const a = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(20_000, 3_000, 20_000), heading: 0, speed: 230, ai: createAiBrain('fighter', { skill: 0.8, seed: 9 }) });
+    const b = w.spawnAircraft({ type: 'su35', team: 'red', position: v3(22_500, 3_200, 17_000), heading: Math.PI * 1.5, speed: 230, ai: createAiBrain('fighter', { skill: 0.8, seed: 3 }) });
     a.stores.forEach((s) => (s.count = 0));
     b.stores.forEach((s) => (s.count = 0));
     const statesA = new Set<string>();
