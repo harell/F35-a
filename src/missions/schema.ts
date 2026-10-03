@@ -479,6 +479,12 @@ export interface MissionScript {
    * rounding would leave pairs unchanged). Groups that lose all members don't spawn.
    */
   scaleEnemyTotal?: boolean;
+  /**
+   * The mission's own enemy-count scale on the listed difficulties, in place of
+   * difficulty.enemyCountScale for its red aircraft groups (Instant Action on Ace: Pilot's
+   * numbers, the enemies get better instead of more numerous; issue #60).
+   */
+  enemyCountScale?: Partial<Record<Difficulty, number>>;
   /** Opening radio calls at mission start (convenience for a 'start' trigger). */
   opening?: Action[];
   /** Radio line on success (after "Mission complete, RTB"). */
