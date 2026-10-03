@@ -172,3 +172,36 @@ describe('g01: the Shaheds only ever hit the Sky Tower (#128)', () => {
     expect(minClear).toBeGreaterThan(10);
   });
 });
+
+describe('the collapse in the merged CBD mesh (#128)', () => {
+  it('flattens a collapsed building to a rubble heap and stands it up again in a new world', async () => {
+    const { BufferAttribute, BufferGeometry } = await import('three');
+    const { CbdCollapseVisual, RUBBLE_HEIGHT } = await import('../src/world/scenery/cbdCollapse');
+    const world = createSimWorld({ terrain: flat, difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
+    const idx = world.buildings!;
+    const k = 0;
+    const id = idx.geo.buildings[k].id;
+    // a fake merged mesh: building `id` owns vertices 2..5 (two at 0 m, two at 120 m)
+    const pos = new Float32Array(8 * 3);
+    for (let v = 0; v < 8; v++) pos[v * 3 + 1] = v % 2 ? 120 : 0;
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new BufferAttribute(pos, 3));
+    const verts = new Int32Array((id + 1) * 2).fill(0);
+    verts[id * 2] = 2;
+    verts[id * 2 + 1] = 6;
+    const ground = new Float32Array(id + 1);
+    const vis = new CbdCollapseVisual(geo, verts, ground);
+    vis.update(world);
+    expect(vis.collapsed).toEqual([]);
+    idx.collapse(k);
+    vis.update(world);
+    expect(vis.collapsed).toEqual([id]);
+    const ys = () => Array.from({ length: 8 }, (_, v) => pos[v * 3 + 1]);
+    expect(ys()).toEqual([0, 120, 0, RUBBLE_HEIGHT, 0, RUBBLE_HEIGHT, 0, 120]);
+    // the next mission: a fresh world, every building standing
+    const next = createSimWorld({ terrain: flat, difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
+    vis.update(next);
+    expect(vis.collapsed).toEqual([]);
+    expect(ys()).toEqual([0, 120, 0, 120, 0, 120, 0, 120]);
+  });
+});

@@ -40,19 +40,20 @@ export class CollisionSystem {
   }
 
   /**
-   * Flying into a CBD skyscraper (#128): any aircraft (the player's jet, AI, drones, civil traffic)
-   * is destroyed with its wreck dropping from the impact, and the building collapses
-   * ('building:collapsed'). The player's down reason is 'building'.
+   * Flying into a CBD skyscraper (#128): any aircraft (the player's jet, AI, drones) is destroyed with
+   * its wreck dropping from the impact, and the building collapses ('building:collapsed'). The
+   * player's down reason is 'building'. Live civil traffic flies a scripted airport profile and is
+   * exempt, as it is from the terrain.
    */
   private buildingImpacts(aircraft: readonly AircraftEntity[], dt: number, buildings: BuildingIndex): void {
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
-      if (!ac.alive || ac.crashed) continue;
+      if (!ac.alive || ac.crashed || ac.civil) continue;
       _mid.copy(ac.position).addScaledVector(ac.velocity, -dt);
       const hit = buildings.firstHit(_mid, ac.position);
       if (!hit) continue;
       ac.position.lerpVectors(_mid, ac.position, hit.s);
-      buildings.collapsed.add(hit.index);
+      buildings.collapse(hit.index);
       this.damage.destroyAircraft(ac, null, 'collision', ac.isPlayer ? 'building' : 'crash');
       ac.velocity.multiplyScalar(-0.08);
       this.host?.events.emit('building:collapsed', {
@@ -60,6 +61,9 @@ export class CollisionSystem {
         aircraftId: ac.id,
         isPlayer: ac.isPlayer,
         position: ac.position.clone(),
+        x: hit.building.x,
+        z: hit.building.z,
+        ground: hit.building.ground,
         top: hit.building.top,
       });
     }

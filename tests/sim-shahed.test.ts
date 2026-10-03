@@ -109,9 +109,12 @@ describe('Shahed-136: the aircraft type', () => {
 describe('Shahed-136: dumb route flight', () => {
   it('flies its route at a fixed height and speed, then dives into the target point and reports the hit', () => {
     const w = makeWorld();
-    const target = new Vector3(0, 10, 0);
-    const route = [new Vector3(0, 0, 6000), new Vector3(3000, 0, 3000)];
-    const d = spawnDrone(w, new Vector3(-4000, 0, 9000), target, route);
+    // 20 km out of the CBD: a 10 m impact point at the origin is the Sky Tower's foot, among the CBD
+    // buildings, which are obstacles (#128)
+    const o = new Vector3(20000, 0, 20000);
+    const target = new Vector3(0, 10, 0).add(o);
+    const route = [new Vector3(0, 0, 6000).add(o), new Vector3(3000, 0, 3000).add(o)];
+    const d = spawnDrone(w, new Vector3(-4000, 0, 9000).add(o), target, route);
     const impacts = record(w, 'drone:impact');
     const destroyed = record(w, 'destroyed');
     let closestWp = [Infinity, Infinity];

@@ -1051,6 +1051,13 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       startFire(b.x, b.y + COLLAPSE.breakHeight - 6, b.z, 1.4, 90);
     }),
     events.on('landmark:impact', ({ position: p, heading }) => collapseDust(p.x, p.y, p.z, heading)),
+    // a CBD skyscraper an aircraft flew into (#128): the fireball at the impact, then the dust wall
+    // where it comes down, and the stump burning
+    events.on('building:collapsed', ({ position: p, x, z, ground }) => {
+      schedule(0, p.x, p.y, p.z, 'huge', 'air');
+      collapseDust(x, ground, z, rnd() * Math.PI * 2);
+      startFire(x, ground + 6, z, 1.6, 90);
+    }),
     events.on('damage', ({ target, weapon }) => {
       if (target.kind !== 'aircraft' || weapon === 'gun') return;
       const p = target.position;

@@ -79,9 +79,10 @@ export interface GameEventMap {
   'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' | 'structure' | 'building' };
   /**
    * An aircraft flew into a CBD skyscraper (sim/buildings.ts, #128): the aircraft is destroyed and
-   * the building collapses. `building` = index into aucklandBuildings(); `top` = its roof (world Y).
+   * the building collapses. `building` = index into aucklandBuildings(); `position` = the impact;
+   * (x, z) its footprint centre, `ground` and `top` its base and roof (world Y).
    */
-  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; top: number };
+  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number };
 }
 
 export type GameEventName = keyof GameEventMap;

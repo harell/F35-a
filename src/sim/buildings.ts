@@ -202,12 +202,23 @@ export function buildingGeometry(
 export class BuildingIndex {
   /** `buildings` indices of the collapsed ones (reset by reset(), and new in every SimWorld). */
   readonly collapsed = new Set<number>();
+  /** Bumped whenever `collapsed` changes (the scenery follows it). */
+  version = 0;
   private readonly seen = new Set<number>();
 
   constructor(readonly geo: BuildingGeometry) {}
 
+  /** Mark building `k` (index into geo.buildings) collapsed. */
+  collapse(k: number): void {
+    if (this.collapsed.has(k)) return;
+    this.collapsed.add(k);
+    this.version++;
+  }
+
   reset(): void {
+    if (!this.collapsed.size) return;
     this.collapsed.clear();
+    this.version++;
   }
 
   /** Standing building whose prisms the segment a→b enters first (and the contact fraction), or null. */
