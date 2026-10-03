@@ -89,8 +89,11 @@ describe('#114: c03 — a time limit, so a sortie with nothing left to drop ends
     expect(h.runner.result(h.world).reason).toBe('Out of time');
   });
 
-  // the playtest's run: Recruit seed 3, the SA-8 shoots down SDBs at 262 s and 441 s (and 625 s)
-  it('Recruit seed 3 (was still running at 900 s): Darkstar calls the SA-8, and the run ends by the time limit', { timeout: 300_000 }, () => {
+  // the playtest's run: Recruit seed 3, the SA-8 shoots down SDBs at 262 s and 441 s (and 625 s), rearming
+  // twice and still running at 900 s. With no rearming (#63) the bot's sortie changed: it loses one SDB at
+  // 262 s and kills the SA-8 at 467 s. The harness tests above pin the call and the time limit; this run
+  // checks that the real sortie ends inside the limit, and that the call follows a second loss if there is one
+  it('Recruit seed 3 (was still running at 900 s) ends inside the time limit; a second SDB lost to the SA-8 brings the call', { timeout: 300_000 }, () => {
     const t = new TerrainQueryImpl(runSync(generateTerrain({ theater: c03.theater, seed: c03.seed, resolution: 512, features: allFeatures(c03.theater, []), pads: terrainPadsFor(c03) })));
     const r = runPlaythrough('c03', 'recruit', 3, t, { maxT: C03_TIME_LIMIT + 60, log: true });
     const msg = `${r.state}@${r.t}s ${r.reason} ${r.objectives}`;
@@ -98,10 +101,13 @@ describe('#114: c03 — a time limit, so a sortie with nothing left to drop ends
     expect(r.t, msg).toBeLessThanOrEqual(C03_TIME_LIMIT + 1);
     if (r.state === 'failed') expect(r.reason, msg).toMatch(/Out of time|Shot down|Crashed/);
     const call = r.events.find((e) => CALL.test(e));
-    expect(call, msg).toBeTruthy();
-    // it comes right after the second SDB lost to the SA-8
     const losses = r.events.filter((e) => /RADIO DARKSTAR: \w+ shot down by SA-8/.test(e)).map((e) => Number(e.trim().split(' ')[0]));
-    expect(losses.length, msg).toBeGreaterThanOrEqual(2);
+    if (losses.length < 2) {
+      expect(call, msg).toBeUndefined();
+      return;
+    }
+    // it comes right after the second SDB lost to the SA-8
+    expect(call, msg).toBeTruthy();
     expect(Number(call!.trim().split(' ')[0]) - losses[1], msg).toBeLessThanOrEqual(5);
   });
 });
