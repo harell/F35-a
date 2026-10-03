@@ -1120,7 +1120,12 @@ export class Game {
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,
       }),
       // + the Instant Action scenario built on a fixed site (Wiri defence) so the e2e sweep covers it
-      missions: () => [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ id: m.id, title: m.title, kind: m.kind })),
+      // every campaign's missions (a disabled campaign's too, with playable: false: the smoke skips them)
+      missions: () =>
+        [
+          ...CAMPAIGNS.flatMap((c) => c.missions.map((m) => ({ m, playable: c.enabled !== false }))),
+          ...[...TRAINING, missionById('ia_defend_auckland')!].map((m) => ({ m, playable: true })),
+        ].map(({ m, playable }) => ({ id: m.id, title: m.title, kind: m.kind, playable })),
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
     } : null;
   }
