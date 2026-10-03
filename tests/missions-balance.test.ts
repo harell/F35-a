@@ -24,6 +24,9 @@ import type { Difficulty } from '../src/core/types';
 import { LOADOUTS } from '../src/core/data';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
+import { hangarLoadouts } from '../src/ui/hangar';
+import { C08_ACE_SCRAMBLE_T } from '../src/missions/content/campaign2';
+import { scaledCount } from '../src/missions/runtime/spawner';
 
 const terrains = new Map<string, TerrainQuery>();
 function terrainFor(id: string): TerrainQuery {
@@ -48,12 +51,16 @@ function wins(id: string, diff: Difficulty, seeds: number[]): { won: number; log
 }
 
 describe('#65: StormBreaker follow-ups (playtest 2026-10-02, 2.1-c / 2.2-h)', () => {
-  it('c08 offers strike_sdb2 only while saying it carries no anti-radiation missile (Pilot was 0/3 to the SA-10)', () => {
+  // #114 (playtest 2026-10-02 bc94edd, 1.3-d): even with the warning, the StormBreaker load lost the
+  // low strike under the SA-10 (bot, 6 seeds: Recruit 6/6, Pilot 2/6, Veteran 0/6), so c08 no longer
+  // offers it, and neither the briefing nor the hangar suggests it
+  it('c08 does not offer strike_sdb2 (no answer to the SA-10; Pilot 2/6, Veteran 0/6 with it)', () => {
     const def = missionById('c08')!;
-    if (!def.allowedLoadouts.includes('strike_sdb2')) return;
     expect(LOADOUTS.strike_sdb2.stores.some((s) => s.weapon === 'aargm')).toBe(false);
-    expect(LOADOUTS.strike_sdb2.description).toMatch(/no anti-radiation missile/i);
-    expect(def.briefing.join(' ')).toMatch(/StormBreaker[^.]*no anti-radiation missile/i);
+    expect(def.allowedLoadouts).not.toContain('strike_sdb2');
+    expect(def.recommendedLoadout).not.toBe('strike_sdb2');
+    expect(hangarLoadouts(def).cards).not.toContain('strike_sdb2');
+    expect(def.briefing.join(' ')).not.toMatch(/StormBreaker|GBU-53/i);
   });
 
   // decision: no fast corvette. Measured (crossing ship, IN RANGE release from 7.6 km): a JDAM's
@@ -353,7 +360,9 @@ describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the play
  * and the win rate never rises from Pilot to Veteran or from Veteran to Ace. Seeds 0–5 are the ones
  * `tools/playtest/bot-sweep.ts -- --seeds=6` flies, so a failure here reproduces with
  *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran,ace --seeds=6 --log --json=<file>
- * c02, c06, c08 and c09 are left to #57 and #65.
+ * c08 on Ace was 6/6, as easy as Pilot (#58): on Ace a ready MiG pair now launches at 100 s, on the
+ * first pass (4/6; Veteran unchanged at 6/6). c02, c06 and c09 already fell (sweep without
+ * rearming, 6 seeds, Pilot/Veteran/Ace: c02 6/5/3, c06 6/5/2, c09 5/4/2); their tests are guards.
  * Margins: c04 wins exactly 2/6 on Veteran here (seeds 0 and 3; 4/12 over seeds 0–11), c10 3/6 (6/12).
  * A change to the bot or the AI can flip one seed and fail the c04 gate: rerun the sweep with --seeds=12
  * before retuning. No c04/c10 run is ever rearmed (the bot's REARM mode is only its flight home), so
@@ -404,11 +413,29 @@ describe('#58: Veteran band in c04 and c10, and a difficulty curve that only fal
       expectFalling(c);
     });
   }
-  for (const id of ['c01', 'c03', 'c05', 'c11']) {
+  for (const id of ['c01', 'c02', 'c03', 'c05', 'c06', 'c09', 'c11']) {
     it(`${id}: the win rate doesn't rise from Pilot to Veteran or from Veteran to Ace`, { timeout: 600_000 }, async () => {
       expectFalling(await curve(id));
     });
   }
+  it('c08: Ace is below 90 % (was 6/6, as easy as Pilot), Pilot stays ≥ 75 %, and Pilot ≥ Veteran ≥ Ace', { timeout: 600_000 }, async () => {
+    const c = await curve('c08');
+    expect(c.won.ace, c.table).toBeLessThanOrEqual(5);
+    expect(c.won.pilot, c.table).toBeGreaterThanOrEqual(5);
+    expect(c.won.veteran, c.table).toBeGreaterThanOrEqual(2);
+    expectFalling(c);
+  });
+  it('c08: only on Ace does a MiG pair launch on the first pass (the rest of the alert still waits until 300 s)', () => {
+    const groups = missionById('c08')!.script.groups;
+    const early = groups.find((g) => g.id === 'migs_ace')!;
+    expect(early.minDifficulty).toBe('ace');
+    expect(early.spawn).toEqual({ kind: 'time', t: C08_ACE_SCRAMBLE_T });
+    expect(C08_ACE_SCRAMBLE_T).toBeLessThan(300);
+    expect(scaledCount(early, DIFFICULTIES.ace.enemyCountScale)).toBe(2);
+    const alert = groups.find((g) => g.id === 'migs')!;
+    expect(alert.minDifficulty).toBeUndefined();
+    expect(alert.spawn).toMatchObject({ kind: 'any' });
+  });
 });
 
 describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-10-02)', () => {
