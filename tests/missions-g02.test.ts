@@ -316,7 +316,7 @@ describe('g02: the competent bot (tests/missions-bot.ts)', () => {
       const n = diff === 'recruit' ? 2 : 3;
       for (const seed of [0, 1]) {
         // no rearming (#63): the bot never goes home for more bombs
-        const r = runPlaythrough('g02', diff, seed, realTerrain(), { maxT: 400, bot: { rearm: false } });
+        const r = runPlaythrough('g02', diff, seed, realTerrain(), { maxT: 400 });
         const tag = `${diff} seed ${seed}`;
         expect(r.state, `${tag}: ${r.reason}`).toBe('success');
         const bombs = r.launches.filter((l) => l.weapon === 'gbu53');

@@ -428,7 +428,7 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
       won[d] = 0;
       for (const seed of seeds) {
         await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
-        const r = runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600, bot: { rearm: false } });
+        const r = runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600 });
         if (r.state === 'success') won[d]++;
         log.push(`g02 ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
         // the opening ripple can't cover both waves: every bomb on a missile boat goes after they came in
