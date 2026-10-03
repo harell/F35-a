@@ -22,7 +22,8 @@ import { gpsMaxRange } from '../src/sim/weapons/dlz';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, missionGunAmmo, terrainPadsFor, validateMission } from '../src/missions';
 import { G02, G02_GROUPS, G02_MISSILE_WAVE_AT, G02_TANKER } from '../src/missions/content/irgcHauraki';
-import { routeLabel, routeOf } from '../src/ui/screens/intelMap';
+import { drawIntelMap, routeLabel, routeOf } from '../src/ui/screens/intelMap';
+import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
 import { forceDestroy } from '../src/game/forceDestroy';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
@@ -110,7 +111,8 @@ describe('g02 Straight Outta Hauraki: content', () => {
     expect(text).toMatch(/cannot be shot down/i);
   });
 
-  it('every boat and the tanker start on open water, and her route out through the Gulf stays on it (real LINZ coast)', () => {
+  // the first test to build the real terrain (~3.5 s alone, past the 5 s default under load)
+  it('every boat and the tanker start on open water, and her route out through the Gulf stays on it (real LINZ coast)', { timeout: 60_000 }, () => {
     const t = realTerrain();
     for (const g of [...G02.script.ground, ...G02.script.sams]) expect(t.isWater(g.x, g.z), g.id).toBe(true);
     const route = [G02_TANKER.start, ...G02_TANKER.path];
@@ -138,6 +140,13 @@ describe('g02 Straight Outta Hauraki: content', () => {
     for (const p of route) expect(routeLabel(G02, p), p.label).toBeNull();
     // a waypoint away from any marker of its name keeps its label
     expect(routeLabel(G02, { ...route[0], x: route[0].x - 20_000 })).toBe('SUICIDE BOATS');
+    // what the drawn map prints (the playtest's screenshot had both spellings of each wave)
+    installPath2D();
+    const { canvas, ctx } = makeFakeCanvas(600, 400, 1);
+    drawIntelMap(canvas, G02, 600, 400, 1);
+    const texts = ctx.texts.map((t) => t.text);
+    expect(texts.filter((t) => /missile boats/i.test(t))).toEqual(['Missile boats']);
+    expect(texts.filter((t) => /suicide boats/i.test(t))).toEqual(['Suicide boats']);
   });
 
   it('the start solves nothing: no boat is in StormBreaker reach at t=0, and the missile boats are out of reach even from 20,000 ft', () => {
