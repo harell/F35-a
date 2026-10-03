@@ -24,6 +24,7 @@ import {
 } from '../src/ui/career';
 import { RECRUIT_OFFER_AFTER, debriefPrimary } from '../src/ui/screens/debrief';
 import { countNote } from '../src/ui/screens/instantAction';
+import { IA_ENEMY_COUNT_SCALE } from '../src/missions/content/instant';
 
 class MemStorage {
   private m = new Map<string, string>();
@@ -170,8 +171,11 @@ describe('instant action enemy-count label', () => {
   it('states the real scaling instead of "More bandits on harder difficulties"', () => {
     const t = countNote();
     expect(t).not.toMatch(/More bandits on harder/);
-    const r = DIFFICULTIES.recruit.enemyCountScale;
-    const a = DIFFICULTIES.ace.enemyCountScale;
+    // Instant Action's own Ace scale (Pilot's numbers, issue #60), not the difficulty's x1.5
+    const r = IA_ENEMY_COUNT_SCALE.recruit ?? DIFFICULTIES.recruit.enemyCountScale;
+    const a = IA_ENEMY_COUNT_SCALE.ace ?? DIFFICULTIES.ace.enemyCountScale;
+    expect(a).toBe(1);
+    expect(t).not.toContain(`×${DIFFICULTIES.ace.enemyCountScale}`);
     if (r !== 1 || a !== 1) {
       expect(t).toContain(`×${r}`);
       expect(t).toContain(`×${a}`);

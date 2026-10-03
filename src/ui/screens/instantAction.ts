@@ -6,6 +6,7 @@
 import type { InstantActionOptions } from '../../core/contracts';
 import { AIRCRAFT_INFO, DIFFICULTIES } from '../../core/data';
 import { DIFFICULTY_ORDER } from '../career';
+import { IA_ENEMY_COUNT_SCALE } from '../../missions/content/instant';
 import type { AircraftType, TheaterId, TimeOfDay, Weather } from '../../core/types';
 import { icon } from '../art/icons';
 import { landmark, type LandmarkId } from '../art/landmarks';
@@ -265,7 +266,8 @@ function cityPicker(value: TheaterId, onChange: (v: TheaterId) => void): HTMLEle
  * number is its SAM sites and survival's is the first wave.
  */
 export function countNote(): string {
-  const scales = DIFFICULTY_ORDER.map((id) => DIFFICULTIES[id]).filter(Boolean);
+  // Instant Action's own scale where it has one (Ace keeps Pilot's numbers, issue #60)
+  const scales = DIFFICULTY_ORDER.map((id) => DIFFICULTIES[id] && { ...DIFFICULTIES[id], enemyCountScale: IA_ENEMY_COUNT_SCALE[id] ?? DIFFICULTIES[id].enemyCountScale }).filter(Boolean);
   const lo = scales[0];
   const hi = scales[scales.length - 1];
   const scaled = scales.some((d) => d.enemyCountScale !== 1);
