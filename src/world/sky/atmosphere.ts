@@ -4,7 +4,7 @@
  * SAME uniform objects, so updating them once per frame updates all materials, and the distant
  * terrain always melts into the sky at the horizon.
  */
-import { Color, Vector3, Vector4 } from 'three';
+import { Color, Vector2, Vector3, Vector4 } from 'three';
 import type { SkyPreset } from './presets';
 
 export interface AtmosphereUniforms {
@@ -28,6 +28,10 @@ export interface AtmosphereUniforms {
   uNight: { value: number };
   /** Night light dome over a city: centre x, z (m), radius (m), strength (0 = none). */
   uCityGlow: { value: Vector4 };
+  /** Aerial perspective: near (m), range (m), strength (0..1), scale height (m). Issue #139. */
+  uAerialPersp: { value: Vector4 };
+  /** Colour grade: contrast, saturation (1, 1 = none). */
+  uGrade: { value: Vector2 };
 }
 
 export function createAtmosphereUniforms(p: SkyPreset, drawDistance: number): AtmosphereUniforms {
@@ -48,6 +52,8 @@ export function createAtmosphereUniforms(p: SkyPreset, drawDistance: number): At
     uTime: { value: 0 },
     uNight: { value: p.lights },
     uCityGlow: { value: new Vector4(0, 0, 1, 0) },
+    uAerialPersp: { value: new Vector4(p.aerial.near, p.aerial.range, p.aerial.strength, p.aerial.height) },
+    uGrade: { value: new Vector2(p.grade.contrast, p.grade.saturation) },
   };
 }
 
@@ -64,6 +70,14 @@ export function blendAtmosphere(u: AtmosphereUniforms, a: SkyPreset, b: SkyPrese
   const ha = a.hemiIntensity + (b.hemiIntensity - a.hemiIntensity) * t;
   u.uHemiSky.value.lerpColors(a.hemiSky, b.hemiSky, t).multiplyScalar(ha);
   u.uSunGlow.value = a.sunGlow + (b.sunGlow - a.sunGlow) * t;
+  const lerp = (x: number, y: number) => x + (y - x) * t;
+  u.uAerialPersp.value.set(
+    lerp(a.aerial.near, b.aerial.near),
+    lerp(a.aerial.range, b.aerial.range),
+    lerp(a.aerial.strength, b.aerial.strength),
+    lerp(a.aerial.height, b.aerial.height),
+  );
+  u.uGrade.value.set(lerp(a.grade.contrast, b.grade.contrast), lerp(a.grade.saturation, b.grade.saturation));
 }
 
 /** GLSL declarations + helpers. Include in both vertex and fragment shaders that need them. */
@@ -84,6 +98,8 @@ uniform vec3 uCamPos;
 uniform float uTime;
 uniform float uNight;
 uniform vec4 uCityGlow;
+uniform vec4 uAerialPersp;
+uniform vec2 uGrade;
 
 // Sodium / LED light dome over the city at night: low on the horizon in the city's direction,
 // all around (and overhead) when flying over it.
@@ -142,11 +158,30 @@ float atmoFogFactor(float dist, float y0, float y1) {
   return max(f, far);
 }
 
+// Aerial perspective (#139): nothing inside uAerialPersp.x metres (the city under the jet stays crisp);
+// beyond it, a blend toward the haze that approaches uAerialPersp.z, thinning with the ray's mean height
+// so it pools low over the harbour and fades as the jet climbs. Mirrored by aerialFactor() in presets.ts.
+float atmoAerial(float dist, float y0, float y1) {
+  float h = max(0.0, 0.5 * (y0 + y1));
+  float k = 1.0 - exp(-max(dist - uAerialPersp.x, 0.0) / uAerialPersp.y);
+  return uAerialPersp.z * k * exp(-h / uAerialPersp.w);
+}
+
+// Light colour grade (saturation, then contrast around linear mid-grey), applied after fog in every
+// world shader and on the sky dome, so ground, water, buildings and sky share one look.
+vec3 atmoGrade(vec3 c) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = max(mix(vec3(l), c, uGrade.y), 0.0);
+  return 0.18 * pow(c / 0.18, vec3(uGrade.x));
+}
+
 vec3 atmoApplyFog(vec3 col, vec3 worldPos) {
   vec3 d = worldPos - uCamPos;
   float dist = length(d);
   float f = atmoFogFactor(dist, uCamPos.y, worldPos.y);
-  return mix(col, atmoHaze(d / max(dist, 1e-3)), f);
+  float a = atmoAerial(dist, uCamPos.y, worldPos.y);
+  f = 1.0 - (1.0 - f) * (1.0 - a);
+  return atmoGrade(mix(col, atmoHaze(d / max(dist, 1e-3)), f));
 }
 
 // Scotopic (night) vision: moonlit colours desaturate towards a cool grey.

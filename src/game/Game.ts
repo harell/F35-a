@@ -46,7 +46,9 @@ import { createEntityRenderer } from '../render/EntityRenderer';
 import { createEffects } from '../render/effects/Effects';
 import { createCameraRig } from '../render/CameraRig';
 import { TargetCam, targetCamOmitFor } from '../render/TargetCam';
+import { Bloom, bloomEnabled } from '../render/Bloom';
 import { pipView } from '../hud/hmd/pip';
+import { wpnView } from '../hud/hmd/wpnCam';
 import { createHud } from '../hud/Hud';
 import { createCockpit } from '../hud/Cockpit';
 import { createAudio } from '../audio/AudioSystem';
@@ -117,6 +119,8 @@ export class Game {
   progress: CampaignProgress;
 
   readonly renderer: WebGLRenderer;
+  /** High-tier glow pass (#139), made on first use. */
+  private bloom: Bloom | null = null;
   readonly hud: HudApi;
   readonly audio: AudioApi;
   readonly input: InputApi;
@@ -753,6 +757,8 @@ export class Game {
     s.cockpit.update(ctx2, s.rig.headLocal);
     this.renderer.info.reset();
     this.renderer.render(s.scene, s.rig.camera);
+    // glow on the world only: before the cockpit pass, so the panel and the PCD never bloom
+    if (bloomEnabled(this.quality)) (this.bloom ??= new Bloom()).render(this.renderer);
     if (s.cockpit.visible) s.cockpit.render(this.renderer);
     this.hud.update(ctx2);
     // target camera window, after the HUD has laid out this frame (pipView: its rect and target), so
@@ -760,6 +766,8 @@ export class Game {
     // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
     const q = this.quality;
     s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit), s.env.targetCamLandmarks);
+    // the weapon window's video owns the same slot when it shows (pipView.vh is 0 then): one pass at most
+    if (wpnView.vh > 0) s.targetCam.renderWeapon(this.renderer, s.scene, wpnView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
     this.audio.update(ctx2);
   }
 
@@ -937,7 +945,9 @@ export class Game {
             triangles: this.renderer.info.render.triangles,
             pip: {
               open: pipView.open,
-              drawn: s?.targetCam.lastTargetId != null || s?.targetCam.lastLandmark != null,
+              drawn: s?.targetCam.lastTargetId != null || s?.targetCam.lastLandmark != null || !!s?.targetCam.lastWeapon,
+              /** the pass drew the weapon window's chase shot instead of the target */
+              weapon: !!s?.targetCam.lastWeapon,
               calls: s?.targetCam.lastStats.calls ?? 0,
               triangles: s?.targetCam.lastStats.triangles ?? 0,
             },

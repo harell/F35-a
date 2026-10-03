@@ -72,6 +72,7 @@ void main() {
     vec3 cc = mix(uCloudShade, uCloudLit, clamp(lit * (0.45 + 0.55 * c.g) + 0.25 * (1.0 - thick), 0.0, 1.0));
     col = mix(col, cc, dens * 0.88);
   }
+  col = atmoGrade(col);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

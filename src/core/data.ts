@@ -209,6 +209,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showFps: false,
   defaultView: 'cockpit',
   targetCam: true,
+  missileCam: 'dynamic',
   hdTerrain: true,
   aerialPhoto: true,
 };
