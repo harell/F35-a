@@ -67,12 +67,14 @@ const g01Dir = (() => {
 
 /**
  * Gun pass numbers (the owner didn't know what speed to fly): the Shahed cruises at SHAHED_SPEED (51 m/s,
- * ~100 kt); the F-35's 1 g stall is ~72 m/s IAS (~140 kt), and at 90 m/s (175 kt) it hangs at 17–19° AoA
- * with the pipper ~100 px above the drone. Gun kills came at 100–150 m/s (195–290 kt), closing at
- * 50–100 m/s: so about 200 kt from behind, Vc about 100 kt (the HMD's OVERSHOOT cue is Vc > 150 kt
- * inside 1.5 km). tests/missions-g01.test.ts checks the texts against these numbers.
+ * ~100 kt); the F-35's 1 g stall is ~72 m/s IAS (~140 kt). About 200 kt from behind closes at ~100 kt.
+ * At that speed the jet flies ~12° nose-up, so the pipper rides ~11° above the flight path: level with
+ * the drone it sits above it at every range (playtest r2, 2.1-b). Sitting 400 ft (122 m) below, the
+ * drone rises into the pipper at ~600 m (pipper − drone: +1.7° at 750 m, −0.6° at 600 m, −4.4° at
+ * 450 m; playtest r3, 3.1-a), hence bursts at 550–700 m. The HMD's OVERSHOOT is time to close < 4 s.
+ * tests/missions-g01.test.ts checks the texts and the geometry against these numbers.
  */
-export const G01_GUN_PASS = { approachKt: 200, closureKt: 100, burstFrom: 600, burstTo: 900 } as const;
+export const G01_GUN_PASS = { approachKt: 200, closureKt: 100, belowFt: 400, burstFrom: 550, burstTo: 700 } as const;
 
 /**
  * g01 hints: the plan at the start; after the first launch, how the swarm steps through the TD box (the
@@ -96,13 +98,13 @@ export const G01_HINTS: MissionDef['script']['hints'] = [
   },
   {
     id: 'h_gun',
-    text: 'Shaheds cruise at ~100 kt. From behind at about 200 kt (Vc 100), short bursts at 600–900 m',
+    text: 'Shaheds cruise at ~100 kt. From behind at about 200 kt (Vc 100), short bursts at 550–700 m',
     when: { kind: 'player_weapon', weapon: 'gun' },
     duration: 10,
   },
   {
     id: 'h_overshoot',
-    text: 'Come in a little low, 300 ft below, and pull the pipper up onto the drone. Overshot? Pull up, come round',
+    text: 'Sit 400 ft below it: the drone rises into the pipper near 600 m. Overshot? Pull up, come round',
     when: { kind: 'player_weapon', weapon: 'gun' }, // (follows h_gun: scripted hints show once each, in order)
     duration: 8,
   },
@@ -122,7 +124,7 @@ export const G01: MissionDef = mission({
   briefing: [
     '13:40. An IRGC mother ship, a converted container ship lying off the Hauraki Gulf, has launched a swarm of Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the Sky Tower. Impact in under four minutes.',
     'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are more of them than the eight missiles you carry at most. The gun is not optional today: you have extra rounds.',
-    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 600 to 900 m. Come in about 300 ft below the drone and pull the pipper up onto it: level behind it, the jet flies nose-high and the pipper sits above the drone (more so below 175 knots). Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
+    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 550 to 700 m. Sit about 400 ft below the drone: at that speed the jet flies nose-high and the pipper rides above your flight path, so level behind a drone it sits above it. From 400 ft below, the drone rises into the pipper at about 600 m. Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
   ],
   recommendedLoadout: 'a2a_beast',

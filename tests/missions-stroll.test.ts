@@ -100,6 +100,12 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(m.runner.state).toBe('running');
   });
 
+  it('starts on the gun, so no bomb cue blinks over the city (playtest r3, 3.1-b)', () => {
+    const m = setup();
+    m.tick(0.5);
+    expect(m.world.player!.selectedWeapon).toBe('gun');
+  });
+
   it('only civilians in the air, and it keeps running until the player quits', () => {
     const m = setup();
     m.tick(60);

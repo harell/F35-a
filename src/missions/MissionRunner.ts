@@ -171,6 +171,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.world = world;
     buildGroups(s);
     const p = spawnPlayer(s, loadout);
+    // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
+    // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
+    if (s.script.freeFlight) world.combat.selectWeapon(p, 'gun', world);
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
     markObjectiveTargets(s);

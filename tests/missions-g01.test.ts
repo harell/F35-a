@@ -26,6 +26,7 @@ import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { MUNITIONS } from '../src/sim/weapons/defs';
 import { AIRCRAFT_HEALTH } from '../src/sim/damage/tables';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
+import { initFlight } from '../src/sim/flight/FlightModel';
 import type { AircraftEntity } from '../src/sim/entities';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
@@ -308,6 +309,34 @@ describe('g01 Buzz Kill: the competent bot (real Auckland terrain, sim and runne
   });
 });
 
+describe('g01 Buzz Kill: the briefed gun pass lines the pipper up (playtest r3, 3.1-a)', () => {
+  // the jet flies ~12° nose-up at 200 kt: level behind a drone the pipper sits above it. From the
+  // briefed 400 ft below at 200 kt the drone rises into the pipper inside the briefed burst window.
+  it(`${G01_GUN_PASS.belowFt} ft below at ${G01_GUN_PASS.approachKt} kt: the pipper crosses the drone between ${G01_GUN_PASS.burstFrom} and ${G01_GUN_PASS.burstTo} m`, { timeout: 60_000 }, () => {
+    const err = (range: number) => {
+      const h = harness(G01, 'pilot');
+      h.run(1);
+      const w = h.world;
+      const p = w.player!;
+      const d = drones(h)[0];
+      const v = d.velocity.clone().setY(0).normalize();
+      p.position.copy(d.position).addScaledVector(v, -range).setY(d.position.y - G01_GUN_PASS.belowFt * 0.3048);
+      initFlight(p, { heading: Math.atan2(v.x, -v.z), speed: (G01_GUN_PASS.approachKt * 1852) / 3600 });
+      w.combat.selectWeapon(p, 'gun', w);
+      w.combat.designate(p, d.id, w);
+      h.run(0.25);
+      const lp = w.combat.gunLeadPoint(p, w)!;
+      const el = (q: Vector3) => (Math.atan2(q.y - p.position.y, Math.hypot(q.x - p.position.x, q.z - p.position.z)) * 180) / Math.PI;
+      return el(lp) - el(d.position); // + : the pipper above the drone
+    };
+    const far = err(G01_GUN_PASS.burstTo + 50);
+    const near = err(G01_GUN_PASS.burstFrom - 50);
+    expect(far, 'still above the drone just outside the window').toBeGreaterThan(0);
+    expect(near, 'below it just inside the near end').toBeLessThan(0);
+    expect(Math.abs(err(600)), 'on the drone at 600 m').toBeLessThan(1.5);
+  });
+});
+
 describe('g01 Buzz Kill: gun pass and swarm hints', () => {
   const KT = 1.943844;
   const hint = (id: string) => G01.script.hints!.find((h) => h.id === id)!;
@@ -329,7 +358,9 @@ describe('g01 Buzz Kill: gun pass and swarm hints', () => {
     expect(gun).toContain(`${G01_GUN_PASS.approachKt} kt`);
     expect(gun).toContain(`Vc ${G01_GUN_PASS.closureKt}`);
     expect(gun).toContain(`${G01_GUN_PASS.burstFrom}–${G01_GUN_PASS.burstTo} m`);
-    expect(hint('h_overshoot').text).toMatch(/300 ft below.*pull the pipper up onto the drone. Overshot\? Pull up, come round/);
+    expect(hint('h_overshoot').text).toMatch(new RegExp(`${G01_GUN_PASS.belowFt} ft below it: the drone rises into the pipper near 600 m. Overshot\\? Pull up, come round`));
+    expect(G01.briefing.join(' ')).toContain(`${G01_GUN_PASS.burstFrom} to ${G01_GUN_PASS.burstTo} m`);
+    expect(G01.briefing.join(' ')).toContain(`about ${G01_GUN_PASS.belowFt} ft below the drone`);
     expect(hint('h_9x').text).toMatch(/AIM-9X.*inside about 2 km/); // NO SEEKER beyond ~2 km head-on (playtest r2, 2.1-e)
     const all = [...G01.briefing, ...G01.script.hints!.map((h) => h.text)].join(' ');
     expect(all).not.toMatch(/throttle right back/i);
