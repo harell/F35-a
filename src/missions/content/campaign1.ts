@@ -194,6 +194,8 @@ export const C02: MissionDef = mission({
 /* ───────────────────────── 3. Iron Hand — SEAD on Rangitoto ───────────────────────── */
 
 const c03Start = { x: -13000, z: -2000, altitude: 4000, heading: 80, speed: 240 };
+/** c03's time limit (s): 15 minutes, Darkstar warns at 3 minutes left (#114). */
+export const C03_TIME_LIMIT = 900;
 
 export const C03: MissionDef = mission({
   id: 'c03',
@@ -206,11 +208,14 @@ export const C03: MissionDef = mission({
   briefing: [
     "From the slopes of Rangitoto an SA-6 battery and an SA-8 now cover the whole harbour. Nothing can fly over the city while they live — not our tankers, not the rescue helicopters, not the ferries' air cover.",
     "You're going in with AARGM anti-radiation missiles and GBU-39 small diameter bombs. The SA-6 sits on the south-west slope facing the city; the SA-8 is on the eastern shore. Shilkas guard the approaches and an early-warning radar near the summit is feeding them.",
-    'Fire the AARGM while a radar is emitting — it rides the beam home, and keeps going even if they shut down. SDBs glide 30 km from altitude. Stay in the bays and stay stealthy.',
+    'Fire the AARGM while a radar is emitting — it rides the beam home, and keeps going even if they shut down. SDBs glide 30 km from altitude. Stay in the bays and stay stealthy. The tankers launch in fifteen minutes: Rangitoto has to be quiet by then.',
   ],
   recommendedLoadout: 'sead_stealth',
   allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
   player: c03Start,
+  // #114: with no rearming, a player whose bombs all fall to the SA-8 had nothing left to do and the
+  // sortie never ended. The slowest bot win over 6 seeds × 4 difficulties is 675 s (Pilot seed 3).
+  timeLimit: C03_TIME_LIMIT,
   script: {
     autoHints: true,
     parTime: 420,
@@ -250,6 +255,25 @@ export const C03: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Straight Flush is off the air. The SA-8 is next.' }],
       },
       { id: 't_cap', when: { kind: 'time', t: 148 }, actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. MiGs launching to cover Rangitoto. Viper 2, engage.' }] },
+      // #114: the SA-8's point defence shoots down an SDB 3 times in 10 and an AARGM 2 in 10 (SAM_DATA),
+      // but only a bomb its radar can see, 1.2–4.5 km out. After the second loss Darkstar marks it and
+      // calls a low run-in from the west: Rangitoto (260 m) hides the jet, and the bombs only show over
+      // the summit, 1.6 km from the site, so the Osa has seconds to shoot. There is no rearming.
+      {
+        id: 't_sa8_eating',
+        when: { kind: 'all', of: [{ kind: 'munitions_shot_down', group: 'rangi_sa8', count: 2 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa8', state: 'complete' } }] },
+        delay: 2,
+        actions: [
+          { kind: 'radio', from: DS, text: "Viper 1, Darkstar. The Gecko is shooting your bombs down. It's on Rangitoto's east shore. Come in low from the west with the volcano between you, so it only sees your bombs as they come over the top.", priority: 3 },
+          { kind: 'reveal', group: 'rangi_sa8' },
+          { kind: 'set_waypoint', id: 'wp_sa8' },
+        ],
+      },
+      {
+        id: 't_time_warn',
+        when: { kind: 'time', t: C03_TIME_LIMIT - 180 },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Three minutes. If Rangitoto is still up then, the tankers stay home and we call it off.', priority: 3 }],
+      },
     ],
     hints: [
       { id: 'h_arm', text: 'SEAD: WPN selects AARGM. Tap TGT on the SA-6 while its radar is on, then fire', when: { kind: 'time', t: 5 }, duration: 10 },

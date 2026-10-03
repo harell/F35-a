@@ -158,6 +158,8 @@ export class MissionState {
   enemiesSpawned = 0;
   /** A SAM / AAA site has shot at the player. */
   samEngaged = false;
+  /** The player's bombs / missiles shot down by a SAM site's point defence, by the site's group id. */
+  readonly munitionsShotDown = new Map<string, number>();
   /** Stunt bonus points (Harbour Bridge). */
   bonus = 0;
   /** Neutral civil traffic the player destroyed (airliners + ships; each costs POINTS.civilian). */
