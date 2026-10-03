@@ -161,6 +161,25 @@ describe('#116 collisions: brevity, seeker and gun labels vs the target box', ()
     }
   });
 
+  it('1.2-c: TONE stays off the box labels with the kill feed above the box (the reserved feed rect is wider than its text)', () => {
+    for (const view of ['hud', 'cockpit'] as CameraMode[]) {
+      const r = rig('9x', view);
+      const mig = r.mock.world.aircraft.find((a) => a.type === 'mig29')!;
+      mig.position.copy(r.at(530, 125, 3200));
+      r.run(1 / 30);
+      const su35 = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
+      const sa6 = r.mock.world.sams[0];
+      r.mock.events.emit('destroyed', { entity: sa6, attackerId: r.mock.player.id } as never);
+      r.mock.events.emit('destroyed', { entity: su35, attackerId: r.mock.player.id } as never);
+      r.run(0.2);
+      const texts = r.run(1 / 30);
+      expect(find(texts, /DESTROYED|SPLASH/).length, view).toBeGreaterThan(0);
+      const tone = find(texts, 'TONE');
+      expect(tone.length, view).toBe(1);
+      expect(hitsOf(texts, tone[0]), view).toEqual([]);
+    }
+  });
+
   it('3.1-c: the gun pipper ring never cuts the designated target\'s name / range labels', () => {
     for (const view of ['hud', 'cockpit', 'chase'] as CameraMode[]) {
       // the pipper sliding over the box: below it, on it, above it, to the side

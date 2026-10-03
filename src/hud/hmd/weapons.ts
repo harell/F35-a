@@ -417,17 +417,20 @@ export function drawSeekerLabel(f: HudFrame): void {
   const hh = 7 * u;
   let lx = sl.x;
   let ly = sl.y + sl.r + 11 * u;
-  // (each side in turn, then each again 8 u further out)
-  search: for (let k = 0; k < 16; k++) {
-    const d = (k >> 2) * 8 * u;
-    const s = k & 3;
-    const cx = s === 0 || s === 3 ? sl.x : s === 1 ? sl.x - sl.r - 6 * u - w / 2 - d : sl.x + sl.r + 6 * u + w / 2 + d;
-    const cy = s === 0 ? sl.y + sl.r + 11 * u + d : s === 3 ? sl.y - sl.r - 11 * u - d : sl.y;
-    if (cx - w / 2 < L.left || cx + w / 2 > L.right || cy - hh < L.row2Y || cy + hh > L.H) continue;
-    if (occ.hits(cx - w / 2 - u, cy - hh, cx + w / 2 + u, cy + hh)) continue;
-    lx = cx;
-    ly = cy;
-    break search;
+  // (each side in turn, then each again 8 u further out; clear of everything, else of the protected
+  // symbols and the target box's labels at least: a fixed zone's reserved rect is wider than its text)
+  search: for (let minLevel = 0; minLevel < 2; minLevel++) {
+    for (let k = 0; k < 16; k++) {
+      const d = (k >> 2) * 8 * u;
+      const s = k & 3;
+      const cx = s === 0 || s === 3 ? sl.x : s === 1 ? sl.x - sl.r - 6 * u - w / 2 - d : sl.x + sl.r + 6 * u + w / 2 + d;
+      const cy = s === 0 ? sl.y + sl.r + 11 * u + d : s === 3 ? sl.y - sl.r - 11 * u - d : sl.y;
+      if (cx - w / 2 < L.left || cx + w / 2 > L.right || cy - hh < L.row2Y || cy + hh > L.H) continue;
+      if (occ.hits(cx - w / 2 - u, cy - hh, cx + w / 2 + u, cy + hh, minLevel)) continue;
+      lx = cx;
+      ly = cy;
+      break search;
+    }
   }
   pen.text(sl.text, lx, ly, sl.col, sl.size);
   occ.add(lx - w / 2 - u, ly - hh, lx + w / 2 + u, ly + hh, 1);
