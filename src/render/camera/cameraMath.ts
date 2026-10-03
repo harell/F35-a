@@ -2,6 +2,8 @@
  * Pure camera helpers (no DOM / WebGL) — unit tested in tests/render-camera.test.ts.
  */
 import { Euler, Quaternion, Vector3 } from 'three';
+import { COCKPIT_REST_PITCH } from '../../core/data';
+import type { CameraMode } from '../../core/types';
 
 export const DEG = Math.PI / 180;
 
@@ -24,6 +26,16 @@ export function headQuaternion(yaw: number, pitch: number, out: Quaternion): Qua
   _qy.setFromAxisAngle(Y, -yaw);
   _qx.setFromAxisAngle(X, pitch);
   return out.copy(_qy).multiply(_qx);
+}
+
+/** Rest head pitch of a view relative to the nose (rad, + = up): the cockpit view looks a little down (#116). */
+export function restPitch(mode: CameraMode): number {
+  return mode === 'cockpit' ? -COCKPIT_REST_PITCH : 0;
+}
+
+/** The rest head pose of a view relative to the body (tests and labs build the camera with it). */
+export function restHead(mode: CameraMode, out: Quaternion): Quaternion {
+  return headQuaternion(0, restPitch(mode), out);
 }
 
 /** Frame-rate independent exponential smoothing factor. */

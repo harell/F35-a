@@ -33,7 +33,7 @@ import {
   Float32BufferAttribute,
 } from 'three';
 import type { FrameContext } from '../../core/contracts';
-import { DEFAULT_SETTINGS, QUALITY_PRESETS } from '../../core/data';
+import { COCKPIT_REST_PITCH, DEFAULT_SETTINGS, QUALITY_PRESETS } from '../../core/data';
 import type { CameraMode, QualityLevel, Settings, TimeOfDay } from '../../core/types';
 import { createHud } from '../Hud';
 import { createCockpit } from '../Cockpit';
@@ -145,7 +145,7 @@ if (view !== 'cockpit' && view !== 'hud') {
 const camera = new PerspectiveCamera(settings.fov, 16 / 9, 0.5, 60_000);
 scene3.add(camera);
 const headLocal = new Quaternion();
-headLocal.setFromAxisAngle(new Vector3(0, 1, 0), -lookYaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), lookPitch));
+headLocal.setFromAxisAngle(new Vector3(0, 1, 0), -lookYaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), lookPitch - (view === 'cockpit' ? COCKPIT_REST_PITCH : 0)));
 const eye = new Vector3(0, 1.02, -3.52);
 
 function placeCamera(): void {

@@ -3,7 +3,7 @@
  * eye at the origin, forward = -Z, up = +Y, right = +X (same axes as the aircraft body).
  *
  * All static parts (glare shield, lip, hood face, instrument panel body, PCD bezel, sills, side
- * consoles, canopy rails and rear canopy bow) are merged into ONE vertex-coloured geometry → one draw
+ * consoles, canopy side rails and aft canopy frame) are merged into ONE vertex-coloured geometry → one draw
  * call. The side-stick and throttle are separate small groups so they can move with the pilot inputs.
  *
  * The glare-shield lip sits GLARE_LIP_ANGLE below the boresight, which the HMD layout uses to keep its
@@ -49,6 +49,18 @@ export const UFD = { width: 0.24, height: 0.024 };
 const LIP_Z = -0.64;
 const LIP_Y = LIP_Z * Math.tan(GLARE_LIP_ANGLE);
 const HALF_W = 0.6;
+/**
+ * Canopy side rail, right side (x mirrored for the left): from the glare shield's drooping end (span
+ * u = 1) back along the sill to the aft frame (#116). At the rest pose only its forward end is in view,
+ * in the lower corners; a look to the side shows the rest.
+ */
+export const CANOPY_RAIL: readonly Vector3[] = [
+  new Vector3(HALF_W, LIP_Y - 0.2, LIP_Z + 0.07),
+  new Vector3(0.585, -0.26, -0.4),
+  new Vector3(0.565, -0.205, -0.08),
+  new Vector3(0.54, -0.18, 0.25),
+  new Vector3(0.52, -0.17, 0.48),
+];
 /** Up-front display screen centre (in the hood face, just under the lip). */
 export const UFD_POS = new Vector3(0, LIP_Y - 0.021, LIP_Z - 0.012);
 
@@ -230,6 +242,7 @@ export function buildCockpit(controlMat: Material, gripMat: Material): CockpitMe
     sill: 0x575d64,
     console: 0x4a4f56,
     frame: 0x656b73,
+    seal: 0x1a1c1f,
     panelLight: 0x5a6068,
     panelDark: 0x2a2d31,
   };
@@ -246,22 +259,12 @@ export function buildCockpit(controlMat: Material, gripMat: Material): CockpitMe
   // instrument panel body behind the PCD (its top edge just above the PCD's)
   parts.push(colorize(place(new BoxGeometry(1.25, 0.7, 0.02), fr.center.clone().addScaledVector(back, 0.045).addScaledVector(up, -(0.35 - PCD.height / 2 - 0.012)), fr.quat), C.panel));
 
-  // canopy sills (rails along the canopy edge) + side consoles
+  // canopy frame (#116): the one-piece canopy's side rails run from the glare shield's drooping ends back
+  // along the sills to the aft frame; a dark seal strip sits on their inner top edge. No forward bow.
   for (const s of [-1, 1]) {
-    parts.push(
-      colorize(
-        tube(
-          [
-            new Vector3(s * 0.56, LIP_Y - 0.2, LIP_Z + 0.14),
-            new Vector3(s * 0.56, -0.24, -0.3),
-            new Vector3(s * 0.56, -0.21, 0.05),
-            new Vector3(s * 0.52, -0.17, 0.42),
-          ],
-          0.024,
-        ),
-        C.frame,
-      ),
-    );
+    const rail = CANOPY_RAIL.map((p) => new Vector3(s * p.x, p.y, p.z));
+    parts.push(colorize(tube(rail, 0.026, 32), C.frame));
+    parts.push(colorize(tube(rail.map((p) => new Vector3(p.x - s * 0.022, p.y + 0.026, p.z)), 0.008, 32), C.seal));
     parts.push(colorize(place(new BoxGeometry(0.12, 0.07, 1.0), new Vector3(s * 0.57, -0.29, -0.08)), C.sill));
     parts.push(colorize(place(new BoxGeometry(0.26, 0.2, 0.78), new Vector3(s * 0.43, -0.52, -0.1)), C.console));
     // switch panels on the console tops (slightly lighter / darker patches)
@@ -272,13 +275,15 @@ export function buildCockpit(controlMat: Material, gripMat: Material): CockpitMe
     // hood side cheek between the glare shield end and the sill
     parts.push(colorize(place(new BoxGeometry(0.08, 0.26, 0.3), new Vector3(s * 0.53, -0.4, -0.5)), C.panel));
   }
-  // rear canopy bow (behind the pilot's head — seen when looking back)
+  // aft canopy frame (behind the pilot's head, seen when looking back): an arch on the rails' aft ends
+  const end = CANOPY_RAIL[CANOPY_RAIL.length - 1];
   const bow: Vector3[] = [];
-  for (let i = 0; i <= 10; i++) {
-    const a = Math.PI * (i / 10);
-    bow.push(new Vector3(-Math.cos(a) * 0.52, -0.17 + Math.sin(a) * 0.55, 0.5));
+  for (let i = 0; i <= 12; i++) {
+    const a = Math.PI * (i / 12);
+    bow.push(new Vector3(-Math.cos(a) * end.x, end.y + Math.sin(a) * 0.55, end.z + 0.02));
   }
-  parts.push(colorize(tube(bow, 0.03, 30), C.frame));
+  parts.push(colorize(tube(bow, 0.034, 36), C.frame));
+  parts.push(colorize(tube(bow.map((p) => new Vector3(p.x * 0.95, end.y + (p.y - end.y) * 0.95, p.z - 0.03)), 0.008, 36), C.seal));
 
   // ejection handle (yellow / black) on the seat bucket between the knees
   for (let k = 0; k < 4; k++) {

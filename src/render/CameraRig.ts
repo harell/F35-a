@@ -1,6 +1,7 @@
 /**
  * CameraRig — all camera modes:
- *  cockpit/hud  pilot eye (per-type eye offset), head look with limits + spring-back, G-induced head
+ *  cockpit/hud  pilot eye (per-type eye offset; the cockpit view rests COCKPIT_REST_PITCH below the nose),
+ *               head look with limits + spring-back, G-induced head
  *               sag, AoA buffet; exposes headLocal (head rotation relative to the body)
  *  chase        behind/above in a lagged aircraft frame (feels the rolls), looks ahead along the
  *               velocity, FOV kick with afterburner/speed, drag to look around, never below terrain
@@ -30,6 +31,7 @@ import {
   flybyAnchor,
   fovToFrame,
   headQuaternion,
+  restPitch,
   impactPose,
   aimAtNdc,
   missileCamPose,
@@ -247,7 +249,8 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
       headPitch += (0 - headPitch) * k;
       if (Math.abs(headYaw) < 0.002 && Math.abs(headPitch) < 0.002) recenter = false;
     }
-    headQuaternion(headYaw, headPitch, headLocal);
+    // the cockpit view rests a little below the nose (the panel pitches with it: more city over the coaming, #116)
+    headQuaternion(headYaw, headPitch + restPitch(mode), headLocal);
     const eye = entities.getEyeOffset(p.type);
     // G pushes the head down (and up under negative G), smoothed
     const gT = Math.max(-0.05, Math.min(0.09, (p.flight.gLoad - 1) * 0.011));

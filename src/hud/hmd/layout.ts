@@ -144,7 +144,7 @@ export interface LayoutOptions {
   /** Left-handed touch layout (throttle right, stick left). */
   leftHanded?: boolean;
   /**
-   * Cockpit view: head pitch relative to the airframe (rad, + = looking up). The glare-shield lip moves
+   * Cockpit view: head pitch relative to the rest pose (rad, + = looking up; see COCKPIT_REST_PITCH). The glare-shield lip moves
    * down the screen when looking up and up when looking down; conformal symbology stays above it.
    */
   headPitch?: number;

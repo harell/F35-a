@@ -24,6 +24,9 @@ function rig(scene: Scenario, view: CameraMode, W = 844, H = 390, targetCam = tr
   const p = mock.player;
   if (view === 'cockpit' || view === 'hud') {
     camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
+    // along the nose: in the cockpit view that is the head raised COCKPIT_REST_PITCH from rest, where the
+    // 'threat' scene's target box clears the spot under the band (at rest it fills the column, and the
+    // feed rightly holds back for the warnings)
     camera.quaternion.copy(p.quaternion);
   } else {
     camera.position.copy(p.position).add(new Vector3(0, 4.5, 20).applyQuaternion(p.quaternion));
