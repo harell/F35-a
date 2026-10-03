@@ -74,9 +74,11 @@ export class PcdDisplay {
     this.pen.outlineExtra = 0;
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
-    const mips = quality.level !== 'low';
-    this.texture.generateMipmaps = mips;
-    this.texture.minFilter = mips ? LinearMipmapLinearFilter : LinearFilter;
+    // mipmaps on every quality level: without them the minified PCD text broke up at 844×390 on low
+    // ('GDU-31', 'RVR': playtest 1.2-g). Their cost is one GPU mip generation per upload, and uploads
+    // follow the throttled redraw (5 Hz on low), never the frame rate.
+    this.texture.generateMipmaps = true;
+    this.texture.minFilter = LinearMipmapLinearFilter;
     this.texture.magFilter = LinearFilter;
     this.texture.anisotropy = quality.level === 'high' ? 4 : 1;
     this.period = quality.level === 'low' ? 0.2 : quality.level === 'medium' ? 0.125 : 0.1;
