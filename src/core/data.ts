@@ -27,6 +27,14 @@ export const GAME_TITLE = 'F35-A';
 export const GAME_BUILD: string = (import.meta.env.VITE_BUILD_NUMBER as string | undefined) || 'dev';
 
 /**
+ * Cockpit view: the pilot's rest head pitch below the jet's nose (rad, #116). The eye and the cockpit
+ * (glare shield, PCD, canopy) pitch down together, so the panel stays where it was on screen while the
+ * horizon rises: at the Stroll's 150 m/s (α ≈ 5°) about 11° below the horizon shows over the coaming,
+ * enough to see the Harbour Bridge 2 km ahead from 300 m. The 'hud' view keeps the eye on the nose.
+ */
+export const COCKPIT_REST_PITCH = 5 * (Math.PI / 180);
+
+/**
  * Test hooks: `?mission=<id>&autostart=1` (fly any mission, campaign locks ignored) and `window.__f35`
  * (state, autopilot, fast-forward, scripted controls, Sky Tower demolition). They exist on the dev
  * server and in builds made with VITE_TEST_HOOKS=1, never in the deployed game. Playtests use them

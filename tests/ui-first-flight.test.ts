@@ -7,7 +7,8 @@
  *  - the cockpit stores (SMS) page isn't covered by the touch controls in either handed layout.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PerspectiveCamera, Vector3 } from 'three';
+import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { restHead } from '../src/render/camera/cameraMath';
 import type { FrameContext } from '../src/core/contracts';
 import { EventBus } from '../src/core/events';
 import { DEFAULT_SETTINGS, DIFFICULTIES, QUALITY_PRESETS } from '../src/core/data';
@@ -132,7 +133,7 @@ function flyLesson(id: string, seconds: number, prep?: (world: ReturnType<typeof
     runner.update(world, 1 / 60);
     if (i % 2) continue;
     camera.position.copy(eye.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position));
-    camera.quaternion.copy(p.quaternion);
+    camera.quaternion.copy(p.quaternion).multiply(restHead('cockpit', new Quaternion()));
     camera.updateMatrixWorld();
     ctx.time = world.time;
     fake.reset();

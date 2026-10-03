@@ -178,9 +178,19 @@ export function drawIncoming(f: HudFrame): boolean {
 
 /* ───────────────────────── RWR spikes ───────────────────────── */
 
+/** RWR symbols placed this frame (centres), so a crowded fallback never stacks two of them. */
+const RWR_MAX = 16;
+const rwrXY = new Float32Array(RWR_MAX * 2);
+
+function rwrHits(x: number, y: number, rr: number, n: number): boolean {
+  for (let i = 0; i < n; i++) if (Math.abs(rwrXY[i * 2] - x) < 2 * rr && Math.abs(rwrXY[i * 2 + 1] - y) < 2 * rr) return true;
+  return false;
+}
+
 export function drawRwrEdge(f: HudFrame): void {
   const { p, pen, pal, L } = f;
   const u = L.u;
+  let nRwr = 0;
   pen.setDash('solid');
   for (const c of p.rwr) {
     if (c.state === 'search' && c.age > 3) continue;
@@ -221,8 +231,28 @@ export function drawRwrEdge(f: HudFrame): void {
           moved = true;
         }
       }
+      // still nothing: along the edge again, over secondary labels if need be but never on a protected
+      // symbol (an incoming missile's TTI: "29" over "32") or another RWR symbol
+      const blocked = (bx: number, by: number) => f.occ.hits(bx - rr, by - rr, bx + rr, by + rr, 1) || rwrHits(bx, by, rr, nRwr);
+      for (let k = 0; k <= 16 && !moved && blocked(x, y); k++) {
+        const da = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * 0.09;
+        const b2 = c.bearing + da;
+        edgeOfEllipse(L.edgeCx, L.edgeCy, L.edgeRx, Math.cos(b2) < 0 ? L.edgeRy * 0.85 : L.edgeRy, Math.sin(b2), -Math.cos(b2), edge);
+        let y2 = Math.max(edge.y, L.row2Y + 18 * u);
+        if (f.mode === 'hmd' && f.cockpit) y2 = Math.min(y2, L.cockpitTop - 16 * u);
+        if (!blocked(edge.x, y2)) {
+          x = edge.x;
+          y = y2;
+          moved = true;
+        }
+      }
     }
     f.occ.add(x - rr, y - rr, x + rr, y + rr);
+    if (nRwr < RWR_MAX) {
+      rwrXY[nRwr * 2] = x;
+      rwrXY[nRwr * 2 + 1] = y;
+      nRwr++;
+    }
     const launch = c.state === 'launch';
     const track = c.state === 'track';
     const col = launch ? pal.danger : track ? pal.warn : pal.dim;

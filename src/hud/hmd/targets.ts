@@ -766,11 +766,44 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
     if (x0 < ax1 && x1 > ax0 && y0 < ay1 && y1 > ay0) continue; // slid or clamped back over the arrow
     break;
   }
+  // still on a symbol (a crowded centre: the incoming-missile ring round the FPM): step the spot up and
+  // down until it clears them all, else (second pass) the protected ones
+  if (blockedCue(f, tx, ty, hw, below, true)) {
+    const bx = tx;
+    const by = ty;
+    let found = false;
+    for (let pass = 0; pass < 2 && !found; pass++) {
+      if (pass === 1 && !blockedCue(f, bx, by, hw, below, false)) break;
+      for (let k = 1; k <= 12; k++) {
+        const y = Math.max(L.row2Y + 8 * u, Math.min(maxTy, by + (k & 1 ? -1 : 1) * Math.ceil(k / 2) * 12 * u));
+        const x = Math.max(L.left + hw, Math.min(L.right - hw, slideOffColumns(f, bx, hw, y - 8 * u, y + below)));
+        if (!blockedCue(f, x, y, hw, below, pass === 0) && !(x - hw < ax1 && x + hw > ax0 && y - 8 * u < ay1 && y + below > ay0)) {
+          tx = x;
+          ty = y;
+          found = true;
+          break;
+        }
+      }
+    }
+  }
   pen.text(off, tx, ty, col, 12.5);
   pen.text(name, tx, ty + 15 * u, pal.dim, 10.5);
   pen.text(rng, tx, ty + 28 * u, pal.dim, 10.5);
   if (tl) pen.text(tl, tx, ty + 41 * u, pal.main, 10.5);
   f.occ.add(tx - hw, ty - 8 * u, tx + hw, ty + below, 1);
+}
+
+/**
+ * Does the off-screen cue's text block centred on x (top line at y) cover a protected symbol (and, with
+ * `syms`, a contact / site / waypoint / friendly symbol)?
+ */
+function blockedCue(f: HudFrame, x: number, y: number, hw: number, below: number, syms: boolean): boolean {
+  const u = f.L.u;
+  const x0 = x - hw;
+  const y0 = y - 8 * u;
+  const x1 = x + hw;
+  const y1 = y + below;
+  return f.occ.hits(x0, y0, x1, y1, 1) || hitsBankOrWaterline(f, x0, y0, x1, y1) || (syms && f.sym.hits(x0, y0, x1, y1));
 }
 
 /**

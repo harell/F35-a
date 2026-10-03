@@ -5,9 +5,11 @@
  * to the airframe (head look, shake and buffet included) so the cockpit is rock-solid against the
  * world. Geometry: glare shield with lip, hood face (the up-front display strip was dropped: unreadable on a phone), the 20x8 in
  * panoramic cockpit display (PCD, one wide CanvasTexture split into tappable portals), instrument
- * panel body, canopy rails / rear bow, side consoles, and a side-stick + throttle that follow the
- * pilot's inputs. Lighting follows the mission's time of day (sun direction in the body frame), with a
- * soft display glow at night.
+ * panel body, canopy side rails / aft frame, side consoles, and a side-stick + throttle that follow the
+ * pilot's inputs, all pitched to the rest head pose (COCKPIT_REST_PITCH below the nose). Over them, the
+ * canopy glass (cockpit/canopy.ts: tint, sun glare, the PCD's reflection; one draw call). Lighting
+ * follows the mission's time of day (sun direction in the body frame); at night a dim flood light and
+ * the displays' glow light the panel.
  *
  * render(): autoClear off → clearDepth → render cockpit → restore (the world stays in the colour
  * buffer, the cockpit always draws on top).
@@ -18,6 +20,7 @@
 import {
   Color,
   DirectionalLight,
+  Group,
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
@@ -40,15 +43,23 @@ import { PCD, buildCockpit, pcdFrame } from './cockpit/geometry';
 import { PcdDisplay } from './cockpit/pcd';
 import { pcdZoom } from './cockpit/zoom';
 import type { PageId } from './cockpit/pages';
-import { TEST_HOOKS } from '../core/data';
+import { COCKPIT_REST_PITCH, TEST_HOOKS } from '../core/data';
+import { CanopyGlass } from './cockpit/canopy';
 
-/** Cockpit lighting per time of day (sun azimuth/elevation in degrees, colours sRGB). */
-const LIGHT: Record<TimeOfDay, { az: number; el: number; sun: number; sunI: number; sky: number; ground: number; hemiI: number; glow: number }> = {
-  dawn: { az: 96, el: 7, sun: 0xffb27a, sunI: 2.0, sky: 0x8f9cc8, ground: 0x3a302c, hemiI: 1.1, glow: 0.02 },
-  day: { az: 20, el: 55, sun: 0xfff3df, sunI: 2.8, sky: 0xbcd3f0, ground: 0x6d6456, hemiI: 1.7, glow: 0 },
-  dusk: { az: 262, el: 5, sun: 0xff9a58, sunI: 1.8, sky: 0x7d82b4, ground: 0x2e2626, hemiI: 0.95, glow: 0.03 },
-  night: { az: 20, el: 38, sun: 0xa8bce8, sunI: 0.25, sky: 0x223458, ground: 0x0c0e14, hemiI: 0.4, glow: 0.07 },
+/**
+ * Cockpit lighting per time of day (sun azimuth/elevation in degrees, colours sRGB). `glow` is the
+ * displays' spill onto the coaming and hood, `flood` the dim panel flood light over the pilot's shoulder
+ * (#116: at night the panel is lit by those two, not by the moon), `screen` the PCD's brightness.
+ */
+export const COCKPIT_LIGHT: Record<TimeOfDay, { az: number; el: number; sun: number; sunI: number; sky: number; ground: number; hemiI: number; glow: number; flood: number; screen: number }> = {
+  dawn: { az: 96, el: 7, sun: 0xffb27a, sunI: 2.0, sky: 0x8f9cc8, ground: 0x3a302c, hemiI: 1.1, glow: 0.1, flood: 0.08, screen: 1 },
+  day: { az: 20, el: 55, sun: 0xfff3df, sunI: 2.8, sky: 0xbcd3f0, ground: 0x6d6456, hemiI: 1.7, glow: 0, flood: 0, screen: 1 },
+  dusk: { az: 262, el: 5, sun: 0xff9a58, sunI: 1.8, sky: 0x7d82b4, ground: 0x2e2626, hemiI: 0.95, glow: 0.1, flood: 0.08, screen: 1 },
+  night: { az: 20, el: 38, sun: 0xa8bce8, sunI: 0.12, sky: 0x223458, ground: 0x0c0e14, hemiI: 0.22, glow: 0.42, flood: 0.42, screen: 0.78 },
 };
+
+/** Brightness of the PCD's reflection in the canopy (× canopyLook's per-time-of-day factor). */
+const CANOPY_REFLECT = 0.25;
 
 const _qInv = new Quaternion();
 const _sun = new Vector3();
@@ -63,6 +74,12 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   const scene = new Scene();
   scene.name = 'cockpit';
   const camera = new PerspectiveCamera(60, 16 / 9, 0.02, 20);
+  // everything built in the eye frame hangs off `body`, pitched to the rest head pose (#116): the panel
+  // sits where it always did on screen while the eye looks COCKPIT_REST_PITCH below the jet's nose
+  const body = new Group();
+  body.name = 'cockpitBody';
+  body.rotation.x = -COCKPIT_REST_PITCH;
+  scene.add(body);
 
   // lights
   const hemi = new HemisphereLight(0xbcd3f0, 0x6d6456, 1.5);
@@ -72,7 +89,10 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   const glow = new PointLight(0x5fd0b0, 0, 1.6, 2);
   const fr = pcdFrame({ center: new Vector3(), quat: new Quaternion() });
   glow.position.copy(fr.center).add(new Vector3(0, 0.05, 0.12));
-  scene.add(glow);
+  // panel flood light: over the pilot's shoulder, lighting the coaming, the hood and the consoles
+  const flood = new PointLight(0xc8dcff, 0, 2.2, 2);
+  flood.position.set(0.18, 0.22, 0.15);
+  body.add(glow, flood);
 
   // materials + meshes
   const shellMat = new MeshLambertMaterial({ vertexColors: true });
@@ -81,7 +101,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   const parts = buildCockpit(controlMat, gripMat);
   const shell = new Mesh(parts.shell, shellMat);
   shell.name = 'cockpitShell';
-  scene.add(shell, parts.stick, parts.throttle);
+  body.add(shell, parts.stick, parts.throttle);
   const lever = parts.throttle.getObjectByName('lever') as Object3D;
 
   const pcd = new PcdDisplay(quality);
@@ -90,7 +110,9 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   screen.position.copy(fr.center);
   screen.quaternion.copy(fr.quat);
   screen.name = 'pcd';
-  scene.add(screen);
+  body.add(screen);
+  const glass = new CanopyGlass(pcd.texture);
+  body.add(glass.mesh);
 
   void loadHudFont(() => pcd.fontsChanged());
 
@@ -109,7 +131,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     const key = tod + weather;
     if (key === lightKey) return;
     lightKey = key;
-    const L = LIGHT[tod] ?? LIGHT.day;
+    const L = COCKPIT_LIGHT[tod] ?? COCKPIT_LIGHT.day;
     const overcast = weather === 'overcast' ? 0.45 : weather === 'scattered' ? 0.85 : 1;
     sun.color.copy(tmpColor.setHex(L.sun));
     sun.intensity = L.sunI * overcast;
@@ -117,12 +139,13 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     hemi.groundColor.setHex(L.ground);
     hemi.intensity = L.hemiI * (weather === 'overcast' ? 1.15 : 1);
     glow.intensity = L.glow;
+    flood.intensity = L.flood;
+    glass.setLook(tod, weather, L.sun, CANOPY_REFLECT);
     const a = L.az * DEG;
     const e = L.el * DEG;
     sunWorld.set(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)).normalize();
-    // displays a touch dimmer at night so they don't glare
-    const dim = tod === 'night' ? 0.82 : 1;
-    screenMat.color.setScalar(dim);
+    // displays dimmer at night so they don't glare
+    screenMat.color.setScalar(L.screen);
   }
 
   const api: CockpitApi = {
@@ -176,6 +199,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
         applyLighting(def?.timeOfDay ?? 'day', def?.weather ?? 'clear');
         _sun.copy(sunWorld).applyQuaternion(_qInv);
         sun.position.copy(_sun).multiplyScalar(5);
+        glass.setSun(_sun.applyQuaternion(_qa.copy(body.quaternion).invert()));
       }
       pcd.update(ctx, ctx.dt);
     },
@@ -207,7 +231,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
       }
       _ndc.set(nx * 2 - 1, -(ny * 2 - 1));
       // (matrices are normally refreshed by render(); a tap can come before the first cockpit frame)
-      screen.updateMatrixWorld();
+      body.updateMatrixWorld();
       raycaster.setFromCamera(_ndc, camera);
       const hit = raycaster.intersectObject(screen, false)[0];
       if (!hit || !hit.uv) return false;
@@ -224,6 +248,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
       controlMat.dispose();
       gripMat.dispose();
       screenMat.dispose();
+      glass.dispose();
       pcd.dispose();
       scene.clear();
     },

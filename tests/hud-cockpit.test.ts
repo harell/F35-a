@@ -7,6 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Quaternion } from 'three';
+import { restHead } from '../src/render/camera/cameraMath';
 import type { FrameContext } from '../src/core/contracts';
 import { DEFAULT_SETTINGS, QUALITY_PRESETS } from '../src/core/data';
 import { createCockpit } from '../src/hud/Cockpit';
@@ -48,7 +49,7 @@ function setup(leftHanded = false) {
   const p = mock.player;
   const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
   camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
-  camera.quaternion.copy(p.quaternion);
+  camera.quaternion.copy(p.quaternion).multiply(restHead('cockpit', new Quaternion()));
   camera.updateMatrixWorld();
   const ctx: FrameContext = {
     dt: 1 / 30,

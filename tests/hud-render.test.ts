@@ -7,6 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { restHead } from '../src/render/camera/cameraMath';
 import type { FrameContext } from '../src/core/contracts';
 import { DEFAULT_SETTINGS, QUALITY_PRESETS } from '../src/core/data';
 import type { CameraMode, Settings } from '../src/core/types';
@@ -48,7 +49,7 @@ function rig(scene: Scenario, view: CameraMode, W = 844, H = 390, settings: Part
   const p = mock.player;
   if (view === 'cockpit' || view === 'hud') {
     camera.position.set(0, 1.02, -3.52).applyQuaternion(p.quaternion).add(p.position);
-    camera.quaternion.copy(p.quaternion);
+    camera.quaternion.copy(p.quaternion).multiply(restHead(view, new Quaternion()));
   } else if (view === 'tactical') {
     camera.position.set(p.position.x, p.position.y + 9000, p.position.z);
     camera.up.set(0, 0, -1);

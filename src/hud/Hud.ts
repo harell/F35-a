@@ -54,7 +54,7 @@ import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarn
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawSeekerLabel, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
 import { bandExt, clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
-import { TEST_HOOKS } from '../core/data';
+import { COCKPIT_REST_PITCH, TEST_HOOKS } from '../core/data';
 import { beginDrawn, drawnLast, type DrawnCue } from './hmd/drawn';
 
 /** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit). */
@@ -349,12 +349,13 @@ export const createHud: CreateHud = (canvas, events) => {
       pen.baseTransform();
       proj.update(ctx.camera, W, H);
       const cockpit = ctx.viewMode === 'cockpit';
-      // head pitch relative to the airframe (cockpit view): moves the glare-shield line, drives declutter
+      // head pitch relative to the rest pose (cockpit view; the rest pose is COCKPIT_REST_PITCH below the
+      // nose, and the panel pitches with it): moves the glare-shield line, drives declutter
       let headPitch = 0;
       if (cockpit && p) {
         _q.copy(p.quaternion).invert();
         _fwd.copy(proj.forward).applyQuaternion(_q);
-        headPitch = Math.asin(Math.max(-1, Math.min(1, _fwd.y)));
+        headPitch = Math.asin(Math.max(-1, Math.min(1, _fwd.y))) + COCKPIT_REST_PITCH;
       }
       layoutOpts.external = mode !== 'hmd';
       layoutOpts.leftHanded = !!ctx.settings.leftHanded;
