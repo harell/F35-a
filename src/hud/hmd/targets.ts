@@ -515,7 +515,13 @@ export function drawDesignated(f: HudFrame): void {
   }
   const rw = label2 ? pen.textWidth(label2, size2) : 0;
   const rightLimit = f.mode === 'hmd' && y > L.boxY - 30 * u && y < L.boxY + 90 * u && x < L.altLeft ? L.altLeft - 12 * u : L.right;
-  const rLeft = rw > 0 && (x + side + rw > rightLimit || (ringCuts(f, x + side, y - 8 * u, x + side + rw, y + 8 * u) && !ringCuts(f, x - side - rw, y - 8 * u, x - side, y + 8 * u)));
+  // (the left too when the right is under the ring or reserved text, the kill feed, and the left isn't)
+  const rLeft =
+    rw > 0 &&
+    (x + side + rw > rightLimit ||
+      ((ringCuts(f, x + side, y - 8 * u, x + side + rw, y + 8 * u) || occ.hits(x + side, y - 8 * u, x + side + rw, y + 8 * u, 0, 0)) &&
+        !ringCuts(f, x - side - rw, y - 8 * u, x - side, y + 8 * u) &&
+        !occ.hits(x - side - rw, y - 8 * u, x - side, y + 8 * u, 0, 0)));
   const rx = rLeft ? x - side : x + side;
   if (label2 && show2) pen.text(label2, rx, y, col2, size2, rLeft ? 'right' : 'left');
   // protected: the box, its ring and every label (text zones never cover it)
