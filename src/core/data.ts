@@ -223,7 +223,7 @@ export interface LoadoutDef {
   gunAmmo: number;
   flares: number;
   chaff: number;
-  role: 'aa' | 'ag' | 'sead';
+  role: 'aa' | 'ag' | 'sead' | 'none';
 }
 
 export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
@@ -328,6 +328,18 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     flares: 30,
     chaff: 30,
     role: 'ag',
+  },
+  // free flight's default (A Stroll in the Park, #113): the lightest jet, so the slowest it flies
+  clean: {
+    id: 'clean',
+    name: 'Clean (Sightseeing)',
+    description: 'Empty bays, no pylons: the gun, flares and chaff only. The lightest jet, and the slowest it will fly.',
+    rcsMultiplier: 1,
+    stores: [],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'none',
   },
 };
 

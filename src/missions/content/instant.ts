@@ -154,9 +154,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
 
   switch (opts.mode) {
     case 'stroll': {
-      // free flight: no hostiles, only the civil traffic; every loadout, the heaviest by default
-      loadout = 'strike_beast';
-      allowed = ['strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
+      // free flight: no hostiles, only the civil traffic; every loadout, a clean jet first and by
+      // default (a calm cockpit and the slowest flight, #113)
+      loadout = 'clean';
+      allowed = ['clean', 'strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
       script.freeFlight = true;
       objectiveText = ['Free flight: no objectives. Explore Auckland at your own pace.'];
       // start low and steady over the upper Waitematā, the Harbour Bridge ahead (not 5,000 m at 470 kt)
@@ -167,7 +168,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
         'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. The airliners and ships are civilians going about their day.',
-        'You are loaded to the teeth if you want to practise on the scenery: nothing counts against you. Terrain and buildings still do, so mind the ground.',
+        'The jet is clean, radar off, for the slowest and quietest flight. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',
         'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
       break;

@@ -116,7 +116,8 @@ export class RearmController {
     }
     // Winchester / bingo calls (edge-triggered)
     const bingoFuel = AIRCRAFT_PERF[p.type].internalFuel * BINGO_FRACTION;
-    const winchester = storesLeft(p) === 0;
+    // (a clean jet took off with nothing to run out of)
+    const winchester = storesLeft(p) === 0 && LOADOUTS[this.loadout].stores.length > 0;
     // no rearm point (a sortie against the clock): Winchester means the gun, not a trip home
     if (winchester && s.script.noRearm) {
       if (!this.gunsCalled) this.callGuns(p);

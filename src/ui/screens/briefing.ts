@@ -20,7 +20,7 @@ import { drawIntelMap } from './intelMap';
 import { aucklandLinz, loadAucklandLinz } from '../../world/terrain/theaters/aucklandLinz';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered cloud', overcast: 'Overcast' } as const;
-const ROLE_LABEL = { aa: 'AIR-AIR', ag: 'STRIKE', sead: 'SEAD' } as const;
+const ROLE_LABEL = { aa: 'AIR-AIR', ag: 'STRIKE', sead: 'SEAD', none: 'CLEAN' } as const;
 const WEAPON_NAMES: Record<string, string> = Object.fromEntries(Object.entries(WEAPON_INFO).map(([k, v]) => [k, v.name]));
 
 type Tab = 'brief' | 'obj' | 'hangar';

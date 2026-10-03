@@ -206,7 +206,7 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
       continue;
     }
     // civil traffic only matters to the human player (AI crews and their datalink ignore it)
-    if (t.team === 'neutral' && !ac.isPlayer) continue;
+    if (t.team === 'neutral' && (!ac.isPlayer || ac.ignoresCivil)) continue;
     _rel.subVectors(t.position, ac.position);
     const d = _rel.length();
     if (d < 1) continue;
@@ -281,7 +281,7 @@ function scanGround(
   for (const g of list) {
     if (!g.alive || g.team === ac.team) continue;
     // civil ships only matter to the human player (AI crews never track or attack them)
-    if (g.team === 'neutral' && !ac.isPlayer) continue;
+    if (g.team === 'neutral' && (!ac.isPlayer || ac.ignoresCivil)) continue;
     _rel.subVectors(g.position, ac.position);
     const d = _rel.length();
     if (d > KNOWN_TARGET_RANGE) continue;

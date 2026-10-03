@@ -1,7 +1,7 @@
 /**
  * Instant Action's A Stroll in the Park: free flight over Auckland with no hostiles. No enemy
- * aircraft, SAMs or targets, no objectives; the heaviest loadout by default with every loadout
- * allowed; the sortie only ends when the player quits or goes down; shooting down an airliner costs
+ * aircraft, SAMs or targets, no objectives; a clean jet by default with every loadout allowed
+ * (#113); the sortie only ends when the player quits or goes down; shooting down an airliner costs
  * nothing and bringing the Sky Tower down doesn't end it. A saved setup and the menu default pick it.
  */
 import { describe, expect, it } from 'vitest';
@@ -43,7 +43,7 @@ function setup() {
 }
 
 describe('Instant Action: A Stroll in the Park', () => {
-  it('has no hostiles, no objectives and every loadout, the heaviest by default', () => {
+  it('has no hostiles, no objectives and every loadout, a clean jet by default (#113)', () => {
     const def = stroll();
     expect(validateMission(def)).toEqual([]);
     expect(def.title).toBe('A Stroll in the Park — Auckland');
@@ -55,7 +55,9 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(def.script.objectives).toEqual([]);
     expect(def.script.survival).toBeUndefined();
     expect(def.intel.filter((i) => i.kind === 'sam' || i.kind === 'air')).toEqual([]);
-    expect(def.recommendedLoadout).toBe('strike_beast');
+    expect(def.recommendedLoadout).toBe('clean');
+    expect(def.allowedLoadouts[0]).toBe('clean');
+    expect(def.allowedLoadouts).toContain('strike_beast');
     expect(def.allowedLoadouts).toContain('strike_sdb2_full');
     expect(def.allowedLoadouts).toContain('a2a_beast');
     expect(def.briefing[0]).toMatch(/^Everyone's friendly\. It's New Zealand\./);

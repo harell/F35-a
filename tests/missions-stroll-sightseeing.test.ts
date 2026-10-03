@@ -1,9 +1,11 @@
 /**
  * A Stroll in the Park, sightseeing follow-ups (issue #113): the free-flight debrief shows what a
- * sightseer did (tour stops, distance flown, highest and lowest pass) instead of combat stats.
+ * sightseer did (tour stops, distance flown, highest and lowest pass) instead of combat stats; a
+ * calm cockpit (a clean jet by default, radar off, no CIV boxes).
  */
 import { describe, expect, it } from 'vitest';
-import { DIFFICULTIES } from '../src/core/data';
+import { Vector3 } from 'three';
+import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import { createAiBrain } from '../src/ai';
 import { buildInstantMissionSeeded, createMissionRunner } from '../src/missions';
@@ -11,6 +13,7 @@ import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { sightseeingRows } from '../src/ui/screens/debrief';
+import { hangarLoadouts } from '../src/ui/hangar';
 import { FlatTerrain } from './combat-helpers';
 
 const DT = 1 / 60;
@@ -22,15 +25,20 @@ function setup() {
   const world = createSimWorld({ terrain: new FlatTerrain(0), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(1) });
   const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
   runner.setup(world, def.recommendedLoadout);
+  const radio: string[] = [];
+  events.on('radio', (e) => radio.push(e.text));
+  const hud: string[] = [];
+  events.on('hud:message', (e) => hud.push(e.text));
   const tick = (seconds: number) => {
     for (let i = 0; i < seconds * 60; i++) {
       world.step(DT);
       runner.update(world, DT);
     }
   };
-  return { def, world, runner, tick };
+  return { def, world, runner, tick, radio, hud };
 }
 
+const ahead = (p: { velocity: Vector3 }) => p.velocity.clone().setY(0).normalize();
 const sights = (r: ReturnType<ReturnType<typeof createMissionRunner>['result']>) => (r as MissionResultExt).sightseeing!;
 
 describe('A Stroll in the Park: the free-flight debrief (2.2-5)', () => {
@@ -87,5 +95,64 @@ describe('A Stroll in the Park: the free-flight debrief (2.2-5)', () => {
     expect(v['Distance flown']).toBe('50 nm <small>93 km</small>');
     expect(v['Highest pass']).toBe('3,970 ft <small>1,210 m</small>');
     expect(v['Lowest pass']).toBe('200 ft <small>61 m</small>');
+  });
+});
+
+describe('A Stroll in the Park: a calm cockpit (1.1-g)', () => {
+  it('a clean jet first in the hangar and by default, the others still offered', () => {
+    const def = stroll();
+    expect(def.recommendedLoadout).toBe('clean');
+    expect(def.allowedLoadouts[0]).toBe('clean');
+    expect(def.allowedLoadouts).toEqual(expect.arrayContaining(['strike_beast', 'a2a_beast', 'strike_sdb2_full', 'a2a_stealth']));
+    expect(hangarLoadouts(def)).toEqual({ cards: def.allowedLoadouts, initial: 'clean' });
+    const l = LOADOUTS.clean;
+    expect(l.stores).toEqual([]);
+    expect(l.rcsMultiplier).toBe(1);
+    expect(l.gunAmmo).toBeGreaterThan(0);
+  });
+
+  it('starts on the gun with the radar off, and a clean jet is never Winchester', () => {
+    const m = setup();
+    m.tick(1);
+    const p = m.world.player!;
+    expect(p.stores).toEqual([]);
+    expect(p.selectedWeapon).toBe('gun');
+    expect(p.radar.emitting).toBe(false);
+    m.tick(10);
+    expect(p.radar.emitting).toBe(false);
+    expect(m.hud.some((t) => /WINCHESTER/.test(t))).toBe(false);
+    expect(m.radio.some((t) => /Winchester/.test(t))).toBe(false);
+    expect(m.runner.currentWaypoint?.label).toBe('Harbour Bridge');
+  });
+
+  /** Radar on; the harbour's ships seen from the start, then an airliner 3 km ahead (the civil module flies it, so the jet moves). */
+  const civilContacts = (m: ReturnType<typeof setup>) => {
+    const p = m.world.player!;
+    m.world.combat.setRadarEmitting(p, true, m.world);
+    m.tick(1);
+    const ships = p.radar.contacts.filter((c) => c.team === 'neutral' && m.world.getEntity(c.id)?.kind !== 'aircraft').length;
+    const civ = m.world.aircraft.find((a) => a.civil)!;
+    p.position.copy(civ.position).addScaledVector(ahead(p), -3000);
+    m.tick(0.5);
+    return { ships, airliner: p.radar.contacts.some((c) => c.id === civ.id) };
+  };
+
+  it('no CIV boxes: the civil traffic never becomes a contact, so TGT has nothing to designate', () => {
+    const m = setup();
+    m.tick(1);
+    expect(civilContacts(m)).toEqual({ ships: 0, airliner: false });
+    const p = m.world.player!;
+    expect(p.radar.contacts.filter((c) => c.team === 'neutral')).toEqual([]);
+    m.world.combat.cycleTarget(p, m.world);
+    expect(p.radar.designatedId).toBeNull();
+  });
+
+  it('outside free flight the player still sees the civil traffic', () => {
+    const m = setup();
+    m.tick(1);
+    m.world.player!.ignoresCivil = false;
+    const seen = civilContacts(m);
+    expect(seen.ships).toBeGreaterThan(0);
+    expect(seen.airliner).toBe(true);
   });
 });

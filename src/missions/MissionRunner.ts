@@ -177,7 +177,13 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const p = spawnPlayer(s, loadout);
     // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
     // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
-    if (s.script.freeFlight) world.combat.selectWeapon(p, 'gun', world);
+    if (s.script.freeFlight) {
+      world.combat.selectWeapon(p, 'gun', world);
+      // a calm cockpit (#113): radar off at the start (the player can turn it on) and no CIV boxes on
+      // the civil traffic, so TGT can't steer a bomb onto a moored cruise ship
+      world.combat.setRadarEmitting(p, false, world);
+      p.ignoresCivil = true;
+    }
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
     markObjectiveTargets(s);
