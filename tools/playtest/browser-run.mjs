@@ -10,6 +10,7 @@
  *       [--missions=c01,c02,ia_defend_auckland] [--loadout=strike_sdb2] [--shots=0] [--text]
  *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}'] [--seed=7]
  *       [--device=phone|desktop] [--base=http://localhost:5190/] [--out=e2e/screenshots/playtest]
+ *       [--tod=dawn|day|dusk|night] [--weather=clear|scattered|overcast]   (Instant Action ids, first mission)
  *
  * --at: game-time checkpoints in seconds (default 0,60,180). Output: <out>/<mission>-<t>s.png per
  * checkpoint, one JSON line per checkpoint (state, objectives, errors so far) and timings, so the
@@ -99,6 +100,8 @@ for (const [k, mission] of missions.entries()) {
     if (args.difficulty) q.set('difficulty', args.difficulty);
     if (args.loadout) q.set('loadout', args.loadout);
     if (args.seed !== undefined) q.set('seed', String(args.seed));
+    if (args.tod) q.set('tod', args.tod);
+    if (args.weather) q.set('weather', args.weather);
     await page.goto(`${base}?${q}`, { waitUntil: 'load' });
   }
   try {
