@@ -246,6 +246,11 @@ export interface DifficultyParams {
   countermeasureEffectiveness: number;
   /** Flight assists: auto-trim, stall/spin protection, g-limiter, auto-rudder. */
   flightAssist: boolean;
+  /**
+   * Auto-GCAS on the player's jet: the automatic fly-up before the ground. Recruit only; from Pilot up
+   * the player can fly into the ground (owner's call, 2026-10-04).
+   */
+  autoGcas: boolean;
   /** Screen blackout/redout from sustained G. */
   gEffects: boolean;
   /** Extra seconds of warning/min range padding on HUD shoot cues. */
