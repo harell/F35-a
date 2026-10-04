@@ -13,7 +13,7 @@
  * and in playtest 2026-10-02 r4:
  *  - 4.3-f (#69): the air-to-air PlayerBot (tests/ai-playerbot.ts) never fired its gun (0 of 180
  *    rounds in 6 gun-only runs on Pilot), so gun balance couldn't be measured.
- * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=c04,c06,t03 --loadout=strike_sdb2
+ * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t03,ia_strike_auckland --loadout=strike_sdb2
  */
 import { describe, expect, it } from 'vitest';
 import { Autopilot } from '../src/ai/pilot/Autopilot';
@@ -24,10 +24,21 @@ import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
 import { CRIPPLED_FRACTION, MissionBot, OUT_THREAT_RANGE, homeBase, outOfFightAction, runPlaythrough, shouldEgress } from './missions-bot';
-import { harness } from './missions-helpers';
+import { harness, sweepFixture } from './missions-helpers';
+import type { MissionDef } from '../src/core/contracts';
 import type { AircraftEntity } from '../src/sim/entities';
 import { PlayerBot, runBalanceMission } from './ai-playerbot';
 import { flat, makeAiWorld, v3 } from './ai-helpers';
+
+/**
+ * ia_strike_auckland with the hangars and fuel made primary and flown with strike_stealth (2 JDAMs,
+ * 2 AMRAAMs): the AMRAAMs go on the MiG CAP and the JDAMs on two targets, so the bot is Winchester
+ * at ~150 s with primaries left and the mission still running (the shape of the removed c04).
+ */
+function strikeOutOfBombs(): MissionDef {
+  const base = missionById('ia_strike_auckland')!;
+  return { ...base, id: 'fx_strike_all', script: { ...base.script, objectives: base.script.objectives.map((o) => (o.id === 'o_hangars' ? { ...o, primary: true } : o)) } };
+}
 
 function terrainFor(id: string): TerrainQuery {
   const def = missionById(id)!;
@@ -62,14 +73,14 @@ describe('1.1-k: the bot flies the GBU-53/B StormBreaker', () => {
 
 describe('1.1-l: out of weapons, the bot goes home (no rearming, issue #63)', () => {
   it('Auckland, the only theatre: home is Whenuapai for campaign and Instant Action missions', () => {
-    for (const id of ['c04', 'ia_strike_auckland', 'ia_sam_gauntlet_auckland']) {
+    for (const id of ['g01', 'g02', 'ia_strike_auckland', 'ia_sam_gauntlet_auckland']) {
       expect(homeBase(missionById(id)!), id).toMatchObject({ x: AKL.whenuapai.x, z: AKL.whenuapai.z, name: 'Whenuapai' });
     }
   });
-  it('c04 Recruit: Winchester after the strike, the bot flies to Whenuapai and is never rearmed', { timeout: 60_000 }, () => {
-    const def = missionById('c04')!;
+  it('strike Recruit: Winchester with targets left, the bot flies to Whenuapai and is never rearmed', { timeout: 60_000 }, () => {
+    const def = strikeOutOfBombs();
     const home = homeBase(def);
-    const r = runPlaythrough(def, 'recruit', 0, terrainFor('c04'), { maxT: 620, log: true });
+    const r = runPlaythrough(def, 'recruit', 0, terrainFor('ia_strike_auckland'), { maxT: 620, log: true, loadout: 'strike_stealth' });
     const w = r.events.findIndex((l) => /WINCHESTER/.test(l));
     expect(w, r.objectives).toBeGreaterThan(0);
     expect(r.events.some((l) => /REARM/.test(l))).toBe(false);
@@ -137,7 +148,7 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
       }
   });
 
-  it('gun-only probe (c01, Recruit): no missiles all mission long, and the pilot fights with the gun', { timeout: 240_000 }, async () => {
+  it('gun-only probe (two-wave MiG sweep, Recruit): no missiles all mission long, and the pilot fights with the gun', { timeout: 240_000 }, async () => {
     // a mission-level check of the harness; the gun steering itself is pinned by the trail
     // chases above. Rounds fired per seed (2026-10-02): 26 (and a gun kill), 0, 0, 0, 0, 18 (and
     // a kill) — so the assertion is "some seed fires", not any one seed.
@@ -147,7 +158,7 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
       // yield between runs: a worker blocked for long stretches can trip vitest's RPC timeout
       await new Promise((r) => setTimeout(r, 0));
       let stores = 0;
-      const r = runBalanceMission('c01', 'recruit', seed, flat(0), {
+      const r = runBalanceMission(sweepFixture(), 'recruit', seed, flat(0), {
         gunOnly: true,
         onStep: (_w, p) => {
           stores = Math.max(stores, p.stores.reduce((n, s) => n + s.count, 0));
@@ -163,29 +174,29 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
     expect(rounds, rows.join('; ')).toBeGreaterThan(0);
   });
 
-  it('gun-only probe on Pilot (c01, ia_dogfight_auckland): no missiles, and c01 fights reach the gun (was 0 rounds)', { timeout: 300_000 }, async () => {
+  it('gun-only probe on Pilot (MiG sweep, ia_dogfight_auckland): no missiles, and sweep fights reach the gun (was 0 rounds)', { timeout: 300_000 }, async () => {
     // the playtest's probe (#69): missile stores zeroed every step, rtbWhenWinchester false. The
     // bot used to lose every fight before a gun shot: crippled by a head-on R-27 or R-73 in the
     // first merge, then 9 g pursuit down to 100 m/s. Rounds fired per seed on a flat sea
-    // (2026-10-02): c01 0, 102, 0, 0, 102 (a gun kill), 6, so the assertion is "some c01 seed
-    // fires", not any one seed. ia_dogfight_auckland fires on 1 seed of 0-15 (seed 8, 6 rounds:
+    // (2026-10-02): c01 (now sweepFixture) 0, 102, 0, 0, 102 (a gun kill), 6, so the assertion is
+    // "some sweep seed fires", not any one seed. ia_dogfight_auckland fires on 1 seed of 0-15 (seed 8, 6 rounds:
     // the a2a_beast wingman often splashes all four first, or the bot dies in a four-ship merge),
     // so its rounds aren't asserted; its rows (the playtest's seeds) check that no missile flies.
-    const probe: [string, number[]][] = [
-      ['c01', [0, 1, 2, 3, 4, 5]],
+    const probe: [string | MissionDef, number[]][] = [
+      [sweepFixture(), [0, 1, 2, 3, 4, 5]],
       ['ia_dogfight_auckland', [1, 2, 3]],
     ];
     const rows: string[] = [];
-    let c01Rounds = 0;
+    let sweepRounds = 0;
     for (const [id, seeds] of probe)
       for (const seed of seeds) {
         await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
         const r = runBalanceMission(id, 'pilot', seed, flat(0), { gunOnly: true });
-        expect(r.playerShots, `${id} seed ${seed}`).toBe(0);
-        if (id === 'c01') c01Rounds += r.gunRounds;
-        rows.push(`${id} seed ${seed}: ${r.state} t=${r.t.toFixed(0)} rounds=${r.gunRounds} kills=${r.playerKills}`);
+        expect(r.playerShots, `${r.mission} seed ${seed}`).toBe(0);
+        if (typeof id !== 'string') sweepRounds += r.gunRounds;
+        rows.push(`${r.mission} seed ${seed}: ${r.state} t=${r.t.toFixed(0)} rounds=${r.gunRounds} kills=${r.playerKills}`);
       }
-    expect(c01Rounds, rows.join('; ')).toBeGreaterThan(0);
+    expect(sweepRounds, rows.join('; ')).toBeGreaterThan(0);
   });
 });
 

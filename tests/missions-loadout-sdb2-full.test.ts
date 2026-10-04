@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FrameContext, MissionDef } from '../src/core/contracts';
 import { DIFFICULTIES, LOADOUTS, WEAPON_INFO } from '../src/core/data';
 import { EventBus } from '../src/core/events';
-import { CAMPAIGN, TRAINING, missionById, validateMission } from '../src/missions';
+import { CAMPAIGNS, TRAINING, missionById, validateMission } from '../src/missions';
 import { drawSmsPage } from '../src/hud/cockpit/pages';
 import { Pen } from '../src/hud/hmd/pen';
 import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
@@ -27,10 +27,10 @@ vi.setConfig({ testTimeout: 60_000 });
 installPath2D();
 
 const FULL = 'strike_sdb2_full' as const;
-/** c06 (ship strike in the Tāmaki Strait) as a mission that lists the loadout, the way #82 will. */
+/** t03 (the strike lesson, which offers strike_sdb2) as a mission that also lists the full load. */
 const offering = (): MissionDef => {
-  const c06 = missionById('c06')!;
-  return { ...c06, allowedLoadouts: [...c06.allowedLoadouts, FULL] };
+  const t03 = missionById('t03')!;
+  return { ...t03, allowedLoadouts: [...t03.allowedLoadouts, FULL] };
 };
 
 /** What the cockpit stores page (SMS) draws for this jet. */
@@ -60,7 +60,7 @@ describe('strike_sdb2_full: the loadout', () => {
   it('no mission offers it yet (only one that lists it, #82): campaign, training and every Instant Action mode', () => {
     const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
     expect(instant.length).toBeGreaterThanOrEqual(4);
-    for (const m of [...CAMPAIGN, ...TRAINING, ...instant]) {
+    for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
       expect(m.allowedLoadouts, m.id).not.toContain(FULL);
       expect(m.recommendedLoadout, m.id).not.toBe(FULL);
       expect(hangarLoadouts(m).cards, m.id).not.toContain(FULL);

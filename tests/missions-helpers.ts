@@ -10,8 +10,8 @@ import type { Difficulty, LoadoutId } from '../src/core/types';
 import type { AiBrain, AiRole, AiTask, CreateAiBrain, SimWorld, TerrainQuery } from '../src/sim/api';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
-import { createMissionRunner, missionById } from '../src/missions';
-import { flight } from '../src/missions/content/common';
+import { createMissionRunner } from '../src/missions';
+import { NEVER, P, flight, mission, site, target, wingmen } from '../src/missions/content/common';
 
 /** Flat land at `height` m everywhere (no water). */
 export function flatLand(height = 20): TerrainQuery {
@@ -117,12 +117,134 @@ export function shieldPlayer(h: Harness): void {
   }
 }
 
+const DS = 'DARKSTAR';
+const sweepStart = { x: -9000, z: -6200, altitude: 3000, heading: 75, speed: 230, fuel: 0.9 };
+
 /**
- * A test-only mission: c01 plus an A-50 Mainstay to shoot down, bullseye AWACS calls and a 720 s
- * time limit. Those features have no campaign mission since c07 was removed (issue #63).
+ * A test-only air-to-air sweep (the shape of the removed Southern Cross c01): the player and Viper 2
+ * on CAP over the upper harbour, a MiG-29 pair ('fulcrum1', objective 'o_sweep'), a second pair
+ * ('fulcrum2', spawned by a trigger once the first is down, objective 'o_second') and the steering
+ * cue on 'wp_cap'. For the generic air-to-air mechanics (Winchester, bingo, driven-off bandits,
+ * debrief tips, dispose) that no remaining mission has in this form.
+ */
+export function sweepFixture(): MissionDef {
+  return mission({
+    id: 'fx_sweep',
+    kind: 'campaign',
+    index: 1,
+    title: 'Sweep fixture',
+    subtitle: 'test',
+    timeOfDay: 'day',
+    weather: 'clear',
+    briefing: ['test'],
+    recommendedLoadout: 'a2a_stealth',
+    allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
+    player: sweepStart,
+    script: {
+      autoHints: true,
+      parTime: 360,
+      groups: [
+        wingmen(1, sweepStart),
+        flight('fulcrum1', 'mig29', 2, { x: 22000, z: -21000 }, 5500, 235, 240, 'fighter', {
+          skillOffset: -0.2,
+          task: { kind: 'patrol', x: 4000, z: -12000, radius: 6000, altitude: 5000 },
+        }),
+        flight('fulcrum2', 'mig29', 2, { x: 27000, z: -13000 }, 6000, 262, 250, 'fighter', {
+          skillOffset: -0.15,
+          spawn: NEVER,
+          task: { kind: 'patrol', x: 6000, z: -9000, radius: 6000, altitude: 5500 },
+        }),
+      ],
+      objectives: [
+        { id: 'o_sweep', kind: 'destroy', groups: ['fulcrum1'], label: 'Splash the MiG-29 sweep', primary: true },
+        { id: 'o_second', kind: 'destroy', groups: ['fulcrum2'], label: 'Splash the second MiG pair', primary: true, activeAt: { kind: 'objective', id: 'o_sweep', state: 'complete' } },
+      ],
+      waypoints: [
+        { id: 'wp_cap', label: 'CAP Alpha', kind: 'cap', x: -1000, z: -7500, altitude: 5000, objective: 'o_second' },
+        { id: 'wp_home', label: 'Whenuapai', kind: 'rtb', x: P.whenuapai.x, z: P.whenuapai.z, altitude: 1000 },
+      ],
+      triggers: [
+        {
+          id: 't_second',
+          when: { kind: 'objective', id: 'o_sweep', state: 'complete' },
+          delay: 7,
+          actions: [
+            { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Two more Fulcrums heading your way.' },
+            { kind: 'spawn', group: 'fulcrum2' },
+          ],
+        },
+      ],
+      hints: [{ id: 'h_start', text: '{controls}. Climb toward the CAP and follow the steering cue', when: { kind: 'time', t: 9 }, duration: 8 }],
+      opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Fulcrums over the Gulf. Cleared to engage.', priority: 2 }],
+    },
+  });
+}
+
+const seadStart = { x: -13000, z: -2000, altitude: 4000, heading: 80, speed: 240 };
+
+/**
+ * A test-only SEAD mission (the shape of the removed Southern Cross c03): an SA-6 ('rangi_sa6') on
+ * Rangitoto's south-west slope, an SA-8 ('rangi_sa8') on its east shore with a 'wp_sa8' waypoint,
+ * Shilkas and an EW radar ('rangi_ewr'), flown with the SEAD loadout. No scripted hints, so every
+ * hint comes from the weapon-aware auto hints. One trigger: after the SA-8 shoots down two of the
+ * player's weapons (the 'munitions_shot_down' condition) Darkstar calls it, reveals it and steers
+ * the player to it. Pass `timeLimit` for the time-limit countdown.
+ */
+export function seadFixture(timeLimit?: number): MissionDef {
+  return mission({
+    id: 'fx_sead',
+    kind: 'campaign',
+    index: 1,
+    title: 'SEAD fixture',
+    subtitle: 'test',
+    timeOfDay: 'day',
+    weather: 'clear',
+    briefing: ['test'],
+    recommendedLoadout: 'sead_stealth',
+    allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
+    player: seadStart,
+    timeLimit,
+    script: {
+      autoHints: true,
+      parTime: 420,
+      groups: [wingmen(1, seadStart)],
+      sams: [
+        site('sa6', 'rangi_sa6', 'sa6', P.rangSW, { heading: 225 }),
+        site('sa8', 'rangi_sa8', 'sa8', P.rangE, { heading: 90 }),
+        site('zsu1', 'rangi_aaa', 'zsu23', P.rangS),
+      ],
+      ground: [target('ewr', 'rangi_ewr', 'ewr', P.rangN, { name: 'EW Radar' })],
+      objectives: [
+        { id: 'o_sa6', kind: 'destroy', groups: ['rangi_sa6'], label: 'Destroy the SA-6 battery', primary: true },
+        { id: 'o_sa8', kind: 'destroy', groups: ['rangi_sa8'], label: 'Destroy the SA-8', primary: true },
+        { id: 'o_ewr', kind: 'destroy', groups: ['rangi_ewr'], label: 'Destroy the early-warning radar', primary: false },
+      ],
+      waypoints: [
+        { id: 'wp_sa6', label: 'SA-6', kind: 'target', x: P.rangSW.x, z: P.rangSW.z, objective: 'o_sa6' },
+        { id: 'wp_sa8', label: 'SA-8', kind: 'target', x: P.rangE.x, z: P.rangE.z, objective: 'o_sa8' },
+      ],
+      triggers: [
+        {
+          id: 't_sa8_eating',
+          when: { kind: 'all', of: [{ kind: 'munitions_shot_down', group: 'rangi_sa8', count: 2 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa8', state: 'complete' } }] },
+          delay: 2,
+          actions: [
+            { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Gecko is shooting your weapons down.', priority: 3 },
+            { kind: 'reveal', group: 'rangi_sa8' },
+            { kind: 'set_waypoint', id: 'wp_sa8' },
+          ],
+        },
+      ],
+    },
+  });
+}
+
+/**
+ * A test-only mission: the sweep fixture plus an A-50 Mainstay to shoot down, bullseye AWACS calls
+ * and a 720 s time limit (features no remaining campaign mission has).
  */
 export function mainstayFixture(): MissionDef {
-  const base = missionById('c01')!;
+  const base = sweepFixture();
   return {
     ...base,
     id: 'fx_mainstay',

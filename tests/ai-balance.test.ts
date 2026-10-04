@@ -2,7 +2,7 @@
  * Regression tests for the iteration-1 lethality / stealth balance (SIM-AI):
  *  - reviewers: "enemies are unfairly lethal on the default 'pilot' difficulty, stealth buys almost
  *    nothing, enemy counts outgrow the player's weapons, recruit/pilot/veteran all play the same"
- *  - lead: a player who defends reasonably survives c01 on recruit almost always, on pilot most of
+ *  - lead: a player who defends reasonably survives the two-wave MiG CAP (sweepFixture(), once c01) on recruit almost always, on pilot most of
  *    the time, on veteran sometimes, on ace rarely; enemies never shoot beyond their own sensor
  *    track, prefer shots inside a sensible fraction of rMax on lower difficulties and react slower
  *    there; a clean F-35 typically gets the first shot, beast mode is seen much earlier; wingmen
@@ -20,9 +20,12 @@ import { WeaponsOfficer } from '../src/ai/brain/weapons';
 import { fcrStealthFactor } from '../src/sim/sensors/signatures';
 import { flat, makeAiWorld, runFor, v3 } from './ai-helpers';
 import { runBalanceMission, runDuel, type BalanceResult } from './ai-playerbot';
+import { sweepFixture } from './missions-helpers';
 
 const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
 const SEEDS = [11, 18, 25, 32, 39, 46, 53, 60];
+/** The two-wave MiG-29 sweep (c01-shaped, tests/missions-helpers.ts). */
+const SWEEP = sweepFixture();
 
 describe('AI shot doctrine & reactions per difficulty', () => {
   const zone = (rMax: number, rNe: number): LaunchZone => ({ weapon: 'aim120', targetId: 1, range: 0, rMin: 1_000, rNe, rMax, shoot: true, closure: 500, timeOfFlight: 20 });
@@ -46,7 +49,7 @@ describe('AI shot doctrine & reactions per difficulty', () => {
   });
 
   it('enemy pilots react slower on recruit / pilot than on veteran / ace', () => {
-    // c01's MiG groups fly at difficulty.aiSkill − 0.2
+    // sweepFixture()'s first MiG pair flies at difficulty.aiSkill − 0.2
     const r = DIFFS.map((d) => deriveSkill(DIFFICULTIES[d], DIFFICULTIES[d].aiSkill - 0.2, 'red', 'mig29').reaction);
     expect(r[0]).toBeGreaterThan(r[1]);
     expect(r[1]).toBeGreaterThan(r[2]);
@@ -55,7 +58,7 @@ describe('AI shot doctrine & reactions per difficulty', () => {
     expect(r[1]).toBeGreaterThan(1.9);
   });
 
-  it('veteran no longer multiplies the enemy count (c01 = 4 MiGs), ace = 6', () => {
+  it('veteran no longer multiplies the enemy count (two MiG pairs = 4 MiGs), ace = 6', () => {
     expect(Math.round(2 * DIFFICULTIES.veteran.enemyCountScale)).toBe(2);
     expect(Math.round(2 * DIFFICULTIES.ace.enemyCountScale)).toBe(3);
     expect(DIFFICULTIES.pilot.enemyCountScale).toBe(1);
@@ -131,8 +134,8 @@ describe('stealth matters (1v1 head-on vs a MiG-29, competent player)', () => {
   });
 });
 
-describe('c01 lethality ladder (competent scripted player, 8 jittered runs per difficulty)', () => {
-  const runs = (d: Difficulty, strategy: 'bot' | 'committed'): BalanceResult[] => SEEDS.map((s) => runBalanceMission('c01', d, s, flat(0), { strategy }));
+describe('two-wave MiG CAP lethality ladder (sweepFixture(), competent scripted player, 8 jittered runs per difficulty)', () => {
+  const runs = (d: Difficulty, strategy: 'bot' | 'committed'): BalanceResult[] => SEEDS.map((s) => runBalanceMission(SWEEP, d, s, flat(0), { strategy }));
   const surv = (rs: BalanceResult[]) => rs.filter((r) => r.survived).length;
 
   it('recruit almost always, pilot most of the time, ace rarely — a clean F-35 shoots first', { timeout: 180_000 }, () => {
@@ -157,7 +160,7 @@ describe('c01 lethality ladder (competent scripted player, 8 jittered runs per d
     // wingmen contribute (Viper 2 scores kills of its own)
     const wing = [...rec, ...pil].reduce((s, r) => s + r.wingKills, 0) / 16;
     expect(wing).toBeGreaterThanOrEqual(1);
-    // no more than 4 MiGs on pilot / veteran (reviewer: veteran/ace turned c01 into 6)
+    // no more than 4 MiGs on pilot / veteran (reviewer: veteran/ace turned the CAP into 6)
     expect(Math.max(...vet.map((r) => r.redTotal))).toBeLessThanOrEqual(4);
   });
 });

@@ -1,6 +1,6 @@
 /**
  * First-time flow polish (issue #70, playtest 2026-10-02 round 4: 4.2-b, 4.2-c, 4.2-f):
- *  - tilt chosen but no orientation data: Input flies the touch stick, so the hints and c01's text
+ *  - tilt chosen but no orientation data: Input flies the touch stick, so the hints and {controls} texts
  *    describe the stick and a toast says tilt is unavailable;
  *  - T01's first hint stays on screen for its whole duration in the default cockpit view at 844x390
  *    (it was drawn ~2.4 s of its 7 s while the radio pill and the opening objectives filled the column);
@@ -14,6 +14,7 @@ import { EventBus } from '../src/core/events';
 import { DEFAULT_SETTINGS, DIFFICULTIES, QUALITY_PRESETS } from '../src/core/data';
 import type { Settings } from '../src/core/types';
 import { createMissionRunner, missionById } from '../src/missions';
+import { mission } from '../src/missions/content/common';
 import { TILT_UNAVAILABLE_TOAST, currentControlPrefs, followActiveScheme } from '../src/missions/runtime/controlsText';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -53,7 +54,7 @@ afterAll(() => {
 });
 
 describe('tilt chosen, no orientation data: the texts describe the stick (4.2-b)', () => {
-  it('T01 re-words its STICK hint and c01 its controls hint once Input falls back; a toast says so', () => {
+  it('T01 re-words its STICK hint and a {controls} hint reads the stick once Input falls back; a toast says so', () => {
     useSettings({ controlScheme: 'tilt', leftHanded: true });
     expect(followActiveScheme('tilt', 'tilt')).toBeNull(); // tilt flying: no override, no toast
     const t01 = harness(missionById('t01')!);
@@ -70,10 +71,25 @@ describe('tilt chosen, no orientation data: the texts describe the stick (4.2-b)
     expect(followActiveScheme('tilt', 'stick')).toBeNull();
     expect(currentControlPrefs()).toEqual({ controlScheme: 'stick', leftHanded: true });
 
-    const c01 = harness(missionById('c01')!);
+    // a mission whose hint uses the {controls} token (no shipped mission has one since c01 was removed)
+    const fixture = mission({
+      id: 'fx_controls',
+      kind: 'campaign',
+      index: 1,
+      title: 'Controls fixture',
+      subtitle: 'Test fixture',
+      timeOfDay: 'day',
+      weather: 'clear',
+      briefing: ['Test fixture.'],
+      recommendedLoadout: 'a2a_stealth',
+      allowedLoadouts: ['a2a_stealth'],
+      player: { x: -9000, z: -6000, altitude: 1200, heading: 100, speed: 220 },
+      script: { hints: [{ id: 'h_controls', text: '{controls}. Climb toward the CAP', when: { kind: 'time', t: 2 }, duration: 6 }] },
+    });
+    const fx = harness(fixture);
     let seen = '';
-    c01.run(12, () => {
-      if (c01.runner.hint?.includes('Climb toward the CAP')) seen = c01.runner.hint;
+    fx.run(12, () => {
+      if (fx.runner.hint?.includes('Climb toward the CAP')) seen = fx.runner.hint;
     });
     expect(seen).toMatch(/^Right thumb THROTTLE, left thumb STICK\. Climb/);
 

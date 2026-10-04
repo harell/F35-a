@@ -1,12 +1,12 @@
 /**
  * F35-A — missions module public API (used by src/game/Game.ts):
- * CAMPAIGNS (CAMPAIGN = Southern Cross's missions), TRAINING, buildInstantMission, loadProgress,
+ * CAMPAIGNS, TRAINING, buildInstantMission, loadProgress,
  * saveProgress, recordResult, nextMissionAfter, nextMissionLabel, missionDifficulty, campaignOf,
  * terrainPadsFor, createMissionRunner.
  *
  *   schema.ts          MissionScript types (spawns, SAMs, targets, objectives, triggers…)
  *   MissionRunner.ts   runtime (implements MissionRunnerApi) + ./runtime/* helpers
- *   content/*          campaigns "Operation Southern Cross" and IRGC (irgc.ts), training, Instant Action generator
+ *   content/*          the IRGC campaign (irgc.ts, irgcHauraki.ts), training, Instant Action generator
  *   progress.ts        localStorage progress (unlocks chain within each campaign)
  *   pads.ts            terrain pads under SAM sites / compounds
  *   difficulty.ts      the difficulty a mission flies at (training: always Pilot)
@@ -15,8 +15,6 @@
 import type { CampaignDef, CampaignProgress, InstantActionOptions, MissionDef, MissionResult } from '../core/contracts';
 import type { TheaterId, TimeOfDay, Weather } from '../core/types';
 import { buildInstantMissionSeeded } from './content/instant';
-import { CAMPAIGN_PART1 } from './content/campaign1';
-import { CAMPAIGN_PART2 } from './content/campaign2';
 import { IRGC_CAMPAIGN } from './content/irgc';
 import { TRAINING_MISSIONS } from './content/training';
 import { applyResult, loadProgressFrom, saveProgressTo, skipMission as skipMissionIn } from './progress';
@@ -35,27 +33,11 @@ export { missionGunAmmo } from './runtime/gunAmmo';
 export { MEDALS, MEDAL_LIST, type MedalDef, type MedalId } from './runtime/debrief';
 export type { MissionScript } from './schema';
 
-/** Operation Southern Cross — 10 missions over Auckland, in order (ids c01–c06, c08–c11: c07 and c12 were removed with rearming, issue #63). */
-export const CAMPAIGN: MissionDef[] = [...CAMPAIGN_PART1, ...CAMPAIGN_PART2];
-
 /** Training missions (always unlocked). */
 export const TRAINING: MissionDef[] = TRAINING_MISSIONS;
 
-/**
- * Operation Southern Cross, the first campaign (its missions are CAMPAIGN). Disabled (owner's decision,
- * 2026-10-03): its code, missions and tests stay, but players don't see it and playtests don't cover it
- * until it is enabled again. To enable it, delete `enabled: false`.
- */
-export const SOUTHERN_CROSS: CampaignDef = {
-  id: 'southern_cross',
-  name: 'Operation Southern Cross',
-  description: 'Drive the hostile force off the Hauraki Gulf islands and defend Auckland',
-  missions: CAMPAIGN,
-  enabled: false,
-};
-
 /** Every campaign, in menu order, disabled ones included. Each has its own unlock chain and ending. */
-export const CAMPAIGNS: CampaignDef[] = [SOUTHERN_CROSS, IRGC_CAMPAIGN];
+export const CAMPAIGNS: CampaignDef[] = [IRGC_CAMPAIGN];
 
 /** The campaigns the player sees (CampaignDef.enabled not false), in menu order. */
 export const PLAYABLE_CAMPAIGNS: CampaignDef[] = CAMPAIGNS.filter((c) => c.enabled !== false);

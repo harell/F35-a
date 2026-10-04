@@ -3,8 +3,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MissionResult } from '../src/core/contracts';
-import { CAMPAIGN, PLAYABLE_CAMPAIGNS, TRAINING, loadProgress, nextMissionAfter, recordResult, saveProgress } from '../src/missions';
+import { PLAYABLE_CAMPAIGNS, TRAINING, loadProgress, nextMissionAfter, recordResult, saveProgress } from '../src/missions';
 import { PROGRESS_KEY, sanitizeProgress } from '../src/missions/progress';
+
+/** The first playable campaign's missions (the IRGC campaign: g01, g02). */
+const CAMPAIGN = PLAYABLE_CAMPAIGNS[0].missions;
 
 function result(missionId: string, over: Partial<MissionResult> = {}): MissionResult {
   return {
@@ -71,26 +74,26 @@ describe('campaign progress', () => {
 
   it('success unlocks the next mission and records the best result', () => {
     const p0 = loadProgress();
-    const p1 = recordResult(p0, result('c01'));
+    const p1 = recordResult(p0, result('g01'));
     expect(p1).not.toBe(p0);
-    expect(p0.unlocked).not.toContain('c02'); // input not mutated
-    expect(p1.unlocked).toContain('c02');
-    expect(p1.best.c01).toEqual({ score: 1500, grade: 'B', difficulty: 'pilot' });
+    expect(p0.unlocked).not.toContain('g02'); // input not mutated
+    expect(p1.unlocked).toContain('g02');
+    expect(p1.best.g01).toEqual({ score: 1500, grade: 'B', difficulty: 'pilot' });
     expect(p1.totals).toEqual({ missions: 1, airKills: 2, groundKills: 2, deaths: 0 });
     // a worse run doesn't replace the best
-    const p2 = recordResult(p1, result('c01', { score: 900, grade: 'C' }));
-    expect(p2.best.c01.score).toBe(1500);
-    const p3 = recordResult(p2, result('c01', { score: 2600, grade: 'A', difficulty: 'ace' }));
-    expect(p3.best.c01).toEqual({ score: 2600, grade: 'A', difficulty: 'ace' });
+    const p2 = recordResult(p1, result('g01', { score: 900, grade: 'C' }));
+    expect(p2.best.g01.score).toBe(1500);
+    const p3 = recordResult(p2, result('g01', { score: 2600, grade: 'A', difficulty: 'ace' }));
+    expect(p3.best.g01).toEqual({ score: 2600, grade: 'A', difficulty: 'ace' });
   });
 
   it('failure does not unlock and counts deaths', () => {
-    const p = recordResult(loadProgress(), result('c01', { success: false, reason: 'Shot down', grade: 'F', score: 100 }));
-    expect(p.unlocked).not.toContain('c02');
-    expect(p.best.c01).toBeUndefined();
+    const p = recordResult(loadProgress(), result('g01', { success: false, reason: 'Shot down', grade: 'F', score: 100 }));
+    expect(p.unlocked).not.toContain('g02');
+    expect(p.best.g01).toBeUndefined();
     expect(p.totals.deaths).toBe(1);
     expect(p.totals.missions).toBe(0);
-    const p2 = recordResult(p, result('c01', { success: false, reason: 'Objective failed: x', grade: 'D' }));
+    const p2 = recordResult(p, result('g01', { success: false, reason: 'Objective failed: x', grade: 'D' }));
     expect(p2.totals.deaths).toBe(1);
   });
 
@@ -104,21 +107,21 @@ describe('campaign progress', () => {
     const p = recordResult(loadProgress(), result(last.id));
     expect(p.unlocked.length).toBe(loadProgress().unlocked.length);
     expect(nextMissionAfter(last.id)).toBeNull();
-    expect(nextMissionAfter('c01')?.id).toBe('c02');
+    expect(nextMissionAfter('g01')?.id).toBe('g02');
   });
 
-  it('an old save stuck on the removed c07 unlocks c08 (c07 and c12 were removed, issue #63)', () => {
+  it('loading a save repairs its unlocks: a won or skipped mission unlocks the next one (issue #63)', () => {
     const won = { score: 1500, grade: 'B', difficulty: 'pilot' };
-    // won c06 → c07 unlocked; c07 is gone, so c06's win now unlocks c08
-    const s = sanitizeProgress({ unlocked: ['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c07'], best: { c06: won } }, [CAMPAIGN], TRAINING);
-    expect(s.unlocked).toContain('c08');
-    expect(s.unlocked).not.toContain('c09');
+    // g01 won but g02 missing from `unlocked` (e.g. a mission removed from between them) → g02 unlocked
+    const s = sanitizeProgress({ unlocked: ['g01'], best: { g01: won } }, [CAMPAIGN], TRAINING);
+    expect(s.unlocked).toContain('g02');
     // a skipped mission unlocks the next one too; nothing unlocks past an unwon mission
-    const k = sanitizeProgress({ unlocked: ['c01', 'c02'], best: {}, skipped: ['c01'] }, [CAMPAIGN], TRAINING);
-    expect(k.unlocked).toContain('c02');
-    expect(k.unlocked).not.toContain('c03');
-    // a finished campaign keeps everything unlocked and the finale is c11
-    const done = sanitizeProgress({ unlocked: CAMPAIGN.map((m) => m.id).concat('c07', 'c12'), best: { c11: won, c12: won } }, [CAMPAIGN], TRAINING);
+    const chain = ['a1', 'a2', 'a3'].map((id, i) => ({ ...CAMPAIGN[0], id, index: i + 1 }));
+    const k = sanitizeProgress({ unlocked: ['a1'], best: {}, skipped: ['a1'] }, [chain], TRAINING);
+    expect(k.unlocked).toContain('a2');
+    expect(k.unlocked).not.toContain('a3');
+    // a finished campaign keeps everything unlocked (stale ids of removed missions do no harm)
+    const done = sanitizeProgress({ unlocked: CAMPAIGN.map((m) => m.id).concat('gone1'), best: { g02: won, gone1: won } }, [CAMPAIGN], TRAINING);
     for (const m of CAMPAIGN) expect(done.unlocked).toContain(m.id);
   });
 
@@ -134,24 +137,24 @@ describe('campaign progress', () => {
   });
 
   it('persists to localStorage and survives garbage', () => {
-    const p = recordResult(loadProgress(), result('c01'));
+    const p = recordResult(loadProgress(), result('g01'));
     saveProgress(p);
     expect(g.localStorage!.getItem(PROGRESS_KEY)).toBeTruthy();
     const back = loadProgress();
-    expect(back.unlocked).toContain('c02');
-    expect(back.best.c01.score).toBe(1500);
+    expect(back.unlocked).toContain('g02');
+    expect(back.best.g01.score).toBe(1500);
     g.localStorage!.setItem(PROGRESS_KEY, '{not json');
     expect(loadProgress().unlocked).toContain(CAMPAIGN[0].id);
-    const s = sanitizeProgress({ unlocked: [42, 'c05'], best: { c01: { score: 'x' } }, totals: { missions: -3 } }, [CAMPAIGN], TRAINING);
-    expect(s.unlocked).toContain('c05');
-    expect(s.unlocked).toContain('c01');
+    const s = sanitizeProgress({ unlocked: [42, 'g02'], best: { g01: { score: 'x' } }, totals: { missions: -3 } }, [CAMPAIGN], TRAINING);
+    expect(s.unlocked).toContain('g02');
+    expect(s.unlocked).toContain('g01');
     expect(s.best).toEqual({});
     expect(s.totals.missions).toBe(0);
   });
 
   it('works without localStorage', () => {
     g.localStorage = undefined;
-    expect(loadProgress().unlocked).toContain('c01');
+    expect(loadProgress().unlocked).toContain('g01');
     expect(() => saveProgress(loadProgress())).not.toThrow();
   });
 });

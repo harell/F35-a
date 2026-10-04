@@ -296,7 +296,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.script.freeFlight) r.freeFlight = true;
     if (this.sightseeing) (r as MissionResultExt).sightseeing = this.sightseeing.result();
     r.tips = r.freeFlight ? [] : buildTips(s, r);
-    r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
+    r.medals = r.freeFlight ? [] : awardMedals(s, r);
     if (finale) r.campaignComplete = true;
     this.finalResult = r;
     return r;

@@ -308,7 +308,7 @@ describe('air-defence boat (moving SAM)', { timeout: 60_000 }, () => {
   });
 
   it('in a mission: escorts its boat group and moves on when that boat is gone; boats find a tanker listed after them', () => {
-    const base = missionById('c01')!;
+    const base = missionById('g01')!;
     const script = emptyScript();
     // the boats come BEFORE the tanker they attack, and SAM sites spawn before every ground target
     script.ground.push(
@@ -545,7 +545,7 @@ describe('boat presentation and mission options', () => {
   });
 
   it('a mission can chase / strike / escort by group, and the validator checks it', () => {
-    const base = missionById('c01')!;
+    const base = missionById('g01')!;
     const script = emptyScript();
     script.ground.push(
       { id: 'mt', group: 'tanker', type: 'ship', team: 'neutral', vessel: 'tanker', hitsToSink: 2, x: 0, z: -5000 },

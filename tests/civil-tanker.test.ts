@@ -189,7 +189,7 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
 /* ───────────────────────── mission: protect a moving tanker ───────────────────────── */
 
 function tankerMission(): MissionDef {
-  const base = missionById('c06')!;
+  const base = missionById('g02')!;
   const script: MissionScript = {
     ...emptyScript(),
     ground: [

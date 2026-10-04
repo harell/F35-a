@@ -23,18 +23,18 @@ const tag = args.tag || quality;
 const out = args.out || 'e2e/screenshots/harbour';
 fs.mkdirSync(out, { recursive: true });
 
-/** cam: camera position; look: point looked at; mission: day c02, night c10; t: sim time to jump to (s). */
+/** cam: camera position; look: point looked at; mission: the Instant Action stroll (`tod` for night); t: sim time to jump to (s). */
 const VIEWS = {
   // the inner harbour from 1 km: Downtown basins, the fairway to Devonport, Stanley Bay and Bayswater
-  harbour_1km: { mission: 'c02', t: 620, cam: [1000, 1000, -300], look: [1300, 0, -1500] },
+  harbour_1km: { mission: 'ia_stroll_auckland', t: 620, cam: [1000, 1000, -300], look: [1300, 0, -1500] },
   // the Downtown Ferry Terminal from low over the CBD
-  downtown_low: { mission: 'c02', t: 620, cam: [520, 160, -380], look: [520, 0, -1100] },
+  downtown_low: { mission: 'ia_stroll_auckland', t: 620, cam: [520, 160, -380], look: [520, 0, -1100] },
   // the upper harbour from 1 km over the Harbour Bridge
-  bridge_1km: { mission: 'c02', t: 1500, cam: [-800, 1000, -1500], look: [-1900, 0, -2400] },
+  bridge_1km: { mission: 'ia_stroll_auckland', t: 1500, cam: [-800, 1000, -1500], look: [-1900, 0, -2400] },
   // a container ship under way in the outer Gulf, from 1 km
-  ship_1km: { mission: 'c02', t: 60, ship: true, cam: [0, 1000, 0], look: [0, 0, 0] },
+  ship_1km: { mission: 'ia_stroll_auckland', t: 60, ship: true, cam: [0, 1000, 0], look: [0, 0, 0] },
   // the harbour at night: ferry lights and faint wakes
-  harbour_night: { mission: 'c10', t: 620, cam: [1000, 700, -300], look: [1300, 0, -1500] },
+  harbour_night: { mission: 'ia_stroll_auckland', tod: 'night', t: 620, cam: [1000, 700, -300], look: [1300, 0, -1500] },
 };
 
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -44,7 +44,7 @@ for (const [name, v] of Object.entries(VIEWS)) {
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
-  await page.goto(`${base}?mission=${v.mission}&autostart=1&quality=${quality}&view=chase`);
+  await page.goto(`${base}?mission=${v.mission}${v.tod ? `&tod=${v.tod}` : ''}&autostart=1&quality=${quality}&view=chase`);
   await page.waitForFunction(() => window.__f35?.game?.session?.world?.player, null, { timeout: 240_000 });
   await page.waitForTimeout(1500);
   const info = await page.evaluate((v) => {

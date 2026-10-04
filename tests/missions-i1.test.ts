@@ -3,11 +3,15 @@
  *  - dispose(): restarts must not leak EventBus handlers (heap leak across restarts)
  *  - Winchester and bingo: DARKSTAR calls only, the steering cue stays on the mission (no rearming, #63)
  *  - bandits that bug out / keep away / are Winchester count as driven off (no soft-locked
- *    'destroy' objective; c01 "Splash the second MiG pair 1/2" forever)
- *  - c09 re-paced (Hammer pushes after the Flankers; Su-35s a minute later; survivors keep the route)
+ *    'destroy' objective: "Splash the second MiG pair 1/2" forever)
+ *  - a strike package whose lead is lost: the survivors keep the route
  *  - SEAD hint follows the selected weapon (no JDAM hint under an AARGM SHOOT cue)
  *  - debrief: informative reason, tips, medals, campaignComplete; MEDALS exported
  *  - Instant Action honours difficulty (count scaling, 'mixed' types)
+ *  - a point-defence SAM shooting the player's weapons down (the 'munitions_shot_down' condition)
+ *  - the time limit's HUD countdown
+ * The air-to-air and SEAD cases run on test fixtures (tests/missions-helpers.ts) shaped like the
+ * removed Southern Cross missions c01 and c03.
  */
 import { Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,19 +21,19 @@ vi.setConfig({ testTimeout: 60_000 });
 import { AKL, BRIDGE_SPAN_T } from '../src/core/auckland';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
-import { CAMPAIGN, MEDALS, TRAINING, buildInstantMissionSeeded, createMissionRunner, failStreak, recordResult, skipMission, wasSkipped } from '../src/missions';
+import { CAMPAIGNS, MEDALS, TRAINING, buildInstantMissionSeeded, createMissionRunner, failStreak, missionById, recordResult, skipMission, wasSkipped } from '../src/missions';
 import { defaultProgress, sanitizeProgress } from '../src/missions/progress';
-import type { MissionResult } from '../src/core/contracts';
+import type { MissionDef, MissionResult } from '../src/core/contracts';
+import type { MissileEntity } from '../src/sim/entities';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { remainingRoute, scaleTotal } from '../src/missions/runtime/spawner';
 import { WINCHESTER_CREDIT, WITHDRAW_CREDIT } from '../src/missions/runtime/withdrawal';
-import { SAM_DATA } from '../src/sim/sam/samData';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
-import { P } from '../src/missions/content/common';
-import { flatLand, harness, killGroup, mainstayFixture, shieldPlayer, stubAi, type Harness } from './missions-helpers';
+import { flight, mission, site } from '../src/missions/content/common';
+import { flatLand, harness, killGroup, mainstayFixture, seadFixture, shieldPlayer, stubAi, sweepFixture, type Harness } from './missions-helpers';
 
-const byId = (id: string) => [...CAMPAIGN, ...TRAINING].find((m) => m.id === id)!;
+const byId = (id: string) => missionById(id)!;
 const WH = AKL.whenuapai;
 
 function handlerCount(events: EventBus): number {
@@ -67,7 +71,7 @@ describe('i1: MissionRunner.dispose() — no leak across restarts', () => {
     for (let i = 0; i < 4; i++) {
       const before = handlerCount(events);
       const world = createSimWorld({ terrain: flatLand(), difficulty: diff, events, combat: createCombatSystemSeeded(1) });
-      const runner = createMissionRunner(byId('c01'), { createAi: stubAi({ created: [], retasked: [] }), difficulty: diff, events });
+      const runner = createMissionRunner(sweepFixture(), { createAi: stubAi({ created: [], retasked: [] }), difficulty: diff, events });
       runner.setup(world, 'a2a_stealth');
       for (let k = 0; k < 120; k++) {
         world.step(1 / 60);
@@ -90,7 +94,7 @@ describe('i1: MissionRunner.dispose() — no leak across restarts', () => {
   });
 
   it('dispose() twice is harmless', () => {
-    const h = harness(byId('c03'));
+    const h = harness(seadFixture());
     h.run(1);
     h.runner.dispose!();
     expect(() => h.runner.dispose!()).not.toThrow();
@@ -99,7 +103,7 @@ describe('i1: MissionRunner.dispose() — no leak across restarts', () => {
 
 describe('Winchester and bingo: calls only, no rearming (issue #63)', () => {
   it('Winchester triggers the DARKSTAR call and a HUD cue; the steering cue stays on the mission', () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     h.run(1, () => shieldPlayer(h));
     expect(h.runner.currentWaypoint?.id).toBe('wp_cap');
     emptyStores(h);
@@ -119,7 +123,7 @@ describe('Winchester and bingo: calls only, no rearming (issue #63)', () => {
   });
 
   it('bingo fuel: a call, no RTB steering', () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     h.run(1, () => shieldPlayer(h));
     h.world.player!.flight.fuel = 100;
     h.run(3, () => shieldPlayer(h));
@@ -129,7 +133,7 @@ describe('Winchester and bingo: calls only, no rearming (issue #63)', () => {
   });
 
   it('circling low over Whenuapai with empty stores and tanks reloads and refuels nothing', () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     const p = h.world.player!;
     emptyStores(h);
     p.flight.fuel = 500;
@@ -144,8 +148,8 @@ describe('Winchester and bingo: calls only, no rearming (issue #63)', () => {
 });
 
 describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
-  it(`a bandit in BUGOUT / RTB for ${WITHDRAW_CREDIT} s counts as driven off (reduced bonus) — c01 cannot stall`, () => {
-    const h = harness(byId('c01'));
+  it(`a bandit in BUGOUT / RTB for ${WITHDRAW_CREDIT} s counts as driven off (reduced bonus) — a sweep cannot stall`, () => {
+    const h = harness(sweepFixture());
     h.run(1, () => shieldPlayer(h));
     const migs = h.world.aircraft.filter((a) => a.groupId === 'fulcrum1');
     h.world.applyDamage(migs[0], 9999, h.world.player!.id, 'aim120');
@@ -178,7 +182,7 @@ describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
   });
 
   it('a withdrawing bandit 25 km from the player is credited at once', () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     h.run(1, () => shieldPlayer(h));
     const [a, b] = h.world.aircraft.filter((x) => x.groupId === 'fulcrum1');
     h.world.applyDamage(a, 9999, h.world.player!.id, 'aim120');
@@ -192,7 +196,7 @@ describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
   });
 
   it(`a gun-only (Winchester) bandit is credited after ${WINCHESTER_CREDIT} s`, () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     const [a, b] = h.world.aircraft.filter((x) => x.groupId === 'fulcrum1');
     h.world.applyDamage(a, 9999, h.world.player!.id, 'aim120');
     for (const st of b.stores) st.count = 0;
@@ -204,7 +208,7 @@ describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
   });
 
   it('an engaged bandit that keeps beyond 15 km for 2 min is credited; an untouched patrol is not', () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     const p = h.world.player!;
     const P0 = p.position.clone();
     const [a, b] = h.world.aircraft.filter((x) => x.groupId === 'fulcrum1');
@@ -247,78 +251,35 @@ describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
   });
 });
 
-describe('i1: c09 Hammer Down re-paced', () => {
-  it('Hammer waits for the Flankers, Su-35s come 60 s after the push, survivors keep their route', () => {
-    const h = harness(byId('c09'));
-    h.run(55, () => shieldPlayer(h));
-    expect(h.world.aircraft.some((a) => a.groupId === 'hammer')).toBe(false);
-    expect(h.world.aircraft.filter((a) => a.groupId === 'flankers')).toHaveLength(2);
-    // Weasel flight is tasked against the SA-6 (not the player)
-    const sa6 = h.world.sams.find((s) => s.groupId === 'wai_sa6')!;
-    expect(h.ai.created.some((c) => c.role === 'fighter' && c.task?.kind === 'attack' && c.task.targetId === sa6.id)).toBe(true);
-    killGroup(h, 'flankers');
-    h.run(5, () => shieldPlayer(h));
-    const hammer = h.world.aircraft.filter((a) => a.groupId === 'hammer');
-    expect(hammer).toHaveLength(4);
-    expect(h.world.aircraft.some((a) => a.groupId === 'sukhois')).toBe(false);
-    h.run(60, () => shieldPlayer(h));
-    expect(h.world.aircraft.filter((a) => a.groupId === 'sukhois')).toHaveLength(2);
-    // lead lost: the survivors re-take the rest of the route
+describe('i1: a strike package keeps its route', () => {
+  it('lead lost: the survivors re-take the rest of the route', () => {
+    const route = { kind: 'route' as const, points: [{ x: 10_000, z: -10_000, altitude: 5000 }, { x: 20_000, z: -10_000, altitude: 5000 }, { x: 30_000, z: -10_000, altitude: 5000 }] };
+    const def = mission({
+      id: 'fx_package',
+      kind: 'training',
+      index: 1,
+      title: 'Package fixture',
+      subtitle: 'test',
+      timeOfDay: 'day',
+      weather: 'clear',
+      briefing: ['test'],
+      recommendedLoadout: 'a2a_stealth',
+      allowedLoadouts: ['a2a_stealth'],
+      player: { x: -20_000, z: 10_000, altitude: 3000, heading: 0, speed: 230 },
+      script: {
+        groups: [flight('pkg', 'mig29', 4, { x: 0, z: -10_000 }, 5000, 90, 240, 'bomber', { fixedCount: true, task: route })],
+        objectives: [{ id: 'o', kind: 'destroy', groups: ['pkg'], label: 'x', primary: true }],
+      },
+    });
+    const h = harness(def);
+    h.run(1, () => shieldPlayer(h));
+    const pkg = h.world.aircraft.filter((a) => a.groupId === 'pkg');
+    expect(pkg).toHaveLength(4);
     const before = h.ai.retasked.length;
-    h.world.applyDamage(hammer[0], 9999, null, 'r77');
+    h.world.applyDamage(pkg[0], 9999, null, 'r77');
     h.run(1, () => shieldPlayer(h));
     const re = h.ai.retasked.slice(before);
     expect(re.some((t) => t.kind === 'route')).toBe(true);
-  });
-
-  it('without a Flanker kill Hammer still pushes at 200 s (never waits forever)', () => {
-    const h = harness(byId('c09'));
-    // the escort stays with Hammer (inside 10 km of the push point): the stub-flown player would fly off east
-    h.run(206, () => {
-      pin(h, 5_000, 6_000, 0);
-      shieldPlayer(h);
-    });
-    expect(h.world.aircraft.filter((a) => a.groupId === 'hammer')).toHaveLength(4);
-  });
-
-  it('Hammer does not push without its escort, and scrubs the strike at 420 s (issue #57: the park win)', () => {
-    const h = harness(byId('c09'));
-    h.run(55, () => {
-      pin(h, -30_000, 6_000, 20_000); // 45 km from the push point
-      shieldPlayer(h);
-    });
-    killGroup(h, 'flankers');
-    h.run(300, () => {
-      pin(h, -30_000, 6_000, 20_000);
-      shieldPlayer(h);
-    });
-    expect(h.world.aircraft.some((a) => a.groupId === 'hammer')).toBe(false);
-    expect(h.runner.state).toBe('running');
-    h.run(70, () => {
-      pin(h, -30_000, 6_000, 20_000);
-      shieldPlayer(h);
-    });
-    expect(h.runner.state).toBe('failed');
-    expect(h.runner.result(h.world).reason).toMatch(/without its escort/);
-    expect(h.of('radio').some((r) => r.from === 'Hammer 1' && /Scrubbing/.test(r.text))).toBe(true);
-  });
-
-  it('a depot bombed before Hammer launches does not bring Hammer "out" (issue #57 review: o_hammer / o_all4 completed with no Hammer jet)', () => {
-    const h = harness(byId('c09'));
-    h.run(20, () => {
-      pin(h, -30_000, 6_000, 20_000); // away from the push point: no push
-      shieldPlayer(h);
-    });
-    killGroup(h, 'depot');
-    h.run(2, () => {
-      pin(h, -30_000, 6_000, 20_000);
-      shieldPlayer(h);
-    });
-    const state = (id: string) => h.runner.objectives.find((o) => o.id === id)!.state;
-    expect(state('o_strike')).toBe('complete');
-    expect(state('o_hammer')).toBe('active');
-    expect(state('o_all4')).toBe('active');
-    expect(h.runner.state).toBe('running');
   });
 
   it('remainingRoute drops the points already flown', () => {
@@ -329,10 +290,10 @@ describe('i1: c09 Hammer Down re-paced', () => {
   });
 });
 
-describe('i1: hints follow the selected weapon (c03 SEAD)', () => {
+describe('i1: hints follow the selected weapon (SEAD)', () => {
   it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; SDB → names the SDB', () => {
     // the reviewers' case: AARGM selected, SA-6 designated, the EW radar (a ground target) in range
-    const h = harness(byId('c03'));
+    const h = harness(seadFixture());
     const p = h.world.player!;
     const c = h.world.combat;
     const sa6 = h.world.sams.find((s) => s.groupId === 'rangi_sa6')!;
@@ -348,7 +309,7 @@ describe('i1: hints follow the selected weapon (c03 SEAD)', () => {
     expect(all.some((t) => /AARGM/.test(t))).toBe(true);
     expect(all.filter((t) => /JDAM/.test(t))).toEqual([]);
     // SDB selected, nothing designated → the hint names the real store
-    const h2 = harness(byId('c03'));
+    const h2 = harness(seadFixture());
     const p2 = h2.world.player!;
     const t2 = new Set<string>();
     h2.run(60, () => {
@@ -374,7 +335,9 @@ describe('i1: hints follow the selected weapon (c03 SEAD)', () => {
 
 describe('i1: debrief — reason, tips, medals, campaign ending', () => {
   it('shot down by the SA-10 → informative reason + a terrain-masking tip', () => {
-    const h = harness(byId('c08'));
+    const base = seadFixture();
+    const def: MissionDef = { ...base, script: { ...base.script, sams: [...base.script.sams, site('sa10', 'sa10', 'sa10', { x: 12800, z: -9000 })] } };
+    const h = harness(def);
     h.run(1);
     const sa10 = h.world.sams.find((s) => s.type === 'sa10')!;
     const p = h.world.player!;
@@ -389,7 +352,7 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
   });
 
   it('AMRAAMs fired far outside the SHOOT cue earn the "wait for SHOOT" tip', () => {
-    const h = harness(byId('c01'));
+    const h = harness(sweepFixture());
     const p = h.world.player!;
     const c = h.world.combat;
     h.run(1, () => shieldPlayer(h));
@@ -414,7 +377,7 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     expect(r.tips!.some((t) => /Wait for SHOOT/.test(t))).toBe(true);
   });
 
-  it('flying under the Harbour Bridge earns Bridge Runner; winning c11 completes the campaign', () => {
+  it('flying under the Harbour Bridge earns Bridge Runner; winning the finale completes the campaign', () => {
     const h = harness(byId('t01'));
     h.run(0.5);
     const p = h.world.player!;
@@ -432,25 +395,28 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     });
     expect(h.runner.result(h.world).medals!.some((m) => m.id === 'bridge_runner')).toBe(true);
 
-    // c11 is the finale since c07 and c12 were removed (issue #63)
-    expect(CAMPAIGN[CAMPAIGN.length - 1].id).toBe('c11');
-    const c11 = harness(byId('c11'));
-    killGroup(c11, 'sa10');
-    c11.run(1, () => shieldPlayer(c11));
-    expect(c11.runner.state).toBe('success');
-    const r = c11.runner.result(c11.world);
-    expect(r.campaignComplete).toBe(true);
-    expect(r.medals!.some((m) => m.id === 'southern_cross')).toBe(true);
+    // g02 is the IRGC campaign's finale: winning it completes the campaign
+    const irgc = CAMPAIGNS.find((c) => c.id === 'irgc')!.missions;
+    expect(irgc[irgc.length - 1].id).toBe('g02');
+    expect(irgc.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual(['g02']);
+    const g02 = harness(byId('g02'));
+    killGroup(g02, 'suicide_boats');
+    g02.run(62, () => shieldPlayer(g02)); // the missile boats come in at 60 s
+    killGroup(g02, 'missile_boats');
+    g02.run(2, () => shieldPlayer(g02));
+    expect(g02.runner.state).toBe('success');
+    expect(g02.runner.result(g02.world).campaignComplete).toBe(true);
     // non-final missions never claim the ending
-    const c06 = harness(byId('c06'));
-    killGroup(c06, 'fleet');
-    c06.run(1, () => shieldPlayer(c06));
-    expect(c06.runner.state).toBe('success');
-    expect(c06.runner.result(c06.world).campaignComplete).toBeUndefined();
+    const g01 = harness(byId('g01'));
+    killGroup(g01, 'shaheds');
+    g01.run(1, () => shieldPlayer(g01));
+    expect(g01.runner.state).toBe('success');
+    expect(g01.runner.result(g01.world).campaignComplete).toBeUndefined();
   });
 
   it('exports a MEDALS catalogue with stable ids', () => {
-    expect(Object.keys(MEDALS)).toEqual(expect.arrayContaining(['bridge_runner', 'ace_in_a_day', 'iron_hand', 'no_hits', 'southern_cross', 'dfc', 'air_medal']));
+    expect(Object.keys(MEDALS)).toEqual(expect.arrayContaining(['bridge_runner', 'ace_in_a_day', 'iron_hand', 'no_hits', 'dfc', 'air_medal']));
+    expect(Object.keys(MEDALS)).not.toContain('southern_cross');
     for (const m of Object.values(MEDALS) as { name: string; description: string }[]) {
       expect(m.name.length).toBeGreaterThan(3);
       expect(m.description.length).toBeGreaterThan(10);
@@ -492,124 +458,27 @@ describe('i1: progress safety valve (failure streak, skip)', () => {
     kills: { air: 0, sam: 0, ground: 0 }, friendlyLosses: 0, shotsFired: 0, hits: 0, accuracy: 0, damageTaken: 0, objectives: [],
   });
   it('counts consecutive failures, resets on success, survives save/load; skip unlocks the next mission', () => {
-    let p = defaultProgress([CAMPAIGN], TRAINING);
-    p = recordResult(p, res('c09', false));
-    p = recordResult(p, res('c09', false));
-    expect(failStreak(p, 'c09')).toBe(2);
-    expect(p.unlocked.includes('c10')).toBe(false);
-    const reloaded = sanitizeProgress(JSON.parse(JSON.stringify(p)), [CAMPAIGN], TRAINING);
-    expect(failStreak(reloaded, 'c09')).toBe(2);
-    const skipped = skipMission(reloaded, 'c09');
-    expect(skipped.unlocked.includes('c10')).toBe(true);
-    expect(wasSkipped(skipped, 'c09')).toBe(true);
-    const won = recordResult(skipped, res('c09', true));
-    expect(failStreak(won, 'c09')).toBe(0);
+    const chains = CAMPAIGNS.map((c) => c.missions);
+    let p = defaultProgress(chains, TRAINING);
+    p = recordResult(p, res('g01', false));
+    p = recordResult(p, res('g01', false));
+    expect(failStreak(p, 'g01')).toBe(2);
+    expect(p.unlocked.includes('g02')).toBe(false);
+    const reloaded = sanitizeProgress(JSON.parse(JSON.stringify(p)), chains, TRAINING);
+    expect(failStreak(reloaded, 'g01')).toBe(2);
+    const skipped = skipMission(reloaded, 'g01');
+    expect(skipped.unlocked.includes('g02')).toBe(true);
+    expect(wasSkipped(skipped, 'g01')).toBe(true);
+    const won = recordResult(skipped, res('g01', true));
+    expect(failStreak(won, 'g01')).toBe(0);
   });
 });
 
-describe('i1: strike routes stay out of the short-range SAM envelopes; c11 support flights', () => {
-  // the briefed high-altitude run-in (25,000 ft) is above the Tor / Osa / Shilka ceilings, and the
-  // IP keeps out of their horizontal reach too (the bot died to the Tor flying the old 3,000 m IP)
-  it('c04 / c06: every nav / IP point is above the SA-8 / SA-15 ceilings and outside their reach', () => {
-    for (const id of ['c04', 'c06']) {
-      const def = byId(id);
-      const shorads = def.script.sams.filter((s) => s.type === 'sa15' || s.type === 'sa8' || s.type === 'zsu23');
-      const route = def.script.waypoints.filter((w) => w.kind === 'nav' || w.kind === 'ip');
-      expect(route.length).toBeGreaterThan(0);
-      for (const w of route) {
-        expect(w.altitude ?? 0, `${id} ${w.id}`).toBeGreaterThanOrEqual(7_000);
-        for (const s of shorads) {
-          const d = Math.hypot(w.x - s.x, w.z - s.z);
-          expect(d, `${id} ${w.id} vs ${s.id}`).toBeGreaterThan(SAM_DATA[s.type].engageMax);
-          expect(w.altitude!, `${id} ${w.id} above ${s.id}`).toBeGreaterThan(SAM_DATA[s.type].altMax);
-        }
-      }
-      // the IP is a JDAM glide (~10–14 km) from the target
-      const ip = route.find((w) => w.kind === 'ip')!;
-      const tgt = def.script.waypoints.find((w) => w.kind === 'target')!;
-      const d = Math.hypot(ip.x - tgt.x, ip.z - tgt.z);
-      expect(d, `${id} IP → target`).toBeGreaterThan(9_000);
-      expect(d, `${id} IP → target`).toBeLessThan(15_000);
-    }
-  });
-
-  it('c11: Vipers 2–3 fly a forward CAP as fighters (40 km commit, not a 15 km wingman leash); Weasel flight goes for the Tor', () => {
-    const def = byId('c11');
-    const h = harness(def, 'pilot');
-    const vipers = h.world.aircraft.filter((a) => a.groupId === 'viper');
-    expect(vipers.map((a) => a.callsign)).toEqual(['Viper 2', 'Viper 3']);
-    expect(vipers.every((a) => a.team === 'blue')).toBe(true);
-    // created as 'fighter' (commits on bandits within 40 km) on a patrol ahead of the player,
-    // west of the SA-10 (> 20 km from it)
-    const sa10 = h.world.sams.find((s) => s.type === 'sa10')!;
-    const created = h.ai.created.filter((c) => c.role === 'fighter');
-    expect(created.length).toBeGreaterThanOrEqual(2);
-    for (const c of created.slice(0, 2)) {
-      expect(c.task?.kind).toBe('patrol');
-      if (c.task?.kind === 'patrol') expect(Math.hypot(c.task.center.x - sa10.position.x, c.task.center.z - sa10.position.z)).toBeGreaterThan(20_000);
-    }
-    // c04 / c06: Viper 2 goes straight at the enemy CAP (briefed "top cover" / "takes on the Flankers")
-    for (const [id, target] of [['c04', 'cap'], ['c06', 'flankers']] as const) {
-      const hx = harness(byId(id), 'pilot');
-      const ids = new Set(hx.world.aircraft.filter((a) => a.groupId === target).map((a) => a.id));
-      const v = hx.ai.created.find((c) => c.role === 'fighter' && c.task?.kind === 'attack' && ids.has(c.task.targetId));
-      expect(v, id).toBeTruthy();
-      expect(hx.world.aircraft.find((a) => a.groupId === 'viper')?.callsign).toBe('Viper 2');
-    }
-    // Weasel pair spawns at 30 s with AARGMs, tasked on the Tor, and says so on the radio
-    h.run(34, () => {
-      shieldPlayer(h);
-    });
-    const weasels = h.world.aircraft.filter((a) => a.groupId === 'weasel');
-    expect(weasels).toHaveLength(2);
-    const tor = h.world.sams.find((s) => s.type === 'sa15')!;
-    const wc = h.ai.created.slice(-2);
-    for (const c of wc) expect(c.task?.kind === 'attack' && c.task.targetId === tor.id).toBe(true);
-    expect(h.world.combat.remaining(weasels[0], 'aargm')).toBeGreaterThan(0);
-    expect(h.of('radio').some((r) => r.from === 'Weasel 1' && /Tor/.test(r.text))).toBe(true);
-  });
-});
-
-describe('i1: late fixes — no stalled package, SDB press-in', () => {
-  it('c09: a Hammer package that misses the release basket is sent back over the strip (never orbits forever)', () => {
-    const h = harness(byId('c09'));
-    h.run(55, () => shieldPlayer(h));
-    killGroup(h, 'flankers');
-    h.run(5, () => shieldPlayer(h));
-    const hammer = h.world.aircraft.filter((a) => a.groupId === 'hammer');
-    expect(hammer).toHaveLength(4);
-    // the package is stuck far from the strip (as when it sailed past the run-in point after a
-    // defensive jink and circled its last route point)
-    const before = h.ai.retasked.length;
-    h.run(215, () => {
-      pin(h, 0, 5_000, 3_000); // the (stub-flown) player stays inside the AO
-      hammer.forEach((a, i) => {
-        a.position.set(40_000 + i * 900, 1_000, 8_000);
-        a.health = a.maxHealth;
-      });
-    });
-    const re = h.ai.retasked.slice(before);
-    const strip = P.waiAirstrip;
-    const back = re.filter((t) => t.kind === 'route' && Math.hypot(t.waypoints[0].x - strip.x, t.waypoints[0].z - strip.z) < 100);
-    expect(back.length).toBeGreaterThan(0);
-    expect(h.of('radio').some((r) => /another pass/.test(r.text))).toBe(true);
-    expect(h.of('radio').some((r) => /bombs away/.test(r.text))).toBe(false);
-    // over the strip (4.5 km out still counts): release → Shack → egress
-    h.run(20, () => {
-      pin(h, 0, 5_000, 3_000);
-      hammer.forEach((a, i) => {
-        a.position.set(strip.x + 4_500, 3_200 + i * 300, strip.z);
-        a.health = a.maxHealth;
-      });
-    });
-    expect(h.of('radio').some((r) => /bombs away/.test(r.text))).toBe(true);
-    expect(h.runner.objectives.find((o) => o.id === 'o_strike')!.state).toBe('complete');
-  });
-
+describe('i1: late fixes — SDB press-in', () => {
   it(`SDB: near its maximum the cue says press in to ${SDB_PRESS_RANGE / 1000} km; closer it says release`, () => {
     // a fresh sortie per range; the cue while holding that geometry (after the opening SEAD hint)
     const hintsAt = (range: number): string[] => {
-      const h = harness(byId('c03'));
+      const h = harness(seadFixture());
       const p = h.world.player!;
       const c = h.world.combat;
       const sa8 = h.world.sams.find((s) => s.type === 'sa8')!;
@@ -632,5 +501,57 @@ describe('i1: late fixes — no stalled package, SDB press-in', () => {
     const near = hintsAt(18_000);
     expect(near.some((t) => /release the SDB/.test(t)), JSON.stringify(near)).toBe(true);
     expect(near.some((t) => /press in/.test(t))).toBe(false);
+  });
+});
+
+const CALL = /Gecko is shooting your weapons down/;
+
+/** A 'munition:end' for one of the player's bombs, shot down by `siteId`'s point defence. */
+function shotDown(h: Harness, siteId: number): void {
+  const p = h.world.player!;
+  const fake = { shooterId: p.id, interceptedBy: siteId, def: { category: 'bomb', id: 'gbu39' } } as unknown as MissileEntity;
+  h.events.emit('munition:end', { missile: fake, position: p.position.clone(), reason: 'selfdestruct', targetId: null });
+}
+
+describe("#114: the 'munitions_shot_down' condition counts the player's weapons a site shoots down", () => {
+  it('one loss: no call; the second: the call, the site revealed and the steering cue on it', () => {
+    const h = harness(seadFixture(), 'recruit');
+    h.run(1, () => shieldPlayer(h));
+    const sa8 = h.world.sams.find((s) => s.groupId === 'rangi_sa8')!;
+    const sa6 = h.world.sams.find((s) => s.groupId === 'rangi_sa6')!;
+    shotDown(h, sa8.id);
+    shotDown(h, sa6.id); // a loss to another site doesn't count toward the SA-8's
+    h.run(5, () => shieldPlayer(h));
+    expect(h.of('radio').some((r) => CALL.test(r.text))).toBe(false);
+    shotDown(h, sa8.id);
+    h.run(5, () => shieldPlayer(h));
+    expect(h.of('radio').filter((r) => CALL.test(r.text))).toHaveLength(1);
+    expect(sa8.known).toBe(true);
+    expect(h.runner.currentWaypoint?.id).toBe('wp_sa8');
+  });
+
+  it('the site already dead: no call', () => {
+    const h = harness(seadFixture(), 'recruit');
+    h.run(1, () => shieldPlayer(h));
+    const sa8 = h.world.sams.find((s) => s.groupId === 'rangi_sa8')!;
+    h.world.applyDamage(sa8, 99_999, h.world.player!.id, 'aargm');
+    shotDown(h, sa8.id);
+    shotDown(h, sa8.id);
+    h.run(5, () => shieldPlayer(h));
+    expect(h.of('radio').some((r) => CALL.test(r.text))).toBe(false);
+  });
+});
+
+describe('#114: a time limit counts down on the HUD, then fails the mission', () => {
+  it('"SECONDS REMAINING" on the HUD, then "Out of time"', () => {
+    const limit = 900;
+    const h = harness(seadFixture(limit), 'recruit');
+    h.world.player!.position.set(-30000, 7000, 30000); // far from the fight
+    h.run(0.2);
+    (h.world as unknown as { time: number }).time = limit - 0.5;
+    h.run(1, () => shieldPlayer(h));
+    expect(h.of('hud:message').some((m) => /SECONDS REMAINING/.test(m.text))).toBe(true);
+    expect(h.runner.state).toBe('failed');
+    expect(h.runner.result(h.world).reason).toBe('Out of time');
   });
 });

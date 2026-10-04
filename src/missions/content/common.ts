@@ -145,25 +145,6 @@ export function wingmen(count: number, playerStart: { x: number; z: number; alti
   });
 }
 
-/**
- * Friendly wingmen flown as a fighter sweep: pushed a few km ahead of the player and sent at a
- * hostile group (a 'wingman' only commits inside 15 km of the player, which leaves the player
- * alone with a CAP that commits on him first). Callsigns Viper 2… like wingmen(). Define it
- * AFTER the target group so the attack task resolves at spawn.
- */
-export function fighterSweep(count: number, at: XZ, altitude: number, heading: number, group: string, extra: GroupExtra = {}): AircraftGroupDef {
-  return flight('viper', 'f35a', count, at, altitude, heading, 250, 'fighter', {
-    team: 'blue',
-    callsign: 'Viper',
-    firstNumber: 2,
-    fixedCount: true,
-    loadout: 'a2a_stealth',
-    announce: false,
-    task: { kind: 'attack_group', group },
-    ...extra,
-  });
-}
-
 /** SAM / AAA site. */
 export function site(id: string, group: string, type: SamType, at: XZ, extra: Partial<Omit<SamSiteDef, 'id' | 'group' | 'type' | 'x' | 'z'>> = {}): SamSiteDef {
   return { id, group, type, x: at.x, z: at.z, ...extra };

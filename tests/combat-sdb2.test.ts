@@ -16,7 +16,7 @@ import { createAiBrain } from '../src/ai';
 import type { SimWorld } from '../src/sim/api';
 import type { AircraftEntity, GroundTargetEntity, MissileEntity } from '../src/sim/entities';
 import { SHIP_ROUTES, routePoints } from '../src/missions/runtime/shipping';
-import { CAMPAIGN, TRAINING, buildInstantMissionSeeded, createMissionRunner, missionById } from '../src/missions';
+import { CAMPAIGNS, TRAINING, buildInstantMissionSeeded, createMissionRunner, missionById } from '../src/missions';
 import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { civilLossRows } from '../src/ui/screens/debrief';
 import { validateMission } from '../src/missions/validate';
@@ -91,7 +91,7 @@ describe('GBU-53 StormBreaker: moving and moored civil ships', () => {
   });
 
   it('sinks a moored civil ship from ≥ 20 km: check-fire naming it, civilian penalty, debrief row', () => {
-    const def = missionById('c06')!; // Strait Shooter allows the SDB II
+    const def = missionById('ia_strike_auckland')!; // an Instant Action strike allows the SDB II
     expect(def.allowedLoadouts).toContain('strike_sdb2');
     const events = new EventBus();
     const world = createSimWorld({ terrain: new FlatTerrain(-20), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
@@ -301,16 +301,13 @@ describe('strike_sdb2 loadout', () => {
       buildInstantMissionSeeded({ mode, theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3),
     );
     let withIt = 0;
-    // #114: c08's low strike under the SA-10 is the exception: the StormBreaker load has no answer to
-    // the Grumble there (bot, 6 seeds: Pilot 2/6, Veteran 0/6), so c08 doesn't offer it
-    const without = new Set(['c08']);
-    for (const m of [...CAMPAIGN, ...TRAINING, ...instant]) {
-      const ag = (m.allowedLoadouts.includes('strike_stealth') || m.allowedLoadouts.includes('sead_stealth')) && !without.has(m.id);
+    for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
+      const ag = m.allowedLoadouts.includes('strike_stealth') || m.allowedLoadouts.includes('sead_stealth');
       expect(m.allowedLoadouts.includes('strike_sdb2'), m.id).toBe(ag);
       if (ag) withIt++;
       expect(validateMission(m), m.id).toEqual([]);
     }
-    expect(withIt).toBeGreaterThanOrEqual(8);
+    expect(withIt).toBeGreaterThanOrEqual(3); // t03, Instant Action strike and SAM gauntlet
   });
 });
 

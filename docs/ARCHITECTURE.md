@@ -20,23 +20,17 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 >   `AKL.<id>` for landmark positions, for example `AKL.rangitoto`, `AKL.whenuapai`, `AKL.port`, `AKL.bridge_s`, `AKL.waiheke`.
 >   The CBD sits on the south shore of the Waitematā Harbour, the Hauraki Gulf and its islands lie to the east/north-east,
 >   the Manukau Harbour and the airport to the south-west/south, and the Waitākere Ranges (≤474 m) plus the Tasman coast to the west.
-> * **Campaign fiction, "Operation Southern Cross":** a fictional hostile expeditionary force has seized the Hauraki
->   Gulf islands (Rangitoto, Motutapu, Waiheke, Motuihe) and set up SAM belts (SA-10 on Motutapu, SA-6/SA-8/SA-15/ZSU on
->   Rangitoto and Waiheke), with warships in the Gulf, fighter CAPs over the Gulf and bomber raids aimed at the city.
->   F-35As fly from **RNZAF Base Auckland (Whenuapai)** to defend Auckland. Enemy targets are always **military**
->   (SAM sites, radars, ships, landing craft, an enemy-held airstrip on Waiheke, fuel depots, a command bunker on Motutapu).
->   Never target civilian landmarks. The CBD, Sky Tower and Harbour Bridge are things you **protect** (for example,
->   intercept cruise-missile carriers and bombers before they reach the CBD).
-> * Mission hooks: a CAP over the Waitematā, an intercept of Tu-22M3 raids from the north-east, SEAD on Rangitoto, a ship
->   strike in the Tāmaki Strait, an AWACS hunt beyond Tiritiri Matangi, a low-level strike under the Motutapu SA-10
->   (terrain masking behind Rangitoto), an escort of a friendly strike package to Waiheke, a night defence of the CBD, and
->   a Su-57 finale over the Gulf. Optional bonus: flying under the Harbour Bridge (43 m clearance) earns a score bonus and
->   a HUD message.
-> * **Second campaign, the IRGC (epic #72):** `CAMPAIGNS` in `src/missions/index.ts` lists Operation Southern Cross and the
->   IRGC campaign (`src/missions/content/irgc.ts`, mission ids `g01`, `g02`, …; g01 "Buzz Kill" is the Shahed swarm on the
->   Sky Tower). Each campaign has its own unlock chain
->   (its first mission is always unlocked, a win unlocks the next one of the same campaign), its own ending screen and a
->   card in the campaign picker. Progress stays keyed by mission id, so mission ids must be unique across campaigns.
+> * **Campaign fiction:** the IRGC campaign (epic #72, `src/missions/content/irgc.ts` and `irgcHauraki.ts`, mission ids
+>   `g01`, `g02`, …): Shahed one-way attack drones over the city and IRGC Navy fast boats in the Hauraki Gulf. F-35As fly
+>   from **RNZAF Base Auckland (Whenuapai)** to defend Auckland. Enemy targets are always **military**; never target
+>   civilian landmarks. The CBD, Sky Tower and Harbour Bridge are things you **protect**. Optional bonus: flying under the
+>   Harbour Bridge (43 m clearance) earns a score bonus and a HUD message. Instant Action still uses a hostile SAM belt on
+>   the Gulf islands and an enemy-held airstrip on Waiheke.
+> * **Campaigns:** `CAMPAIGNS` in `src/missions/index.ts` lists every campaign (today the IRGC campaign only; Operation
+>   Southern Cross, c01–c11, was deleted, so old saves may still hold those ids: never reuse them). Each campaign has its
+>   own unlock chain (its first mission is always unlocked, a win unlocks the next one of the same campaign), its own ending
+>   screen and a card in the campaign picker (shown when more than one is playable). Progress stays keyed by mission id, so
+>   mission ids must be unique across campaigns.
 > * Terrain heights: sea level 0, isthmus 20–80 m, volcanic cones up to 196 m (Mt Eden), Rangitoto 260 m, Waitākere
 >   ≤474 m, Hunua ≤688 m at the SE edge. Aircraft spawn altitudes can be low: a 1,000–3,000 m CAP is fine.
 
@@ -89,7 +83,7 @@ No per-frame allocations in hot loops: reuse module-level scratch `Vector3`/`Qua
 | HMD symbology + 3D cockpit + PCD | HUD | `src/hud/**`, `tests/hud-*.test.ts` | `createHud`, `createCockpit` |
 | Audio (synth + voice) | AUDIO | `src/audio/**`, `tools/gen-voices.sh`, `public/audio/**` | `createAudio` |
 | Touch/tilt/keyboard/gamepad input, menus, PWA | UI | `src/input/**`, `src/ui/**`, `public/manifest.webmanifest`, `public/sw.js`, `public/icons/**`, `tools/gen-icons.mjs` | `createInput`, `createUi` |
-| Missions, campaigns, scoring | MISSIONS | `src/missions/**`, `tests/missions-*.test.ts` | `CAMPAIGNS` (`CAMPAIGN` = Southern Cross's missions), `TRAINING`, `buildInstantMission`, `createMissionRunner`, progress fns, `terrainPadsFor` |
+| Missions, campaigns, scoring | MISSIONS | `src/missions/**`, `tests/missions-*.test.ts` | `CAMPAIGNS`, `TRAINING`, `buildInstantMission`, `createMissionRunner`, progress fns, `terrainPadsFor` |
 
 ## Protected landmarks (the Sky Tower)
 
@@ -241,7 +235,7 @@ react to `munition:launch`, `explosion`, `destroyed`, `radio`, `warning` and so 
 * `npx vitest run` covers unit tests (flight model trim and limits, missile guidance, radar and RCS, mission logic).
 * `node e2e/missions.mjs --base=http://localhost:5173/` loads every campaign and training mission in headless Chromium and reports errors, entity counts and draw calls.
 * Developer labs live in `labs/` (`/labs/models-lab.html`, `fx-lab`, `hud-lab`, `audio-lab`, `ui-lab`, `world-lab`, `sandbox`).
-* `node e2e/shot.mjs --url='http://localhost:5173/?mission=c01&autostart=1&view=chase' --wait=6000 --out=e2e/screenshots/x.png`
+* `node e2e/shot.mjs --url='http://localhost:5173/?mission=g01&autostart=1&view=chase' --wait=6000 --out=e2e/screenshots/x.png`
   takes a mobile-landscape (844×390 @2x) screenshot with headless Chromium (SwiftShader, so it's slow) and prints
   console errors plus `window.__f35.state()`. The dev server runs with `npx vite --port 5173`.
 * `node e2e/harbour-shots.mjs [--quality=medium] [--tag=x]` pins the camera over the Waitematā (mostly 1 km up) in an
