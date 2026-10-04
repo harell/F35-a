@@ -1,14 +1,16 @@
 /**
  * Ground target prototypes: EWR (rotating array on a mast), command bunker, fuel farm, hardened
  * aircraft shelter, parked jet, truck, tank, corvette, factory, bridge, IRGC fast boats, plus the civil
- * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
+ * container ship, cruise liner, crude carrier and harbour ferry (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  *  'span:mid' bridge middle span (drops when destroyed)
  * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
  * Civil ships also carry their night lights (ShipLight, drawn as sprites by the EntityRenderer).
  */
-import { BufferGeometry, Group, Object3D, Vector3 } from 'three';
+import { BufferGeometry, Group, Mesh, Object3D, Vector3 } from 'three';
+import { FERRY_LIGHTS, ferryGeometry } from '../traffic/HarbourFerries';
+import { getMaterial } from './materials';
 import type { GroundTargetType, VesselClass } from '../../core/types';
 import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
@@ -50,6 +52,7 @@ export interface GroundPrototype {
 const cache = new Map<string, GroundPrototype>();
 
 function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null = null): GroundPrototype {
+  if (type === 'ship' && vessel === 'ferry') return buildFerry();
   if (type === 'ship' && vessel) return buildMerchant(vessel);
   const root = new Group();
   root.name = `ground:${type}`;
@@ -422,6 +425,19 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
   body.name = 'static';
   root.add(body);
   return { type: 'ship', root, spinners, wreck: 'ship', radius: L / 2, farScale: 3.5, lights };
+}
+
+/**
+ * A harbour ferry as a ground model (the labs; in the game HarbourFerries draws every ferry, the sim's ones included,
+ * in one InstancedMesh): the same hull, with its night lights.
+ */
+function buildFerry(): GroundPrototype {
+  const root = new Group();
+  root.name = 'ground:ship:ferry';
+  const body = new Mesh(ferryGeometry(), getMaterial('building'));
+  body.name = 'static';
+  root.add(body);
+  return { type: 'ship', root, spinners: [], wreck: 'ship', radius: SHIP_DIMS.ferry.length / 2, farScale: 2, lights: FERRY_LIGHTS.map((l) => ({ ...l, pos: l.pos.clone() })) };
 }
 
 export function getGroundPrototype(type: GroundTargetType, palette: PaletteId = 'green', vessel: VesselClass | null = null): GroundPrototype {

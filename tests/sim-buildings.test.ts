@@ -9,7 +9,7 @@ import { DIFFICULTIES } from '../src/core/data';
 import { EventBus, type GameEventMap } from '../src/core/events';
 import type { Difficulty } from '../src/core/types';
 import { G01, G01_SWARM } from '../src/missions/content/irgc';
-import { REASONS } from '../src/missions/runtime/reasons';
+import { REASONS, crashedInto } from '../src/missions/runtime/reasons';
 import { BuildingIndex, buildBuildingGeometry, buildingGeometry, prismSegmentHit, SKYSCRAPER_MIN_HEIGHT, type SolidPrism } from '../src/sim/buildings';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -113,7 +113,7 @@ describe('the CBD skyscraper index', () => {
     expect(w2.buildings!.collapsed.size).toBe(0);
   });
 
-  it('the mission fails with "Crashed into a building" when the player flies into one', () => {
+  it('the mission fails with "Crashed into <its name>" when the player flies into one', () => {
     const h = harness(G01, 'pilot');
     const { b, p } = tallest();
     const cx = (p.minX + p.maxX) / 2;
@@ -123,7 +123,9 @@ describe('the CBD skyscraper index', () => {
     player.velocity.set(250, 0, 0);
     h.run(3, () => h.runner.state !== 'running');
     expect(h.runner.state).toBe('failed');
-    expect(h.of('mission:end')[0]?.reason).toBe(REASONS.building);
+    // every tower has a name now (sim/buildings.ts buildingName); "Crashed into a building" is the fallback
+    expect(b.name).toBeTruthy();
+    expect(h.of('mission:end')[0]?.reason).toBe(crashedInto(b.name!));
   });
 });
 

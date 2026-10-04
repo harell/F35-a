@@ -520,6 +520,8 @@ export class GroundTargetEntity implements Entity {
   hits = 0;
   /** Riding at anchor (civil ship): the visual swings slowly about the bow. */
   anchored = false;
+  /** A harbour ferry's place in the fleet (render/traffic/ferryRoutes.ts FERRY_FLEET; -1 = not a ferry): HarbourFerries draws it. */
+  ferrySlot = -1;
   /** Sim time it was destroyed (-1 = alive): paces the sinking / collapse animation. */
   destroyedAt = -1;
   /**

@@ -15,6 +15,8 @@
  *                                            only __f35.simulate() advances it (__f35.hold(false) lets
  *                                            it run), so browser perf reads reproduce (#66)
  */
+import { HARBOUR_BRIDGE_ID, HARBOUR_BRIDGE_MAIN_SPAN } from '../sim/buildings';
+import { hbDeck, hbFrame } from '../core/harbourBridge';
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
 import { EventBus } from '../core/events';
 import { DIFFICULTIES, GAME_BUILD, QUALITY_PRESETS, TEST_HOOKS } from '../core/data';
@@ -1080,7 +1082,7 @@ export class Game {
        * 150 m/s. A second of simulate() later the jet hits and the building collapses. (Not much farther
        * out: Auto-GCAS sees only the terrain and climbs a jet this low over the arena or the museum.)
        */
-      crashInto: (id: 'skytower' | 'spark_arena' | 'museum', fromDeg = 225, dist = 120) => {
+      crashInto: (id: 'skytower' | 'spark_arena' | 'museum' | 'harbour_bridge', fromDeg = id === 'harbour_bridge' ? 298 : 225, dist = 120) => {
         const s = this.session;
         const p = s?.world.player;
         if (!s || !p) return false;
@@ -1088,6 +1090,11 @@ export class Game {
         if (id === 'skytower') {
           const lm = s.world.landmarks.find((l) => l.id === 'skytower');
           if (lm) at = { x: lm.base.x, y: lm.base.y + 120, z: lm.base.z };
+        } else if (id === 'harbour_bridge') {
+          // the navigation span, into its through truss a few metres over the road (default: from the west-north-west,
+          // square to the bridge)
+          const b = s.world.buildings?.geo.buildings.find((x) => x.id === HARBOUR_BRIDGE_ID - HARBOUR_BRIDGE_MAIN_SPAN);
+          if (b) at = { x: b.x, y: hbDeck(hbFrame(b.x, b.z)[0]) + 6, z: b.z };
         } else {
           const idx = s.world.buildings;
           const k = idx?.heroIndex(id) ?? -1;

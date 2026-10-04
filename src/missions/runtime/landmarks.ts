@@ -14,8 +14,8 @@
  *    the sortie ("Crashed into the Sky Tower") and the collapse plays on.
  *  - Free flight (script.freeFlight) never fails over it: the tower comes down and the sortie goes on.
  *
- * It also calls out the other 3D-modelled landmarks (Spark Arena, the Auckland Museum) when the
- * player's jet brings one down ('building:collapsed' with a hero): AWACS and the HUD name it.
+ * It also calls out every other building the player's jet brings down ('building:collapsed'): Spark Arena, the
+ * Auckland Museum, a span of the Harbour Bridge or a CBD tower, AWACS and the HUD name it (sim/buildings.ts names).
  */
 import type { MunitionId } from '../../core/types';
 import { createSkyTower, hitLandmark, type LandmarkCollapseCause, type LandmarkEntity } from '../../sim/landmarks';
@@ -48,11 +48,12 @@ export class LandmarkWatch {
       s.events.on('landmark:destroyed', ({ landmark, cause, weapon, attackerId }) => {
         if (landmark === this.tower && !s.disposed) this.onDestroyed(cause, weapon, attackerId);
       }),
-      // a hero landmark the player's jet flew into (sim/buildings.ts): named on the radio and the HUD
-      s.events.on('building:collapsed', ({ hero, isPlayer }) => {
-        if (!hero || !isPlayer || s.disposed) return;
-        s.radio.push({ from: s.awacsCallsign, text: `${sentenceName(hero.name)} has been destroyed! ${s.callsign} went straight into it.`, priority: URGENT_PRIORITY });
-        s.hud(`${hero.label} DESTROYED`, 'bad', 5);
+      // a building the player's jet flew into (sim/buildings.ts): named on the radio and the HUD, a landmark or a
+      // CBD tower alike
+      s.events.on('building:collapsed', ({ name, label, isPlayer }) => {
+        if (!isPlayer || s.disposed) return;
+        s.radio.push({ from: s.awacsCallsign, text: `${name ? sentenceName(name) : 'A building'} has been destroyed! ${s.callsign} went straight into it.`, priority: URGENT_PRIORITY });
+        s.hud(`${label ?? 'BUILDING'} DESTROYED`, 'bad', 5);
       }),
       // a Shahed's warhead goes off against the tower: an enemy hit (the second one brings it down)
       s.events.on('drone:impact', ({ drone, position, landmark }) => {

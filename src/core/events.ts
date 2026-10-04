@@ -84,7 +84,7 @@ export interface GameEventMap {
    * (x, z) its footprint centre, `ground` and `top` its base and roof (world Y).
    */
   /** A building comes down (a CBD skyscraper, or a hero landmark under the player's jet; `hero` names it). */
-  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number; radius: number; hero: HeroBuilding | null };
+  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number; radius: number; hero: HeroBuilding | null; name: string | null; label: string | null };
 }
 
 export type GameEventName = keyof GameEventMap;

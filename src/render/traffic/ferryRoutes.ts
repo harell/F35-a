@@ -1,7 +1,8 @@
 /**
  * Harbour ferries (render-only, issue #30): the timetable routes out of the Downtown Ferry Terminal and the
- * pure kinematics that place a ferry on them. Nothing here is a sim entity: ferries are not on radar, not
- * targetable, and cost the sim nothing.
+ * pure kinematics that place a ferry on them. In wartime nothing here is a sim entity: ferries are not on radar,
+ * not targetable, and cost the sim nothing. In free flight the sim sails each one on this timetable as a neutral ship
+ * the player can shoot (missions/runtime/shipping.ts).
  *
  * Every route is a loop of docks. At each dock a ferry comes in bow first along the dock's axis, dwells,
  * backs out `back` metres, turns on the spot (catamarans do) and sets off for the next dock along a

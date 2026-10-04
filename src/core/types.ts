@@ -90,7 +90,8 @@ export type GroundTargetType =
  * picks the model, hull size and callouts. Military ships (corvettes, landing ships) have none.
  * 'tanker' is a ~250 m crude carrier (the escort mission's protected ship).
  */
-export type VesselClass = 'container' | 'cruise' | 'tanker';
+/** 'ferry': a 34 m harbour catamaran on the ferry timetable (A Stroll in the Park: missions/runtime/shipping.ts). */
+export type VesselClass = 'container' | 'cruise' | 'tanker' | 'ferry';
 
 export type WeaponId =
   | 'gun' // GAU-22/A 25 mm, 180 rds

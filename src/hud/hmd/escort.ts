@@ -19,7 +19,7 @@ export interface VesselCounter {
 
 const MAX = 3;
 const texts = new Map<number, string>();
-const CLASS_KEY = { container: 1, cruise: 2, tanker: 3 } as const;
+const CLASS_KEY = { container: 1, cruise: 2, tanker: 3, ferry: 4 } as const;
 const out: { ship: GroundTargetEntity; text: string; tone: VesselCounter['tone'] }[] = [];
 const pool = Array.from({ length: MAX }, () => ({ ship: null as unknown as GroundTargetEntity, text: '', tone: 'main' as VesselCounter['tone'] }));
 

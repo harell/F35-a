@@ -79,6 +79,8 @@ export interface Building {
   hero?: 'scene' | 'tower';
   /** The CBD tower kit's tower (hero 'tower'): its facade and parts. */
   tower?: CbdTower;
+  /** A hero 'scene' building's name (the tower kit's towers carry theirs in `tower`). */
+  name?: string;
 }
 
 const MAGIC = 'AKLB';
@@ -239,7 +241,7 @@ export function applyHeroBuildings(list: Building[], towers: readonly CbdTower[]
   for (const name of Object.keys(SCENE_OUTLINES)) {
     const prisms = SCENE_TERRACES.filter((t) => t.building === name).map((t) => heroPrism(t.ring, t.h, t.kind));
     prisms.sort((a, b) => Math.abs(ringArea(b.ring)) - Math.abs(ringArea(a.ring)));
-    out.push({ lidar: true, hero: 'scene', prisms });
+    out.push({ lidar: true, hero: 'scene', name, prisms });
   }
   for (const t of towers) {
     const prisms: BuildingPrism[] = [];

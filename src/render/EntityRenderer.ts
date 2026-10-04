@@ -22,6 +22,7 @@ import { GroundVisual, SamVisual } from './visuals/SiteVisuals';
 import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
 import { WakeBatch } from './effects/Wakes';
 import { HarbourFerries } from './traffic/HarbourFerries';
+import { FERRY_FLEET } from './traffic/ferryRoutes';
 import { shipDims } from './visuals/shipMotion';
 import { BOAT_DIMS, type BoatKind } from './models/boats';
 
@@ -194,8 +195,10 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       const dt = ctx.paused ? 0 : ctx.dt;
       if (!ferriesChecked && ctx.mission) {
         ferriesChecked = true;
-        if (ctx.mission.def.theater === 'auckland' && q.ferries > 0) {
-          ferries = new HarbourFerries(q.ferries);
+        // free flight: the whole fleet, every one a sim ship the player can shoot (missions/runtime/shipping.ts)
+        const free = !!ctx.mission.def.script?.freeFlight;
+        if (ctx.mission.def.theater === 'auckland' && (q.ferries > 0 || free)) {
+          ferries = new HarbourFerries(free ? FERRY_FLEET.length : q.ferries);
           group.add(ferries.mesh, ferries.windows);
         }
       }
@@ -282,6 +285,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
 
       // harbour ferries (render-only, placed by their timetable at sim time)
       ferries?.setNight(env.isNight);
+      ferries?.bindSim(world.ground);
       ferries?.update(t, wakes);
       wakes?.end();
 
