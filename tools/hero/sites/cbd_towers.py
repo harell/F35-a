@@ -308,9 +308,17 @@ def main():
             continue
         # final outline cleanup: 1.2 m (the 0.5 m traces and clips leave raster stairs and slivers of vertices)
         for t in terr:
+            if t.get('step'):
+                continue
             q = t['poly'].simplify(1.2, preserve_topology=True)
             if isinstance(q, Polygon) and q.area > 0.8 * t['area']:
                 t['poly'] = Polygon(q.exterior)
+            # neighbours simplified apart leave hairline cracks between them (Metropolis's crown halves): grow each
+            # terrace 0.4 m (mitred) inside the outline so they overlap; the overlap is inside the building
+            g = t['poly'].buffer(0.4, join_style=2).intersection(opx)
+            g = max(parts_of(g) or [t['poly']], key=lambda q: q.area)
+            if not g.interiors:
+                t['poly'] = g
         top = max(t['h'] for t in terr)
         shaft = [t for t in terr if t['h'] >= 0.55 * top]
         shaft_area = sum(t['area'] for t in shaft)
@@ -339,6 +347,25 @@ def main():
                 merged = {'li': top_t[0]['li'], 'poly': g, 'cells': cells, 'h': float(np.median(hr[cells])), 'area': g.area,
                           'kind': 'shaft', 'sx': 0.0, 'sz': 0.0}
                 terr = [t for t in terr if t not in top_t] + [merged]
+                # a pyramid or dome cap (Metropolis): nested prisms from the LiDAR's contours every `steps` m, each to
+                # the median of the cells over its contour, so the cap tapers instead of standing flat
+                if st.get('steps'):
+                    terr.remove(merged)
+                    lo, hi = float(np.percentile(hr[cells], 5)), float(hr[cells].max())
+                    lv = lo
+                    while lv < hi - 0.5:
+                        cm = cells & (hr >= lv)
+                        lab, nl = ndimage.label(cm)
+                        if nl:
+                            big = lab == (np.bincount(lab.ravel())[1:].argmax() + 1)
+                            ps = [translate(q, c0, r0) for q in polys(big[r0:r1, c0:c1])]
+                            if ps:
+                                q = max(ps, key=lambda q: q.area).simplify(0.6, preserve_topology=True)
+                                q = Polygon(q.exterior)
+                                if q.area >= 4:
+                                    terr.append({'li': merged['li'], 'poly': q, 'cells': big, 'h': float(np.median(hr[big])),
+                                                 'area': q.area, 'kind': 'shaft', 'sx': 0.0, 'sz': 0.0, 'step': True})
+                        lv += float(st['steps'])
         # hand-set from the mesh views (Tier A): the terraces from this height up are the crown (its own colour, lit)
         if st.get('crown_above') is not None:
             for t in terr:
@@ -393,7 +420,10 @@ def main():
             extras.append({'kind': 'spire', 'x': xs[i] + 0.5, 'z': ys[i] + 0.5, 'h': float(st['mast']), 'base': tt['h']})
         # spot checks: three cells well inside the top terraces (3×3 median), away from plant
         spots = []
-        for t in sorted([t for t in terr if t['kind'] != 'podium'], key=lambda t: -t['area'])[:3]:
+        cand = sorted([t for t in terr if t['kind'] != 'podium' and not t.get('step')], key=lambda t: -t['area'])
+        for t in cand[:3] + cand[3:]:
+            if len(spots) >= 3:
+                break
             er = ndimage.binary_erosion(t['cells'], iterations=3)
             if not er.any():  # a narrow terrace (a ramp cut in strips)
                 er = ndimage.binary_erosion(t['cells'], iterations=1)

@@ -80,7 +80,14 @@
   "wall": "#b0ada9",
   "podium": "#9c9289",
   "wall_raw": "#a9a4ba",
-  "podium_raw": "#90889e"
+  "podium_raw": "#90889e",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: stone grid, stepped set-backs, a pyramid crown and spire",
+  "crown_above": 128,
+  "crownColour": "#d8d0c2",
+  "mast": 155,
+  "merge_above": 128,
+  "steps": 1.5
  },
  "9": {
   "name": "Auckland Harbour Suites",
