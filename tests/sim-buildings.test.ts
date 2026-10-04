@@ -191,8 +191,10 @@ describe('the collapse in the merged CBD mesh (#128)', () => {
     const idx = world.buildings!;
     const k = idx.heroIndex('museum');
     expect(idx.geo.buildings[k].id).toBe(MUSEUM_ID);
+    // the mesh as tall as the measured museum (a float32, as the position buffer stores it)
+    const h = Math.fround(idx.geo.buildings[k].top - idx.geo.buildings[k].ground);
     const pos = new Float32Array(4 * 3);
-    for (let v = 0; v < 4; v++) pos[v * 3 + 1] = v % 2 ? 42 : 0;
+    for (let v = 0; v < 4; v++) pos[v * 3 + 1] = v % 2 ? h : 0;
     const geo = new BufferGeometry();
     geo.setAttribute('position', new BufferAttribute(pos, 3));
     const lights = new BufferGeometry();
@@ -203,11 +205,10 @@ describe('the collapse in the merged CBD mesh (#128)', () => {
     vis.update(world);
     expect(vis.collapsed).toEqual([MUSEUM_ID]);
     expect(vis.animating).toBe(true);
-    expect(pos[1 * 3 + 1]).toBe(42); // still standing at t = 0
+    expect(pos[1 * 3 + 1]).toBe(h); // still standing at t = 0
     expect(sign.visible).toBe(false);
     expect(Array.from(lights.getAttribute('aColor').array)).toEqual([1, 1, 1, 0, 0, 0]);
-    const h = idx.geo.buildings[k].top - idx.geo.buildings[k].ground;
-    let lastY = 42;
+    let lastY = h;
     for (let i = 0; i < 60 * (buildingCollapseTime(h) + 0.5); i++) {
       world.step(1 / 60);
       vis.update(world);
@@ -220,7 +221,7 @@ describe('the collapse in the merged CBD mesh (#128)', () => {
     // the next mission stands it up, lights and sign back
     const next = createSimWorld({ terrain: flat, difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
     vis.update(next);
-    expect(pos[1 * 3 + 1]).toBe(42);
+    expect(pos[1 * 3 + 1]).toBe(h);
     expect(sign.visible).toBe(true);
     expect(Array.from(lights.getAttribute('aColor').array)).toEqual([1, 1, 1, 0.5, 0.5, 0.5]);
   });

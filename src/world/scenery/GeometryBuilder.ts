@@ -31,6 +31,9 @@ export const WIN_GLOW = 4; // uniformly emissive at night (tower pod, lit sign)
 export const WIN_RIBS = 5; // standing-seam sheet metal: seams down a roof's fall line (Spark Arena)
 export const WIN_LOBBY = 6; // curtain-wall glass on a mullion grid, lit from inside at night (Spark Arena's foyer)
 export const WIN_BALCONY = 7; // apartment balcony bands: a white slab edge every 3.2 m storey over dark glazing (the Scene apartments)
+export const WIN_CURTAIN = 8; // tower curtain-wall glass: 1.5 m mullions, a dark spandrel at each 3.8 m storey (the CBD tower kit)
+export const WIN_BANDS = 9; // ribbon windows between precast bands, 3.6 m storeys (the CBD tower kit)
+export const WIN_FLOOD = 10; // plain stone walls, floodlit warm white at night (the War Memorial Museum)
 
 export class GeometryBuilder {
   private pos: number[] = [];

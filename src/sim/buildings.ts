@@ -18,12 +18,14 @@
  * anybody else's aircraft or drone crashes on it and it stands. The Domain is terrain, not a building:
  * a crash into the hill leaves the museum standing, and a crash into the museum leaves the hill.
  * The Ports of Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9) are `fixed`:
- * their portals up to the A-frame crash an aircraft and never collapse.
+ * their portals up to the A-frame crash an aircraft and never collapse. So is Westfield Newmarket
+ * (core/westfieldNewmarket.ts, id −101): its measured blocks crash an aircraft and stand.
  */
 import type { Vector3 } from 'three';
 import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
 import { PORT_CRANES } from '../core/portOfAuckland';
 import { MUSEUM, museumSolids } from '../core/museum';
+import { WESTFIELD_CENTRE, WESTFIELD_PRISMS } from '../core/westfieldNewmarket';
 import { aucklandBuildings, aucklandBuildingsVersion } from '../world/scenery/aucklandBuildings';
 
 /** Roof height above the ground (m) from which a building is a skyscraper the sim knows about (≈ 12 storeys). */
@@ -45,6 +47,8 @@ export const HERO_BUILDINGS = {
 /** Building ids of the hero buildings in the index (the LINZ ones count up from 0). */
 export const SPARK_ARENA_ID = -1;
 export const MUSEUM_ID = -10;
+/** Westfield Newmarket: `fixed`, it stands whatever hits it. */
+export const WESTFIELD_ID = -101;
 
 /**
  * How long a collapsing building takes to come down (s): it stands for COLLAPSE_DELAY while the
@@ -175,8 +179,10 @@ export function buildBuildingGeometry(
   });
   // Spark Arena: its roof outline in 10 m cells, each as high as the roof over it (core/sparkArena.ts)
   add(SPARK_ARENA_ID, SPARK_ARENA.x, SPARK_ARENA.z, sparkArenaSolids(), false, HERO_BUILDINGS.spark_arena);
-  // the Auckland Museum on the Domain: its block, portico, upper storey and dome (core/museum.ts)
+  // the Auckland Museum on the Domain: its measured block, domes and portico columns (core/museum.ts)
   add(MUSEUM_ID, MUSEUM.x, MUSEUM.z, museumSolids(), false, HERO_BUILDINGS.museum);
+  // Westfield Newmarket: its measured blocks (core/westfieldNewmarket.ts), a landmark that stands
+  add(WESTFIELD_ID, WESTFIELD_CENTRE.x, WESTFIELD_CENTRE.z, WESTFIELD_PRISMS.map((p) => ({ ring: Float32Array.from(p.ring), h: p.h })), true);
   if (!buildings.length) return null;
   return { buildings, maxTop, minX: gx0, maxX: gx1, minZ: gz0, maxZ: gz1, cells };
 }

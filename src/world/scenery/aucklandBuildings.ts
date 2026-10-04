@@ -18,6 +18,8 @@
  * (the first from the origin), rings counter-clockwise on the map (+X east, +Z south). A sloped
  * roof's height is given at the ring's area centroid.
  */
+import { type CbdTower, spirePrisms, type TowerPartKind } from '../../core/cbdTowers';
+import { CBD_TOWERS } from '../../core/cbdTowersData';
 import { SCENE_OUTLINES, SCENE_TERRACES, type SceneTerraceKind } from '../../core/sceneApartments';
 import buildingsUrl from '../terrain/data/auckland-buildings.bin?url';
 import { fetchMaybeGzip } from '../terrain/theaters/aucklandLinz';
@@ -37,7 +39,7 @@ export interface BuildingPrism {
   cx: number;
   cz: number;
   /** A hero building's part (tower, podium, round bay…): picks its facade in the scenery. */
-  kind?: SceneTerraceKind;
+  kind?: SceneTerraceKind | TowerPartKind;
 }
 
 /** Roof height of a prism above the ground at (x, z) (m). */
@@ -74,7 +76,9 @@ export interface Building {
   /** The first prism is the whole footprint (or the tallest part); towers on a podium follow. */
   prisms: BuildingPrism[];
   /** A hand-measured hero building that replaced LINZ blocks (applyHeroBuildings): its own facades. */
-  hero?: 'scene';
+  hero?: 'scene' | 'tower';
+  /** The CBD tower kit's tower (hero 'tower'): its facade and parts. */
+  tower?: CbdTower;
 }
 
 const MAGIC = 'AKLB';
@@ -221,30 +225,44 @@ export function decodeBuildings(bytes: Uint8Array): Building[] {
 
 /**
  * Hero buildings measured from the LiDAR replace the LINZ blocks under them, for the scenery and the sim alike:
- * the Scene apartments (core/sceneApartments.ts), whose outlines held a tower and its podium at one height. A LINZ
- * building goes when its footprint centre is inside a hero outline; each hero building is appended with one prism
- * per terrace, its tower first.
+ * the Scene apartments (core/sceneApartments.ts), whose outlines held a tower and its podium at one height, and the CBD
+ * towers of the tower kit (core/cbdTowers.ts). A LINZ building goes when its footprint centre is inside a hero outline
+ * or its footprint holds one of a tower's `replaces` points;
+ * each hero building is appended with one prism per terrace (a spire as a few tapering prisms), its largest first.
  */
-export function applyHeroBuildings(list: Building[]): Building[] {
-  const outlines = Object.values(SCENE_OUTLINES);
+export function applyHeroBuildings(list: Building[], towers: readonly CbdTower[] = CBD_TOWERS): Building[] {
+  const outlines = [...Object.values(SCENE_OUTLINES), ...towers.map((t) => t.outline)];
   const inside = (x: number, z: number) => outlines.some((r) => pointInFlatRing(r, x, z));
-  const out = list.filter((b) => !b.prisms.length || !inside(b.prisms[0].cx, b.prisms[0].cz));
+  const points = towers.flatMap((t) => t.replaces);
+  const replaced = (b: Building) => inside(b.prisms[0].cx, b.prisms[0].cz) || points.some(([x, z]) => pointInFlatRing(b.prisms[0].ring, x, z));
+  const out = list.filter((b) => !b.prisms.length || !replaced(b));
   for (const name of Object.keys(SCENE_OUTLINES)) {
-    // the file's conventions: one winding (positive area), the largest footprint first (the tower, here)
-    const prisms: BuildingPrism[] = SCENE_TERRACES.filter((t) => t.building === name).map((t) => {
-      let ring = Float32Array.from(t.ring);
-      if (ringArea(ring) < 0) {
-        const r = new Float32Array(ring.length);
-        for (let i = 0; i < ring.length; i += 2) r.set([ring[ring.length - 2 - i], ring[ring.length - 1 - i]], i);
-        ring = r;
-      }
-      const [cx, cz] = ringCentroid(ring);
-      return { h: t.h, ring, sx: 0, sz: 0, cx, cz, kind: t.kind };
-    });
+    const prisms = SCENE_TERRACES.filter((t) => t.building === name).map((t) => heroPrism(t.ring, t.h, t.kind));
     prisms.sort((a, b) => Math.abs(ringArea(b.ring)) - Math.abs(ringArea(a.ring)));
     out.push({ lidar: true, hero: 'scene', prisms });
   }
+  for (const t of towers) {
+    const prisms: BuildingPrism[] = [];
+    for (const p of t.parts) {
+      if (p.kind === 'spire') for (const s of spirePrisms(p)) prisms.push(heroPrism(s.ring, s.h, 'spire'));
+      else prisms.push(heroPrism(p.ring, p.h, p.kind, p.sx, p.sz));
+    }
+    prisms.sort((a, b) => Math.abs(ringArea(b.ring)) - Math.abs(ringArea(a.ring)));
+    out.push({ lidar: t.traced === true, hero: 'tower', tower: t, prisms });
+  }
   return out;
+}
+
+/** A hero part in the file's conventions: one winding (positive area), its centroid; a sloped roof's height is at the centroid. */
+function heroPrism(flatRing: readonly number[], h: number, kind: SceneTerraceKind | TowerPartKind, sx = 0, sz = 0): BuildingPrism {
+  let ring = Float32Array.from(flatRing);
+  if (ringArea(ring) < 0) {
+    const r = new Float32Array(ring.length);
+    for (let i = 0; i < ring.length; i += 2) r.set([ring[ring.length - 2 - i], ring[ring.length - 1 - i]], i);
+    ring = r;
+  }
+  const [cx, cz] = ringCentroid(ring);
+  return { h, ring, sx, sz, cx, cz, kind };
 }
 
 function pointInFlatRing(r: ArrayLike<number>, x: number, z: number): boolean {
