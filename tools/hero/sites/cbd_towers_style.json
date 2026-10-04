@@ -140,7 +140,9 @@
   "wall": "#b5afaa",
   "podium": "#928386",
   "wall_raw": "#ada6bb",
-  "podium_raw": "#877a9a"
+  "podium_raw": "#877a9a",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark glass, white corner edges, a crown box"
  },
  "15": {
   "name": "205 Queen",
