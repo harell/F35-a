@@ -18,8 +18,9 @@ import { isCivilVessel, vesselHullDistance, vesselSegmentHit } from '../src/sim/
 import type { SimWorld } from '../src/sim/api';
 import type { GroundTargetEntity } from '../src/sim/entities';
 import type { VesselClass } from '../src/core/types';
-import { ANCHORAGES, PORT_BERTHS, SHIP_ROUTES, routePoints } from '../src/missions/runtime/shipping';
-import { createMissionRunner, missionById } from '../src/missions';
+import { ANCHORAGES, HARBOUR_LANE, LANE_SPEED, PORT_BERTHS, SHIP_ROUTES, lanePoints, routePoints } from '../src/missions/runtime/shipping';
+import { FERRY_ROUTES } from '../src/render/traffic/ferryRoutes';
+import { buildInstantMissionSeeded, createMissionRunner, missionById } from '../src/missions';
 import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { computeScore, POINTS } from '../src/missions/runtime/scoring';
 import { civilLossRows } from '../src/ui/screens/debrief';
@@ -98,6 +99,36 @@ describe('civil shipping geography', () => {
       for (let k = 0; k < 16; k++) expect(q.isWater(b.x + Math.sin((k / 16) * Math.PI * 2) * R, b.z + Math.cos((k / 16) * Math.PI * 2) * R)).toBe(true);
     }
     for (const b of PORT_BERTHS) for (const [x, z] of hullPoints(b.x, b.z, b.heading * DEG, b.vessel)) expect(q.isWater(x, z), `berth ${b.x},${b.z}: ${x},${z}`).toBe(true);
+  });
+
+  it('peacetime harbour lane: the whole hull on water in more than 5 m, all the way round', () => {
+    const pts = lanePoints();
+    expect(pts.length).toBeGreaterThan(500);
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      // smooth: no waypoint more than 60 m from the next, the heading snaps by a few degrees at most
+      expect(a.distanceTo(b)).toBeLessThan(60);
+      const heading = Math.atan2(b.x - a.x, -(b.z - a.z));
+      expect(q.heightAt(a.x, a.z), `depth @ ${a.x.toFixed(0)},${a.z.toFixed(0)}`).toBeLessThan(-5);
+      for (const v of ['cruise', 'container'] as const)
+        for (const [hx, hz] of hullPoints(a.x, a.z, heading, v)) expect(q.isWater(hx, hz), `lane hull @ ${hx.toFixed(0)},${hz.toFixed(0)}`).toBe(true);
+    }
+  });
+
+  it('the harbour lane keeps off Rangitoto and North Head, east of every ferry route, clear of the anchorages', () => {
+    const pts = lanePoints();
+    for (const p of pts) {
+      expect(Math.hypot(p.x - AKL.rangitoto.x, p.z - AKL.rangitoto.z)).toBeGreaterThan(AKL_RADIUS.rangitoto + 500);
+      expect(Math.hypot(p.x - AKL.north_head.x, p.z - AKL.north_head.z)).toBeGreaterThan(450 + 300); // ≈ 380 m off the headland at the closest, in deep water
+      for (const b of ANCHORAGES) expect(Math.hypot(p.x - b.x, p.z - b.z)).toBeGreaterThan(1_000);
+    }
+    const minX = Math.min(...pts.map((p) => p.x));
+    for (const r of FERRY_ROUTES) {
+      for (const d of r.docks) expect(d.x).toBeLessThan(minX - 300);
+      for (const leg of r.via) for (const [x] of leg) expect(x).toBeLessThan(minX - 300);
+    }
+    expect(HARBOUR_LANE.length).toBeGreaterThan(10);
   });
 
   it('keeps clear of the enemy-held islands and of each other', () => {
@@ -210,6 +241,34 @@ describe('civil shipping in missions', () => {
     expect(Math.hypot(s.position.x - route.x, s.position.z - route.z)).toBeLessThanOrEqual(route.a + 1);
     expect(s.velocity.length()).toBeCloseTo(route.speed, 3);
     m.runner.dispose?.();
+  });
+
+  it('A Stroll in the Park (peacetime): a cruise liner and a container ship sail the harbour lane, half a loop apart', () => {
+    const stroll = (seed: number) => buildInstantMissionSeeded({ mode: 'stroll', theater: 'auckland', timeOfDay: 'night', weather: 'overcast', enemyType: 'mixed', enemyCount: 1 }, seed);
+    const pts = lanePoints();
+    const onLane = (s: GroundTargetEntity) => pts.some((p) => p.distanceTo(s.position) < 1);
+    for (const seed of [1, 2, 3]) {
+      const m = setup(stroll(seed));
+      const lane = m.ships().filter((s) => s.path && s.speed === LANE_SPEED);
+      expect(lane.map((s) => s.vessel).sort()).toEqual(['container', 'cruise']);
+      for (const s of lane) expect(onLane(s)).toBe(true);
+      const [a, b] = lane.map((s) => pts.findIndex((p) => p.distanceTo(s.position) < 1));
+      const apart = Math.abs(a - b);
+      expect(Math.min(apart, pts.length - apart)).toBeGreaterThan(pts.length * 0.45);
+      // the wartime traffic is still there too, all of it named apart
+      expect(m.ships().length).toBeGreaterThanOrEqual(3 + 2 + 1 + 2);
+      expect(new Set(m.ships().map((s) => s.name)).size).toBe(m.ships().length);
+      m.tick(60);
+      for (const s of lane) {
+        expect(s.alive).toBe(true);
+        expect(s.velocity.length()).toBeCloseTo(LANE_SPEED, 3);
+      }
+      m.runner.dispose?.();
+    }
+    // a wartime sortie has nobody on the lane
+    const war = setup(missionById('c01')!);
+    expect(war.ships().filter((s) => s.speed === LANE_SPEED)).toHaveLength(0);
+    war.runner.dispose?.();
   });
 
   it('no ships with civil traffic switched off', () => {

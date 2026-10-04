@@ -10,12 +10,18 @@
  *  - The player bringing it down (one bomb or missile, whatever its damage) is an immediate failure
  *    in every mode: AWACS calls check fire, the HUD flags it, and the runner
  *    fails with REASONS.skytower while the collapse plays on.
+ *  - The player's jet flying into it brings it down at once (sim/damage/Collisions.ts): the crash ends
+ *    the sortie ("Crashed into the Sky Tower") and the collapse plays on.
  *  - Free flight (script.freeFlight) never fails over it: the tower comes down and the sortie goes on.
+ *
+ * It also calls out the other 3D-modelled landmarks (Spark Arena, the Auckland Museum) when the
+ * player's jet brings one down ('building:collapsed' with a hero): AWACS and the HUD name it.
  */
+import type { MunitionId } from '../../core/types';
 import { createSkyTower, hitLandmark, type LandmarkCollapseCause, type LandmarkEntity } from '../../sim/landmarks';
 import { AKL } from '../../core/auckland';
 import { URGENT_PRIORITY } from './radio';
-import { REASONS } from './reasons';
+import { REASONS, sentenceName } from './reasons';
 import type { MissionState } from './state';
 
 export class LandmarkWatch {
@@ -39,8 +45,14 @@ export class LandmarkWatch {
       s.events.on('landmark:damaged', ({ landmark }) => {
         if (landmark === this.tower && !s.disposed) this.onDamaged();
       }),
-      s.events.on('landmark:destroyed', ({ landmark, cause }) => {
-        if (landmark === this.tower && !s.disposed) this.onDestroyed(cause);
+      s.events.on('landmark:destroyed', ({ landmark, cause, weapon, attackerId }) => {
+        if (landmark === this.tower && !s.disposed) this.onDestroyed(cause, weapon, attackerId);
+      }),
+      // a hero landmark the player's jet flew into (sim/buildings.ts): named on the radio and the HUD
+      s.events.on('building:collapsed', ({ hero, isPlayer }) => {
+        if (!hero || !isPlayer || s.disposed) return;
+        s.radio.push({ from: s.awacsCallsign, text: `${sentenceName(hero.name)} has been destroyed! ${s.callsign} went straight into it.`, priority: URGENT_PRIORITY });
+        s.hud(`${hero.label} DESTROYED`, 'bad', 5);
       }),
       // a Shahed's warhead goes off against the tower: an enemy hit (the second one brings it down)
       s.events.on('drone:impact', ({ drone, position, landmark }) => {
@@ -61,15 +73,21 @@ export class LandmarkWatch {
     s.hud('SKY TOWER HIT', 'warn', 4);
   }
 
-  private onDestroyed(cause: LandmarkCollapseCause): void {
+  private onDestroyed(cause: LandmarkCollapseCause, weapon: MunitionId | null, attackerId: number | null): void {
     const s = this.s;
     const byPlayer = cause === 'player';
+    // the player's jet itself (no munition): the crash has already ended the sortie
+    const rammed = byPlayer && weapon === null && attackerId !== null && attackerId === s.player?.id;
     s.radio.push({
       from: s.awacsCallsign,
-      text: byPlayer ? `Check fire, check fire! ${s.callsign}, the Sky Tower is coming down!` : `The Sky Tower is coming down! ${s.callsign}, we've lost the Sky Tower.`,
+      text: rammed
+        ? `The Sky Tower has been destroyed! ${s.callsign} went straight into it.`
+        : byPlayer
+          ? `Check fire, check fire! ${s.callsign}, the Sky Tower is coming down!`
+          : `The Sky Tower is coming down! ${s.callsign}, we've lost the Sky Tower.`,
       priority: URGENT_PRIORITY,
     });
-    s.hud('SKY TOWER DESTROYED', 'bad', 4);
+    s.hud('SKY TOWER DESTROYED', 'bad', rammed ? 5 : 4);
     if (s.state !== 'running' || s.script.freeFlight) return;
     const reason = byPlayer ? REASONS.skytower : REASONS.skytowerLost;
     this.fail(reason);

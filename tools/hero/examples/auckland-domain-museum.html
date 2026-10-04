@@ -1,0 +1,512 @@
+<!-- The Auckland Domain with the Auckland War Memorial Museum standing on it: two hero layers composed as they will be
+     ported. Filled by tools/hero/sites/auckland_domain_museum_page.py (DATA: the Domain's data as on the Domain page plus
+     museum_model, the museum moved into the Domain's frame; AERIAL_HERO / AERIAL_GAME / AERIAL_PORT; MUSEUM_TEX, the five
+     projections of Auckland Council's 3D mesh; TODAY_SW, a frame from the running game). See the recipes' docstrings
+     and .claude/skills/hero-building/SKILL.md, "Layered sites". -->
+<title>Domain and Museum</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: one 3D viewer with the four stages up top, then the measured differences, then how it was made. Same system as the other hero prototypes. */
+:root {
+  --bg: #eef1ee; --surface: #ffffff; --fg: #17241c; --muted: #536159; --line: #d4dbd5;
+  --accent: #2c6a3f; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111a15; --surface: #18241d; --fg: #e5ece7; --muted: #9fb0a5; --line: #2a3a30;
+  --accent: #7fc495; --accent-ink: #111a15; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111a15; --surface: #18241d; --fg: #e5ece7; --muted: #9fb0a5; --line: #2a3a30;
+  --accent: #7fc495; --accent-ink: #111a15; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; margin: 0; }
+main { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 14.5px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; font-size: 15px; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible, .views button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+.views { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 20px); }
+.views button { font: 500 12px var(--mono); color: #15212a; background: rgba(255,255,255,.82); border: 1px solid rgba(21,33,42,.2); padding: 5px 9px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: #15212a; color: #fff; }
+.legend { position: absolute; right: 10px; top: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.88); padding: 6px 9px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; }
+.legend .bar { width: 170px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #2f5fb3, #8fb2e6 35%, #f2f2ee 50%, #f0b07a 65%, #c2470f); }
+.legend .ticks { display: flex; justify-content: space-between; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 14px var(--mono); color: #15212a; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.old { color: var(--old); }
+td.new { color: var(--measured); }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.shots figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.shots img { width: 100%; display: block; aspect-ratio: 16 / 10; object-fit: cover; }
+.shots figcaption { padding: 10px 14px; font-size: 14px; color: var(--muted); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+.hud { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font: 500 14px var(--mono); color: #b8ffb0; text-shadow: 0 0 4px #0a2a08; letter-spacing: .08em; display: flex; gap: 22px; pointer-events: none; }
+.fly { font: 600 13px var(--body); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+.fly:focus-visible { outline: 3px solid var(--measured); outline-offset: 2px; }
+ol.layers { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 75ch; }
+ol.layers li::marker { font-family: var(--mono); color: var(--accent); }
+.tex { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.tex figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tex img { width: 100%; display: block; background: #cdc8be; }
+.tex figcaption { padding: 8px 12px; font-size: 13.5px; color: var(--muted); }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero landmarks · Pukekawa / Auckland Domain</span>
+    <h1>The Domain with the museum on top, as a pilot will see it after the port</h1>
+    <p class="lede">Two models, built separately and stacked. The Domain is the base layer: ground, trees, park buildings and ponds, with the museum's footprint kept clear. The Auckland War Memorial Museum is the top layer: its walls start on the same LiDAR ground. Stage 4 puts both on the game's own terrain and photo, which is what ships. Press <b>Fly a pass</b> for the pilot's view at 300 knots.</p>
+  </header>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="What to show">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Game terrain, photo, museum box</button>
+      <button id="s1" aria-pressed="false"><b>2 · Museum alone</b>The top layer on bare LiDAR ground</button>
+      <button id="s2" aria-pressed="false"><b>3 · Domain + museum</b>Both layers on the LiDAR ground</button>
+      <button id="s3" aria-pressed="true"><b>4 · After the port</b>Both layers on the game's terrain</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of the Auckland Domain with the museum"></canvas>
+      <div class="loading" id="loading">building the museum…</div>
+      <div class="views" role="group" aria-label="Camera">
+        <button id="v0" aria-pressed="true">From Grafton</button>
+        <button id="v1" aria-pressed="false">Museum, north front</button>
+        <button id="v2" aria-pressed="false">Atrium dome</button>
+        <button id="v3" aria-pressed="false">Run-in, 150 m</button>
+        <button id="v4" aria-pressed="false">From above</button>
+      </div>
+      <div class="hud" id="hud" hidden><span id="hspd">300 KT</span><span id="halt">500 FT AGL</span><span id="hhdg">HDG 135</span></div>
+      <span class="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px;align-items:center;flex-wrap:wrap"><button class="fly" id="fly">Fly a pass</button><label for="outline"><input type="checkbox" id="outline"> Museum footprint</label><label for="spin"><input type="checkbox" id="spin"> Slow orbit</label></span>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">How the two layers stack</span>
+      <h2>The Domain first, the museum on top</h2>
+      <ol class="layers">
+        <li><b>Each layer has its own recipe and frame.</b> <span class="num">auckland_domain.py</span> measures the park in a 1.5 km box; <span class="num">auckland_museum.py</span> measures the museum in a 260 m box. Both frames are NZTM metres, so moving the museum into the Domain's frame is a translation of <span class="num" id="off"></span> m, with no rotation or scaling.</li>
+        <li><b>The top layer declares its footprint.</b> <span class="num">museum_model.json</span> carries the outline and its origin. The Domain reads it with <span class="num">--exclude</span>, and that one outline is the only place the boundary is defined.</li>
+        <li><b>The base layer keeps clear.</b> No trees or park buildings within 3 m of the footprint, no crown reaching over it, and the photo under the footprint plus 2 m filled with the forecourt's tone. The forecourt and the Court of Honour stay as photo.</li>
+        <li><b>Both stand on one ground.</b> Heights are absolute (NZVD2016). The museum's walls start at the lowest LiDAR ground inside its outline, <span class="num" id="g0"></span> m, so it meets the Domain's ground with no gap and no float.</li>
+        <li><b>In the game, both move together.</b> The game's terrain is not the LiDAR. Every part moves by the game's height minus the LiDAR ground at its own anchor. Each tree moves at its trunk, each park building at its centroid, and the museum by one value at its centroid so its roofs stay level.</li>
+      </ol>
+    </div>
+    <div>
+      <span class="eyebrow">The museum layer</span>
+      <h2>Measured, read off the mesh, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Roof levels as <span class="num" id="nter"></span> LiDAR terraces (main block <span class="num" id="hmain"></span> m above the ground, the raised centre <span class="num" id="hup"></span> m). The atrium dome's surface is LiDAR at 1 m, top <span class="num" id="hdome"></span> m. The portico's top, and the outline, dome and columns from OSM.</span></div>
+        <div><span class="tag r">From the mesh</span><span>Every facade and the roof. Auckland Council's 2023 textured mesh is projected straight onto four side planes and the roof plan, and each wall takes the side it faces.</span></div>
+        <div><span class="tag g">Guessed</span><span>The entablature's depth (4.2 m) and the column diameter (60 % of the OSM ring). Inner courtyard walls take the outer facade's projection. Glass is drawn opaque.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">The facades, as projected from the 2023 mesh</span>
+    <div class="tex">
+      <figure><img id="tn" alt="North front: the portico between two wings"><figcaption>North: the portico and wings, facing the harbour</figcaption></figure>
+      <figure><img id="ts" alt="South side: the 1950s wing under the atrium dome"><figcaption>South: the 1950s wing and the dome's glass band</figcaption></figure>
+      <figure><img id="te" alt="East side"><figcaption>East</figcaption></figure>
+      <figure><img id="tw" alt="West side"><figcaption>West, in shadow on the flight day</figcaption></figure>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">What changes for the pilot</span>
+    <h2>Today versus after the port</h2>
+    <div class="table-wrap"><table><thead><tr><th>What</th><th>Game today</th><th>After the port</th></tr></thead><tbody id="diffs"></tbody></table></div>
+    <div style="max-width:760px" class="shots"><figure><img src="__TODAY_SW__" alt="F35-A today: the Domain from the south-west"><figcaption>The running game today, from the south-west at 420 m: a photo of the park with the museum box on the crown.</figcaption></figure></div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">Porting</span>
+      <h2>What the port has to do</h2>
+      <div class="ledger">
+        <div><span class="tag r">Museum</span><span>Replace the box in <span class="num">buildMuseumAndObelisk</span> with the terraces, the dome heightfield and the portico. Facade textures go in an atlas, about 1.5 MB as WebP. Collision is the terraces' prisms.</span></div>
+        <div><span class="tag r">Domain</span><span>Bake the trees into a binary next to the port stacks, and lift the "no trees on the aerial" rule inside the park. Swap the park buildings in through <span class="num">applyHeroBuildings</span>.</span></div>
+        <div><span class="tag r">Order</span><span>Load the museum first, because its footprint is the Domain's exclusion. In a test, check that no tree or park building lies within 3 m of it and that the museum's base is within 0.5 m of <span class="num">meshHeightAt</span> at its centroid.</span></div>
+        <div><span class="tag r">Photo</span><span>The game's aerial square keeps the museum's roof painted on the ground. Fill it in the baked webp, as stage 4 does.</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Reading stage 4</span>
+      <h2>What is and isn't the game yet</h2>
+      <p style="color:var(--muted)">Stage 4 uses the game's high-tier terrain (43 m grid) and its 1.25 m photo with the museum filled, the trees and buildings moved onto that terrain, and the game's own CBD around them. What it can't show: the game's sky, fog and lighting, its shaders, its foliage meshes, and the level of detail it picks at range. The pass uses the game's 60° field of view.</p>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Facades: Auckland Council, Auckland CBD to Airport 3D Mesh (2023), CC BY 4.0. Outlines: © <a href="https://www.openstreetmap.org/way/23906678">OpenStreetMap</a> contributors, ODbL. Stage 1 and the context use the game's own terrain and meshes.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>__DATA__</script>
+<script>
+// ── site frame: the Domain's (metres, x east, z south from the NW corner of its 1500 m box; y = metres above NZVD2016) ──
+const SIZE = DATA.size, ST = DATA.stats, MU = DATA.museum_model;
+const b64 = (s) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+const i16 = (s, k = 0.1) => { const a = new Int16Array(b64(s)), f = new Float32Array(a.length); for (let i = 0; i < a.length; i++) f[i] = a[i] * k; return f; };
+const fmt = (v, d = 1) => Number(v).toFixed(d);
+const centroid = (ring) => ring.reduce((s, p) => [s[0] + p[0] / ring.length, s[1] + p[1] / ring.length], [0, 0]);
+const inRing = (x, z, ring) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, zi] = ring[i], [xj, zj] = ring[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; };
+
+// ── page numbers ──
+{
+  const ter = MU.terraces, med = (k) => { const v = ter.filter((t) => t.kind === k).map((t) => t.y1 - MU.ground).sort((a, b) => a - b); return v[v.length >> 1]; };
+  document.getElementById('off').textContent = `(${fmt(MU.offset[0], 0)}, ${fmt(MU.offset[1], 0)})`;
+  document.getElementById('g0').textContent = fmt(MU.ground);
+  document.getElementById('nter').textContent = ter.length;
+  document.getElementById('hmain').textContent = fmt(med('main'));
+  document.getElementById('hup').textContent = fmt(Math.max(med('upper'), med('top')));
+  document.getElementById('hdome').textContent = fmt(MU.dome.top - MU.ground);
+  for (const [id, k] of [['tn', 'north'], ['ts', 'south'], ['te', 'east'], ['tw', 'west']]) document.getElementById(id).src = MUSEUM_TEX[k];
+  const rows = [
+    ['Museum', 'a 104 × 62 × 22 m box with a 28 m dome, about 80 m north of the real building', `${ter.length} roof terraces up to ${fmt(Math.max(med('upper'), med('top')))} m, the atrium dome to ${fmt(MU.dome.top - MU.ground)} m, the portico and 8 columns, facades from the 2023 mesh`],
+    ['Trees', 'none in 3D (the park is a photo)', `${ST.trees.toLocaleString()} trees, ${ST.over_20m} of them over 20 m`],
+    ['Park buildings', 'none', `${DATA.buildings.length}, with the Wintergardens glasshouses vaulted`],
+    ['Ground', `game terrain (${fmt(ST.game_cell_high, 0)} m grid)`, 'unchanged: the layers move onto it'],
+    ['Photo', 'the museum roof painted on the ground', 'the museum footprint filled'],
+  ];
+  document.getElementById('diffs').innerHTML = rows.map(([w, o, n]) => `<tr><td>${w}</td><td class="n old">${o}</td><td class="n new">${n}</td></tr>`).join('');
+}
+
+// ── triangle soup per material, flat normals ──
+class Soup {
+  constructor() { this.p = {}; this.c = {}; }
+  tri(m, a, b, c, col) { (this.p[m] ||= []).push(...a, ...b, ...c); if (col) (this.c[m] ||= []).push(...col, ...col, ...col); }
+  quad(m, a, b, c, d, col) { this.tri(m, a, b, c, col); this.tri(m, a, c, d, col); }
+  mesh(m, mat, uvTex) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.p[m]), 3));
+    if (this.c[m]) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.c[m]), 3));
+    if (uvTex) { const p = this.p[m], uv = new Float32Array((p.length / 3) * 2); for (let i = 0, k = 0; i < p.length; i += 3, k += 2) { uv[k] = p[i] / SIZE; uv[k + 1] = 1 - p[i + 2] / SIZE; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
+    g.computeVertexNormals(); return new THREE.Mesh(g, mat);
+  }
+}
+function prism(S, m, ring, y0, y1, col, topM) {
+  const pts = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+  const v2 = pts.map(([x, z]) => new THREE.Vector2(x, z));
+  if (THREE.ShapeUtils.isClockWise(v2)) { pts.reverse(); v2.reverse(); }
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; S.quad(m, [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [b[0], y0, b[1]], col); }
+  if (topM) for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(v2, [])) S.tri(topM, [pts[a][0], y1, pts[a][1]], [pts[c][0], y1, pts[c][1]], [pts[b][0], y1, pts[b][1]]);
+}
+// glasshouse: walls to the eave, then a smooth arch across the short side, extruded along the long side
+function vault(S, b) {
+  const [A, B, , D] = b.rect, u = [B[0] - A[0], B[1] - A[1]], v = [D[0] - A[0], D[1] - A[1]];
+  const WALL = [0.86, 0.88, 0.86], GLASS = [0.78, 0.86, 0.88];
+  prism(S, 'glassWall', b.rect, b.y0 - 0.3, b.eave, WALL, null);
+  const N = 12, P = (t, s) => { const th = Math.PI * s, w = 0.5 - 0.5 * Math.cos(th); return [A[0] + u[0] * t + v[0] * w, b.eave + (b.ridge - b.eave) * Math.sin(th), A[1] + u[1] * t + v[1] * w]; };
+  for (let i = 0; i < N; i++) {
+    S.quad('glass', P(0, i / N), P(1, i / N), P(1, (i + 1) / N), P(0, (i + 1) / N), GLASS);
+    S.tri('glass', P(0, 0), P(0, (i + 1) / N), P(0, i / N), GLASS); // gable ends
+    S.tri('glass', P(1, 0), P(1, i / N), P(1, (i + 1) / N), GLASS);
+  }
+  // ribs every ~3 m
+  const L = Math.hypot(...u);
+  for (let t = 0; t <= 1.0001; t += 3 / L) for (let i = 0; i < N; i++) {
+    const a = P(t, i / N), c = P(t, (i + 1) / N);
+    S.quad('rib', [a[0], a[1] + 0.12, a[2]], [c[0], c[1] + 0.12, c[2]], [c[0], c[1] - 0.12, c[2]], [a[0], a[1] - 0.12, a[2]], [0.95, 0.95, 0.93]);
+  }
+}
+
+
+// ── three.js scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#bcd3e2');
+scene.fog = new THREE.Fog(scene.background.clone(), 1600, 4200);
+const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 10000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 10; controls.maxDistance = 4000;
+scene.add(new THREE.HemisphereLight(0xf2f6f8, 0x7a8478, 0.85));
+const sun = new THREE.DirectionalLight(0xfff4e2, 0.7); sun.position.set(-500, 900, -300); scene.add(sun);
+let dirty = true;
+const loadTex = (src) => { const t = new THREE.TextureLoader().load(src, () => (dirty = true)); t.anisotropy = 8; return t; };
+const heroTex = loadTex(AERIAL_HERO), gameTex = loadTex(AERIAL_GAME), portTex = loadTex(AERIAL_PORT);
+const MT = Object.fromEntries(Object.entries(MUSEUM_TEX).map(([k, v]) => [k, loadTex(v)]));
+
+function gridMesh(n, res, hts, mat) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), idx = new Uint32Array((n - 1) * (n - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const k = j * n + i, x = Math.min(i * res, SIZE), z = Math.min(j * res, SIZE);
+    pos[k * 3] = x; pos[k * 3 + 1] = hts[k]; pos[k * 3 + 2] = z; uv[k * 2] = x / SIZE; uv[k * 2 + 1] = 1 - z / SIZE;
+    if (i + 1 < n && j + 1 < n) { idx[q++] = k; idx[q++] = k + n; idx[q++] = k + 1; idx[q++] = k + 1; idx[q++] = k + n; idx[q++] = k + n + 1; }
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+const DEM = i16(DATA.dem.h), GAMEH = i16(DATA.game.h), GD = i16(DATA.game.d);
+const demAt = (x, z) => { const r = DATA.dem.res, n = DATA.dem.n, i = Math.max(0, Math.min(n - 1, Math.round(x / r))), j = Math.max(0, Math.min(n - 1, Math.round(z / r))); return DEM[j * n + i]; };
+// game − LiDAR ground, bilinear on the 10 m grid: how far each layer moves on the game's terrain
+const offAt = (x, z) => { const r = DATA.game.res, n = DATA.game.n, fx = Math.max(0, Math.min(n - 1.001, x / r)), fz = Math.max(0, Math.min(n - 1.001, z / r)), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, a = (ii, jj) => GD[jj * n + ii];
+  return a(i, j) * (1 - u) * (1 - v) + a(i + 1, j) * u * (1 - v) + a(i, j + 1) * (1 - u) * v + a(i + 1, j + 1) * u * v; };
+const groundAt = (x, z, port) => demAt(x, z) + (port ? offAt(x, z) : 0);
+const heroGround = gridMesh(DATA.dem.n, DATA.dem.res, DEM, new THREE.MeshLambertMaterial({ map: heroTex }));
+const gameGround = gridMesh(DATA.game.n, DATA.game.res, GAMEH, new THREE.MeshLambertMaterial({ map: gameTex }));
+const portGround = gridMesh(DATA.game.n, DATA.game.res, GAMEH, new THREE.MeshLambertMaterial({ map: portTex }));
+// ground beyond the box, so a low pass has a horizon
+const outer = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), new THREE.MeshLambertMaterial({ color: 0x74806a }));
+outer.rotation.x = -Math.PI / 2; outer.position.set(SIZE / 2, 8, SIZE / 2); scene.add(outer);
+
+function gameMesh(lift, skipMuseum) {
+  const P = i16(DATA.gmesh.pos), DY = i16(DATA.gmesh.dy), C = new Uint8Array(b64(DATA.gmesh.col)), K = new Uint8Array(b64(DATA.gmesh.kind));
+  const p = [], c = [];
+  for (let t = 0; t < K.length; t++) {
+    if (skipMuseum && K[t] === 1) continue;
+    for (let v = t * 3; v < t * 3 + 3; v++) { p.push(P[v * 3], P[v * 3 + 1] + (lift ? DY[v] : 0), P[v * 3 + 2]); c.push(C[v * 3] / 255, C[v * 3 + 1] / 255, C[v * 3 + 2] / 255); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(p), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(c), 3)); g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+}
+const gameCity = gameMesh(false, false), heroCtx = gameMesh(true, true), portCtx = gameMesh(false, true);
+
+// ── the Domain layer (port = moved onto the game's terrain) ──
+function buildDomain(port) {
+  const grp = new THREE.Group(), S = new Soup();
+  for (const b of DATA.buildings) {
+    const dy = port ? offAt(...centroid(b.ring)) : 0, bb = { ...b, y0: b.y0 + dy, y1: b.y1 + dy, eave: (b.eave ?? 0) + dy, ridge: (b.ridge ?? 0) + dy };
+    if (b.rect) vault(S, bb);
+    else prism(S, 'wall', b.ring, bb.y0 - 0.3, bb.y1, b.kind === 'grandstand' ? [0.78, 0.74, 0.68] : [0.84, 0.82, 0.77], 'roof');
+  }
+  for (const p of DATA.ponds) { const dy = port ? offAt(...centroid(p.ring)) : 0; prism(S, 'water', p.ring, p.y + dy - 0.05, p.y + dy, null, 'water'); }
+  const MATS = {
+    wall: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    roof: new THREE.MeshLambertMaterial({ map: port ? portTex : heroTex, side: THREE.DoubleSide }),
+    glassWall: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    glass: new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.82, shininess: 80, specular: 0x667777 }),
+    rib: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    water: new THREE.MeshPhongMaterial({ color: 0x4d6e6a, shininess: 90, specular: 0x99aabb, side: THREE.DoubleSide }),
+  };
+  for (const m of Object.keys(S.p)) grp.add(S.mesh(m, MATS[m], m === 'roof'));
+  const T = DATA.trees, crownGeo = new THREE.IcosahedronGeometry(1, 2), trunkGeo = new THREE.CylinderGeometry(0.7, 1, 1, 6);
+  trunkGeo.translate(0, 0.5, 0);
+  const crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), T.length);
+  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x5b4a3a }), T.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+  let h = 2166136261;
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ 0x9e3779b9) >>> 0) / 4294967296;
+  T.forEach(([x, z, g0, top0, r, base0, cr, cg, cb], i) => {
+    const dy = port ? offAt(x, z) : 0, g = g0 + dy, top = top0 + dy, base = base0 + dy;
+    const half = Math.max(0.8, (top - base) / 2);
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * Math.PI * 2);
+    p.set(x, top - half, z); s.set(r * (0.95 + 0.1 * rnd()), half, r * (0.95 + 0.1 * rnd()));
+    crowns.setMatrixAt(i, m4.compose(p, q, s));
+    col.setRGB(Math.min(1, (cr / 255) * 1.12 + 0.02), Math.min(1, (cg / 255) * 1.12 + 0.03), Math.min(1, (cb / 255) * 1.08 + 0.01));
+    crowns.setColorAt(i, col);
+    const tr = Math.max(0.18, Math.min(0.9, r * 0.07));
+    p.set(x, g - 0.3, z); s.set(tr, base - g + half * 0.6, tr); q.identity();
+    trunks.setMatrixAt(i, m4.compose(p, q, s));
+  });
+  crowns.instanceColor.needsUpdate = true;
+  grp.add(crowns, trunks);
+  return grp;
+}
+
+// ── the museum layer: terraces, atrium dome, portico; walls take the mesh projection of the side they face ──
+function buildMuseum(dy) {
+  const X = MU.tex.x, Z = MU.tex.z, Y0 = MU.tex.y0 + dy, VH = MU.tex.vh;
+  const B = { north: [], south: [], east: [], west: [], top: [], stone: [] };   // positions; uv computed per side
+  const sideOf = (nx, nz) => (Math.abs(nx) > Math.abs(nz) ? (nx > 0 ? 'east' : 'west') : nz > 0 ? 'south' : 'north');
+  const wall = (ring, a, b, y0, y1) => {
+    let nx = b[1] - a[1], nz = -(b[0] - a[0]); const L = Math.hypot(nx, nz); if (L < 1e-3) return; nx /= L; nz /= L;
+    const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+    if (inRing(mx + nx * 0.3, mz + nz * 0.3, ring)) { nx = -nx; nz = -nz; }
+    B[sideOf(nx, nz)].push([a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y0, a[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]);
+  };
+  const flat = (ring, y) => { const v2 = ring.map(([x, z]) => new THREE.Vector2(x, z)); for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(v2, [])) B.top.push([ring[a][0], y, ring[a][1]], [ring[b][0], y, ring[b][1]], [ring[c][0], y, ring[c][1]]); };
+  const g0 = MU.ground + dy - 0.4;
+  for (const t of MU.terraces) {
+    for (let i = 0; i < t.ring.length; i++) wall(t.ring, t.ring[i], t.ring[(i + 1) % t.ring.length], g0, t.y1 + dy);
+    flat(t.ring, t.y1 + dy);
+  }
+  // portico: entablature + columns
+  const P = MU.portico;
+  for (let i = 0; i < P.ring.length; i++) wall(P.ring, P.ring[i], P.ring[(i + 1) % P.ring.length], P.under + dy, P.top + dy);
+  flat(P.ring, P.top + dy);
+  // dome heightfield, cells inside its ring, and a skirt from the ground to its rim
+  const D = MU.dome, hAt = (x, z) => { const i = Math.max(0, Math.min(D.nx - 1, Math.round(x - D.x0))), j = Math.max(0, Math.min(D.nz - 1, Math.round(z - D.z0))); return D.h[j * D.nx + i] + dy; };
+  for (let j = 0; j < D.nz - 1; j++) for (let i = 0; i < D.nx - 1; i++) {
+    const x = D.x0 + i, z = D.z0 + j;
+    if (!inRing(x + 0.5, z + 0.5, D.ring)) continue;
+    const a = [x, hAt(x, z), z], b = [x + 1, hAt(x + 1, z), z], c = [x + 1, hAt(x + 1, z + 1), z + 1], d = [x, hAt(x, z + 1), z + 1];
+    B.top.push(a, d, c, a, c, b);
+  }
+  for (let i = 0; i < D.ring.length; i++) {
+    const a = D.ring[i], b = D.ring[(i + 1) % D.ring.length], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 1.5));
+    for (let k = 0; k < n; k++) {
+      const p0 = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], p1 = [a[0] + ((b[0] - a[0]) * (k + 1)) / n, a[1] + ((b[1] - a[1]) * (k + 1)) / n];
+      let nx = p1[1] - p0[1], nz = -(p1[0] - p0[0]); const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
+      if (inRing((p0[0] + p1[0]) / 2 + nx * 0.3, (p0[1] + p1[1]) / 2 + nz * 0.3, D.ring)) { nx = -nx; nz = -nz; }
+      const h0 = hAt(p0[0] - nx * 0.8, p0[1] - nz * 0.8), h1 = hAt(p1[0] - nx * 0.8, p1[1] - nz * 0.8);
+      B[sideOf(nx, nz)].push([p0[0], g0, p0[1]], [p1[0], g0, p1[1]], [p1[0], h1, p1[1]], [p0[0], g0, p0[1]], [p1[0], h1, p1[1]], [p0[0], h0, p0[1]]);
+    }
+  }
+  const grp = new THREE.Group();
+  const uvOf = (side, [x, y, z]) => side === 'top' ? [(x - X[0]) / (X[1] - X[0]), 1 - (z - Z[0]) / (Z[1] - Z[0])]
+    : [side === 'north' || side === 'south' ? (x - X[0]) / (X[1] - X[0]) : (z - Z[0]) / (Z[1] - Z[0]), (y - Y0) / VH];
+  for (const side of ['north', 'south', 'east', 'west', 'top']) {
+    const pts = B[side]; if (!pts.length) continue;
+    const pos = new Float32Array(pts.flat()), uv = new Float32Array(pts.flatMap((p) => uvOf(side, p)));
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.computeVertexNormals();
+    grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: MT[side], side: THREE.DoubleSide })));
+  }
+  const colGeo = new THREE.CylinderGeometry(1, 1.06, 1, 16); colGeo.translate(0, 0.5, 0);
+  const cols = new THREE.InstancedMesh(colGeo, new THREE.MeshLambertMaterial({ color: 0xe9e3d6 }), P.columns.length);
+  P.columns.forEach(([x, z, r], i) => cols.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, g0, z), new THREE.Quaternion(), new THREE.Vector3(r, P.under + dy - g0, r))));
+  grp.add(cols);
+  return grp;
+}
+const mc = centroid(MU.footprint), museumDy = offAt(...mc);
+const heroDomain = buildDomain(false), portDomain = buildDomain(true);
+const heroMuseum = buildMuseum(0), portMuseum = buildMuseum(museumDy);
+
+const footLine = (() => {
+  const pts = MU.footprint.map(([x, z]) => new THREE.Vector3(x, MU.ground + 0.6, z));
+  return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffd34d }));
+})();
+
+// ── stages, views, the pass ──
+const NOTES = [
+  `The game today on the high tier: its ${fmt(ST.game_cell_high, 0)} m terrain grid, the 1.25 m aerial, and the museum box standing about 80 m north of the museum in the photo.`,
+  `The museum layer alone on the bare LiDAR ground: ${MU.terraces.length} roof terraces, the atrium dome as a 1 m surface, the portico on 8 columns. Every wall and roof is coloured from Auckland Council’s 2023 mesh.`,
+  'Both layers on the LiDAR ground: the Domain’s trees, park buildings and ponds keep clear of the museum’s footprint, and the museum stands on the same ground. Outside the park, the game’s own CBD.',
+  `What ships: both layers moved onto the game’s high-tier terrain (the museum by ${fmt(museumDy)} m, the trees and park buildings each at their own point) under the game’s 1.25 m photo with the museum filled. Press Fly a pass for a 300 kt run at the game’s 60° field of view.`,
+];
+const ALL = [gameGround, gameCity, heroGround, heroCtx, heroDomain, heroMuseum, portGround, portCtx, portDomain, portMuseum];
+const ITEMS = [[gameGround, gameCity], [heroGround, heroMuseum], [heroGround, heroCtx, heroDomain, heroMuseum], [portGround, portCtx, portDomain, portMuseum]];
+for (const o of ALL) { scene.add(o); o.visible = false; }
+scene.add(footLine);
+let stage = 3;
+const outlineBox = document.getElementById('outline');
+function setStage(k) {
+  stage = k;
+  for (const o of ALL) o.visible = false;
+  for (const o of ITEMS[k]) o.visible = true;
+  footLine.visible = outlineBox.checked;
+  document.querySelectorAll('.stages button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  document.getElementById('note').textContent = NOTES[k];
+  dirty = true;
+}
+document.querySelectorAll('.stages button').forEach((b, i) => b.addEventListener('click', () => setStage(i)));
+outlineBox.addEventListener('change', () => setStage(stage));
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const pc = centroid(MU.portico.ring), dc = [MU.dome.x0 + MU.dome.nx / 2, MU.dome.z0 + MU.dome.nz / 2];
+const VIEWS = [
+  { cam: V3(80, 380, 1350), look: V3(800, 50, 720) },
+  { cam: V3(pc[0] - 40, MU.ground + 30, pc[1] - 120), look: V3(pc[0], MU.ground + 12, pc[1] + 20) },
+  { cam: V3(dc[0] + 70, MU.ground + 60, dc[1] + 90), look: V3(dc[0], MU.ground + 20, dc[1]) },
+  { cam: V3(250, 230, 200), look: V3(mc[0], MU.ground + 10, mc[1]) },
+  { cam: V3(760, 2100, 761), look: V3(760, 0, 760) },
+];
+function setView(k) {
+  stopFly();
+  camera.fov = 38; camera.updateProjectionMatrix();
+  camera.position.copy(VIEWS[k].cam); controls.target.copy(VIEWS[k].look); controls.update();
+  document.querySelectorAll('.views button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k))); dirty = true;
+}
+document.querySelectorAll('.views button').forEach((b, i) => b.addEventListener('click', () => setView(i)));
+
+// the pass: in from the north-west over Grafton Gully, across the bush and the Wintergardens, past the museum's west front,
+// out over the crater fields; 300 kt (154 m/s), 60° field of view like the game's cockpit camera
+const KT = 300, MPS = KT * 0.5144;
+const wgc = centroid(DATA.buildings.find((b) => b.name === 'Temperate House').ring);
+const RAW = [[80, 120, 170], [420, 380, 140], [wgc[0] - 40, wgc[1] - 20, 115], [mc[0] - 120, mc[1] - 20, 95], [mc[0] - 60, mc[1] + 200, 100], [mc[0] + 160, mc[1] + 450, 130], [1450, 1450, 170]];
+const path = new THREE.CatmullRomCurve3(RAW.map(([x, z, agl]) => V3(x, groundAt(x, z, true) + agl, z)), false, 'centripetal');
+const PLEN = path.getLength();
+let fly = null;
+const hud = document.getElementById('hud'), flyBtn = document.getElementById('fly');
+function stopFly() { if (!fly) return; fly = null; hud.hidden = true; controls.enabled = true; flyBtn.textContent = 'Fly a pass'; }
+flyBtn.addEventListener('click', () => {
+  if (fly) { stopFly(); return; }
+  if (stage !== 3) setStage(3);
+  fly = { t0: performance.now() }; hud.hidden = false; controls.enabled = false; flyBtn.textContent = 'Stop';
+  camera.fov = 60; camera.updateProjectionMatrix();
+  document.querySelectorAll('.views button').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+});
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function stepFly(now) {
+  const s = ((now - fly.t0) / 1000) * MPS * (reduce ? 0.35 : 1);
+  if (s >= PLEN) { stopFly(); setView(0); return; }
+  const u = s / PLEN, p = path.getPointAt(u), ahead = path.getPointAt(Math.min(1, u + 0.02)), tan = path.getTangentAt(u), tan2 = path.getTangentAt(Math.min(1, u + 0.03));
+  // bank into the turn: the heading's rate of change at this speed
+  const turn = Math.atan2(tan.x * tan2.z - tan.z * tan2.x, tan.x * tan2.x + tan.z * tan2.z);
+  const bank = Math.max(-0.6, Math.min(0.6, -turn * 9));
+  camera.position.copy(p);
+  camera.up.set(Math.sin(bank) * tan.z, Math.cos(bank), -Math.sin(bank) * tan.x);
+  camera.lookAt(ahead.x, ahead.y - 0.09 * p.distanceTo(ahead) * 3, ahead.z);
+  const agl = p.y - groundAt(p.x, p.z, true), hdg = (Math.atan2(tan.x, -tan.z) * 180 / Math.PI + 360) % 360;
+  document.getElementById('hspd').textContent = `${KT} KT`;
+  document.getElementById('halt').textContent = `${Math.round(agl * 3.281 / 10) * 10} FT AGL`;
+  document.getElementById('hhdg').textContent = `HDG ${String(Math.round(hdg)).padStart(3, '0')}`;
+  dirty = true;
+}
+const spin = document.getElementById('spin');
+controls.addEventListener('change', () => (dirty = true));
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, pr = renderer.getPixelRatio();
+  if (canvas.width !== Math.round(w * pr) || canvas.height !== Math.round(h * pr)) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; }
+}
+function loop(now) {
+  resize();
+  if (fly) stepFly(now);
+  else {
+    camera.up.set(0, 1, 0);
+    if (spin.checked && !reduce) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.0012); camera.position.copy(controls.target).add(off); dirty = true; }
+    if (controls.update()) dirty = true;
+  }
+  if (dirty) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+}
+document.getElementById('loading').hidden = true;
+setStage(3); setView(0); requestAnimationFrame(loop);
+// for headless checks: freeze the pass at a fraction of its length
+window.__passAt = (u) => { fly = { t0: performance.now() - (u * PLEN / MPS) * 1000 }; hud.hidden = false; controls.enabled = false; camera.fov = 60; camera.updateProjectionMatrix(); setStage(3); stepFly(performance.now()); renderer.render(scene, camera); fly = null; };
+</script>
