@@ -1,6 +1,7 @@
 /**
  * F35-A UI lab (dev only, served at /labs/ui-lab.html): renders one screen with mock data for visual checks.
- *   ?screen=splash|main|campaigns|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|loading|rotate|toast|controls
+ *   ?screen=splash|main|campaigns|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|codex|loading|rotate|toast|controls
+ *   codex: &entry=<id> opens it at an entry (aim120, mud, matrix…)
  *   &mission=g01          mission for briefing / pause
  *   &tab=obj|hangar       briefing tab to open
  *   &stab=controls|audio|display  settings tab
@@ -58,6 +59,7 @@ const result = (success: boolean): MissionResult => ({
     { id: 'b', label: 'Splash the second MiG pair', state: success ? 'complete' : 'failed', primary: true },
     { id: 'c', label: 'Keep the MiGs off the North Shore', state: success ? 'complete' : 'failed', primary: false },
   ],
+  codexId: success ? undefined : 'mud',
 });
 
 const fakeRunner = {
@@ -118,6 +120,10 @@ async function run(): Promise<void> {
       break;
     case 'debrief-fail':
       out(await ui.showDebrief(result(false), null));
+      break;
+    case 'codex':
+      await ui.showCodex(q.get('entry') ?? undefined);
+      out('codex done');
       break;
     case 'credits':
       await ui.showCredits();

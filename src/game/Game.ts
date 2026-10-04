@@ -290,6 +290,8 @@ export class Game {
       });
     } else if (choice === 'settings') {
       await this.editSettings();
+    } else if (choice === 'codex') {
+      await this.flow.ask(this.ui.showCodex());
     } else if (choice === 'credits') {
       await this.flow.ask(this.ui.showCredits());
     }
