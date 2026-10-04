@@ -23,6 +23,7 @@ import { SkyTowerVisual } from './skyTower';
 import { buildHarbourBridge } from './harbourBridge';
 import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTexture } from './sparkArena';
 import { sparkArenaCovers } from '../../core/sparkArena';
+import { buildWestfieldNewmarket, westfieldCovers } from './westfieldNewmarket';
 import { CbdCollapseVisual } from './cbdCollapse';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
@@ -181,6 +182,8 @@ export class Scenery {
       this.stats.meshes++;
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
       buildMuseumAndObelisk(city, lights, height);
+      // Westfield Newmarket, measured from the LiDAR and OSM (westfieldNewmarket.ts), in the same mesh
+      buildWestfieldNewmarket(city, lights, height);
       // Spark Arena (hand-built from the LiDAR, sparkArena.ts) rides in the CBD mesh; its three signs are one small mesh
       buildSparkArena(city, lights, height, detail);
       const cityGeo = addMesh(city, 'akl-cbd');
@@ -201,7 +204,7 @@ export class Scenery {
       if (cityGeo && cs.buildingVerts && cs.buildingGround) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts, cs.buildingGround);
       const centres = new GeometryBuilder();
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) : (x, z) => sparkArenaCovers(x, z, 20));
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20));
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
       const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail');
       // railway ribbons (+ bridges over the water): one more draw call
@@ -303,7 +306,7 @@ export class Scenery {
       const real = this.cbdStats?.prisms.length ? this.cbdStats.prisms : null;
       const region = real ? o.style.cbd?.streets ?? null : null;
       // (none inside the CBD region, which has its facade lights, nor under Spark Arena's roof)
-      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z));
+      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z) || westfieldCovers(x, z));
       if (real) buildFacadeLightPoints(real, o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
       const cityMat = createLightsMaterial(o.atmo);
       cityMat.uniforms.uIntensity.value = o.lights;

@@ -220,7 +220,7 @@ void main() {
       float lit = step(hash12(id + floor(vWorld.xz / 37.0) * 7.0), 0.3) * (1.0 - slab);
       emissive += uNight * mix(vec3(0.22, 0.16, 0.09), vec3(1.0, 0.7, 0.38) * 1.5 * lit, detail);
     }
-  } else if (vWin > 5.5) {
+  } else if (vWin > 5.5 && vWin < 6.5) {
     // curtain-wall glass (aWin 6): sky reflections between the mullions of a 3 m × 2.7 m grid by day;
     // at night lit from inside, panel columns warm white or the arena's purple
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
@@ -237,14 +237,14 @@ void main() {
       vec3 inside = mix(vec3(1.0, 0.62, 0.3), vec3(0.42, 0.12, 1.0), step(0.45, col)) * (0.5 + 0.5 * hash12(floor(g) + 7.0));
       emissive += uNight * inside * (1.0 - frame * 0.9) * 0.55;
     }
-  } else if (vWin > 4.5) {
+  } else if (vWin > 4.5 && vWin < 5.5) {
     // ribbed sheet metal (aWin 5): a bright seam every 0.63 m across the face's fall line (the ribs run
     // down a sloped roof and up a wall), blending into the sheet's average once a rib is under a pixel
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
     float seam = pow(0.5 + 0.5 * cos(6.2831853 * dot(vWorld.xz, t) / 0.63), 6.0);
     // (the mean of the seam profile is 924 / 4096: the sheet's colour on average stays its own)
     base *= 1.0 + 0.35 * (mix(seam, 0.2256, smoothstep(0.2, 0.6, mpp / 0.63)) - 0.2256);
-  } else if (vWin > 3.5) {
+  } else if (vWin > 3.5 && vWin < 4.5) {
     emissive += base * uNight * 1.6;
   }
   vec3 lit = atmoDiffuse(base, N, 1.0);
