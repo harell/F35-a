@@ -68,7 +68,12 @@
   "wall": "#aaa5a4",
   "podium": "#757e8b",
   "wall_raw": "#a39db5",
-  "podium_raw": "#6c76a0"
+  "podium_raw": "#6c76a0",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye: precast bands, a blue glass crown box",
+  "crown_above": 138,
+  "crown": "lit",
+  "crownColour": "#3f9fd6"
  },
  "8": {
   "name": "Metropolis",
