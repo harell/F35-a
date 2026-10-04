@@ -9,6 +9,7 @@
  *    "use the AMRAAM's reach" time tip stays out of missions with nothing to shoot or under par (2.3-e).
  */
 import { describe, expect, it } from 'vitest';
+import { Vector3 } from 'three';
 import { EventBus } from '../src/core/events';
 import { AKL } from '../src/core/auckland';
 import { DIFFICULTIES } from '../src/core/data';
@@ -127,6 +128,9 @@ describe('#64: no fight, no credit', () => {
   });
 });
 
+const _fwd = new Vector3(0, 0, -1);
+const _dir = new Vector3();
+
 /** Fly the T01 jet straight across the bridge line at `frac` (0 = south abutment, 1 = north), `alt` m MSL. */
 function bridgePass(frac: number, alt = 20, passes = 1) {
   const h = harness(byId('t01'), 'pilot', undefined, flatLand(0));
@@ -152,6 +156,8 @@ function bridgePass(frac: number, alt = 20, passes = 1) {
       const d = -600 + k * (v / 60);
       p.position.set(cx + nx * d * dir, alt, cz + nz * d * dir);
       p.velocity.set(nx * v * dir, 0, nz * v * dir);
+      // nose along the track: Auto-GCAS (off above Recruit) no longer pulls a jet flying sideways off the deck
+      p.quaternion.setFromUnitVectors(_fwd, _dir.set(nx * dir, 0, nz * dir));
       shieldPlayer(h);
       k++;
     });
@@ -262,6 +268,21 @@ describe('#64: training debrief', () => {
     expect(noFightTip(buildTips(state('t01'), win('t01', 100)))).toBe(false);
     // a loss is not capped by it
     expect(noFightTip(buildTips(s, { ...win('c01', 100), success: false, reason: 'Out of time' }))).toBe(false);
+  });
+
+  it('a crash tip names Auto-GCAS only on Recruit, the one difficulty that has it', () => {
+    const crashed = (d: 'recruit' | 'pilot' | 'ace') => {
+      const s = new MissionState(byId('c01'), { createAi: stubAi({ created: [], retasked: [] }), difficulty: DIFFICULTIES[d], events: new EventBus() });
+      s.playerDied = true;
+      s.stats.downReason = 'crash';
+      return buildTips(s, { ...win('c01', 100), success: false, reason: 'Crashed', difficulty: d });
+    };
+    expect(crashed('recruit').some((t) => /let Auto-GCAS fly the pull-up/.test(t))).toBe(true);
+    for (const d of ['pilot', 'ace'] as const) {
+      const tips = crashed(d);
+      expect(tips.some((t) => /no Auto-GCAS, so the pull-up is yours/.test(t))).toBe(true);
+      expect(tips.some((t) => /let Auto-GCAS/.test(t))).toBe(false);
+    }
   });
 
   it('the time tip only shows over par', () => {

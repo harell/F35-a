@@ -28,7 +28,7 @@ import { evalCondition } from './runtime/conditions';
 import { HintSystem } from './runtime/hints';
 import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
 import { URGENT_PRIORITY } from './runtime/radio';
-import { REASONS } from './runtime/reasons';
+import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
 import { awardMedals, buildTips, deathReason } from './runtime/debrief';
 import { WinchesterWatch } from './runtime/winchester';
@@ -169,10 +169,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
     if (s.script.freeFlight) {
       world.combat.selectWeapon(p, 'gun', world);
-      // a calm cockpit (#113): radar off at the start (the player can turn it on) and no CIV boxes on
-      // the civil traffic, so TGT can't steer a bomb onto a moored cruise ship
+      // a calm cockpit (#113): radar off at the start (the player can turn it on); the civil traffic
+      // shows as CIV boxes, and a tap or TGT designates it like anything else (owner, 2026-10-04)
       world.combat.setRadarEmitting(p, false, world);
-      p.ignoresCivil = true;
     }
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)
@@ -641,7 +640,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.playerDied = true;
     if (s.state !== 'running') return;
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, eject, eject!`, voice: 'a_eject', priority: URGENT_PRIORITY + 1 });
-    this.fail(reason === 'structure' ? REASONS.structure : reason === 'building' ? REASONS.building : deathReason(s, reason));
+    // a named landmark the jet brought down (Spark Arena, the Auckland Museum: sim/buildings.ts) names itself
+    const named = reason === 'building' ? s.world.structureStrike?.name : null;
+    this.fail(reason === 'structure' ? REASONS.structure : named ? crashedInto(named) : reason === 'building' ? REASONS.building : deathReason(s, reason));
   }
 }
 
