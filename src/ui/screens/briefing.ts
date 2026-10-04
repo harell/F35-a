@@ -15,6 +15,7 @@ import { formatTime, pad2, stealthRating, storeLines } from '../format';
 import { hangarLoadouts } from '../hangar';
 import type { UiHost } from '../host';
 import { screenHeader } from '../widgets';
+import { codexForWeapon } from '../codex/data';
 import { openDifficultySheet } from './difficultySheet';
 import { drawIntelMap } from './intelMap';
 import { aucklandLinz, loadAucklandLinz } from '../../world/terrain/theaters/aucklandLinz';
@@ -30,11 +31,14 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     let done = false;
     const { cards: allowed, initial } = hangarLoadouts(m);
     let loadout: LoadoutId = initial;
+    /** Close function of the open sheet (difficulty or Codex); Back closes it first. */
+    let closeSheet: (() => boolean) | null = null;
     const el = h('section', { class: 'scr-brief' });
     const finish = (v: { loadout: LoadoutId } | null) => {
       if (done) return;
       done = true;
       window.removeEventListener('resize', redraw);
+      closeSheet?.();
       host.leave(el);
       resolve(v);
     };
@@ -165,6 +169,25 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       cards.appendChild(c);
     }
     hangar.appendChild(cards);
+    // what each store is for: a button per weapon opens the Codex at that weapon
+    const storeIds = [...new Set(allowed.flatMap((id) => LOADOUTS[id].stores.map((s) => s.weapon as string)))];
+    const learn = h('div', { class: 'lo-learn', html: `<span class="lo-learn-k">${icon('book')}<span>What do these do?</span></span>` });
+    for (const wid of [...storeIds, 'gun', 'cms']) {
+      const entry = codexForWeapon(wid);
+      if (!entry) continue;
+      const b = h('button', { class: 'ui-btn ghost lo-learn-b', attrs: { type: 'button', 'aria-label': `${entry.name}: what it's for` }, html: `<span>${escapeHtml(entry.short)}</span><b>?</b>` });
+      b.addEventListener('click', () => {
+        void import('./codex').then((m) => {
+          if (done) return;
+          closeSheet = m.openCodexSheet(el, entry.id, () => {
+            closeSheet = null;
+            b.focus();
+          });
+        }, () => undefined); // offline before the Codex was ever loaded: nothing to show
+      });
+      learn.appendChild(b);
+    }
+    if (learn.children.length > 1) hangar.insertBefore(learn, cards);
     pageEls.set('hangar', hangar);
 
     pages.append(brief, obj, hangar);
@@ -185,7 +208,6 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       diffEl.innerHTML = `<span class="br-diff-k">DIFFICULTY</span><span class="badge diff-${settings.difficulty}">${escapeHtml(d?.label ?? settings.difficulty)}</span><span class="br-diff-chg">${icon('next')}</span>`;
     };
     syncDiff();
-    let closeSheet: (() => boolean) | null = null;
     if (!fixed) diffEl.addEventListener('click', () => {
       closeSheet = openDifficultySheet(el, settings, () => {
         closeSheet = null;

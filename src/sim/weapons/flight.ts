@@ -425,7 +425,9 @@ function applyBlast(ctx: CombatCtx, m: CombatMissile, point: Vector3, primary: A
     if (e === primary) hitPrimary = true;
     if (isHostile(m.team, e.team)) hitHostile = true; // hitting civil traffic is no "hit" for accuracy
   };
-  for (const ac of world.aircraft) hurt(ac, 0.5);
+  // aircraft on the shooter's own side are spared: a bomb or missile going off near a wingman (or a SAM
+  // round near its own fighters) doesn't hurt them. Civil traffic and the other side still take blast damage.
+  for (const ac of world.aircraft) if (ac.team !== m.team) hurt(ac, 0.5);
   if (def.category === 'bomb' || def.category === 'agm') {
     for (const s of world.sams) hurt(s, 0.6);
     for (const g of world.ground) hurt(g, 0.6);

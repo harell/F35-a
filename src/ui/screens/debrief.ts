@@ -16,6 +16,7 @@ import { icon } from '../art/icons';
 import { escapeHtml, h } from '../dom';
 import { formatPercent, formatScore, formatTime, gradeTone } from '../format';
 import type { UiHost } from '../host';
+import { codexEntry } from '../codex/data';
 import { showCampaignEnding } from './ending';
 
 const GRADE_WORD: Record<MissionResult['grade'], string> = {
@@ -120,11 +121,14 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
   return new Promise((resolve) => {
     let done = false;
     let raf = 0;
+    /** Close function of an open Codex sheet. */
+    let closeSheet: (() => boolean) | null = null;
     const el = h('section', { class: `scr-debrief ${r.success || r.freeFlight ? 'is-win' : 'is-loss'}` });
     const finish = (c: 'next' | 'retry' | 'menu') => {
       if (done) return;
       done = true;
       cancelAnimationFrame(raf);
+      closeSheet?.();
       host.leave(el);
       resolve(c);
     };
@@ -215,6 +219,27 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       if (r.success) right.appendChild(box);
       else right.insertBefore(box, right.firstChild);
     }
+    // what ended the sortie, explained: opens the Codex at that warning or weapon
+    const learnEntry = !r.success && r.codexId ? codexEntry(r.codexId) : null;
+    if (learnEntry) {
+      const learn = h('button', {
+        class: 'ui-btn ghost db-learn',
+        attrs: { type: 'button' },
+        html: `${icon('book')}<span>What happened? Read <b>${escapeHtml(learnEntry.name)}</b> in the Codex</span>${icon('next')}`,
+      });
+      learn.addEventListener('click', () => {
+        void import('./codex').then((m) => {
+          if (done) return;
+          closeSheet = m.openCodexSheet(el, learnEntry.id, () => {
+            closeSheet = null;
+            learn.focus();
+          });
+        }, () => undefined); // offline before the Codex was ever loaded: nothing to show
+      });
+      const tipsBox = right.querySelector('.db-tips');
+      if (tipsBox) tipsBox.appendChild(learn);
+      else right.insertBefore(learn, right.firstChild);
+    }
 
     const body = h('div', { class: 'scr-body db-body' }, left, right);
     el.appendChild(body);
@@ -250,7 +275,7 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       focusEl = next;
     }
     el.appendChild(foot);
-    host.present(el, { bg: true, back: () => finish('menu'), focus: focusEl });
+    host.present(el, { bg: true, back: () => (closeSheet?.() ? undefined : finish('menu')), focus: focusEl });
 
     // score count-up (starts once the grade has landed)
     const scoreEl = left.querySelector('.db-score-v') as HTMLElement | null;

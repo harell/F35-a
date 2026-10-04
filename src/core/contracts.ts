@@ -372,6 +372,8 @@ export interface MissionResult {
   campaignComplete?: boolean;
   /** Free flight (A Stroll in the Park): no grade, no score, nothing recorded in the career. */
   freeFlight?: boolean;
+  /** Codex entry that explains what ended a failed sortie (e.g. 'mud' after a radar SAM hit); the debrief links to it. */
+  codexId?: string;
 }
 
 export interface MissionRunnerApi {
@@ -425,7 +427,7 @@ export interface CampaignProgress {
 
 /* ───────────────────────── Menus / UI (UI agent) ───────────────────────── */
 
-export type MainMenuChoice = 'campaign' | 'instant' | 'training' | 'settings' | 'credits';
+export type MainMenuChoice = 'campaign' | 'instant' | 'training' | 'codex' | 'settings' | 'credits';
 
 export interface UiApi {
   /** Title screen with "TAP TO START" (resolves on the user gesture — used to unlock audio). */
@@ -450,6 +452,8 @@ export interface UiApi {
    */
   showDebrief(result: MissionResult, next: string | null): Promise<'next' | 'retry' | 'menu'>;
   showCredits(): Promise<void>;
+  /** Codex: weapons, warnings and threats, open at an entry id if given. Resolves on Back. */
+  showCodex(entry?: string): Promise<void>;
   /** Portrait-orientation overlay ("rotate your phone"). */
   setRotateHint(visible: boolean): void;
   /** Short non-blocking message. */

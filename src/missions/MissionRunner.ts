@@ -30,7 +30,7 @@ import { activateObjective, createObjectives, failOpenObjectives, markObjectiveT
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
-import { awardMedals, buildTips, deathReason } from './runtime/debrief';
+import { awardMedals, buildTips, codexTopic, deathReason } from './runtime/debrief';
 import { WinchesterWatch } from './runtime/winchester';
 import { WithdrawalMonitor } from './runtime/withdrawal';
 import { attemptSeed, nextAttempt } from './runtime/variation';
@@ -297,6 +297,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (this.sightseeing) (r as MissionResultExt).sightseeing = this.sightseeing.result();
     r.tips = r.freeFlight ? [] : buildTips(s, r);
     r.medals = r.freeFlight ? [] : awardMedals(s, r, finale);
+    const learn = codexTopic(s, r);
+    if (learn) r.codexId = learn;
     if (finale) r.campaignComplete = true;
     this.finalResult = r;
     return r;

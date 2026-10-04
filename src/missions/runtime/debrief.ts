@@ -82,6 +82,25 @@ export function deathReason(s: MissionState, reason: 'crash' | 'shot' | 'collisi
 }
 
 /**
+ * The Codex entry that explains what ended a failed sortie, for the debrief's "What happened?" link.
+ * Ids are Codex entries (src/ui/codex/data.ts); tests/ui-codex.test.ts checks each one exists.
+ */
+export function codexTopic(s: MissionState, r: MissionResult): string | undefined {
+  if (r.success || r.freeFlight) return undefined;
+  if (r.reason === REASONS.fuel) return 'fuel';
+  if (r.reason === REASONS.crash) return 'pullup';
+  if (!r.reason.startsWith(REASONS.shot)) return undefined;
+  const w = s.stats.lastHitWeapon;
+  if (!w) return undefined;
+  if (w === 'm_igla') return 'silent'; // shoulder-fired: no radar warning at all
+  if (s.stats.lastHitBy === 'sam' || SAM_MUNITION[w]) return 'mud'; // radar SAMs and AAA
+  if (IR_MUNITIONS.has(w)) return 'cms'; // heat-seekers: flares
+  if (w === 'r77') return 'silent'; // silent in midcourse
+  if (RADAR_MUNITIONS.has(w)) return 'launch';
+  return undefined;
+}
+
+/**
  * The mission asks for air-to-air kills: a 'destroy' or 'intercept' objective on a hostile aircraft
  * group (T02, c01, a Dogfight…). T01's rings or a pure strike are not.
  */
