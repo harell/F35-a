@@ -484,6 +484,9 @@ export const createHud: CreateHud = (canvas, events) => {
       reserveRadio(f);
       reservePip(f);
       reserveWpn(f);
+      // the warning band rows too: the target box's labels, pushed off the FPM, mustn't climb into
+      // MISSILE / SPIKE (#116)
+      reserveWarningBand(f);
       // 1) protected symbols (they register in the occupancy pass): FPM, the incoming-missile arrows and
       // their TTIs (the target box's labels, off-screen cue and centre cues dodge them), pipper / seeker,
       // target box
@@ -511,7 +514,6 @@ export const createHud: CreateHud = (canvas, events) => {
       reserveFixedZones(f);
       // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
       const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
-      reserveWarningBand(f);
       if (!zoomed) {
         const below = planCues(f);
         const cur = st.messages.current;

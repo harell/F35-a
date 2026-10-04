@@ -515,25 +515,38 @@ export function drawDesignated(f: HudFrame): void {
     label2 = 'NOSE ON';
     col2 = pal.warn;
   }
-  const rw = label2 ? pen.textWidth(label2, size2) : 0;
+  let rw = label2 ? pen.textWidth(label2, size2) : 0;
   const rightLimit = f.mode === 'hmd' && y > L.boxY - 30 * u && y < L.boxY + 90 * u && x < L.altLeft ? L.altLeft - 12 * u : L.right;
   // (the left too when the right is under the ring or reserved text, the kill feed, and the left isn't)
-  const rLeft =
-    rw > 0 &&
-    (x + side + rw > rightLimit ||
-      ((ringCuts(f, x + side, y - 8 * u, x + side + rw, y + 8 * u) || occ.hits(x + side, y - 8 * u, x + side + rw, y + 8 * u, 0, 0)) &&
-        !ringCuts(f, x - side - rw, y - 8 * u, x - side, y + 8 * u) &&
-        !occ.hits(x - side - rw, y - 8 * u, x - side, y + 8 * u, 0, 0)));
-  const rx = rLeft ? x - side : x + side;
-  if (label2 && show2) pen.text(label2, rx, y, col2, size2, rLeft ? 'right' : 'left');
+  const slotBlocked = (x0: number, x1: number, yc: number) => ringCuts(f, x0, yc - 8 * u, x1, yc + 8 * u) || occ.hits(x0, yc - 8 * u, x1, yc + 8 * u, 0, 0);
+  const rightBlocked = rw > 0 && slotBlocked(x + side, x + side + rw, y);
+  const leftBlocked = rw > 0 && slotBlocked(x - side - rw, x - side, y);
+  const rLeft = rw > 0 && (x + side + rw > rightLimit || (rightBlocked && !leftBlocked));
+  let rx = rLeft ? x - side : x + side;
+  let ry = y;
+  let align: 'left' | 'right' | 'center' = rLeft ? 'right' : 'left';
+  // both sides on reserved text (a box under the kill feed, #116): under the label rows, else over
+  // them, else left out (the lock ring shows the lock building; LOCK is a moment's flash)
+  if (rw > 0 && (rLeft ? leftBlocked : rightBlocked)) {
+    const below = lay.bottom + 15 * u;
+    const above = lay.top - 15 * u;
+    const ok = (yc: number) => !slotBlocked(tx - rw / 2, tx + rw / 2, yc) && yc > L.tapeY + 44 * u && yc < (f.cockpit ? L.cockpitTop : L.H) - 10 * u;
+    if (ok(below)) ry = below;
+    else if (ok(above)) ry = above;
+    else rw = 0;
+    rx = tx;
+    align = 'center';
+  }
+  if (label2 && show2 && rw > 0) pen.text(label2, rx, ry, col2, size2, align);
   // protected: the box, its ring and every label (text zones never cover it)
   const hb = building ? h * 1.5 : h;
-  const top = Math.min(y - hb - 3 * u, lay.top - 8 * u);
-  const bottom = Math.max(y + hb + 3 * u, lay.bottom + 8 * u);
+  const top = Math.min(y - hb - 3 * u, lay.top - 8 * u, rw > 0 ? ry - 8 * u : Infinity);
+  const bottom = Math.max(y + hb + 3 * u, lay.bottom + 8 * u, rw > 0 ? ry + 8 * u : -Infinity);
+  const r0 = align === 'right' ? rx - rw : align === 'center' ? rx - rw / 2 : rx;
   occ.add(
-    Math.min(x - lw - 2 * u, tx - tw - 2 * u, rw > 0 && rLeft ? rx - rw - 2 * u : Infinity),
+    Math.min(x - lw - 2 * u, tx - tw - 2 * u, rw > 0 ? r0 - 2 * u : Infinity),
     top,
-    Math.max(x + lw + 2 * u, tx + tw + 2 * u, rw > 0 && !rLeft ? rx + rw + 2 * u : 0),
+    Math.max(x + lw + 2 * u, tx + tw + 2 * u, rw > 0 ? r0 + rw + 2 * u : 0),
     bottom,
     1,
   );
@@ -602,12 +615,15 @@ function setLayout(k: number, y: number, h: number, g: number, withTof: boolean,
   lay.bottom = Math.max(lay.typeY, lay.rngY, withTof ? lay.tofY : -Infinity);
 }
 
-/** Is a label row centred at `ly` (± sw wide) on reserved text (the radio pill, the target camera window) or a reticle ring? */
+/**
+ * Is a label row centred at `ly` (± sw wide) on reserved text (the radio pill, the target camera window,
+ * the kill feed), the flight path marker and its wings (level 2, #116), or a reticle ring?
+ */
 function rowBlocked(f: HudFrame, x: number, sw: number, ly: number, ringOnly: number): boolean {
   const u = f.L.u;
   const y0 = ly - 7 * u;
   const y1 = ly + 7 * u;
-  return (!ringOnly && f.occ.hits(x - sw, y0, x + sw, y1, 0, 0)) || ringCuts(f, x - sw, y0, x + sw, y1);
+  return (!ringOnly && (f.occ.hits(x - sw, y0, x + sw, y1, 0, 0) || f.occ.hits(x - sw, y0, x + sw, y1, 2, 2))) || ringCuts(f, x - sw, y0, x + sw, y1);
 }
 
 /** Does the reticle ring drawn this frame (gun pipper, AIM-9X seeker) reach into the rect? */
