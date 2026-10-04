@@ -24,7 +24,12 @@
   "wall": "#91979d",
   "podium": "#62707f",
   "wall_raw": "#8b8fad",
-  "podium_raw": "#5b6992"
+  "podium_raw": "#5b6992",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: blue glass, a white glazed crown screen rising to the north-east",
+  "crown_above": 159,
+  "crown": "lit",
+  "crownColour": "#e9edf0"
  },
  "4": {
   "name": "Vero Centre",
