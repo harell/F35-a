@@ -640,6 +640,25 @@ def model_area(site, osm_path, area, exclude=None, log=print):
     stats.update({'area_ha': round(area.area / 1e4, 1), 'trees': len(trees), 'tree_h_median': round(float(np.median(hts)), 1),
                   'tree_h_p90': round(float(np.percentile(hts, 90)), 1), 'buildings_total': len(blds), 'triangles': int(len(tri)),
                   'canopy_ha': round(float(((nd > 2.5) & free & (crowns > 0) & ~rejected[crowns]).sum()) / 1e4, 1)})
-    model = {'E0': E0, 'N1': N1, 'size': W, 'footprint': [[round(x, 1), round(z, 1)] for x, z in area.exterior.coords],
+    canopy = canopy_grid(nd, free)
+    model = {'E0': E0, 'N1': N1, 'size': W, 'canopy': canopy, 'footprint': [[round(x, 1), round(z, 1)] for x, z in area.exterior.coords],
              'buildings': blds, 'trees': trees, 'piers': piers, 'roads': rd, 'stats': stats}
     return model, mesh, {'dsm': dsm, 'dem': dem, 'nd': nd, 'rgb': rgb, 'area_m': area_m, 'areas': areas, 'lines': lines, 'points': points}
+
+
+def canopy_grid(nd, free, cell=20):
+    """The cheap alternative to one record per tree: per `cell` m square, the share of it under canopy (nDSM > 2.5 m on
+    free land, off buildings) in sixteenths and the canopy's p75 height in 0.5 m steps. The game scatters its own
+    trees to match (density and height per cell, positions random, kept off buildings and roads by its own layers)."""
+    H, W = nd.shape
+    ny, nx = H // cell, W // cell
+    can = (nd > 2.5) & free
+    c = can[:ny * cell, :nx * cell].reshape(ny, cell, nx, cell)
+    cover = np.round(c.mean((1, 3)) * 15).astype(int)
+    h = np.where(can, nd, np.nan)[:ny * cell, :nx * cell].reshape(ny, cell, nx, cell).transpose(0, 2, 1, 3).reshape(ny, nx, -1)
+    with np.errstate(all='ignore'):
+        import warnings
+        warnings.simplefilter('ignore')
+        p75 = np.nan_to_num(np.nanpercentile(h, 75, axis=2))
+    height = np.clip(np.round(p75 * 2), 0, 255).astype(int)
+    return {'cell': cell, 'nx': int(nx), 'ny': int(ny), 'cover': cover.ravel().tolist(), 'height': np.where(cover > 0, height, 0).ravel().tolist()}

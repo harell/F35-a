@@ -84,6 +84,52 @@ def road_mesh(roads, dem, lift=0.25):
     return np.concatenate(P), np.array(T), U.area
 
 
+def gzn(b):
+    return len(gzip.compress(bytes(b), 9))
+
+
+def sizes(M, mesh):
+    """Gzipped bytes of each part of the model in two shipping formats: a baked mesh, or parameters the game rebuilds."""
+    import struct
+    pos = np.round(mesh['pos'] * 10).astype(np.int16).tobytes()
+    tri = mesh['tri'].astype(np.uint32).tobytes()
+    col = mesh['tcol'].astype(np.uint8).tobytes()
+    out = bytearray()
+    kinds = {'flat': 0, 'gable': 1, 'hip': 2, 'skel': 3}
+    for b in M['buildings']:  # u8 n, base, eave (dm), pitch (‰), kind, roof rgb, ring as int16 dm deltas
+        r = np.round(np.array(b['ring'][:-1]) * 10).astype(np.int32)
+        out += struct.pack('<BhhhBBBB', len(r), int(b['y0'] * 10), int(b['eave'] * 10), int(b.get('pitch', 0) * 1000), kinds[b['kind']], *b['roof'])
+        out += np.diff(np.vstack([[0, 0], r]), axis=0).astype(np.int16).tobytes()
+    T = np.array(M['trees'], np.float64).reshape(-1, 9)
+    xy = np.ascontiguousarray(np.round(T[:, :2] * 10).astype(np.int16)).view(np.uint8).reshape(len(T), 4)
+    rest = np.c_[np.round(np.c_[T[:, 3] - T[:, 2], T[:, 4], T[:, 5] - T[:, 2]] * 4).clip(0, 255), T[:, 6:9]].astype(np.uint8)
+    C = M['canopy']
+    grid = np.array(C['cover'], np.uint8).tobytes() + np.array(C['height'], np.uint8).tobytes()
+    B = M.get('boats', [])
+    return {'mesh_pos': gzn(pos), 'mesh_tri': gzn(tri), 'mesh_col': gzn(col), 'params': gzn(out),
+            'trees': gzn(np.ascontiguousarray(np.concatenate([xy, rest], 1)).tobytes()), 'canopy': gzn(grid),
+            'boats': gzn(np.round(np.array(B, np.float64).reshape(-1, 11)[:, :8] * 10).astype(np.int16).tobytes()) if B else 0,
+            'n_trees': len(T), 'n_cells': int(sum(1 for c in C['cover'] if c > 0))}
+
+
+def no_tree_mask(M, res=2):
+    """Page only: a 2 m bit mask of buildings and carriageways, where the canopy-grid scatter may not put a trunk
+    (the game knows both from its own layers)."""
+    from heights import ring_mask
+    n = M['size'] // res
+    m = np.zeros((n, n), bool)
+    for b in M['buildings']:
+        m |= ring_mask(m.shape, [(x / res, z / res) for x, z in b['ring']])
+    U = unary_union([LineString(r['pts']).buffer(r['width'] / 2 / res * res, cap_style='flat') for r in M['roads'] if len(r['pts']) > 1])
+    for g in getattr(U, 'geoms', [U]):
+        if g.geom_type == 'Polygon':  # the street network's union holds the blocks as holes
+            r = ring_mask(m.shape, [(x / res, z / res) for x, z in g.exterior.coords])
+            for h in g.interiors:
+                r &= ~ring_mask(m.shape, [(x / res, z / res) for x, z in h.coords])
+            m |= r
+    return {'n': int(n), 'res': res, 'bits': base64.b64encode(gzip.compress(np.packbits(m.ravel()).tobytes(), 9)).decode()}
+
+
 def i16(a):
     return np.round(np.asarray(a, np.float64) * 10).astype(np.int16)
 
@@ -143,6 +189,7 @@ def build_area(key, cfg):
         'boats': {'n': int(len(boats)), 'f': gz64(np.round(boats[:, :8] * np.array([10, 10, 1000, 10, 10, 10, 10, 10])).astype(np.int16)),
                   'col': gz64(boats[:, 8:11].astype(np.uint8))},
         'kinds': st.get('kinds', {}),
+        'canopy': M['canopy'], 'nomask': no_tree_mask(M), 'sizes': sizes(M, mesh),
         'tallest': sorted([{'name': b.get('name') or '', 'h': round(b['eave'] - b['y0'], 1)} for b in M['buildings']], key=lambda b: -b['h'])[:3],
     }
     return data, tex, shots

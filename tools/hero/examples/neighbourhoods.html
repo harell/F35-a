@@ -50,6 +50,20 @@ button:focus-visible, label:focus-within { outline: 3px solid var(--measured); o
 .views button { font: 500 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 6px 10px; border-radius: 4px; cursor: pointer; }
 .views button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.treemode { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.treemode button { font: 500 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 4px 8px; cursor: pointer; margin-left: -1px; }
+.treemode button:first-of-type { margin-left: 6px; border-radius: 4px 0 0 4px; }
+.treemode button:last-of-type { border-radius: 0 4px 4px 0; }
+.treemode button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.bars { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.bars h3 { font-size: 15px; }
+.bar { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr) 76px; gap: 12px; align-items: center; font-size: 14px; }
+.bar .track { height: 14px; background: var(--bg); border-radius: 0 4px 4px 0; }
+.bar .fill { height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar .fill.alt { background: var(--muted); }
+.bar .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.bar.total { border-top: 1px solid var(--line); padding-top: 8px; font-weight: 600; }
+@media (max-width: 560px) { .bar { grid-template-columns: minmax(0, 1fr) 70px; } .bar .track { grid-column: 1 / -1; grid-row: 2; } }
 .toggles label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
 .caption { padding: 10px 14px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
 .figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -119,7 +133,8 @@ footer a { color: var(--measured); }
         <div class="toggles">
           <label for="t-photo"><input type="checkbox" id="t-photo" checked> Aerial on the ground</label>
           <label for="t-roads"><input type="checkbox" id="t-roads"> Roads layer on top</label>
-          <label for="t-trees"><input type="checkbox" id="t-trees" checked> Trees</label>
+          <span class="treemode" role="group" aria-label="Trees">Trees:
+            <button id="tm-list" aria-pressed="true">LiDAR, one per tree</button><button id="tm-grid" aria-pressed="false">20 m canopy grid</button><button id="tm-none" aria-pressed="false">None</button></span>
           <label for="t-boats"><input type="checkbox" id="t-boats" checked> Boats &amp; pontoons</label>
           <label for="t-edge"><input type="checkbox" id="t-edge" checked> Model boundary</label>
         </div>
@@ -127,6 +142,22 @@ footer a { color: var(--measured); }
       </div>
     </div>
     <div class="figs" id="figs"></div>
+  </section>
+
+  <section>
+    <span class="eyebrow">What the model file weighs · <span id="wname"></span>, gzipped</span>
+    <h2>Houses are the weight, and only while they're a mesh</h2>
+    <p id="w-lede" style="color:var(--muted)"></p>
+    <div class="split">
+      <div class="bars" id="bars-mesh"></div>
+      <div class="bars" id="bars-param"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Option</th><th>Ships in the model</th><th>Gzipped</th><th>Looks like</th></tr></thead>
+        <tbody id="options"></tbody>
+      </table>
+    </div>
   </section>
 
   <section>
@@ -257,6 +288,46 @@ function hullGeometry() {
   return g;
 }
 
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+async function canopyScatter(D, groundAt) {
+  const C = D.canopy, M = D.nomask;
+  const bits = await unz(M.bits, Uint8Array);
+  const blocked = (x, z) => { const i = Math.floor(x / M.res), j = Math.floor(z / M.res); if (i < 0 || j < 0 || i >= M.n || j >= M.n) return true; const k = j * M.n + i; return (bits[k >> 3] >> (7 - (k & 7))) & 1; };
+  const R = rng(7), recs = [];
+  for (let j = 0; j < C.ny; j++) for (let i = 0; i < C.nx; i++) {
+    const k = j * C.nx + i, cov = C.cover[k] / 15;
+    if (!cov) continue;
+    const h0 = C.height[k] / 2;
+    let need = cov * C.cell * C.cell;
+    for (let tries = 0; need > 0 && tries < 40; tries++) {
+      const h = Math.max(3, h0 * (0.7 + 0.5 * R())), r = Math.min(9, Math.max(2.2, 0.48 * h));
+      const x = (i + R()) * C.cell, z = (j + R()) * C.cell;
+      if (blocked(x, z)) continue;
+      recs.push([x, z, h, r]);
+      need -= Math.PI * r * r;
+    }
+  }
+  const n = recs.length;
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ flatShading: true }), n);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 5).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: 0x5b4632 }), n);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+  const PAL = [[0.29, 0.38, 0.25], [0.35, 0.43, 0.29], [0.25, 0.33, 0.22], [0.40, 0.45, 0.31]];
+  recs.forEach(([x, z, h, r], i) => {
+    const g = groundAt(x, z);
+    const base = g + h * 0.3, hh = (h * 0.7) / 2;
+    crown.setMatrixAt(i, m4.compose(v.set(x, base + hh, z), q, sc.set(r, hh, r)));
+    const p = PAL[i % 4], j = 0.9 + 0.2 * R();
+    crown.setColorAt(i, c.setRGB(p[0] * j * 1.25, p[1] * j * 1.25, p[2] * j * 1.2));
+    trunk.setMatrixAt(i, m4.compose(v.set(x, g, z), q, sc.set(1, h * 0.3 + 0.5, 1)));
+  });
+  crown.frustumCulled = trunk.frustumCulled = false; // r128 culls an InstancedMesh by its base geometry at the origin
+  const grp = new THREE.Group();
+  grp.add(crown, trunk);
+  grp.userData.n = n;
+  return grp;
+}
+
 async function buildArea(key) {
   const D = DATA[key];
   const root = new THREE.Group();
@@ -309,8 +380,18 @@ async function buildArea(key) {
     trunk.setMatrixAt(i, m4);
   }
   const trees = new THREE.Group();
+  crown.frustumCulled = trunk.frustumCulled = false;
   trees.add(crown, trunk);
   root.add(trees);
+  // the cheap alternative: scatter trees to match each 20 m cell's canopy share and height, off buildings and roads
+  const groundAt = (x, z) => { // bilinear on the 4 m DEM
+    const fx = Math.min(n - 1.001, Math.max(0, x / r)), fz = Math.min(n - 1.001, Math.max(0, z / r)), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, w = fz - j;
+    const h = (a, b) => gh[b * n + a] / 10;
+    return (h(i, j) * (1 - u) + h(i + 1, j) * u) * (1 - w) + (h(i, j + 1) * (1 - u) + h(i + 1, j + 1) * u) * w;
+  };
+  const gridTrees = await canopyScatter(D, groundAt);
+  gridTrees.visible = false;
+  root.add(gridTrees);
   // boats: hull, cabin, mast
   if (D.boats.n) {
     const B = await unz(D.boats.f, Int16Array), BC = await unz(D.boats.col, Uint8Array);
@@ -335,6 +416,7 @@ async function buildArea(key) {
       if (mh > 0) { m4.compose(v.set(x + Math.cos(hd) * L * 0.08, D.sea, z + Math.sin(hd) * L * 0.08), q, sc.set(1, mh, 1)); mast.setMatrixAt(k++, m4); }
     }
     mast.count = k;
+    hull.frustumCulled = cabin.frustumCulled = mast.frustumCulled = false;
     marine.add(hull, cabin, mast);
   }
   root.add(marine);
@@ -342,14 +424,13 @@ async function buildArea(key) {
   const edge = new THREE.Group();
   const line = (ring, color) => {
     const pts = ring.map(([x, z]) => new THREE.Vector3(x, 0, z));
-    const ray = new THREE.Raycaster();
-    for (const p of pts) { ray.set(new THREE.Vector3(p.x, 400, p.z), new THREE.Vector3(0, -1, 0)); const h = ray.intersectObject(ground)[0]; p.y = Math.max(h ? h.point.y : 0, D.sea) + 1.5; }
+    for (const p of pts) p.y = Math.max(groundAt(p.x, p.z), D.sea) + 1.5;
     return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color }));
   };
   edge.add(line(D.footprint, 0xffd23f));
   for (const ex of D.exclude) edge.add(line(ex, 0xff6b4a));
   root.add(edge);
-  return { root, ground, photoMat, plainMat, roads, trees, marine, edge, D };
+  return { root, ground, photoMat, plainMat, roads, trees, gridTrees, marine, edge, D };
 }
 
 function setCam(i) {
@@ -381,7 +462,8 @@ function applyToggles() {
   if (!cur) return;
   cur.ground.material = $('t-photo').checked ? cur.photoMat : cur.plainMat;
   cur.roads.visible = $('t-roads').checked;
-  cur.trees.visible = $('t-trees').checked;
+  cur.trees.visible = treeMode === 'list';
+  cur.gridTrees.visible = treeMode === 'grid';
   cur.marine.visible = $('t-boats').checked;
   cur.edge.visible = $('t-edge').checked;
 }
@@ -412,9 +494,35 @@ async function show(key) {
   if (key === 'westhaven') f.push([fmt(s.boats), 'boats in the marina'], [fmt(s.pontoon_m2) + ' m²', 'pontoons and fingers']);
   else f.push([fmt((s.kinds.gable || 0) + (s.kinds.hip || 0) + (s.kinds.skel || 0)), 'pitched roofs'], [fmt(s.tree_h_p90) + ' m', 'tallest 10 % of trees']);
   $('figs').innerHTML = f.map(([b, t]) => `<div class="fig"><b>${b}</b><span>${t}</span></div>`).join('');
+  fillSizes(D);
   applyToggles();
   setShot(0);
   $('loading').hidden = true;
+}
+
+const kb = (b) => (b >= 1e6 ? (b / 1e6).toFixed(2) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' kB');
+function bars(el, title, rows, max) {
+  el.innerHTML = `<h3>${title}</h3>` + rows.map(([label, v, alt, tot]) =>
+    `<div class="bar${tot ? ' total' : ''}" title="${label}: ${kb(v)}"><span>${label}</span><span class="track"><span class="fill${alt ? ' alt' : ''}" style="display:block;width:${(100 * v / max).toFixed(2)}%"></span></span><span class="v">${kb(v)}</span></div>`).join('');
+}
+function fillSizes(D) {
+  const z = D.sizes, wh = D.key === 'westhaven';
+  const meshB = z.mesh_pos + z.mesh_tri + z.mesh_col;
+  const extra = wh ? [['Boats (list)', z.boats, true]] : [];
+  const totA = meshB + z.trees + (wh ? z.boats : 0), totB = z.params + z.trees + (wh ? z.boats : 0), totC = z.params + z.canopy + (wh ? z.boats : 0);
+  const max = totA;
+  $('wname').textContent = D.name;
+  bars($('bars-mesh'), 'A · Buildings as a baked mesh (the .glb)', [['Building vertices', z.mesh_pos], ['Building triangles', z.mesh_tri], ['Building colours', z.mesh_col], ['Trees, one per tree', z.trees, true], ...extra, ['Total', totA, false, true]], max);
+  bars($('bars-param'), 'B · Buildings as parameters the game rebuilds', [['Buildings: outline + roof', z.params], ['Trees, one per tree', z.trees, true], ['or: 20 m canopy grid', z.canopy, true], ...extra, ['Total with the grid', totC, false, true]], max);
+  const pctA = Math.round(100 * z.trees / totA), pctB = Math.round(100 * z.trees / totB);
+  $('w-lede').textContent = `As a baked mesh the buildings are ${Math.round(100 * meshB / totA)} % of the file and the ${fmt(z.n_trees)} trees only ${pctA} %: dropping the trees there saves almost nothing. The mesh is redundant, though: every roof is an outline plus five numbers (base, eave, pitch, kind, colour), and the game can rebuild the triangles when it loads, as it already does for the LINZ buildings. Shipped that way the buildings shrink ${Math.round(meshB / z.params)}×, and then the trees are ${pctB} % of what's left. That is when the cheaper tree source pays: a 20 m canopy grid is ${kb(z.canopy)} instead of ${kb(z.trees)}. The page draws all three; switch "Trees" under the model.`;
+  const opts = [
+    ['A · Mesh + LiDAR trees', 'Every triangle, every tree', kb(totA), 'What the page shows by default'],
+    ['B · Parameters + LiDAR trees', 'Outline and roof per building, one record per tree', kb(totB), 'Identical: the game rebuilds the same roofs'],
+    ['C · Parameters + canopy grid', `Outline and roof per building; per ${D.canopy.cell} m cell the canopy share and height (${fmt(z.n_cells)} cells)`, kb(totC), 'Same houses; trees in the right streets and gullies at the right density and height, but not the actual trees'],
+    ['D · Parameters, no trees', 'Outline and roof per building', kb(z.params + (wh ? z.boats : 0)), 'The game falls back to its own land-cover trees (172 m cells), which miss most suburban canopy'],
+  ];
+  $('options').innerHTML = opts.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="n">${r[2]}</td><td>${r[3]}</td></tr>`).join('');
 }
 
 function fillVerdicts() {
@@ -437,7 +545,9 @@ function fillVerdicts() {
 for (const k of Object.keys(DATA)) $('a-' + k).addEventListener('click', () => show(k));
 for (let i = 0; i < 4; i++) $('v' + i).addEventListener('click', () => setCam(i));
 for (let i = 0; i < 2; i++) $('sh' + i).addEventListener('click', () => setShot(i));
-for (const id of ['t-photo', 't-roads', 't-trees', 't-boats', 't-edge']) $(id).addEventListener('change', applyToggles);
+let treeMode = 'list';
+for (const m of ['list', 'grid', 'none']) $('tm-' + m).addEventListener('click', () => { treeMode = m; for (const o of ['list', 'grid', 'none']) $('tm-' + o).setAttribute('aria-pressed', String(o === m)); applyToggles(); });
+for (const id of ['t-photo', 't-roads', 't-boats', 't-edge']) $(id).addEventListener('change', applyToggles);
 fillVerdicts();
 (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
 resize();
