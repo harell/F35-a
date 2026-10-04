@@ -247,6 +247,12 @@ export interface DifficultyParams {
   playerMissileHitsToKill: number;
   /** Fuel burn multiplier. */
   fuelBurnScale: number;
+  /**
+   * Air-defence boats harass: with the bay open inside `SamTypeData.harass.cueRange` they cue on the jet
+   * and fire at it out to `harass.reach`, past the missile's real envelope (a nuisance shot a jet that
+   * turns away outruns; one that flies straight in meets). Off on every level but the baseline one.
+   */
+  adBoatHarass: boolean;
 }
 
 export interface QualitySettings {

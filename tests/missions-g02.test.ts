@@ -329,30 +329,56 @@ describe('g02: the clocks and the outcome (real sim, real coast)', { timeout: 60
 });
 
 describe('g02: the competent bot (tests/missions-bot.ts)', () => {
-  it('wins on Recruit and Pilot in two passes: one StormBreaker per suicide boat first, then, once they are in the water, one per missile boat', { timeout: 120_000 }, () => {
-    for (const diff of ['recruit', 'pilot'] as const) {
-      const n = diff === 'recruit' ? 2 : 3;
-      for (const seed of [0, 1]) {
-        // no rearming (#63): the bot never goes home for more bombs
-        const r = runPlaythrough('g02', diff, seed, realTerrain(), { maxT: 400 });
-        const tag = `${diff} seed ${seed}`;
-        expect(r.state, `${tag}: ${r.reason}`).toBe('success');
-        const bombs = r.launches.filter((l) => l.weapon === 'gbu53');
-        // suicide boats first (the 2-minute clock), one bomb each, and released early (nothing is in reach at t=0)
-        const first = bombs.slice(0, n);
-        expect(first.map((l) => l.group), tag).toEqual(Array(n).fill(G02_GROUPS.suicide));
-        expect(new Set(first.map((l) => l.targetId)).size, tag).toBe(n);
-        expect(first[0].t, tag).toBeGreaterThan(10);
-        expect(first[n - 1].t, tag).toBeLessThan(45);
-        // then one bomb on each missile boat: a second pass, after they came in (#115)
-        const next = bombs.slice(n, n + 3);
-        expect(next.map((l) => l.group), tag).toEqual([G02_GROUPS.missile, G02_GROUPS.missile, G02_GROUPS.missile]);
-        expect(new Set(next.map((l) => l.targetId)).size, tag).toBe(3);
-        expect(next[0].t, tag).toBeGreaterThan(G02_MISSILE_WAVE_AT);
-        // every boat sunk before the first Kowsar (launch ~3.9 minutes in), the tanker never hit
-        expect(r.t, tag).toBeLessThan(235);
-        expect(r.objectives, tag).toContain('P:o_tanker=complete');
-      }
+  it('wins on Recruit in two passes: one StormBreaker per suicide boat first, then, once they are in the water, one per missile boat', { timeout: 120_000 }, () => {
+    const n = 2;
+    for (const seed of [0, 1]) {
+      // no rearming (#63): the bot never goes home for more bombs
+      const r = runPlaythrough('g02', 'recruit', seed, realTerrain(), { maxT: 400 });
+      const tag = `recruit seed ${seed}`;
+      expect(r.state, `${tag}: ${r.reason}`).toBe('success');
+      const bombs = r.launches.filter((l) => l.weapon === 'gbu53');
+      // suicide boats first (the 2-minute clock), one bomb each, and released early (nothing is in reach at t=0)
+      const first = bombs.slice(0, n);
+      expect(first.map((l) => l.group), tag).toEqual(Array(n).fill(G02_GROUPS.suicide));
+      expect(new Set(first.map((l) => l.targetId)).size, tag).toBe(n);
+      expect(first[0].t, tag).toBeGreaterThan(10);
+      expect(first[n - 1].t, tag).toBeLessThan(45);
+      // then one bomb on each missile boat: a second pass, after they came in (#115)
+      const next = bombs.slice(n, n + 3);
+      expect(next.map((l) => l.group), tag).toEqual([G02_GROUPS.missile, G02_GROUPS.missile, G02_GROUPS.missile]);
+      expect(new Set(next.map((l) => l.targetId)).size, tag).toBe(3);
+      expect(next[0].t, tag).toBeGreaterThan(G02_MISSILE_WAVE_AT);
+      // every boat sunk before the first Kowsar (launch ~3.9 minutes in), the tanker never hit
+      expect(r.t, tag).toBeLessThan(235);
+      expect(r.objectives, tag).toContain('P:o_tanker=complete');
+    }
+  });
+
+  // Pilot is the baseline of the AD boats' harassment (DifficultyParams.adBoatHarass): the bay opening for a
+  // stand-off release cues the boat, which fires past its missile's envelope. The first ripple still goes
+  // out whole (the bot finishes it before breaking), but the pass is no longer free: the bot has to defend.
+  it('Pilot: the AD boat answers the stand-off ripple with a SAM launch, and the ripple still goes out whole', { timeout: 120_000 }, () => {
+    for (const seed of [0, 1]) {
+      const r = runPlaythrough('g02', 'pilot', seed, realTerrain(), { maxT: 400, log: true });
+      const tag = `pilot seed ${seed}`;
+      const bombs = r.launches.filter((l) => l.weapon === 'gbu53');
+      const first = bombs.slice(0, 3);
+      expect(first.map((l) => l.group), tag).toEqual(Array(3).fill(G02_GROUPS.suicide));
+      expect(first[2].t, tag).toBeLessThan(45);
+      const sam = r.events.filter((e) => /LAUNCH m_9m330 sam/.test(e)).map((e) => Number(e.trim().split(/\s+/)[0]));
+      expect(sam.length, tag).toBeGreaterThan(0);
+      // the cue is the open bay of the release, not the jet merely being there
+      expect(sam[0], tag).toBeGreaterThan(first[0].t - 5);
+      expect(sam[0], tag).toBeLessThan(first[0].t + 10);
+    }
+  });
+
+  it('only Pilot harasses: no AD boat fires at a stand-off ripple on Recruit, Veteran or Ace', { timeout: 120_000 }, () => {
+    expect(DIFFS.filter((d) => DIFFICULTIES[d].adBoatHarass)).toEqual(['pilot']);
+    for (const diff of ['recruit', 'veteran', 'ace'] as const) {
+      const r = runPlaythrough('g02', diff, 0, realTerrain(), { maxT: 400, log: true });
+      const early = r.events.filter((e) => /LAUNCH m_9m330 sam/.test(e)).map((e) => Number(e.trim().split(/\s+/)[0])).filter((t) => t < 45);
+      expect(early, `${diff}: no SAM launch in the opening ripple`).toEqual([]);
     }
   });
 });
