@@ -172,6 +172,11 @@ The suburbs' painted lots and the 3D houses on them keep a corridor clear along 
 `src/world/scenery/lotMask.ts` is one bit per 12 m cell, set near a ribbon, and both the terrain shader
 (`lotMasked()`, `TerrainRenderer.setLotMask`) and `HouseSource` leave a lot unbuilt when its centre falls in a set
 cell, so painted and 3D houses still agree.
+Along the arterials and main streets (LINZ, `tools/linz/roads.ts`) that corridor starts at the back of a frontage band:
+`src/world/scenery/frontage.ts` lines each side of the road with lots that face it (footpath, front lawn, house,
+driveway; shops in the town centres), fitted in blocks between the grid's side streets, and every district an arterial
+runs through turns its street grid to the road (`urbanGrid.ts districtAngles`). The shader's `frontageLot()` and
+`HouseSource` read the same lots (textures from `TerrainRenderer.setFrontage`), so painted and 3D houses agree there too.
 
 ## Harbour ferries and wakes (render-only)
 

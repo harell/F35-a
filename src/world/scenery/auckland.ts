@@ -812,6 +812,14 @@ const CENTRES: Centre[] = [
   { name: 'Wiri (industrial)', x: 9.0, z: 18.5, r: 480, h: 14, industrial: true },
 ];
 
+/** Share of a town centre's radius whose arterial frontage is shops (frontage.ts FRONT_SHOP). */
+const SHOP_REACH = 0.75;
+
+/** True in the shopping core of a suburban town centre (not an industrial estate): its arterials are lined with shops. */
+export function inTownCentre(x: number, z: number): boolean {
+  return CENTRES.some((c) => !c.industrial && Math.hypot(x - c.x * 1000, z - c.z * 1000) < c.r * SHOP_REACH);
+}
+
 /** Town centres, suburban apartment clusters and industrial estates (one merged mesh). */
 /** `skip`: places where no procedural shop / industrial block may stand (under the aerial photo, which shows the real ones). */
 export function buildCentres(

@@ -21,12 +21,11 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { AKL } from '../../src/core/auckland';
 import { decodeRoads, encodeRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_RAIL, ROAD_STREET, type RoadData, type RoadKind, type RoadLine } from '../../src/world/scenery/aucklandRoads';
-import { HAND_ARTERIALS } from '../../src/world/scenery/motorways';
 import { decodeLinz, linzIsLand } from '../../src/world/terrain/theaters/aucklandLinz';
 import { decodeOsm, OSM_STADIUM } from '../../src/world/scenery/aucklandOsm';
 import { worldToGeo } from '../../src/core/auckland';
 import { WESTFIELD_PRISMS } from '../../src/core/westfieldNewmarket';
-import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, project, runs, segDist, simplify, type Feature, type Pt } from './polyline';
+import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, runs, segDist, simplify, type Feature, type Pt } from './polyline';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const WORK = process.argv[2] ?? path.join(os.tmpdir(), 'f35-linz-roads');
@@ -40,21 +39,158 @@ const wfs = (file: string, typeName: string, cql: string) => fetchWfs(WORK, file
 const W = { s: -37.25, n: -36.44, w: 174.26, e: 175.26 };
 // the CBD and, west of it, Herne Bay and Westhaven (hero neighbourhoods: tools/hero/sites/herne_bay.py, westhaven.py)
 const CBD = { s: -36.8745, n: -36.8275, w: 174.72, e: 174.7905 };
-const ARTERIAL_NAMES: Record<string, string> = {
-  'Dominion Road': 'Dominion Rd',
-  'Mount Eden Road': 'Mt Eden Rd',
-  'Manukau Road': 'Manukau Rd',
-  'Remuera Road': 'Remuera Rd',
-  'Sandringham Road': 'Sandringham Rd',
-  'New North Road': 'New North Rd',
-  'Great North Road': 'Great North Rd',
-  'Lake Road': 'Lake Rd',
-  'Onewa Road': 'Onewa Rd',
-  'East Coast Road': 'East Coast Rd',
-};
+/**
+ * The arterials and main streets outside the CBD region (inside it they are the street map's): LINZ name, the name
+ * the game shows, kerb-to-kerb width (m; 4-lane arterials ≈ 15–16 m, 2-lane main streets 12–13 m) and, where the
+ * name is common (a Park Road in Titirangi, Waiuku and Grafton), the suburbs it is taken from.
+ */
+const ARTERIALS: [linz: string, name: string, width: number, suburbs?: string[]][] = [
+  // isthmus: the radial roads out of the CBD
+  ['Great North Road', 'Great North Rd', 15, ['Grey Lynn', 'Western Springs', 'Point Chevalier', 'Waterview', 'Avondale', 'New Lynn', 'Glendene', 'Glen Eden', 'Henderson']],
+  ['New North Road', 'New North Rd', 14],
+  ['Sandringham Road', 'Sandringham Rd', 13],
+  ['Dominion Road', 'Dominion Rd', 15, ['Eden Terrace', 'Mount Eden', 'Kingsland', 'Mount Roskill']],
+  ['Mount Eden Road', 'Mt Eden Rd', 14],
+  ['Symonds Street', 'Symonds St', 15, ['Auckland Central', 'Eden Terrace', 'Grafton']],
+  ['Khyber Pass Road', 'Khyber Pass Rd', 15],
+  ['Park Road', 'Park Rd', 13, ['Grafton', 'Newmarket']],
+  ['Domain Drive', 'Domain Dr', 11],
+  ['Grafton Road', 'Grafton Rd', 14],
+  ['Carlton Gore Road', 'Carlton Gore Rd', 13],
+  ['Broadway', 'Broadway', 16, ['Newmarket', 'Epsom']],
+  ['Manukau Road', 'Manukau Rd', 15, ['Epsom', 'Royal Oak']],
+  ['Gillies Avenue', 'Gillies Ave', 14],
+  ['Great South Road', 'Great South Rd', 15],
+  ['Remuera Road', 'Remuera Rd', 14],
+  ['Parnell Road', 'Parnell Rd', 13],
+  ['St Stephens Avenue', 'St Stephens Ave', 12],
+  ['Gladstone Road', 'Gladstone Rd', 12, ['Parnell']],
+  ['Tamaki Drive', 'Tamaki Dr', 14],
+  ['Ngapipi Road', 'Ngapipi Rd', 12],
+  ['Kepa Road', 'Kepa Rd', 13],
+  ['Kohimarama Road', 'Kohimarama Rd', 12],
+  ['St Heliers Bay Road', 'St Heliers Bay Rd', 12],
+  ['West Tamaki Road', 'West Tamaki Rd', 12],
+  ['Orakei Road', 'Orakei Rd', 13],
+  ['Meadowbank Road', 'Meadowbank Rd', 12],
+  ['Gowing Drive', 'Gowing Dr', 11],
+  ['Ladies Mile', 'Ladies Mile', 13, ['Remuera', 'Ellerslie']],
+  ['Market Road', 'Market Rd', 14],
+  ['Green Lane East', 'Green Lane East', 14],
+  ['Green Lane West', 'Green Lane West', 14],
+  ['Abbotts Way', 'Abbotts Way', 13],
+  ['Main Highway', 'Main Hwy', 14],
+  ['Ellerslie-Panmure Highway', 'Ellerslie-Panmure Hwy', 15],
+  ['Lunn Avenue', 'Lunn Ave', 13],
+  ['Morrin Road', 'Morrin Rd', 13],
+  ['Apirana Avenue', 'Apirana Ave', 13],
+  ['Mount Wellington Highway', 'Mt Wellington Hwy', 15],
+  ['Penrose Road', 'Penrose Rd', 13],
+  ['Ponsonby Road', 'Ponsonby Rd', 14],
+  ['Jervois Road', 'Jervois Rd', 12],
+  ['College Hill', 'College Hill', 14],
+  ['Franklin Road', 'Franklin Rd', 13, ['Freemans Bay', 'Ponsonby']],
+  ['Newton Road', 'Newton Rd', 14, ['Eden Terrace', 'Grey Lynn']],
+  ['Richmond Road', 'Richmond Rd', 12],
+  ['Williamson Avenue', 'Williamson Ave', 13, ['Grey Lynn']],
+  ['Surrey Crescent', 'Surrey Cres', 12],
+  ['Meola Road', 'Meola Rd', 12],
+  ['Point Chevalier Road', 'Pt Chevalier Rd', 13],
+  ['Carrington Road', 'Carrington Rd', 13],
+  ['Mount Albert Road', 'Mt Albert Rd', 13],
+  ['Balmoral Road', 'Balmoral Rd', 13],
+  ['Valley Road', 'Valley Rd', 12, ['Mount Eden']],
+  ['Owairaka Avenue', 'Owairaka Ave', 12],
+  ['Richardson Road', 'Richardson Rd', 13, ['Mount Roskill', 'Mount Albert', 'Wesley', 'New Windsor', 'Hillsborough']],
+  ['Stoddard Road', 'Stoddard Rd', 13],
+  ['May Road', 'May Rd', 12, ['Wesley', 'Mount Roskill']],
+  ['Mount Roskill Road', 'Mt Roskill Rd', 12],
+  ['Hillsborough Road', 'Hillsborough Rd', 13],
+  ['Blockhouse Bay Road', 'Blockhouse Bay Rd', 13],
+  ['Whitney Street', 'Whitney St', 12],
+  ['Tiverton Road', 'Tiverton Rd', 12],
+  ['Wolverton Street', 'Wolverton St', 12],
+  ['Rosebank Road', 'Rosebank Rd', 13, ['Avondale']],
+  ['Ash Street', 'Ash St', 13, ['Avondale']],
+  ['Rata Street', 'Rata St', 13, ['New Lynn']],
+  ['Clark Street', 'Clark St', 13, ['New Lynn']],
+  ['Portage Road', 'Portage Rd', 12, ['New Lynn', 'Green Bay', 'Papatoetoe', 'Ōtāhuhu', 'Māngere']],
+  ['Titirangi Road', 'Titirangi Rd', 12],
+  ['Pah Road', 'Pah Rd', 13, ['Epsom', 'Royal Oak']],
+  ['Mount Smart Road', 'Mt Smart Rd', 13],
+  ['Queenstown Road', 'Queenstown Rd', 12],
+  ['Onehunga Mall', 'Onehunga Mall', 13],
+  ['Church Street', 'Church St', 13, ['Onehunga', 'Penrose', 'Ōtāhuhu']],
+  ['Neilson Street', 'Neilson St', 15],
+  ['Selwyn Street', 'Selwyn St', 12],
+  ['Princes Street', 'Princes St', 12, ['Onehunga', 'Ōtāhuhu']],
+  // south and east
+  ['Massey Road', 'Massey Rd', 14],
+  ['Kirkbride Road', 'Kirkbride Rd', 14],
+  ['Coronation Road', 'Coronation Rd', 13, ['Māngere Bridge', 'Papatoetoe']],
+  ['Mangere Road', 'Mangere Rd', 13],
+  ['Bader Drive', 'Bader Dr', 13],
+  ['Ireland Road', 'Ireland Rd', 13, ['Mount Wellington', 'Panmure']],
+  ['Pakuranga Road', 'Pakuranga Rd', 15],
+  ['Ti Rakau Drive', 'Ti Rakau Dr', 16],
+  ['Te Irirangi Drive', 'Te Irirangi Dr', 16],
+  ['Botany Road', 'Botany Rd', 14],
+  ['Harris Road', 'Harris Rd', 14, ['East Tāmaki']],
+  ['Springs Road', 'Springs Rd', 14, ['East Tāmaki', 'Ōtara']],
+  ['Highbrook Drive', 'Highbrook Dr', 15],
+  ['East Tamaki Road', 'East Tamaki Rd', 14],
+  ['Otara Road', 'Otara Rd', 13],
+  ['Preston Road', 'Preston Rd', 13],
+  ['Bairds Road', 'Bairds Rd', 13],
+  ['Ormiston Road', 'Ormiston Rd', 14],
+  ['Chapel Road', 'Chapel Rd', 13],
+  ['Redoubt Road', 'Redoubt Rd', 13],
+  ['Cavendish Drive', 'Cavendish Dr', 15],
+  ['Puhinui Road', 'Puhinui Rd', 14],
+  ['Station Road', 'Station Rd', 13, ['Penrose', 'Papatoetoe', 'Ōtāhuhu']],
+  ['Weymouth Road', 'Weymouth Rd', 13],
+  ['Alfriston Road', 'Alfriston Rd', 13, ['Manurewa', 'Manurewa East']],
+  // west
+  ['Lincoln Road', 'Lincoln Rd', 16, ['Henderson']],
+  ['Te Atatu Road', 'Te Atatu Rd', 14],
+  ['Edmonton Road', 'Edmonton Rd', 13],
+  ['Swanson Road', 'Swanson Rd', 13, ['Henderson', 'Rānui', 'Swanson']],
+  ['Don Buck Road', 'Don Buck Rd', 13],
+  ['Universal Drive', 'Universal Dr', 13],
+  ['West Coast Road', 'West Coast Rd', 12, ['Glen Eden', 'Oratia']],
+  ['Henderson Valley Road', 'Henderson Valley Rd', 12, ['Henderson']],
+  ['Sturges Road', 'Sturges Rd', 12],
+  ['Hobsonville Road', 'Hobsonville Rd', 13],
+  // North Shore
+  ['Lake Road', 'Lake Rd', 14],
+  ['Victoria Road', 'Victoria Rd', 12, ['Devonport']],
+  ['Bayswater Avenue', 'Bayswater Ave', 12],
+  ['Esmonde Road', 'Esmonde Rd', 15],
+  ['Hurstmere Road', 'Hurstmere Rd', 12],
+  ['Taharoto Road', 'Taharoto Rd', 14],
+  ['Shakespeare Road', 'Shakespeare Rd', 13, ['Milford']],
+  ['Akoranga Drive', 'Akoranga Dr', 13],
+  ['Onewa Road', 'Onewa Rd', 14],
+  ['Northcote Road', 'Northcote Rd', 14],
+  ['Birkenhead Avenue', 'Birkenhead Ave', 12],
+  ['Mokoia Road', 'Mokoia Rd', 12],
+  ['Beach Haven Road', 'Beach Haven Rd', 12],
+  ['Glenfield Road', 'Glenfield Rd', 14, ['Glenfield', 'Birkenhead', 'Hillcrest', 'Tōtara Vale', 'Bayview']],
+  ['Wairau Road', 'Wairau Rd', 15],
+  ['Sunset Road', 'Sunset Rd', 13],
+  ['Sunnynook Road', 'Sunnynook Rd', 12],
+  ['Forrest Hill Road', 'Forrest Hill Rd', 12],
+  ['Tristram Avenue', 'Tristram Ave', 13],
+  ['East Coast Road', 'East Coast Rd', 13, ['Milford', 'Castor Bay', 'Forrest Hill', 'Sunnynook', 'Mairangi Bay', 'Campbells Bay', 'Windsor Park', 'Northcross', 'Pinehill', 'Browns Bay', 'Murrays Bay', 'Torbay', 'Oteha']],
+  ['Browns Bay Road', 'Browns Bay Rd', 12],
+  ['Constellation Drive', 'Constellation Dr', 15],
+  ['Rosedale Road', 'Rosedale Rd', 14],
+  ['Albany Highway', 'Albany Hwy', 15],
+  ['Oteha Valley Road', 'Oteha Valley Rd', 14],
+];
 const streets = wfs('cbd-streets.json', 'layer-123109', `BBOX(shape,${CBD.s},${CBD.w},${CBD.n},${CBD.e})`);
 const motorways = wfs('motorways.json', 'layer-123109', `BBOX(shape,${W.s},${W.w},${W.n},${W.e}) AND (road_name_type IN ('Motorway','State Highway') OR full_road_name LIKE '%Motorway%')`);
-const arterials = wfs('arterials.json', 'layer-123109', `territorial_authority='Auckland' AND full_road_name IN (${Object.keys(ARTERIAL_NAMES).map((n) => `'${n}'`).join(',')})`);
+const arterials = wfs('arterials-v2.json', 'layer-123109', `territorial_authority='Auckland' AND full_road_name IN (${ARTERIALS.map(([n]) => `'${n}'`).join(',')})`);
 const tunnels = wfs('tunnels.json', 'layer-50366', `BBOX(GEOMETRY,5880000,1710000,5965000,1800000) AND use1='vehicle'`);
 
 // ── Road graph (for the region border) ──
@@ -306,21 +442,16 @@ for (const c of chain(stSecs)) {
   }
 }
 
-// ── Arterials (by name, along the hand-traced corridors, outside the CBD region) ──
-const hand = new Map(HAND_ARTERIALS.map((a) => [a.name, a.ll.map(([lat, lon]) => project([lon, lat]))]));
-// by suburb instead of along the hand-traced corridor: Great North Rd past its hand-traced end at
-// Waterview, through Avondale and over the Whau to New Lynn
-const SUBURBS: Record<string, string[]> = { 'Great North Rd': ['Grey Lynn', 'Western Springs', 'Point Chevalier', 'Waterview', 'Avondale', 'New Lynn'] };
-for (const [linzName, short] of Object.entries(ARTERIAL_NAMES)) {
-  const corridor = hand.get(short) ?? [];
-  if (!corridor.length) continue;
-  const suburbs = SUBURBS[short];
+// ── Arterials and main streets (by name and suburb, outside the CBD region) ──
+// in the world box only (the LINZ layer is the whole Auckland region, out to Wellsford and Waiuku)
+const inWorld = (pts: Pt[]) => pts.every(([x, z]) => Math.abs(x) < 44000 && Math.abs(z) < 44000);
+for (const [linzName, short, width, suburbs] of ARTERIALS) {
   const secs = arterials
     .filter((f) => f.properties.full_road_name === linzName && (!suburbs || suburbs.includes(String(f.properties.suburb_locality))))
     .flatMap(lines)
-    .filter((pts) => suburbs || pts.every((p) => polyDist(p[0], p[1], corridor) < 700))
+    .filter(inWorld)
     .map((pts) => ({ group: short, pts }));
-  const width = HAND_ARTERIALS.find((a) => a.name === short)!.width;
+  if (!secs.length) throw new Error(`no LINZ road sections for ${linzName}`);
   for (const c of chain(secs)) {
     for (const r of runs(densify(c.pts, 8), (p) => (regionDist(p[0], p[1]) > -15 ? -1 : 0))) {
       const pts = simplify(r.pts, 1.5);
