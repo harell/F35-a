@@ -1,7 +1,7 @@
 /**
  * A Stroll in the Park, sightseeing follow-ups (issue #113): the free-flight debrief shows what a
  * sightseer did (tour stops, distance flown, highest and lowest pass) instead of combat stats; a
- * calm cockpit (a clean jet by default, radar off, no CIV boxes).
+ * calm cockpit (a clean jet by default, radar off, CIV boxes that TGT can't designate).
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -138,23 +138,30 @@ describe('A Stroll in the Park: a calm cockpit (1.1-g)', () => {
     return { ships, airliner: p.radar.contacts.some((c) => c.id === civ.id) };
   };
 
-  it('no CIV boxes: the civil traffic never becomes a contact, so TGT has nothing to designate', () => {
+  it('CIV boxes: the player sees the civil traffic, but TGT, a tap or the HMD cue never designates it', () => {
     const m = setup();
     m.tick(1);
-    expect(civilContacts(m)).toEqual({ ships: 0, airliner: false });
-    const p = m.world.player!;
-    expect(p.radar.contacts.filter((c) => c.team === 'neutral')).toEqual([]);
-    m.world.combat.cycleTarget(p, m.world);
-    expect(p.radar.designatedId).toBeNull();
-  });
-
-  it('outside free flight the player still sees the civil traffic', () => {
-    const m = setup();
-    m.tick(1);
-    m.world.player!.ignoresCivil = false;
     const seen = civilContacts(m);
     expect(seen.ships).toBeGreaterThan(0);
     expect(seen.airliner).toBe(true);
+    const p = m.world.player!;
+    const civ = p.radar.contacts.filter((c) => c.team === 'neutral');
+    expect(civ.length).toBeGreaterThan(0);
+    m.world.combat.cycleTarget(p, m.world);
+    expect(p.radar.designatedId).toBeNull();
+    m.world.combat.designate(p, civ[0].id, m.world);
+    expect(p.radar.designatedId).toBeNull();
+  });
+
+  it('outside free flight the player can designate the civil traffic (and pay for shooting it)', () => {
+    const m = setup();
+    m.tick(1);
+    const p = m.world.player!;
+    p.civilWatchOnly = false;
+    civilContacts(m);
+    const civ = p.radar.contacts.find((c) => c.team === 'neutral')!;
+    m.world.combat.designate(p, civ.id, m.world);
+    expect(p.radar.designatedId).toBe(civ.id);
   });
 });
 
@@ -181,12 +188,14 @@ describe('A Stroll in the Park: the Sky Tower as an obstacle (1.1-l)', () => {
     p.position.copy(tower.base).addScaledVector(ahead(p), -300).setY(tower.base.y + 120);
     for (let i = 0; i < 10 && p.alive; i++) m.tick(0.25);
     expect(p.alive).toBe(false);
-    expect(tower.alive).toBe(true);
-    expect(tower.hits).toBe(1); // burning where the jet went in
+    expect(tower.alive).toBe(false); // the player's jet brings it down at once
     const r = m.runner.result(m.world);
     expect(r.reason).toBe('Crashed into the Sky Tower');
     expect(r.tips ?? []).toEqual([]);
     expect(m.hud).toContain('FLIGHT OVER');
+    expect(m.hud).toContain('SKY TOWER DESTROYED');
+    m.tick(3);
+    expect(m.radio.some((t) => /The Sky Tower has been destroyed!/.test(t))).toBe(true);
   });
 });
 
