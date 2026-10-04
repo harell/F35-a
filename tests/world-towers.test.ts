@@ -34,19 +34,34 @@ describe('CBD tower kit (measured)', () => {
   });
 
   it('replace their LINZ blocks: no LINZ building centred inside a tower outline, no tower inside another', () => {
+    // (violations are collected, then checked once: thousands of expect() calls ran past the 5 s timeout on CI)
+    const box = (r: ArrayLike<number>) => {
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let i = 0; i < r.length; i += 2) {
+        x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]);
+        z0 = Math.min(z0, r[i + 1]); z1 = Math.max(z1, r[i + 1]);
+      }
+      return [x0, x1, z0, z1];
+    };
+    const near = (b: number[], x: number, z: number) => x >= b[0] && x <= b[1] && z >= b[2] && z <= b[3];
+    const towerBoxes = CBD_TOWERS.map((t) => box(t.outline));
+    const bad: string[] = [];
     for (const b of bs) {
       if (b.hero) continue;
-      for (const t of CBD_TOWERS) expect(inRing(t.outline, b.prisms[0].cx, b.prisms[0].cz)).toBe(false);
+      const bb = box(b.prisms[0].ring);
+      CBD_TOWERS.forEach((t, i) => {
+        if (near(towerBoxes[i], b.prisms[0].cx, b.prisms[0].cz) && inRing(t.outline, b.prisms[0].cx, b.prisms[0].cz)) bad.push(`LINZ block centred in ${t.name}`);
+        // nor an old block left standing over a tower (a concave LINZ footprint's centre falls outside it)
+        for (const [x, z] of t.spots) if (near(bb, x, z) && b.prisms.some((p) => inRing(p.ring, x, z))) bad.push(`LINZ block over ${t.name}`);
+      });
     }
-    // nor an old block left standing over a tower (a concave LINZ footprint's centre falls outside it)
-    for (const b of bs) {
-      if (b.hero) continue;
-      for (const t of CBD_TOWERS) for (const [x, z] of t.spots) expect(b.prisms.some((p) => inRing(p.ring, x, z)), t.name).toBe(false);
-    }
-    for (const t of CBD_TOWERS) for (const u of CBD_TOWERS) if (t !== u) {
-      const p = heroes.find((b) => b.tower === u)!.prisms[0];
-      expect(inRing(t.outline, p.cx, p.cz)).toBe(false);
-    }
+    CBD_TOWERS.forEach((t, i) => {
+      for (const u of CBD_TOWERS) if (t !== u) {
+        const p = heroes.find((b) => b.tower === u)!.prisms[0];
+        if (near(towerBoxes[i], p.cx, p.cz) && inRing(t.outline, p.cx, p.cz)) bad.push(`${u.name} inside ${t.name}`);
+      }
+    });
+    expect(bad).toEqual([]);
   });
 
   it('stand at the LiDAR heights: every spot check within ±2 m', () => {
