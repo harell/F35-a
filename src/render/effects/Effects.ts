@@ -9,6 +9,7 @@
  * Budgets: particle capacities and emission rates scale with QualitySettings.particleScale and with
  * distance to the camera. Everything is pooled; the per-frame path allocates nothing.
  */
+import { COLLAPSE_DELAY, buildingCollapseTime } from '../../sim/buildings';
 import { Color, Group, Matrix4, Vector3 } from 'three';
 import type { CreateEffects, EffectsApi, FrameContext } from '../../core/contracts';
 import type { ExplosionSize } from '../../core/types';
@@ -1053,10 +1054,25 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     events.on('landmark:impact', ({ position: p, heading }) => collapseDust(p.x, p.y, p.z, heading)),
     // a CBD skyscraper an aircraft flew into (#128): the fireball at the impact, then the dust wall
     // where it comes down, and the stump burning
-    events.on('building:collapsed', ({ position: p, x, z, ground }) => {
+    // A hero landmark (the player's jet into Spark Arena or the Museum) goes the same way, louder: charges
+    // go off round it while it still stands, then it drops (world/scenery/cbdCollapse.ts) onto ground blasts.
+    events.on('building:collapsed', ({ position: p, x, z, ground, top, radius, hero }) => {
       schedule(0, p.x, p.y, p.z, 'huge', 'air');
       collapseDust(x, ground, z, rnd() * Math.PI * 2);
       startFire(x, ground + 6, z, 1.6, 90);
+      if (!hero) return;
+      const h = top - ground;
+      const r = Math.max(10, radius * 0.8);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + rnd() * 0.6;
+        schedule(0.15 + (i / 8) * COLLAPSE_DELAY + rnd() * 0.1, x + Math.sin(a) * r, ground + h * (0.2 + rnd() * 0.6), z - Math.cos(a) * r, i % 3 ? 'medium' : 'large', 'air');
+      }
+      const down = buildingCollapseTime(h);
+      for (let i = 0; i < 4; i++) {
+        const a = rnd() * Math.PI * 2;
+        schedule(down - 0.4 + i * 0.25, x + Math.sin(a) * r * 0.6, ground + 2, z - Math.cos(a) * r * 0.6, i ? 'large' : 'huge', 'ground');
+      }
+      startFire(x + r * 0.4, ground + 4, z, 1.4, 120);
     }),
     events.on('damage', ({ target, weapon }) => {
       if (target.kind !== 'aircraft' || weapon === 'gun') return;
