@@ -70,9 +70,8 @@ export interface TerrainQuery {
 export type AiRole =
   | 'fighter' // air superiority: patrol → intercept → BVR/BFM → defend
   | 'interceptor' // scrambles towards the player/closest blue, aggressive
-  | 'escort' // protects a leader (bombers/AWACS) and engages threats to it
+  | 'escort' // protects a leader (bombers) and engages threats to it
   | 'bomber' // flies waypoint route at altitude, no air-to-air weapons (may have tail gun)
-  | 'awacs' // orbits a racetrack, flees when threatened
   | 'wingman' // friendly: follows player/lead in formation, engages on command/opportunity
   | 'cap'; // friendly/enemy combat air patrol around a point
 

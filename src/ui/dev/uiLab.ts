@@ -1,7 +1,8 @@
 /**
  * F35-A UI lab (dev only, served at /labs/ui-lab.html): renders one screen with mock data for visual checks.
- *   ?screen=splash|main|campaigns|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|loading|rotate|toast|controls
- *   &mission=c01          mission for briefing / pause
+ *   ?screen=splash|main|campaigns|campaign|training|instant|briefing|settings|pause|debrief|debrief-fail|credits|codex|loading|rotate|toast|controls
+ *   codex: &entry=<id> opens it at an entry (aim120, mud, matrix…)
+ *   &mission=g01          mission for briefing / pause
  *   &tab=obj|hangar       briefing tab to open
  *   &stab=controls|audio|display  settings tab
  *   &next=<label>         debrief NEXT button label (default 'Next mission'; 'Next lesson', 'Start the campaign')
@@ -10,7 +11,7 @@
  */
 import type { CampaignProgress, MissionResult, MissionRunnerApi } from '../../core/contracts';
 import { DEFAULT_SETTINGS } from '../../core/data';
-import { CAMPAIGN, CAMPAIGNS, SOUTHERN_CROSS, TRAINING, missionById } from '../../missions';
+import { CAMPAIGNS, TRAINING, missionById } from '../../missions';
 import { createInput } from '../../input/Input';
 import { createUi } from '../Ui';
 
@@ -28,16 +29,15 @@ const ui = createUi(document.getElementById('ui') as HTMLElement, { uiClick: () 
 (window as unknown as { __ui: unknown }).__ui = ui;
 
 const progress: CampaignProgress = {
-  unlocked: ['c01', 'c02', 'c03', 'c04'],
+  unlocked: ['g01', 'g02'],
   best: {
-    c01: { score: 12450, grade: 'A', difficulty: 'pilot' },
-    c02: { score: 9800, grade: 'B', difficulty: 'veteran' },
-    c03: { score: 20100, grade: 'S', difficulty: 'ace' },
+    g01: { score: 12450, grade: 'A', difficulty: 'pilot' },
+    g02: { score: 9800, grade: 'B', difficulty: 'veteran' },
     t01: { score: 3000, grade: 'C', difficulty: 'recruit' },
   },
   totals: { missions: 3, airKills: 14, groundKills: 6, deaths: 1 },
 };
-const mission = missionById(q.get('mission') ?? 'c01') ?? CAMPAIGN[0];
+const mission = missionById(q.get('mission') ?? 'g01') ?? CAMPAIGNS[0].missions[0];
 
 const result = (success: boolean): MissionResult => ({
   missionId: mission.id,
@@ -59,6 +59,7 @@ const result = (success: boolean): MissionResult => ({
     { id: 'b', label: 'Splash the second MiG pair', state: success ? 'complete' : 'failed', primary: true },
     { id: 'c', label: 'Keep the MiGs off the North Shore', state: success ? 'complete' : 'failed', primary: false },
   ],
+  codexId: success ? undefined : 'mud',
 });
 
 const fakeRunner = {
@@ -88,7 +89,7 @@ async function run(): Promise<void> {
       out((await ui.showCampaigns(CAMPAIGNS, progress))?.id ?? null);
       break;
     case 'campaign':
-      out((await ui.showCampaign(SOUTHERN_CROSS, progress))?.id ?? null);
+      out((await ui.showCampaign(CAMPAIGNS[0], progress))?.id ?? null);
       break;
     case 'training':
       out((await ui.showTraining(TRAINING, progress))?.id ?? null);
@@ -119,6 +120,10 @@ async function run(): Promise<void> {
       break;
     case 'debrief-fail':
       out(await ui.showDebrief(result(false), null));
+      break;
+    case 'codex':
+      await ui.showCodex(q.get('entry') ?? undefined);
+      out('codex done');
       break;
     case 'credits':
       await ui.showCredits();

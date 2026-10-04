@@ -331,6 +331,61 @@ describe('#116 collisions: incoming missiles, waterline, wingmen, bank arc, CIV 
   });
 });
 
+describe('#116 collisions: the FPM wing and the kill feed', () => {
+  it('the designated box\'s type label never prints on the flight path marker or its wings', () => {
+    for (const view of ['hud', 'cockpit'] as CameraMode[]) {
+      const probe = rig('lock', view);
+      probe.run(1 / 30);
+      const R = 6.5 * L.u;
+      const fpm0 = probe.fake.arcs.find((a) => Math.abs(a.r - R) < 0.3)!;
+      expect(fpm0, view).toBeTruthy();
+      // the box just under the FPM, left, centred and right of it: the type label above the box was
+      // laid out against text only and printed on the wing
+      for (const dx of [-30, -15, 0, 15, 30]) {
+        for (const dy of [8, 16, 24, 32]) {
+          const r = rig('lock', view);
+          r.run(1 / 30);
+          const mig = r.mock.world.aircraft.find((a) => a.type === 'mig29')!;
+          mig.position.copy(r.at(fpm0.x + dx, fpm0.y + dy, 9000));
+          const texts = r.run(1 / 30);
+          const fpm = r.fake.arcs.find((a) => Math.abs(a.r - R) < 0.3)!;
+          const wing = { x0: fpm.x - R - 10 * L.u, y0: fpm.y - R - 7 * L.u, x1: fpm.x + R + 10 * L.u, y1: fpm.y + 2 };
+          for (const t of find(texts, 'MIG-29')) expect(overlaps(textBox(t), wing, 0), `${view} ${dx},${dy}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('LOCKING never prints into the kill feed, even with the box right under it', () => {
+    for (const view of ['hud', 'cockpit'] as CameraMode[]) {
+      let shown = 0;
+      for (const x of [450, 520, 580, 640, 700]) {
+        for (const y of [50, 80, 95, 110]) {
+          const r = rig('aa', view);
+          r.run(1 / 30);
+          const su35 = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
+          r.mock.events.emit('destroyed', { entity: r.mock.world.sams[0], attackerId: r.mock.player.id } as never);
+          r.mock.events.emit('destroyed', { entity: su35, attackerId: r.mock.player.id } as never);
+          r.run(0.2);
+          const des = r.mock.world.aircraft.find((a) => a.id === r.mock.player.radar.designatedId)!;
+          for (let k = 0; k < 8; k++) {
+            des.position.copy(r.at(x, y, 9000));
+            const texts = r.run(1 / 30);
+            const feed = find(texts, /DESTROYED|SPLASH/);
+            expect(feed.length, `${view} ${x},${y}`).toBeGreaterThan(0);
+            for (const l of find(texts, 'LOCKING')) {
+              shown++;
+              for (const fd of feed) expect(overlaps(textBox(l), textBox(fd), 0), `${view} ${x},${y}: LOCKING x ${fd.text}`).toBe(false);
+            }
+          }
+        }
+      }
+      // it moves out of the way (under or over the box's labels), it isn't simply dropped
+      expect(shown, view).toBeGreaterThan(40);
+    }
+  });
+});
+
 describe('#116 wording', () => {
   it('1.2-m: a parked jet the mission names after its type reads as that type (HMD, PiP, PCD)', () => {
     const jet = new GroundTargetEntity(1, 'parked_jet', 'red', { name: 'MiG-29', radius: 9 });

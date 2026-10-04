@@ -99,13 +99,13 @@ describe('combat: dynamic launch zone', () => {
     expect(zAi.shoot).toBe(true);
   });
 
-  it('GPS envelopes: SDB standoff ≫ JDAM, higher and faster releases reach further', () => {
+  it('GPS envelopes: SDB II (GBU-53) standoff ≫ JDAM, higher and faster releases reach further', () => {
     const jdam = gpsMaxRange(MUNITIONS.gbu31, 9000, 250, 0);
-    const sdb = gpsMaxRange(MUNITIONS.gbu39, 9000, 250, 0);
+    const sdb = gpsMaxRange(MUNITIONS.gbu53, 9000, 250, 0);
     expect(sdb).toBeGreaterThan(2 * jdam);
     expect(sdb).toBeGreaterThan(18_000);
     expect(jdam).toBeGreaterThan(5_000);
-    expect(gpsMaxRange(MUNITIONS.gbu39, 4000, 250, 0)).toBeLessThan(sdb);
+    expect(gpsMaxRange(MUNITIONS.gbu53, 4000, 250, 0)).toBeLessThan(sdb);
     expect(gpsMaxRange(MUNITIONS.gbu31, 9000, 320, 0)).toBeGreaterThan(jdam);
   });
 
@@ -258,16 +258,16 @@ describe('combat: guns', () => {
   it('strafing damages ground targets', () => {
     const w = new FakeWorld();
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 400, 0), heading: 0, speed: 200, loadout: 'a2a_stealth' });
-    const truck = w.spawnGround({ type: 'truck', team: 'red', position: v3(0, 0, -1500), health: 60 });
-    // aim the nose at the truck
-    const dir = new Vector3().subVectors(truck.position, f35.position).normalize();
+    const jet = w.spawnGround({ type: 'parked_jet', team: 'red', position: v3(0, 0, -1500), health: 60 });
+    // aim the nose at the parked jet
+    const dir = new Vector3().subVectors(jet.position, f35.position).normalize();
     f35.quaternion.setFromUnitVectors(new Vector3(0, 0, -1), dir);
     f35.velocity.copy(dir).multiplyScalar(200);
     f35.input.fireGun = true;
     w.run(1);
     f35.input.fireGun = false;
     w.run(2);
-    expect(truck.health).toBeLessThan(60);
+    expect(jet.health).toBeLessThan(60);
     const shooter: AircraftEntity = f35;
     expect(shooter.hits).toBeGreaterThanOrEqual(1);
   });

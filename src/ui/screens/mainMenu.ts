@@ -1,6 +1,6 @@
 /**
  * F35-A UI — main menu: logo + theatre card + pilot card (rank, current difficulty, service record)
- * on the left, five big menu items on the right. On a first launch a friendly prompt suggests the
+ * on the left, six big menu items on the right. On a first launch a friendly prompt suggests the
  * Training lessons (dismissable, remembered).
  */
 import type { CampaignProgress, MainMenuChoice } from '../../core/contracts';
@@ -19,6 +19,7 @@ const ITEMS: { id: MainMenuChoice; title: string; sub: string; icon: string; pri
   { id: 'campaign', title: 'Campaign', sub: 'Defend Auckland', icon: 'flag', primary: true },
   { id: 'instant', title: 'Instant Action', sub: 'Free flight · dogfight · strike · defend', icon: 'crosshair' },
   { id: 'training', title: 'Training', sub: 'Learn to fly and fight the F-35A', icon: 'book' },
+  { id: 'codex', title: 'Codex', sub: 'Weapons · warnings · threats', icon: 'missile' },
   { id: 'settings', title: 'Settings', sub: 'Difficulty · controls · audio · display', icon: 'gear' },
   { id: 'credits', title: 'Credits', sub: 'Team, tools and licences', icon: 'info' },
 ];
@@ -82,7 +83,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
     const list = h('nav', { class: 'mm-list', attrs: { 'aria-label': 'Main menu' } });
     let first: HTMLButtonElement | null = null;
     for (const it of ITEMS) {
-      // the Campaign line names every playable campaign (a disabled one, like Southern Cross, isn't shown)
+      // the Campaign line names every playable campaign (a disabled one isn't shown)
       const sub = it.id === 'campaign' && PLAYABLE_CAMPAIGNS.length > 0 ? PLAYABLE_CAMPAIGNS.map((c) => c.name).join(' · ') : it.sub;
       const recBadge = it.id === 'training' && needsTraining ? '<span class="badge mm-recb">RECOMMENDED</span>' : '';
       const b = h('button', {

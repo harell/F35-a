@@ -10,7 +10,7 @@ import { campaignStatus } from '../format';
 import type { UiHost } from '../host';
 import { screenHeader, stagger } from '../widgets';
 
-const CAMPAIGN_ICON: Record<CampaignDef['id'], string> = { southern_cross: 'flag', irgc: 'crosshair' };
+const CAMPAIGN_ICON: Record<CampaignDef['id'], string> = { irgc: 'crosshair' };
 
 export function showCampaigns(host: UiHost, campaigns: CampaignDef[], progress: CampaignProgress, toast: (t: string) => void): Promise<CampaignDef | null> {
   return new Promise((resolve) => {

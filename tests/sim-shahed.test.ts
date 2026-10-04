@@ -372,7 +372,7 @@ describe('Shahed-136: formation spawn', () => {
   });
 
   it('validateMission accepts a drone group at drone speed and checks its target and route', () => {
-    const base = missionById('c01')!;
+    const base = missionById('t01')!;
     const withGroup = (g: AircraftGroupDef): MissionDef => ({ ...base, script: { ...base.script!, groups: [...base.script!.groups, g] } });
     const g: AircraftGroupDef = {
       id: 'shaheds',
@@ -390,11 +390,11 @@ describe('Shahed-136: formation spawn', () => {
     };
     expect(validateMission(base)).toEqual([]);
     expect(validateMission(withGroup(g))).toEqual([]);
-    expect(validateMission(withGroup({ ...g, speed: 10 }))).toEqual(['c01: group shaheds drone speed below 30 m/s']);
+    expect(validateMission(withGroup({ ...g, speed: 10 }))).toEqual(['t01: group shaheds drone speed below 30 m/s']);
     const far = withGroup({ ...g, oneWay: { targetX: 1e7, targetZ: 1000, route: [{ x: 2500, z: -1e7 }] } });
     expect(validateMission(far).filter((e) => /drone target|drone route 0/.test(e))).toHaveLength(2);
     // ordinary flights keep the 100 m/s floor
-    expect(validateMission(withGroup({ ...g, oneWay: undefined, speed: SHAHED_SPEED }))).toContain('c01: group shaheds speed below 100 m/s');
+    expect(validateMission(withGroup({ ...g, oneWay: undefined, speed: SHAHED_SPEED }))).toContain('t01: group shaheds speed below 100 m/s');
   });
 
   it('a mission group of 10 drones spawns in the triangle, nose toward the target, and every drone dives into it', { timeout: 30_000 }, () => {
@@ -417,7 +417,7 @@ describe('Shahed-136: formation spawn', () => {
       announce: false,
       oneWay: { targetX: target.x, targetZ: target.z, targetY: 60, route: [{ x: 2500, z: 3500 }] },
     };
-    const base = missionById('c01')!;
+    const base = missionById('g01')!;
     const def: MissionDef = {
       ...base,
       script: {
@@ -489,7 +489,7 @@ describe('Shahed-136: red AI and SAMs ignore it', () => {
 describe('Shahed-136: AIM-9X and AIM-120 lock it at its route height over the city', () => {
   let terrain: TerrainQuery;
   beforeAll(() => {
-    const def = missionById('c01')!;
+    const def = missionById('g01')!;
     terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: 'auckland', seed: def.seed, resolution: 512, features: allFeatures('auckland', []), pads: terrainPadsFor(def) })));
   }, 60_000);
 

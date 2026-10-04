@@ -33,7 +33,7 @@ A routine runs this skill. Keep the wiring as it is, because the simpler setups 
 - **Gameplay intent stays the owner's.** If an issue needs a choice that changes what a mission or mechanic is, don't make it. Comment the question on the issue and move to the next one.
 - **Pushing extra branches is allowed.** Each layer is pushed to its own `stack/…` branch (stacked-pr skill), not only to the session's assigned branch.
 - **Don't subscribe to PR activity** and don't schedule check-ins. The session ends at the deadline. CI results on tonight's layers are picked up by tomorrow's run (phase 0).
-- Operation Southern Cross is disabled (CLAUDE.md). Skip issues that only concern it.
+- Operation Southern Cross was deleted (CLAUDE.md). Skip issues that only concern it and list them in the run report for the owner to close.
 - Test shortcuts stay behind `TEST_HOOKS` (`src/core/data.ts`).
 
 ## Budget

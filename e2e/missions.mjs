@@ -4,7 +4,7 @@
  * player state and frame stats. Screenshots go to e2e/screenshots/missions/.
  * Training lessons start on an Ace setting and must fly at Pilot (#68: Game.runSession).
  *
- *   node e2e/missions.mjs [--base=http://localhost:5173/] [--seconds=12] [--only=c01,c02] [--view=chase]
+ *   node e2e/missions.mjs [--base=http://localhost:5173/] [--seconds=12] [--only=g01,g02] [--view=chase]
  */
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -32,7 +32,7 @@ await page.goto(base + '?autostart=1', { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__f35, null, { timeout: 30000 });
 let missions = await page.evaluate(() => window.__f35.missions());
 await page.close();
-// --only picks any ids; without it, the missions the player can reach (not the disabled Southern Cross)
+// --only picks any ids; without it, the missions the player can reach (not a disabled campaign's)
 if (args.only) missions = missions.filter((m) => String(args.only).split(',').includes(m.id));
 else missions = missions.filter((m) => m.playable !== false);
 

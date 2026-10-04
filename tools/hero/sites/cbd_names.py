@@ -1,9 +1,10 @@
 """
 F35-A — names for the CBD's remaining skyscrapers: every LINZ building the sim knows as a solid (a roof ≥ 40 m above the
 ground, sim/buildings.ts SKYSCRAPER_MIN_HEIGHT) that isn't a tower of the tower kit (core/cbdTowersData.ts) or a Scene
-apartment, so a crash into any of them names it on the HUD and in the debrief. Writes src/core/cbdBuildingNames.ts.
+apartment (a hero neighbourhood building has no name of its own, so it is listed too), so a crash into any of them
+names it on the HUD and in the debrief. Writes src/core/cbdBuildingNames.ts.
 
-  (a throwaway vitest writes the list: for every aucklandBuildings() entry with no `tower` / `hero` and a prism ≥ 40 m,
+  (a throwaway vitest writes the list: for every aucklandBuildings() entry with no `tower` / `name` and a prism ≥ 40 m,
    {id, x, z, h, lon, lat, ring: [[lon, lat], …]} of its first prism (worldToGeo) → /tmp/hero/cbd_unnamed.json)
   python3 tools/hero/sites/cbd_names.py --list /tmp/hero/cbd_unnamed.json [--cache /tmp/hero/cbd_names_osm]
 
@@ -21,12 +22,12 @@ OUT = os.path.join(os.path.dirname(__file__), '../../../src/core/cbdBuildingName
 
 # LINZ index → (name in a sentence, HUD label); None keeps OSM's
 OVERRIDES = {
-    540: ('2 Kitchener Street', None),  # OSM: a tenant (an immigration firm)
-    754: ('39 Symonds Street', None),  # OSM: the art shop on the ground floor
-    233: ('a tower on Shortland Street', 'SHORTLAND ST TOWER'),  # no OSM building or address
-    498: ('a University of Auckland building', 'UNIVERSITY BUILDING'),
-    718: ('a building on Wellesley Street East', 'WELLESLEY ST BUILDING'),
-    914: ('a building on Symonds Street', 'SYMONDS ST BUILDING'),
+    538: ('2 Kitchener Street', None),  # OSM: a tenant (an immigration firm)
+    752: ('39 Symonds Street', None),  # OSM: the art shop on the ground floor
+    231: ('a tower on Shortland Street', 'SHORTLAND ST TOWER'),  # no OSM building or address
+    496: ('a University of Auckland building', 'UNIVERSITY BUILDING'),
+    716: ('a building on Wellesley Street East', 'WELLESLEY ST BUILDING'),
+    912: ('a building on Symonds Street', 'SYMONDS ST BUILDING'),
 }
 
 

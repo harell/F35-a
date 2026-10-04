@@ -4,6 +4,7 @@
  * single draw call. Local frames: yaw θ about +Y (three.js convention); θ = −heading.
  */
 import { BufferAttribute, BufferGeometry, Color, ShapeUtils, Vector2 } from 'three';
+import { pitchedHeight, roofFacets, wallBreaks, type PitchedRoof } from './pitchedRoof';
 
 export interface Frame {
   ox: number;
@@ -198,6 +199,44 @@ export class GeometryBuilder {
       // upward normal: (p1 − p0) × (p2 − p0) has y = Δz1·Δx2 − Δx1·Δz2 > 0
       const up = (ring[b * 2 + 1] - ring[a * 2 + 1]) * (ring[c * 2] - ring[a * 2]) - (ring[b * 2] - ring[a * 2]) * (ring[c * 2 + 1] - ring[a * 2 + 1]) > 0;
       this.tri(IDENT_FRAME, up ? [...p(a), ...p(b), ...p(c)] : [...p(a), ...p(c), ...p(b)], roofColor, WIN_NONE);
+    }
+    return this.triangleCount - t0;
+  }
+
+  /**
+   * A house with a gable or hip roof (pitchedRoof.ts) over a footprint (flat [x0, z0, ...], either winding): walls
+   * from y0 up to the roof, split where the roof's slope changes so a gable end reaches the ridge, and one planar
+   * facet per eave edge. `g` is the ground the roof's heights stand on. Returns the triangle count.
+   */
+  pitchedPrism(ring: ArrayLike<number>, y0: number, g: number, roof: PitchedRoof, color: Color | number, roofColor: Color | number, win = WIN_NONE): number {
+    const n = ring.length / 2;
+    if (n < 3) return 0;
+    const t0 = this.triangleCount;
+    let area = 0;
+    for (let i = 0, j = n - 1; i < n; j = i++) area += ring[j * 2] * ring[i * 2 + 1] - ring[i * 2] * ring[j * 2 + 1];
+    const colr = typeof color === 'number' ? new Color(color) : color.clone();
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const [a, b] = area > 0 ? [j, i] : [i, j];
+      const ax = ring[a * 2], az = ring[a * 2 + 1], bx = ring[b * 2], bz = ring[b * 2 + 1];
+      if (ax === bx && az === bz) continue;
+      const ts = wallBreaks(roof, ax, az, bx, bz);
+      for (let k = 0; k + 1 < ts.length; k++) {
+        const pax = ax + (bx - ax) * ts[k], paz = az + (bz - az) * ts[k];
+        const pbx = ax + (bx - ax) * ts[k + 1], pbz = az + (bz - az) * ts[k + 1];
+        if (Math.abs(pbx - pax) + Math.abs(pbz - paz) < 1e-3) continue;
+        this.quad(IDENT_FRAME, [pax, y0, paz, pbx, y0, pbz, pbx, g + pitchedHeight(roof, pbx, pbz), pbz, pax, g + pitchedHeight(roof, pax, paz), paz], colr, win);
+      }
+    }
+    for (const f of roofFacets(roof, ring)) {
+      const m = f.heights.length;
+      const pts: Vector2[] = [];
+      for (let i = 0; i < m; i++) pts.push(new Vector2(f.ring[i * 2], f.ring[i * 2 + 1]));
+      for (const [a, b, c] of ShapeUtils.triangulateShape(pts, [])) {
+        const p = (k: number) => [f.ring[k * 2], g + f.heights[k], f.ring[k * 2 + 1]];
+        const up = (f.ring[b * 2 + 1] - f.ring[a * 2 + 1]) * (f.ring[c * 2] - f.ring[a * 2]) - (f.ring[b * 2] - f.ring[a * 2]) * (f.ring[c * 2 + 1] - f.ring[a * 2 + 1]) > 0;
+        this.tri(IDENT_FRAME, up ? [...p(a), ...p(b), ...p(c)] : [...p(a), ...p(c), ...p(b)], roofColor, WIN_NONE);
+      }
     }
     return this.triangleCount - t0;
   }

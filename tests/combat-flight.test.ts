@@ -2,7 +2,7 @@
  * Regression tests for the i1 missile-flight fixes:
  *  - thrust-vector g is no longer charged as induced drag (AIM-9X / R-73 high off-boresight shots
  *    used to stall during the boost and self-destruct at 2.0 s)
- *  - vertical-launch SAMs (SA-10 / SA-15) pitch over with a rate-limited, speed-preserving turn
+ *  - vertical-launch SAMs (SA-15) pitch over with a rate-limited, speed-preserving turn
  *    and do not fly into the ground against low targets
  */
 import { describe, expect, it } from 'vitest';
@@ -80,7 +80,7 @@ describe('combat: thrust-vectoring dogfight missiles', () => {
 });
 
 /** Vertical-launch SAM vs a MiG at `agl` over flat ground (20 m MSL), `dist` north of the site. */
-function vls(type: 'sa15' | 'sa10', agl: number, dist: number, heading: number) {
+function vls(type: 'sa15', agl: number, dist: number, heading: number) {
   const ground = 20;
   const w = new FakeWorld({ difficulty: 'veteran', seed: 7, terrain: new FlatTerrain(ground) });
   w.spawnSam({ type, team: 'red', position: v3(0, 0, 0) });
@@ -116,9 +116,9 @@ describe('combat: vertical-launch SAM pitch-over', () => {
     expect(['hit', 'proximity']).toContain(r.reason);
   });
 
-  it('SA-10 vs a 150 m AGL target 12 km away: climbs out of the tube, turns over, intercepts', () => {
-    for (const heading of [Math.PI, Math.PI / 2]) {
-      const r = vls('sa10', 150, 12000, heading);
+  it('SA-15 vs a 300 m AGL target 6 km head-on / 4 km crossing: climbs out of the tube, turns over, intercepts', () => {
+    for (const [heading, dist] of [[Math.PI, 6000], [Math.PI / 2, 4000]]) {
+      const r = vls('sa15', 300, dist, heading);
       expect(r.reason).not.toBe('ground');
       expect(['hit', 'proximity']).toContain(r.reason);
       expect(r.heightAt1_5).toBeGreaterThan(60); // it rose above the launcher before turning over

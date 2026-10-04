@@ -292,6 +292,8 @@ export class Game {
       });
     } else if (choice === 'settings') {
       await this.editSettings();
+    } else if (choice === 'codex') {
+      await this.flow.ask(this.ui.showCodex());
     } else if (choice === 'credits') {
       await this.flow.ask(this.ui.showCredits());
     }
@@ -299,7 +301,7 @@ export class Game {
 
   /**
    * Campaign picker → that campaign's mission list; Back on the list returns to the picker. Only playable
-   * campaigns are offered (Southern Cross is disabled); with just one, its mission list opens directly.
+   * campaigns are offered; with just one, its mission list opens directly.
    */
   private async campaignMenu(): Promise<void> {
     if (PLAYABLE_CAMPAIGNS.length === 1) {

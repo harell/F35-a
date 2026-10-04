@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { FakeWorld, FlatTerrain, v3 } from './combat-helpers';
 import type { SamState } from '../src/sim/entities';
 import type { CombatMissile } from '../src/sim/weapons/missile';
 import { SAM_LAUNCH_PRIORITY, launchRangeFraction } from '../src/sim/sam/SamSystem';
+import { SAM_DATA } from '../src/sim/sam/samData';
 
 /** Simulation-heavy tests get an explicit timeout (a loaded CI runner can take > 5 s). */
 const SIM = { timeout: 30_000 };
@@ -44,8 +45,8 @@ describe('combat: SAM sites', () => {
   it('a clean F-35 is detected at ~25 % of the range of a fighter; beast mode much earlier', SIM, () => {
     const trackRange = (type: 'mig29' | 'f35a', loadout?: 'a2a_stealth' | 'a2a_beast') => {
       const w = new FakeWorld({ difficulty: 'veteran' });
-      const site = w.spawnSam({ type: 'sa10', team: 'red', position: v3(0, 0, 0) });
-      const ac = w.spawnAircraft({ type, team: 'blue', position: v3(0, 9000, -90000), heading: Math.PI, speed: 300, loadout });
+      const site = w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, 0) });
+      const ac = w.spawnAircraft({ type, team: 'blue', position: v3(0, 5000, -50000), heading: Math.PI, speed: 300, loadout });
       let r = -1;
       w.run(400, () => {
         if (site.state === 'track') r = ac.position.distanceTo(site.position);
@@ -56,7 +57,7 @@ describe('combat: SAM sites', () => {
     const mig = trackRange('mig29');
     const clean = trackRange('f35a', 'a2a_stealth');
     const beast = trackRange('f35a', 'a2a_beast');
-    expect(mig).toBeGreaterThan(60_000);
+    expect(mig).toBeGreaterThan(0.8 * SAM_DATA.sa6.detectRange); // a fighter is seen near the quoted range
     expect(clean / mig).toBeGreaterThan(0.15);
     expect(clean / mig).toBeLessThan(0.4);
     expect(beast).toBeGreaterThan(1.5 * clean);
@@ -72,7 +73,7 @@ describe('combat: SAM sites', () => {
 
     const wall = { x0: -2000, x1: 2000, z0: -6000, z1: -5000, h: 3000 };
     const w2 = new FakeWorld({ terrain: new FlatTerrain(0, [wall]) });
-    const s2 = w2.spawnSam({ type: 'sa8', team: 'red', position: v3(0, 0, 0) });
+    const s2 = w2.spawnSam({ type: 'sa15', team: 'red', position: v3(0, 0, 0) });
     w2.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(0, 800, -20000), heading: 0, speed: 0.001 });
     w2.run(10);
     expect(s2.state).toBe('search');
@@ -99,7 +100,7 @@ describe('combat: SAM sites', () => {
     for (let seed = 1; seed <= 6; seed++) {
       const w = new FakeWorld({ seed, difficulty: 'ace' });
       const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 9000, 0), heading: 0, speed: 280, loadout: 'sead_stealth' });
-      const site = w.spawnSam({ type: 'sa10', team: 'red', position: v3(0, 0, -40000) });
+      const site = w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, -40000) });
       f35.selectedWeapon = 'aargm';
       f35.radar.mode = 'ground';
       w.run(0.5);
@@ -145,8 +146,14 @@ describe('combat: SAM sites', () => {
   });
 
   it('MANPADS: silent on the RWR but the F-35 DAS warns and the site is revealed; DARKSTAR does not call it', SIM, () => {
+    // the AD boat's SA-18 crew on its own: its radar SAM (which would show on the RWR and draw a
+    // DARKSTAR call) is switched off for this test, leaving the shoulder-launched rounds
+    const data = SAM_DATA.ad_boat;
+    const saved = { radar: data.radar, missile: data.missile, closeCue: data.closeCue };
+    Object.assign(data, { radar: false, missile: null, closeCue: null });
+    onTestFinished(() => void Object.assign(data, saved));
     const w = new FakeWorld();
-    const team = w.spawnSam({ type: 'sa18', team: 'red', position: v3(0, 0, 0) });
+    const team = w.spawnSam({ type: 'ad_boat', team: 'red', position: v3(0, 0, 0) });
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(300, 700, -7000), heading: Math.PI, speed: 230, loadout: 'a2a_stealth' });
     f35.flight.afterburner = 1;
     const launches = w.record('munition:launch');

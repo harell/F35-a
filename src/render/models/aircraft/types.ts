@@ -14,7 +14,6 @@ import type { V3 } from '../specs';
  *  rudder    rudder·max + side·airbrake·extra (split-rudder speed brake)
  *  airbrake  −airbrake·max (panel lifts)
  *  door      bayDoors·max (signed open angle)
- *  sweep     variable-geometry wing: −side·sweepFromSpeed (max = full sweep delta)
  *  radome    continuous rotation at `max` rad/s
  *  canard    −elevator·max (foreplane, opposite sense)
  *  gear      landing gear leg: (1 − gear)·max (folded = retracted; hidden once fully up)
@@ -30,7 +29,6 @@ export type DriveKind =
   | 'rudder'
   | 'airbrake'
   | 'door'
-  | 'sweep'
   | 'radome'
   | 'canard'
   | 'gear'

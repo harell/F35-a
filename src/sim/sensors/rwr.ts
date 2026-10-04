@@ -21,8 +21,6 @@ import { SAM_DATA } from '../sam/samData';
 import { FIGHTER_RADAR } from './signatures';
 import { lineOfSight } from './los';
 
-export const EWR_RWR_RANGE = 120_000;
-
 interface RwrEntry extends RwrContact {
   stamp: number;
 }
@@ -99,7 +97,7 @@ export function updateRwr(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState,
   _st = st;
   _sdt = sdt;
 
-  // ── fighter / AEW radars ──
+  // ── fighter radars ──
   for (const y of world.aircraft) {
     if (!y.alive || y.team === ac.team || !y.radar.emitting) continue;
     const spec = FIGHTER_RADAR[y.type];
@@ -114,7 +112,7 @@ export function updateRwr(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState,
     else if (y.radar.lockedId === ac.id) state = 'track';
     const maxR = spec.range * 1.2 * (spec.lpi && state === 'search' ? 0.4 : 1);
     if (d > maxR) continue;
-    report(y.id, y.type === 'a50' ? 'awacs' : 'fighter', AIRCRAFT_INFO[y.type].rwrSymbol, y.position, d / maxR, state);
+    report(y.id, 'fighter', AIRCRAFT_INFO[y.type].rwrSymbol, y.position, d / maxR, state);
   }
 
   // ── SAM / AAA radars ──
@@ -131,14 +129,6 @@ export function updateRwr(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState,
     else if (s.trackedTargetId === ac.id && (s.state === 'track' || s.state === 'launch' || s.state === 'guiding')) state = 'track';
     report(s.id, s.type === 'zsu23' ? 'aaa' : 'sam', SAM_INFO[s.type].rwrSymbol || 'S', s.position, d / maxR, state);
     if (ac.isPlayer) s.known = true; // ESM geolocates the emitter
-  }
-
-  // ── early-warning radars ──
-  for (const g of world.ground) {
-    if (!g.alive || !g.emitter || g.team === ac.team) continue;
-    const d = g.position.distanceTo(ac.position);
-    if (d > EWR_RWR_RANGE) continue;
-    report(g.id, 'ewr', 'EW', g.position, d / EWR_RWR_RANGE, 'search');
   }
 
   // ── active seekers locked on us ──

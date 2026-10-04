@@ -154,7 +154,6 @@ export class SamVisual {
 export class GroundVisual {
   readonly root: Object3D;
   private spinners: { node: Object3D; rate: number }[] = [];
-  private mid: Object3D | null;
   private wreckT = -1;
   private mats = new Map<Mesh, Material | Material[]>();
   private readonly seed = Math.random();
@@ -169,7 +168,6 @@ export class GroundVisual {
       const n = this.root.getObjectByName(s.name);
       if (n) this.spinners.push({ node: n, rate: s.rate });
     }
-    this.mid = this.root.getObjectByName('span:mid') ?? null;
     this.ship = proto.wreck === 'ship';
   }
 
@@ -208,7 +206,6 @@ export class GroundVisual {
       this.wreckT = -1;
       charAll(this.root, this.mats, false);
       this.root.scale.set(1, 1, 1);
-      if (this.mid) this.mid.position.set(0, 0, 0);
     }
     for (const s of this.spinners) s.node.rotation.y = time * s.rate;
     const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
@@ -221,13 +218,6 @@ export class GroundVisual {
     switch (this.proto.wreck) {
       case 'building':
         this.root.scale.set(1, 1 - 0.62 * k, 1);
-        break;
-      case 'bridge':
-        if (this.mid) {
-          this.mid.position.y = -9 * k;
-          this.mid.rotation.x = 0.12 * k;
-          this.mid.rotation.z = 0.05 * k;
-        }
         break;
       case 'aircraft':
       case 'vehicle':

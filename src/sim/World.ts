@@ -59,18 +59,13 @@ const WRECK_MAX_TIME = 120;
 /** Aircraft never spawn lower than this above the surface (m). */
 const MIN_SPAWN_AGL = 60;
 /** Default driving speeds (m/s) for ground movers without an explicit speed. */
-const DEFAULT_MOVER_SPEED: Partial<Record<GroundTargetType, number>> = { truck: 12, tank: 7, ship: 8, suicide_boat: BOAT_SPEED, missile_boat: BOAT_SPEED };
+const DEFAULT_MOVER_SPEED: Partial<Record<GroundTargetType, number>> = { ship: 8, suicide_boat: BOAT_SPEED, missile_boat: BOAT_SPEED };
 const GROUND_NAMES: Record<GroundTargetType, string> = {
-  ewr: 'EW Radar',
   bunker: 'Command Bunker',
   fuel: 'Fuel Depot',
   hangar: 'Hangar',
   parked_jet: 'Parked Jet',
-  truck: 'Truck',
-  tank: 'Tank',
   ship: 'Corvette',
-  factory: 'Factory',
-  bridge: 'Bridge',
   suicide_boat: 'Suicide Boat',
   missile_boat: 'Peykaap II',
 };
@@ -290,7 +285,6 @@ class SimWorldImpl implements SimWorld {
     }
     e.anchored = !!spec.anchored && !spec.path;
     e.scenery = !!spec.scenery;
-    e.emitter = data.emitter;
     e.groupId = spec.groupId ?? '';
     const x = spec.position.x;
     const z = spec.position.z;

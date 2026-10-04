@@ -1,5 +1,5 @@
 /**
- * F35-A — bomber brain (Tu-22M3 raids): fly the route at altitude, straight and steady.
+ * F35-A — bomber brain (strike jets on a route, Shahed drones): fly the route at altitude, straight and steady.
  *
  *  ROUTE      waypoint route (task 'route'; y = altitude), or straight on the spawn heading
  *  JINK       hostile fighter close: mild heading weaves, full power, pre-emptive flares when
@@ -12,7 +12,7 @@ import { Vector3 } from 'three';
 import type { AiTask, SimWorld } from '../../sim/api';
 import type { AircraftEntity } from '../../sim/entities';
 import type { FlightIntent } from '../pilot/Autopilot';
-import { dirWithElevation, headingDir, rotateHorizontal } from '../geom';
+import { headingDir, rotateHorizontal } from '../geom';
 import { Brain, type BrainOptions } from './Brain';
 import { Awareness } from './awareness';
 import { FormationKeeper, type FormationSlot } from '../pilot/formation';
@@ -47,7 +47,7 @@ export class BomberBrain extends Brain {
   protected think(ac: AircraftEntity, world: SimWorld, dt: number, it: FlightIntent): void {
     this.aw.update(ac, world, this.skill, this.rng);
     const perf = this.perfOf(ac);
-    const cruise = ac.type === 'a50' ? 190 : 250;
+    const cruise = 250;
     const task = this.task;
 
     // navigation: bomber elements fly a wide echelon on their lead
@@ -76,8 +76,9 @@ export class BomberBrain extends Brain {
       this.flyToPoint(ac, it, this.farPoint, this.homeAlt, 0.1, 12);
       it.speed = cruise;
     }
-    // heavies turn at ≤ ~45° of bank (1.4 g), gently
+    // bombers turn gently: 1.4 g is ~45° of bank level, and the bank cap holds it in a descending turn
     it.gMax = Math.min(it.gMax, 1.4, perf.maxG * 0.8);
+    it.bankMax = 50 * DEG;
     it.gain = Math.min(it.gain, 0.5);
     it.allowInverted = false;
 
@@ -116,71 +117,5 @@ export class BomberBrain extends Brain {
     if (d < 8_000) this.orbit(ac, it, point, 7_000, this.homeAlt, 220);
     else it.speed = 240;
     return 'RTB';
-  }
-}
-
-/**
- * AWACS brain (A-50): race-track orbit; flees at full power when a hostile aircraft comes
- * within ~25 km (its own 360° radar sees them), returns once clear for 15 s.
- *  ORBIT / FLEE / DEFENSIVE
- */
-export class AwacsBrain extends Brain {
-  private readonly aw = new Awareness();
-  private fleeing = false;
-  private clearSince = -1;
-  private readonly fleeDir = new Vector3();
-
-  constructor(opts: BrainOptions) {
-    super('awacs', opts);
-  }
-
-  protected think(ac: AircraftEntity, world: SimWorld, _dt: number, it: FlightIntent): void {
-    this.aw.update(ac, world, this.skill, this.rng);
-    const task = this.task;
-    const center = task?.kind === 'patrol' ? task.center : task?.kind === 'rtb' ? task.point : this.home;
-    const alt = task?.kind === 'patrol' ? task.altitude : Math.max(6_000, this.homeAlt);
-    const length = task?.kind === 'patrol' ? Math.max(20_000, task.radius * 2) : 25_000;
-
-    // threat picture: nearest hostile aircraft and the centroid of those within 40 km
-    let nearest = Infinity;
-    _p.set(0, 0, 0);
-    let n = 0;
-    for (const b of this.aw.bandits) {
-      if (b.range < nearest) nearest = b.range;
-      if (b.range < 40_000) {
-        _p.add(b.pos);
-        n++;
-      }
-    }
-    if (!this.fleeing && nearest < 25_000) {
-      this.fleeing = true;
-      this.clearSince = -1;
-    }
-    if (this.fleeing) {
-      if (n > 0) this.fleeDir.set(ac.position.x - _p.x / n, 0, ac.position.z - _p.z / n).normalize();
-      if (nearest > 45_000) {
-        if (this.clearSince < 0) this.clearSince = this.now;
-        if (this.now - this.clearSince > 15) this.fleeing = false;
-      } else this.clearSince = -1;
-    }
-
-    const inc = this.aw.threatMissile(this.now, ac.incoming);
-    if (this.fleeing || inc) {
-      if (this.fleeDir.lengthSq() < 0.5) this.fleeDir.set(ac.position.x - center.x, 0, ac.position.z - center.z).normalize();
-      dirWithElevation(this.fleeDir, -0.03, it.dir);
-      it.throttle = 1;
-      it.gMax = 1.8;
-      it.gain = 0.7;
-      it.allowInverted = false;
-      if (inc) {
-        if (inc.guidance === 'ir' || inc.distance < 3_000) this.flares(ac, 0.6);
-        if (inc.guidance === 'radar' && inc.distance < 12_000) this.chaff(ac, 0.8);
-        this.setState('DEFENSIVE');
-      } else this.setState('FLEE');
-      return;
-    }
-    this.flyRacetrack(ac, it, center, length, this.homeHeading + Math.PI / 2, alt, 190);
-    it.gMax = 1.6;
-    this.setState('ORBIT');
   }
 }

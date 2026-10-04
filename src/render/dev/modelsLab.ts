@@ -143,7 +143,7 @@ function addAircraft(type: AircraftType, pos = new Vector3()): AircraftVisual {
 
 function build(): void {
   if (modelId === 'all') {
-    const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50', 'a320', 'shahed136'];
+    const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57', 'a320', 'shahed136'];
     let x = -60;
     for (const t of types) {
       const s = AIRCRAFT_SPECS[t];

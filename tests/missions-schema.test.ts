@@ -58,7 +58,7 @@ describe('mission schema features', () => {
   it('reach with an altitude band (low level), destroy_sams, reveal and set_waypoint', () => {
     const d = def({
       sams: [
-        { id: 's1', group: 'sams', type: 'sa8', x: 30000, z: -20000, known: false },
+        { id: 's1', group: 'sams', type: 'sa15', x: 30000, z: -20000, known: false },
         { id: 's2', group: 'sams', type: 'zsu23', x: 30500, z: -20000, known: false },
       ],
       objectives: [
@@ -129,7 +129,10 @@ describe('mission schema features', () => {
   });
 
   it('missionById resolves campaign, training and instant ids', () => {
-    expect(missionById('c05')?.title).toBe('Backfire');
+    expect(missionById('g01')?.title).toBe('Buzz Kill');
+    expect(missionById('g02')?.kind).toBe('campaign');
+    // Operation Southern Cross (c01–c11) was deleted
+    expect(missionById('c01')).toBeNull();
     expect(missionById('t02')?.kind).toBe('training');
     const ia = missionById('ia_sam_gauntlet_auckland');
     expect(ia?.kind).toBe('instant');

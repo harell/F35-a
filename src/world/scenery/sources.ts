@@ -13,6 +13,8 @@ import { TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
+import { canopyAt, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
+import { pointInRing } from './cbdStreets';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
@@ -81,7 +83,71 @@ export class TreeSource implements ScatterSource {
     private readonly spacing = 14,
     private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
     private readonly cbd: CbdGrid | null = null,
+    private readonly nbs: Neighbourhood[] | null = null,
   ) {}
+
+  /** Hero neighbourhoods' building footprints in 20 m buckets (trunks stay out of the houses). */
+  private nbBuildings: Map<number, Float32Array[]> | null = null;
+
+  private inNbBuilding(x: number, z: number): boolean {
+    if (!this.nbBuildings) {
+      const m = new Map<number, Float32Array[]>();
+      for (const n of this.nbs ?? [])
+        for (const parts of n.buildings)
+          for (const p of parts) {
+            let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+            for (let i = 0; i < p.ring.length; i += 2) {
+              x0 = Math.min(x0, p.ring[i]);
+              x1 = Math.max(x1, p.ring[i]);
+              z0 = Math.min(z0, p.ring[i + 1]);
+              z1 = Math.max(z1, p.ring[i + 1]);
+            }
+            for (let j = Math.floor(z0 / 20); j <= Math.floor(z1 / 20); j++)
+              for (let i = Math.floor(x0 / 20); i <= Math.floor(x1 / 20); i++) {
+                const k = (i + 8192) * 16384 + (j + 8192);
+                const l = m.get(k);
+                if (l) l.push(p.ring);
+                else m.set(k, [p.ring]);
+              }
+          }
+      this.nbBuildings = m;
+    }
+    const l = this.nbBuildings.get((Math.floor(x / 20) + 8192) * 16384 + (Math.floor(z / 20) + 8192));
+    return !!l && l.some((r) => pointInRing(r, x, z));
+  }
+
+  /**
+   * A tree of a hero neighbourhood (Herne Bay, Westhaven) at grid point (x, z), or false: grown to match the measured
+   * canopy cell it stands in (aucklandNeighbourhoods.ts canopy grid), its share under trees and their height, off the
+   * houses and the streets. Each 14 m grid point stands for 196 m² of ground, so a cell with share c gets a tree at a
+   * point with probability c · 196 / crown area, crowns widened where that would exceed one (a closed canopy).
+   */
+  private nbTree(n: Neighbourhood, x: number, z: number, gx: number, gz: number, out: TileInstances): void {
+    const c = canopyAt(n.canopy, x, z);
+    if (!c || c.cover <= 0 || c.height < 2.5) return;
+    const seed = this.seed;
+    const h1 = hash2(gx, gz, seed + 11);
+    const s = c.height * (0.8 + 0.4 * hash2(gx, gz, seed + 12));
+    const cell = this.spacing * this.spacing;
+    let w = s * 0.9;
+    let p = (c.cover * cell) / (Math.PI * (w / 2) ** 2);
+    if (p > 1) {
+      w = Math.min(s * 1.6, 2 * Math.sqrt((c.cover * cell) / Math.PI));
+      p = 1;
+    }
+    if (h1 > p) return;
+    const hf = this.hf;
+    if (hf.heightAt(x, z) < 0.6) return;
+    if (this.inNbBuilding(x, z)) return;
+    const st = this.cbd?.streets;
+    if (st && st.streetSD(x, z) < 2) return;
+    if (this.blocked && this.blocked(x, z, 2)) return;
+    const mi = Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell);
+    const mat = hf.mat[Math.max(0, Math.min(hf.mat.length - 1, mi))];
+    const kind = this.veg.species(hf.heightAt(x, z), mat, hash2(gx, gz, seed + 3), x, z);
+    _c.setScalar(0.82 + 0.3 * hash2(gx, gz, seed + 13));
+    out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, h1 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4));
+  }
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
     const sp = this.spacing;
@@ -97,6 +163,11 @@ export class TreeSource implements ScatterSource {
         const h3 = hash2(gx, gz, seed + 2);
         const x = (gx + 0.1 + 0.8 * h1) * sp;
         const z = (gz + 0.1 + 0.8 * h2) * sp;
+        const nb = this.nbs ? neighbourhoodAt(x, z, this.nbs) : null;
+        if (nb) {
+          this.nbTree(nb, x, z, gx, gz, out);
+          continue;
+        }
         let dens = this.cmap.forest(x, z);
         const urban = dens > 0 ? 0 : this.cmap.urban(x, z);
         if (urban > 0.05) dens = 0.1 * (1 - urban * 0.7); // garden & street trees
@@ -156,7 +227,7 @@ export class HouseSource implements ScatterSource {
     private readonly cbd: CbdGrid | null = null,
     private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
     /** Lots cleared along the road and railway ribbons (the terrain shader leaves them unbuilt too). */
-    private readonly lotMask: LotMask | null = null,
+    private readonly lotMask: Pick<LotMask, 'masked'> | null = null,
   ) {}
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
@@ -206,6 +277,8 @@ export class HouseSource implements ScatterSource {
           const gh = this.groundAt(wx, wz);
           if (gh < 1) continue;
           if (this.blocked && this.blocked(wx, wz, 12)) continue;
+          // the house itself (not only its lot centre) clear of the street along the real-streets region's border
+          if (this.cbd?.streets && this.cbd.streets.regionSD(wx, wz) > -ROAD_HALF - 2) continue;
           const w = fp.sx * lotW;
           const dd = fp.sz * lotD;
           const hgt = apt ? 12 + 26 * lotFrac(lh, 5.7) * dens : 3.2 + 1.6 * lotFrac(lh, 3.3);

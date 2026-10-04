@@ -4,7 +4,10 @@ import { LOADOUTS } from '../src/core/data';
 import { placeStores } from '../src/ui/art/storesDiagram';
 import { formatPercent, formatScore, formatTime, gradeTone, missionState, niceScaleLength, stealthRating, storeLines, suggestedMissionIndex } from '../src/ui/format';
 import { fitIntelView, intelBounds } from '../src/ui/screens/intelMap';
-import { CAMPAIGN, TRAINING } from '../src/missions';
+import { CAMPAIGNS, PLAYABLE_CAMPAIGNS, TRAINING } from '../src/missions';
+
+/** The first playable campaign's missions (the IRGC campaign: g01, g02). */
+const CAMPAIGN = PLAYABLE_CAMPAIGNS[0].missions;
 
 describe('formatting', () => {
   it('formats times', () => {
@@ -73,21 +76,30 @@ describe('loadouts', () => {
 });
 
 describe('mission cards', () => {
+  // first sortie: g01 open, g02 locked; after a g01 win: g01 done, g02 open
+  const fresh: CampaignProgress = {
+    unlocked: ['g01'],
+    best: {},
+    totals: { missions: 0, airKills: 0, groundKills: 0, deaths: 0 },
+  };
   const progress: CampaignProgress = {
-    unlocked: ['c01', 'c02'],
-    best: { c01: { score: 1000, grade: 'B', difficulty: 'pilot' } },
+    unlocked: ['g01', 'g02'],
+    best: { g01: { score: 1000, grade: 'B', difficulty: 'pilot' } },
     totals: { missions: 1, airKills: 2, groundKills: 0, deaths: 0 },
   };
 
   it('locked / open / done states', () => {
+    expect(CAMPAIGN.map((m) => m.id)).toEqual(['g01', 'g02']);
+    expect(missionState(CAMPAIGN[0], fresh)).toBe('open');
+    expect(missionState(CAMPAIGN[1], fresh)).toBe('locked');
     expect(missionState(CAMPAIGN[0], progress)).toBe('done');
     expect(missionState(CAMPAIGN[1], progress)).toBe('open');
-    expect(missionState(CAMPAIGN[2], progress)).toBe('locked');
     // training is always open
-    expect(missionState(TRAINING[0], progress)).toBe('open');
+    expect(missionState(TRAINING[0], fresh)).toBe('open');
   });
 
   it('suggests the first open mission', () => {
+    expect(suggestedMissionIndex(CAMPAIGN, fresh)).toBe(0);
     expect(suggestedMissionIndex(CAMPAIGN, progress)).toBe(1);
     const all: CampaignProgress = { ...progress, unlocked: CAMPAIGN.map((m) => m.id), best: Object.fromEntries(CAMPAIGN.map((m) => [m.id, { score: 1, grade: 'A' as const, difficulty: 'pilot' as const }])) };
     expect(suggestedMissionIndex(CAMPAIGN, all)).toBe(CAMPAIGN.length - 1);
@@ -95,7 +107,7 @@ describe('mission cards', () => {
 });
 
 describe('intel map framing', () => {
-  const missions: MissionDef[] = [...CAMPAIGN, ...TRAINING];
+  const missions: MissionDef[] = [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING];
 
   it('contains the start, every waypoint and every marker', () => {
     for (const m of missions) {

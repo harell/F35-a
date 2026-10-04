@@ -1,0 +1,555 @@
+<!-- Herne Bay and Westhaven hero-neighbourhood prototypes (LiDAR-driven: every building's roof, every tree, at Westhaven
+     every boat and pontoon). Filled by tools/hero/sites/neighbourhoods_page.py, which replaces the DATA marker below with
+     the measured models, the aerial textures and the frames from the running game. See .claude/skills/hero-building/SKILL.md. -->
+<title>Herne Bay &amp; Westhaven Models</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: an area switch, then per area the game today beside the measured model (one 3D viewer), then the layering
+   verdict (roads, trees, ground) with its numbers, then the ledger. Same system as the other hero prototypes, harbour blue. */
+:root {
+  --bg: #eef1f2; --surface: #ffffff; --fg: #15212a; --muted: #52616b; --line: #d3dbe0;
+  --accent: #1d5f86; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a; --good: #2c6a3f;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10181e; --surface: #172229; --fg: #e3eaee; --muted: #9cadb8; --line: #283843;
+  --accent: #79b8de; --accent-ink: #10181e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; --good: #7fc495; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10181e; --surface: #172229; --fg: #e3eaee; --muted: #9cadb8; --line: #283843;
+  --accent: #79b8de; --accent-ink: #10181e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; --good: #7fc495; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; margin: 0; }
+main { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 72ch; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.areas { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); width: fit-content; max-width: 100%; }
+.areas button { border: 0; border-right: 1px solid var(--line); background: none; padding: 12px 22px; cursor: pointer; color: var(--muted); font: 14px/1.3 var(--body); text-align: left; }
+.areas button:last-child { border-right: 0; }
+.areas button b { display: block; font: 600 20px/1.1 var(--display); color: var(--fg); letter-spacing: .01em; }
+.areas button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.areas button[aria-pressed="true"] b { color: var(--accent-ink); }
+button:focus-visible, label:focus-within { outline: 3px solid var(--measured); outline-offset: -3px; }
+.compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .compare { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.panel .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.panel .head span { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.panel .head b { font-weight: 600; }
+.frame { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+.frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 14px var(--mono); color: #15212a; }
+.views { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.views button { font: 500 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.treemode { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.treemode button { font: 500 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 4px 8px; cursor: pointer; margin-left: -1px; }
+.treemode button:first-of-type { margin-left: 6px; border-radius: 4px 0 0 4px; }
+.treemode button:last-of-type { border-radius: 0 4px 4px 0; }
+.treemode button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.bars { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.bars h3 { font-size: 15px; }
+.bar { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr) 76px; gap: 12px; align-items: center; font-size: 14px; }
+.bar .track { height: 14px; background: var(--bg); border-radius: 0 4px 4px 0; }
+.bar .fill { height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar .fill.alt { background: var(--muted); }
+.bar .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.bar.total { border-top: 1px solid var(--line); padding-top: 8px; font-weight: 600; }
+@media (max-width: 560px) { .bar { grid-template-columns: minmax(0, 1fr) 70px; } .bar .track { grid-column: 1 / -1; grid-row: 2; } }
+.toggles label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.caption { padding: 10px 14px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fig { background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fig b { font: 600 26px/1 var(--display); font-variant-numeric: tabular-nums; }
+.fig span { font-size: 13px; color: var(--muted); }
+.verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.verdict .call { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.verdict .call.yes { color: var(--good); }
+.verdict .call.cond { color: var(--guess); }
+.verdict p { font-size: 15px; color: var(--muted); }
+.verdict p strong { color: var(--fg); font-weight: 600; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero neighbourhoods · prototype for review</span>
+    <h1>Herne Bay and Westhaven, measured house by house</h1>
+    <p class="lede">Two separate models built from LINZ 2024 LiDAR, the 2024 aerial and OpenStreetMap: every building with its own fitted roof, every tree the survey found, and at Westhaven every boat and pontoon in the marina. Roads are not in either model. On the left is the game today from the same camera; on the right is the model. Drag to orbit, scroll or pinch to zoom.</p>
+  </header>
+
+  <div class="areas" role="group" aria-label="Neighbourhood">
+    <button id="a-herne_bay" aria-pressed="true"><b>Herne Bay</b><span id="sub-herne_bay"></span></button>
+    <button id="a-westhaven" aria-pressed="false"><b>Westhaven</b><span id="sub-westhaven"></span></button>
+  </div>
+
+  <section aria-label="Today and the model">
+    <div class="compare">
+      <div class="panel">
+        <div class="head"><span>In the game today</span><b id="shotname"></b></div>
+        <div class="frame"><img id="shot" alt=""></div>
+        <div class="views" role="group" aria-label="Game frame">
+          <button id="sh0" aria-pressed="true"></button>
+          <button id="sh1" aria-pressed="false"></button>
+        </div>
+        <div class="caption" id="todaynote"></div>
+      </div>
+      <div class="panel">
+        <div class="head"><span>The model, ported</span><b id="viewname">Same camera as the game frame</b></div>
+        <div class="frame"><canvas id="c" aria-label="3D model of the neighbourhood"></canvas><div class="loading" id="loading">unpacking the suburb…</div></div>
+        <div class="views" role="group" aria-label="Camera">
+          <button id="v0" aria-pressed="true">Game camera</button>
+          <button id="v1" aria-pressed="false">Overhead</button>
+          <button id="v2" aria-pressed="false">Low pass</button>
+          <button id="v3" aria-pressed="false">Street level</button>
+        </div>
+        <div class="toggles">
+          <label for="t-photo"><input type="checkbox" id="t-photo" checked> Aerial on the ground</label>
+          <label for="t-roads"><input type="checkbox" id="t-roads"> Roads layer on top</label>
+          <span class="treemode" role="group" aria-label="Trees">Trees:
+            <button id="tm-list" aria-pressed="true">LiDAR, one per tree</button><button id="tm-grid" aria-pressed="false">20 m canopy grid</button><button id="tm-none" aria-pressed="false">None</button></span>
+          <label for="t-boats"><input type="checkbox" id="t-boats" checked> Boats &amp; pontoons</label>
+          <label for="t-edge"><input type="checkbox" id="t-edge" checked> Model boundary</label>
+        </div>
+        <div class="caption" id="modelnote"></div>
+      </div>
+    </div>
+    <div class="figs" id="figs"></div>
+  </section>
+
+  <section>
+    <span class="eyebrow">What the model file weighs · <span id="wname"></span>, gzipped</span>
+    <h2>Houses are the weight, and only while they're a mesh</h2>
+    <p id="w-lede" style="color:var(--muted)"></p>
+    <div class="split">
+      <div class="bars" id="bars-mesh"></div>
+      <div class="bars" id="bars-param"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Option</th><th>Ships in the model</th><th>Gzipped</th><th>Looks like</th></tr></thead>
+        <tbody id="options"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">What goes in the model and what goes on top</span>
+    <h2>Roads, trees and the ground</h2>
+    <div class="verdicts">
+      <div class="verdict">
+        <span class="call yes">Roads · keep them out of the model</span>
+        <h3>The model has no road in it anywhere</h3>
+        <p id="v-roads"></p>
+      </div>
+      <div class="verdict">
+        <span class="call cond">But · the game's streets there are fake</span>
+        <h3>On top of what? Not the procedural grid</h3>
+        <p>In both frames on the left the streets are the game's procedural grid: 105 × 76 m blocks in a random orientation, with nothing to do with Herne Bay's real streets. Real houses dropped onto it would sit across fake roads. <strong>The roads layer under these models has to be the real one</strong>: either extend the aerial photo square west to cover both areas (the photo already carries every street, driveway and pool, as it does from Westhaven's east end to the port), or extend the CBD's real-street region (LINZ centrelines painted by the terrain shader). The photo is the cheaper and better-looking choice; the toggle "Aerial on the ground" shows it.</p>
+      </div>
+      <div class="verdict">
+        <span class="call yes">Trees · out of the mesh, in as a list</span>
+        <h3>A placement list for the game's tree instances</h3>
+        <p id="v-trees"></p>
+      </div>
+      <div class="verdict">
+        <span class="call cond">Ground · the game's terrain, not the LiDAR</span>
+        <h3>Each building keeps its own base height</h3>
+        <p>Roofs are stored with their base (<span class="num">y0</span>, the lowest LiDAR ground under the outline). When porting, each building moves by one offset, game terrain minus <span class="num">y0</span> at its centroid, so it sits on the same ground as the road layer and its roof stays level. The game terrain was not compared with the LiDAR for these two areas yet; on the Domain the high tier was within about 2 m.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Check</th><th>Herne Bay</th><th>Westhaven</th><th>What it means</th></tr></thead>
+        <tbody id="checks"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">What the models are made of</span>
+      <h2>Measured, read off a photo, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Every building's outline (OSM, the LINZ import), base height and roof: flat, gable, hip, or hipped along any outline, with eave height and pitch fitted to the 1 m LiDAR surface by least squares. Roofs that step are split into terraces. Buildings OSM misses are traced from the LiDAR. Each tree's position, height and crown (LiDAR watershed). Boat decks, cabins and masts (LiDAR).</span></div>
+        <div><span class="tag r">From photos</span><span>Roof colours, tree colours, and at Westhaven each boat's outline, heading and colour and every pontoon and finger (the 2024 aerial, 0.3 m).</span></div>
+        <div><span class="tag g">Guessed</span><span>Wall colours (a light palette: no 3D mesh covers these suburbs), eaves without overhang, crown shape and base, hull shape. The LiDAR and the photo were flown on different days, so a berth can hold a boat in one and not the other; masts are 15 cm wide and the 1 m LiDAR misses some, so some yachts read as launches.</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Porting, after this review</span>
+      <h2>What each layer becomes in the game</h2>
+      <div class="ledger">
+        <div><span class="tag r">Buildings</span><span>Swap into the LINZ building list like the Scene apartments (<span class="num">applyHeroBuildings</span>), with a new pitched-roof prism kind, so scenery, collision and collapse follow. Or ship the merged mesh per area as a small baked binary.</span></div>
+        <div><span class="tag r">Trees</span><span>A baked list (x, z, height, crown, colour) drawn with the game's instanced trees; lift the "no trees on the aerial" rule inside these footprints.</span></div>
+        <div><span class="tag r">Boats</span><span>Replace the procedural yachts at Westhaven with the measured list, instanced like the trees. The pontoons replace the OSM walkways there.</span></div>
+        <div><span class="tag r">Ground</span><span>Extend the aerial square west over Herne Bay and Westhaven, and switch off procedural houses and trees inside both footprints.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Building outlines, roads and jetties: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ODbL. Left-hand frames: the running game (Auckland stroll, high quality, clear day), camera pinned with the test hooks. Recipes: <span class="num">tools/hero/sites/herne_bay.py</span>, <span class="num">westhaven.py</span>, kit <span class="num">neighbourhood.py</span>.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>/*@DATA@*/</script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n).toLocaleString('en-NZ');
+const SIDES = { se: 'from the south-east', nw: 'from the north-west', sw: 'from the south-west', ne: 'from the north-east' };
+
+async function unz(b64, T) {
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const s = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const buf = await new Response(s).arrayBuffer();
+  return new T(buf);
+}
+
+// ── renderer ──
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+const scene = new THREE.Scene();
+const SKY = new THREE.Color(0xbfd3df);
+scene.background = SKY;
+scene.fog = new THREE.Fog(SKY, 1500, 4200);
+const camera = new THREE.PerspectiveCamera(60, 16 / 9, 1, 9000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.495;
+scene.add(new THREE.HemisphereLight(0xdfeaf2, 0x55604a, 0.75));
+const sun = new THREE.DirectionalLight(0xfff3e0, 0.85);
+sun.position.set(-0.45, 1, 0.75);
+scene.add(sun);
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas);
+
+const cache = {};
+let cur = null;
+
+function triGeometry(pos16, tri, col) {
+  // expand to one vertex per corner so each face is flat-shaded with its own colour
+  const n = tri.length;
+  const P = new Float32Array(n * 3), C = col ? new Float32Array(n * 3) : null;
+  for (let i = 0; i < n; i++) {
+    const v = tri[i];
+    P[i * 3] = pos16[v * 3] / 10; P[i * 3 + 1] = pos16[v * 3 + 1] / 10; P[i * 3 + 2] = pos16[v * 3 + 2] / 10;
+    if (C) { const t = (i / 3) | 0; C[i * 3] = col[t * 3] / 255; C[i * 3 + 1] = col[t * 3 + 1] / 255; C[i * 3 + 2] = col[t * 3 + 2] / 255; }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  if (C) g.setAttribute('color', new THREE.BufferAttribute(C, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function hullGeometry() {
+  // a unit hull: length 1 along x (bow at +x), beam 1, height 1, pointed bow
+  const s = new THREE.Shape();
+  s.moveTo(-0.5, -0.42); s.lineTo(0.18, -0.5); s.quadraticCurveTo(0.42, -0.4, 0.5, 0); s.quadraticCurveTo(0.42, 0.4, 0.18, 0.5); s.lineTo(-0.5, 0.42); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false, curveSegments: 3 });
+  g.rotateX(Math.PI / 2); g.translate(0, 1, 0);
+  return g;
+}
+
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+async function canopyScatter(D, groundAt) {
+  const C = D.canopy, M = D.nomask;
+  const bits = await unz(M.bits, Uint8Array);
+  const blocked = (x, z) => { const i = Math.floor(x / M.res), j = Math.floor(z / M.res); if (i < 0 || j < 0 || i >= M.n || j >= M.n) return true; const k = j * M.n + i; return (bits[k >> 3] >> (7 - (k & 7))) & 1; };
+  const R = rng(7), recs = [];
+  for (let j = 0; j < C.ny; j++) for (let i = 0; i < C.nx; i++) {
+    const k = j * C.nx + i, cov = C.cover[k] / 15;
+    if (!cov) continue;
+    const h0 = C.height[k] / 2;
+    let need = cov * C.cell * C.cell;
+    for (let tries = 0; need > 0 && tries < 40; tries++) {
+      const h = Math.max(3, h0 * (0.7 + 0.5 * R())), r = Math.min(9, Math.max(2.2, 0.48 * h));
+      const x = (i + R()) * C.cell, z = (j + R()) * C.cell;
+      if (blocked(x, z)) continue;
+      recs.push([x, z, h, r]);
+      need -= Math.PI * r * r;
+    }
+  }
+  const n = recs.length;
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ flatShading: true }), n);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 5).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: 0x5b4632 }), n);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+  const PAL = [[0.29, 0.38, 0.25], [0.35, 0.43, 0.29], [0.25, 0.33, 0.22], [0.40, 0.45, 0.31]];
+  recs.forEach(([x, z, h, r], i) => {
+    const g = groundAt(x, z);
+    const base = g + h * 0.3, hh = (h * 0.7) / 2;
+    crown.setMatrixAt(i, m4.compose(v.set(x, base + hh, z), q, sc.set(r, hh, r)));
+    const p = PAL[i % 4], j = 0.9 + 0.2 * R();
+    crown.setColorAt(i, c.setRGB(p[0] * j * 1.25, p[1] * j * 1.25, p[2] * j * 1.2));
+    trunk.setMatrixAt(i, m4.compose(v.set(x, g, z), q, sc.set(1, h * 0.3 + 0.5, 1)));
+  });
+  crown.frustumCulled = trunk.frustumCulled = false; // r128 culls an InstancedMesh by its base geometry at the origin
+  const grp = new THREE.Group();
+  grp.add(crown, trunk);
+  grp.userData.n = n;
+  return grp;
+}
+
+async function buildArea(key) {
+  const D = DATA[key];
+  const root = new THREE.Group();
+  const S = D.size;
+  // ground: the LiDAR DEM, the aerial or a plain tone
+  const gh = await unz(D.ground.h, Int16Array);
+  const n = D.ground.n, r = D.ground.res;
+  const gg = new THREE.PlaneGeometry((n - 1) * r, (n - 1) * r, n - 1, n - 1);
+  gg.rotateX(-Math.PI / 2);
+  gg.translate((n - 1) * r / 2, 0, (n - 1) * r / 2);
+  const gp = gg.attributes.position;
+  for (let i = 0; i < gp.count; i++) gp.setY(i, gh[i] / 10);
+  gg.computeVertexNormals();
+  const uv = gg.attributes.uv;
+  for (let i = 0; i < uv.count; i++) { uv.setXY(i, gp.getX(i) / S, 1 - gp.getZ(i) / S); }
+  const tex = new THREE.TextureLoader().load(TEX[key]);
+  tex.anisotropy = 8;
+  const photoMat = new THREE.MeshLambertMaterial({ map: tex });
+  const plainMat = new THREE.MeshLambertMaterial({ color: 0x9aa98a });
+  const ground = new THREE.Mesh(gg, photoMat);
+  root.add(ground);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshLambertMaterial({ color: 0x2f5e70, transparent: true, opacity: 0.86 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(S / 2, D.sea + 0.05, S / 2);
+  root.add(water);
+  // buildings
+  const bg = triGeometry(await unz(D.bld.pos, Int16Array), await unz(D.bld.tri, Uint32Array), await unz(D.bld.col, Uint8Array));
+  root.add(new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  // roads: an overlay, lifted 0.25 m over the DEM
+  const roads = new THREE.Mesh(triGeometry(await unz(D.road.pos, Int16Array), await unz(D.road.tri, Uint32Array)),
+    new THREE.MeshLambertMaterial({ color: 0x4a4e52, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  roads.visible = false;
+  root.add(roads);
+  // pontoons and jetties
+  const marine = new THREE.Group();
+  if (D.slab.nt) marine.add(new THREE.Mesh(triGeometry(await unz(D.slab.pos, Int16Array), await unz(D.slab.tri, Uint32Array)), new THREE.MeshLambertMaterial({ color: 0xbdb7a8 })));
+  // trees: crowns (squashed icosahedra) and trunks, instanced
+  const T = await unz(D.trees.xyz, Int16Array), TC = await unz(D.trees.col, Uint8Array);
+  const nt = D.trees.n;
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ flatShading: true }), nt);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 5).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: 0x5b4632 }), nt);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+  for (let i = 0; i < nt; i++) {
+    const x = T[i * 6] / 10, z = T[i * 6 + 1] / 10, g = T[i * 6 + 2] / 10, top = T[i * 6 + 3] / 10, rad = T[i * 6 + 4] / 10, base = T[i * 6 + 5] / 10;
+    const hh = Math.max(top - base, 1) / 2;
+    m4.compose(v.set(x, base + hh, z), q, sc.set(rad, hh, rad));
+    crown.setMatrixAt(i, m4);
+    c.setRGB(Math.min(1, TC[i * 3] / 255 * 1.25), Math.min(1, TC[i * 3 + 1] / 255 * 1.25), Math.min(1, TC[i * 3 + 2] / 255 * 1.2));
+    crown.setColorAt(i, c);
+    m4.compose(v.set(x, g, z), q, sc.set(1, Math.max(base - g, 0.5) + 0.5, 1));
+    trunk.setMatrixAt(i, m4);
+  }
+  const trees = new THREE.Group();
+  crown.frustumCulled = trunk.frustumCulled = false;
+  trees.add(crown, trunk);
+  root.add(trees);
+  // the cheap alternative: scatter trees to match each 20 m cell's canopy share and height, off buildings and roads
+  const groundAt = (x, z) => { // bilinear on the 4 m DEM
+    const fx = Math.min(n - 1.001, Math.max(0, x / r)), fz = Math.min(n - 1.001, Math.max(0, z / r)), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, w = fz - j;
+    const h = (a, b) => gh[b * n + a] / 10;
+    return (h(i, j) * (1 - u) + h(i + 1, j) * u) * (1 - w) + (h(i, j + 1) * (1 - u) + h(i + 1, j + 1) * u) * w;
+  };
+  const gridTrees = await canopyScatter(D, groundAt);
+  gridTrees.visible = false;
+  root.add(gridTrees);
+  // boats: hull, cabin, mast
+  if (D.boats.n) {
+    const B = await unz(D.boats.f, Int16Array), BC = await unz(D.boats.col, Uint8Array);
+    const nb = D.boats.n;
+    const hull = new THREE.InstancedMesh(hullGeometry(), new THREE.MeshLambertMaterial(), nb);
+    const cabin = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: 0xe9ecee }), nb);
+    let masts = 0;
+    for (let i = 0; i < nb; i++) if (B[i * 8 + 7] > 0) masts++;
+    const mast = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.09, 0.12, 1, 4).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: 0xd9dcdf }), Math.max(masts, 1));
+    let k = 0;
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < nb; i++) {
+      const x = B[i * 8] / 10, z = B[i * 8 + 1] / 10, hd = B[i * 8 + 2] / 1000, L = B[i * 8 + 3] / 10, W = B[i * 8 + 4] / 10;
+      const deck = B[i * 8 + 5] / 10, cab = B[i * 8 + 6] / 10, mh = B[i * 8 + 7] / 10;
+      q.setFromAxisAngle(up, -hd);
+      m4.compose(v.set(x, D.sea - 0.3, z), q, sc.set(L, Math.max(deck, 0.8) + 0.3, W * 0.95));
+      hull.setMatrixAt(i, m4);
+      const g0 = Math.min(1, BC[i * 3] / 255 * 1.08), g1 = Math.min(1, BC[i * 3 + 1] / 255 * 1.08), g2 = Math.min(1, BC[i * 3 + 2] / 255 * 1.08);
+      hull.setColorAt(i, c.setRGB(g0, g1, g2));
+      m4.compose(v.set(x, D.sea + Math.max(deck, 0.8), z), q, sc.set(L * 0.42, Math.max(cab, 0.6), W * 0.55));
+      cabin.setMatrixAt(i, m4);
+      if (mh > 0) { m4.compose(v.set(x + Math.cos(hd) * L * 0.08, D.sea, z + Math.sin(hd) * L * 0.08), q, sc.set(1, mh, 1)); mast.setMatrixAt(k++, m4); }
+    }
+    mast.count = k;
+    hull.frustumCulled = cabin.frustumCulled = mast.frustumCulled = false;
+    marine.add(hull, cabin, mast);
+  }
+  root.add(marine);
+  // boundary of the model and what it keeps clear
+  const edge = new THREE.Group();
+  const line = (ring, color) => {
+    const pts = ring.map(([x, z]) => new THREE.Vector3(x, 0, z));
+    for (const p of pts) p.y = Math.max(groundAt(p.x, p.z), D.sea) + 1.5;
+    return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color }));
+  };
+  edge.add(line(D.footprint, 0xffd23f));
+  for (const ex of D.exclude) edge.add(line(ex, 0xff6b4a));
+  root.add(edge);
+  return { root, ground, photoMat, plainMat, roads, trees, gridTrees, marine, edge, D };
+}
+
+function setCam(i) {
+  const D = cur.D;
+  for (let k = 0; k < 4; k++) $('v' + k).setAttribute('aria-pressed', String(k === i));
+  const S = D.size, cx = S / 2, cz = S / 2;
+  const shot = D.cams[Object.keys(D.cams)[curShot]];
+  let pos, look, name;
+  if (i === 0) { pos = shot.pos; look = shot.look; name = 'Same camera as the game frame'; }
+  else if (i === 1) { pos = [cx + 1, S * 1.05, cz + 60]; look = [cx, 0, cz]; name = 'Overhead'; }
+  else if (i === 2) { const f = D.key === 'westhaven' ? [[360, 140, 900], [700, 30, 560]] : [[1450, 160, 1150], [1000, 30, 700]]; pos = f[0]; look = f[1]; name = 'Low pass, 140–160 m up'; }
+  else { const f = D.key === 'westhaven' ? [[650, 18, 860], [560, 6, 640]] : [[1020, 50, 760], [900, 38, 640]]; pos = f[0]; look = f[1]; name = 'Street level'; }
+  camera.position.set(...pos); controls.target.set(...look); controls.update();
+  $('viewname').textContent = name;
+}
+
+let curShot = 0;
+function setShot(i) {
+  curShot = i;
+  const D = cur.D, sides = Object.keys(D.cams);
+  for (let k = 0; k < 2; k++) $('sh' + k).setAttribute('aria-pressed', String(k === i));
+  $('shot').src = SHOTS[D.key][sides[i]];
+  $('shot').alt = `F35-A today: ${D.name} ${SIDES[sides[i]]}, procedural houses on a procedural street grid`;
+  $('shotname').textContent = `${D.name}, ${SIDES[sides[i]]}`;
+  setCam(0);
+}
+
+function applyToggles() {
+  if (!cur) return;
+  cur.ground.material = $('t-photo').checked ? cur.photoMat : cur.plainMat;
+  cur.roads.visible = $('t-roads').checked;
+  cur.trees.visible = treeMode === 'list';
+  cur.gridTrees.visible = treeMode === 'grid';
+  cur.marine.visible = $('t-boats').checked;
+  cur.edge.visible = $('t-edge').checked;
+}
+
+const NOTES = {
+  herne_bay: {
+    today: 'Today Herne Bay is the generic suburb: red and grey boxes on green lots along a procedural street grid that ignores the real streets, and a coastline that only roughly follows the real one. Nothing tells a pilot this is Herne Bay.',
+    model: (s) => `${fmt(s.buildings_total)} buildings (${fmt(s.osm_buildings)} from OSM outlines, ${fmt(s.traced_buildings)} traced from the LiDAR where OSM has none), ${fmt(s.trees)} trees, ${fmt(s.triangles)} triangles of buildings. The two 56 m towers near Sentinel Road are real. Yellow line: the model's boundary, Jervois Road to the harbour, Cox's Bay to Shelly Beach Road.`,
+  },
+  westhaven: {
+    today: 'Today Westhaven has the right pontoons (from OSM) with procedural yachts along them, and the strip along Westhaven Drive is grass. Its western half lies outside the aerial photo, so the photo fades out across the marina.',
+    model: (s) => `${fmt(s.boats)} boats (${fmt(s.sailboats)} with a mast the LiDAR caught), ${fmt(s.pontoon_m2)} m² of pontoons and fingers, ${fmt(s.buildings_total)} buildings, ${fmt(s.trees)} trees. Yellow line: the model's boundary; red: the Harbour Bridge and motorway, kept clear for the bridge's own model.`,
+  },
+};
+
+async function show(key) {
+  for (const k of Object.keys(DATA)) $('a-' + k).setAttribute('aria-pressed', String(k === key));
+  $('loading').hidden = false;
+  if (cur) scene.remove(cur.root);
+  cache[key] = cache[key] || await buildArea(key);
+  cur = cache[key];
+  scene.add(cur.root);
+  const D = cur.D, s = D.stats, sides = Object.keys(D.cams);
+  sides.forEach((sd, i) => { $('sh' + i).textContent = 'Game ' + SIDES[sd].replace('from the ', ''); });
+  $('todaynote').textContent = NOTES[key].today;
+  $('modelnote').textContent = NOTES[key].model(s);
+  const f = [[fmt(s.area_ha) + ' ha', 'inside the boundary'], [fmt(s.buildings_total), 'buildings, each roof fitted'], [fmt(s.trees), 'trees from LiDAR crowns']];
+  if (key === 'westhaven') f.push([fmt(s.boats), 'boats in the marina'], [fmt(s.pontoon_m2) + ' m²', 'pontoons and fingers']);
+  else f.push([fmt((s.kinds.gable || 0) + (s.kinds.hip || 0) + (s.kinds.skel || 0)), 'pitched roofs'], [fmt(s.tree_h_p90) + ' m', 'tallest 10 % of trees']);
+  $('figs').innerHTML = f.map(([b, t]) => `<div class="fig"><b>${b}</b><span>${t}</span></div>`).join('');
+  fillSizes(D);
+  applyToggles();
+  setShot(0);
+  $('loading').hidden = true;
+}
+
+const kb = (b) => (b >= 1e6 ? (b / 1e6).toFixed(2) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' kB');
+function bars(el, title, rows, max) {
+  el.innerHTML = `<h3>${title}</h3>` + rows.map(([label, v, alt, tot]) =>
+    `<div class="bar${tot ? ' total' : ''}" title="${label}: ${kb(v)}"><span>${label}</span><span class="track"><span class="fill${alt ? ' alt' : ''}" style="display:block;width:${(100 * v / max).toFixed(2)}%"></span></span><span class="v">${kb(v)}</span></div>`).join('');
+}
+function fillSizes(D) {
+  const z = D.sizes, wh = D.key === 'westhaven';
+  const meshB = z.mesh_pos + z.mesh_tri + z.mesh_col;
+  const extra = wh ? [['Boats (list)', z.boats, true]] : [];
+  const totA = meshB + z.trees + (wh ? z.boats : 0), totB = z.params + z.trees + (wh ? z.boats : 0), totC = z.params + z.canopy + (wh ? z.boats : 0);
+  const max = totA;
+  $('wname').textContent = D.name;
+  bars($('bars-mesh'), 'A · Buildings as a baked mesh (the .glb)', [['Building vertices', z.mesh_pos], ['Building triangles', z.mesh_tri], ['Building colours', z.mesh_col], ['Trees, one per tree', z.trees, true], ...extra, ['Total', totA, false, true]], max);
+  bars($('bars-param'), 'B · Buildings as parameters the game rebuilds', [['Buildings: outline + roof', z.params], ['Trees, one per tree', z.trees, true], ['or: 20 m canopy grid', z.canopy, true], ...extra, ['Total with the grid', totC, false, true]], max);
+  const pctA = Math.round(100 * z.trees / totA), pctB = Math.round(100 * z.trees / totB);
+  $('w-lede').textContent = `As a baked mesh the buildings are ${Math.round(100 * meshB / totA)} % of the file and the ${fmt(z.n_trees)} trees only ${pctA} %: dropping the trees there saves almost nothing. The mesh is redundant, though: every roof is an outline plus five numbers (base, eave, pitch, kind, colour), and the game can rebuild the triangles when it loads, as it already does for the LINZ buildings. Shipped that way the buildings shrink ${Math.round(meshB / z.params)}×, and then the trees are ${pctB} % of what's left. That is when the cheaper tree source pays: a 20 m canopy grid is ${kb(z.canopy)} instead of ${kb(z.trees)}. The page draws all three; switch "Trees" under the model.`;
+  const opts = [
+    ['A · Mesh + LiDAR trees', 'Every triangle, every tree', kb(totA), 'What the page shows by default'],
+    ['B · Parameters + LiDAR trees', 'Outline and roof per building, one record per tree', kb(totB), 'Identical: the game rebuilds the same roofs'],
+    ['C · Parameters + canopy grid', `Outline and roof per building; per ${D.canopy.cell} m cell the canopy share and height (${fmt(z.n_cells)} cells)`, kb(totC), 'Same houses; trees in the right streets and gullies at the right density and height, but not the actual trees'],
+    ['D · Parameters, no trees', 'Outline and roof per building', kb(z.params + (wh ? z.boats : 0)), 'The game falls back to its own land-cover trees (172 m cells), which miss most suburban canopy'],
+  ];
+  $('options').innerHTML = opts.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="n">${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+}
+
+function fillVerdicts() {
+  const H = DATA.herne_bay.stats, W = DATA.westhaven.stats, hr = H.roads, wr = W.roads;
+  $('v-roads').innerHTML = `Every building stands on its own outline and the ground between them is just ground, so the roads can be any layer drawn on top. Checked against OSM's carriageways (width by road class): <strong>${hr.buildings_over_road} of ${fmt(H.buildings_total)}</strong> Herne Bay buildings and <strong>${wr.buildings_over_road} of ${fmt(W.buildings_total)}</strong> at Westhaven touch a carriageway, by ${fmt(hr.buildings_over_road_m2)} m² and ${fmt(wr.buildings_over_road_m2)} m² in all: slivers where a narrow street got a class-average width, or a garage on a mapped driveway. Nothing in the model would have to move for a road. Keeping roads out also keeps one road network across the whole city instead of each hero bringing its own. Tick "Roads layer on top" to see OSM's carriageways laid over the model.`;
+  $('v-trees').innerHTML = `${fmt(H.trees)} trees in Herne Bay and ${fmt(W.trees)} at Westhaven are each just (x, z, height, crown radius, colour): about 14 bytes, against about 100 triangles each if baked into the mesh. As a list they use the game's existing instanced trees, LOD and wind, and can be thinned on low quality. They are also the layer most often on top of a road: <strong>${fmt(hr.trees_overhanging_road)}</strong> Herne Bay crowns overhang a carriageway, which works only if trees are drawn above the roads. ${fmt(hr.trees_rooted_on_road)} trunks fall inside a class-width carriageway; those are berm trees on narrower streets.`;
+  const rows = [
+    ['Buildings touching a carriageway', `${hr.buildings_over_road} / ${fmt(H.buildings_total)}`, `${wr.buildings_over_road} / ${fmt(W.buildings_total)}`, 'Slivers from estimated road widths; no building sits on a road'],
+    ['Area of those overlaps', `${fmt(hr.buildings_over_road_m2)} m²`, `${fmt(wr.buildings_over_road_m2)} m²`, `Largest single overlap ${hr.worst_overlaps.length ? hr.worst_overlaps[0][1] : 0} m²`],
+    ['Carriageway share of the area', `${hr.area_share_pct} %`, `${wr.area_share_pct} %`, 'Ground the road layer covers; the model leaves it empty'],
+    ['Tree crowns over a carriageway', fmt(hr.trees_overhanging_road), fmt(wr.trees_overhanging_road), 'Trees must draw above roads'],
+    ['Trunks inside a carriageway', fmt(hr.trees_rooted_on_road), fmt(wr.trees_rooted_on_road), 'Berm trees on streets narrower than the class width'],
+    ['Building triangles', fmt(H.triangles), fmt(W.triangles), 'Before any simplification for the low tier'],
+  ];
+  $('checks').innerHTML = rows.map((r) => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+  $('sub-herne_bay').textContent = `${fmt(H.buildings_total)} buildings · ${fmt(H.trees)} trees`;
+  $('sub-westhaven').textContent = `${fmt(W.boats)} boats · ${fmt(W.buildings_total)} buildings`;
+}
+
+for (const k of Object.keys(DATA)) $('a-' + k).addEventListener('click', () => show(k));
+for (let i = 0; i < 4; i++) $('v' + i).addEventListener('click', () => setCam(i));
+for (let i = 0; i < 2; i++) $('sh' + i).addEventListener('click', () => setShot(i));
+let treeMode = 'list';
+for (const m of ['list', 'grid', 'none']) $('tm-' + m).addEventListener('click', () => { treeMode = m; for (const o of ['list', 'grid', 'none']) $('tm-' + o).setAttribute('aria-pressed', String(o === m)); applyToggles(); });
+for (const id of ['t-photo', 't-roads', 't-boats', 't-edge']) $(id).addEventListener('change', applyToggles);
+fillVerdicts();
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+resize();
+show('herne_bay');
+</script>

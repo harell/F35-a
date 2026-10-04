@@ -6,6 +6,13 @@
  * frame (capped at 30 fps, paused when hidden) blits it and draws a handful of shapes.
  */
 import { CHART_LABELS, chartVersion, drawAucklandChart, type ChartView } from './aucklandChart';
+import { chooseChartNames, type ScreenBox } from '../screens/placeNames';
+
+type LabelKind = (typeof CHART_LABELS)[number]['kind'];
+/** Chart label font size (device px). */
+const labelSize = (kind: LabelKind, dpr: number) => Math.round((kind === 'sea' ? 11 : 9) * dpr);
+/** Chart labels are letter-spaced with hair spaces. */
+const spaced = (text: string) => text.split('').join(String.fromCharCode(8202));
 
 interface Blip {
   x: number;
@@ -136,17 +143,41 @@ export class MenuBackground {
       cg.lineTo(cw, pz);
     }
     cg.stroke();
-    // labels
+    // labels: the fixed ones, then the baked LINZ islands and suburbs around them (#129)
     if (ok) {
       cg.textAlign = 'center';
       cg.textBaseline = 'middle';
+      const font = (kind: LabelKind) =>
+        `${kind === 'sea' ? 600 : 700} ${labelSize(kind, dpr)}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
+      const fill = (kind: LabelKind) => (kind === 'sea' ? 'rgba(95,227,255,0.22)' : 'rgba(180,230,245,0.28)');
+      const fixed: (ScreenBox & { text: string })[] = [];
       for (const l of CHART_LABELS) {
         const px = (l.x - this.view.x0) * scale;
         const pz = (l.z - this.view.z0) * scale;
-        cg.font = `${l.kind === 'sea' ? 600 : 700} ${Math.round((l.kind === 'sea' ? 11 : 9) * dpr)}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
-        cg.fillStyle = l.kind === 'sea' ? 'rgba(95,227,255,0.22)' : 'rgba(180,230,245,0.28)';
-        cg.fillText(l.text.split('').join(String.fromCharCode(8202)), px, pz);
+        cg.font = font(l.kind);
+        cg.fillStyle = fill(l.kind);
+        const text = spaced(l.text);
+        cg.fillText(text, px, pz);
+        const tw = cg.measureText(text).width;
+        const th = labelSize(l.kind, dpr);
+        fixed.push({ text: l.text, x: px - tw / 2, y: pz - th / 2, w: tw, h: th });
       }
+      // choose names inside the screen-sized middle of the chart, so the drift never hides one
+      const inset = margin * dpr;
+      const size = labelSize('land', dpr);
+      cg.font = font('land');
+      const names = chooseChartNames({
+        w: cw - inset * 2,
+        h: ch - inset * 2,
+        X: (x) => (x / 1000 - this.view.x0) * scale - inset,
+        Y: (z) => (z / 1000 - this.view.z0) * scale - inset,
+        measure: (t) => cg.measureText(spaced(t)).width,
+        size,
+        fixed: fixed.map((f) => ({ ...f, x: f.x - inset, y: f.y - inset })),
+        areaPerName: 35_000 * dpr * dpr,
+      });
+      cg.fillStyle = fill('land');
+      for (const n of names) cg.fillText(spaced(n.name), n.cx + inset, n.cy + inset);
     }
     // range rings around the sweep centre
     const sx = (SWEEP_CENTRE.x - this.view.x0) * scale;

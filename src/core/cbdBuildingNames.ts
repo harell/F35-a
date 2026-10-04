@@ -104,4 +104,6 @@ export const CBD_BUILDING_NAMES: readonly CbdBuildingName[] = [
   { x: 346.93, z: 1002.7, name: "Empire Apartments" },
   { x: -313.25, z: 1140.21, name: "Karanga-a-Hape Station" },
   { x: 134.31, z: 1163.84, name: "a building on Symonds Street", label: "SYMONDS ST BUILDING" },
+  { x: -1855.76, z: -421.63, name: "Westwater" },
+  { x: -2018.47, z: -420.78, name: "Shangri-La" },
 ];

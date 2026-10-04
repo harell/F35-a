@@ -8,7 +8,7 @@
  *    950 m and 1,050 m behave alike, and low flying is a real tactic
  * and i2 critiques (src/sim/sam/endgame.ts):
  *  - "SAM hits are all-or-nothing: 100 % of missiles hit a non-defending jet (SA-6 36/36, SA-15
- *    48/48, SA-10 19/19 at Pilot) and one chaff roll decides the whole salvo": every round now
+ *    48/48, SA-10 19/19 at Pilot; the SA-10 has since been removed) and one chaff roll decides the whole salvo": every round now
  *    rolls its own end-game miss distance (target g, aspect, notch, chaff in the gate, correlated
  *    salvo term) against the fuze reach; a per-difficulty target table, monotonic Recruit → Ace
  */
@@ -148,19 +148,10 @@ describe('combat: defending against SAMs', () => {
     expect(low).toBeGreaterThan(0.1); // not immunity either
   });
 
-  it('no single trick defeats every SAM: the SA-10 is the hardest to defeat with beam + chaff at altitude', { timeout: 60_000 }, () => {
-    const sa10 = rate(engagement('sa10', 'veteran', 'beamchaff', 6000, 6, 30_000));
-    const sa6 = rate(engagement('sa6', 'veteran', 'beamchaff', 6000, 6));
-    expect(sa10).toBeGreaterThan(0.25);
-    expect(sa10).toBeGreaterThan(sa6);
-    // … but it is not unbeatable either (i2: "the Ace SA-10 was never defeated", 32/32)
-    expect(rate(engagement('sa10', 'ace', 'beamchaff', 6000, 6, 30_000))).toBeLessThan(0.85);
-  });
-
   it('i2: an undefended jet is no longer hit by 100 % of SAM rounds; Pk follows the difficulty table, monotonic', { timeout: 60_000 }, () => {
-    const pilot = pooled(engagement('sa6', 'pilot', 'none', 3000, 6), engagement('sa15', 'pilot', 'none', 3000, 6), engagement('sa10', 'pilot', 'none', 6000, 6, 30_000));
-    const vet = pooled(engagement('sa6', 'veteran', 'none', 3000, 6), engagement('sa15', 'veteran', 'none', 3000, 6), engagement('sa10', 'veteran', 'none', 6000, 6, 30_000));
-    const ace = pooled(engagement('sa6', 'ace', 'none', 3000, 6), engagement('sa15', 'ace', 'none', 3000, 6), engagement('sa10', 'ace', 'none', 6000, 6, 30_000));
+    const pilot = pooled(engagement('sa6', 'pilot', 'none', 3000, 6), engagement('sa15', 'pilot', 'none', 3000, 6), engagement('sa6', 'pilot', 'none', 6000, 6, 30_000));
+    const vet = pooled(engagement('sa6', 'veteran', 'none', 3000, 6), engagement('sa15', 'veteran', 'none', 3000, 6), engagement('sa6', 'veteran', 'none', 6000, 6, 30_000));
+    const ace = pooled(engagement('sa6', 'ace', 'none', 3000, 6), engagement('sa15', 'ace', 'none', 3000, 6), engagement('sa6', 'ace', 'none', 6000, 6, 30_000));
     // reviewer: Pilot 36/36, 48/48, 19/19 — target ≈ 0.75 at Pilot, ≈ 0.9 at Ace
     expect(pilot).toBeGreaterThan(0.55);
     expect(pilot).toBeLessThan(0.85);
@@ -174,10 +165,10 @@ describe('combat: defending against SAMs', () => {
   });
 
   it('i2: defence ladder at Pilot — none > chaff only > beam + chaff (≈ 20 %); a break turn lowers the Pk', { timeout: 60_000 }, () => {
-    const none = pooled(engagement('sa6', 'pilot', 'none', 3000, 6), engagement('sa10', 'pilot', 'none', 6000, 6, 30_000));
-    const chaff = pooled(engagement('sa6', 'pilot', 'chaff', 3000, 6), engagement('sa10', 'pilot', 'chaff', 6000, 6, 30_000));
-    const good = pooled(engagement('sa6', 'pilot', 'beamchaff', 3000, 6), engagement('sa10', 'pilot', 'beamchaff', 6000, 6, 30_000));
-    const brk = pooled(engagement('sa6', 'pilot', 'break', 3000, 6), engagement('sa10', 'pilot', 'break', 6000, 6, 30_000));
+    const none = pooled(engagement('sa6', 'pilot', 'none', 3000, 6), engagement('sa6', 'pilot', 'none', 6000, 6, 30_000));
+    const chaff = pooled(engagement('sa6', 'pilot', 'chaff', 3000, 6), engagement('sa6', 'pilot', 'chaff', 6000, 6, 30_000));
+    const good = pooled(engagement('sa6', 'pilot', 'beamchaff', 3000, 6), engagement('sa6', 'pilot', 'beamchaff', 6000, 6, 30_000));
+    const brk = pooled(engagement('sa6', 'pilot', 'break', 3000, 6), engagement('sa6', 'pilot', 'break', 6000, 6, 30_000));
     expect(chaff).toBeLessThan(none - 0.05);
     expect(good).toBeLessThan(chaff - 0.2);
     expect(good).toBeGreaterThan(0.03);

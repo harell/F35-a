@@ -29,7 +29,7 @@ function wrapWords(text: string, chars: number): string[] {
 describe('briefing intel map labels', () => {
   // the map is square, as tall as the briefing body (about 240 px at 844×390), or wide when enlarged
   const sizes: [number, number][] = [[240, 240], [260, 260], [300, 300], [360, 220], [800, 300]];
-  for (const id of ['t01', 't02', 't03', 'c01', 'c03', 'c05', 'c09', 'c10']) {
+  for (const id of ['t01', 't02', 't03', 'g01', 'g02', 'ia_dogfight_auckland', 'ia_sam_gauntlet_auckland', 'ia_strike_auckland', 'ia_defend_auckland']) {
     it(`${id}: no label prints over another`, () => {
       const m = missionById(id)!;
       for (const [w, h] of sizes) {

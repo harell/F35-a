@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Vector3 } from 'three';
 import { AKL } from '../src/core/auckland';
 import type { CampaignProgress, MissionDef, MissionResult } from '../src/core/contracts';
-import { CAMPAIGN, TRAINING, missionById, recordResult, skipMission } from '../src/missions';
+import { CAMPAIGNS, TRAINING, missionById, recordResult, skipMission } from '../src/missions';
 import { PROGRESS_KEY, defaultProgress, loadProgressFrom, sanitizeProgress } from '../src/missions/progress';
 import { REASONS } from '../src/missions/runtime/reasons';
 import { destroyLandmark, hitSkyTower } from '../src/sim/landmarks';
@@ -29,7 +29,7 @@ const enemyHit = (h: Harness): number => hitSkyTower(h.world, { attackerId: 999 
 
 describe('Sky Tower in Auckland sorties', () => {
   it('every mission (all Auckland) stands the tower up', () => {
-    for (const def of [byId('c01'), byId('t01'), byId('ia_strike_auckland'), byId('ia_defend_auckland')]) {
+    for (const def of [byId('g01'), byId('g02'), byId('t01'), byId('ia_strike_auckland'), byId('ia_defend_auckland')]) {
       const h = harness(def);
       expect(h.world.landmarks.map((l) => l.id), def.id).toEqual(['skytower']);
       expect(h.world.landmarks[0].base.x).toBeCloseTo(AKL.skytower.x, 6);
@@ -37,7 +37,7 @@ describe('Sky Tower in Auckland sorties', () => {
   });
 
   it('destroying it: check fire, SKY TOWER DESTROYED, mission failed with the reason, debrief tip', () => {
-    const h = harness(byId('c01'));
+    const h = harness(byId('g01'));
     h.run(3);
     knockDown(h);
     h.run(0.5);
@@ -70,7 +70,7 @@ describe('Sky Tower in Auckland sorties', () => {
   });
 
   it('one enemy hit: damaged, "Sky Tower is hit!", SKY TOWER HIT, and the sortie goes on', () => {
-    const h = harness(byId('c01'));
+    const h = harness(byId('g01'));
     h.run(3);
     expect(enemyHit(h)).toBe(1);
     h.run(2);
@@ -86,7 +86,7 @@ describe('Sky Tower in Auckland sorties', () => {
   });
 
   it('a second enemy hit collapses it and fails the mission (no check fire, no "protected landmark" tip)', () => {
-    const h = harness(byId('c01'));
+    const h = harness(byId('g01'));
     h.run(3);
     enemyHit(h);
     h.run(5);
@@ -106,7 +106,7 @@ describe('Sky Tower in Auckland sorties', () => {
   });
 
   it('a player munition on the damaged tower: collapse, check fire, failed with the player reason', () => {
-    const h = harness(byId('c01'));
+    const h = harness(byId('g01'));
     h.run(3);
     enemyHit(h);
     h.run(2);
@@ -122,16 +122,17 @@ describe('Sky Tower in Auckland sorties', () => {
 });
 
 describe('Sky Tower: never destroyed for good (issue #75)', () => {
-  const fresh = () => defaultProgress([CAMPAIGN], TRAINING);
+  const chains = CAMPAIGNS.map((c) => c.missions);
+  const fresh = () => defaultProgress(chains, TRAINING);
   /** What Game does between sorties: fold the result into the save, write it, read it back. */
-  const saveAndLoad = (p: CampaignProgress) => sanitizeProgress(JSON.parse(JSON.stringify(p)), [CAMPAIGN], TRAINING);
+  const saveAndLoad = (p: CampaignProgress) => sanitizeProgress(JSON.parse(JSON.stringify(p)), chains, TRAINING);
 
   afterEach(() => vi.unstubAllGlobals());
 
   it('restarting the mission after a collapse (or after damage) finds the tower intact', () => {
     let p = fresh();
     for (const what of ['collapse', 'damage'] as const) {
-      const h = harness(byId('c01'));
+      const h = harness(byId('g01'));
       h.run(3);
       enemyHit(h);
       if (what === 'collapse') knockDown(h);
@@ -139,7 +140,7 @@ describe('Sky Tower: never destroyed for good (issue #75)', () => {
       p = saveAndLoad(recordResult(p, h.runner.result(h.world)));
       expect(p).not.toHaveProperty('skyTowerDown');
       h.runner.dispose?.();
-      const again = harness(byId('c01'));
+      const again = harness(byId('g01'));
       const tower = again.world.landmarks[0];
       expect(tower.id, what).toBe('skytower');
       expect(tower.alive, what).toBe(true);
@@ -155,15 +156,15 @@ describe('Sky Tower: never destroyed for good (issue #75)', () => {
     const old = { ...fresh(), skyTowerDown: { fallHeading: 1.25 } } as CampaignProgress;
     const store = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(old)]]);
     vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) });
-    const loaded = loadProgressFrom([CAMPAIGN], TRAINING);
+    const loaded = loadProgressFrom(chains, TRAINING);
     expect(loaded).not.toHaveProperty('skyTowerDown');
-    expect(loaded.unlocked).toContain('c01');
+    expect(loaded.unlocked).toContain('g01');
     // results and skips folded into an unsanitised old object don't carry it on either
-    const fail: MissionResult = { missionId: 'c01', title: 'x', success: false, reason: REASONS.skytower, difficulty: 'pilot', time: 60, score: 0, grade: 'F', kills: { air: 0, sam: 0, ground: 0 }, friendlyLosses: 0, shotsFired: 1, hits: 0, accuracy: 0, damageTaken: 0, objectives: [] };
+    const fail: MissionResult = { missionId: 'g01', title: 'x', success: false, reason: REASONS.skytower, difficulty: 'pilot', time: 60, score: 0, grade: 'F', kills: { air: 0, sam: 0, ground: 0 }, friendlyLosses: 0, shotsFired: 1, hits: 0, accuracy: 0, damageTaken: 0, objectives: [] };
     expect(recordResult(old, fail)).not.toHaveProperty('skyTowerDown');
-    expect(skipMission(old, 'c01')).not.toHaveProperty('skyTowerDown');
+    expect(skipMission(old, 'g01')).not.toHaveProperty('skyTowerDown');
     // every Auckland sortie flown on that save stands the tower up
-    const h = harness(byId('c01'));
+    const h = harness(byId('g01'));
     expect(h.world.landmarks.map((l) => [l.id, l.alive])).toEqual([['skytower', true]]);
   });
 });

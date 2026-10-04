@@ -5,7 +5,7 @@
  *   screens/*            splash, main menu (+ first-launch Training prompt, pilot card), service record
  *                        (rank, stats, medals), campaign picker, campaign/training (+ "complete Training" nudge), instant
  *                        action, briefing (+ intel map, difficulty sheet), settings, pause, debrief (+ tips,
- *                        medals, Retry on Recruit), campaign ending, credits
+ *                        medals, Retry on Recruit), campaign ending, credits, codex (weapons and warnings)
  *   career.ts            pure helpers: difficulty facts from DIFFICULTIES, onboarding flag, rank, medal tally
  *   overlays.ts          loading (progress + tips), rotate-your-phone, toasts
  *   art/*                logo, F-35 planform, icons, Auckland chart, animated menu background
@@ -33,6 +33,7 @@ import './styles/base.css';
 import './styles/screens.css';
 import './styles/overlays.css';
 import './styles/career.css';
+import './styles/codex.css';
 
 export const createUi: CreateUi = (root, deps) => {
   const host = new UiHost(root, () => {
@@ -111,6 +112,12 @@ export const createUi: CreateUi = (root, deps) => {
       return showDebrief(host, result, next, { settings: liveSettings, failStreak: p ? failStreak(p, result.missionId) : 0 });
     },
     showCredits: () => showCredits(host, deps.build),
+    // the Codex (3D viewer, demos) loads on first use, outside the main bundle
+    showCodex: (entry) =>
+      import('./screens/codex').then(
+        (m) => m.showCodex(host, entry),
+        () => toast('The Codex needs a connection the first time it opens'),
+      ),
     setRotateHint: (visible) => rotate.set(visible),
     toast,
     hideAll: () => {

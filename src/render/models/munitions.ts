@@ -233,24 +233,6 @@ const SPECS: Record<MunitionId, MissileSpec> = {
       return out;
     },
   },
-  m_9m33: {
-    body: 0xe2e3de,
-    nose: 0xcac9bf,
-    noseLen: 0.45,
-    fins: [
-      { at: 0.1, root: 0.2, tip: 0.1, span: 0.14, sweep: 0.08 },
-      { at: 0.82, root: 0.5, tip: 0.22, span: 0.3, sweep: 0.25, roll: Math.PI / 4 },
-    ],
-  },
-  m_48n6: {
-    body: 0xe4e1d6,
-    nose: 0x9a9887,
-    noseLen: 1.2,
-    fins: [
-      { at: 0.9, root: 0.5, tip: 0.3, span: 0.24, sweep: 0.18, roll: Math.PI / 4 },
-      { at: 0.82, root: 0.3, tip: 0.22, span: 0.12, sweep: 0.06 },
-    ],
-  },
   m_9m330: {
     body: 0xbfc4b2,
     nose: 0x8b9178,
@@ -304,14 +286,6 @@ const SPECS: Record<MunitionId, MissileSpec> = {
       { at: 0.3, root: 0.5, tip: 0.3, span: 0.12, sweep: 0.1, roll: Math.PI / 4, color: 0x7d8376 },
       { at: 0.86, root: 0.5, tip: 0.36, span: 0.26, sweep: 0.1, roll: Math.PI / 4, color: 0x7d8376 },
     ],
-  },
-  gbu39: {
-    body: 0x9aa0a4,
-    nose: 0x8d9296,
-    noseLen: 0.3,
-    square: 3.2,
-    fins: [{ at: 0.9, root: 0.16, tip: 0.12, span: 0.09, sweep: 0.04, roll: Math.PI / 4 }],
-    extra: sdbWings,
   },
   gbu53: {
     // SDB II: SDB-like square body, blunt faceted tri-mode seeker nose, four tail fins, pop-out wings

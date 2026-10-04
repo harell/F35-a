@@ -1,22 +1,16 @@
 /**
  * MISSIONS — pacing (#59): no campaign mission goes quiet for more than 90 s. A dead stretch is mission
  * time with no radio call, HUD message, launch, kill or objective change (tests/missions-pacing.ts),
- * read from the bot's event log. The playtest of 2026-10-02 (1.1-i) measured c11 at 131 s, c02 at
- * 124 s and c08 at 95 s; before the fixes, c11 Pilot seed 0 was 112 s (143–255 s) and seed 2 169 s,
- * and c08 Pilot was 95–97 s (7–102 s) on seeds 0–2.
+ * read from the bot's event log (logged Pilot runs of every campaign mission, seeds 0–2).
  * Measure any mission: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=pilot --seeds=1 --log
  */
 import { describe, expect, it } from 'vitest';
-import { missionById, terrainPadsFor } from '../src/missions';
+import { CAMPAIGNS, missionById, terrainPadsFor } from '../src/missions';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import type { TerrainQuery } from '../src/sim/api';
-import { DIFFICULTIES } from '../src/core/data';
-import type { Difficulty } from '../src/core/types';
-import { scaledCount } from '../src/missions/runtime/spawner';
 import { runPlaythrough } from './missions-bot';
-import { flatLand, harness, killGroup, shieldPlayer, type Harness } from './missions-helpers';
 import { MAX_DEAD_STRETCH, deadStretchText, deadStretches, longestDeadStretch, pacingEventTimes } from './missions-pacing';
 
 describe('pacing: dead stretches in the bot event log (#59)', () => {
@@ -29,7 +23,7 @@ describe('pacing: dead stretches in the bot event log (#59)', () => {
     ' 40 RADIO Viper 1: Fox Three',
     ' 75 DESTROYED Fulcrum 1 by PLAYER',
     ' 75 HUD SPLASH MIG-29',
-    '100 MSL gbu39->2@3km v200 y4000',
+    '100 MSL gbu53->2@3km v200 y4000',
     '150 BOT HOLD pos=(1.0,1.0)km alt=500',
     '200 OBJ o_a complete',
   ];
@@ -78,87 +72,18 @@ async function expectPaced(id: string, seeds: readonly number[]): Promise<void> 
   }
 }
 
-describe('pacing: c11 Grumble has no dead stretch over 90 s (#59)', () => {
-  it('logged Pilot runs, seeds 0–2 (seed 0 was 112 s waiting on a GBU-39, seed 2 169 s before the reserve scrambled)', { timeout: 300_000 }, async () => {
-    await expectPaced('c11', [0, 1, 2]);
-  });
-});
+describe('pacing: every campaign mission has no dead stretch over 90 s (#59)', () => {
+  const ids = CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id));
 
-describe('pacing: c02, c04 and c08 have no dead stretch over 90 s (#59)', () => {
-  it('each mission flies on its own terrain', () => {
-    expect(terrainFor('c11')).toBe(terrainFor('c11'));
-    expect(terrainFor('c02')).not.toBe(terrainFor('c11'));
+  it('each mission flies on its own terrain', { timeout: 60_000 }, () => {
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+    expect(terrainFor(ids[0])).toBe(terrainFor(ids[0]));
+    expect(terrainFor(ids[1])).not.toBe(terrainFor(ids[0]));
   });
 
-  // the playtest's 124 s (131–255 s) included a rearm trip; there is no rearming since #63. The longest stretch on seeds 0–2 is 47–74 s, after the last kill: Viper's return leg
-  // until it is within 20 km of Whenuapai (kiwiSafe; Kiwi is already home at ~106 s), so it depends on
-  // how far east the fight ends and how fast the player flies home (seed 2: 74 s, the closest to 90 s)
-  it('c02 Shepherd: logged Pilot runs, seeds 0–2', { timeout: 300_000 }, async () => {
-    await expectPaced('c02', [0, 1, 2]);
-  });
-
-  // the low transit across the harbour was silent from the opening calls to the first release:
-  // 95–97 s (7–102 s) on seeds 0–2, until Darkstar's alert and run-in calls (t_pace_alert, t_pace_runin)
-  it('c08 Under the Umbrella: logged Pilot runs, seeds 0–2 (the transit was silent for 95 s)', { timeout: 300_000 }, async () => {
-    await expectPaced('c08', [0, 1, 2]);
-  });
-
-  // the transit from the CAP fight to the bomb run was silent for 108–131 s in 16 of 24 runs (6 seeds, every
-  // difficulty; Pilot seed 0 119 s, 48–167 s) until Darkstar's strait and IP calls (t_pace_strait, t_pace_ip).
-  // After them the worst of the 24 is 67 s, and every run ends the same way at the same second
-  it('c04 Broken Wing: logged Pilot runs, seeds 0–2 (seeds 0 and 2 were silent for 119 and 125 s)', { timeout: 300_000 }, async () => {
-    await expectPaced('c04', [0, 1, 2]);
-  });
-});
-
-// What Darkstar's c08 MiG alert (t_pace_alert) says must be what the mission does. The first wording,
-// "Two MiG-29s on alert: they launch when the ships go down", was false twice over (review, #59):
-// sinking the ships ends the mission in the same tick, so the MiGs never launch then, and Ace flies 3.
-describe('pacing: c08\'s MiG alert call says what the mission does (#59)', () => {
-  const c08 = missionById('c08')!;
-  const alert = c08.script.triggers?.find((t) => t.id === 't_pace_alert')?.actions.find((a) => a.kind === 'radio');
-  const alertText = alert?.kind === 'radio' ? alert.text : '';
-  // no SAM sees through this terrain: the tests are about the spawn rule, not about surviving the SA-10
-  const blind: TerrainQuery = { ...flatLand(), lineOfSight: () => false };
-  /** Park Viper at its start, low and unharmed, while the mission clock runs. */
-  const hold = (h: Harness) => () => {
-    const p = h.world.player!;
-    p.position.set(c08.player.x, 100, c08.player.z);
-    shieldPlayer(h);
-  };
-  const migs = (h: Harness) => h.world.aircraft.filter((a) => a.groupId === 'migs');
-
-  it('sinking the ships ends the mission in the same tick: no MiG launches then', () => {
-    const h = harness(c08, 'pilot', undefined, blind);
-    const heardAt: number[] = [];
-    h.events.on('radio', (r) => {
-      if (r.text === alertText) heardAt.push(h.world.time);
+  for (const id of ids) {
+    it(`${id}: logged Pilot runs, seeds 0–2`, { timeout: 300_000 }, async () => {
+      await expectPaced(id, [0, 1, 2]);
     });
-    h.run(50, hold(h));
-    expect(heardAt, 'the alert call plays once, from 40 s').toHaveLength(1);
-    expect(heardAt[0]).toBeGreaterThanOrEqual(40);
-    killGroup(h, 'landing');
-    h.run(10, hold(h));
-    expect(h.runner.state).toBe('success');
-    expect(migs(h)).toHaveLength(0);
-  });
-
-  it('the ships still afloat at 300 s: the MiGs launch ("take too long and they launch")', () => {
-    const h = harness(c08, 'pilot', undefined, blind);
-    h.run(298, hold(h));
-    expect(h.runner.state).toBe('running');
-    expect(migs(h)).toHaveLength(0);
-    h.run(4, hold(h));
-    expect(h.runner.state).toBe('running');
-    expect(migs(h).length).toBeGreaterThan(0);
-  });
-
-  it('the call ties the launch to time, not to the ships sinking, and names no count (2 MiGs up to Veteran, 3 on Ace)', () => {
-    expect(alertText).toMatch(/MiG-29s on alert/);
-    expect(alertText).not.toMatch(/ships (go|are|get) (down|sunk|hit)|when the ships/i);
-    const group = c08.script.groups.find((g) => g.id === 'migs')!;
-    const counts = (Object.keys(DIFFICULTIES) as Difficulty[]).map((d) => scaledCount(group, DIFFICULTIES[d].enemyCountScale));
-    expect(new Set(counts)).toEqual(new Set([2, 3]));
-    expect(alertText).not.toMatch(/\b(one|two|three|four|a pair of|\d+) MiG/i);
-  });
+  }
 });

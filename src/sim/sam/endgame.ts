@@ -10,15 +10,13 @@
  * no detonation beyond fuze reach (a miss), otherwise a proximity burst whose blast damage falls
  * off with the miss distance (so hits are no longer all full-warhead direct hits).
  *
- *   miss ~ Rayleigh(σ),   σ = reach · s_diff · F_man · F_track · F_height · e^(0.3·z)
+ *   miss ~ Rayleigh(σ),   σ = reach · s_diff · F_man · F_track · e^(0.3·z)
  *   reach   = fuseRadius · fuzeScale(difficulty) + target.radius / 2       (same as flight.ts)
  *   s_diff  from the no-defence Pk table (Pk₀ = 1 − e^(−1/(2 s²)))  recruit … ace
  *   F_man   = 1 + 0.16 · max(0, a_T/g − 1) · (0.35 + 0.65 · sin aspect) · 25 / missile maxG
  *             (target lateral acceleration, smoothed over the last ~0.8 s, as seen across the LOS)
  *   F_track = 1 + 0.9 · notch (radar sites: smoothed Doppler-notch depth of the target as seen
  *             by the fire-control radar) + 0.8 · chaff_in_gate · (0.2 + 0.8 · beam)
- *   F_height = SamTypeData.heightMiss against the target's height above the site (1 for radar
- *             SAMs; MANPADS: better against a low, close jet than one at 1,500 m, design pillar 3)
  *   z       = √ρ · z_salvo + √(1 − ρ) · z_missile, ρ = 0.45  (correlated salvo term: rounds of one
  *             salvo share the fire-control radar's error, but are not identical)
  * Chaff: in addition every radar-guided round rolls its own seduction when chaff is in the
@@ -26,13 +24,12 @@
  * same correlated z) — a seduced round's final correction walks onto the chaff (≥ 35 m miss).
  */
 import { Vector3 } from 'three';
-import { G, clamp, smoothstep } from '../../core/math';
+import { G, clamp } from '../../core/math';
 import type { AircraftEntity, SamSiteEntity } from '../entities';
 import type { CombatCtx } from '../weapons/context';
 import { gaussian } from '../weapons/context';
 import { cmFactor, notchDepth, radialSpeed } from '../weapons/ew';
 import { isCombatMissile, type CombatMissile } from '../weapons/missile';
-import { SAM_DATA, type SamTypeData } from './samData';
 
 /** Probability that an undefended, non-manoeuvring jet is hit (fuzed on), per difficulty. */
 export const ENDGAME_PK: Record<string, number> = { recruit: 0.66, pilot: 0.8, veteran: 0.87, ace: 0.93 };
@@ -91,13 +88,6 @@ export function registerRound(ctx: CombatCtx, m: CombatMissile, salvoZ: number):
 /** End-game state of a round (tests / debug). */
 export function endgameState(m: CombatMissile): EndgameState | undefined {
   return states.get(m);
-}
-
-/** End-game miss multiplier of a site type against a target `height` m above the site (F_height). */
-export function heightMissFactor(data: Pick<SamTypeData, 'heightMiss'>, height: number): number {
-  const hm = data.heightMiss;
-  if (!hm) return 1;
-  return hm.low + (hm.high - hm.low) * smoothstep(height, hm.lowHeight, hm.highHeight);
 }
 
 /**
@@ -186,7 +176,7 @@ function stepRound(
     gate = age < 4 ? clamp(chaff.chaffExposure * Math.exp(-age / 2.5), 0, 1.5) / 1.5 : 0;
     beam = 1 - clamp((radialSpeed(site.position, t) - 40) / 160, 0, 1);
   }
-  const sigma = missSigma(ctx, m, t, st, sinAspect, gate * (0.2 + 0.8 * beam)) * heightMissFactor(SAM_DATA[site.type], t.position.y - site.position.y);
+  const sigma = missSigma(ctx, m, t, st, sinAspect, gate * (0.2 + 0.8 * beam));
   let miss = sigma * Math.sqrt(-2 * Math.log(Math.max(1e-9, 1 - ctx.rng())));
   if (gate > 0) {
     // per-round seduction: this round's final correction walks onto the chaff cloud

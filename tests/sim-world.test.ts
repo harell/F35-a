@@ -49,36 +49,37 @@ describe('SimWorld spawning', () => {
 
   it('places SAMs on the terrain and ships at sea level, movers follow their path', () => {
     const tw = makeWorld('pilot', flatTerrain(120));
-    const sam = tw.world.spawnSam({ type: 'sa10', team: 'red', position: new Vector3(5000, 0, 5000), emcon: true, known: true });
+    const sam = tw.world.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(5000, 0, 5000), emcon: true, known: true });
     expect(sam.position.y).toBe(120);
     expect(sam.radarOn).toBe(false);
     expect(sam.known).toBe(true);
     expect(sam.radius).toBeGreaterThan(20);
     const ship = tw.world.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 50, 0) });
     expect(ship.position.y).toBe(0);
-    const truck = tw.world.spawnGround({
-      type: 'truck',
+    // a taxiing jet: any ground target with a path is a mover
+    const jet = tw.world.spawnGround({
+      type: 'parked_jet',
       team: 'red',
       position: new Vector3(0, 0, 0),
       path: [new Vector3(0, 0, -100), new Vector3(100, 0, -100)],
       speed: 10,
       loopPath: true,
     });
-    expect(truck.position.y).toBe(120);
+    expect(jet.position.y).toBe(120);
     run(tw.world, 5);
-    expect(truck.position.z).toBeCloseTo(-50, 0);
-    expect(truck.velocity.z).toBeCloseTo(-10, 1);
-    expect(truck.position.y).toBe(120);
+    expect(jet.position.z).toBeCloseTo(-50, 0);
+    expect(jet.velocity.z).toBeCloseTo(-10, 1);
+    expect(jet.position.y).toBe(120);
     // heading north (towards −Z): forward = −Z
-    const fwd = new Vector3(0, 0, -1).applyQuaternion(truck.quaternion);
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(jet.quaternion);
     expect(fwd.z).toBeLessThan(-0.99);
     run(tw.world, 15); // reaches the corner and turns east
-    expect(truck.position.x).toBeGreaterThan(40);
-    expect(truck.position.z).toBeCloseTo(-100, 0);
+    expect(jet.position.x).toBeGreaterThan(40);
+    expect(jet.position.z).toBeCloseTo(-100, 0);
     run(tw.world, 20); // loops back to the first waypoint
-    expect(truck.alive).toBe(true);
-    expect(tw.world.hostilesOf('blue')).toContain(truck);
-    expect(tw.world.hostilesOf('red')).not.toContain(truck);
+    expect(jet.alive).toBe(true);
+    expect(tw.world.hostilesOf('blue')).toContain(jet);
+    expect(tw.world.hostilesOf('red')).not.toContain(jet);
   });
 });
 

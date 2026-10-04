@@ -2,7 +2,7 @@
  * Target camera (PiP) smoke test: flies a mission, designates the nearest hostile of a kind
  * (air / sam / ground), switches view and screenshots the target camera window.
  *
- *   node e2e/targetcam.mjs [--base=http://localhost:5173/] [--mission=c01] [--kind=air|civil|sam|ground]
+ *   node e2e/targetcam.mjs [--base=http://localhost:5173/] [--mission=ia_strike_auckland] [--kind=air|civil|sam|ground]
  *                          [--view=cockpit|hud|chase] [--wait=6000] [--steps=1 --every=1000] [--clip] [--dpr=2]
  *                          [--out=e2e/screenshots/targetcam/<mission>-<kind>-<view>.png] [--shahed]
  *
@@ -23,7 +23,7 @@ const args = Object.fromEntries(
   }),
 );
 const base = args.base || 'http://localhost:5173/';
-const mission = args.mission || 'c01';
+const mission = args.mission || 'ia_strike_auckland';
 const kind = args.kind || 'air';
 const view = args.view || 'cockpit';
 const wait = Number(args.wait || 6000);

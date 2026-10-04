@@ -13,7 +13,8 @@ import { computeScore, contributionCap, type ScoreInput } from '../src/missions/
 import { attemptSeed, jitter, nextAttempt, setAttemptVariation } from '../src/missions/runtime/variation';
 import { sameFlight } from '../src/missions/runtime/callouts';
 import { groupSkill } from '../src/missions/runtime/spawner';
-import { CAMPAIGN, TRAINING, missionById } from '../src/missions';
+import { CAMPAIGNS, TRAINING, missionById } from '../src/missions';
+import { flight } from '../src/missions/content/common';
 import { DIFFICULTIES } from '../src/core/data';
 
 const NO_SAFE = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -49,15 +50,15 @@ describe('i2: handedness / scheme-aware instructions', () => {
     expect(formatControls(t, { controlScheme: 'tilt', leftHanded: true })).toBe('Tilt the phone to fly, right thumb THROTTLE. Climb');
   });
   it('no campaign or training hint hard-codes a thumb (playtest 2026-10-02, 1.4-d: T01 said RIGHT THUMB = STICK)', () => {
-    for (const m of [...CAMPAIGN, ...TRAINING]) {
+    for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING]) {
       const texts = [...(m.script.hints ?? []).map((h) => h.text), ...(m.script.triggers ?? []).flatMap((t) => t.actions.flatMap((a) => (a.kind === 'hint' ? [a.text] : [])))];
       for (const t of texts) expect(t, `${m.id}: "${t}"`).not.toMatch(/\b(left|right) thumb\b/i);
     }
   });
-  it('c01 no longer hard-codes "Left thumb THROTTLE"', () => {
-    const c01 = missionById('c01')!;
-    for (const h of c01.script.hints ?? []) expect(h.text).not.toMatch(/Left thumb THROTTLE/);
-    expect(c01.script.hints?.some((h) => h.text.includes('{controls}'))).toBe(true);
+  it('T01 names the thumbs through tokens, not a hard-coded "Left thumb THROTTLE"', () => {
+    const t01 = missionById('t01')!;
+    for (const h of t01.script.hints ?? []) expect(h.text).not.toMatch(/Left thumb THROTTLE/);
+    expect(t01.script.hints?.some((h) => /\{(controls|stickThumb|throttleThumb)\}/.test(h.text))).toBe(true);
   });
 });
 
@@ -109,11 +110,12 @@ describe('i2: player-centric grading', () => {
     expect(sameFlight('Hammer 3', 'Viper 1')).toBe(false);
   });
   it('the fighting-wing wingman is generous only on Recruit; strike-package friendlies stay competent', () => {
-    const c01 = missionById('c01')!;
-    const wing = c01.script.groups.find((g) => g.role === 'wingman')!;
+    const dogfight = missionById('ia_dogfight_auckland')!;
+    const wing = dogfight.script.groups.find((g) => g.role === 'wingman')!;
     expect(groupSkill(wing, DIFFICULTIES.recruit.aiSkill)).toBeGreaterThan(groupSkill(wing, DIFFICULTIES.pilot.aiSkill));
     expect(groupSkill(wing, DIFFICULTIES.ace.aiSkill)).toBeLessThanOrEqual(0.6);
-    const weasel = missionById('c04')!.script.groups.find((g) => g.callsign === 'Weasel')!;
+    // a strike-package friendly (no shipped mission has one now): a blue flight that is not the wingman
+    const weasel = flight('weasel', 'f35a', 2, { x: 0, z: 0 }, 5000, 0, 230, 'fighter', { team: 'blue', callsign: 'Weasel' });
     expect(groupSkill(weasel, DIFFICULTIES.pilot.aiSkill)).toBeGreaterThanOrEqual(0.75);
   });
 });
@@ -121,15 +123,15 @@ describe('i2: player-centric grading', () => {
 describe('i2: retries vary', () => {
   it('attempt 0 is the designed mission, retries get new seeds; off in node unless enabled', () => {
     setAttemptVariation(false);
-    expect(nextAttempt('c06')).toBe(0);
-    expect(nextAttempt('c06')).toBe(0);
+    expect(nextAttempt('g01')).toBe(0);
+    expect(nextAttempt('g01')).toBe(0);
     setAttemptVariation(true);
-    expect(nextAttempt('c06')).toBe(0);
-    expect(nextAttempt('c06')).toBe(1);
-    expect(nextAttempt('c06')).toBe(2);
-    expect(nextAttempt('c08')).toBe(0);
+    expect(nextAttempt('g01')).toBe(0);
+    expect(nextAttempt('g01')).toBe(1);
+    expect(nextAttempt('g01')).toBe(2);
+    expect(nextAttempt('g02')).toBe(0);
     setAttemptVariation(false);
-    const s = missionById('c06')!.seed;
+    const s = missionById('g01')!.seed;
     expect(attemptSeed(s, 0)).toBe(s);
     expect(new Set([0, 1, 2, 3].map((n) => attemptSeed(s, n))).size).toBe(4);
   });

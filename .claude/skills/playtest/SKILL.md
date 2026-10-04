@@ -33,13 +33,13 @@ Parse the constraints. Free text is fine ("3 rounds, done by 5pm NZT").
 
 ## 1. Orient and scope (≤ 10 % of the budget)
 
-**What's in scope: what the player can play.** Operation Southern Cross (c01–c06, c08–c11) is **disabled** (owner's decision, 2026-10-03): its code and tests stay, but players can't reach it. Don't playtest it, sweep it, score it or file findings on it, even when the diff touches its missions, until the owner enables it again (`enabled: false` on `SOUTHERN_CROSS` in `src/missions/index.ts`; a playable campaign is in `PLAYABLE_CAMPAIGNS`). Spend the time on the playable game instead: the IRGC campaign (g01, g02), training (t01–t03) and Instant Action, including A Stroll in the Park. Shared code (HUD, weapons, AI, the bot) is still in scope; check it in playable missions.
+**What's in scope: what the player can play** (a campaign with `enabled: false` in `src/missions/index.ts` is not; the playable ones are `PLAYABLE_CAMPAIGNS`): the IRGC campaign (g01, g02), training (t01–t03) and Instant Action, including A Stroll in the Park. Shared code (HUD, weapons, AI, the bot) is still in scope; check it in playable missions.
 
 1. `npm ci` if `node_modules` is missing. Start the playtest server: `npx vite --config vite.e2e.config.ts --port 5190 &`.
 2. Find the last playtested SHA in `docs/playtests/README.md`. Read that run's file: findings, "not covered", time sinks.
 3. `git log --oneline <sha>..HEAD` and `git diff --stat <sha>..HEAD`. Skim the commits that touch `src/`. Also list open GitHub issues labelled `bug` or mentioning balance, if you can reach them.
 4. Turn the diff into risks and charters with `charters.md` sections 2 and 3: risk = likelihood × impact + coverage gap, ranked by risk per minute. `focus=` adds +3 to matching charters. With no previous run, do the baseline charters.
-5. Write the plan into the ledger file: charters with budgets, and what you're deliberately **not** testing (always including the disabled Southern Cross).
+5. Write the plan into the ledger file: charters with budgets, and what you're deliberately **not** testing.
 
 ## 2. Round loop
 

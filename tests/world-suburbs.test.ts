@@ -9,7 +9,7 @@ import { allFeatures } from '../src/world/scenery/Scenery';
 import { bakeColorRows } from '../src/world/terrain/bake';
 import { reduceView } from '../src/world/terrain/parallel';
 import { MAT_CONE, MAT_URBAN } from '../src/world/terrain/types';
-import { aucklandRoadPaths } from '../src/world/scenery/motorways';
+import { aucklandRoadPaths, HAND_ARTERIALS } from '../src/world/scenery/motorways';
 import { lightsForSun, skyPreset } from '../src/world/sky/presets';
 import { terrainStyle } from '../src/world/config';
 import { airfieldFeature } from '../src/core/airfields';
@@ -97,6 +97,7 @@ describe('real arterial roads and softer volcanic cones', () => {
   const hf = runSync(generateTerrain({ theater: 'auckland', seed: 1840, resolution: 1024, features, pads: [] }));
 
   it('Dominion Rd, Great North Rd, Lake Rd, Onewa Rd etc. are road ribbons, on land', () => {
+    const HAND_NAMES = new Set(HAND_ARTERIALS.map((a) => a.name));
     const paths = aucklandRoadPaths();
     const names = paths.map((p) => p.name);
     for (const n of ['Dominion Rd', 'Great North Rd', 'Lake Rd', 'Onewa Rd', 'Manukau Rd', 'Mt Eden Rd']) expect(names).toContain(n);
@@ -116,7 +117,8 @@ describe('real arterial roads and softer volcanic cones', () => {
         if (hf.mat[k] === MAT_URBAN) urban++;
       }
       expect(longest, `${p.name} runs over water`).toBeLessThan(300); // Whau bridge incl. shore ramps ≈ 270 m
-      expect(urban / p.x.length, `${p.name} runs through the suburbs`).toBeGreaterThan(0.6);
+      // the main arterials cross the suburbs (the streets round a stadium may run along its park)
+      if (HAND_NAMES.has(p.name)) expect(urban / p.x.length, `${p.name} runs through the suburbs`).toBeGreaterThan(0.6);
     }
     // motorway-only list still available
     expect(aucklandRoadPaths(false).every((p) => p.kind === 'motorway')).toBe(true);

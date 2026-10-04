@@ -16,7 +16,7 @@ import { GUNS, type GunDef } from './defs';
 import { TYPE_IR, TYPE_RCS } from '../sensors/signatures';
 
 /** Weapon cycle order; the gun is always last. */
-export const WEAPON_ORDER: readonly WeaponId[] = ['aim120', 'aim9x', 'gbu31', 'gbu39', 'gbu53', 'aargm', 'gun'];
+export const WEAPON_ORDER: readonly WeaponId[] = ['aim120', 'aim9x', 'gbu31', 'gbu53', 'aargm', 'gun'];
 
 type StoreWeapon = Exclude<WeaponId, 'gun'>;
 
@@ -73,8 +73,6 @@ const ENEMY_LOADOUTS: Partial<Record<AircraftType, DefaultLoadout>> = {
     flares: 30,
     chaff: 30,
   },
-  tu22m: { stores: [], gunAmmo: 0, flares: 48, chaff: 48 },
-  a50: { stores: [], gunAmmo: 0, flares: 48, chaff: 48 },
   a320: { stores: [], gunAmmo: 0, flares: 0, chaff: 0 },
   shahed136: { stores: [], gunAmmo: 0, flares: 0, chaff: 0 },
 };
@@ -213,7 +211,7 @@ export function cycleWeapon(ac: AircraftEntity, world: SimWorld | null): void {
 export function autoReselect(ac: AircraftEntity, world: SimWorld | null): void {
   if (ac.selectedWeapon === 'gun' || remaining(ac, ac.selectedWeapon) > 0) return;
   const aa = ac.selectedWeapon === 'aim120' || ac.selectedWeapon === 'aim9x';
-  const sameKind: WeaponId[] = aa ? ['aim120', 'aim9x'] : ['aargm', 'gbu53', 'gbu39', 'gbu31'];
+  const sameKind: WeaponId[] = aa ? ['aim120', 'aim9x'] : ['aargm', 'gbu53', 'gbu31'];
   for (const w of sameKind) if (remaining(ac, w) > 0) return setSelected(ac, w, world);
   for (const w of WEAPON_ORDER) if (w !== 'gun' && remaining(ac, w) > 0) return setSelected(ac, w, world);
   if (gunFor(ac)) setSelected(ac, 'gun', world);
@@ -222,10 +220,10 @@ export function autoReselect(ac: AircraftEntity, world: SimWorld | null): void {
 function initialWeapon(ac: AircraftEntity, role: 'aa' | 'ag' | 'sead' | 'none'): WeaponId {
   const order: WeaponId[] =
     role === 'ag'
-      ? ['gbu31', 'gbu53', 'gbu39', 'aargm', 'aim120', 'aim9x']
+      ? ['gbu31', 'gbu53', 'aargm', 'aim120', 'aim9x']
       : role === 'sead'
-        ? ['aargm', 'gbu53', 'gbu39', 'gbu31', 'aim120', 'aim9x']
-        : ['aim120', 'aim9x', 'gbu31', 'gbu53', 'gbu39', 'aargm'];
+        ? ['aargm', 'gbu53', 'gbu31', 'aim120', 'aim9x']
+        : ['aim120', 'aim9x', 'gbu31', 'gbu53', 'aargm'];
   for (const w of order) if (remaining(ac, w) > 0) return w;
   return 'gun';
 }
