@@ -108,7 +108,11 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   if (died) {
     if (st.downReason === 'fuel') add('Afterburner drinks fuel and there is no refuelling: cruise at MIL power, and when BINGO shows finish the job and head home.');
     else if (st.downReason === 'crash' || st.downReason === 'collision')
-      add('Watch your altitude and let Auto-GCAS fly the pull-up — don’t fight the stick when it takes over.');
+      add(
+        s.difficulty.autoGcas
+          ? 'Watch your altitude and let Auto-GCAS fly the pull-up — don’t fight the stick when it takes over.'
+          : 'Watch your altitude: above Recruit there is no Auto-GCAS, so the pull-up is yours — start it early.',
+      );
     else if (samType === 'sa10') add('Stay below 300 ft and keep Rangitoto between you and Motutapu: the SA-10 cannot see through the volcano.');
     else if (samType === 'zsu23') add('Shilkas shred anything low and close: stay above 5,000 ft or more than 3 km from the flak.');
     else if (samType === 'sa18' || IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');

@@ -6,6 +6,7 @@
  * the real ones (LINZ outlines + LiDAR heights) when that data is installed, else procedural towers
  * on the streets the terrain shader paints (the real LINZ streets, or the urbanGrid.ts block grid).
  */
+import { MUSEUM, MUSEUM_BOXES, MUSEUM_DOME } from '../../core/museum';
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
 import { AKL } from '../../core/auckland';
@@ -990,20 +991,24 @@ export function buildMarinas(B: GeometryBuilder, lights: LightList, height: Heig
   }
 }
 
-export function buildMuseumAndObelisk(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
-  // Auckland War Memorial Museum on the Domain
-  const mx = AKL.domain.x;
-  const mz = AKL.domain.z;
+/** Auckland War Memorial Museum on the Domain (shape shared with the sim: core/museum.ts). */
+export function buildMuseum(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
+  const { x: mx, z: mz, heading } = MUSEUM;
   const g = height(mx, mz) - 1.5;
-  const fr = frameFromHeading(mx, g, mz, 0.3);
+  const fr = frameFromHeading(mx, g, mz, heading);
   const stone = 0xe8e0cc;
-  B.box(fr, 0, 0, 0, 104, 22, 62, stone, 0x9c9486, WIN_NONE);
-  B.box(fr, 0, 0, -35, 40, 20, 10, stone, 0x9c9486, WIN_NONE); // portico
-  B.box(fr, 0, 22, 0, 40, 6, 30, stone, 0x9c9486);
-  B.cylinder(fr, 0, 28, 0, 14, 14, 4, 16, stone, WIN_NONE, false);
-  B.cylinder(fr, 0, 32, 0, 14, 2, 10, 16, 0x9aa8ae, WIN_NONE, true);
+  const [block, portico, upper] = MUSEUM_BOXES;
+  B.box(fr, block.lx, block.y0, block.lz, block.w, block.h, block.d, stone, 0x9c9486, WIN_NONE);
+  B.box(fr, portico.lx, portico.y0, portico.lz, portico.w, portico.h, portico.d, stone, 0x9c9486, WIN_NONE);
+  B.box(fr, upper.lx, upper.y0, upper.lz, upper.w, upper.h, upper.d, stone, 0x9c9486);
+  const d = MUSEUM_DOME;
+  B.cylinder(fr, 0, d.drumY0, 0, d.r, d.r, d.drumH, 16, stone, WIN_NONE, false);
+  B.cylinder(fr, 0, d.drumY0 + d.drumH, 0, d.r, d.domeTopR, d.domeH, 16, 0x9aa8ae, WIN_NONE, true);
   lights.add(mx, g + 30, mz, 0xfff0d0, 12);
-  // One Tree Hill obelisk
+}
+
+/** One Tree Hill obelisk. */
+export function buildObelisk(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
   const ox = AKL.one_tree_hill.x;
   const oz = AKL.one_tree_hill.z;
   const og = height(ox, oz) - 1;

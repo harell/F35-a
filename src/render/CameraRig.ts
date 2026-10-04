@@ -115,6 +115,8 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
   let dead = false;
   const deathPos = new Vector3();
   let deathYaw = 0;
+  /** The structure strike the death cam has framed (null: orbiting the wreck). */
+  let strikeFramed: object | null = null;
   // shake
   let shakeAmp = 0;
   let shakeT = 0;
@@ -538,7 +540,20 @@ export const createCameraRig: CreateCameraRig = (world, entities, settings) => {
         if (p.alive && dead) dead = false;
         deathPos.copy(p.position);
       }
-      if (dead) {
+      const strike = dead ? world.structureStrike : null;
+      if (strike) {
+        // the jet brought a building down: stand back far enough to see all of it fall, on the side
+        // the jet came in from and a little round, and turn slowly (the outro waits for the collapse)
+        if (strikeFramed !== strike) {
+          strikeFramed = strike;
+          orbitYaw = Math.atan2(deathPos.x - strike.center.x, deathPos.z - strike.center.z) + 0.8;
+          orbitPitch = 0.22;
+        }
+        orbitYaw += dt * 0.08;
+        const half = (Math.min(camera.fov, camera.fov * Math.min(1, camera.aspect)) * Math.PI) / 360;
+        orbitAround(strike.center, (strike.radius / Math.sin(half)) * 1.1, 0, ctx, false);
+      } else if (dead) {
+        strikeFramed = null;
         const spec = p ? AIRCRAFT_SPECS[p.type] : AIRCRAFT_SPECS.f35a;
         orbitAround(deathPos, (spec?.chase.dist ?? 25) * 2.4, dt, ctx, true);
         void deathYaw;
