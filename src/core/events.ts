@@ -9,6 +9,7 @@ import type { Vector3 } from 'three';
 import type { ExplosionSize, MunitionId, Team, VoiceId, WarningId, WeaponId } from './types';
 import type { AircraftEntity, AnyEntity, DecoyEntity, GroundTargetEntity, MissileEntity, RwrContact } from '../sim/entities';
 import type { LandmarkCollapseCause, LandmarkEntity } from '../sim/landmarks';
+import type { HeroBuilding } from '../sim/buildings';
 
 export interface GameEventMap {
   /** A missile/bomb left the rail/bay. */
@@ -82,7 +83,8 @@ export interface GameEventMap {
    * the building collapses. `building` = index into aucklandBuildings(); `position` = the impact;
    * (x, z) its footprint centre, `ground` and `top` its base and roof (world Y).
    */
-  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number };
+  /** A building comes down (a CBD skyscraper, or a hero landmark under the player's jet; `hero` names it). */
+  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number; radius: number; hero: HeroBuilding | null };
 }
 
 export type GameEventName = keyof GameEventMap;

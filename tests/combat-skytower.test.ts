@@ -270,27 +270,41 @@ describe('aircraft vs Sky Tower', () => {
     return { events, world, tower };
   }
 
-  it("flying into the shaft crashes the jet ('structure'), leaves the tower burning there and the wreck falls (#113)", () => {
+  it("the player's jet flying into the shaft crashes ('structure') and brings the tower down at once, falling away from it", () => {
     const { events, world, tower } = realWorld();
     const downs: GameEventMap['player:down'][] = [];
+    const destroyed: GameEventMap['landmark:destroyed'][] = [];
     events.on('player:down', (e) => downs.push(e));
+    events.on('landmark:destroyed', (e) => destroyed.push(e));
     const p = world.spawnAircraft({ type: 'f35a', team: 'blue', position: at(400, 120, 0), heading: WEST, speed: 220, isPlayer: true });
     for (let i = 0; i < 240 && p.alive; i++) world.step(DT);
     expect(p.alive).toBe(false);
     expect(downs).toEqual([{ reason: 'structure' }]);
     expect(Math.abs(p.position.x - TX)).toBeLessThan(20);
-    // standing, but hit: it burns where the jet went in (a second hit would bring it down)
-    expect(tower.alive).toBe(true);
-    expect(tower.hits).toBe(1);
-    expect(tower.damagePoint.y - tower.base.y).toBeGreaterThan(100);
-    expect(tower.damagePoint.y - tower.base.y).toBeLessThan(140);
+    // one jet is enough (two Shaheds are needed): down at once, the player's doing, no munition
+    expect(tower.alive).toBe(false);
+    expect(destroyed).toHaveLength(1);
+    expect(destroyed[0]).toMatchObject({ cause: 'player', weapon: null, attackerId: p.id });
+    expect(tower.hitPoint.y - tower.base.y).toBeGreaterThan(100);
+    expect(tower.hitPoint.y - tower.base.y).toBeLessThan(140);
+    // came in from the east → falls west, away from the jet
+    expect(tower.fallHeading).toBeCloseTo((270 * Math.PI) / 180, 1);
+    // the strike is recorded for the death cam and the outro: named, framing the fall
+    const strike = world.structureStrike!;
+    expect(strike).toMatchObject({ name: 'the Sky Tower', label: 'SKY TOWER', duration: COLLAPSE.ruinsAt });
+    expect(strike.center.x).toBeLessThan(TX - 100);
+    expect(strike.radius).toBeGreaterThan(200);
+    // the collapse plays: the pod lands
+    const impacts: unknown[] = [];
+    events.on('landmark:impact', (e) => impacts.push(e));
     // the wreck doesn't hang on the shaft: it falls to the ground
     const y0 = p.position.y;
     for (let i = 0; i < 600; i++) world.step(DT);
     expect(p.position.y).toBeLessThan(y0 - 80);
+    expect(impacts).toHaveLength(1);
   });
 
-  it('an AI jet flying into it crashes; the tower is unharmed', () => {
+  it('an AI jet flying into it crashes; the tower is unharmed and no strike is recorded', () => {
     const { events, world, tower } = realWorld();
     const downs: GameEventMap['player:down'][] = [];
     events.on('player:down', (e) => downs.push(e));
@@ -300,6 +314,7 @@ describe('aircraft vs Sky Tower', () => {
     expect(downs).toEqual([]);
     expect(tower.alive).toBe(true);
     expect(tower.hits).toBe(0);
+    expect(world.structureStrike).toBeNull();
   });
 
   it('flying past it does not', () => {
