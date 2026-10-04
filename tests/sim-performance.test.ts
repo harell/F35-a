@@ -74,9 +74,9 @@ describe('performance helpers (AI)', () => {
   });
 });
 
-describe('Auto-GCAS robustness', () => {
+describe('Auto-GCAS robustness (Recruit: the only difficulty the player has it on)', () => {
   it('an assisted F-35 flown with random stick inputs never hits the ground', () => {
-    const tw = makeWorld('pilot');
+    const tw = makeWorld('recruit');
     const jets = [0, 1, 2, 3].map((i) =>
       tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: i === 0, position: new Vector3(i * 3000, 2000, 0), heading: i, speed: 240, loadout: 'a2a_stealth' }),
     );
@@ -91,7 +91,7 @@ describe('Auto-GCAS robustness', () => {
   });
 
   it('climbs over a ridge the pilot is flying straight into', () => {
-    const tw = makeWorld('pilot', flatTerrain(0, { z: -6000, height: 800 }));
+    const tw = makeWorld('recruit', flatTerrain(0, { z: -6000, height: 800 }));
     const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 300, 0), heading: 0, speed: 250 });
     let gcas = false;
     run(tw.world, 40, () => {
@@ -105,7 +105,7 @@ describe('Auto-GCAS robustness', () => {
   });
 
   it('stays out of the way of a pilot who is already recovering', () => {
-    const tw = makeWorld('pilot');
+    const tw = makeWorld('recruit');
     const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 2500, 0), heading: 0, speed: 230 });
     let gcas = false;
     // dive at ~30°, then a firm 7 g pull well above the ground

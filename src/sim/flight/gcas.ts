@@ -10,8 +10,8 @@
  * the full g limit. If the pilot is already pulling harder than the recovery would, the
  * prediction uses the pilot's g and the system stays out of the way.
  *
- * Always on for the player's F-35 (on every difficulty — the real jet has it) and for friendly
- * AI F-35s. It is also what saves a pilot who G-LOCs on Ace (see ./gloc.ts).
+ * On for friendly AI F-35s, and for the player's F-35 on Recruit only (DifficultyParams.autoGcas):
+ * from Pilot up the player can fly into the ground, and a G-LOC on Ace (./gloc.ts) can end in it.
  */
 import { G } from '../../core/math';
 import { AB_DETENT } from '../../core/types';
@@ -38,9 +38,9 @@ const MAX_CLIMB_ANGLE = 60 * DEG;
 const MIN_LOOKAHEAD = 6;
 
 /** Is Auto-GCAS available on this aircraft right now? */
-export function gcasAvailable(ac: AircraftEntity, _env: FlightEnv): boolean {
-  if (!ac.alive || ac.crashed || ac.damage.avionics >= 0.7) return false;
-  return ac.type === 'f35a' && (ac.isPlayer || ac.team === 'blue');
+export function gcasAvailable(ac: AircraftEntity, env: FlightEnv): boolean {
+  if (!ac.alive || ac.crashed || ac.damage.avionics >= 0.7 || ac.type !== 'f35a') return false;
+  return ac.isPlayer ? env.difficulty.autoGcas : ac.team === 'blue';
 }
 
 /** Nominal recovery g. */
