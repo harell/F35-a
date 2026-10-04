@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { CBD_TOWERS } from '../src/core/cbdTowersData';
 import { spirePrisms } from '../src/core/cbdTowers';
-import { BuildingIndex, buildBuildingGeometry } from '../src/sim/buildings';
+import { BuildingIndex, buildBuildingGeometry, SKYSCRAPER_MIN_HEIGHT } from '../src/sim/buildings';
 import { aucklandBuildings, ringArea, roofHeight, type Building } from '../src/world/scenery/aucklandBuildings';
 
 const inRing = (r: ArrayLike<number>, x: number, z: number) => {
@@ -59,7 +59,7 @@ describe('CBD tower kit (measured)', () => {
         spots++;
       }
       const top = Math.max(...t.parts.filter((p) => p.kind !== 'spire' && p.kind !== 'plant').map((p) => p.h));
-      expect(top).toBeGreaterThan(40);
+      if (t.tier !== 'L') expect(top).toBeGreaterThan(40); // the landmarks (tier L) can be lower
     }
     expect(spots).toBeGreaterThanOrEqual(CBD_TOWERS.length * 1.5);
   });
@@ -81,6 +81,8 @@ describe('CBD tower kit (measured)', () => {
     for (const t of CBD_TOWERS) {
       const [x, z, h] = t.spots[0];
       const b = heroes.find((u) => u.tower === t)!;
+      // the sim collides with buildings of SKYSCRAPER_MIN_HEIGHT and up, kit or not (a 30 m landmark is flown over)
+      if (Math.max(...b.prisms.map((p) => p.h)) < SKYSCRAPER_MIN_HEIGHT) continue;
       const roof = Math.max(...b.prisms.filter((p) => inRing(p.ring, x, z)).map((p) => p.h));
       expect(idx.firstHit(new Vector3(x, 10 + h + 30, z), new Vector3(x, 10 + h - 3, z)), t.name).not.toBeNull();
       expect(idx.firstHit(new Vector3(x, 10 + roof + 30, z), new Vector3(x, 10 + roof + 2, z)), t.name).toBeNull();
