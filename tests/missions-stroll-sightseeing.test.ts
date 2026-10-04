@@ -1,7 +1,7 @@
 /**
  * A Stroll in the Park, sightseeing follow-ups (issue #113): the free-flight debrief shows what a
  * sightseer did (tour stops, distance flown, highest and lowest pass) instead of combat stats; a
- * calm cockpit (a clean jet by default, radar off, no CIV boxes).
+ * calm cockpit (a clean jet by default, radar off), and civil traffic the player can designate and shoot.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -20,12 +20,12 @@ import { FlatTerrain } from './combat-helpers';
 const DT = 1 / 60;
 const stroll = () => buildInstantMissionSeeded({ mode: 'stroll', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 8 }, 7);
 
-function setup() {
+function setup(loadout?: Parameters<ReturnType<typeof createMissionRunner>['setup']>[1]) {
   const def = stroll();
   const events = new EventBus();
   const world = createSimWorld({ terrain: new FlatTerrain(0), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(1) });
   const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
-  runner.setup(world, def.recommendedLoadout);
+  runner.setup(world, loadout ?? def.recommendedLoadout);
   const radio: string[] = [];
   events.on('radio', (e) => radio.push(e.text));
   const hud: string[] = [];
@@ -138,23 +138,79 @@ describe('A Stroll in the Park: a calm cockpit (1.1-g)', () => {
     return { ships, airliner: p.radar.contacts.some((c) => c.id === civ.id) };
   };
 
-  it('no CIV boxes: the civil traffic never becomes a contact, so TGT has nothing to designate', () => {
+  it('CIV boxes: TGT or a tap designates the civil traffic (owner, 2026-10-04)', () => {
     const m = setup();
     m.tick(1);
-    expect(civilContacts(m)).toEqual({ ships: 0, airliner: false });
-    const p = m.world.player!;
-    expect(p.radar.contacts.filter((c) => c.team === 'neutral')).toEqual([]);
-    m.world.combat.cycleTarget(p, m.world);
-    expect(p.radar.designatedId).toBeNull();
-  });
-
-  it('outside free flight the player still sees the civil traffic', () => {
-    const m = setup();
-    m.tick(1);
-    m.world.player!.ignoresCivil = false;
     const seen = civilContacts(m);
     expect(seen.ships).toBeGreaterThan(0);
     expect(seen.airliner).toBe(true);
+    const p = m.world.player!;
+    const civ = p.radar.contacts.filter((c) => c.team === 'neutral');
+    expect(civ.length).toBeGreaterThan(0);
+    // with nothing hostile about, TGT steps onto the civil traffic (the gun is selected: air mode)
+    m.world.combat.cycleTarget(p, m.world);
+    expect(m.world.getEntity(p.radar.designatedId)?.team).toBe('neutral');
+    // a tap on any CIV box, ship or airliner
+    for (const c of civ) {
+      m.world.combat.designate(p, c.id, m.world);
+      expect(p.radar.designatedId).toBe(c.id);
+    }
+  });
+
+  /** Fly the jet `range` m behind and level with `target`, at its speed, nose on it. */
+  const sitBehind = (p: { position: Vector3; velocity: Vector3; quaternion: { setFromUnitVectors(a: Vector3, b: Vector3): unknown } }, target: { position: Vector3; velocity: Vector3 }, range: number) => {
+    const dir = target.velocity.clone().normalize();
+    p.position.copy(target.position).addScaledVector(dir, -range);
+    p.velocity.copy(target.velocity);
+    p.quaternion.setFromUnitVectors(new Vector3(0, 0, -1), dir);
+  };
+
+  it('with the radar off, as the flight starts, a tap designates an airliner and the gun shoots it down', () => {
+    const m = setup();
+    m.tick(1);
+    const p = m.world.player!;
+    expect(p.selectedWeapon).toBe('gun');
+    const civ = m.world.aircraft.find((a) => a.civil && a.alive)!;
+    sitBehind(p, civ, 600);
+    m.tick(0.5);
+    // the CIV box is there without the radar (the HUD boxes what's on the contact list)
+    expect(p.radar.contacts.some((c) => c.id === civ.id)).toBe(true);
+    m.world.combat.designate(p, civ.id, m.world);
+    expect(p.radar.designatedId).toBe(civ.id);
+    // guns: hold the nose on the airliner
+    const d = new Vector3();
+    p.input.fireGun = true;
+    for (let i = 0; i < 6 * 60 && civ.alive; i++) {
+      d.subVectors(civ.position, p.position).normalize();
+      p.quaternion.setFromUnitVectors(new Vector3(0, 0, -1), d);
+      p.velocity.copy(d).multiplyScalar(civ.velocity.length());
+      m.tick(1 / 60);
+    }
+    p.input.fireGun = false;
+    expect(civ.alive).toBe(false);
+    m.tick(1);
+    expect(m.hud).toContain('CIVILIAN AIRLINER DOWN');
+    expect(m.runner.state).toBe('running'); // free flight goes on: nothing counts against the player
+  });
+
+  it('a loaded jet bombs a designated civil ship', () => {
+    const m = setup('strike_stealth');
+    m.tick(1);
+    const p = m.world.player!;
+    const ship = m.world.ground.find((g) => g.team === 'neutral' && g.type === 'ship' && g.alive)!;
+    // 4 km short of the ship at 6,000 m, flying at it
+    const to = new Vector3(ship.position.x - p.position.x, 0, ship.position.z - p.position.z).normalize();
+    p.position.set(ship.position.x, 6000, ship.position.z).addScaledVector(to, -4000);
+    p.velocity.copy(to).multiplyScalar(250);
+    p.quaternion.setFromUnitVectors(new Vector3(0, 0, -1), to);
+    m.world.combat.selectWeapon(p, 'gbu31', m.world);
+    m.tick(0.5);
+    m.world.combat.designate(p, ship.id, m.world);
+    expect(p.radar.designatedId).toBe(ship.id);
+    m.world.combat.fire(p, m.world, 'gbu31'); // released once the bay doors are open
+    for (let i = 0; i < 90 && ship.alive; i++) m.tick(1);
+    expect(ship.alive).toBe(false);
+    expect(m.hud).toContain('CIVILIAN SHIP DESTROYED');
   });
 });
 
@@ -181,12 +237,14 @@ describe('A Stroll in the Park: the Sky Tower as an obstacle (1.1-l)', () => {
     p.position.copy(tower.base).addScaledVector(ahead(p), -300).setY(tower.base.y + 120);
     for (let i = 0; i < 10 && p.alive; i++) m.tick(0.25);
     expect(p.alive).toBe(false);
-    expect(tower.alive).toBe(true);
-    expect(tower.hits).toBe(1); // burning where the jet went in
+    expect(tower.alive).toBe(false); // the player's jet brings it down at once
     const r = m.runner.result(m.world);
     expect(r.reason).toBe('Crashed into the Sky Tower');
     expect(r.tips ?? []).toEqual([]);
     expect(m.hud).toContain('FLIGHT OVER');
+    expect(m.hud).toContain('SKY TOWER DESTROYED');
+    m.tick(3);
+    expect(m.radio.some((t) => /The Sky Tower has been destroyed!/.test(t))).toBe(true);
   });
 });
 
