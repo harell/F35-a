@@ -3,10 +3,11 @@
  * paints Auckland's real streets instead of the procedural Voronoi grid.
  *
  * The street centrelines are rasterised once per data install into a small RGBA8 texture (4 m texels
- * over the region's bounding box, ≈ 0.6 × 0.8 k texels):
+ * over the region's bounding box, ≈ 1.2 × 0.8 k texels since the region took in Herne Bay and Westhaven):
  *   R  distance to the nearest kerb (m, + off the street; ±32 m in 0.25 m steps)
  *   G  signed distance to the region border (m, + inside)
- *   B  park coverage (Albert Park, Victoria Park, Myers Park)
+ *   B  green ground: 255 the parks (Albert Park, Victoria Park, Myers Park), GARDEN_B the gardens of the hero
+ *      neighbourhoods (aucklandNeighbourhoods.ts: Herne Bay, Westhaven), whose houses and trees are 3D models
  *   A  motorway verge: within MOTORWAY_VERGE m of a motorway carriageway (grassy embankments)
  * Distance fields interpolate well, so 4 m texels still give kerbs to a fraction of a metre.
  * The shader samples it with LINEAR / CLAMP_TO_EDGE filtering; `streetSD` / `regionSD` / `park` below
@@ -14,6 +15,7 @@
  * `kerbDistance` / `inRegion` answer the same questions exactly from the vectors (placement, tests).
  */
 import { aucklandRoads, aucklandRoadsVersion, ROAD_MOTORWAY, ROAD_STREET, type RoadData, type RoadLine } from './aucklandRoads';
+import { aucklandNeighbourhoods, aucklandNeighbourhoodsVersion } from './aucklandNeighbourhoods';
 
 /** Texel size (m). */
 export const STREET_CELL = 4;
@@ -23,6 +25,8 @@ export const STREET_RANGE = 32;
 export const FOOTPATH = 3;
 /** Grass verge / embankment beside the motorway carriageways in the CBD region (m from the edge). */
 export const MOTORWAY_VERGE = 18;
+/** Street-map B value of a hero neighbourhood's gardens: lawn (park() ≥ 0.6) with few painted tree crowns (< 0.8). */
+export const GARDEN_B = 160;
 
 /** CBD parks (game XZ, traced along the streets that bound them in the LINZ data). */
 export const CBD_PARKS: { name: string; pts: [number, number][] }[] = [
@@ -114,7 +118,7 @@ export class CbdStreets {
   /** Flat [ax, az, bx, bz, halfWidth, line] per segment. */
   private readonly segs: number[] = [];
 
-  constructor(d: RoadData) {
+  constructor(d: RoadData, private readonly gardens: readonly Float32Array[] = []) {
     this.region = d.region;
     this.streets = d.lines.filter((l) => l.kind === ROAD_STREET && !l.tunnel);
     this.motorways = d.lines.filter((l) => l.kind === ROAD_MOTORWAY && !l.tunnel);
@@ -195,13 +199,14 @@ export class CbdStreets {
     const inside = new Uint8Array(cols * rows);
     fillRing(inside, g, x0, z0, cell, cols, rows, 1);
     for (const p of CBD_PARKS) fillRing(inside, Float32Array.from(p.pts.flat()), x0, z0, cell, cols, rows, 2);
+    for (const r of this.gardens) fillRing(inside, r, x0, z0, cell, cols, rows, 4);
     const out = new Uint8Array(cols * rows * 4);
     const q = (v: number) => Math.max(0, Math.min(255, Math.round(v * 4 + 128)));
     for (let k = 0; k < cols * rows; k++) {
       const f = inside[k];
       out[k * 4] = q(kerb[k]);
       out[k * 4 + 1] = q(f & 1 ? border[k] : -border[k]);
-      out[k * 4 + 2] = f === 3 ? 255 : 0;
+      out[k * 4 + 2] = (f & 3) === 3 ? 255 : (f & 5) === 5 ? GARDEN_B : 0;
       out[k * 4 + 3] = verge[k] < MOTORWAY_VERGE ? 255 : 0;
     }
     return out;
@@ -285,10 +290,11 @@ let cache: { version: number; streets: CbdStreets | null } = { version: -1, stre
 
 /** The CBD street map of the installed LINZ road data (built once per install), or null. */
 export function aucklandStreets(): CbdStreets | null {
-  const v = aucklandRoadsVersion();
+  const v = aucklandRoadsVersion() * 4096 + aucklandNeighbourhoodsVersion();
   if (cache.version !== v) {
     const d = aucklandRoads();
-    cache = { version: v, streets: d && d.region.length >= 6 ? new CbdStreets(d) : null };
+    const gardens = (aucklandNeighbourhoods() ?? []).map((n) => n.footprint);
+    cache = { version: v, streets: d && d.region.length >= 6 ? new CbdStreets(d, gardens) : null };
   }
   return cache.streets;
 }

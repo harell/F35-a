@@ -29,6 +29,7 @@ import { terrainStyle, worldConfig } from '../src/world/config';
 import { skyPreset } from '../src/world/sky/presets';
 import { createAtmosphereUniforms } from '../src/world/sky/atmosphere';
 import { createRoadMaterial, ROAD_NIGHT_GLOW } from '../src/world/scenery/materials';
+import { neighbourhoodAt } from '../src/world/scenery/aucklandNeighbourhoods';
 
 const style = terrainStyle('auckland');
 const leafy = suburbFarAlbedo(style, LEAFY_MIX);
@@ -200,7 +201,7 @@ describe('the CBD’s streets glow under the towers at night (#61 item 6, part 2
   const b = st.bounds;
   for (let z = b.minZ; z < b.maxZ; z += 3)
     for (let x = b.minX; x < b.maxX; x += 3) {
-      if (st.regionSD(x, z) <= 0) continue;
+      if (st.regionSD(x, z) <= 0 || neighbourhoodAt(x, z)) continue; // the CBD, not Herne Bay's and Westhaven's gardens
       const kerb = st.streetSD(x, z);
       const off = smooth(FOOTPATH, FOOTPATH + 2, kerb);
       const park = Math.max(smooth(0.35, 0.65, st.park(x, z)) * off, smooth(0.35, 0.65, st.verge(x, z)) * off);

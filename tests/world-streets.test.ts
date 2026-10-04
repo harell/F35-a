@@ -20,7 +20,7 @@ import { AKL_CBD_GRID, aucklandCbd, terrainStyle } from '../src/world/config';
 import { streetUniforms } from '../src/world/terrain/TerrainRenderer';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { aucklandLinz, linzIsLand } from '../src/world/terrain/theaters/aucklandLinz';
-import { AKL } from '../src/core/auckland';
+import { AKL, geoToWorld } from '../src/core/auckland';
 import { airfieldFeature } from '../src/core/airfields';
 import { ROADS_BYTES, ROADS_GZ } from './linz-setup';
 
@@ -91,9 +91,16 @@ describe('LINZ road data (auckland-roads.bin)', () => {
 });
 
 describe('CBD region (real streets instead of the procedural grid)', () => {
-  it('covers the city centre and the waterfront, not the suburbs or the port around it', () => {
-    for (const id of ['skytower', 'cbd', 'britomart', 'viaduct', 'wynyard']) expect(st.inRegion(AKL[id].x, AKL[id].z), id).toBe(true);
-    for (const id of ['ponsonby', 'parnell', 'newmarket', 'domain', 'port', 'bridge_s']) expect(st.inRegion(AKL[id].x, AKL[id].z), id).toBe(false);
+  it('covers the city centre, the waterfront and the hero neighbourhoods, not the suburbs or the port around them', () => {
+    // Westhaven and Herne Bay (aucklandNeighbourhoods.ts) are in: their buildings and trees are measured models;
+    // the Harbour Bridge's south abutment (Point Erin) stands between them
+    for (const id of ['skytower', 'cbd', 'britomart', 'viaduct', 'wynyard', 'westhaven', 'bridge_s']) expect(st.inRegion(AKL[id].x, AKL[id].z), id).toBe(true);
+    const herneBay = geoToWorld(-36.8425, 174.733); // Sentinel Rd
+    expect(st.inRegion(herneBay.x, herneBay.z)).toBe(true);
+    // St Marys Bay (south of SH1, east of Shelly Beach Rd) and Ponsonby stay procedural
+    const stMarysBay = geoToWorld(-36.8470, 174.7480);
+    expect(st.inRegion(stMarysBay.x, stMarysBay.z)).toBe(false);
+    for (const id of ['ponsonby', 'parnell', 'newmarket', 'domain', 'port']) expect(st.inRegion(AKL[id].x, AKL[id].z), id).toBe(false);
     // the shader's region test agrees with the polygon away from its border
     for (const id of ['skytower', 'britomart', 'ponsonby', 'parnell']) expect(st.regionSD(AKL[id].x, AKL[id].z) > 0).toBe(st.inRegion(AKL[id].x, AKL[id].z));
   });
@@ -232,8 +239,10 @@ describe('CBD streets painted by the terrain shader', () => {
     expect(terrainFragmentShader).toContain('dist.w = min(dist.w, -sm.y);');
     // the texture's edge texels are 'outside' (CLAMP_TO_EDGE repeats them beyond the rect)
     for (let i = 0; i < st.cols; i += 7) expect(st.data[i * 4 + 1]).toBe(0);
-    // texel = 4 m, small enough for phones
-    expect(st.cols * st.rows * 4).toBeLessThan(2.5e6);
+    // texel = 4 m, small enough for phones: ≈ 1190 × 790 texels (3.7 MB) since the region took in Herne Bay and
+    // Westhaven, well under the 4096-texel side every phone GPU takes
+    expect(st.cols * st.rows * 4).toBeLessThan(4e6);
+    expect(Math.max(st.cols, st.rows)).toBeLessThan(4096);
   });
 });
 
@@ -368,7 +377,8 @@ describe('motorways and arterials from LINZ', () => {
   });
 
   it('the Waterview tunnel is a tunnel (no ribbon over Alan Wood Reserve); Victoria Park keeps its viaduct', () => {
-    const tun = motorways.filter((p) => p.tunnel.every((t) => t === 1));
+    // (the Johnstones Hill tunnels on SH1 north of Ōrewa, which the current LINZ data flags too, are the other tunnel runs)
+    const tun = motorways.filter((p) => p.tunnel.every((t) => t === 1) && Math.hypot(p.x[0] + 5340, p.z[0] - 4100) < 3000);
     expect(tun.length).toBeGreaterThanOrEqual(1);
     let len = 0;
     for (const p of tun) {

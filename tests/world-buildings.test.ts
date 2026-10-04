@@ -17,7 +17,8 @@ import { airfieldFeature } from '../src/core/airfields';
 import { BUILDINGS_BYTES, BUILDINGS_GZ } from './linz-setup';
 import SPOT from './fixtures/linz-buildings-spotchecks.json';
 
-const bs = aucklandBuildings()!;
+// the LINZ file's buildings (the hero neighbourhoods' houses joined to the list are tested in world-neighbourhoods)
+const bs = aucklandBuildings()!.filter((b) => b.hero !== 'house');
 const st = aucklandStreets() as CbdStreets;
 const cbd = aucklandCbd();
 const roads = new RoadNetwork(aucklandRoadPaths());

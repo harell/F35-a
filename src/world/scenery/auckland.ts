@@ -695,6 +695,15 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       // the kit towers' terraces are traced at 0.5 m: below the high tier they take a coarser outline (1 m / 2 m)
       const ring = simplifyRing(p.ring, b.hero === 'tower' && tol > 0 ? tol * 2 : tol);
       const roof = (x: number, z: number) => g + roofHeight(p, x, z);
+      if (b.hero === 'house' && b.colors) {
+        // hero neighbourhood houses (aucklandNeighbourhoods.ts): measured roof shape and colours, homes' windows
+        const w = top >= 12 ? WIN_OFFICE : WIN_HOME;
+        if (p.pitch) B.pitchedPrism(ring, y0, g, p.pitch, b.colors.wall, b.colors.roof, w);
+        else B.prism(ring, y0, roof, b.colors.wall, b.colors.roof, w);
+        prisms.push({ ...p, y0, y1: g + p.h });
+        heights.push(p.h);
+        continue;
+      }
       if (b.hero === 'scene') {
         // the Scene apartments (core/sceneApartments.ts): white balcony bands on the towers, Scene One's teal glass bay
         const [c, w] = HERO_FACADE[(p.kind ?? 'podium') as SceneTerraceKind];
