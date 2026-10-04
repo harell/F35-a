@@ -1,11 +1,11 @@
 """
 F35-A — hero buildings: Auckland War Memorial Museum (Tāmaki Paenga Hira) on Pukekawa / the Auckland Domain, for
-src/core/museum.ts (generated) — #143 item 3, #113 item 5.
+src/core/museumData.ts (generated) — #143 item 3, #113 item 5.
 
   python3 tools/hero/site.py --name museum --lat -36.8604 --lon 174.7778 --size 260 --res 0.15 --scale 60
   python3 tools/hero/osm.py --site /tmp/hero/museum
   python3 tools/hero/mesh3d.py --site /tmp/hero/museum --match "War Memorial"     (colours, by eye)
-  python3 tools/hero/sites/museum.py --site /tmp/hero/museum                        → src/core/museum.ts
+  python3 tools/hero/sites/museum.py --site /tmp/hero/museum                        → src/core/museumData.ts
 
 OpenStreetMap has the museum in 3D (way 23906678 and 15 building:parts): the neoclassical block, the portico's eight
 columns and pediment, the 2007 Grand Atrium dome over the southern apse. The parts give the plan; the LiDAR gives every
@@ -64,7 +64,7 @@ def dome_steps(mask, nd, g0, step, box):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--site', default='/tmp/hero/museum')
-    ap.add_argument('--ts', default=os.path.join(HERE, '..', '..', '..', 'src', 'core', 'museum.ts'))
+    ap.add_argument('--ts', default=os.path.join(HERE, '..', '..', '..', 'src', 'core', 'museumData.ts'))
     a = ap.parse_args()
     d = np.load(f'{a.site}/lidar.npz')
     dsm, dem = d['dsm'], d['dem']
@@ -137,7 +137,7 @@ def main():
         ' * and the old central dome as nested prisms from the LiDAR contours, the portico columns on their OSM parts.',
         ' * Heights over the 10th-percentile ground in the outline. Colours from Auckland Council\'s 2023 3D mesh.',
         ' * Sources: LINZ 2024 LiDAR (CC BY 4.0); © OpenStreetMap contributors (ODbL); Auckland Council 3D mesh (CC BY 4.0).',
-        ' * Builder: world/scenery/museum.ts. Do not edit by hand: rerun the recipe.',
+        ' * Builder: world/scenery/museum.ts; the shared shape (scenery and sim): core/museum.ts. Do not edit by hand.',
         ' */',
         '',
         "export type MuseumPartKind = 'block' | 'atrium' | 'dome';",

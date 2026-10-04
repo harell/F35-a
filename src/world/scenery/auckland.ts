@@ -16,7 +16,6 @@ import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
-import { buildMuseum } from './museum';
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
@@ -991,10 +990,8 @@ export function buildMarinas(B: GeometryBuilder, lights: LightList, height: Heig
   }
 }
 
-export function buildMuseumAndObelisk(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
-  // Auckland War Memorial Museum on Pukekawa: measured from the LiDAR and OpenStreetMap (core/museum.ts)
-  buildMuseum(B, lights, height);
-  // One Tree Hill obelisk
+/** One Tree Hill obelisk. */
+export function buildObelisk(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
   const ox = AKL.one_tree_hill.x;
   const oz = AKL.one_tree_hill.z;
   const og = height(ox, oz) - 1;
