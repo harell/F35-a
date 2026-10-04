@@ -51,6 +51,8 @@ export interface CbdTower {
   /** A lit crown (Tier A): the colour of the crown's facade at night. */
   crown?: 'lit';
   crownColour?: number;
+  /** Its LINZ footprint was traced from the LiDAR (completed after the 2017 outlines: #156's ‡ rows). */
+  traced?: true;
   /** LiDAR spot checks [x, z, height above ground] (m, 3×3 median) inside the upper terraces. */
   spots: readonly (readonly number[])[];
   /** The LINZ footprints it replaces (union), flat ring (game m). */

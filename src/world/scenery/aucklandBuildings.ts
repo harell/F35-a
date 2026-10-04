@@ -248,7 +248,7 @@ export function applyHeroBuildings(list: Building[], towers: readonly CbdTower[]
       else prisms.push(heroPrism(p.ring, p.h, p.kind, p.sx, p.sz));
     }
     prisms.sort((a, b) => Math.abs(ringArea(b.ring)) - Math.abs(ringArea(a.ring)));
-    out.push({ lidar: true, hero: 'tower', tower: t, prisms });
+    out.push({ lidar: t.traced === true, hero: 'tower', tower: t, prisms });
   }
   return out;
 }

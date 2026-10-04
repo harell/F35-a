@@ -235,10 +235,20 @@ def main():
                     terr.append({'li': li, 'poly': q, 'cells': cells, 'h': roof, 'area': q.area})
         # a step inside one terrace (two levels closer than the histogram resolves, a ramped roof): a group of ≥ 25 m²
         # more than 1.8 m off the terrace's roof (and not plant on it) becomes its own terrace
-        for _pass in range(3):  # a carved step can hold another
+        for _pass in range(4):  # a carved step can hold another
             out = []
             for t in terr:
-                low = t['cells'] & (np.abs(hr - t['h']) > 1.8) & (nd >= 2.5) & (hr < t['h'] + 2.5)
+                # off the terrace's roof: its plane where a plane fits it (a ramp stays one piece), else its median
+                ys_, xs_ = np.where(t['cells'])
+                ref = np.full(hr.shape, t['h'], np.float32)
+                if len(ys_) >= 40:
+                    A = np.c_[xs_, ys_, np.ones(len(xs_))]
+                    coef, *_ = np.linalg.lstsq(A, hr[ys_, xs_], rcond=None)
+                    rp = float(np.sqrt(np.mean((A @ coef - hr[ys_, xs_]) ** 2)))
+                    rf = float(np.sqrt(np.mean((hr[ys_, xs_] - t['h']) ** 2)))
+                    if 0.08 < math.hypot(coef[0], coef[1]) < 1.0 and rp < 0.5 * rf:
+                        ref[ys_, xs_] = A @ coef
+                low = t['cells'] & (np.abs(hr - ref) > 1.8) & (nd >= 2.5) & (hr < ref + 2.5)
                 lab, nl = ndimage.label(low)
                 poly, cells_left = t['poly'], t['cells']
                 for j in range(1, nl + 1):
@@ -264,14 +274,18 @@ def main():
                 terr = out
                 break
             terr = out
-        # slivers (< 60 m²) join the touching terrace nearest in height: fewer walls, no gaps
+        # slivers (< 60 m²) join the touching terrace nearest in height when it is within 2.5 m: fewer walls, no gaps
         terr.sort(key=lambda t: t['area'])
+        kept = []
         while terr and terr[0]['area'] < 60:
             t = terr.pop(0)
             nb = [u for u in terr if u['poly'].distance(t['poly']) < 0.8]
             if not nb:
                 continue
             u = min(nb, key=lambda u: abs(u['h'] - t['h']))
+            if abs(u['h'] - t['h']) > 2.5:  # a small part at its own height (a ramp's foot, a lift core) stays
+                kept.append(t)
+                continue
             # close the seam between them with a mitred grow-and-shrink (round joins would add arcs of vertices)
             g = unary_union([u['poly'], t['poly']]).buffer(0.8, join_style=2).buffer(-0.8, join_style=2)
             g = max(parts_of(g) or [u['poly']], key=lambda q: q.area).simplify(1.0, preserve_topology=True)
@@ -284,6 +298,7 @@ def main():
             u['cells'] = u['cells'] | t['cells']
             u['area'] = u['poly'].area
             terr.sort(key=lambda t: t['area'])
+        terr += kept
         # a terrace well over the listed height is a crane or a neighbour's edge in the old outline, not this tower
         terr = [t for t in terr if 3 <= float(np.median(nd[t['cells']])) <= h + 6]  # (above its own ground: the table's measure)
         if not terr:
@@ -405,6 +420,7 @@ def main():
         tw = {'n': n, 'tier': tier, 'name': name, 'address': addr, 'use': use, 'listed': h, 'floors': int(floors) if floors else None,
               'published': float(pub) if pub else None, 'outline': [round(v, 2) for p in list(outline.exterior.coords)[:-1] for v in p],
               'parts': parts, 'spots': spots, 'linz': [b['i'] for b in group], 'style': st,
+              'traced': any(linz[b['i']]['lidar'] for b in group),
               # a point inside each replaced LINZ building's first footprint (its centroid can fall outside a concave one)
               'replaces': [[round(c, 2) for c in Polygon(flat(linz[b['i']]['prisms'][0]['ring'])).buffer(0).representative_point().coords[0]] for b in group]}
         towers.append(tw)
@@ -448,6 +464,8 @@ def write_ts(towers, path):
             extra += f", crownColour: 0x{st['crownColour'].lstrip('#')}"
         lines.append(f"  {{ n: {t['n']}, tier: '{t['tier']}', name: {json.dumps(t['name'], ensure_ascii=False)}, address: {json.dumps(t['address'], ensure_ascii=False)}, "
                      f"facade: '{facade}', wall: 0x{wall.lstrip('#')}, podium: 0x{podium.lstrip('#')}{extra},")
+        if t['traced']:
+            lines.append('    traced: true,')
         lines.append(f"    spots: {json.dumps(t['spots'])},")
         lines.append(f"    replaces: {json.dumps(t['replaces'])},")
         lines.append(f"    outline: [{', '.join(str(v) for v in t['outline'])}],")
