@@ -173,7 +173,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       script.opening = [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Nothing hostile up here today. Enjoy the view.`, priority: 1 }];
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
-        'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. The airliners and ships are civilians going about their day.',
+        'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. Airliners climb out over the city and ships sail the harbour: civilians going about their day, boxed CIV on the HUD.',
         // (playtest 1.1-d: until the suburbs' streets are baked from LINZ data, say so)
         "The CBD, the motorways and the main roads follow Auckland's real streets. The suburbs between them are stylised, so your own street isn't there yet.",
         'The jet is clean, radar off, for the slowest and quietest flight. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',

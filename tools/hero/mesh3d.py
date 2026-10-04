@@ -61,26 +61,16 @@ def crawl(base, box):
     return leaves
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--site', required=True)
-    ap.add_argument('--match', default='', help='OSM building name (substring): views of these buildings only')
-    ap.add_argument('--px', type=float, default=0.1)
-    ap.add_argument('--zone', default='1A')
-    a = ap.parse_args()
-    from shapely import contains_xy
-    from shapely.geometry import Polygon, box as sbox
-    from shapely.ops import unary_union
+def sample_points(site, area, px=0.1, zone='1A'):
+    """The mesh over `area` (a shapely polygon in NZTM) as coloured points: x, z (site frame), y (m), rgb (uint8).
 
-    site = json.load(open(f'{a.site}/site.json'))
+    Crawls and caches the leaf nodes, then samples every triangle's texture at about 2.5 points per px².
+    Other recipes use it to project the mesh onto their own planes (facade textures, roof drapes)."""
     E0, N0, E1, N1 = site['box_nztm']
-    area = sbox(E0, N0, E1, N1)
-    if a.match:
-        feats = [f for f in json.load(open(f'{a.site}/osm.json'))['features'] if a.match.lower() in f['tags'].get('name', '').lower() and len(f['ring']) > 3]
-        area = unary_union([Polygon([(E0 + x, N1 - z) for x, z in f['ring']]).buffer(0) for f in feats]).buffer(20)
-    base = SERVICE.format(zone=a.zone)
+    from shapely import contains_xy
+    base = SERVICE.format(zone=zone)
     leaves = crawl(base, area.bounds)
-    cache = f'/tmp/hero/_i3s/{a.zone}'
+    cache = f'/tmp/hero/_i3s/{zone}'
     os.makedirs(cache, exist_ok=True)
 
     def one(n):
@@ -96,7 +86,7 @@ def main():
         leaves = list(ex.map(one, leaves))
     print(len(leaves), 'mesh nodes over the area')
 
-    # sample every triangle's texture into points (x, z site frame; y height), then splat orthographic views
+    # sample every triangle's texture into points (x, z site frame; y height)
     U, V, W, Cc = [], [], [], []
     for n in leaves:
         r = n['mesh']['geometry']['resource']
@@ -114,7 +104,7 @@ def main():
         if not len(T):
             continue
         ab = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1) / 2
-        cnt = np.clip(np.ceil(ab / (a.px * a.px) * 2.5).astype(int), 1, 1600)
+        cnt = np.clip(np.ceil(ab / (px * px) * 2.5).astype(int), 1, 1600)
         idx = np.repeat(np.arange(len(T)), cnt)
         r1, r2 = np.random.rand(len(idx)), np.random.rand(len(idx))
         s = np.sqrt(r1)
@@ -124,7 +114,26 @@ def main():
         H, Wd = tex.shape[:2]
         Cc.append(tex[np.clip((uv[:, 1] % 1) * H, 0, H - 1).astype(int), np.clip((uv[:, 0] % 1) * Wd, 0, Wd - 1).astype(int)])
         U.append(p[:, 0] - E0); W.append(N1 - p[:, 1]); V.append(p[:, 2])
-    x, z, y, col = np.concatenate(U), np.concatenate(W), np.concatenate(V), np.concatenate(Cc)
+    return np.concatenate(U), np.concatenate(W), np.concatenate(V), np.concatenate(Cc)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--site', required=True)
+    ap.add_argument('--match', default='', help='OSM building name (substring): views of these buildings only')
+    ap.add_argument('--px', type=float, default=0.1)
+    ap.add_argument('--zone', default='1A')
+    a = ap.parse_args()
+    from shapely.geometry import Polygon, box as sbox
+    from shapely.ops import unary_union
+
+    site = json.load(open(f'{a.site}/site.json'))
+    E0, N0, E1, N1 = site['box_nztm']
+    area = sbox(E0, N0, E1, N1)
+    if a.match:
+        feats = [f for f in json.load(open(f'{a.site}/osm.json'))['features'] if a.match.lower() in f['tags'].get('name', '').lower() and len(f['ring']) > 3]
+        area = unary_union([Polygon([(E0 + x, N1 - z) for x, z in f['ring']]).buffer(0) for f in feats]).buffer(20)
+    x, z, y, col = sample_points(site, area, a.px, a.zone)
     g = float(np.percentile(y, 1))
     for side in ('south', 'north', 'east', 'west', 'top'):
         if side == 'top':
