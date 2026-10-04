@@ -103,7 +103,9 @@
   "wall": "#868a96",
   "podium": "#6e7b8d",
   "wall_raw": "#8183a5",
-  "podium_raw": "#6673a2"
+  "podium_raw": "#6673a2",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark glass, white edges"
  },
  "11": {
   "name": "HSBC Tower",
