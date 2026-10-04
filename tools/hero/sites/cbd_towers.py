@@ -144,6 +144,7 @@ def main():
     ap.add_argument('--styles', default=os.path.join(HERE, 'cbd_towers_style.json'))
     ap.add_argument('--ts', default=os.path.join(HERE, '..', '..', '..', 'src', 'core', 'cbdTowersData.ts'))
     ap.add_argument('--only', default='')
+    ap.add_argument('--with', dest='extra', default='', help='rows to add beyond --tiers (Tier A, one layer at a time)')
     a = ap.parse_args()
     d = np.load(f'{a.site}/lidar.npz')
     dsm, dem, box = d['dsm'], d['dem'], d['box']
@@ -170,7 +171,8 @@ def main():
     for r in rows:
         n, tier, name, addr, h, floors, pub, use, x, z = r
         n, h, x, z = int(n), float(h), float(x), float(z)
-        if tier not in tiers or (only and n not in only):
+        extra = {int(v) for v in a.extra.split(',') if v}
+        if (tier not in tiers and n not in extra) or (only and n not in only):
             continue
         if name == 'Scene One':
             continue  # already a hero building (core/sceneApartments.ts)
@@ -321,6 +323,12 @@ def main():
             for t in terr:
                 if t['li'] == top_lv['li']:
                     t['kind'] = 'crown'
+        st = styles.get(str(n), {})
+        # hand-set from the mesh views (Tier A): the terraces from this height up are the crown (its own colour, lit)
+        if st.get('crown_above') is not None:
+            for t in terr:
+                if t['h'] >= st['crown_above']:
+                    t['kind'] = 'crown'
         # sloped roofs (wedge crowns, ramped roofs): a terrace a plane fits better than a flat roof takes the plane
         for t in terr:
             t['sx'] = t['sz'] = 0.0
@@ -361,10 +369,19 @@ def main():
                     small = rect.area <= min(150, 0.25 * t['area']) and hi <= t['h'] + 9
                     if small and sides[1] < 4 * max(sides[0], 1) and len(ys) > 0.45 * rect.area:
                         extras.append({'kind': 'plant', 'poly': rect, 'h': hi})
+        # a mast too thin for the 1 m LiDAR, seen in the mesh views: from the top terrace's highest LiDAR cell to the
+        # published tip (published heights are from the street, so the tip is ±a few m)
+        if st.get('mast'):
+            tt = max(terr, key=lambda t: t['h'])
+            ys, xs = np.where(tt['cells'])
+            i = int(hr[ys, xs].argmax())
+            extras.append({'kind': 'spire', 'x': xs[i] + 0.5, 'z': ys[i] + 0.5, 'h': float(st['mast']), 'base': tt['h']})
         # spot checks: three cells well inside the top terraces (3×3 median), away from plant
         spots = []
         for t in sorted([t for t in terr if t['kind'] != 'podium'], key=lambda t: -t['area'])[:3]:
             er = ndimage.binary_erosion(t['cells'], iterations=3)
+            if not er.any():  # a narrow terrace (a ramp cut in strips)
+                er = ndimage.binary_erosion(t['cells'], iterations=1)
             er &= ~ndimage.binary_dilation(hr > t['h'] + 2.0, iterations=2)
             for e in extras:
                 if e['kind'] == 'plant':
@@ -376,9 +393,16 @@ def main():
                 ys, xs = np.where(er)
             if not len(ys):
                 continue
+            # inside the terrace's final (simplified) outline, not just its cells
+            from shapely import contains_xy
+            inner = t['poly'].buffer(-0.7)
+            ok = contains_xy(inner, xs + 0.5, ys + 0.5) if not inner.is_empty else np.zeros(len(xs), bool)
+            if not ok.any():
+                continue
+            ys, xs = ys[ok], xs[ok]
             i = len(ys) // 2
             yy, xx = ys[i], xs[i]
-            v = float(np.median(hr[yy - 1:yy + 2, xx - 1:xx + 2]))
+            v = float(np.median(hr[yy - 1:yy + 2, xx - 1:xx + 2] if t['sx'] == 0 and t['sz'] == 0 else hr[yy, xx]))
             gx, gz = px_to_game(xx + 0.5, yy + 0.5, box)
             spots.append([round(gx, 1), round(gz, 1), round(v, 1)])
 
@@ -416,7 +440,6 @@ def main():
             else:
                 gx, gz = px_to_game(e['x'], e['z'], box)
                 parts.append({'kind': 'spire', 'h': round(e['h'], 1), 'x': round(gx, 1), 'z': round(gz, 1), 'base': round(e['base'], 1)})
-        st = styles.get(str(n), {})
         tw = {'n': n, 'tier': tier, 'name': name, 'address': addr, 'use': use, 'listed': h, 'floors': int(floors) if floors else None,
               'published': float(pub) if pub else None, 'outline': [round(v, 2) for p in list(outline.exterior.coords)[:-1] for v in p],
               'parts': parts, 'spots': spots, 'linz': [b['i'] for b in group], 'style': st,

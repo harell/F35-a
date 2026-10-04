@@ -4,7 +4,10 @@
   "wall": "#b8afa3",
   "podium": "#dacaab",
   "wall_raw": "#b0a6b3",
-  "podium_raw": "#c9bcc5"
+  "podium_raw": "#c9bcc5",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023, under construction), by eye",
+  "note": "2024 LiDAR: topped out, roof ramps 188 → 126 m (construction state)"
  },
  "2": {
   "name": "The Pacifica",
