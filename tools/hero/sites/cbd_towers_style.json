@@ -14,7 +14,10 @@
   "wall": "#6d7e8b",
   "podium": "#b3b09d",
   "wall_raw": "#697899",
-  "podium_raw": "#a5a4b5"
+  "podium_raw": "#a5a4b5",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark blue glass, white diagonal bracing on the lower third",
+  "merge_above": 170
  },
  "3": {
   "name": "PwC Tower at Commercial Bay",

@@ -324,6 +324,21 @@ def main():
                 if t['li'] == top_lv['li']:
                     t['kind'] = 'crown'
         st = styles.get(str(n), {})
+        # hand-set from the mesh views (Tier A): one flat roof over everything from this height up (a flat top the
+        # LiDAR's plant and parapets split into slivers)
+        if st.get('merge_above') is not None:
+            top_t = [t for t in terr if t['h'] >= st['merge_above']]
+            if len(top_t) > 1:
+                g = unary_union([t['poly'] for t in top_t]).buffer(0.8, join_style=2).buffer(-0.8, join_style=2)
+                g = max(parts_of(g), key=lambda q: q.area).simplify(1.2, preserve_topology=True)
+                g = Polygon(g.exterior).intersection(opx)
+                g = max(parts_of(g), key=lambda q: q.area)
+                cells = np.zeros_like(top_t[0]['cells'])
+                for t in top_t:
+                    cells |= t['cells']
+                merged = {'li': top_t[0]['li'], 'poly': g, 'cells': cells, 'h': float(np.median(hr[cells])), 'area': g.area,
+                          'kind': 'shaft', 'sx': 0.0, 'sz': 0.0}
+                terr = [t for t in terr if t not in top_t] + [merged]
         # hand-set from the mesh views (Tier A): the terraces from this height up are the crown (its own colour, lit)
         if st.get('crown_above') is not None:
             for t in terr:
