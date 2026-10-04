@@ -49,7 +49,9 @@
   "wall": "#998f8f",
   "podium": "#5f687a",
   "wall_raw": "#93889e",
-  "podium_raw": "#58618d"
+  "podium_raw": "#58618d",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark glass, plant on the roof"
  },
  "6": {
   "name": "Voco Hotel / Holiday Inn",
