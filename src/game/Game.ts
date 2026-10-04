@@ -38,6 +38,7 @@ import type {
 import type { CameraMode, ControlInput, LoadoutId, QualityLevel, QualitySettings, Settings } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import { createSimWorld } from '../sim/World';
+import { endDelay } from './outro';
 import { forceDestroy } from './forceDestroy';
 import { createCombatSystem, createCombatSystemSeeded } from '../sim/weapons/CombatSystem';
 import { createAiBrain } from '../ai';
@@ -74,7 +75,6 @@ import {
   WEATHERS,
   type InstantConditions,
 } from '../missions';
-import { COLLAPSE } from '../core/skyTower';
 import { destroyLandmark, hitSkyTower } from '../sim/landmarks';
 import { initFlight } from '../sim/flight/FlightModel';
 import { AKL } from '../core/auckland';
@@ -86,13 +86,9 @@ import type { CockpitTestHooks } from '../hud/Cockpit';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
-/** Seconds the mission keeps running after success/failure before the debrief. */
-const END_DELAY_SUCCESS = 6;
-const END_DELAY_FAILED = 5;
-/** …or until the Sky Tower's collapse has played out (it fails the mission the moment it is hit). */
-const END_DELAY_COLLAPSE = COLLAPSE.ruinsAt + 2.6;
 
 type MissionOutcome = 'next' | 'retry' | 'menu';
+
 
 interface Session {
   def: MissionDef;
@@ -730,10 +726,7 @@ export class Game {
 
       // Mission end handling
       if (s.runner.state !== 'running') {
-        if (s.endTimer < 0) {
-          const collapse = s.world.landmarks.some((l) => !l.alive);
-          s.endTimer = s.runner.state === 'success' ? END_DELAY_SUCCESS : collapse ? END_DELAY_COLLAPSE : END_DELAY_FAILED;
-        }
+        if (s.endTimer < 0) s.endTimer = endDelay(s.runner.state, s.world);
         s.endTimer -= dt;
         if (s.endTimer <= 0) {
           s.resolve('ended');
@@ -1079,6 +1072,32 @@ export class Game {
         if (!at) throw new Error(`no place ${x}`);
         p.position.set(at.x, alt, at.z);
         initFlight(p, { heading: (headingDeg * Math.PI) / 180, speed });
+        return true;
+      },
+      /**
+       * Aim the jet at a 3D-modelled landmark to crash into it: `dist` m out on bearing `fromDeg` from it
+       * (deg, clockwise from north), level at half its height (the Sky Tower: 120 m), flying at it at
+       * 150 m/s. A second of simulate() later the jet hits and the building collapses. (Not much farther
+       * out: Auto-GCAS sees only the terrain and climbs a jet this low over the arena or the museum.)
+       */
+      crashInto: (id: 'skytower' | 'spark_arena' | 'museum', fromDeg = 225, dist = 120) => {
+        const s = this.session;
+        const p = s?.world.player;
+        if (!s || !p) return false;
+        let at: { x: number; y: number; z: number } | null = null;
+        if (id === 'skytower') {
+          const lm = s.world.landmarks.find((l) => l.id === 'skytower');
+          if (lm) at = { x: lm.base.x, y: lm.base.y + 120, z: lm.base.z };
+        } else {
+          const idx = s.world.buildings;
+          const k = idx?.heroIndex(id) ?? -1;
+          const b = k >= 0 ? idx!.geo.buildings[k] : null;
+          if (b) at = { x: b.x, y: b.ground + (b.top - b.ground) / 2, z: b.z };
+        }
+        if (!at) throw new Error(`no ${id} standing in this sortie`);
+        const brg = (fromDeg * Math.PI) / 180;
+        p.position.set(at.x + Math.sin(brg) * dist, at.y, at.z - Math.cos(brg) * dist);
+        initFlight(p, { heading: brg + Math.PI, speed: 150 });
         return true;
       },
       /** Pin the camera at `pos` looking at `look` (scenery checks without a driver); null hands it back to the rig. */

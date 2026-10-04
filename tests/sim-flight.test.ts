@@ -516,10 +516,10 @@ describe('Auto-GCAS', () => {
     });
     return { tw, ac };
   }
-  it('recovers an assisted jet diving at the ground and says AUTO GCAS', () => {
+  it('recovers the Recruit jet diving at the ground and says AUTO GCAS', () => {
     let gcasSeen = false;
     let minGamma = 0;
-    const { tw, ac } = diveAtGround('pilot', (a) => {
+    const { tw, ac } = diveAtGround('recruit', (a) => {
       gcasSeen ||= !!a.gcasActive;
       minGamma = Math.min(minGamma, Math.asin(a.velocity.y / a.velocity.length()));
     });
@@ -530,13 +530,28 @@ describe('Auto-GCAS', () => {
     expect(tw.of('player:down')).toHaveLength(0);
     expect(ac.gcasActive).toBe(false); // hands control back after the recovery
   });
-  it('saves the Ace pilot too — Auto-GCAS is part of the jet (regression i1: Ace used to crash)', () => {
+  for (const d of ['pilot', 'veteran', 'ace'] as const) {
+    it(`lets the ${d} player fly into the ground: Auto-GCAS is a Recruit assist (owner, 2026-10-04)`, () => {
+      let gcasSeen = false;
+      const { tw, ac } = diveAtGround(d, (a) => {
+        gcasSeen ||= !!a.gcasActive;
+      });
+      expect(gcasSeen).toBe(false);
+      expect(ac.alive).toBe(false);
+      expect(tw.of('hud:message').some((m) => m.text === 'AUTO GCAS')).toBe(false);
+      expect(tw.of('player:down')).toHaveLength(1);
+    });
+  }
+  it('still saves a friendly AI F-35 whatever the difficulty', () => {
+    const tw = makeWorld('ace');
+    const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', position: new Vector3(0, 1800, 0), heading: 0, speed: 230 });
     let gcasSeen = false;
-    const { tw, ac } = diveAtGround('ace', (a) => {
-      gcasSeen ||= !!a.gcasActive;
+    run(tw.world, 25, (t) => {
+      ac.input.throttle = 0.7;
+      ac.input.pitch = t < 2.2 ? -1 : 0;
+      gcasSeen ||= !!ac.gcasActive;
     });
     expect(gcasSeen).toBe(true);
     expect(ac.alive).toBe(true);
-    expect(tw.of('player:down')).toHaveLength(0);
   });
 });

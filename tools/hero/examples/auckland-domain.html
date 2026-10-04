@@ -1,0 +1,406 @@
+<!-- Auckland Domain (Pukekawa) hero-model prototype, without the museum (LiDAR-driven: ground, 2,000+ trees, park buildings,
+     ponds). Placeholders filled by tools/hero/sites/auckland_domain_page.py: DATA (a script defining DATA: the measured
+     park from tools/hero/sites/auckland_domain.py, the 3 m DEM and max-pooled DSM, the game's terrain and meshes in the site
+     frame; AERIAL_HERO, the 2024 aerial with the museum filled; AERIAL_GAME, the same photo at the game's 1.25 m / px with
+     the museum), TODAY_SW and TODAY_NE (frames from the running game). Site: NZTM E0 1757462, N1 5919971,
+     1500 × 1500 m. See .claude/skills/hero-building/SKILL.md. -->
+<title>Auckland Domain Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: one 3D viewer with the four stages up top, then the measured differences, then how it was made. Same system as the other hero prototypes. */
+:root {
+  --bg: #eef1ee; --surface: #ffffff; --fg: #17241c; --muted: #536159; --line: #d4dbd5;
+  --accent: #2c6a3f; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111a15; --surface: #18241d; --fg: #e5ece7; --muted: #9fb0a5; --line: #2a3a30;
+  --accent: #7fc495; --accent-ink: #111a15; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111a15; --surface: #18241d; --fg: #e5ece7; --muted: #9fb0a5; --line: #2a3a30;
+  --accent: #7fc495; --accent-ink: #111a15; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; margin: 0; }
+main { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 14.5px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; font-size: 15px; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible, .views button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+.views { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 20px); }
+.views button { font: 500 12px var(--mono); color: #15212a; background: rgba(255,255,255,.82); border: 1px solid rgba(21,33,42,.2); padding: 5px 9px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: #15212a; color: #fff; }
+.legend { position: absolute; right: 10px; top: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.88); padding: 6px 9px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; }
+.legend .bar { width: 170px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #2f5fb3, #8fb2e6 35%, #f2f2ee 50%, #f0b07a 65%, #c2470f); }
+.legend .ticks { display: flex; justify-content: space-between; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.75); padding: 4px 8px; border-radius: 4px; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 14px var(--mono); color: #15212a; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.old { color: var(--old); }
+td.new { color: var(--measured); }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.shots figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.shots img { width: 100%; display: block; aspect-ratio: 16 / 10; object-fit: cover; }
+.shots figcaption { padding: 10px 14px; font-size: 14px; color: var(--muted); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.step .n { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; }
+.step p { font-size: 14.5px; color: var(--muted); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero landmark test · Pukekawa / Auckland Domain</span>
+    <h1>Auckland Domain: the game's park next to one measured from LiDAR</h1>
+    <p class="lede">Stage 1 is the Domain as the game draws it today, from its own terrain and meshes. Stage 3 rebuilds the park from LINZ 2024 LiDAR and OpenStreetMap: every tree the survey found, the Wintergardens glasshouses, the grandstand, the band rotunda and the ponds. The Auckland War Memorial Museum is left out on purpose: it gets its own model. Stage 4 compares the ground itself. Drag to orbit, scroll or pinch to zoom.</p>
+  </header>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="stages" role="group" aria-label="What to show">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>Game terrain, photo, museum box</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>Surface heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Hero model</b>Measured park, no museum</button>
+      <button id="s3" aria-pressed="false"><b>4 · Ground difference</b>Game terrain minus LiDAR ground</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of the Auckland Domain"></canvas>
+      <div class="loading" id="loading">growing the trees…</div>
+      <div class="views" role="group" aria-label="Camera">
+        <button id="v0" aria-pressed="true">From Grafton</button>
+        <button id="v1" aria-pressed="false">Wintergardens</button>
+        <button id="v2" aria-pressed="false">The crater fields</button>
+        <button id="v3" aria-pressed="false">Low pass</button>
+        <button id="v4" aria-pressed="false">From above</button>
+      </div>
+      <div class="legend" id="legend" hidden><span>game ground − LiDAR ground</span><span class="bar"></span><span class="ticks"><span>−5 m</span><span>0</span><span>+5 m</span></span></div>
+      <span class="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="outline"><input type="checkbox" id="outline" checked> Park boundary</label><label for="spin"><input type="checkbox" id="spin"> Slow orbit</label></span>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">The running game, today</span>
+    <h2>What a pilot sees over the Domain now</h2>
+    <div class="shots">
+      <figure><img src="__TODAY_SW__" alt="F35-A today: the Domain from the south-west, a flat photo of the bush with the museum box on the crown"><figcaption>From the south-west, 420 m up, high quality. The bush, the fields and the Wintergardens are a photo on the ground; the only 3D object in the park is the museum box.</figcaption></figure>
+      <figure><img src="__TODAY_NE__" alt="F35-A today: the Domain from the north-east, the CBD towers on the right"><figcaption>From the north-east. The museum box stands north of the museum in the photo; the canopy along the railway reads as a dark smear.</figcaption></figure>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">Measured differences</span>
+    <h2>Where today's Domain is off</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What</th><th>Game today</th><th>Measured</th><th>Source of the measurement</th></tr></thead>
+        <tbody id="diffs"></tbody>
+      </table>
+    </div>
+    <p style="color:var(--muted)">The ground is closer than it looks: on the high tier the game's terrain is within about 2 m of the LiDAR over most of the park. What the game lacks is everything standing on that ground. Half the Domain is canopy up to <span class="num" id="tallest"></span> m tall, and today an aircraft flies straight through it.</p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <span class="eyebrow">How it was made · about 1 hour with the hero-building tools</span>
+    <h2>From public data to a park the game can use</h2>
+    <div class="steps">
+      <div class="step"><span class="n">STEP 1 · AUTOMATIC</span><h3>LiDAR over 1.5 km</h3><p><span class="num">tools/hero/site.py</span>: 1 m DSM and DEM and the 2024 aerial. OSM gives the park boundary (way 6029919), 29 buildings inside it and 8 ponds.</p></div>
+      <div class="step"><span class="n">STEP 2 · AUTOMATIC</span><h3>One crown per tree</h3><p><span class="num">tools/hero/sites/auckland_domain.py</span>: canopy where the surface stands 2.5 m over the ground. Tops are local maxima, with a wider window for taller trees. A watershed splits the canopy into crowns, each coloured from the aerial.</p></div>
+      <div class="step"><span class="n">STEP 3 · AUTOMATIC</span><h3>Buildings and ponds</h3><p>Each OSM outline is raised to its LiDAR roof. The two glasshouses get a barrel vault: the cross-sections rise from about 6 m at the walls to 12 m at the ridge. Each pond is a water surface at its ground level.</p></div>
+      <div class="step"><span class="n">STEP 4 · CODE</span><h3>Build it in three.js</h3><p>The trees are two instanced meshes, crowns and trunks. The ground is the 3 m DEM under the aerial, with the museum's footprint filled. Outside the park stand the game's own CBD meshes, so the park is all that differs.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">What the hero model is made of</span>
+      <h2>Measured, read off a photo, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Ground (1 m DEM); every tree's position, top height and crown spread; building roof heights; the glasshouses' eave and ridge; pond levels (LiDAR). Park, building and pond outlines (OSM).</span></div>
+        <div><span class="tag r">From photos</span><span>Crown colours and the ground, paths, fields and roofs: the 2024 aerial.</span></div>
+        <div><span class="tag g">Guessed</span><span>Crown shape (a rounded ellipsoid), crown base at 30 % of the tree's height, crowns widened 10 % to close the gaps left by the watershed, trunk size, the glasshouses' vault being a smooth arch. The museum's footprint is filled with one tone taken from the ground around it.</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Putting it in the game</span>
+      <h2>What's left after this review</h2>
+      <div class="ledger">
+        <div><span class="tag r">Trees</span><span>Bake the crowns into a small binary like the port stacks (about 2,100 records), drawn with the game's broadleaf and conifer instances. Lift the "no trees under the aerial" rule inside the park only.</span></div>
+        <div><span class="tag r">Collision</span><span>Trees over about 20 m are real obstacles for a low pass. Give the canopy a coarse height grid in the sim's terrain lookup.</span></div>
+        <div><span class="tag r">Buildings</span><span>Swap the 29 park outlines into the LINZ building list (<span class="num">applyHeroBuildings</span>), the glasshouses as a bespoke vault.</span></div>
+        <div><span class="tag r">Museum</span><span>Out of scope here. The game's box stands about 80 m north of the real building and should move when the museum gets its own model.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a> and <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a>. Park, building and pond outlines: © <a href="https://www.openstreetmap.org/way/6029919">OpenStreetMap</a> contributors, ODbL. Stage 1 and the context of stage 3 use the game's own terrain and meshes (<span class="num">generateTerrain</span> high tier, <span class="num">buildCBD</span>, <span class="num">buildMuseumAndObelisk</span>); the game's photo is shown at its high-tier 1.25 m per pixel.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>__DATA__</script>
+<script>
+// ── site frame: metres, x east, z south from the NW corner of the 1500 m box; y = metres above NZVD2016 ──
+const SIZE = DATA.size, ST = DATA.stats;
+const b64 = (s) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+const i16 = (s, k = 0.1) => { const a = new Int16Array(b64(s)), f = new Float32Array(a.length); for (let i = 0; i < a.length; i++) f[i] = a[i] * k; return f; };
+const fmt = (v, d = 1) => Number(v).toFixed(d);
+const centroid = (ring) => ring.reduce((s, p) => [s[0] + p[0] / ring.length, s[1] + p[1] / ring.length], [0, 0]);
+
+// ── the differences table, from the measured numbers ──
+{
+  const sp = ST.spots, dh = ST.diff_high, dm = ST.diff_med, sgn = (v) => (v > 0 ? '+' : '') + fmt(v);
+  const rows = [
+    ['Trees', 'none in 3D: on the medium and high tiers the park is a photo on the ground (scattered trees are kept off the aerial square)', `${ST.trees.toLocaleString()} trees, ${fmt(ST.canopy_ha)} ha of canopy (${fmt(ST.canopy_pct, 0)} % of the park)`, 'LiDAR crowns: surface 2.5 m or more above the ground, split by watershed'],
+    ['Tree heights', '0 m (the low tier scatters generic 8–17 m trees)', `median ${fmt(ST.tree_h_median)} m, 90 % under ${fmt(ST.tree_h_p90)} m, ${ST.over_20m} over 20 m, tallest ${fmt(ST.tree_h_max)} m`, 'LiDAR, crown top over the DEM'],
+    ['Park buildings', 'none', `${DATA.buildings.length} OSM outlines at LiDAR heights: Temperate and Tropical Houses (vault ridge ≈ 12 m), Charlie Kerr Grandstand, Band Rotunda, the kiosk and depots`, 'OSM outlines, LiDAR roofs (p90 for glass)'],
+    ['Ponds', 'photo only', `${DATA.ponds.length} water surfaces: the Duckpond, the Reflection Pond, the Wintergarden fish pond and 5 more`, 'OSM water, level from the DEM'],
+    ['Ground, high tier', `${fmt(ST.game_cell_high, 0)} m grid`, `RMS ${fmt(dh.rms)} m inside the park; 90 % of it within ${sgn(dh.p5)} to ${sgn(dh.p95)} m`, 'LINZ 1 m DEM vs meshHeightAt'],
+    ['Ground, medium tier', `${fmt(ST.game_cell_med, 0)} m grid`, `RMS ${fmt(dm.rms)} m; ${sgn(dm.p5)} to ${sgn(dm.p95)} m`, 'same'],
+    ['Crater fields (Outer Domain)', `high ${fmt(sp.fields.high)} m · medium ${fmt(sp.fields.medium)} m`, `${fmt(sp.fields.lidar)} m`, 'median DEM in a 40 m disc'],
+    ['Wintergardens courtyard', `high ${fmt(sp.wintergardens.high)} m · medium ${fmt(sp.wintergardens.medium)} m`, `${fmt(sp.wintergardens.lidar)} m`, 'median DEM in a 30 m disc'],
+    ['Museum', '104 × 62 m box with a dome, about 80 m north of the real building', 'left out of this model', 'OSM way 23906678'],
+  ];
+  document.getElementById('diffs').innerHTML = rows.map(([w, o, n, s]) => `<tr><td>${w}</td><td class="n old">${o}</td><td class="n new">${n}</td><td>${s}</td></tr>`).join('');
+  document.getElementById('tallest').textContent = fmt(ST.tree_h_max, 0);
+}
+
+// ── triangle soup per material, flat normals ──
+class Soup {
+  constructor() { this.p = {}; this.c = {}; }
+  tri(m, a, b, c, col) { (this.p[m] ||= []).push(...a, ...b, ...c); if (col) (this.c[m] ||= []).push(...col, ...col, ...col); }
+  quad(m, a, b, c, d, col) { this.tri(m, a, b, c, col); this.tri(m, a, c, d, col); }
+  mesh(m, mat, uvTex) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.p[m]), 3));
+    if (this.c[m]) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.c[m]), 3));
+    if (uvTex) { const p = this.p[m], uv = new Float32Array((p.length / 3) * 2); for (let i = 0, k = 0; i < p.length; i += 3, k += 2) { uv[k] = p[i] / SIZE; uv[k + 1] = 1 - p[i + 2] / SIZE; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
+    g.computeVertexNormals(); return new THREE.Mesh(g, mat);
+  }
+}
+function prism(S, m, ring, y0, y1, col, topM) {
+  const pts = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+  const v2 = pts.map(([x, z]) => new THREE.Vector2(x, z));
+  if (THREE.ShapeUtils.isClockWise(v2)) { pts.reverse(); v2.reverse(); }
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; S.quad(m, [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [b[0], y0, b[1]], col); }
+  if (topM) for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(v2, [])) S.tri(topM, [pts[a][0], y1, pts[a][1]], [pts[c][0], y1, pts[c][1]], [pts[b][0], y1, pts[b][1]]);
+}
+// glasshouse: walls to the eave, then a smooth arch across the short side, extruded along the long side
+function vault(S, b) {
+  const [A, B, , D] = b.rect, u = [B[0] - A[0], B[1] - A[1]], v = [D[0] - A[0], D[1] - A[1]];
+  const WALL = [0.86, 0.88, 0.86], GLASS = [0.78, 0.86, 0.88];
+  prism(S, 'glassWall', b.rect, b.y0 - 0.3, b.eave, WALL, null);
+  const N = 12, P = (t, s) => { const th = Math.PI * s, w = 0.5 - 0.5 * Math.cos(th); return [A[0] + u[0] * t + v[0] * w, b.eave + (b.ridge - b.eave) * Math.sin(th), A[1] + u[1] * t + v[1] * w]; };
+  for (let i = 0; i < N; i++) {
+    S.quad('glass', P(0, i / N), P(1, i / N), P(1, (i + 1) / N), P(0, (i + 1) / N), GLASS);
+    S.tri('glass', P(0, 0), P(0, (i + 1) / N), P(0, i / N), GLASS); // gable ends
+    S.tri('glass', P(1, 0), P(1, i / N), P(1, (i + 1) / N), GLASS);
+  }
+  // ribs every ~3 m
+  const L = Math.hypot(...u);
+  for (let t = 0; t <= 1.0001; t += 3 / L) for (let i = 0; i < N; i++) {
+    const a = P(t, i / N), c = P(t, (i + 1) / N);
+    S.quad('rib', [a[0], a[1] + 0.12, a[2]], [c[0], c[1] + 0.12, c[2]], [c[0], c[1] - 0.12, c[2]], [a[0], a[1] - 0.12, a[2]], [0.95, 0.95, 0.93]);
+  }
+}
+
+// ── three.js scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#bcd3e2');
+scene.fog = new THREE.Fog(scene.background.clone(), 1800, 5200);
+const camera = new THREE.PerspectiveCamera(38, 16 / 9, 2, 10000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 15; controls.maxDistance = 4000;
+scene.add(new THREE.HemisphereLight(0xeef4f7, 0x6f7a70, 0.8));
+const sun = new THREE.DirectionalLight(0xfff4e2, 0.75); sun.position.set(-500, 900, -300); scene.add(sun);
+let dirty = true;
+const loadTex = (src) => { const t = new THREE.TextureLoader().load(src, () => (dirty = true)); t.anisotropy = 8; return t; };
+const heroTex = loadTex(AERIAL_HERO), gameTex = loadTex(AERIAL_GAME);
+
+function gridMesh(n, res, hts, mat, cols) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), idx = new Uint32Array((n - 1) * (n - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const k = j * n + i, x = Math.min(i * res, SIZE), z = Math.min(j * res, SIZE);
+    pos[k * 3] = x; pos[k * 3 + 1] = hts[k]; pos[k * 3 + 2] = z; uv[k * 2] = x / SIZE; uv[k * 2 + 1] = 1 - z / SIZE;
+    if (i + 1 < n && j + 1 < n) { idx[q++] = k; idx[q++] = k + n; idx[q++] = k + 1; idx[q++] = k + 1; idx[q++] = k + n; idx[q++] = k + n + 1; }
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  if (cols) g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+const DEM = i16(DATA.dem.h), DSM = i16(DATA.dsm.h), GAMEH = i16(DATA.game.h), GD = i16(DATA.game.d);
+const demAt = (x, z) => { const r = DATA.dem.res, n = DATA.dem.n, i = Math.max(0, Math.min(n - 1, Math.round(x / r))), j = Math.max(0, Math.min(n - 1, Math.round(z / r))); return DEM[j * n + i]; };
+const heroGround = gridMesh(DATA.dem.n, DATA.dem.res, DEM, new THREE.MeshLambertMaterial({ map: heroTex }));
+const lidarMesh = gridMesh(DATA.dsm.n, DATA.dsm.res, DSM, new THREE.MeshLambertMaterial({ map: gameTex }));
+const gameGround = gridMesh(DATA.game.n, DATA.game.res, GAMEH, new THREE.MeshLambertMaterial({ map: gameTex }));
+// the ground difference: the LiDAR ground coloured by game − LiDAR (blue: game too low, orange: game too high)
+const diffCols = (() => {
+  const n = DATA.game.n, c = new Float32Array(n * n * 3), lo = new THREE.Color('#2f5fb3'), mid = new THREE.Color('#f2f2ee'), hi = new THREE.Color('#c2470f'), t = new THREE.Color();
+  for (let k = 0; k < n * n; k++) { const d = Math.max(-1, Math.min(1, GD[k] / 5)); t.copy(mid).lerp(d < 0 ? lo : hi, Math.abs(d)); c[k * 3] = t.r; c[k * 3 + 1] = t.g; c[k * 3 + 2] = t.b; }
+  return c;
+})();
+const diffGround = gridMesh(DATA.game.n, DATA.game.res, GAMEH.map((h, k) => h - GD[k]), new THREE.MeshLambertMaterial({ vertexColors: true }), diffCols);
+
+// the game's meshes (site frame, sRGB vertex colours): kind 1 = the museum and its dome
+function gameMesh(lift, skipMuseum) {
+  const P = i16(DATA.gmesh.pos), DY = i16(DATA.gmesh.dy), C = new Uint8Array(b64(DATA.gmesh.col)), K = new Uint8Array(b64(DATA.gmesh.kind));
+  const p = [], c = [];
+  for (let t = 0; t < K.length; t++) {
+    if (skipMuseum && K[t] === 1) continue;
+    for (let v = t * 3; v < t * 3 + 3; v++) { p.push(P[v * 3], P[v * 3 + 1] + (lift ? DY[v] : 0), P[v * 3 + 2]); c.push(C[v * 3] / 255, C[v * 3 + 1] / 255, C[v * 3 + 2] / 255); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(p), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(c), 3)); g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+}
+const gameCity = gameMesh(false, false), heroCtx = gameMesh(true, true);
+
+// ── the hero park ──
+const hero = new THREE.Group();
+{
+  const S = new Soup();
+  for (const b of DATA.buildings) {
+    if (b.rect) vault(S, b);
+    else prism(S, 'wall', b.ring, b.y0 - 0.3, b.y1, b.kind === 'grandstand' ? [0.78, 0.74, 0.68] : [0.84, 0.82, 0.77], 'roof');
+  }
+  for (const p of DATA.ponds) prism(S, 'water', p.ring, p.y - 0.05, p.y, null, 'water');
+  const MATS = {
+    wall: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    roof: new THREE.MeshLambertMaterial({ map: heroTex, side: THREE.DoubleSide }),
+    glassWall: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    glass: new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.82, shininess: 80, specular: 0x667777 }),
+    rib: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    water: new THREE.MeshPhongMaterial({ color: 0x4d6e6a, shininess: 90, specular: 0x9ab, side: THREE.DoubleSide }),
+  };
+  for (const m of Object.keys(S.p)) hero.add(S.mesh(m, MATS[m], m === 'roof'));
+
+  // trees: one rounded crown and one trunk per LiDAR tree, instanced
+  const T = DATA.trees, crownGeo = new THREE.IcosahedronGeometry(1, 2), trunkGeo = new THREE.CylinderGeometry(0.7, 1, 1, 6);
+  trunkGeo.translate(0, 0.5, 0);
+  const crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), T.length);
+  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x5b4a3a }), T.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+  let h = 2166136261;
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ 0x9e3779b9) >>> 0) / 4294967296;
+  T.forEach(([x, z, g, top, r, base, cr, cg, cb], i) => {
+    const half = Math.max(0.8, (top - base) / 2);
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * Math.PI * 2);
+    p.set(x, top - half, z); s.set(r * (0.95 + 0.1 * rnd()), half, r * (0.95 + 0.1 * rnd()));
+    crowns.setMatrixAt(i, m4.compose(p, q, s));
+    // the aerial's crown colour, lifted a touch (the photo's shadows are deep under a canopy)
+    col.setRGB(Math.min(1, (cr / 255) * 1.12 + 0.02), Math.min(1, (cg / 255) * 1.12 + 0.03), Math.min(1, (cb / 255) * 1.08 + 0.01));
+    crowns.setColorAt(i, col);
+    const tr = Math.max(0.18, Math.min(0.9, r * 0.07));
+    p.set(x, g - 0.3, z); s.set(tr, base - g + half * 0.6, tr); q.identity();
+    trunks.setMatrixAt(i, m4.compose(p, q, s));
+  });
+  crowns.instanceColor.needsUpdate = true;
+  hero.add(crowns, trunks);
+  hero.userData.tris = Object.values(S.p).reduce((a, v) => a + v.length / 9, 0) + T.length * (crownGeo.index ? crownGeo.index.count : crownGeo.attributes.position.count) / 3;
+}
+
+// the park boundary as a line just over the ground
+const outline = (() => {
+  const pts = [];
+  const ring = DATA.park;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 6));
+    for (let k = 0; k < n; k++) { const x = a[0] + ((b[0] - a[0]) * k) / n, z = a[1] + ((b[1] - a[1]) * k) / n; pts.push(new THREE.Vector3(x, demAt(x, z) + 1.5, z)); }
+  }
+  return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffd34d }));
+})();
+
+// ── stages and camera views ──
+const NOTES = [
+  `The Domain as the game draws it on the high tier: its ${fmt(ST.game_cell_high, 0)} m terrain grid under the 1.25 m aerial, and the museum box on the crown. The bush, the fields and the Wintergardens are only in the photo. Around it, the game’s LINZ CBD.`,
+  'LINZ 2024 LiDAR on a 3 m grid, keeping each cell’s highest return so the tree tops survive, under the same aerial. The museum is in this one.',
+  `The hero park: ${ST.trees.toLocaleString()} trees where the LiDAR found them, ${DATA.buildings.length} park buildings, ${DATA.ponds.length} ponds on the 3 m LiDAR ground, about ${Math.round(hero.userData.tris / 1000)}k triangles. No museum: its footprint is left as open ground. Outside the park stand the game’s own meshes.`,
+  `The LiDAR ground coloured by the game’s high-tier terrain minus the LiDAR: RMS ${fmt(ST.diff_high.rms)} m inside the park. Orange where the game is too high, blue where it is too low. Inside the park it misses most on the steep banks: the railway cutting along the east edge and the gully through the northern bush, by up to about 5 m. The game’s grid smooths them out.`,
+];
+const ALL = [gameGround, gameCity, lidarMesh, hero, heroGround, heroCtx, diffGround];
+const ITEMS = [[gameGround, gameCity], [lidarMesh], [hero, heroGround, heroCtx], [diffGround, heroCtx]];
+for (const o of ALL) { scene.add(o); o.visible = false; }
+scene.add(outline);
+let stage = 2;
+const outlineBox = document.getElementById('outline');
+function setStage(k) {
+  stage = k;
+  for (const o of ALL) o.visible = false;
+  for (const o of ITEMS[k]) o.visible = true;
+  outline.visible = outlineBox.checked;
+  document.querySelectorAll('.stages button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  document.getElementById('note').textContent = NOTES[k];
+  document.getElementById('legend').hidden = k !== 3;
+  dirty = true;
+}
+document.querySelectorAll('.stages button').forEach((b, i) => b.addEventListener('click', () => setStage(i)));
+outlineBox.addEventListener('change', () => setStage(stage));
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const wg = centroid(DATA.buildings.find((b) => b.name === 'Temperate House').ring);
+const VIEWS = [
+  { cam: V3(80, 380, 1350), look: V3(760, 40, 650) },                                     // from Grafton, south-west, looking over the crater to the bush
+  { cam: V3(wg[0] - 120, demAt(...wg) + 70, wg[1] + 110), look: V3(wg[0] + 10, demAt(...wg) + 6, wg[1] - 5) },  // Wintergardens close up
+  { cam: V3(640, 170, 1330), look: V3(700, 60, 880) },                                     // the crater fields from the south
+  { cam: V3(560, 130, 120), look: V3(900, 40, 700) },                                      // a low pass over the bush from the north
+  { cam: V3(760, 2100, 761), look: V3(760, 0, 760) },                                      // straight down
+];
+function setView(k) {
+  camera.position.copy(VIEWS[k].cam); controls.target.copy(VIEWS[k].look); controls.update();
+  document.querySelectorAll('.views button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k))); dirty = true;
+}
+document.querySelectorAll('.views button').forEach((b, i) => b.addEventListener('click', () => setView(i)));
+const spin = document.getElementById('spin');
+controls.addEventListener('change', () => (dirty = true));
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight, pr = renderer.getPixelRatio();
+  if (canvas.width !== Math.round(w * pr) || canvas.height !== Math.round(h * pr)) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; }
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop() {
+  resize();
+  if (spin.checked && !reduce) { const off = camera.position.clone().sub(controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.0012); camera.position.copy(controls.target).add(off); dirty = true; }
+  if (controls.update()) dirty = true;
+  if (dirty) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+}
+document.getElementById('loading').hidden = true;
+setStage(2); setView(0); loop();
+</script>
