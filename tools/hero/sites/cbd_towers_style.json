@@ -131,7 +131,9 @@
   "wall": "#747c8c",
   "podium": "#626a7a",
   "wall_raw": "#6f769a",
-  "podium_raw": "#5b638d"
+  "podium_raw": "#5b638d",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: blue glass"
  },
  "14": {
   "name": "BNZ Tower / QBE Centre",
