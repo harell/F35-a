@@ -704,9 +704,20 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
         continue;
       }
       if (b.hero === 'tower' && b.tower) {
-        // a kit tower (core/cbdTowers.ts): its measured parts, each with its facade; sloped crowns keep the wall colour
+        // a kit tower (core/cbdTowers.ts): its measured parts, each with its facade; sloped crowns keep the wall colour.
+        // Every part stands from the ground, and a crown terrace is beside the shaft's roof, not on it: up to the shaft's
+        // roof its walls are the shaft's facade, the crown's colour (and its light) only above
         const [c, rc, w] = towerPartFacade(b.tower, p.kind, tmp);
-        B.prism(ring, y0, roof, c, p.sx || p.sz ? c : rc, w);
+        let from = y0;
+        if (p.kind === 'crown') {
+          const shaftTop = Math.max(0, ...b.prisms.filter((q) => q.kind === 'shaft' || q.kind === 'podium').map((q) => q.h));
+          if (shaftTop > 0 && shaftTop < p.h) {
+            const [sc, , sw] = towerPartFacade(b.tower, 'shaft', tmp);
+            B.prism(ring, y0, () => g + shaftTop, sc, sc, sw);
+            from = g + shaftTop;
+          }
+        }
+        B.prism(ring, from, roof, c, p.sx || p.sz ? c : rc, w);
         prisms.push({ ...p, y0, y1: g + p.h });
         heights.push(p.h);
         continue;
