@@ -287,14 +287,6 @@ const SPECS: Record<MunitionId, MissileSpec> = {
       { at: 0.86, root: 0.5, tip: 0.36, span: 0.26, sweep: 0.1, roll: Math.PI / 4, color: 0x7d8376 },
     ],
   },
-  gbu39: {
-    body: 0x9aa0a4,
-    nose: 0x8d9296,
-    noseLen: 0.3,
-    square: 3.2,
-    fins: [{ at: 0.9, root: 0.16, tip: 0.12, span: 0.09, sweep: 0.04, roll: Math.PI / 4 }],
-    extra: sdbWings,
-  },
   gbu53: {
     // SDB II: SDB-like square body, blunt faceted tri-mode seeker nose, four tail fins, pop-out wings
     body: 0x8e959a,

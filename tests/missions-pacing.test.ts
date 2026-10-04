@@ -23,7 +23,7 @@ describe('pacing: dead stretches in the bot event log (#59)', () => {
     ' 40 RADIO Viper 1: Fox Three',
     ' 75 DESTROYED Fulcrum 1 by PLAYER',
     ' 75 HUD SPLASH MIG-29',
-    '100 MSL gbu39->2@3km v200 y4000',
+    '100 MSL gbu53->2@3km v200 y4000',
     '150 BOT HOLD pos=(1.0,1.0)km alt=500',
     '200 OBJ o_a complete',
   ];

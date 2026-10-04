@@ -263,7 +263,6 @@ const WEAPON_NAME: Record<WeaponId, string> = {
   aim120: 'AIM-120D',
   aim9x: 'AIM-9X',
   gbu31: 'GBU-31',
-  gbu39: 'GBU-39',
   gbu53: 'GBU-53',
   aargm: 'AGM-88G',
 };

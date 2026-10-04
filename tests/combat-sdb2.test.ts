@@ -24,6 +24,8 @@ import { FlatTerrain } from './combat-helpers';
 
 const DEG = Math.PI / 180;
 const DT = 1 / 60;
+/** A GBU-31's level-release reach from 8 km at 250 m/s (m). */
+const JDAM_RANGE = gpsMaxRange(MUNITIONS.gbu31, 8_000, 250, 0);
 
 /** Open sea (`land` = flat ground at sea level instead). */
 function makeWorld(seed = 1, land = false): SimWorld {
@@ -49,7 +51,7 @@ function civilShip(w: SimWorld, vessel: VesselClass, pos: Vector3, headingDeg = 
 }
 
 /** Release `weapon` at `target` (waits for the bay doors) and return the munition. */
-function release(w: SimWorld, p: AircraftEntity, weapon: 'gbu53' | 'gbu39', targetId: number): MissileEntity {
+function release(w: SimWorld, p: AircraftEntity, weapon: 'gbu53' | 'gbu31', targetId: number): MissileEntity {
   const launches: MissileEntity[] = [];
   const off = w.events.on('munition:launch', (e) => launches.push(e.missile));
   w.combat.fire(p, w, weapon, targetId);
@@ -69,17 +71,19 @@ function routeShip(w: SimWorld): GroundTargetEntity {
 }
 
 describe('GBU-53 StormBreaker: moving and moored civil ships', () => {
-  it('sinks a designated civil ship steaming round a SHIP_ROUTES loop from ≥ 20 km; a GBU-39 misses it', () => {
-    const outcome = (weapon: 'gbu53' | 'gbu39') => {
+  it('sinks a designated civil ship steaming round a SHIP_ROUTES loop from ≥ 20 km; a GPS-only JDAM misses it', () => {
+    const outcome = (weapon: 'gbu53' | 'gbu31') => {
       const w = makeWorld(3);
       const ship = routeShip(w);
       run(w, 0.5);
-      const p = jetToward(w, ship.position, 22_000, 8_000, weapon === 'gbu53' ? 'strike_sdb2' : 'sead_stealth');
+      // the JDAM's envelope is shorter: it is released from inside its own reach
+      const minRange = weapon === 'gbu53' ? 20_000 : JDAM_RANGE - 2_000;
+      const p = jetToward(w, ship.position, minRange + 2_000, 8_000, weapon === 'gbu53' ? 'sead_stealth' : 'strike_stealth');
       run(w, 1);
       w.combat.designate(p, ship.id, w);
       run(w, 0.5);
       const range = Math.hypot(ship.position.x - p.position.x, ship.position.z - p.position.z);
-      expect(range).toBeGreaterThanOrEqual(20_000);
+      expect(range).toBeGreaterThanOrEqual(minRange);
       const m = release(w, p, weapon, ship.id);
       expect(m.targetId).toBe(ship.id);
       run(w, 200, () => !m.alive);
@@ -87,16 +91,16 @@ describe('GBU-53 StormBreaker: moving and moored civil ships', () => {
       return ship.alive;
     };
     expect(outcome('gbu53')).toBe(false); // sunk
-    expect(outcome('gbu39')).toBe(true); // flew to where the ship was at release
+    expect(outcome('gbu31')).toBe(true); // flew to where the ship was at release
   });
 
   it('sinks a moored civil ship from ≥ 20 km: check-fire naming it, civilian penalty, debrief row', () => {
-    const def = missionById('ia_strike_auckland')!; // an Instant Action strike allows the SDB II
-    expect(def.allowedLoadouts).toContain('strike_sdb2');
+    const def = missionById('ia_strike_auckland')!; // an Instant Action strike allows the SDB II (SEAD fit)
+    expect(def.allowedLoadouts).toContain('sead_stealth');
     const events = new EventBus();
     const world = createSimWorld({ terrain: new FlatTerrain(-20), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
     const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
-    runner.setup(world, 'strike_sdb2');
+    runner.setup(world, 'sead_stealth');
     const radio: string[] = [];
     const hud: string[] = [];
     events.on('radio', (e) => radio.push(e.text));
@@ -145,7 +149,7 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
     // a faster patrol than the mission's 1 m/s, to make the moving-target part count
     cv.speed = 6;
     run(w, 0.5);
-    const p = jetToward(w, cv.position, 20_000, 8_000, 'strike_sdb2');
+    const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, cv.id, w);
     const m1 = release(w, p, 'gbu53', cv.id);
@@ -164,7 +168,7 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
     const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [b, a], loopPath: true, speed: 8 });
     run(w, 0.2);
     expect(cv.velocity.x).toBeGreaterThan(7);
-    const p = jetToward(w, cv.position, 20_000, 8_000, 'strike_sdb2');
+    const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, cv.id, w);
     const m = release(w, p, 'gbu53', cv.id);
@@ -177,7 +181,7 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
     const w = makeWorld(10);
     const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(-5_000, 0, 0)], speed: 7 });
     run(w, 0.2);
-    const p = jetToward(w, cv.position, 20_000, 8_000, 'strike_sdb2');
+    const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, cv.id, w);
     const m = release(w, p, 'gbu53', cv.id);
@@ -193,7 +197,7 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
   it('one GBU-53 never destroys a bunker', () => {
     const w = makeWorld(2, true);
     const bunker = w.spawnGround({ type: 'bunker', team: 'red', position: new Vector3(0, 0, 0), name: 'Bunker' });
-    const p = jetToward(w, bunker.position, 15_000, 7_000, 'strike_sdb2');
+    const p = jetToward(w, bunker.position, 15_000, 7_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, bunker.id, w);
     const m = release(w, p, 'gbu53', bunker.id);
@@ -206,7 +210,7 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
   it('still hits a SAM site that switches its radar off right after release', () => {
     const w = makeWorld(4, true);
     const sam = w.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(2_000, 0, -3_000), name: 'SA-6' });
-    const p = jetToward(w, sam.position, 20_000, 8_000, 'strike_sdb2');
+    const p = jetToward(w, sam.position, 20_000, 8_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, sam.id, w);
     const m = release(w, p, 'gbu53', sam.id);
@@ -225,7 +229,7 @@ describe('GBU-53 StormBreaker: never retargets', () => {
     // ship lying 180 m beyond it
     const crosser = civilShip(w, 'cruise', new Vector3(-1_500, 0, 3_000), 90, { path: [new Vector3(-1_500, 0, 3_000), new Vector3(4_000, 0, 3_000)], speed: 5 });
     const beyond = civilShip(w, 'container', new Vector3(0, 0, -200), 90);
-    const p = jetToward(w, cv.position, 20_000, 8_000, 'strike_sdb2');
+    const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, cv.id, w);
     const m = release(w, p, 'gbu53', cv.id);
@@ -245,7 +249,7 @@ describe('GBU-53 StormBreaker: never retargets', () => {
     const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531' });
     const other = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(400, 0, 0), name: 'Corvette 532' });
     const civ = civilShip(w, 'container', new Vector3(-450, 0, 0), 0);
-    const p = jetToward(w, cv.position, 18_000, 8_000, 'strike_sdb2');
+    const p = jetToward(w, cv.position, 18_000, 8_000, 'sead_stealth');
     run(w, 1);
     w.combat.designate(p, cv.id, w);
     const m = release(w, p, 'gbu53', cv.id);
@@ -267,9 +271,10 @@ describe('GBU-53 StormBreaker: release rules and envelope', () => {
   it('denied with NO TARGET without a designation (no CCIP drop) and OUT OF RANGE beyond the envelope', () => {
     const w = makeWorld(1, true);
     const tgt = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(0, 0, 0), name: 'Fuel depot' });
-    const p = jetToward(w, tgt.position, 45_000, 6_000, 'strike_sdb2');
-    expect(p.selectedWeapon).toBe('gbu53');
+    const p = jetToward(w, tgt.position, 45_000, 6_000, 'sead_stealth');
     run(w, 1);
+    w.combat.selectWeapon(p, 'gbu53', w);
+    expect(p.selectedWeapon).toBe('gbu53');
     const denied: string[] = [];
     w.events.on('weapon:denied', (e) => denied.push(e.reason));
     w.combat.designate(p, null, w);
@@ -282,29 +287,29 @@ describe('GBU-53 StormBreaker: release rules and envelope', () => {
     expect(w.combat.remaining(p, 'gbu53')).toBe(4);
   });
 
-  it('glide envelope at 250 m/s: ≥ 20 km from 6 km, ≥ 28 km from 10 km (about SDB parity)', () => {
+  it('glide envelope at 250 m/s: ≥ 20 km from 6 km, ≥ 28 km from 10 km', () => {
     expect(gpsMaxRange(MUNITIONS.gbu53, 6_000, 250, 0)).toBeGreaterThanOrEqual(20_000);
     expect(gpsMaxRange(MUNITIONS.gbu53, 10_000, 250, 0)).toBeGreaterThanOrEqual(28_000);
-    expect(gpsMaxRange(MUNITIONS.gbu53, 10_000, 250, 0)).toBeLessThanOrEqual(gpsMaxRange(MUNITIONS.gbu39, 10_000, 250, 0) * 1.05);
   });
 });
 
-describe('strike_sdb2 loadout', () => {
-  it('4× GBU-53 + 2× AIM-120D internal, offered wherever strike_stealth / sead_stealth are, never in A/A-only missions', () => {
-    const l = LOADOUTS.strike_sdb2;
+describe('sead_stealth loadout carries the StormBreakers', () => {
+  it('2× AARGM-ER + 4× GBU-53 + 2× AIM-120D internal, offered wherever strike_stealth is, never in A/A-only missions', () => {
+    const l = LOADOUTS.sead_stealth;
     expect(l.stores).toEqual([
+      { weapon: 'aargm', count: 2, internal: true },
       { weapon: 'gbu53', count: 4, internal: true },
       { weapon: 'aim120', count: 2, internal: true },
     ]);
-    expect(l.rcsMultiplier).toBe(1);
-    expect(l.role).toBe('ag');
+    expect(l.role).toBe('sead');
     const instant = (['strike', 'sam_gauntlet', 'dogfight'] as const).map((mode) =>
       buildInstantMissionSeeded({ mode, theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3),
     );
     let withIt = 0;
     for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
-      const ag = m.allowedLoadouts.includes('strike_stealth') || m.allowedLoadouts.includes('sead_stealth');
-      expect(m.allowedLoadouts.includes('strike_sdb2'), m.id).toBe(ag);
+      const ag = m.allowedLoadouts.includes('strike_stealth');
+      if (ag) expect(m.allowedLoadouts, m.id).toContain('sead_stealth');
+      if (m.allowedLoadouts.every((id) => LOADOUTS[id].role === 'aa')) expect(m.allowedLoadouts, m.id).not.toContain('sead_stealth');
       if (ag) withIt++;
       expect(validateMission(m), m.id).toEqual([]);
     }
@@ -325,9 +330,10 @@ describe('GBU-53 StormBreaker: the IN RANGE cue is a range the bomb reaches (pla
     // the ship steams across the bomb's track (east), well clear of the end of its path
     const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: shipSpeed });
     run(w, 0.2);
-    const p = jetToward(w, cv.position, 40_000, alt, 'strike_sdb2');
+    const p = jetToward(w, cv.position, 40_000, alt, 'sead_stealth');
     p.input.throttle = 0.85;
     run(w, 0.5);
+    w.combat.selectWeapon(p, 'gbu53', w); // the SEAD fit starts on the AARGM
     w.combat.designate(p, cv.id, w);
     let cueRange = 0;
     // fly level at it (straight and level is what the jet already does) until the cue says so
@@ -368,9 +374,9 @@ describe('GBU-53 StormBreaker: the IN RANGE cue is a range the bomb reaches (pla
  */
 describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to (playtest 2.1-b)', () => {
   /** Jet flying north (−z) at `alt`; the target `d` m away, `deg` right of the ground track. */
-  const cue = (weapon: 'gbu53' | 'gbu39' | 'gbu31', alt: number, d: number, deg: number) => {
+  const cue = (weapon: 'gbu53' | 'gbu31', alt: number, d: number, deg: number) => {
     const w = makeWorld(1, true);
-    const loadout: LoadoutId = weapon === 'gbu53' ? 'strike_sdb2' : weapon === 'gbu39' ? 'sead_stealth' : 'strike_stealth';
+    const loadout: LoadoutId = weapon === 'gbu53' ? 'sead_stealth' : 'strike_stealth';
     const tgt = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(0, 0, 0), name: 'Fuel depot' });
     const p = jetToward(w, tgt.position, 5_000, alt, loadout);
     run(w, 1);
@@ -386,8 +392,8 @@ describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to 
     return { inRange: b!.inRange, offAxis: b!.offAxis, rel: b!.timeToRelease };
   };
 
-  it('a StormBreaker / SDB: in range ahead and 45° off, not abeam, behind or past the target at low level', () => {
-    for (const weapon of ['gbu53', 'gbu39'] as const) {
+  it('a StormBreaker: in range ahead and 45° off, not abeam, behind or past the target at low level', () => {
+    for (const weapon of ['gbu53'] as const) {
       expect(cue(weapon, 7_000, 15_000, 0), weapon).toMatchObject({ inRange: true, offAxis: false });
       expect(cue(weapon, 7_000, 15_000, 45), weapon).toMatchObject({ inRange: true, offAxis: false });
       expect(cue(weapon, 7_000, 15_000, 90), weapon).toMatchObject({ inRange: false, offAxis: true, rel: -1 });
@@ -417,7 +423,7 @@ describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to 
     const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: 5 });
     run(w, 0.2);
     // 14 km from the ship, ground track 60° left of it
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_700, 14_000), heading: -60 * DEG, speed: 250, loadout: 'strike_sdb2' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_700, 14_000), heading: -60 * DEG, speed: 250, loadout: 'sead_stealth' });
     run(w, 0.5);
     w.combat.designate(p, cv.id, w);
     const m = release(w, p, 'gbu53', cv.id);

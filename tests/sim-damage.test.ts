@@ -112,7 +112,7 @@ describe('applyDamage — events, credit, subsystems', () => {
     const jet = tw.world.spawnGround({ type: 'parked_jet', team: 'red', position: new Vector3(-2500, 0, 2000), path: [new Vector3(-2500, 0, 0)] });
     tw.world.applyDamage(sam, 1000, player.id, 'aargm');
     tw.world.applyDamage(fuel, 1000, player.id, 'gbu31');
-    tw.world.applyDamage(jet, 1000, player.id, 'gbu39');
+    tw.world.applyDamage(jet, 1000, player.id, 'gbu53');
     expect(sam.alive).toBe(false);
     expect(sam.radarOn).toBe(false);
     expect(player.kills).toBe(3);

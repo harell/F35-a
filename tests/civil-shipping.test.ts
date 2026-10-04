@@ -282,7 +282,7 @@ describe('civil shipping in missions', () => {
     m.tick(1);
     const p = m.world.player!;
     const ship = m.ships().find((s) => s.vessel === 'cruise')!;
-    m.world.applyDamage(ship, 1, p.id, 'gbu39'); // a near miss's worth of blast still sinks it
+    m.world.applyDamage(ship, 1, p.id, 'gbu53'); // a near miss's worth of blast still sinks it
     m.tick(6);
     expect(ship.alive).toBe(false);
     expect(m.hud).toContain('CIVILIAN SHIP DESTROYED');
@@ -374,7 +374,7 @@ describe('civil ship damage', () => {
     const a = spawnShip(w, 'container', 0, -2000);
     expect(a.destroyedAt).toBe(-1);
     run(w, 1);
-    w.applyDamage(a, 3, p.id, 'gbu39');
+    w.applyDamage(a, 3, p.id, 'gbu53');
     expect(a.alive).toBe(false);
     expect(a.destroyedAt).toBeCloseTo(w.time, 6); // paces the sinking animation
     const b = spawnShip(w, 'cruise', 2000, -2000, 0, 'Southern Barnacle');

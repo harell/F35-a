@@ -6,9 +6,9 @@
  *  - air-to-air: the simai team's calibrated PlayerBot (tests/ai-playerbot.ts) — taps the TD box,
  *    fires on the calibrated SHOOT cue, cranks, defends on the MAWS after a human reaction time;
  *  - air-to-ground: picks the next live target of an active objective (primary first; a Tor
- *    guarding it goes first), selects AARGM against emitters / SDB II / SDB / JDAM, designates it
+ *    guarding it goes first), selects AARGM against emitters / SDB II / JDAM, designates it
  *    with the sensors a human has (the target must be a contact), releases on the launch-zone cue
- *    (the StormBreaker is flown like the SDB: same glide envelope, it just also follows a mover);
+ *    (the StormBreaker glides from far out and also follows a mover);
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
  *  - Winchester / low fuel: there is no rearming (issue #63), so it flies home to Whenuapai
  *    (homeBase()) and circles the field, out of the fight, until the mission ends.
@@ -40,12 +40,12 @@ import { spawnFloor } from '../src/missions/runtime/spawner';
 const _h = new Vector3();
 const _q = new Vector3();
 
-type AgWeapon = 'aargm' | 'gbu53' | 'gbu39' | 'gbu31';
-/** In order of preference (as the game's hints: AARGM for emitters, then SDB II, SDB, JDAM). */
-const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu39', 'gbu31'];
+type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
+/** In order of preference (as the game's hints: AARGM for emitters, then SDB II, JDAM). */
+const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu31'];
 
-/** SDB-class glide bombs (GBU-39, GBU-53/B): same envelope, pressed in to SDB_PRESS_RANGE. */
-const isSdb = (w: AgWeapon): boolean => w === 'gbu39' || w === 'gbu53';
+/** SDB-class glide bombs (GBU-53/B): pressed in to SDB_PRESS_RANGE. */
+const isSdb = (w: AgWeapon): boolean => w === 'gbu53';
 
 /** Order a boat swarm is bombed in: the shortest clock first (a suicide boat, then a missile boat, then an AD boat). */
 const boatRank = (t: AnyEntity): number => (t.kind === 'ground' && t.type === 'suicide_boat' ? 0 : t.kind === 'ground' && t.type === 'missile_boat' ? 1 : 2);
@@ -223,7 +223,7 @@ export class MissionBot {
 
   /**
    * Next surface target: nearest live objective target we can hit; a live Tor guarding it goes first.
-   * SDB-class glide bombs (SDB, StormBreaker): with one already on its way to a target the next is
+   * SDB-class glide bombs (StormBreaker): with one already on its way to a target the next is
    * preferred, so they are rippled onto the targets like a human does instead of one 2-minute glide
    * at a time (issue #65: StormBreaker runs over 600 s). Not JDAMs (a JDAM rippled from inside the
    * run-in overflew its target in t03).
@@ -729,7 +729,7 @@ export class MissionBot {
       ok = !!z && z.shoot;
     } else {
       const b = c.bombImpactPoint(p, w);
-      // like the hint says: an SDB (I or II) is pressed in to ~20 km (a max-range glide arrives slow)
+      // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
       ok = !!b && b.inRange && (!isSdb(weapon) || R <= SDB_PRESS_RANGE);
     }
     if (ok) {

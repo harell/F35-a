@@ -20,7 +20,7 @@ function placeAtFraction(w: FakeWorld, shooterId: number, targetId: number, frac
 
 describe('combat: munition database', () => {
   it('defines every munition with sane values', () => {
-    const ids: MunitionId[] = ['aim120', 'aim9x', 'gbu31', 'gbu39', 'aargm', 'r73', 'r27', 'r77', 'm_3m9', 'm_9m330', 'm_igla'];
+    const ids: MunitionId[] = ['aim120', 'aim9x', 'gbu31', 'gbu53', 'aargm', 'r73', 'r27', 'r77', 'm_3m9', 'm_9m330', 'm_igla'];
     for (const id of ids) {
       const d = MUNITIONS[id];
       expect(d, id).toBeTruthy();

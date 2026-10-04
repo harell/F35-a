@@ -51,7 +51,6 @@ export const WEAPON_HUD: Record<WeaponId, string> = {
   aim120: 'AMRAAM',
   aim9x: '9X',
   gbu31: 'JDAM',
-  gbu39: 'SDB',
   gbu53: 'SDB II',
   aargm: 'AARGM',
 };
@@ -61,7 +60,6 @@ export const WEAPON_IS_AG: Record<WeaponId, boolean> = {
   aim120: false,
   aim9x: false,
   gbu31: true,
-  gbu39: true,
   gbu53: true,
   aargm: true,
 };
@@ -72,7 +70,6 @@ export const WEAPON_IS_BOMB: Record<WeaponId, boolean> = {
   aim120: false,
   aim9x: false,
   gbu31: true,
-  gbu39: true,
   gbu53: true,
   aargm: false,
 };
@@ -83,7 +80,6 @@ export const WEAPON_BREVITY: Record<WeaponId, string> = {
   aim120: 'FOX 3',
   aim9x: 'FOX 2',
   gbu31: 'RIFLE',
-  gbu39: 'RIFLE',
   gbu53: 'RIFLE',
   aargm: 'MAGNUM',
 };

@@ -87,7 +87,6 @@ export type WeaponId =
   | 'aim120' // AIM-120D AMRAAM — active radar BVR missile
   | 'aim9x' // AIM-9X Sidewinder — IR, high off-boresight via HMD
   | 'gbu31' // GBU-31 JDAM — 2000 lb GPS guided bomb
-  | 'gbu39' // GBU-39 SDB — 250 lb GPS guided glide bomb (standoff)
   | 'gbu53' // GBU-53/B StormBreaker (SDB II): datalinked glide bomb with a tri-mode terminal seeker, hits moving targets
   | 'aargm'; // AGM-88G AARGM-ER — anti-radiation missile for SEAD
 
@@ -107,9 +106,6 @@ export type LoadoutId =
   | 'a2a_stealth'
   | 'strike_stealth'
   | 'sead_stealth'
-  | 'strike_sdb2'
-  /** 8× GBU-53/B + 2× AIM-120D: only in missions that list it in allowedLoadouts (the boat swarm, #82). */
-  | 'strike_sdb2_full'
   /** 8× GBU-53/B + 2× AARGM-ER, no air-to-air missile: the boat swarm's only loadout (#136). */
   | 'strike_maritime'
   | 'a2a_beast'

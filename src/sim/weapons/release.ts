@@ -39,7 +39,6 @@ const CALLS: Record<StoreWeapon, { text: string; voice: VoiceId }> = {
   aim120: { text: 'Fox Three', voice: 'p_fox3' },
   aim9x: { text: 'Fox Two', voice: 'p_fox2' },
   gbu31: { text: 'Rifle', voice: 'p_rifle' },
-  gbu39: { text: 'Rifle', voice: 'p_rifle' },
   gbu53: { text: 'Rifle', voice: 'p_rifle' },
   aargm: { text: 'Magnum', voice: 'p_magnum' },
 };

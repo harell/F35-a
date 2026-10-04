@@ -201,7 +201,7 @@ export function seadFixture(timeLimit?: number): MissionDef {
     weather: 'clear',
     briefing: ['test'],
     recommendedLoadout: 'sead_stealth',
-    allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'],
+    allowedLoadouts: ['sead_stealth', 'strike_stealth', 'strike_beast'],
     player: seadStart,
     timeLimit,
     script: {

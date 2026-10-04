@@ -268,11 +268,11 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
   sead_stealth: {
     id: 'sead_stealth',
     name: 'SEAD (Stealth)',
-    description: '2× AARGM-ER + 4× GBU-39 SDB + 2× AIM-120D internal. Kill the SAM network.',
+    description: '2× AARGM-ER + 4× GBU-53/B StormBreaker + 2× AIM-120D internal. Kill the SAM network; the StormBreakers also chase moving targets.',
     rcsMultiplier: 1.2,
     stores: [
       { weapon: 'aargm', count: 2, internal: true },
-      { weapon: 'gbu39', count: 4, internal: true },
+      { weapon: 'gbu53', count: 4, internal: true },
       { weapon: 'aim120', count: 2, internal: true },
     ],
     gunAmmo: 180,
@@ -280,38 +280,7 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
-  strike_sdb2: {
-    id: 'strike_sdb2',
-    name: 'Precision Strike (Stealth)',
-    description: '4× GBU-53/B StormBreaker + 2× AIM-120D internal. Datalinked glide bombs that chase moving ships and vehicles. No anti-radiation missile: against a long-range SAM, take SEAD.',
-    rcsMultiplier: 1,
-    stores: [
-      { weapon: 'gbu53', count: 4, internal: true },
-      { weapon: 'aim120', count: 2, internal: true },
-    ],
-    gunAmmo: 180,
-    flares: 24,
-    chaff: 24,
-    role: 'ag',
-  },
-  // The real F-35A's full internal SDB II load: a BRU-61/A rack of four GBU-53/B and an AIM-120 in
-  // each bay. Offered only where a mission lists it (the boat swarm needs a bomb per moving boat), so
-  // the other missions keep their balance.
-  strike_sdb2_full: {
-    id: 'strike_sdb2_full',
-    name: 'Precision Strike (Full Bays)',
-    description: '8× GBU-53/B StormBreaker + 2× AIM-120D internal: four bombs and an AMRAAM in each bay. A datalinked bomb for every moving boat in a swarm.',
-    rcsMultiplier: 1,
-    stores: [
-      { weapon: 'gbu53', count: 8, internal: true },
-      { weapon: 'aim120', count: 2, internal: true },
-    ],
-    gunAmmo: 180,
-    flares: 24,
-    chaff: 24,
-    role: 'ag',
-  },
-  // The boat swarm's loadout (#136): strike_sdb2_full with an AARGM-ER in place of each AMRAAM, so only
+  // The boat swarm's loadout (#136): 8 StormBreakers and an AARGM-ER in each bay, so only
   // weapons that kill a moving boat (the mission has nothing hostile in the air). The StormBreaker
   // tracks any boat; the AARGM-ER homes on the radar of an air-defence boat, one for each. Offered
   // only where a mission lists it.
@@ -379,7 +348,6 @@ export const WEAPON_INFO: Record<WeaponId, { name: string; short: string; kind: 
   aim120: { name: 'AIM-120D AMRAAM', short: 'AMRAAM', kind: 'aam' },
   aim9x: { name: 'AIM-9X Sidewinder', short: 'AIM-9X', kind: 'aam' },
   gbu31: { name: 'GBU-31 JDAM', short: 'JDAM', kind: 'bomb' },
-  gbu39: { name: 'GBU-39 SDB', short: 'SDB', kind: 'bomb' },
   gbu53: { name: 'GBU-53/B StormBreaker', short: 'SDB II', kind: 'bomb' },
   aargm: { name: 'AGM-88G AARGM-ER', short: 'AARGM', kind: 'agm' },
 };

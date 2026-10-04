@@ -99,13 +99,13 @@ describe('combat: dynamic launch zone', () => {
     expect(zAi.shoot).toBe(true);
   });
 
-  it('GPS envelopes: SDB standoff ≫ JDAM, higher and faster releases reach further', () => {
+  it('GPS envelopes: SDB II (GBU-53) standoff ≫ JDAM, higher and faster releases reach further', () => {
     const jdam = gpsMaxRange(MUNITIONS.gbu31, 9000, 250, 0);
-    const sdb = gpsMaxRange(MUNITIONS.gbu39, 9000, 250, 0);
+    const sdb = gpsMaxRange(MUNITIONS.gbu53, 9000, 250, 0);
     expect(sdb).toBeGreaterThan(2 * jdam);
     expect(sdb).toBeGreaterThan(18_000);
     expect(jdam).toBeGreaterThan(5_000);
-    expect(gpsMaxRange(MUNITIONS.gbu39, 4000, 250, 0)).toBeLessThan(sdb);
+    expect(gpsMaxRange(MUNITIONS.gbu53, 4000, 250, 0)).toBeLessThan(sdb);
     expect(gpsMaxRange(MUNITIONS.gbu31, 9000, 320, 0)).toBeGreaterThan(jdam);
   });
 

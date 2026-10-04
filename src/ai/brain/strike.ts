@@ -16,7 +16,7 @@ import { gammaForAltitude } from '../pilot/Autopilot';
 import { dirWithElevation } from '../geom';
 import type { TickCtx } from './context';
 
-const AG: readonly Exclude<WeaponId, 'gun' | 'aim120' | 'aim9x'>[] = ['aargm', 'gbu39', 'gbu31'];
+const AG: readonly Exclude<WeaponId, 'gun' | 'aim120' | 'aim9x'>[] = ['aargm', 'gbu53', 'gbu31'];
 const _h = new Vector3();
 /** Steepest GPS-bomb release: height / horizontal range (tan ≈ 45°). */
 const STEEP_SLOPE = 1.1;

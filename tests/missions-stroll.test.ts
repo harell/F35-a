@@ -57,7 +57,7 @@ describe('Instant Action: A Stroll in the Park', () => {
     expect(def.recommendedLoadout).toBe('clean');
     expect(def.allowedLoadouts[0]).toBe('clean');
     expect(def.allowedLoadouts).toContain('strike_beast');
-    expect(def.allowedLoadouts).toContain('strike_sdb2_full');
+    expect(def.allowedLoadouts).toContain('strike_maritime');
     expect(def.allowedLoadouts).toContain('a2a_beast');
     expect(def.briefing[0]).toMatch(/^Everyone's friendly\. It's New Zealand\./);
     expect(def.objectiveText).toEqual(['Free flight: no objectives. Explore Auckland at your own pace.']);

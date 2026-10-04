@@ -175,7 +175,7 @@ export const T03: MissionDef = mission({
     'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. There is no rearming, so make each release count.',
   ],
   recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'sead_stealth', 'strike_beast', 'strike_sdb2'],
+  allowedLoadouts: ['strike_stealth', 'sead_stealth', 'strike_beast'],
   player: { x: -13000, z: -1500, altitude: 3500, heading: 80, speed: 230 },
   script: {
     autoHints: true,

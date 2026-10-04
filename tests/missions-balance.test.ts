@@ -44,11 +44,11 @@ describe('#65: the bot ripples its StormBreakers (playtest 2026-10-02, 2.2-h)', 
   // repro sweep took over 600 s (every Southern Cross c04 and c06 one). Now its releases come close
   // together: the second StormBreaker leaves long before the first one lands.
   for (const id of ['t03', 'ia_strike_auckland']) {
-    it(`${id} with strike_sdb2 is won in under 600 s on Pilot (the bot ripples its bombs)`, { timeout: 300_000 }, async () => {
+    it(`${id} with sead_stealth (4 StormBreakers) is won in under 600 s on Pilot (the bot ripples its bombs)`, { timeout: 300_000 }, async () => {
       for (const seed of [0, 1]) {
         // yield between runs: a worker blocked for long stretches can trip vitest's RPC timeout
         await new Promise((r) => setTimeout(r, 0));
-        const r = runPlaythrough(id, 'pilot', seed, terrainFor(id), { maxT: 900, loadout: 'strike_sdb2' });
+        const r = runPlaythrough(id, 'pilot', seed, terrainFor(id), { maxT: 900, loadout: 'sead_stealth' });
         const line = `${id} pilot seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`;
         expect(r.state, line).toBe('success');
         expect(r.t, line).toBeLessThan(600);

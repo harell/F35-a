@@ -107,7 +107,7 @@ export class AircraftVisual {
     if (slots.length === 0) return;
     const used = new Map<StoreSlot, number>();
     const counters = new Map<string, number>();
-    const capacity = (s: StoreSlot, w: WeaponId) => (w === 'gbu39' || w === 'gbu53' ? 2 : 1);
+    const capacity = (s: StoreSlot, w: WeaponId) => (w === 'gbu53' ? 2 : 1);
     for (const st of ac.stores) {
       for (let i = 0; i < st.count; i++) {
         const slot = slots.find(
@@ -119,7 +119,7 @@ export class AircraftVisual {
         this.slotWeapon.set(slot, st.weapon);
         const mesh = munitionMesh(st.weapon as MunitionId);
         const r = MUNITION_DIMS[st.weapon as MunitionId].diameter / 2;
-        const off = st.weapon === 'gbu39' || st.weapon === 'gbu53' ? (n === 0 ? -0.11 : 0.11) : 0;
+        const off = st.weapon === 'gbu53' ? (n === 0 ? -0.11 : 0.11) : 0;
         mesh.position.set(slot.pos[0] + off, slot.pos[1] - r - (st.internal ? 0 : 0.03), slot.pos[2]);
         this.lod0.add(mesh);
         const key = `${st.weapon}|${st.internal ? 1 : 0}`;

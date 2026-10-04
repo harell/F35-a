@@ -291,7 +291,7 @@ describe('i1: a strike package keeps its route', () => {
 });
 
 describe('i1: hints follow the selected weapon (SEAD)', () => {
-  it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; SDB → names the SDB', () => {
+  it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; SDB II → names the SDB II', () => {
     // the reviewers' case: AARGM selected, SA-6 designated, the EW radar (a ground target) in range
     const h = harness(seadFixture());
     const p = h.world.player!;
@@ -308,13 +308,13 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     const all = [...texts];
     expect(all.some((t) => /AARGM/.test(t))).toBe(true);
     expect(all.filter((t) => /JDAM/.test(t))).toEqual([]);
-    // SDB selected, nothing designated → the hint names the real store
+    // SDB II selected, nothing designated → the hint names the real store
     const h2 = harness(seadFixture());
     const p2 = h2.world.player!;
     const t2 = new Set<string>();
     h2.run(60, () => {
       pin(h2, P0.x, 6000, P0.z);
-      if (p2.selectedWeapon !== 'gbu39') h2.world.combat.selectWeapon(p2, 'gbu39', h2.world);
+      if (p2.selectedWeapon !== 'gbu53') h2.world.combat.selectWeapon(p2, 'gbu53', h2.world);
       if (p2.radar.designatedId !== null) h2.world.combat.designate(p2, null, h2.world);
       if (h2.runner.hint) t2.add(h2.runner.hint);
     });
@@ -486,7 +486,7 @@ describe('i1: late fixes — SDB press-in', () => {
         pin(h, sa15.position.x - (k++ < 16 * 60 ? 40_000 : range), 7_000, sa15.position.z);
         p.velocity.set(240, 0, 0);
         p.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2);
-        if (p.selectedWeapon !== 'gbu39') c.selectWeapon(p, 'gbu39', h.world);
+        if (p.selectedWeapon !== 'gbu53') c.selectWeapon(p, 'gbu53', h.world);
         if (p.radar.designatedId !== sa15.id) c.designate(p, sa15.id, h.world);
         const b = c.bombImpactPoint(p, h.world);
         if (k > 18 * 60 && h.runner.hint && b?.inRange) out.add(h.runner.hint);
@@ -507,7 +507,7 @@ const CALL = /Gauntlet is shooting your weapons down/;
 /** A 'munition:end' for one of the player's bombs, shot down by `siteId`'s point defence. */
 function shotDown(h: Harness, siteId: number): void {
   const p = h.world.player!;
-  const fake = { shooterId: p.id, interceptedBy: siteId, def: { category: 'bomb', id: 'gbu39' } } as unknown as MissileEntity;
+  const fake = { shooterId: p.id, interceptedBy: siteId, def: { category: 'bomb', id: 'gbu53' } } as unknown as MissileEntity;
   h.events.emit('munition:end', { missile: fake, position: p.position.clone(), reason: 'selfdestruct', targetId: null });
 }
 

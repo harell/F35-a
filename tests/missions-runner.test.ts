@@ -127,7 +127,7 @@ const SHIP_FIXTURE: MissionDef = mission({
   title: 'Ship strike fixture',
   subtitle: 'Sink the corvettes',
   recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_sdb2'],
+  allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_maritime'],
   player: shipStart,
   script: {
     groups: [
@@ -510,7 +510,7 @@ describe('A/G auto-designation ranks the primary targets first (playtest 2.2-f: 
 
   it('ship strike with the StormBreaker: a corvette, not the Shilka on Browns Island in front', () => {
     const def = SHIP_FIXTURE;
-    const h = harness(def, 'pilot', 'strike_sdb2');
+    const h = harness(def, 'pilot', 'strike_maritime');
     const p = h.world.player!;
     shieldPlayer(h);
     expect(p.selectedWeapon).toBe('gbu53');

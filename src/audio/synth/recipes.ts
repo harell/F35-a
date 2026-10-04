@@ -283,7 +283,7 @@ export function denied(env: SynthEnv, when: number): void {
   beep(env, shot, when + 0.1, 'square', 262, 0.09, 0.2, 1400);
 }
 
-const WEAPON_BEEP: Record<WeaponId, number> = { gun: 600, aim9x: 900, aim120: 1200, gbu31: 750, gbu39: 820, gbu53: 860, aargm: 1050 };
+const WEAPON_BEEP: Record<WeaponId, number> = { gun: 600, aim9x: 900, aim120: 1200, gbu31: 750, gbu53: 860, aargm: 1050 };
 
 /** Weapon selector detent click + a short identifying beep. */
 export function weaponSelect(env: SynthEnv, when: number, weapon: WeaponId): void {

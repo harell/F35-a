@@ -7,7 +7,7 @@
  *
  *   npx vite --config vite.e2e.config.ts --port 5190 &      # test hooks are on in dev
  *   node tools/playtest/browser-run.mjs --mission=g01 [--at=0,30,120,300] [--view=chase|cockpit|hud|...]
- *       [--missions=g01,g02,ia_defend_auckland] [--loadout=strike_sdb2] [--shots=0] [--text]
+ *       [--missions=g01,g02,ia_defend_auckland] [--loadout=sead_stealth] [--shots=0] [--text]
  *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}'] [--seed=7]
  *       [--device=phone|desktop] [--base=http://localhost:5190/] [--out=e2e/screenshots/playtest]
  *       [--tod=dawn|day|dusk|night] [--weather=clear|scattered|overcast]   (Instant Action ids, first mission)

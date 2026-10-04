@@ -73,13 +73,13 @@ describe('combat: SEAD depth', () => {
     expect(radioSeen).toBe(true); // "AARGM shot down by SA-15" feedback for the player
   });
 
-  it('the SA-15 sometimes shoots down SDBs and JDAMs aimed at it', { timeout: 60_000 }, () => {
-    for (const weapon of ['gbu39', 'gbu31'] as const) {
+  it('the SA-15 sometimes shoots down SDB IIs and JDAMs aimed at it', { timeout: 60_000 }, () => {
+    for (const weapon of ['gbu53', 'gbu31'] as const) {
       let fired = 0;
       let down = 0;
       let kills = 0;
       for (let s = 1; s <= 10; s++) {
-        const r = seadTrial(s, 'veteran', 'sa15', false, weapon, weapon === 'gbu39' ? 12_000 : 7_000, 2);
+        const r = seadTrial(s, 'veteran', 'sa15', false, weapon, weapon === 'gbu53' ? 12_000 : 7_000, 2);
         fired += r.fired;
         down += r.intercepted;
         if (r.siteKilled) kills++;

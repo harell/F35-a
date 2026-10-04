@@ -93,7 +93,7 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
 
   it('a hit from the player counts the same; gun damage still only accumulates', () => {
     const w = seaWorld();
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 3000, 10_000), heading: 0, speed: 230, loadout: 'strike_sdb2' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 3000, 10_000), heading: 0, speed: 230, loadout: 'sead_stealth' });
     const t = spawnTanker(w);
     run(w, 1);
     for (let i = 0; i < 40; i++) w.applyDamage(t, 20, p.id, 'gun');
@@ -114,7 +114,7 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
     for (const [i, v] of (['container', 'cruise'] as VesselClass[]).entries()) {
       const s = w.spawnGround({ type: 'ship', team: 'neutral', vessel: v, position: new Vector3(3000 + i * 1000, 0, -4000), heading: 0, name: v, groupId: 'civil-ship' });
       expect(s.hitsToSink).toBe(1);
-      w.applyDamage(s, 2, null, 'gbu39');
+      w.applyDamage(s, 2, null, 'gbu53');
       expect(s.alive).toBe(false);
       expect(s.hits).toBe(0);
     }

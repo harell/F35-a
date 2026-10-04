@@ -1,7 +1,7 @@
 /**
  * MISSIONS — gaps in the scripted competent player (tests/missions-bot.ts) that hid balance
  * questions in playtest r1-1:
- *  - 1.1-k: it never used the GBU-53/B StormBreaker, so a strike_sdb2 loadout dropped nothing
+ *  - 1.1-k: it never used the GBU-53/B StormBreaker, so a StormBreaker loadout dropped nothing
  *    (0 wins in 16 runs, 7 HUNG);
  *  - 1.1-l: its rearm leg always flew to Whenuapai, so in the procedural Instant Action theatres
  *    (rearm at the scenery's first airbase) it never rearmed (16 of 17 HUNG rows in an IA sweep).
@@ -13,7 +13,7 @@
  * and in playtest 2026-10-02 r4:
  *  - 4.3-f (#69): the air-to-air PlayerBot (tests/ai-playerbot.ts) never fired its gun (0 of 180
  *    rounds in 6 gun-only runs on Pilot), so gun balance couldn't be measured.
- * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t03,ia_strike_auckland --loadout=strike_sdb2
+ * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t03,ia_strike_auckland --loadout=sead_stealth
  */
 import { describe, expect, it } from 'vitest';
 import { Autopilot } from '../src/ai/pilot/Autopilot';
@@ -62,8 +62,8 @@ describe('1.1-m: Instant Action ids are reproducible', () => {
 });
 
 describe('1.1-k: the bot flies the GBU-53/B StormBreaker', () => {
-  it('t03 with strike_sdb2: it releases StormBreakers and wins', { timeout: 60_000 }, () => {
-    const r = runPlaythrough('t03', 'pilot', 1, terrainFor('t03'), { loadout: 'strike_sdb2', maxT: 400, log: true });
+  it('t03 with sead_stealth: it releases StormBreakers and wins', { timeout: 60_000 }, () => {
+    const r = runPlaythrough('t03', 'pilot', 1, terrainFor('t03'), { loadout: 'sead_stealth', maxT: 400, log: true });
     const drops = r.events.filter((l) => / LAUNCH gbu53 PLAYER /.test(l));
     expect(drops.length, r.objectives).toBeGreaterThan(0);
     expect(r.playerKills).toBeGreaterThan(0);

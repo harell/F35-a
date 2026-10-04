@@ -147,7 +147,7 @@ describe('Sky Tower: one hit from the player destroys it', () => {
   });
 
   it('the structural reach is a fraction of each warhead’s blast radius', () => {
-    for (const id of ['gbu31', 'gbu39', 'aargm', 'aim9x', 'aim120'] as const) {
+    for (const id of ['gbu31', 'gbu53', 'aargm', 'aim9x', 'aim120'] as const) {
       const reach = MUNITIONS[id].blastRadius * STRUCTURAL_BLAST_FRACTION;
       expect(reach).toBeGreaterThan(4);
       expect(reach).toBeLessThan(20);

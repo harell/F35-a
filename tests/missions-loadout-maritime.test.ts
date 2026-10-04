@@ -1,8 +1,8 @@
 /**
- * Loadout strike_sdb2_full (#81, IRGC campaign 9/10): the real F-35A's full internal SDB II load,
- * 8× GBU-53/B StormBreaker + 2× AIM-120D (four bombs and an AMRAAM in each bay), for the boat swarm
- * of #82, where the GBU-53/B is the bomb that kills a moving boat and strike_sdb2's four are too few.
- * It is offered only by missions that list it in allowedLoadouts, so no other mission's balance moves.
+ * Loadout strike_maritime (#81, #136): the full internal SDB II load, 8× GBU-53/B StormBreaker +
+ * 2× AARGM-ER (four bombs and an anti-radiation missile in each bay), for the boat swarm of g02, where
+ * the GBU-53/B is the bomb that kills a moving boat. It is offered only by missions that list it in
+ * allowedLoadouts (g02 and the free-flight Stroll), so no other mission's balance moves.
  */
 import { Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -26,8 +26,8 @@ import { harness } from './missions-helpers';
 vi.setConfig({ testTimeout: 60_000 });
 installPath2D();
 
-const FULL = 'strike_sdb2_full' as const;
-/** t03 (the strike lesson, which offers strike_sdb2) as a mission that also lists the full load. */
+const FULL = 'strike_maritime' as const;
+/** t03 (the strike lesson) as a mission that also lists the maritime load. */
 const offering = (): MissionDef => {
   const t03 = missionById('t03')!;
   return { ...t03, allowedLoadouts: [...t03.allowedLoadouts, FULL] };
@@ -40,27 +40,30 @@ function smsTexts(p: AircraftEntity): string[] {
   return ctx.texts.map((t) => t.text);
 }
 
-describe('strike_sdb2_full: the loadout', () => {
-  it('8× GBU-53/B + 2× AIM-120D, all internal, as stealthy as the clean jet, a strike loadout', () => {
+describe('strike_maritime: the loadout', () => {
+  it('8× GBU-53/B + 2× AARGM-ER, all internal, as stealthy as the clean jet, a strike loadout', () => {
     const l = LOADOUTS[FULL];
     expect(l.id).toBe(FULL);
     expect(l.stores).toEqual([
       { weapon: 'gbu53', count: 8, internal: true },
-      { weapon: 'aim120', count: 2, internal: true },
+      { weapon: 'aargm', count: 2, internal: true },
     ]);
     expect(l.rcsMultiplier).toBe(1);
     expect(l.rcsMultiplier).toBe(LOADOUTS.a2a_stealth.rcsMultiplier);
     expect(l.role).toBe('ag');
-    // the rest matches the four-bomb StormBreaker loadout
-    expect(l.gunAmmo).toBe(LOADOUTS.strike_sdb2.gunAmmo);
-    expect(l.flares).toBe(LOADOUTS.strike_sdb2.flares);
-    expect(l.chaff).toBe(LOADOUTS.strike_sdb2.chaff);
+    // the rest matches the four-bomb StormBreaker loadout (SEAD)
+    expect(l.gunAmmo).toBe(LOADOUTS.sead_stealth.gunAmmo);
+    expect(l.flares).toBe(LOADOUTS.sead_stealth.flares);
+    expect(l.chaff).toBe(LOADOUTS.sead_stealth.chaff);
   });
 
-  it('no mission offers it yet (only one that lists it, #82): campaign, training and every Instant Action mode', () => {
+  it('only g02 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
     const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
     expect(instant.length).toBeGreaterThanOrEqual(4);
+    expect(missionById('g02')!.allowedLoadouts).toContain(FULL);
+    expect(missionById('ia_stroll_auckland')!.allowedLoadouts).toContain(FULL);
     for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
+      if (m.id === 'g02') continue;
       expect(m.allowedLoadouts, m.id).not.toContain(FULL);
       expect(m.recommendedLoadout, m.id).not.toBe(FULL);
       expect(hangarLoadouts(m).cards, m.id).not.toContain(FULL);
@@ -68,7 +71,7 @@ describe('strike_sdb2_full: the loadout', () => {
   });
 });
 
-describe('strike_sdb2_full: a mission that allows it', () => {
+describe('strike_maritime: a mission that allows it', () => {
   it('validates, and the briefing hangar offers its card', () => {
     const def = offering();
     expect(validateMission(def)).toEqual([]);
@@ -77,22 +80,22 @@ describe('strike_sdb2_full: a mission that allows it', () => {
     expect(initial).toBe(def.recommendedLoadout);
   });
 
-  it('the hangar card lists 8× GBU-53/B and 2× AIM-120D in the bays', () => {
+  it('the hangar card lists 8× GBU-53/B and 2× AGM-88G AARGM-ER in the bays', () => {
     const names = Object.fromEntries(Object.entries(WEAPON_INFO).map(([k, v]) => [k, v.name]));
     expect(storeLines(LOADOUTS[FULL], names)).toEqual([
       { text: '8× GBU-53/B StormBreaker', internal: true },
-      { text: '2× AIM-120D AMRAAM', internal: true },
+      { text: '2× AGM-88G AARGM-ER', internal: true },
     ]);
   });
 
-  it('the hangar store diagram draws all ten in the bays, four bombs and an AMRAAM a side, none overlapping', () => {
+  it('the hangar store diagram draws all ten in the bays, four bombs and an AARGM-ER a side, none overlapping', () => {
     const placed = placeStores(LOADOUTS[FULL]);
     expect(placed).toHaveLength(10);
     expect(placed.every((p) => p.internal)).toBe(true);
     for (const side of [1, -1]) {
       const mine = placed.filter((p) => Math.sign(p.x) === side);
       expect(mine.filter((p) => p.weapon === 'gbu53'), `side ${side}`).toHaveLength(4);
-      expect(mine.filter((p) => p.weapon === 'aim120'), `side ${side}`).toHaveLength(1);
+      expect(mine.filter((p) => p.weapon === 'aargm'), `side ${side}`).toHaveLength(1);
     }
     // each store is its own shape: no two outlines (width × length, as drawn) overlap
     const box = (p: (typeof placed)[number]) => {
@@ -109,12 +112,13 @@ describe('strike_sdb2_full: a mission that allows it', () => {
     }
   });
 
-  it('the jet launches with 8 GBU-53/B and 2 AIM-120D, StormBreakers selected', () => {
+  it('the jet launches with 8 GBU-53/B and 2 AARGM-ER, no AMRAAM, StormBreakers selected', () => {
     const h = harness(offering(), 'pilot', FULL);
     const p = h.world.player!;
     expect(p.loadout).toBe(FULL);
     expect(h.world.combat.remaining(p, 'gbu53')).toBe(8);
-    expect(h.world.combat.remaining(p, 'aim120')).toBe(2);
+    expect(h.world.combat.remaining(p, 'aargm')).toBe(2);
+    expect(h.world.combat.remaining(p, 'aim120')).toBe(0);
     expect(h.world.combat.remaining(p, 'gbu31')).toBe(0);
     expect(p.stores.every((s) => s.internal)).toBe(true);
     expect(p.rcsMultiplier).toBe(1);
@@ -122,7 +126,7 @@ describe('strike_sdb2_full: a mission that allows it', () => {
     expect(p.gunAmmo).toBe(180);
   });
 
-  it('the cockpit stores page shows them: SDB II 8 and AMRAAM 2 on the stations, QTY of the selected weapon', () => {
+  it('the cockpit stores page shows them: SDB II 8 and AARGM 2 on the stations, QTY of the selected weapon', () => {
     const h = harness(offering(), 'pilot', FULL);
     const p = h.world.player!;
     let texts = smsTexts(p);
@@ -131,16 +135,16 @@ describe('strike_sdb2_full: a mission that allows it', () => {
     // station boxes: label (first four letters of the HUD name) and count
     expect(texts).toContain('SDB ');
     expect(texts).toContain('8');
-    expect(texts).toContain('AMRA');
+    expect(texts).toContain('AARG');
     expect(texts).toContain('2');
-    h.world.combat.selectWeapon(p, 'aim120', h.world);
+    h.world.combat.selectWeapon(p, 'aargm', h.world);
     texts = smsTexts(p);
-    expect(texts).toContain('AIM-120D');
+    expect(texts).toContain('AGM-88G');
     expect(texts).toContain('QTY 2');
   });
 });
 
-describe('strike_sdb2_full: all eight StormBreakers release', () => {
+describe('strike_maritime: all eight StormBreakers release', () => {
   it('eight designated boats, eight releases, then the jet is out of GBU-53/B', () => {
     const w = createSimWorld({ terrain: new FlatTerrain(-20), difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(5) });
     const boats = Array.from({ length: 8 }, (_, i) =>
@@ -162,7 +166,7 @@ describe('strike_sdb2_full: all eight StormBreakers release', () => {
     expect(launches.every((m) => m.def.id === 'gbu53')).toBe(true);
     expect(new Set(launches.map((m) => m.targetId))).toEqual(new Set(boats.map((b) => b.id)));
     expect(w.combat.remaining(p, 'gbu53')).toBe(0);
-    expect(w.combat.remaining(p, 'aim120')).toBe(2);
+    expect(w.combat.remaining(p, 'aargm')).toBe(2);
     expect(w.combat.fire(p, w, 'gbu53', boats[0].id)).toBeNull();
   });
 });

@@ -453,7 +453,7 @@ describe('GBU-53/B vs a weaving boat', { timeout: 60_000 }, () => {
     const w = seaWorld(3);
     const t = tanker(w, 0, -20_000);
     const boat = w.spawnGround({ type: 'suicide_boat', team: 'red', position: new Vector3(0, 0, -2000), boat: { chaseId: t.id } });
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 7000, 12_000), heading: 0, speed: 250, loadout: 'strike_sdb2' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 7000, 12_000), heading: 0, speed: 250, loadout: 'sead_stealth' });
     w.combat.selectWeapon(p, 'gbu53', w);
     run(w, 1);
     w.combat.designate(p, boat.id, w);
