@@ -58,7 +58,10 @@
   "wall": "#f0ecc8",
   "podium": "#888a8d",
   "wall_raw": "#e6e0dc",
-  "podium_raw": "#7e81a2"
+  "podium_raw": "#7e81a2",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: white precast, two set-back slabs",
+  "merge_above": 135
  },
  "7": {
   "name": "ANZ Centre",
