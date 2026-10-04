@@ -11,18 +11,51 @@
  * the index's bounds, so it costs nothing outside the CBD. The geometry is cached per installed data
  * (aucklandBuildingsVersion) and terrain; which buildings are down is per world (BuildingIndex.collapsed).
  *
- * Spark Arena (core/sparkArena.ts), the hand-built landmark east of the LINZ building box, joins the
- * index as a `fixed` building (id −1, after the LINZ ones): flying into it crashes the aircraft like a
- * tower does, but it never collapses. It is there with or without the LINZ building data. So are the Ports of
- * Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9, added before the arena): their portals up to the A-frame.
+ * The 3D-modelled landmarks join the index as `hero` buildings, with or without the LINZ building data:
+ * Spark Arena (core/sparkArena.ts, id −1) and the Auckland War Memorial Museum on the Domain
+ * (core/museum.ts, id −10). The policy for a hero (the Sky Tower too, sim/landmarks.ts): the player's
+ * jet flying into it crashes and brings it down at once (it explodes and collapses, named on the HUD);
+ * anybody else's aircraft or drone crashes on it and it stands. The Domain is terrain, not a building:
+ * a crash into the hill leaves the museum standing, and a crash into the museum leaves the hill.
+ * The Ports of Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9) are `fixed`:
+ * their portals up to the A-frame crash an aircraft and never collapse.
  */
 import type { Vector3 } from 'three';
 import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
 import { PORT_CRANES } from '../core/portOfAuckland';
+import { MUSEUM, museumSolids } from '../core/museum';
 import { aucklandBuildings, aucklandBuildingsVersion } from '../world/scenery/aucklandBuildings';
 
 /** Roof height above the ground (m) from which a building is a skyscraper the sim knows about (≈ 12 storeys). */
 export const SKYSCRAPER_MIN_HEIGHT = 40;
+/** A 3D-modelled landmark in the index: what the HUD and the debrief call it. */
+export interface HeroBuilding {
+  readonly id: 'spark_arena' | 'museum';
+  /** Its name in a sentence ("Crashed into the Auckland Museum"). */
+  readonly name: string;
+  /** Its name on the HUD ("AUCKLAND MUSEUM DESTROYED"). */
+  readonly label: string;
+}
+
+export const HERO_BUILDINGS = {
+  spark_arena: { id: 'spark_arena', name: 'Spark Arena', label: 'SPARK ARENA' },
+  museum: { id: 'museum', name: 'the Auckland Museum', label: 'AUCKLAND MUSEUM' },
+} as const satisfies Record<HeroBuilding['id'], HeroBuilding>;
+
+/** Building ids of the hero buildings in the index (the LINZ ones count up from 0). */
+export const SPARK_ARENA_ID = -1;
+export const MUSEUM_ID = -10;
+
+/**
+ * How long a collapsing building takes to come down (s): it stands for COLLAPSE_DELAY while the
+ * charges go off, then drops at about free fall to its rubble heap.
+ */
+export const COLLAPSE_DELAY = 0.7;
+export const COLLAPSE_ACCEL = 9.8;
+export function buildingCollapseTime(height: number): number {
+  return COLLAPSE_DELAY + Math.sqrt((2 * Math.max(1, height)) / COLLAPSE_ACCEL);
+}
+
 /** Grid cell size of the index (m). */
 const CELL = 64;
 
@@ -47,8 +80,12 @@ export interface SolidBuilding {
   readonly z: number;
   readonly ground: number;
   readonly top: number;
-  /** A landmark that stands whatever hits it (Spark Arena): never collapsed, no 'building:collapsed'. */
+  /** A structure that stands whatever hits it (the port's cranes): never collapsed, no 'building:collapsed'. */
   readonly fixed?: boolean;
+  /** A 3D-modelled landmark: only the player's jet brings it down. */
+  readonly hero?: HeroBuilding;
+  /** Horizontal half-extent of the footprint bounds (m): the collapse's dust and the death cam's framing. */
+  readonly radius: number;
 }
 
 export interface BuildingGeometry {
@@ -78,7 +115,7 @@ export function buildBuildingGeometry(
   let gx1 = -Infinity;
   let gz0 = Infinity;
   let gz1 = -Infinity;
-  const add = (id: number, x: number, z: number, parts: readonly { ring: Float32Array; h: number }[], fixed?: boolean) => {
+  const add = (id: number, x: number, z: number, parts: readonly { ring: Float32Array; h: number }[], fixed?: boolean, hero?: HeroBuilding) => {
     const ground = groundAt(x, z);
     const prisms: SolidPrism[] = [];
     let top = ground;
@@ -106,7 +143,9 @@ export function buildBuildingGeometry(
       bz1 = Math.max(bz1, maxZ);
     }
     const k = buildings.length;
-    buildings.push(fixed ? { id, prisms, x, z, ground, top, fixed } : { id, prisms, x, z, ground, top });
+    const radius = Math.max(bx1 - bx0, bz1 - bz0) / 2;
+    const b: SolidBuilding = { id, prisms, x, z, ground, top, radius, ...(fixed ? { fixed } : {}), ...(hero ? { hero } : {}) };
+    buildings.push(b);
     maxTop = Math.max(maxTop, top);
     gx0 = Math.min(gx0, bx0);
     gx1 = Math.max(gx1, bx1);
@@ -135,7 +174,9 @@ export function buildBuildingGeometry(
     add(-2 - i, cx, cz, [{ ring, h: c.apex }], true);
   });
   // Spark Arena: its roof outline in 10 m cells, each as high as the roof over it (core/sparkArena.ts)
-  add(-1, SPARK_ARENA.x, SPARK_ARENA.z, sparkArenaSolids(), true);
+  add(SPARK_ARENA_ID, SPARK_ARENA.x, SPARK_ARENA.z, sparkArenaSolids(), false, HERO_BUILDINGS.spark_arena);
+  // the Auckland Museum on the Domain: its block, portico, upper storey and dome (core/museum.ts)
+  add(MUSEUM_ID, MUSEUM.x, MUSEUM.z, museumSolids(), false, HERO_BUILDINGS.museum);
   if (!buildings.length) return null;
   return { buildings, maxTop, minX: gx0, maxX: gx1, minZ: gz0, maxZ: gz1, cells };
 }
@@ -222,22 +263,31 @@ export function buildingGeometry(
 export class BuildingIndex {
   /** `buildings` indices of the collapsed ones (reset by reset(), and new in every SimWorld). */
   readonly collapsed = new Set<number>();
+  /** Sim time each collapsed building started coming down (the scenery animates the fall from it). */
+  readonly collapsedAt = new Map<number, number>();
   /** Bumped whenever `collapsed` changes (the scenery follows it). */
   version = 0;
   private readonly seen = new Set<number>();
 
   constructor(readonly geo: BuildingGeometry) {}
 
-  /** Mark building `k` (index into geo.buildings) collapsed (a `fixed` one never is). */
-  collapse(k: number): void {
+  /** Mark building `k` (index into geo.buildings) collapsed at sim time `time` (a `fixed` one never is). */
+  collapse(k: number, time = 0): void {
     if (this.collapsed.has(k) || this.geo.buildings[k].fixed) return;
     this.collapsed.add(k);
+    this.collapsedAt.set(k, time);
     this.version++;
+  }
+
+  /** Index (into geo.buildings) of a hero building, or -1. */
+  heroIndex(id: HeroBuilding['id']): number {
+    return this.geo.buildings.findIndex((b) => b.hero?.id === id);
   }
 
   reset(): void {
     if (!this.collapsed.size) return;
     this.collapsed.clear();
+    this.collapsedAt.clear();
     this.version++;
   }
 
