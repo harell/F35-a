@@ -39,9 +39,10 @@ export interface TowerSpire {
 export type TowerPart = TowerPrismPart | TowerSpire;
 
 export interface CbdTower {
-  /** Row of issue #156's table (tallest first). */
+  /** Row of issue #156's table (tallest first); 201+ the landmarks. */
   n: number;
-  tier: 'A' | 'B' | 'C' | 'C*';
+  /** #156's tiers; L: a landmark of #143 through the same kit (Ferry Building, Chief Post Office, Town Hall). */
+  tier: 'A' | 'B' | 'C' | 'C*' | 'L';
   name: string;
   address: string;
   facade: TowerFacade;

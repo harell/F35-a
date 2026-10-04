@@ -366,6 +366,28 @@ def main():
                                     terr.append({'li': merged['li'], 'poly': q, 'cells': big, 'h': float(np.median(hr[big])),
                                                  'area': q.area, 'kind': 'shaft', 'sx': 0.0, 'sz': 0.0, 'step': True})
                         lv += float(st['steps'])
+        # hand-set (landmarks): everything over this height in the outline (a clock tower, a lantern, which the levels
+        # drop as too small) as nested prisms from the LiDAR's contours every 1.5 m, its crown
+        if st.get('steps_above') is not None:
+            hi_m = m & (hr >= st['steps_above']) & (nd >= 2.5)
+            lab, nl = ndimage.label(hi_m)
+            for j in range(1, nl + 1):
+                comp = lab == j
+                if comp.sum() < 6:
+                    continue
+                lv = float(st['steps_above'])
+                while lv < float(hr[comp].max()) - 0.5:
+                    cm = comp & (hr >= lv)
+                    lab2, n2 = ndimage.label(cm)
+                    if n2:
+                        big = lab2 == (np.bincount(lab2.ravel())[1:].argmax() + 1)
+                        ps = [translate(q, c0, r0) for q in polys(big[r0:r1, c0:c1])]
+                        if ps:
+                            q = Polygon(max(ps, key=lambda q: q.area).simplify(0.5, preserve_topology=True).exterior)
+                            if q.area >= 3:
+                                terr.append({'li': -1, 'poly': q, 'cells': big, 'h': float(np.median(hr[big])), 'area': q.area,
+                                             'kind': 'crown', 'sx': 0.0, 'sz': 0.0, 'step': True})
+                    lv += 1.5
         # hand-set from the mesh views (Tier A): the terraces from this height up are the crown (its own colour, lit)
         if st.get('crown_above') is not None:
             for t in terr:

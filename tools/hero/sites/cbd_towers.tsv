@@ -116,3 +116,7 @@
 114	C*	32 Eden	32 Eden Cres	49.8	14		residential	911	-31
 115	C*	Quest on Eden	50–52 Eden Cres	49.8	12		hotel	948	17
 116	C*	Waldorf Celestion	23 Anzac Ave	49.7	18		residential	819	-249
+# landmarks of #143 through the same kit (tier L): listed = the LiDAR's maximum inside the OSM outline
+201	L	Ferry Building	99 Quay St	48.4	5		landmark	416.8	-608.7
+202	L	Chief Post Office (Britomart station)	12 Queen St	30.4	4		landmark	463.6	-489.7
+203	L	Auckland Town Hall	301–305 Queen St	40.9	3		landmark	83.5	506.6
