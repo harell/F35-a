@@ -521,7 +521,7 @@ def main():
 
 
 FACADE = {'residential': 'balcony', 'hotel': 'punched', 'office': 'glass', 'mixed': 'glass', 'university': 'bands', 'civic': 'bands'}
-WALL = {'balcony': 0xd9dbd8, 'punched': 0xc9c3b8, 'glass': 0x6f8a99, 'bands': 0xb9b6ae, 'stone': 0xc8bfae}
+WALL = {'balcony': 0xd9dbd8, 'punched': 0xc9c3b8, 'glass': 0x6f8a99, 'bands': 0xb9b6ae, 'stone': 0xc8bfae, 'plain': 0xcfc9bd}
 
 
 def write_ts(towers, path):
