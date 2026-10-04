@@ -123,9 +123,11 @@ describe('the CBD skyscraper index', () => {
     player.velocity.set(250, 0, 0);
     h.run(3, () => h.runner.state !== 'running');
     expect(h.runner.state).toBe('failed');
-    // every tower has a name now (sim/buildings.ts buildingName); "Crashed into a building" is the fallback
-    expect(b.name).toBeTruthy();
-    expect(h.of('mission:end')[0]?.reason).toBe(crashedInto(b.name!));
+    // every tower has a name now (sim/buildings.ts buildingName), so the reason names the one it met first
+    // ("Crashed into a building" is the fallback)
+    const hit = h.world.structureStrike!.name;
+    expect(hit).toBeTruthy();
+    expect(h.of('mission:end')[0]?.reason).toBe(crashedInto(hit!));
   });
 });
 
