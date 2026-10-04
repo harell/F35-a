@@ -90,7 +90,8 @@ describe('arterial frontage (frontage.ts)', () => {
     }
   });
 
-  it('every house faces its road: square to it, set back behind the footpath', () => {
+  // (all ≈ 30k houses, four corners each: ≈ 3 s here, more on the CI runner)
+  it('every house faces its road: square to it, set back behind the footpath', { timeout: 30_000 }, () => {
     for (const h of all) {
       const s = map.segments[h.seg];
       const hit = map.at(h.x, h.z)!;
