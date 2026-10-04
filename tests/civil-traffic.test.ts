@@ -237,6 +237,33 @@ describe('civil traffic in missions', () => {
   });
 });
 
+describe('peacetime airliners (A Stroll in the Park)', () => {
+  it('a busier airport whatever the conditions, and departures turning north over the city', () => {
+    for (const [timeOfDay, weather] of [['day', 'clear'], ['night', 'overcast'], ['dawn', 'scattered']] as const) {
+      const def = buildInstantMissionSeeded({ mode: 'stroll', theater: 'auckland', timeOfDay, weather, enemyType: 'mixed', enemyCount: 4 }, 11);
+      const events = new EventBus();
+      const world = createSimWorld({ terrain: new FlatTerrain(ELEV), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(1) });
+      const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
+      runner.setup(world, def.recommendedLoadout);
+      let most = 0;
+      const exits = new Set<number>();
+      for (let i = 0; i < 15 * 60 * 60 && runner.state === 'running'; i++) {
+        world.step(DT);
+        runner.update(world, DT);
+        if (i % 60) continue;
+        const civ = world.aircraft.filter((a) => a.civil && a.alive);
+        most = Math.max(most, civ.length);
+        for (const a of civ) if (a.civil!.kind === 'departure') exits.add(Math.round((a.civil!.exitHeading * 180) / Math.PI));
+      }
+      expect(runner.state).toBe('running');
+      expect(most).toBeGreaterThan(3); // the wartime flow never has more than 3
+      expect(most).toBeLessThanOrEqual(5);
+      expect([...exits].some((h) => h >= 330 || h <= 25)).toBe(true);
+      runner.dispose?.();
+    }
+  });
+});
+
 describe('scoring', () => {
   it('each civilian airliner shot down costs points and rating', () => {
     const base = {
