@@ -112,7 +112,10 @@
   "wall": "#b1bcc1",
   "podium": "#acafa8",
   "wall_raw": "#aab2d4",
-  "podium_raw": "#9fa3c2"
+  "podium_raw": "#9fa3c2",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye: white bands, a mast on the roof",
+  "mast": 138
  },
  "12": {
   "name": "Quay West",
