@@ -20,10 +20,11 @@ import { Color } from 'three';
 import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
 import { sparkArenaCovers } from '../../core/sparkArena';
+import { EDEN_PARK_STANDS } from '../../core/edenPark';
 import { CONTAINER_TIER, PORT_CRANES, PORT_MASTS, type PortCrane } from '../../core/portOfAuckland';
 import { aucklandPortStacks } from './aucklandPort';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, IDENT_FRAME, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
+import { frameFromHeading, IDENT_FRAME, WIN_FLOOD, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
 import type { DecalBuilder, HeightFn, LightList } from './builders';
 import { aucklandLinz, fillLinzLand, linzIsLand } from '../terrain/theaters/aucklandLinz';
 import {
@@ -714,16 +715,44 @@ export function buildWiriTerminal(B: GeometryBuilder, lights: LightList, height:
   for (const b of s.buildings) if (inRing(s.depot, ...centreOf(b.pts))) building(B, b, height, null, 0xc4c6c2, 0x7c8084, WIN_INDUSTRIAL);
 }
 
-/** Stadiums with OSM grandstands (Eden Park): the stands and four floodlight towers. */
+/**
+ * Stadiums with OSM grandstands (Eden Park): the stands and four floodlight towers. Eden Park's four stands are measured
+ * (core/edenPark.ts): strips across each stand from its back to the pitch at their LiDAR heights, the canopy and the
+ * seating raking down. Other stadiums' stands rake from a guessed back height (26 m for a big stand, 14 m) down to
+ * half of it at the pitch side. Plain concrete outside, floodlit at night.
+ */
 export function buildStadiums(B: GeometryBuilder, lights: LightList, height: HeightFn, s: SiteLayout): void {
-  const stand = new Color(0xd4d6d6);
-  const roof = new Color(0x8e979c);
+  const stand = new Color(0xc9c7c0);
+  const canopy = new Color(0xdfe3e3);
+  const seats = new Color(0x56616b);
   for (const st of s.stadiums) {
+    const [scx, scz] = centreOf(st.outline.pts);
     for (const r of st.stands) {
       let lo = Infinity;
       for (let i = 0; i < r.pts.length; i += 2) lo = Math.min(lo, height(r.pts[i], r.pts[i + 1]));
+      const [cx, cz] = centreOf(r.pts);
+      const measured = EDEN_PARK_STANDS.find((m) => Math.hypot(m.x - cx, m.z - cz) < 25);
+      if (measured) {
+        const g = height(measured.x, measured.z);
+        for (const strip of measured.strips) B.prism(strip.ring, lo - 1, () => g + strip.h, stand, strip.h >= 8 ? canopy : seats, WIN_FLOOD);
+        continue;
+      }
+      // a raked stand: its back (away from the pitch) at h, the pitch side at h / 2
       const h = areaOf(r.pts) > 3000 ? 26 : 14;
-      B.prism(r.pts, lo - 1, () => lo + h, stand, roof, WIN_OFFICE);
+      let dx = scx - cx;
+      let dz = scz - cz;
+      const dl = Math.hypot(dx, dz) || 1;
+      dx /= dl;
+      dz /= dl;
+      let t0 = Infinity;
+      let t1 = -Infinity;
+      for (let i = 0; i < r.pts.length; i += 2) {
+        const t = (r.pts[i] - cx) * dx + (r.pts[i + 1] - cz) * dz;
+        t0 = Math.min(t0, t);
+        t1 = Math.max(t1, t);
+      }
+      const span = Math.max(1, t1 - t0);
+      B.prism(r.pts, lo - 1, (x, z) => lo + h * (1 - (0.5 * ((x - cx) * dx + (z - cz) * dz - t0)) / span), stand, seats, WIN_FLOOD);
     }
     if (st.stands.length < 2) continue;
     // floodlight masts at the outline's four extreme points, pulled 15 m in
