@@ -261,7 +261,7 @@ describe('peacetime airliners (A Stroll in the Park)', () => {
       expect([...exits].some((h) => h >= 330 || h <= 25)).toBe(true);
       runner.dispose?.();
     }
-  });
+  }, 30_000); // 3 × 15 sim-minutes: ~2.6 s locally, past the 5 s default on a loaded CI runner
 });
 
 describe('scoring', () => {
