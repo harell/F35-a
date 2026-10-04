@@ -36,7 +36,13 @@
   "wall": "#a9b0b0",
   "podium": "#79828b",
   "wall_raw": "#a2a7c2",
-  "podium_raw": "#7079a0"
+  "podium_raw": "#7079a0",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: glass with white mullions, a white sail crown and a mast",
+  "crown_above": 150,
+  "crown": "lit",
+  "crownColour": "#eef0f0",
+  "mast": 170
  },
  "5": {
   "name": "51 Albert (Hotel Indigo)",

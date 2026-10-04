@@ -6,13 +6,13 @@
   "lidar": 169.86
  },
  {
-  "name": "Vero Centre",
+  "name": "Pacifica",
   "x": 505.1,
   "z": -312.2,
   "lidar": 174.93
  },
  {
-  "name": "Pacifica",
+  "name": "Seascape",
   "x": 620.7,
   "z": -326.4,
   "lidar": 188.31
@@ -24,7 +24,7 @@
   "lidar": 131.76
  },
  {
-  "name": "ANZ Centre",
+  "name": "Voco Hotel",
   "x": 233.8,
   "z": -179.2,
   "lidar": 140.27

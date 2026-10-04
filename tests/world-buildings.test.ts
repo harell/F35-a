@@ -98,10 +98,11 @@ describe('LINZ building data (auckland-buildings.bin)', () => {
     for (const s of SPOT) if (!kit.some((p) => pointInRing(p.ring, s.x, s.z))) expect(Math.abs(roofAt(s.x, s.z) - s.lidar), s.name).toBeLessThan(5);
   });
 
-  it('the downtown towers: PwC Tower, Vero Centre, Pacifica, ANZ Centre, Metropolis at their LiDAR heights', () => {
+  it('the downtown towers: PwC Tower, Pacifica, Seascape, Voco Hotel, Metropolis at their LiDAR heights', () => {
     const named = Object.fromEntries(SPOT.filter((s) => !s.name.startsWith('outline')).map((s) => [s.name, s]));
-    // published heights to the roof / crown: 180, 170, 187, 143, 155 (spire) m
-    for (const [name, lo, hi] of [['PwC Tower', 160, 185], ['Vero Centre', 165, 185], ['Pacifica', 180, 195], ['ANZ Centre', 135, 150], ['Metropolis', 125, 160]] as const) {
+    // published heights to the roof / crown: 180, 179, 187, 141, 155 (spire) m. (The points were first labelled Vero
+    // Centre, Pacifica and ANZ Centre; their coordinates are #156's Pacifica, Seascape and Voco Hotel.)
+    for (const [name, lo, hi] of [['PwC Tower', 160, 185], ['Pacifica', 165, 185], ['Seascape', 180, 195], ['Voco Hotel', 135, 150], ['Metropolis', 125, 160]] as const) {
       const s = named[name];
       expect(s, name).toBeDefined();
       const h = roofAt(s.x, s.z);
