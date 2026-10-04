@@ -1,0 +1,118 @@
+# Every Auckland CBD building taller than Scene 3 (30 Beach Rd, 49.6 m by the 2024 LiDAR): issue #156.
+# n	tier	name	address	h	floors	pub	use	x	z
+1	A	Seascape	71–87 Customs St E	188.2	56	187	residential	623	-322
+2	A	The Pacifica	10 Commerce St	177.1	57	178.7	residential	521	-317
+3	A	PwC Tower at Commercial Bay	15 Customs St W	168.7	41	180.1	office	335	-489
+4	A	Vero Centre	48 Shortland St	150.2		170	office	549	-206
+5	A	51 Albert (Hotel Indigo)	51–53 Albert St	139	41	160	mixed	166	-231
+6	A	Voco Hotel / Holiday Inn	13 Wyndham St	138.4	38	141	hotel	222	-182
+7	A	ANZ Centre	23–29 Albert St	136.9	35	153	office	194	-318
+8	A	Metropolis	1 Courthouse Lane	129.9		155	residential	411	-31
+9	A	Auckland Harbour Suites	16 Gore St	127.9	37	130	mixed	597	-284
+10	A	Auckland Council Tower	135 Albert St	116.8	29	116	office	24	158
+11	A	HSBC Tower	188 Quay St	113.6	29	138	office	275	-572
+12	A	Quay West	8 Albert St	107	32	120.1	hotel	291	-399
+13	A	Park Residences	32 Swanson St	105.2		109	residential	181	-271
+14	A	BNZ Tower / QBE Centre	125 Queen St	102.8	28	106	office	309	-223
+15	B	205 Queen	205 Queen St	98.8	23	104	office	203	90
+16	B	SAP Tower	151 Queen St	96.9		104	office	290	-158
+17	B	Shortland & Fort	88 Shortland St	95.1		125	office	671	-223
+18	B	Precinct Apartments	6–8 Lorne St	95	33	115	residential	348	147
+19	B	Aon Centre	29 Customs St W	92.4		92	office	250	-520
+20	B	Crombie Lockwood Tower	191 Queen St	90.9	24	92	office	261	1
+21	B	Huawei Centre	120 Albert St	89.4	24	95	office	128	108
+22	B	Campbell House	66–72 Lorne St	88.9	19		residential	280	441
+23	B	80 Queen St	80 Queen St	88.4	23	100	office	392	-257
+24	B	CityLife Auckland	171 Queen St	86.2		90	hotel	244	-75
+25	B	Victoria Residences	75 Victoria St W	85.5	26	80	residential	61	-47
+26	B	AIG Building	41 Shortland St	84.3		84	office	495	-121
+27	B	Crowne Plaza Auckland	128 Albert St	84.3	29	110	hotel	91	144
+28	B	Deloitte Centre	1 Queen St	81.2	20	81	office	382	-565
+29	B	Chorus House	66 Wyndham St	80.8		85	office	48	-182
+30	B	SkyCity Grand Hotel	90 Federal St	79.9	20	75	hotel	52	109
+31	B	Barclay Suites	74 Albert St	78.9	25	78	residential	185	-127
+32	B	JW Marriott	22–26 Albert St	78	20	92	hotel	266	-319
+33	B	Four Points by Sheraton	396–406 Queen St	76.1			hotel	127	580
+34	B	City Gardens Apartments	76 Albert St	76		90	residential	192	-86
+35	B	West Plaza	3 Albert St	75.7	18	77	office	235	-449
+36	B	Queens Residences	8 Airedale St	73.9		107	residential	180	528
+37	B	The CAB	1 Greys Ave	72.9	20		residential	-20	480
+38	B	The AA Centre	99 Albert St	72.6	18		office	70	37
+39	B	2 Wakefield Street	2 Wakefield St	70.8	17		residential	213	438
+40	B	Commercial Bay (eastern block)	7 Queen St	70.5	10		office	382	-482
+41	B	Fifty Albert	50 Albert St	69.6	24		office	232	-202
+42	B	Tower Centre	45 Queen St	68	18		office	352	-400
+43	B	Telco Building	16 Kingston St	67.7	15	75	office	77	-93
+44	B	The Shortland Centre	51–53 Shortland St	67.3			office	538	-114
+45	B	Waipārūrū Hall	35 Whitaker Pl	65.7			residential	405	1008
+46	B	SO/ Auckland	67 Customs St E	65.5	16		hotel	567	-335
+47	B	The Wiltshire on Victoria	89–93 Victoria St W	65.5			residential	-1	-65
+48	C	President Hotel	27 Victoria St W	64.9	17		hotel	185	-4
+49	C	92 Albert Street	92 Albert St	63.4			office	164	-44
+50	C	Augusta House	19 Victoria St W	63	15		office	226	13
+51	C	Citigroup Centre	23 Customs St E	61.9			office	475	-362
+52	C	Atrium on Elliott	39 Elliott St	60.3			office	125	164
+53	C	10–14 Lorne St	10–14 Lorne St	60.3			office	267	231
+54	C	CTS House	175 Queen St	60.2			office	271	-53
+55	C	Swanson House	12–26 Swanson St	60	14		office	264	-247
+56	C	Shortland Chambers	68–70 Shortland St	60	14		office	604	-189
+57	C	48 Emily Place	48 Emily Pl	59.3	15		office	787	-226
+58	C	Symphony House	300 Queen St	59.3			office	234	301
+59	C	Quay Regency	148 Quay St	59.2	16		residential	535	-518
+60	C	Altitude Apartments	34 Kingston St	59.1		75	residential	10	-121
+61	C	Columbard	20 Wyndham St	59	19		hotel	230	-128
+62	C	Club Tower	34 Shortland St	58.9	16		office	496	-218
+63	C	Acrossia House	155 Queen St	58.8	15		office	285	-110
+64	C	The Quadrant Hotel and Suites	10 Waterloo Quadrant	58.8			hotel	794	-41
+65	C	Whitaker Park Apartments	8 Whitaker Pl	58.3			residential	427	913
+66	C	36 Kitchener Street	36 Kitchener St	58.2			office	423	29
+67	C	Airedale St building	Airedale St	57.7			residential	240	821
+68	C	Library 27	27 Rutland St	57.6	16		residential	298	422
+69	C	Connect Apartments	70–74 Anzac Ave	57.4	15		residential	951	-113
+70	C	University Hall	30 Whitaker Pl	57.1			residential	466	878
+71	C	Portland Tower	62 Queen St	56.8			office	398	-314
+72	C	Shine Building	33 Federal St	56.6	16		office	80	-313
+73	C	Mövenpick Hotel	8 Customs St E	56.5			hotel	446	-438
+74	C	Pinnacle Apartments	18 St Martins Lane	56.1	16		residential	278	1091
+75	C	The Connaught	14 Waterloo Quadrant	55.8	14		residential	787	2
+76	C	UniLodge Anzac	138 Anzac Ave	55	19		residential	1035	94
+77	C	Te Tirohanga o te Tōangaroa	128 Anzac Ave	54.9	21		residential	1042	65
+78	C	WQ Building	29–35 Wakefield St	54.9	15		residential	222	618
+79	C	The International	9 Princes St	54.7			residential	672	-96
+80	C	Group M	1 Federal St	54.6	14		office	158	-436
+81	C	Mount Terrace	33 Mount St	53.9	13		residential	318	685
+82	C	Auckland District Court	69 Albert St	53.8			civic	115	-133
+83	C	Science Centre 302	23 Symonds St	53.7			university	553	528
+84	C	Princeton Apartments	30 Symonds St	53.7	19		residential	542	696
+85	C	Auckland Bioengineering House	70 Symonds St	53.7			university	387	844
+86	C	Vincent Tower	126 Vincent St	53.4			residential	-180	603
+87	C	Cordis	83 Symonds St	53.3	16		hotel	184	978
+88	C	Delta Insurance	57 Fort St	53.2	12		office	611	-233
+89	C	Union House	2 Commerce St	53	13		office	591	-500
+90	C	AMI Building	63 Albert St	53			office	146	-162
+91	C	Centur on Anzac	100 Anzac Ave	53	16		residential	1024	-7
+92	C	Waterloo Towers	20 Waterloo Quadrant	52.8	16		office	824	67
+93	C	33 Lorne Street	33 Lorne St	52.7			office	284	214
+94	C	290 Queen Street	290 Queen St	52.6			office	242	248
+95	C*	nesuto	6 St Martins Lane	52.5			hotel	249	1050
+96	C*	CityZone	11 Liverpool St	52.2			residential	132	887
+97	C*	Queens Square Residences	438 Queen St	52	16		residential	104	702
+98	C*	152 Quay Street apartments	152 Quay St	51.7	17		residential	492	-535
+99	C*	Life Apartments	38A Liverpool St	51.6	20		residential	120	855
+100	C*	Tower Hill Apartments	1 Emily Pl	51.5			residential	724	-287
+101	C*	Symonds Centre	59 Symonds St	51.5			university	368	770
+102	C*	Southern Cross Building	57 High St	51.4	13		office	344	51
+103	C*	WO Building	56 Wakefield St	51.4	17		university	309	637
+104	C*	Volt Apartments	430 Queen St	51.1	17		residential	120	657
+105	C*	55 Symonds Accommodation	55 Symonds St	51.1	15		residential	282	862
+106	C*	Argent Hall	2 Eden Cres	51	16		residential	810	-148
+107	C*	Crown on Cintra	3 Whitaker Pl	51			residential	319	971
+108	C*	Atrium on Takutai	9 Britomart Pl	50.9	13		office	729	-402
+109	C*	Empire Apartments	23 Whitaker Pl	50.7	18		residential	320	1020
+110	C*	Hotel Grand Chancellor	1 Hobson St	50.6	15		hotel	39	-395
+111	C*	The Statesman	1 Parliament St	50.5			residential	969	35
+112	C*	Engineering 405	20 Symonds St	50.3	11		university	697	529
+113	C*	Scene One	2 Beach Rd	50.2	12		residential	800	-356
+114	C*	32 Eden	32 Eden Cres	49.8	14		residential	911	-31
+115	C*	Quest on Eden	50–52 Eden Cres	49.8	12		hotel	948	17
+116	C*	Waldorf Celestion	23 Anzac Ave	49.7	18		residential	819	-249

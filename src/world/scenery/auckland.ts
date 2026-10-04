@@ -13,7 +13,8 @@ import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfield
 import { airfieldLayout } from './aucklandOsm';
 import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
@@ -629,6 +630,25 @@ function buildSceneFins(B: GeometryBuilder, height: HeightFn): void {
   }
 }
 
+/** Window style of a kit tower's shaft facade (core/cbdTowers.ts). */
+const TOWER_WIN: Record<TowerFacade, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, balcony: WIN_BALCONY };
+
+/** Wall colour, roof colour and window style of a kit tower's part. */
+function towerPartFacade(t: CbdTower, kind: string | undefined, tmp: Color): [number, number, number] {
+  switch (kind) {
+    case 'podium':
+      return [t.podium, tmp.setHex(t.podium).multiplyScalar(0.62).getHex(), WIN_OFFICE];
+    case 'plant':
+      return [0x8d8f8e, 0x6f7170, WIN_NONE];
+    case 'spire':
+      return [0xc9ccce, 0xc9ccce, WIN_NONE];
+    case 'crown':
+      if (t.crownColour !== undefined) return [t.crownColour, tmp.setHex(t.crownColour).multiplyScalar(0.7).getHex(), t.crown === 'lit' ? WIN_GLOW : WIN_NONE];
+      break;
+  }
+  return [t.wall, tmp.setHex(t.wall).multiplyScalar(0.55).getHex(), TOWER_WIN[t.facade]];
+}
+
 function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, bs: Building[]): CbdStats {
   const tol = detail >= 0.9 ? 0 : detail >= 0.5 ? 0.5 : 1.5;
   const minArea = detail >= 0.5 ? 0 : 60;
@@ -671,12 +691,22 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     const roofCol = top >= 60 ? tmp.setHex(col).multiplyScalar(0.62).getHex() : tmp.setHex(0x7c7b77).lerp(new Color(col), 0.2).multiplyScalar(0.8 + hsh * 0.3).getHex();
     for (const p of b.prisms) {
       if (minArea && Math.abs(ringArea(p.ring)) < minArea) continue;
-      const ring = simplifyRing(p.ring, tol);
+      if (detail < 0.5 && p.kind === 'plant') continue; // low tier: the kit towers' roof plant goes
+      // the kit towers' terraces are traced at 0.5 m: below the high tier they take a coarser outline (1 m / 2 m)
+      const ring = simplifyRing(p.ring, b.hero === 'tower' && tol > 0 ? tol * 2 : tol);
       const roof = (x: number, z: number) => g + roofHeight(p, x, z);
       if (b.hero === 'scene') {
         // the Scene apartments (core/sceneApartments.ts): white balcony bands on the towers, Scene One's teal glass bay
-        const [c, w] = HERO_FACADE[p.kind ?? 'podium'];
+        const [c, w] = HERO_FACADE[(p.kind ?? 'podium') as SceneTerraceKind];
         B.prism(ring, y0, roof, c, p.kind === 'tower' ? 0xd8dbdb : 0x9a9b97, w);
+        prisms.push({ ...p, y0, y1: g + p.h });
+        heights.push(p.h);
+        continue;
+      }
+      if (b.hero === 'tower' && b.tower) {
+        // a kit tower (core/cbdTowers.ts): its measured parts, each with its facade; sloped crowns keep the wall colour
+        const [c, rc, w] = towerPartFacade(b.tower, p.kind, tmp);
+        B.prism(ring, y0, roof, c, p.sx || p.sz ? c : rc, w);
         prisms.push({ ...p, y0, y1: g + p.h });
         heights.push(p.h);
         continue;
@@ -700,8 +730,8 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
   // street lamps, not inside a building: a 20 m bucket grid of the footprints
   const grid = new Map<number, BuildingPrism[]>();
   const key = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
-  for (const b of bs) {
-    const p = b.prisms[0];
+  // (a kit tower's terraces don't overlap: every one of its parts holds the lamps off)
+  for (const p of bs.flatMap((b) => (b.hero === 'tower' ? b.prisms : [b.prisms[0]]))) {
     let x0 = Infinity;
     let x1 = -Infinity;
     let z0 = Infinity;

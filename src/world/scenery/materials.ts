@@ -160,7 +160,46 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit, detail);
     }
-  } else if (vWin > 6.5) {
+  } else if (vWin > 7.5 && abs(N.y) < 0.5) {
+    // the CBD tower kit's facades (core/cbdTowers.ts): aWin 8 curtain-wall glass on a 1.5 m × 3.8 m storey grid with a dark
+    // spandrel at each slab; aWin 9 ribbon windows between precast bands (1.5 m band, 2.1 m glass, mullions every 1.8 m).
+    // Both blend to their average once a storey is a few pixels; at night office floors lit as the office grid (window LOD)
+    bool curtain = vWin < 8.5;
+    vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
+    vec2 cell = curtain ? vec2(1.5, 3.8) : vec2(1.8, 3.6);
+    vec2 g = vec2(dot(vWorld.xz, t), vWorld.y) / cell;
+    vec2 f = fract(g);
+    vec2 aa = vec2(mpp) / cell;
+    float detail = 1.0 - smoothstep(0.35, 0.9, mpp / cell.y);
+    vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
+    float band;
+    float mull;
+    vec3 glass;
+    if (curtain) {
+      band = 1.0 - smoothstep(0.2 - aa.y, 0.2 + aa.y, f.y);
+      mull = smoothstep(0.93 - aa.x, 0.93 + aa.x, abs(f.x - 0.5) * 2.0);
+      glass = mix(base * 0.7, sky * 0.75, 0.5);
+      vec3 spandrel = base * 0.55;
+      vec3 face = mix(mix(glass, base * 0.9, mull * 0.6), spandrel, band);
+      vec3 avg = mix(glass, spandrel, 0.2);
+      base = mix(avg, face, detail);
+    } else {
+      band = 1.0 - smoothstep(0.42 - aa.y, 0.42 + aa.y, f.y);
+      mull = smoothstep(0.92 - aa.x, 0.92 + aa.x, abs(f.x - 0.5) * 2.0);
+      glass = mix(vec3(0.12, 0.15, 0.18), sky * 0.5, 0.45);
+      vec3 face = mix(mix(glass, base * 0.8, mull), base, band);
+      vec3 avg = mix(glass, base, 0.5);
+      base = mix(avg, face, detail);
+    }
+    if (uNight > 0.0) {
+      vec2 id = floor(g);
+      float hsh = hash12(id + floor(vWorld.xz / 37.0) * 7.0);
+      float lit = step(hsh, ${WINDOW_STYLES.office.lit.toFixed(3)}) * (1.0 - band);
+      vec3 warm = mix(vec3(1.0, 0.7, 0.38), vec3(0.75, 0.85, 1.0), step(0.8, fract(hsh * 7.0))) * 1.5;
+      vec3 avg = ${v3(windowGlowAverage('office'))};
+      emissive += uNight * mix(avg, warm * lit, detail);
+    }
+  } else if (vWin > 6.5 && vWin < 7.5) {
     // balcony bands (aWin 7, the Scene apartments): a white slab edge (0.45 m) every 3.2 m storey, frosted balustrades
     // and dark glazing between; blends to the band's average once a storey is a few pixels; some bays lit at night
     float y = fract(vWorld.y / 3.2);
