@@ -31,7 +31,7 @@ import { campaignStatus } from '../src/ui/format';
 import { campaignEnding } from '../src/ui/screens/ending';
 import { harness, killGroup, shieldPlayer } from './missions-helpers';
 
-/** A minimal campaign mission: one SA-8 on Rangitoto to destroy (`finale`: the campaign's last). */
+/** A minimal campaign mission: one SA-15 on Rangitoto to destroy (`finale`: the campaign's last). */
 function fixtureMission(id: string, index: number, finale = false): MissionDef {
   return mission({
     id,
@@ -46,8 +46,8 @@ function fixtureMission(id: string, index: number, finale = false): MissionDef {
     allowedLoadouts: ['a2a_stealth'],
     player: { x: -6000, z: -8000, altitude: 4000, heading: 60, speed: 240 },
     script: {
-      sams: [site('fx_sa8', 'fx_sam', 'sa8', P.rangitoto)],
-      objectives: [{ id: 'o_sam', kind: 'destroy', groups: ['fx_sam'], label: 'Destroy the SA-8', primary: true }],
+      sams: [site('fx_sa15', 'fx_sam', 'sa15', P.rangitoto)],
+      objectives: [{ id: 'o_sam', kind: 'destroy', groups: ['fx_sam'], label: 'Destroy the SA-15', primary: true }],
       campaignFinale: finale,
     },
   });
@@ -272,7 +272,7 @@ describe('campaigns', () => {
   });
 
   it("winning a campaign's finale completes the campaign; any other win does not", () => {
-    /** Fly a fixture mission and win it: its SA-8 dead. */
+    /** Fly a fixture mission and win it: its SA-15 dead. */
     const win = (def: MissionDef) => {
       const h = harness(def);
       h.run(1, () => shieldPlayer(h));

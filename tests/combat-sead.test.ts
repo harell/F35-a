@@ -1,7 +1,7 @@
 /**
  * Regression tests for SEAD depth (i1): AARGMs used to kill every SAM (16/16) and SAMs never
  * defended themselves. Now:
- *  - SA-15 (and SA-8 close in) shoot down anti-radiation missiles and GPS bombs aimed at them or
+ *  - SA-15 sites shoot down anti-radiation missiles and GPS bombs aimed at them or
  *    at co-located sites (probability based, limited fire channels)
  *  - crews time their EMCON shutdown to the ARM's approach and come back on afterwards
  *  - an AARGM against an emitter that went silent flies to a degraded memory point and can miss
@@ -95,7 +95,7 @@ describe('combat: SEAD depth', () => {
     const ttis: number[] = [];
     let backOn = 0;
     for (let s = 1; s <= 16; s++) {
-      const r = seadTrial(s, 'ace', 'sa10', false, 'aargm', 32_000);
+      const r = seadTrial(s, 'ace', 'sa6', false, 'aargm', 32_000);
       if (r.shutdownTti > 0) ttis.push(r.shutdownTti);
       if (r.backOn) backOn++;
     }
@@ -106,10 +106,10 @@ describe('combat: SEAD depth', () => {
     expect(backOn).toBeGreaterThan(0);
   });
 
-  it('an AARGM against an SA-10 that goes silent can miss (degraded memory point); it does not always kill', { timeout: 60_000 }, () => {
+  it('an AARGM against an SA-6 that goes silent can miss (degraded memory point); it does not always kill', { timeout: 60_000 }, () => {
     let kills = 0;
     const N = 20;
-    for (let s = 1; s <= N; s++) if (seadTrial(s, 'veteran', 'sa10', false, 'aargm', 32_000).siteKilled) kills++;
+    for (let s = 1; s <= N; s++) if (seadTrial(s, 'veteran', 'sa6', false, 'aargm', 32_000).siteKilled) kills++;
     expect(kills).toBeGreaterThan(N * 0.15);
     expect(kills).toBeLessThan(N * 0.85);
   });

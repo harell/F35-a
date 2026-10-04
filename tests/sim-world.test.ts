@@ -49,7 +49,7 @@ describe('SimWorld spawning', () => {
 
   it('places SAMs on the terrain and ships at sea level, movers follow their path', () => {
     const tw = makeWorld('pilot', flatTerrain(120));
-    const sam = tw.world.spawnSam({ type: 'sa10', team: 'red', position: new Vector3(5000, 0, 5000), emcon: true, known: true });
+    const sam = tw.world.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(5000, 0, 5000), emcon: true, known: true });
     expect(sam.position.y).toBe(120);
     expect(sam.radarOn).toBe(false);
     expect(sam.known).toBe(true);

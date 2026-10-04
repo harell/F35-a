@@ -250,7 +250,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
           sams.set(s.id, tr);
         }
         tr.seen = frame;
-        const vis = tr.v.update(s, t, dt, cam, s.type === 'sa10' ? groundFar * 1.4 : groundFar);
+        const vis = tr.v.update(s, t, dt, cam, groundFar);
         // the air-defence boat (a moving SAM) leaves a wake like any boat
         if (wakes && vis && s.alive && s.boat) boatWake(wakes, 'ad_boat', s.position, s.velocity);
       }
@@ -319,7 +319,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         tr.v.root.visible = ac.position.distanceToSquared(camPos) <= max2 && tr.v.update(ac, t, 0, camPos, lodCfg, env.isNight);
       }
       for (const m of world.missiles) missiles.get(m.id)?.v.update(m, t, camPos);
-      for (const s of world.sams) sams.get(s.id)?.v.update(s, t, 0, camPos, s.type === 'sa10' ? groundFar * 1.4 : groundFar);
+      for (const s of world.sams) sams.get(s.id)?.v.update(s, t, 0, camPos, groundFar);
       for (const g of world.ground) grounds.get(g.id)?.v.update(g, t, 0, camPos, groundFar);
     },
 

@@ -1,5 +1,5 @@
 /**
- * F35-A — debrief extras: the informative end reason ("Shot down by an SA-10 Grumble"), 1–3
+ * F35-A — debrief extras: the informative end reason ("Shot down by an SA-6 Gainful"), 1–3
  * specific tips built from how the sortie went, and the medals earned (MEDALS catalogue, exported
  * through src/missions/index.ts for the UI).
  */
@@ -36,16 +36,16 @@ export type MedalId = keyof typeof MEDALS;
 /** Every medal, in display order. */
 export const MEDAL_LIST: MedalDef[] = Object.values(MEDALS);
 
-const SAM_MUNITION: Record<string, SamType> = { m_3m9: 'sa6', m_9m33: 'sa8', m_48n6: 'sa10', m_9m330: 'sa15', m_igla: 'sa18' };
+const SAM_MUNITION: Record<string, SamType> = { m_3m9: 'sa6', m_9m330: 'sa15', m_igla: 'ad_boat' };
 const IR_MUNITIONS = new Set(['r73', 'm_igla', 'aim9x']);
-const RADAR_MUNITIONS = new Set(['r27', 'r77', 'aim120', 'm_3m9', 'm_9m33', 'm_48n6', 'm_9m330']);
+const RADAR_MUNITIONS = new Set(['r27', 'r77', 'aim120', 'm_3m9', 'm_9m330']);
 
 /** "an SA-10", "an F-35", "a MiG-29". */
 function article(word: string): string {
   return /^[aeiou]/i.test(word) || /^(SA-|F-|A-\d)/.test(word) ? 'an' : 'a';
 }
 
-/** What killed the player, readable ("an SA-10 Grumble", "a MiG-29's R-73", "Shilka fire"), or null. */
+/** What killed the player, readable ("an SA-6 Gainful", "a MiG-29's R-73", "Shilka fire"), or null. */
 export function killerText(s: MissionState): string | null {
   const st = s.stats;
   const w = st.lastHitWeapon;
@@ -70,7 +70,7 @@ export function killerText(s: MissionState): string | null {
   return null;
 }
 
-/** Death reason for the debrief, e.g. "Shot down by an SA-10 Grumble". */
+/** Death reason for the debrief, e.g. "Shot down by an SA-6 Gainful". */
 export function deathReason(s: MissionState, reason: 'crash' | 'shot' | 'collision' | 'fuel'): string {
   const base = REASONS[reason] ?? REASONS.shot;
   if (reason !== 'shot') return base;
@@ -110,9 +110,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
           ? 'Watch your altitude and let Auto-GCAS fly the pull-up — don’t fight the stick when it takes over.'
           : 'Watch your altitude: above Recruit there is no Auto-GCAS, so the pull-up is yours — start it early.',
       );
-    else if (samType === 'sa10') add('Stay below 300 ft and keep Rangitoto between you and Motutapu: the SA-10 cannot see through the volcano.');
     else if (samType === 'zsu23') add('Shilkas shred anything low and close: stay above 5,000 ft or more than 3 km from the flak.');
-    else if (samType === 'sa18' || IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');
+    else if (IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');
     else if (samType) add('SAM launch: beam it — turn 90° to the missile, dive for the deck and pump CHAFF in the last seconds.');
     else if (RADAR_MUNITIONS.has(w)) add('Radar missile: put it on your wing (beam), drop CHAFF — and shoot first: a clean F-35 sees them long before they see you.');
     else if (w === 'gun') add('Guns kill: don’t let a bandit sit behind you — keep your speed up and turn into him.');

@@ -137,7 +137,7 @@ const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
  */
 export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = { ace: 1 };
 
-const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
+const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa15', 'sa15', 'sa6', 'zsu23', 'sa15', 'sa15'];
 
 export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: number): MissionDef {
   const rng = mulberry32(seed >>> 0);
@@ -204,8 +204,9 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
-        // the SA-15 Tor shoots down glide bombs and AARGMs: Veteran and up only, as in c04 and Strike
-        sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35, ...(type === 'sa15' ? { minDifficulty: 'veteran' as const } : {}) }));
+        // the SA-15 Tor shoots down glide bombs and AARGMs: the first Tor of each pair flies on every
+        // difficulty (it took the SA-8's slot), the second only on Veteran and up
+        sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35, ...(type === 'sa15' && i % 4 === 3 ? { minDifficulty: 'veteran' as const } : {}) }));
       }
       ground.push(
         target('fuel1', 'target', 'fuel', { x: lay.target.x - 120, z: lay.target.z }),

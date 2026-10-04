@@ -151,11 +151,11 @@ export function buildMock(scene: Scenario): MockSetup {
   sa6.radarOn = true;
   sa6.trackedTargetId = scene === 'threat' || scene === 'ag' ? player.id : null;
   sams.push(sa6);
-  const sa10 = add(new SamSiteEntity(nextId++, 'sa10', 'red', { name: 'SA-10' }));
-  sa10.position.copy(at(42_000, 12_000, 0)).setY(0);
-  sa10.known = true;
-  sa10.engageRange = 45_000;
-  sams.push(sa10);
+  const sa15 = add(new SamSiteEntity(nextId++, 'sa15', 'red', { name: 'SA-15' }));
+  sa15.position.copy(at(42_000, 12_000, 0)).setY(0);
+  sa15.known = true;
+  sa15.engageRange = 12_000;
+  sams.push(sa15);
 
   // ground targets
   const ship = add(new GroundTargetEntity(nextId++, 'ship', 'red', { name: 'CORVETTE', radius: 40 }));
@@ -220,7 +220,7 @@ export function buildMock(scene: Scenario): MockSetup {
     player.rwr = [
       { sourceId: sa6.id, kind: 'sam', symbol: '6', bearing: -0.35, strength: 0.75, state: scene === 'threat' ? 'launch' : 'track', age: 5 },
       { sourceId: mig.id, kind: 'fighter', symbol: '29', bearing: 0.2, strength: 0.6, state: 'track', age: 2 },
-      { sourceId: sa10.id, kind: 'sam', symbol: '10', bearing: 0.5, strength: 0.3, state: 'search', age: 1 },
+      { sourceId: sa15.id, kind: 'sam', symbol: '15', bearing: 0.5, strength: 0.3, state: 'search', age: 1 },
       { sourceId: su35.id, kind: 'fighter', symbol: '35', bearing: -2.4, strength: 0.4, state: scene === 'threat' ? 'launch' : 'search', age: 1 },
     ];
   }

@@ -25,17 +25,17 @@ describe('applyDamage — difficulty scaling', () => {
 
   it('pilot: first missile hit survivable, second kills', () => {
     const { tw, player, enemy } = setup('pilot');
-    tw.world.applyDamage(player, 150, enemy.id, 'm_48n6');
+    tw.world.applyDamage(player, 150, enemy.id, 'm_3m9');
     expect(player.alive).toBe(true);
     expect(player.health).toBeLessThan(80);
-    tw.world.applyDamage(player, 150, enemy.id, 'm_48n6');
+    tw.world.applyDamage(player, 150, enemy.id, 'm_3m9');
     expect(player.alive).toBe(false);
   });
 
-  it('ace: a direct SA-10 hit is fatal', () => {
+  it('ace: a direct SA-6 hit is fatal', () => {
     const { tw, player } = setup('ace');
-    const sam = tw.world.spawnSam({ type: 'sa10', team: 'red', position: new Vector3(0, 0, -20000) });
-    tw.world.applyDamage(player, 120, sam.id, 'm_48n6');
+    const sam = tw.world.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(0, 0, -20000) });
+    tw.world.applyDamage(player, 120, sam.id, 'm_3m9');
     expect(player.alive).toBe(false);
     expect(tw.of('destroyed')[0].attackerId).toBe(sam.id);
   });
@@ -107,7 +107,7 @@ describe('applyDamage — events, credit, subsystems', () => {
 
   it('SAM sites and ground targets become wrecks that stay in their lists', () => {
     const { tw, player } = setup('pilot');
-    const sam = tw.world.spawnSam({ type: 'sa10', team: 'red', position: new Vector3(2000, 0, 2000) });
+    const sam = tw.world.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(2000, 0, 2000) });
     const fuel = tw.world.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(-2000, 0, 2000) });
     const jet = tw.world.spawnGround({ type: 'parked_jet', team: 'red', position: new Vector3(-2500, 0, 2000), path: [new Vector3(-2500, 0, 0)] });
     tw.world.applyDamage(sam, 1000, player.id, 'aargm');

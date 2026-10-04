@@ -25,7 +25,7 @@ import { SPEED_OF_SOUND } from '../acoustics';
 
 const GUN_RANGE: Record<GunKind, number> = { gau22: 4000, gsh301: 3500, zsu23: 4500 };
 const GUN_LEVEL: Record<GunKind, number> = { gau22: 1, gsh301: 0.9, zsu23: 0.85 };
-const BIG_MOTORS = new Set(['m_48n6', 'm_3m9', 'm_9m330', 'aargm']);
+const BIG_MOTORS = new Set(['m_3m9', 'm_9m330', 'aargm']);
 
 interface Watch {
   missile: MissileEntity;

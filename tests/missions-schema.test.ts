@@ -58,7 +58,7 @@ describe('mission schema features', () => {
   it('reach with an altitude band (low level), destroy_sams, reveal and set_waypoint', () => {
     const d = def({
       sams: [
-        { id: 's1', group: 'sams', type: 'sa8', x: 30000, z: -20000, known: false },
+        { id: 's1', group: 'sams', type: 'sa15', x: 30000, z: -20000, known: false },
         { id: 's2', group: 'sams', type: 'zsu23', x: 30500, z: -20000, known: false },
       ],
       objectives: [

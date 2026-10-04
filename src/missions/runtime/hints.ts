@@ -36,14 +36,6 @@ const COOLDOWN = 25;
 const MAX_SHOWS = 3;
 const COS_LOCK_CONE = Math.cos((30 * Math.PI) / 180);
 
-function nearestLiveSam(s: MissionState, p: AircraftEntity, type: string, within: number): boolean {
-  for (const site of s.world.sams) {
-    if (!site.alive || site.team === p.team || site.type !== type) continue;
-    if (Math.hypot(site.position.x - p.position.x, site.position.z - p.position.z) < within) return true;
-  }
-  return false;
-}
-
 function remaining(p: AircraftEntity, w: WeaponId): number {
   if (w === 'gun') return p.gunAmmo;
   let n = 0;
@@ -87,7 +79,7 @@ function inLockCone(p: AircraftEntity, e: AnyEntity): boolean {
 
 /** Radar SAM that is emitting (or known) — an AARGM target. */
 function armTargetable(e: AnyEntity): boolean {
-  return e.kind === 'sam' && e.type !== 'zsu23' && e.type !== 'sa18' && (e.radarOn || e.known);
+  return e.kind === 'sam' && e.type !== 'zsu23' && (e.radarOn || e.known);
 }
 
 /** Nearest live hostile surface target of an active PRIMARY objective within `within` m. */
@@ -158,13 +150,6 @@ const AUTO: AutoHint[] = [
       if (w.current === 'winchester') return p.gunAmmo > 0 ? 'WINCHESTER: missiles and bombs gone — the gun is all you have left' : 'WINCHESTER: no weapons left — stay clear of the threats';
       if (w.current === 'bingo') return 'BINGO FUEL: finish the job before the tanks run dry';
       return null;
-    },
-  },
-  {
-    id: 'sa10_low',
-    test(p, s) {
-      if (p.flight.agl < 150 || !nearestLiveSam(s, p, 'sa10', 40_000)) return null;
-      return 'SA-10 up: fly below 300 ft and keep the terrain between you and Motutapu';
     },
   },
   {

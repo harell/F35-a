@@ -184,9 +184,9 @@ const seadStart = { x: -13000, z: -2000, altitude: 4000, heading: 80, speed: 240
 
 /**
  * A test-only SEAD mission (the shape of the removed Southern Cross c03): an SA-6 ('rangi_sa6') on
- * Rangitoto's south-west slope, an SA-8 ('rangi_sa8') on its east shore with a 'wp_sa8' waypoint,
+ * Rangitoto's south-west slope, an SA-15 ('rangi_sa15') on its east shore with a 'wp_sa15' waypoint,
  * Shilkas and an EW radar ('rangi_ewr'), flown with the SEAD loadout. No scripted hints, so every
- * hint comes from the weapon-aware auto hints. One trigger: after the SA-8 shoots down two of the
+ * hint comes from the weapon-aware auto hints. One trigger: after the SA-15 shoots down two of the
  * player's weapons (the 'munitions_shot_down' condition) Darkstar calls it, reveals it and steers
  * the player to it. Pass `timeLimit` for the time-limit countdown.
  */
@@ -210,26 +210,26 @@ export function seadFixture(timeLimit?: number): MissionDef {
       groups: [wingmen(1, seadStart)],
       sams: [
         site('sa6', 'rangi_sa6', 'sa6', P.rangSW, { heading: 225 }),
-        site('sa8', 'rangi_sa8', 'sa8', P.rangE, { heading: 90 }),
+        site('sa15', 'rangi_sa15', 'sa15', P.rangE, { heading: 90 }),
         site('zsu1', 'rangi_aaa', 'zsu23', P.rangS),
       ],
       objectives: [
         { id: 'o_sa6', kind: 'destroy', groups: ['rangi_sa6'], label: 'Destroy the SA-6 battery', primary: true },
-        { id: 'o_sa8', kind: 'destroy', groups: ['rangi_sa8'], label: 'Destroy the SA-8', primary: true },
+        { id: 'o_sa15', kind: 'destroy', groups: ['rangi_sa15'], label: 'Destroy the SA-15', primary: true },
       ],
       waypoints: [
         { id: 'wp_sa6', label: 'SA-6', kind: 'target', x: P.rangSW.x, z: P.rangSW.z, objective: 'o_sa6' },
-        { id: 'wp_sa8', label: 'SA-8', kind: 'target', x: P.rangE.x, z: P.rangE.z, objective: 'o_sa8' },
+        { id: 'wp_sa15', label: 'SA-15', kind: 'target', x: P.rangE.x, z: P.rangE.z, objective: 'o_sa15' },
       ],
       triggers: [
         {
-          id: 't_sa8_eating',
-          when: { kind: 'all', of: [{ kind: 'munitions_shot_down', group: 'rangi_sa8', count: 2 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa8', state: 'complete' } }] },
+          id: 't_sa15_eating',
+          when: { kind: 'all', of: [{ kind: 'munitions_shot_down', group: 'rangi_sa15', count: 2 }, { kind: 'not', of: { kind: 'objective', id: 'o_sa15', state: 'complete' } }] },
           delay: 2,
           actions: [
-            { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Gecko is shooting your weapons down.', priority: 3 },
-            { kind: 'reveal', group: 'rangi_sa8' },
-            { kind: 'set_waypoint', id: 'wp_sa8' },
+            { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Gauntlet is shooting your weapons down.', priority: 3 },
+            { kind: 'reveal', group: 'rangi_sa15' },
+            { kind: 'set_waypoint', id: 'wp_sa15' },
           ],
         },
       ],

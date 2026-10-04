@@ -7,8 +7,8 @@
 <p align="center"><img src="docs/cover.jpg" width="420" alt="F-35-a Ratites game cover: an F-35A over Auckland's Sky Tower and skyline, with a kiwi in the flames"></p>
 
 **A combat flight simulator for your phone's browser.** Fly the F-35A Lightning II over Auckland, New Zealand.
-Defend the city against a hostile force dug in on the Hauraki Gulf islands: dogfight MiGs and Flankers over the Waitematā,
-dodge SA-10s behind Rangitoto, and thread the Harbour Bridge at 40 m.
+Defend the city: shoot down Shahed drones over the CBD, sink IRGC fast boats in the Hauraki Gulf, dogfight MiGs and
+Flankers over the Waitematā, and thread the Harbour Bridge at 40 m.
 
 Inspired by NovaLogic's *F-22 Raptor* (1997). Built with three.js (WebGL 2), TypeScript and Web Audio, and installable as a PWA.
 
@@ -41,7 +41,7 @@ Clarity can't see inside the WebGL canvas, so the useful data is the custom even
 |---|---|
 | **Flight model** | Force-based 6-DOF with an F-35-style fly-by-wire g/AoA command law, engine spool, afterburner fuel burn, energy bleed, transonic drag, and Auto-GCAS ground-collision avoidance (Recruit only: from Pilot up you can fly into the ground) |
 | **Air-to-air** | Designation, then a nose-pointing ±30° radar lock (or a silent TWS shot). AIM-120D with loft, datalink and pitbull; AIM-9X with a ±90° HMD seeker and growl; GAU-22 25 mm with LCOS/funnel; a Pk-calibrated SHOOT cue on the DLZ |
-| **Threats** | SA-6, SA-8, SA-10, SA-15, SA-18 MANPADS and ZSU-23-4 with search → track → launch → guide. RWR, DAS missile warning, flares and chaff, beam-notching, terrain masking, EMCON pop-up ambushes, point defence, SEAD with AARGM and SDB |
+| **Threats** | SA-6, SA-15, ZSU-23-4 and the IRGC Navy air-defence boat (a moving SAM with SA-18 MANPADS), with search → track → launch → guide. RWR, DAS missile warning, flares and chaff, beam-notching, terrain masking, EMCON pop-up ambushes, point defence, SEAD with AARGM and SDB |
 | **Enemies** | MiG-29, Su-27, Su-35 and Su-57 flown by AI, Shahed-136 drones and IRGC Navy fast boats that uses its own sensors, flies BVR/BFM, defends against missiles and bugs out |
 | **Cockpit** | F-35 HMD symbology plus a 3D cockpit with a panoramic display (TSD, SMS, FUEL, ENG, RWR, ICAWS, radar pages; tap to zoom) |
 | **Views** | Cockpit, HMD-only, chase, orbit, padlock/target, missile cam, flyby and tactical map, plus a picture-in-picture target camera: a live head-on shot of the bandit, a slow orbit of the SAM site (radars spinning) or a wide orbit over open water round a ship, with name, range and radar state / aspect |

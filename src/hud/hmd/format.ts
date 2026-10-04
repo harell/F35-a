@@ -30,10 +30,7 @@ export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
 
 export const SAM_LABEL: Record<SamType, string> = {
   sa6: 'SA-6',
-  sa8: 'SA-8',
-  sa10: 'SA-10',
   sa15: 'SA-15',
-  sa18: 'SA-18',
   zsu23: 'ZSU-23',
   ad_boat: 'AD BOAT',
 };

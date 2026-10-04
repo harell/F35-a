@@ -20,7 +20,7 @@ function placeAtFraction(w: FakeWorld, shooterId: number, targetId: number, frac
 
 describe('combat: munition database', () => {
   it('defines every munition with sane values', () => {
-    const ids: MunitionId[] = ['aim120', 'aim9x', 'gbu31', 'gbu39', 'aargm', 'r73', 'r27', 'r77', 'm_3m9', 'm_9m33', 'm_48n6', 'm_9m330', 'm_igla'];
+    const ids: MunitionId[] = ['aim120', 'aim9x', 'gbu31', 'gbu39', 'aargm', 'r73', 'r27', 'r77', 'm_3m9', 'm_9m330', 'm_igla'];
     for (const id of ids) {
       const d = MUNITIONS[id];
       expect(d, id).toBeTruthy();
@@ -36,7 +36,7 @@ describe('combat: munition database', () => {
       }
       if (d.category !== 'bomb') expect(d.boostAccel).toBeGreaterThan(0);
     }
-    expect(MUNITIONS.m_48n6.launch).toBe('vertical');
+    expect(MUNITIONS.m_9m330.launch).toBe('vertical');
     expect(MUNITIONS.r27.guidance).toBe('semi_active');
     expect(MUNITIONS.m_igla.guidance).toBe('ir');
   });
@@ -161,7 +161,7 @@ describe('combat: missile flight & guidance', () => {
 
   it('command-guided SAM missile goes ballistic when the site is destroyed', () => {
     const w = new FakeWorld();
-    const site = w.spawnSam({ type: 'sa8', team: 'red', position: v3(0, 0, 0) });
+    const site = w.spawnSam({ type: 'sa15', team: 'red', position: v3(0, 0, 0) });
     const ac = w.spawnAircraft({ type: 'mig29', team: 'blue', position: v3(0, 2000, -12000), heading: Math.PI, speed: 200 });
     const launches = w.record('munition:launch');
     const ends = w.record('munition:end');

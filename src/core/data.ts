@@ -396,10 +396,7 @@ export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; r
 
 export const SAM_INFO: Record<SamType, { name: string; nato: string; rwrSymbol: string }> = {
   sa6: { name: '2K12 Kub', nato: 'SA-6 Gainful', rwrSymbol: '6' },
-  sa8: { name: '9K33 Osa', nato: 'SA-8 Gecko', rwrSymbol: '8' },
-  sa10: { name: 'S-300PS', nato: 'SA-10 Grumble', rwrSymbol: '10' },
   sa15: { name: '9K330 Tor', nato: 'SA-15 Gauntlet', rwrSymbol: '15' },
-  sa18: { name: '9K38 Igla', nato: 'SA-18 Grouse', rwrSymbol: '' },
   zsu23: { name: 'ZSU-23-4 Shilka', nato: 'Shilka', rwrSymbol: 'A' },
   // IRGC Navy fast boat with a short-range radar SAM and shoulder-launched SA-18s (no class name: none is confirmed)
   ad_boat: { name: 'IRGC Navy air-defence boat', nato: 'AD boat', rwrSymbol: 'B' },

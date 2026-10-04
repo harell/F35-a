@@ -16,7 +16,7 @@
  * in flight lose their uplink / illumination. MANPADS acquire visually/IR (no radar, no RWR), AAA
  * has an optical backup. Launcher / turret azimuth + elevation slew for the visuals.
  *
- * SEAD depth: SA-15 (and SA-8 close in) shoot down anti-radiation missiles and GPS bombs aimed at
+ * SEAD depth: the SA-15 shoots down anti-radiation missiles and GPS bombs aimed at
  * them or at co-located sites (point defence, probability based, limited fire channels), and
  * crews time their EMCON shutdown to the ARM's approach — a disciplined crew goes quiet 6–16 s
  * before impact (the AARGM then flies to a degraded memory point), a sloppy one too late or never.
@@ -700,7 +700,7 @@ function munitionAimPoint(m: MissileEntity): Vector3 {
 }
 
 /**
- * SA-15 / SA-8: track incoming anti-radiation missiles and GPS bombs aimed at (or near) the
+ * SA-15: track incoming anti-radiation missiles and GPS bombs aimed at (or near) the
  * site and engage them with interceptors (kill probability rolled when the interceptor fuzes).
  */
 function pointDefense(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: SamInternal): void {

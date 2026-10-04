@@ -47,10 +47,7 @@ const AIRCRAFT_SPAN: Record<AircraftType, number> = {
  */
 const SAM_FRAMING: Record<SamType, { dist: number; lookY: number }> = {
   sa6: { dist: 19, lookY: 2.6 },
-  sa8: { dist: 17, lookY: 2.6 },
-  sa10: { dist: 44, lookY: 6 },
   sa15: { dist: 17, lookY: 2.8 },
-  sa18: { dist: 13, lookY: 1.2 },
   zsu23: { dist: 14, lookY: 1.8 },
   ad_boat: { dist: 30, lookY: 1.6 }, // a ~20 m fast boat, framed whole
 };

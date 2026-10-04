@@ -98,7 +98,7 @@ describe('render munitions', () => {
 });
 
 describe('render SAM sites and ground targets', () => {
-  const sams: SamType[] = ['sa6', 'sa8', 'sa10', 'sa15', 'sa18', 'zsu23'];
+  const sams: SamType[] = ['sa6', 'sa15', 'zsu23'];
   for (const t of sams) {
     it(`${t}: builds with named animated nodes`, () => {
       const p = getSamPrototype(t, 'green');

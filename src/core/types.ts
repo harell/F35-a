@@ -62,10 +62,7 @@ export type AircraftType =
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles
-  | 'sa8' // 9K33 Osa — single amphibious vehicle, command guided
-  | 'sa10' // S-300PS — Flap Lid + Clam Shell + vertical launch TELs, long range, TVM
   | 'sa15' // 9K330 Tor — single vehicle, vertical launch, command guided, short range
-  | 'sa18' // 9K38 Igla MANPADS team — passive IR, no radar (no RWR warning!)
   | 'zsu23' // ZSU-23-4 Shilka radar-directed AAA
   | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
@@ -102,10 +99,8 @@ export type MunitionId =
   | 'r77' // AA-12 Adder, active radar
   | 'kab500' // KAB-500S-E, satellite-guided 500 kg bomb (enemy strike jets, carried on the 'gbu31' slot)
   | 'm_3m9' // SA-6 missile, semi-active radar
-  | 'm_9m33' // SA-8 missile, command guided
-  | 'm_48n6' // SA-10 missile, track-via-missile / command
   | 'm_9m330' // SA-15 missile, command guided
-  | 'm_igla' // SA-18 MANPADS missile, IR
+  | 'm_igla' // 9M39 Igla MANPADS missile, IR (the air-defence boat's shoulder-launched rounds)
   | 'kowsar'; // Kowsar anti-ship missile of the missile boat: visual only, flown by sim/boats.ts, never a target
 
 export type LoadoutId =

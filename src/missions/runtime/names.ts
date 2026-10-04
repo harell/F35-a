@@ -12,10 +12,7 @@ export function aircraftHudName(type: AircraftType): string {
 
 const SAM_HUD: Record<SamType, string> = {
   sa6: 'SA-6 SITE',
-  sa8: 'SA-8',
-  sa10: 'SA-10 SITE',
   sa15: 'SA-15',
-  sa18: 'MANPADS TEAM',
   zsu23: 'SHILKA',
   ad_boat: 'AD BOAT',
 };

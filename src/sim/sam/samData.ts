@@ -46,12 +46,6 @@ export interface SamTypeData {
   armDiscipline: number;
   /** Antenna height for terrain line-of-sight (m). */
   mastHeight: number;
-  /**
-   * End-game miss distance against the target's height above the site (sam/endgame.ts): σ × `low`
-   * at `lowHeight` m or less, × `high` at `highHeight` m or more, smooth in between. null = × 1 at
-   * every height (radar SAMs: their fire-control error does not depend on the target's height).
-   */
-  heightMiss: { lowHeight: number; low: number; highHeight: number; high: number } | null;
   /** AAA: burst length / pause (s) and ammunition. */
   burst: number;
   burstPause: number;
@@ -91,7 +85,6 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
   lowAltFactor: 0.7,
   armDiscipline: 0.6,
   mastHeight: 8,
-  heightMiss: null,
   burst: 0,
   burstPause: 0,
   ammo: 0,
@@ -101,30 +94,6 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
 };
 
 export const SAM_DATA: Record<SamType, SamTypeData> = {
-  // S-300PS: Clam Shell low-altitude acquisition on a 25 m mast, Flap Lid engagement radar, TVM
-  sa10: {
-    ...D,
-    type: 'sa10',
-    missile: 'm_48n6',
-    gun: null,
-    detectRange: 75_000,
-    engageMin: 5_000,
-    engageMax: 45_000,
-    altMin: 25,
-    altMax: 27_000,
-    reaction: 1,
-    salvo: 2,
-    salvoInterval: 3,
-    missiles: 8,
-    reloadTime: 90,
-    refireDelay: 5,
-    channels: 4,
-    radarSpin: 2.1,
-    vertical: true,
-    lowAltFactor: 0.85,
-    armDiscipline: 0.75,
-    mastHeight: 25,
-  },
   // 2K12 Kub: Straight Flush radar, CW illuminator, 3M9 semi-active ramjet
   sa6: {
     ...D,
@@ -148,32 +117,6 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     lowAltFactor: 0.6,
     armDiscipline: 0.55,
     mastHeight: 6,
-  },
-  // 9K33 Osa: single amphibious vehicle, command guidance
-  sa8: {
-    ...D,
-    type: 'sa8',
-    missile: 'm_9m33',
-    gun: null,
-    detectRange: 24_000,
-    engageMin: 1_500,
-    engageMax: 10_000,
-    altMin: 25,
-    altMax: 5_000,
-    reaction: 0.8,
-    salvo: 2,
-    salvoInterval: 2.5,
-    missiles: 6,
-    reloadTime: 50,
-    refireDelay: 3,
-    channels: 2,
-    radarSpin: 3.1,
-    slewRate: 1.2,
-    lowAltFactor: 0.75,
-    armDiscipline: 0.5,
-    mastHeight: 5,
-    // Osa: can engage a munition only close in, with a poor chance
-    pointDefense: { range: 4_500, minRange: 1_200, protect: 1_500, pkAgm: 0.2, pkBomb: 0.3 },
   },
   // 9K330 Tor: vertical launch, fast reaction, good against low / small targets
   sa15: {
@@ -200,35 +143,6 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     mastHeight: 5,
     // Tor: designed to kill precision munitions — protects itself and co-located sites
     pointDefense: { range: 9_000, minRange: 1_000, protect: 3_000, pkAgm: 0.35, pkBomb: 0.45 },
-  },
-  // 9K38 Igla team: visual/IR acquisition, no radar, no RWR warning
-  sa18: {
-    ...D,
-    type: 'sa18',
-    missile: 'm_igla',
-    gun: null,
-    radar: false,
-    detectRange: 6_000,
-    engageMin: 500,
-    engageMax: 5_000,
-    altMin: 10,
-    altMax: 3_500,
-    reaction: 1,
-    salvo: 1,
-    salvoInterval: 1,
-    missiles: 4,
-    reloadTime: 45,
-    refireDelay: 12,
-    channels: 1,
-    radarSpin: 0,
-    slewRate: 1.5,
-    lowAltFactor: 1,
-    armDiscipline: 0,
-    mastHeight: 2,
-    // design pillar 3 (MANPADS threaten low flight): against a low, close jet the round flies a
-    // short time with the motor still burning and the gunner's lead is easy; climbing to a jet at
-    // 1,500 m it burns out on the way and arrives slow, with little g left for the end game
-    heightMiss: { lowHeight: 300, low: 0.6, highHeight: 1_500, high: 1.8 },
   },
   // ZSU-23-4 Shilka: Gun Dish radar + optical backup, 4 × 23 mm
   zsu23: {

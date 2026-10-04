@@ -79,10 +79,7 @@ export const NATO_AIR: Record<AircraftType, string> = {
 
 export const NATO_SAM: Record<SamType, string> = {
   sa6: 'GAINFUL',
-  sa8: 'GECKO',
-  sa10: 'GRUMBLE',
   sa15: 'GAUNTLET',
-  sa18: 'GROUSE',
   zsu23: 'SHILKA',
   ad_boat: '', // no reporting name: the PiP shows "AD BOAT" once
 };

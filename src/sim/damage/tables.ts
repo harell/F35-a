@@ -13,11 +13,8 @@ export interface SamSiteData {
 }
 
 export const SAM_SITE_DATA: Record<SamType, SamSiteData> = {
-  sa10: { radius: 45, health: 160, missiles: 8, explosion: 'huge' }, // Flap Lid + TELs spread out
   sa6: { radius: 35, health: 120, missiles: 6, explosion: 'huge' }, // Straight Flush + 3 launchers
-  sa8: { radius: 10, health: 80, missiles: 6, explosion: 'large' },
   sa15: { radius: 10, health: 90, missiles: 8, explosion: 'large' },
-  sa18: { radius: 6, health: 30, missiles: 4, explosion: 'large' },
   zsu23: { radius: 8, health: 60, missiles: 4, explosion: 'large' }, // "missiles" = ammo bursts
   ad_boat: { radius: 11, health: 50, missiles: 4, explosion: 'large' }, // ~22 m fast boat, a few gun hits
 };

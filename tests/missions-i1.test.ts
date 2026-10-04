@@ -23,14 +23,14 @@ import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
 import { CAMPAIGNS, MEDALS, TRAINING, buildInstantMissionSeeded, createMissionRunner, failStreak, missionById, recordResult, skipMission, wasSkipped } from '../src/missions';
 import { defaultProgress, sanitizeProgress } from '../src/missions/progress';
-import type { MissionDef, MissionResult } from '../src/core/contracts';
+import type { MissionResult } from '../src/core/contracts';
 import type { MissileEntity } from '../src/sim/entities';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { remainingRoute, scaleTotal } from '../src/missions/runtime/spawner';
 import { WINCHESTER_CREDIT, WITHDRAW_CREDIT } from '../src/missions/runtime/withdrawal';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
-import { flight, mission, site } from '../src/missions/content/common';
+import { flight, mission } from '../src/missions/content/common';
 import { flatLand, harness, killGroup, raiderFixture, seadFixture, shieldPlayer, stubAi, sweepFixture, type Harness } from './missions-helpers';
 
 const byId = (id: string) => missionById(id)!;
@@ -334,21 +334,19 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
 });
 
 describe('i1: debrief — reason, tips, medals, campaign ending', () => {
-  it('shot down by the SA-10 → informative reason + a terrain-masking tip', () => {
-    const base = seadFixture();
-    const def: MissionDef = { ...base, script: { ...base.script, sams: [...base.script.sams, site('sa10', 'sa10', 'sa10', { x: 12800, z: -9000 })] } };
-    const h = harness(def);
+  it('shot down by the SA-6 → informative reason + a beam-the-SAM tip', () => {
+    const h = harness(seadFixture());
     h.run(1);
-    const sa10 = h.world.sams.find((s) => s.type === 'sa10')!;
+    const sa6 = h.world.sams.find((s) => s.groupId === 'rangi_sa6')!;
     const p = h.world.player!;
-    for (let i = 0; i < 4 && p.alive; i++) h.world.applyDamage(p, 9999, sa10.id, 'm_48n6');
+    for (let i = 0; i < 4 && p.alive; i++) h.world.applyDamage(p, 9999, sa6.id, 'm_3m9');
     h.run(1);
     const r = h.runner.result(h.world);
     expect(r.success).toBe(false);
-    expect(r.reason).toBe('Shot down by an SA-10 Grumble');
+    expect(r.reason).toBe('Shot down by an SA-6 Gainful');
     expect(r.tips!.length).toBeGreaterThanOrEqual(1);
     expect(r.tips!.length).toBeLessThanOrEqual(3);
-    expect(r.tips![0]).toMatch(/Rangitoto/);
+    expect(r.tips![0]).toMatch(/beam it/);
   });
 
   it('AMRAAMs fired far outside the SHOOT cue earn the "wait for SHOOT" tip', () => {
@@ -481,15 +479,15 @@ describe('i1: late fixes — SDB press-in', () => {
       const h = harness(seadFixture());
       const p = h.world.player!;
       const c = h.world.combat;
-      const sa8 = h.world.sams.find((s) => s.type === 'sa8')!;
+      const sa15 = h.world.sams.find((s) => s.groupId === 'rangi_sa15')!;
       const out = new Set<string>();
       let k = 0;
       h.run(50, () => {
-        pin(h, sa8.position.x - (k++ < 16 * 60 ? 40_000 : range), 7_000, sa8.position.z);
+        pin(h, sa15.position.x - (k++ < 16 * 60 ? 40_000 : range), 7_000, sa15.position.z);
         p.velocity.set(240, 0, 0);
         p.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2);
         if (p.selectedWeapon !== 'gbu39') c.selectWeapon(p, 'gbu39', h.world);
-        if (p.radar.designatedId !== sa8.id) c.designate(p, sa8.id, h.world);
+        if (p.radar.designatedId !== sa15.id) c.designate(p, sa15.id, h.world);
         const b = c.bombImpactPoint(p, h.world);
         if (k > 18 * 60 && h.runner.hint && b?.inRange) out.add(h.runner.hint);
       });
@@ -504,7 +502,7 @@ describe('i1: late fixes — SDB press-in', () => {
   });
 });
 
-const CALL = /Gecko is shooting your weapons down/;
+const CALL = /Gauntlet is shooting your weapons down/;
 
 /** A 'munition:end' for one of the player's bombs, shot down by `siteId`'s point defence. */
 function shotDown(h: Harness, siteId: number): void {
@@ -517,26 +515,26 @@ describe("#114: the 'munitions_shot_down' condition counts the player's weapons 
   it('one loss: no call; the second: the call, the site revealed and the steering cue on it', () => {
     const h = harness(seadFixture(), 'recruit');
     h.run(1, () => shieldPlayer(h));
-    const sa8 = h.world.sams.find((s) => s.groupId === 'rangi_sa8')!;
+    const sa15 = h.world.sams.find((s) => s.groupId === 'rangi_sa15')!;
     const sa6 = h.world.sams.find((s) => s.groupId === 'rangi_sa6')!;
-    shotDown(h, sa8.id);
-    shotDown(h, sa6.id); // a loss to another site doesn't count toward the SA-8's
+    shotDown(h, sa15.id);
+    shotDown(h, sa6.id); // a loss to another site doesn't count toward the SA-15's
     h.run(5, () => shieldPlayer(h));
     expect(h.of('radio').some((r) => CALL.test(r.text))).toBe(false);
-    shotDown(h, sa8.id);
+    shotDown(h, sa15.id);
     h.run(5, () => shieldPlayer(h));
     expect(h.of('radio').filter((r) => CALL.test(r.text))).toHaveLength(1);
-    expect(sa8.known).toBe(true);
-    expect(h.runner.currentWaypoint?.id).toBe('wp_sa8');
+    expect(sa15.known).toBe(true);
+    expect(h.runner.currentWaypoint?.id).toBe('wp_sa15');
   });
 
   it('the site already dead: no call', () => {
     const h = harness(seadFixture(), 'recruit');
     h.run(1, () => shieldPlayer(h));
-    const sa8 = h.world.sams.find((s) => s.groupId === 'rangi_sa8')!;
-    h.world.applyDamage(sa8, 99_999, h.world.player!.id, 'aargm');
-    shotDown(h, sa8.id);
-    shotDown(h, sa8.id);
+    const sa15 = h.world.sams.find((s) => s.groupId === 'rangi_sa15')!;
+    h.world.applyDamage(sa15, 99_999, h.world.player!.id, 'aargm');
+    shotDown(h, sa15.id);
+    shotDown(h, sa15.id);
     h.run(5, () => shieldPlayer(h));
     expect(h.of('radio').some((r) => CALL.test(r.text))).toBe(false);
   });

@@ -133,7 +133,6 @@ for (const [size, d] of [
 }
 button(boom, 'large @ 300 m water', () => lab.explode('large', 300, 'water'));
 button(boom, 'SA-6 launch 4 km', () => lab.launchSam(4000, 'm_3m9'));
-button(boom, 'SA-10 launch 9 km', () => lab.launchSam(9000, 'm_48n6'));
 button(boom, 'R-77 launch 3 km', () => lab.launchEnemy(3000));
 button(boom, 'Hit (light)', () => lab.hit(12));
 button(boom, 'Hit (heavy)', () => lab.hit(60));

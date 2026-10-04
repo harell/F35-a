@@ -14,11 +14,8 @@ export interface Pad {
 }
 
 export const SAM_PAD_RADIUS: Record<SamType, number> = {
-  sa10: 160,
   sa6: 130,
-  sa8: 60,
   sa15: 60,
-  sa18: 35,
   zsu23: 45,
   ad_boat: 0, // a boat: no pad
 };

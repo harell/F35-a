@@ -61,7 +61,7 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 | AIM-9X | 0.3–8 km, ±90° off-boresight via HMD |
 | GAU-22 | effective ≤ 1.2 km |
 | R-77 / R-27ER / R-73 | 25 / 20 / 6 km |
-| SA-10 / SA-6 / SA-15 / SA-8 / SA-18 / ZSU-23-4 | 45 / 20 / 12 / 10 / 5 / 2.5 km |
+| SA-6 / SA-15 / SA-18 (AD boat) / ZSU-23-4 | 20 / 12 / 5 / 2.5 km |
 | Typical cruise | 250 m/s (~480 kt); Mach 1.6 max; 50,000 ft ceiling |
 
 ## Conventions

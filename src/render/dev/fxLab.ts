@@ -115,7 +115,6 @@ const DEFS = {
   aim120: def('aim120', 'aam', 'active_radar', 0.35, 3.66, 0.178, 6),
   aim9x: def('aim9x', 'aam', 'ir', 0.5, 3.02, 0.127, 4),
   m_3m9: def('m_3m9', 'sam', 'semi_active', 0.9, 5.8, 0.335, 7),
-  m_48n6: def('m_48n6', 'sam', 'command', 1, 7.5, 0.515, 9),
   gbu31: def('gbu31', 'bomb', 'gps', 0, 3.88, 0.46, 0),
 };
 

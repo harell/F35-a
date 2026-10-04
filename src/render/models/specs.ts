@@ -237,8 +237,6 @@ export const MUNITION_DIMS: Record<MunitionId, { length: number; diameter: numbe
   r77: { length: 3.6, diameter: 0.2 },
   kab500: { length: 3.05, diameter: 0.35 },
   m_3m9: { length: 5.8, diameter: 0.335 },
-  m_9m33: { length: 3.16, diameter: 0.21 },
-  m_48n6: { length: 7.5, diameter: 0.515 },
   m_9m330: { length: 2.9, diameter: 0.23 },
   m_igla: { length: 1.57, diameter: 0.072 },
   kowsar: { length: 3.5, diameter: 0.3 },

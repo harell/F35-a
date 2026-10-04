@@ -117,7 +117,7 @@ const RAID_FIXTURE: MissionDef = mission({
 });
 
 /**
- * Ship strike: two slow corvettes on a patrol line (primary), a moored supply ship, a Tor, an SA-8,
+ * Ship strike: two slow corvettes on a patrol line (primary), a moored supply ship, two Tors,
  * a Shilka on Browns Island in front of the run-in, a Flanker CAP and a fighter sweep (once c06).
  */
 const shipStart = { x: 1000, z: 7000, altitude: 3500, heading: 75, speed: 240 };
@@ -145,7 +145,7 @@ const SHIP_FIXTURE: MissionDef = mission({
     ],
     sams: [
       site('sa15', 'motuihe_sa15', 'sa15', MOTUIHE),
-      site('sa8', 'wai_sa8', 'sa8', WAIHEKE_S),
+      site('wai_sa15', 'wai_sa15', 'sa15', WAIHEKE_S),
       site('zsu', 'browns_aaa', 'zsu23', BROWNS_IS, { minDifficulty: 'pilot' }),
     ],
     ground: [
@@ -246,7 +246,7 @@ describe('MissionRunner: setup', () => {
   it('scales enemy groups with difficulty and gates sites by minDifficulty', () => {
     const rec = harness(SEAD_FIXTURE, 'recruit');
     const ace = harness(SEAD_FIXTURE, 'ace');
-    // sa6, sa8, zsu1 always; zsu2 pilot+; sa15pop veteran+
+    // sa6, sa15, zsu1 always; zsu2 pilot+; sa15pop veteran+
     expect(rec.world.sams).toHaveLength(3);
     expect(ace.world.sams).toHaveLength(5);
     const capAce = harness(CAP_FIXTURE, 'ace');
@@ -262,7 +262,7 @@ describe('MissionRunner: setup', () => {
     expect(own.filter((g) => g.type === 'ship')).toHaveLength(3);
     const moving = own.filter((g) => g.path);
     expect(moving).toHaveLength(2);
-    const pop = harness(SEAD_FIXTURE, 'veteran').world.sams.find((s) => s.type === 'sa15')!;
+    const pop = harness(SEAD_FIXTURE, 'veteran').world.sams.find((s) => s.groupId === 'popup')!;
     expect(pop.state).toBe('emcon');
     expect(pop.known).toBe(false);
   });
@@ -283,15 +283,15 @@ describe('MissionRunner: objectives and outcome', () => {
     h.run(0.5);
     expect(h.runner.objectives.find((o) => o.id === 'o_sa6')!.state).toBe('complete');
     expect(h.runner.state).toBe('running');
-    // the steering cue moves on to the SA-8
-    expect(h.runner.currentWaypoint?.id).toBe('wp_sa8');
-    killGroup(h, 'rangi_sa8');
+    // the steering cue moves on to the SA-15
+    expect(h.runner.currentWaypoint?.id).toBe('wp_sa15');
+    killGroup(h, 'rangi_sa15');
     h.run(0.5);
     expect(h.runner.state).toBe('success');
     const end = h.of('mission:end');
     expect(end).toHaveLength(1);
     expect(end[0].success).toBe(true);
-    expect(h.of('objective').some((o) => o.id === 'o_sa8' && o.state === 'complete')).toBe(true);
+    expect(h.of('objective').some((o) => o.id === 'o_sa15' && o.state === 'complete')).toBe(true);
     expect(h.of('hud:message').some((m) => m.text === 'OBJECTIVE COMPLETE')).toBe(true);
     h.run(8);
     expect(h.of('radio').some((r) => r.voice === 'a_mission_complete')).toBe(true);
@@ -537,16 +537,16 @@ describe('A/G auto-designation ranks the primary targets first (playtest 2.2-f: 
     shieldPlayer(h);
     h.run(0.2);
     const flagged = h.world.sams.filter((s) => s.objective).map((s) => s.groupId);
-    expect(new Set(flagged)).toEqual(new Set(['rangi_sa6', 'rangi_sa8']));
+    expect(new Set(flagged)).toEqual(new Set(['rangi_sa6', 'rangi_sa15']));
     expect(h.world.sams.filter((s) => s.groupId === 'rangi_aaa').every((s) => !s.objective)).toBe(true);
     let first: string | null = null;
     h.run(3, () => {
       first ??= designatedGroup(h);
       return false;
     });
-    expect(['rangi_sa6', 'rangi_sa8']).toContain(first);
+    expect(['rangi_sa6', 'rangi_sa15']).toContain(first);
     killGroup(h, 'rangi_sa6');
     h.run(1);
-    expect(h.world.sams.filter((s) => s.groupId === 'rangi_sa8').every((s) => s.objective)).toBe(true);
+    expect(h.world.sams.filter((s) => s.groupId === 'rangi_sa15').every((s) => s.objective)).toBe(true);
   });
 });
