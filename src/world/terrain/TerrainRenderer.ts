@@ -137,6 +137,7 @@ export class TerrainRenderer {
   /** CBD street map texture (null without LINZ road data). */
   readonly streetTexture: DataTexture | null;
   private lotMaskTexture: DataTexture | null = null;
+  private siteMaskTexture: DataTexture | null = null;
   private readonly geometry: InstancedBufferGeometry;
   private readonly material: ShaderMaterial;
   private readonly patchAttr: InstancedBufferAttribute;
@@ -340,6 +341,10 @@ export class TerrainRenderer {
         uLotMask: { value: o.dummy },
         uLotMaskRect: { value: new Vector4(0, 0, 1, 0) },
         uLotMaskRows: { value: 1 },
+        // set by setSiteMask() with the scenery (landmark sites: no procedural grid)
+        uSiteMask: { value: o.dummy },
+        uSiteMaskRect: { value: new Vector4(0, 0, 1, 0) },
+        uSiteMaskRows: { value: 1 },
       },
     });
     this.mesh = new Mesh(this.geometry, this.material);
@@ -467,11 +472,20 @@ export class TerrainRenderer {
   /** Clear the lots along the road and railway ribbons (lotMask.ts, built with the scenery); null = none. */
   setLotMask(mask: LotMask | null): void {
     this.lotMaskTexture?.dispose();
-    this.lotMaskTexture = null;
+    this.lotMaskTexture = this.installMask(mask, 'uLotMask');
+  }
+
+  /** Stop the procedural streets and lots on the landmarks' sites (Scenery.siteMask); null = none. */
+  setSiteMask(mask: LotMask | null): void {
+    this.siteMaskTexture?.dispose();
+    this.siteMaskTexture = this.installMask(mask, 'uSiteMask');
+  }
+
+  private installMask(mask: LotMask | null, name: 'uLotMask' | 'uSiteMask'): DataTexture | null {
     const u = this.material.uniforms;
     if (!mask) {
-      u.uLotMaskRect.value.set(0, 0, 1, 0);
-      return;
+      u[`${name}Rect`].value.set(0, 0, 1, 0);
+      return null;
     }
     const t = new DataTexture(mask.data, mask.texW, mask.texH, RGBAFormat, UnsignedByteType);
     t.wrapS = t.wrapT = ClampToEdgeWrapping;
@@ -479,10 +493,10 @@ export class TerrainRenderer {
     t.minFilter = NearestFilter;
     t.generateMipmaps = false;
     t.needsUpdate = true;
-    this.lotMaskTexture = t;
-    u.uLotMask.value = t;
-    u.uLotMaskRect.value.set(mask.x0, mask.z0, mask.cell, mask.texW);
-    u.uLotMaskRows.value = mask.texH;
+    u[name].value = t;
+    u[`${name}Rect`].value.set(mask.x0, mask.z0, mask.cell, mask.texW);
+    u[`${name}Rows`].value = mask.texH;
+    return t;
   }
 
   dispose(): void {
@@ -492,6 +506,7 @@ export class TerrainRenderer {
     this.heightTexture.dispose();
     this.streetTexture?.dispose();
     this.lotMaskTexture?.dispose();
+    this.siteMaskTexture?.dispose();
   }
 }
 

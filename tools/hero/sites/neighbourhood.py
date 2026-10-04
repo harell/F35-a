@@ -163,7 +163,7 @@ def creases(kind, c, ax, ay, A, B):
     return []
 
 
-def fit_roof(P, dsm, dem, rgb, min_pitch=0.15):
+def fit_roof(P, dsm, dem, rgb, min_pitch=0.15, kinds=('gable', 'hip', 'skel')):
     """Measure one building: base, roof kind, eave, pitch, colour, fit error. None if the LiDAR sees too little of it."""
     ring = list(P.exterior.coords)
     m_all = ring_mask(dsm.shape, ring)
@@ -201,7 +201,7 @@ def fit_roof(P, dsm, dem, rgb, min_pitch=0.15):
         fits[kind] = (sol, rms, float(sel.mean()))
     (e_flat,), rms_flat, _ = fits['flat']
     best = ('flat', e_flat, 0.0, rms_flat)
-    for kind in ('gable', 'hip', 'skel'):
+    for kind in kinds:
         (e, t), rms, inl = fits[kind]
         rise = t * (B if kind == 'gable' else min(A, B) if kind == 'hip' else float(dsk.max()))
         # a clearly better pitched fit; or, on a house-sized roof that is not flat (rms > 0.5 m), any better pitched fit

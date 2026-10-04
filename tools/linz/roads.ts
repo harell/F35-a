@@ -23,6 +23,8 @@ import { AKL } from '../../src/core/auckland';
 import { decodeRoads, encodeRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_RAIL, ROAD_STREET, type RoadData, type RoadKind, type RoadLine } from '../../src/world/scenery/aucklandRoads';
 import { HAND_ARTERIALS } from '../../src/world/scenery/motorways';
 import { decodeLinz, linzIsLand } from '../../src/world/terrain/theaters/aucklandLinz';
+import { decodeOsm, OSM_STADIUM } from '../../src/world/scenery/aucklandOsm';
+import { worldToGeo } from '../../src/core/auckland';
 import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, project, runs, segDist, simplify, type Feature, type Pt } from './polyline';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -35,7 +37,8 @@ const wfs = (file: string, typeName: string, cql: string) => fetchWfs(WORK, file
 
 // World box ±44 km (lat/lon order for EPSG:4167 / 4326 BBOX filters, northing/easting for NZTM)
 const W = { s: -37.25, n: -36.44, w: 174.26, e: 175.26 };
-const CBD = { s: -36.8745, n: -36.8275, w: 174.7365, e: 174.7905 };
+// the CBD and, west of it, Herne Bay and Westhaven (hero neighbourhoods: tools/hero/sites/herne_bay.py, westhaven.py)
+const CBD = { s: -36.8745, n: -36.8275, w: 174.72, e: 174.7905 };
 const ARTERIAL_NAMES: Record<string, string> = {
   'Dominion Road': 'Dominion Rd',
   'Mount Eden Road': 'Mt Eden Rd',
@@ -253,15 +256,29 @@ for (const f of streets) {
 // ── Region polygon ──
 // Legs along the real road graph (counter-clockwise on the map: west → south → east), then closed
 // through the harbour. Waypoints are only hints: each is snapped to the nearest road node.
+// Herne Bay and Westhaven are in the region: their buildings, trees and boats are the hero
+// neighbourhood models (src/world/scenery/aucklandNeighbourhoods.ts), so the seam follows the streets
+// that bound them (Jervois Rd, Shelly Beach Rd, SH1) and St Marys Bay and Ponsonby stay procedural.
+const JERVOIS_W: Pt = [-3234, 122];
+const JERVOIS_E: Pt = [-1871, -333];
+const SHELLY_N: Pt = [-1786, -1329];
+// a graph of those two roads alone, so the shortest path can't cut along a parallel street
+const herneGraph = new Graph();
+for (const f of streets) if (['Jervois Road', 'Shelly Beach Road'].includes(String(f.properties.full_road_name))) for (const pts of lines(f)) herneGraph.add(pts);
 const region: Pt[] = [
-  // SH1 at St Marys Bay → down the SH1 carriageways, through the Central Motorway Junction → up SH16 (Grafton Gully)
-  ...mwGraph.path([-1125, -590], [1030, 452]),
+  // Jervois Rd from Herne Bay's west end to Ponsonby Rd, up Shelly Beach Rd to SH1
+  ...herneGraph.path(JERVOIS_W, JERVOIS_E),
+  ...herneGraph.path(JERVOIS_E, SHELLY_N).slice(1),
+  // SH1 from the bridge approach through St Marys Bay and the Central Motorway Junction → up SH16 (Grafton Gully)
+  ...mwGraph.path([-1812, -1342], [1030, 452]),
   // SH16 end → Stanley St → Beach Rd → Quay St, west of the port's Captain Cook / Marsden wharves
   ...stGraph.path([1030, 452], [925, -585]).slice(1),
   // across the root of the wharf (≈ 100 m) to its west waterline, round the port's west deck
-  // (buildPort), Queens Wharf and the Wynyard Quarter, back through Westhaven Marina to the shore at
-  // St Marys Bay (the last ≈ 45 m cross Westhaven Dr to the motorway)
-  [895, -700], [770, -760], [770, -1260], [600, -1400], [-300, -1700], [-760, -1500], [-1000, -1100], [-1125, -760],
+  // (buildPort), Queens Wharf and the Wynyard Quarter, outside Westhaven's breakwaters, under the
+  // Harbour Bridge and ≈ 100 m off Herne Bay's shore to Cox's Bay
+  [895, -700], [770, -760], [770, -1260], [600, -1400], [-300, -1700], [-650, -1440], [-1000, -1590], [-1720, -1590],
+  [-2100, -1370], [-2240, -1110], [-2400, -975], [-2650, -950], [-2920, -870], [-3090, -665], [-3300, -605], [-3560, -200],
+  [-3560, 20],
 ];
 const regionPts = simplify(region.concat([region[0]]), 1).slice(0, -1);
 const inRegion = (x: number, z: number) => {
@@ -311,6 +328,56 @@ for (const [linzName, short] of Object.entries(ARTERIAL_NAMES)) {
   }
 }
 
+// ── Streets round the 3D landmarks outside the region (the stadiums with OSM stands) ──
+// The terrain shader stops its procedural grid on a landmark's site (Scenery.siteMask); the real streets
+// that bound the site are ribbons, so a stadium stands among its own streets, not on painted ones.
+// Every LINZ road section within LANDMARK_REACH m of the site's outline, clipped there.
+const LANDMARK_REACH = 90;
+const osmRaw = fs.readFileSync(path.join(HERE, '../../src/world/scenery/data/auckland-osm.bin'));
+const osm = decodeOsm(new Uint8Array(osmRaw[0] === 0x1f ? zlib.gunzipSync(osmRaw) : osmRaw));
+const landmarkStreets: RoadLine[] = [];
+// the motorways and arterials already baked: a landmark street along one of them is the same road
+const ribbonSegs: [Pt, Pt][] = [];
+for (const l of out) for (let i = 0; i + 3 < l.pts.length; i += 2) ribbonSegs.push([[l.pts[i], l.pts[i + 1]], [l.pts[i + 2], l.pts[i + 3]]]);
+const onRibbon = (p: Pt) => ribbonSegs.some(([a, b]) => segDist(p[0], p[1], a, b) < 12);
+const inRing = (ring: Pt[], x: number, z: number) => {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i];
+    const [xj, zj] = ring[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+};
+for (const f of osm.features) {
+  if (f.layer !== OSM_STADIUM) continue;
+  const ring: Pt[] = [];
+  for (let i = 0; i < f.pts.length; i += 2) ring.push([f.pts[i], f.pts[i + 1]]);
+  if (ring.some((p) => inRegion(p[0], p[1]))) continue; // Spark Arena: the region's own streets
+  const xs = ring.map((p) => p[0]);
+  const zs = ring.map((p) => p[1]);
+  const lo = worldToGeo(Math.min(...xs) - LANDMARK_REACH - 50, Math.max(...zs) + LANDMARK_REACH + 50);
+  const hi = worldToGeo(Math.max(...xs) + LANDMARK_REACH + 50, Math.min(...zs) - LANDMARK_REACH - 50);
+  const key = `landmark-${Math.round(xs[0])}_${Math.round(zs[0])}.json`;
+  const secs = wfs(key, 'layer-123109', `BBOX(shape,${lo.lat},${lo.lon},${hi.lat},${hi.lon})`);
+  const closed = ring.concat([ring[0]]);
+  const dist = (p: Pt) => polyDist(p[0], p[1], closed);
+  for (const sec of secs) {
+    const w = streetWidth(sec.properties);
+    // accessways are mostly footpath links through parks and between sections
+    if (w === null || sec.properties.road_name_type === 'Accessway') continue;
+    for (const pl of lines(sec))
+      // (not across the site itself: a racecourse's own service roads stay off its grounds)
+      for (const r of runs(densify(pl, 4), (p) => (dist(p) < LANDMARK_REACH && !inRing(ring, p[0], p[1]) ? 0 : -1))) {
+        if (r.flag !== 0 || r.pts.filter(onRibbon).length > r.pts.length / 2) continue;
+        if (Math.hypot(r.pts[r.pts.length - 1][0] - r.pts[0][0], r.pts[r.pts.length - 1][1] - r.pts[0][1]) < 15) continue; // stubs
+        const pts = simplify(r.pts, 0.8);
+        if (pts.length > 1) landmarkStreets.push(toLine(String(sec.properties.full_road_name ?? ''), ROAD_ARTERIAL, Math.min(w, 12), false, pts));
+      }
+  }
+}
+out.push(...landmarkStreets);
+
 // ── Write ──
 // the railways (tools/linz/railways.ts) share the file: keep the ones already baked
 const rails = fs.existsSync(OUT) ? decodeRoads(new Uint8Array(zlib.gunzipSync(fs.readFileSync(OUT)))).lines.filter((l) => l.kind === ROAD_RAIL) : [];
@@ -320,7 +387,7 @@ const gz = zlib.gzipSync(raw, { level: 9 });
 fs.writeFileSync(OUT, gz);
 const count = (k: RoadKind) => out.filter((l) => l.kind === k);
 const len = (ls: RoadLine[]) => ls.reduce((s, l) => s + l.pts.reduce((a, _, i, p) => (i >= 2 && i % 2 === 0 ? a + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]) : a), 0), 0) / 1000;
-console.log(`region: ${regionPts.length} vertices; ${rails.length} railway lines kept`);
+console.log(`region: ${regionPts.length} vertices; ${rails.length} railway lines kept; ${landmarkStreets.length} street runs round the landmarks`);
 for (const [k, n] of [[ROAD_STREET, 'streets'], [ROAD_MOTORWAY, 'motorways'], [ROAD_ARTERIAL, 'arterials']] as const) console.log(`${n}: ${count(k).length} lines, ${len(count(k)).toFixed(1)} km, ${count(k).reduce((s, l) => s + l.pts.length / 2, 0)} vertices, ${count(k).filter((l) => l.tunnel).length} tunnel runs`);
 console.log(`wrote ${OUT}: ${raw.length} bytes raw, ${gz.length} bytes gzip`);
 

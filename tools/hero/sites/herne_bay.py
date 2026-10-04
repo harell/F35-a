@@ -8,7 +8,7 @@ neighbourhoods review page (tools/hero/sites/neighbourhoods_page.py).
       → <site>/model.json, <site>/mesh.npz, <site>/herne_bay.glb
 
 Scope: north of Jervois Road and west of Shelly Beach Road to the harbour, from Cox's Bay in the west (the OSM roads
-themselves, so the edge follows the streets, not a hand-drawn line), on land (LiDAR DEM > 0.6 m) plus the jetties.
+themselves, so the edge follows the streets, not a hand-drawn line), on land (LiDAR DEM > 0.6 m) and 30 m out over the beaches, plus the jetties.
 Shelly Beach Road's east side, Point Erin and the marina are Westhaven's (tools/hero/sites/westhaven.py).
 The kit (neighbourhood.py) does the measuring: roofs per OSM outline, trees per LiDAR crown, buildings OSM misses,
 and the roads check (roads are left out of the model and drawn on top by the game).
@@ -52,7 +52,8 @@ def footprint(site, osm_path):
     m = ring_mask(dem.shape, list(face.exterior.coords)) & land
     polys = [shapely.geometry.shape(g) for g, v in features.shapes(m.astype(np.uint8), mask=m, transform=Affine(1, 0, 0, 0, 1, 0)) if v == 1]
     landpoly = max(polys, key=lambda p: p.area).buffer(2).buffer(-2).simplify(1.5)
-    return landpoly, face
+    # out over the beaches to 30 m past the land (the game's coastline is mean high water), never past the streets
+    return landpoly.union(landpoly.buffer(30).intersection(face)).simplify(1.5), face
 
 
 def main():

@@ -5,13 +5,14 @@
  * tools/linz/railways.ts) from Toitū Te Whenua LINZ open data (CC BY 4.0): NZ Addresses road sections
  * (layer 123109), Topo50 railway centrelines (layer 50319) and tunnel centrelines (layer 50366),
  * reprojected to game XZ with geoToWorld (src/core/auckland.ts). It holds
- *  - every street inside the CBD region (painted by the terrain shader, see cbdStreets.ts),
+ *  - every street inside the CBD region (painted by the terrain shader, see cbdStreets.ts): the CBD, and west of it
+ *    Herne Bay and Westhaven, whose buildings and trees are measured models (aucklandNeighbourhoods.ts),
  *  - the motorway carriageways of the whole theatre (road ribbons, motorways.ts),
- *  - the main arterials (road ribbons),
+ *  - the main arterials and the streets round the stadiums outside the region (road ribbons),
  *  - the railway lines (kind ROAD_RAIL, ballast-and-track ribbons, width = the formation),
  *  - the CBD region polygon: the area that uses the real streets instead of the procedural grid.
- *    Its border runs along the SH1 / SH16 carriageways, Stanley St / Beach Rd and out into the
- *    harbour, so the hand-over to the procedural suburbs happens under a motorway, not across a block.
+ *    Its border runs along Jervois Rd / Shelly Beach Rd, the SH1 / SH16 carriageways, Stanley St /
+ *    Beach Rd and out into the harbour, so the hand-over to the procedural suburbs happens under a motorway, not across a block.
  * One small gzip file (≈ 40 kB), fetched once per page load next to the LINZ terrain. When it is
  * missing the theatre falls back to the hand-traced motorways and the procedural CBD grid.
  *

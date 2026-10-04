@@ -57,6 +57,11 @@ export class LotMask {
     return ((this.data[((j >> 2) * this.texW + (i >> 3)) * 4 + (j & 3)] >> (i & 7)) & 1) === 1;
   }
 
+  /** Set a cell (column i, row j from x0, z0). */
+  mark(i: number, j: number): void {
+    this.set(i, j);
+  }
+
   private set(i: number, j: number): void {
     this.data[((j >> 2) * this.texW + (i >> 3)) * 4 + (j & 3)] |= 1 << (i & 7);
   }
@@ -104,6 +109,43 @@ export class LotMask {
     }
     return m;
   }
+}
+
+/**
+ * Mask of the cells whose centre lies inside one of `rings` (flat [x0, z0, ...]) or within `margin` m of one: the
+ * landmark sites where the procedural grid stops (Scenery.siteMask). Covers the rings' bounding box.
+ */
+export function maskFromRings(rings: readonly ArrayLike<number>[], margin: number, cell = LOT_MASK_CELL): LotMask | null {
+  if (!rings.length) return null;
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const r of rings)
+    for (let i = 0; i < r.length; i += 2) {
+      x0 = Math.min(x0, r[i] - margin - cell);
+      x1 = Math.max(x1, r[i] + margin + cell);
+      z0 = Math.min(z0, r[i + 1] - margin - cell);
+      z1 = Math.max(z1, r[i + 1] + margin + cell);
+    }
+  // ring edges as zero-width segments, plus the cells inside each ring
+  const segs: number[] = [];
+  for (const r of rings) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) segs.push(r[j], r[j + 1], r[i], r[i + 1], 0);
+  const m = LotMask.fromSegments(segs, { x0, z0, x1, z1 }, margin, cell);
+  for (let j = 0; j < m.texH * 4; j++) {
+    const cz = m.z0 + (j + 0.5) * cell;
+    for (let i = 0; i < m.texW * 8; i++) {
+      const cx = m.x0 + (i + 0.5) * cell;
+      if (rings.some((r) => ringHas(r, cx, cz))) m.mark(i, j);
+    }
+  }
+  return m;
+}
+
+function ringHas(r: ArrayLike<number>, x: number, z: number): boolean {
+  let c = false;
+  for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+    const xi = r[i], zi = r[i + 1], xj = r[j], zj = r[j + 1];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+  }
+  return c;
 }
 
 /**
