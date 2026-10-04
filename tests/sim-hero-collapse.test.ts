@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { DIFFICULTIES } from '../src/core/data';
 import { EventBus, type GameEventMap } from '../src/core/events';
-import { MUSEUM, MUSEUM_TOP, museumSolids, museumToWorld } from '../src/core/museum';
+import { MUSEUM, MUSEUM_COLUMNS, MUSEUM_TOP, museumSolids } from '../src/core/museum';
 import { SPARK_ARENA } from '../src/core/sparkArena';
 import { COLLAPSE } from '../src/core/skyTower';
 import { createAiBrain } from '../src/ai';
@@ -22,7 +22,7 @@ import { initFlight } from '../src/sim/flight/FlightModel';
 import { END_DELAY_COLLAPSE, END_DELAY_FAILED, END_DELAY_SUCCESS, END_SETTLE_AFTER_STRIKE, endDelay } from '../src/game/outro';
 import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
-import { buildMuseum } from '../src/world/scenery/auckland';
+import { buildMuseum } from '../src/world/scenery/museum';
 import { FlatTerrain } from './combat-helpers';
 
 const DT = 1 / 60;
@@ -65,7 +65,8 @@ describe('the museum as a solid', () => {
   it('its prisms hold the drawn model: every vertex inside a prism footprint and under its top', () => {
     const solids = museumSolids();
     const B = new GeometryBuilder();
-    buildMuseum(B, new LightList(), () => 1.5);
+    const ground = 1.5;
+    buildMuseum(B, new LightList(), () => ground);
     const pos = B.build()!.getAttribute('position');
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -73,12 +74,11 @@ describe('the museum as a solid', () => {
       const z = pos.getZ(i);
       const inside = solids.filter((s) => pointInRing(s.ring, x, z) || ringDistance(s.ring, x, z) < 0.05);
       expect(inside.length, `vertex ${x.toFixed(1)},${z.toFixed(1)}`).toBeGreaterThan(0);
-      expect(y).toBeLessThanOrEqual(Math.max(...inside.map((s) => s.h)) + 0.01);
+      expect(y).toBeLessThanOrEqual(ground + Math.max(...inside.map((s) => s.h)) + 0.01);
     }
     expect(Math.max(...solids.map((s) => s.h))).toBe(MUSEUM_TOP);
-    // the portico is on the −lz side
-    const [px, pz] = museumToWorld(0, -35);
-    expect(pointInRing(solids[1].ring, px, pz)).toBe(true);
+    // the portico's eight columns are solid too
+    for (const [cx, cz] of MUSEUM_COLUMNS) expect(solids.some((s) => pointInRing(s.ring, cx, cz))).toBe(true);
   });
 });
 

@@ -9,7 +9,7 @@ F35-A — hero building recipe: Westfield Newmarket (277 + 309 Broadway, Newmark
 Baseline: OSM relation 11520833 "Westfield Newmarket" (two outer rings: 277 Broadway with its rooftop car
 park, 309 Broadway) and its building:part ways (5–8 levels). Heights: LINZ 2024 LiDAR, the median DSM
 inside each ring (flat roofs), walls down to the lowest DEM in the ring (Newmarket slopes ~8 m across the
-site). Roofs: the 2024 7.5 cm aerial draped in the same frame (low buildings: lean < 1 m). Facades and
+site; an outline holding other parts takes its median outside them). Roofs: the 2024 7.5 cm aerial draped in the same frame (low buildings: lean < 1 m). Facades and
 signs: Wikimedia Commons photo File:Westfield_Newmarket_20220125_163111.jpg (Broadway frontage, 2022:
 dark precast and glass bays, the teal glass air bridge over Mortimer Pass, the corner "Westfield" sign);
 architect's renders show the 277 entrance's glass dome (confirmed in the aerial) but are not as-built.
@@ -49,10 +49,40 @@ def main():
     g0 = float(np.nanpercentile(dem[mall], 2))          # heights in the model are metres above this
 
     prisms = []
+    masks = {k: ring_mask(dem.shape, feats[k]['ring']) for k in PARTS}
     for k, (wall, bay, roof, base) in PARTS.items():
-        m = ring_mask(dem.shape, feats[k]['ring'])
+        m = masks[k]
+        # 277's outline holds the other 277 parts: its own roof (the car-park deck) is the median outside them
+        own = m.copy()
+        for j, mj in masks.items():
+            if j != k and (mj & m).sum() > 0.8 * mj.sum():
+                own &= ~mj
         prisms.append({'id': k, 'ring': feats[k]['ring'], 'y0': round(float(np.nanmin(dem[m])) - g0 - 0.5, 2),
-                       'y1': round(float(np.nanmedian(dsm[m])) - g0, 2), 'wall': wall, 'bay': bay, 'roof': roof, **({'base': base} if base else {})})
+                       'y1': round(float(np.nanmedian(dsm[own if own.sum() > 50 else m])) - g0, 2), 'wall': wall, 'bay': bay, 'roof': roof, **({'base': base} if base else {})})
+    # 277's deck is two levels (21 m and 24 m over g0 in the LiDAR's histogram): the outline at the lower deck, the
+    # upper deck's areas traced from the LiDAR (0.5 m, simplified 1.2 m) as their own prisms on it
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cbd_towers import parts_of, polys  # noqa: E402
+    from shapely.geometry import Polygon
+    deck = next(p for p in prisms if p['id'] == 'way/30088824')
+    own = masks['way/30088824'].copy()
+    for j in ('way/1010450578', 'way/1010450579', 'way/1010450580'):
+        own &= ~masks[j]
+    hv = dsm - g0
+    roofs = own & (dsm - dem > 3)
+    lo = roofs & (hv < 22.5)
+    deck['y1'] = round(float(np.nanmedian(hv[lo])), 2)
+    outline = Polygon(deck['ring']).buffer(0)
+    # (a third level over 25.5 m on the upper deck: the plant and lift housings)
+    for name, hi in (('upper', roofs & (hv >= 22.5)), ('top', roofs & (hv >= 25.5))):
+        for q in polys(hi):
+            for r in parts_of(q.intersection(outline).simplify(1.2, preserve_topology=True)):
+                if r.area < 40:
+                    continue
+                cells = ring_mask(dem.shape, list(r.exterior.coords)[:-1]) & hi
+                prisms.append({'id': f'way/30088824+{name}', 'ring': [[round(x, 2), round(z, 2)] for x, z in list(r.exterior.coords)[:-1]],
+                               'y0': deck['y0'], 'y1': round(float(np.nanmedian(hv[cells & (hv < 25.5 if name == 'upper' else hv > 0)])), 2),
+                               'wall': 'lattice' if name == 'upper' else 'precast_dark', 'bay': deck['bay'], 'roof': 'aerial'})
     P = {p['id']: p for p in prisms}
     # the rotunda's glass dome lets the LiDAR through (p10 ≈ 0 m inside it), so its median reads low;
     # it stands one storey above the car-park deck it sits on (renders and the aerial's shadow)

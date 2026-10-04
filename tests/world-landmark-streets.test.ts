@@ -11,6 +11,7 @@ import { aucklandStreets, type CbdStreets } from '../src/world/scenery/cbdStreet
 import { distToPath, pointInRing } from '../src/world/scenery/aucklandOsm';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { AKL } from '../src/core/auckland';
+import { WESTFIELD_CENTRE, WESTFIELD_PRISMS } from '../src/core/westfieldNewmarket';
 
 const rings = siteRings();
 const mask = maskFromRings(rings, 8)!;
@@ -18,8 +19,9 @@ const st = aucklandStreets() as CbdStreets;
 const eden = siteLayout()!.stadiums.find((s) => pointInRing(s.outline.pts, AKL.eden_park.x, AKL.eden_park.z))!;
 
 describe('landmark sites stop the procedural grid', () => {
-  it('every stadium and the oil terminal is a site; the mask covers each one and a street width round it', () => {
-    expect(rings.length).toBe(siteLayout()!.stadiums.length + 1);
+  it('every stadium, the oil terminal and Westfield Newmarket is a site; the mask covers each one and a street width round it', () => {
+    expect(rings.length).toBe(siteLayout()!.stadiums.length + 1 + WESTFIELD_PRISMS.length);
+    expect(mask.masked(WESTFIELD_CENTRE.x + 20, WESTFIELD_CENTRE.z - 60)).toBe(true);
     expect(eden).toBeTruthy();
     expect(mask.masked(AKL.eden_park.x, AKL.eden_park.z)).toBe(true);
     expect(mask.masked(AKL.wiri.x, AKL.wiri.z)).toBe(true);
@@ -59,6 +61,12 @@ describe('real streets round the landmarks', () => {
     expect([...names].some((n) => /Reimers|Walters|Cricket|Sandringham|Bellwood/.test(n))).toBe(true);
     // no ribbon crosses the grounds
     for (const l of ribbons) for (let i = 0; i < l.pts.length; i += 2) expect(pointInRing(eden.outline.pts, l.pts[i], l.pts[i + 1])).toBe(false);
+  });
+
+  it('Westfield Newmarket stands among Broadway, Mortimer Pass and its other streets', () => {
+    const all = new Set<string>();
+    for (const p of WESTFIELD_PRISMS) for (const l of near(Float32Array.from(p.ring), 60)) all.add(l.name);
+    expect([...all].some((n) => /Mortimer|Broadway|Teed|Gillies|Kent/.test(n))).toBe(true);
   });
 
   it('every stadium outside the real-streets region gets streets round it', () => {

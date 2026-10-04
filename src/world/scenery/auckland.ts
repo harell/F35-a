@@ -6,7 +6,6 @@
  * the real ones (LINZ outlines + LiDAR heights) when that data is installed, else procedural towers
  * on the streets the terrain shader paints (the real LINZ streets, or the urbanGrid.ts block grid).
  */
-import { MUSEUM, MUSEUM_BOXES, MUSEUM_DOME } from '../../core/museum';
 import { Color } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
 import { AKL } from '../../core/auckland';
@@ -14,7 +13,8 @@ import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfield
 import { airfieldLayout } from './aucklandOsm';
 import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
@@ -630,6 +630,25 @@ function buildSceneFins(B: GeometryBuilder, height: HeightFn): void {
   }
 }
 
+/** Window style of a kit tower's shaft facade (core/cbdTowers.ts). */
+const TOWER_WIN: Record<TowerFacade, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, balcony: WIN_BALCONY, plain: WIN_FLOOD };
+
+/** Wall colour, roof colour and window style of a kit tower's part. */
+function towerPartFacade(t: CbdTower, kind: string | undefined, tmp: Color): [number, number, number] {
+  switch (kind) {
+    case 'podium':
+      return [t.podium, tmp.setHex(t.podium).multiplyScalar(0.62).getHex(), WIN_OFFICE];
+    case 'plant':
+      return [0x8d8f8e, 0x6f7170, WIN_NONE];
+    case 'spire':
+      return [0xc9ccce, 0xc9ccce, WIN_NONE];
+    case 'crown':
+      if (t.crownColour !== undefined) return [t.crownColour, tmp.setHex(t.crownColour).multiplyScalar(0.7).getHex(), t.crown === 'lit' ? WIN_GLOW : WIN_NONE];
+      break;
+  }
+  return [t.wall, tmp.setHex(t.wall).multiplyScalar(0.55).getHex(), TOWER_WIN[t.facade]];
+}
+
 function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, bs: Building[]): CbdStats {
   const tol = detail >= 0.9 ? 0 : detail >= 0.5 ? 0.5 : 1.5;
   const minArea = detail >= 0.5 ? 0 : 60;
@@ -672,7 +691,9 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     const roofCol = top >= 60 ? tmp.setHex(col).multiplyScalar(0.62).getHex() : tmp.setHex(0x7c7b77).lerp(new Color(col), 0.2).multiplyScalar(0.8 + hsh * 0.3).getHex();
     for (const p of b.prisms) {
       if (minArea && Math.abs(ringArea(p.ring)) < minArea) continue;
-      const ring = simplifyRing(p.ring, tol);
+      if (detail < 0.5 && p.kind === 'plant') continue; // low tier: the kit towers' roof plant goes
+      // the kit towers' terraces are traced at 0.5 m: below the high tier they take a coarser outline (1 m / 2 m)
+      const ring = simplifyRing(p.ring, b.hero === 'tower' && tol > 0 ? tol * 2 : tol);
       const roof = (x: number, z: number) => g + roofHeight(p, x, z);
       if (b.hero === 'house' && b.colors) {
         // hero neighbourhood houses (aucklandNeighbourhoods.ts): measured roof shape and colours, homes' windows
@@ -685,8 +706,27 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       }
       if (b.hero === 'scene') {
         // the Scene apartments (core/sceneApartments.ts): white balcony bands on the towers, Scene One's teal glass bay
-        const [c, w] = HERO_FACADE[p.kind ?? 'podium'];
+        const [c, w] = HERO_FACADE[(p.kind ?? 'podium') as SceneTerraceKind];
         B.prism(ring, y0, roof, c, p.kind === 'tower' ? 0xd8dbdb : 0x9a9b97, w);
+        prisms.push({ ...p, y0, y1: g + p.h });
+        heights.push(p.h);
+        continue;
+      }
+      if (b.hero === 'tower' && b.tower) {
+        // a kit tower (core/cbdTowers.ts): its measured parts, each with its facade; sloped crowns keep the wall colour.
+        // Every part stands from the ground, and a crown terrace is beside the shaft's roof, not on it: up to the shaft's
+        // roof its walls are the shaft's facade, the crown's colour (and its light) only above
+        const [c, rc, w] = towerPartFacade(b.tower, p.kind, tmp);
+        let from = y0;
+        if (p.kind === 'crown') {
+          const shaftTop = Math.max(0, ...b.prisms.filter((q) => q.kind === 'shaft' || q.kind === 'podium').map((q) => q.h));
+          if (shaftTop > 0 && shaftTop < p.h) {
+            const [sc, , sw] = towerPartFacade(b.tower, 'shaft', tmp);
+            B.prism(ring, y0, () => g + shaftTop, sc, sc, sw);
+            from = g + shaftTop;
+          }
+        }
+        B.prism(ring, from, roof, c, p.sx || p.sz ? c : rc, w);
         prisms.push({ ...p, y0, y1: g + p.h });
         heights.push(p.h);
         continue;
@@ -710,8 +750,8 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
   // street lamps, not inside a building: a 20 m bucket grid of the footprints
   const grid = new Map<number, BuildingPrism[]>();
   const key = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
-  for (const b of bs) {
-    const p = b.prisms[0];
+  // (a kit tower's terraces don't overlap: every one of its parts holds the lamps off)
+  for (const p of bs.flatMap((b) => (b.hero === 'tower' ? b.prisms : [b.prisms[0]]))) {
     let x0 = Infinity;
     let x1 = -Infinity;
     let z0 = Infinity;
@@ -957,22 +997,6 @@ export function buildMarinas(B: GeometryBuilder, lights: LightList, height: Heig
     // breakwater along the outer edge
     B.box(IDENT, (m.x0 + m.x1) / 2, -2, m.zOut - 12, m.x1 - m.x0 + 60, 4.2, 10, 0x5a5854, 0x6a6864);
   }
-}
-
-/** Auckland War Memorial Museum on the Domain (shape shared with the sim: core/museum.ts). */
-export function buildMuseum(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
-  const { x: mx, z: mz, heading } = MUSEUM;
-  const g = height(mx, mz) - 1.5;
-  const fr = frameFromHeading(mx, g, mz, heading);
-  const stone = 0xe8e0cc;
-  const [block, portico, upper] = MUSEUM_BOXES;
-  B.box(fr, block.lx, block.y0, block.lz, block.w, block.h, block.d, stone, 0x9c9486, WIN_NONE);
-  B.box(fr, portico.lx, portico.y0, portico.lz, portico.w, portico.h, portico.d, stone, 0x9c9486, WIN_NONE);
-  B.box(fr, upper.lx, upper.y0, upper.lz, upper.w, upper.h, upper.d, stone, 0x9c9486);
-  const d = MUSEUM_DOME;
-  B.cylinder(fr, 0, d.drumY0, 0, d.r, d.r, d.drumH, 16, stone, WIN_NONE, false);
-  B.cylinder(fr, 0, d.drumY0 + d.drumH, 0, d.r, d.domeTopR, d.domeH, 16, 0x9aa8ae, WIN_NONE, true);
-  lights.add(mx, g + 30, mz, 0xfff0d0, 12);
 }
 
 /** One Tree Hill obelisk. */

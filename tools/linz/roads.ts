@@ -25,6 +25,7 @@ import { HAND_ARTERIALS } from '../../src/world/scenery/motorways';
 import { decodeLinz, linzIsLand } from '../../src/world/terrain/theaters/aucklandLinz';
 import { decodeOsm, OSM_STADIUM } from '../../src/world/scenery/aucklandOsm';
 import { worldToGeo } from '../../src/core/auckland';
+import { WESTFIELD_PRISMS } from '../../src/core/westfieldNewmarket';
 import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, project, runs, segDist, simplify, type Feature, type Pt } from './polyline';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -328,7 +329,7 @@ for (const [linzName, short] of Object.entries(ARTERIAL_NAMES)) {
   }
 }
 
-// ── Streets round the 3D landmarks outside the region (the stadiums with OSM stands) ──
+// ── Streets round the 3D landmarks outside the region (the stadiums with OSM stands, Westfield Newmarket) ──
 // The terrain shader stops its procedural grid on a landmark's site (Scenery.siteMask); the real streets
 // that bound the site are ribbons, so a stadium stands among its own streets, not on painted ones.
 // Every LINZ road section within LANDMARK_REACH m of the site's outline, clipped there.
@@ -349,26 +350,31 @@ const inRing = (ring: Pt[], x: number, z: number) => {
   }
   return c;
 };
-for (const f of osm.features) {
-  if (f.layer !== OSM_STADIUM) continue;
-  const ring: Pt[] = [];
-  for (let i = 0; i < f.pts.length; i += 2) ring.push([f.pts[i], f.pts[i + 1]]);
-  if (ring.some((p) => inRegion(p[0], p[1]))) continue; // Spark Arena: the region's own streets
-  const xs = ring.map((p) => p[0]);
-  const zs = ring.map((p) => p[1]);
+const toPts = (a: ArrayLike<number>): Pt[] => {
+  const r: Pt[] = [];
+  for (let i = 0; i < a.length; i += 2) r.push([a[i], a[i + 1]]);
+  return r;
+};
+// each landmark is one or more outlines (Westfield's buildings stand either side of Mortimer Pass, a real street)
+const landmarks: Pt[][][] = [...osm.features.filter((f) => f.layer === OSM_STADIUM).map((f) => [toPts(f.pts)]), WESTFIELD_PRISMS.map((p) => toPts(p.ring))];
+for (const rings of landmarks) {
+  if (rings.some((ring) => ring.some((p) => inRegion(p[0], p[1])))) continue; // Spark Arena: the region's own streets
+  const xs = rings.flat().map((p) => p[0]);
+  const zs = rings.flat().map((p) => p[1]);
   const lo = worldToGeo(Math.min(...xs) - LANDMARK_REACH - 50, Math.max(...zs) + LANDMARK_REACH + 50);
   const hi = worldToGeo(Math.max(...xs) + LANDMARK_REACH + 50, Math.min(...zs) - LANDMARK_REACH - 50);
   const key = `landmark-${Math.round(xs[0])}_${Math.round(zs[0])}.json`;
   const secs = wfs(key, 'layer-123109', `BBOX(shape,${lo.lat},${lo.lon},${hi.lat},${hi.lon})`);
-  const closed = ring.concat([ring[0]]);
-  const dist = (p: Pt) => polyDist(p[0], p[1], closed);
+  const closed = rings.map((ring) => ring.concat([ring[0]]));
+  const dist = (p: Pt) => Math.min(...closed.map((c) => polyDist(p[0], p[1], c)));
+  const onSite = (p: Pt) => rings.some((ring) => inRing(ring, p[0], p[1]));
   for (const sec of secs) {
     const w = streetWidth(sec.properties);
     // accessways are mostly footpath links through parks and between sections
     if (w === null || sec.properties.road_name_type === 'Accessway') continue;
     for (const pl of lines(sec))
       // (not across the site itself: a racecourse's own service roads stay off its grounds)
-      for (const r of runs(densify(pl, 4), (p) => (dist(p) < LANDMARK_REACH && !inRing(ring, p[0], p[1]) ? 0 : -1))) {
+      for (const r of runs(densify(pl, 4), (p) => (dist(p) < LANDMARK_REACH && !onSite(p) ? 0 : -1))) {
         if (r.flag !== 0 || r.pts.filter(onRibbon).length > r.pts.length / 2) continue;
         if (Math.hypot(r.pts[r.pts.length - 1][0] - r.pts[0][0], r.pts[r.pts.length - 1][1] - r.pts[0][1]) < 15) continue; // stubs
         const pts = simplify(r.pts, 0.8);

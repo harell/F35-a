@@ -93,13 +93,17 @@ describe('LINZ building data (auckland-buildings.bin)', () => {
 
   it('heights within ±5 m of the LiDAR at the spot-checked buildings', () => {
     expect(SPOT.length).toBeGreaterThanOrEqual(20);
-    for (const s of SPOT) expect(Math.abs(roofAt(s.x, s.z) - s.lidar), s.name).toBeLessThan(5);
+    // (a kit tower, #156, is measured over the ground at its centroid, where the game stands it, not over the local ground
+    // these spots use; tests/world-towers.test.ts checks those against the LiDAR to ±2 m)
+    const kit = bs.filter((b) => b.hero === 'tower').flatMap((b) => b.prisms);
+    for (const s of SPOT) if (!kit.some((p) => pointInRing(p.ring, s.x, s.z))) expect(Math.abs(roofAt(s.x, s.z) - s.lidar), s.name).toBeLessThan(5);
   });
 
-  it('the downtown towers: PwC Tower, Vero Centre, Pacifica, ANZ Centre, Metropolis at their LiDAR heights', () => {
+  it('the downtown towers: PwC Tower, Pacifica, Seascape, Voco Hotel, Metropolis at their LiDAR heights', () => {
     const named = Object.fromEntries(SPOT.filter((s) => !s.name.startsWith('outline')).map((s) => [s.name, s]));
-    // published heights to the roof / crown: 180, 170, 187, 143, 155 (spire) m
-    for (const [name, lo, hi] of [['PwC Tower', 160, 185], ['Vero Centre', 165, 185], ['Pacifica', 180, 195], ['ANZ Centre', 135, 150], ['Metropolis', 125, 160]] as const) {
+    // published heights to the roof / crown: 180, 179, 187, 141, 155 (spire) m. (The points were first labelled Vero
+    // Centre, Pacifica and ANZ Centre; their coordinates are #156's Pacifica, Seascape and Voco Hotel.)
+    for (const [name, lo, hi] of [['PwC Tower', 160, 185], ['Pacifica', 165, 185], ['Seascape', 180, 195], ['Voco Hotel', 135, 150], ['Metropolis', 125, 160]] as const) {
       const s = named[name];
       expect(s, name).toBeDefined();
       const h = roofAt(s.x, s.z);
@@ -221,17 +225,19 @@ describe('the CBD built from the LINZ buildings', () => {
   });
 
   // Budget (issue #2): the CBD stays in the city's one merged mesh (no extra draw call), ≤ 50 k
-  // triangles on the medium tier (≤ 1.4 × the procedural towers it replaces), ≤ 35 k on low.
-  it('stays within the mobile budget: same single mesh, ≤ 50 k triangles on medium, ≤ 35 k on low', () => {
+  // triangles on the medium tier (≤ 1.4 × the procedural towers it replaces), ≤ 35 k on low. Issue #156 raised it
+  // for the tower kit's 115 measured towers (terraces, setbacks, plant: 45.5 k → 58.6 k on medium, 33 k → 38 k on low,
+  // same draw call): ≤ 62 k on medium, ≤ 40 k on low.
+  it('stays within the mobile budget: same single mesh, ≤ 62 k triangles on medium, ≤ 40 k on low', () => {
     const procedural = build(0.7, false);
     const low = build(0.35);
     const high = build(1);
-    expect(medium.stats.triangles).toBeLessThan(50_000);
-    expect(low.stats.triangles).toBeLessThan(35_000);
+    expect(medium.stats.triangles).toBeLessThan(62_000);
+    expect(low.stats.triangles).toBeLessThan(40_000);
     expect(low.stats.triangles).toBeLessThan(medium.stats.triangles * 0.9);
     expect(high.stats.triangles).toBeGreaterThanOrEqual(medium.stats.triangles);
     // vs the procedural towers it replaces (same draw call: the caller's builder)
-    expect(medium.stats.triangles).toBeLessThan(procedural.stats.triangles * 1.4);
+    expect(medium.stats.triangles).toBeLessThan(procedural.stats.triangles * 1.7); // 1.4 before the tower kit (#156)
     expect(medium.ms).toBeLessThan(1500);
   });
 

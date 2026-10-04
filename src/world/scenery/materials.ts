@@ -160,7 +160,49 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit, detail);
     }
-  } else if (vWin > 6.5) {
+  } else if (vWin > 9.5) {
+    // floodlit stone (aWin 10, the War Memorial Museum): plain walls by day, washed warm white by floodlights at night
+    if (uNight > 0.0 && abs(N.y) < 0.5) emissive += uNight * base * vec3(1.0, 0.92, 0.78) * 0.55;
+  } else if (vWin > 7.5 && abs(N.y) < 0.5) {
+    // the CBD tower kit's facades (core/cbdTowers.ts): aWin 8 curtain-wall glass on a 1.5 m × 3.8 m storey grid with a dark
+    // spandrel at each slab; aWin 9 ribbon windows between precast bands (1.5 m band, 2.1 m glass, mullions every 1.8 m).
+    // Both blend to their average once a storey is a few pixels; at night office floors lit as the office grid (window LOD)
+    bool curtain = vWin < 8.5;
+    vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
+    vec2 cell = curtain ? vec2(1.5, 3.8) : vec2(1.8, 3.6);
+    vec2 g = vec2(dot(vWorld.xz, t), vWorld.y) / cell;
+    vec2 f = fract(g);
+    vec2 aa = vec2(mpp) / cell;
+    float detail = 1.0 - smoothstep(0.35, 0.9, mpp / cell.y);
+    vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
+    float band;
+    float mull;
+    vec3 glass;
+    if (curtain) {
+      band = 1.0 - smoothstep(0.2 - aa.y, 0.2 + aa.y, f.y);
+      mull = smoothstep(0.93 - aa.x, 0.93 + aa.x, abs(f.x - 0.5) * 2.0);
+      glass = mix(base * 0.7, sky * 0.75, 0.5);
+      vec3 spandrel = base * 0.55;
+      vec3 face = mix(mix(glass, base * 0.9, mull * 0.6), spandrel, band);
+      vec3 avg = mix(glass, spandrel, 0.2);
+      base = mix(avg, face, detail);
+    } else {
+      band = 1.0 - smoothstep(0.42 - aa.y, 0.42 + aa.y, f.y);
+      mull = smoothstep(0.92 - aa.x, 0.92 + aa.x, abs(f.x - 0.5) * 2.0);
+      glass = mix(vec3(0.12, 0.15, 0.18), sky * 0.5, 0.45);
+      vec3 face = mix(mix(glass, base * 0.8, mull), base, band);
+      vec3 avg = mix(glass, base, 0.5);
+      base = mix(avg, face, detail);
+    }
+    if (uNight > 0.0) {
+      vec2 id = floor(g);
+      float hsh = hash12(id + floor(vWorld.xz / 37.0) * 7.0);
+      float lit = step(hsh, ${WINDOW_STYLES.office.lit.toFixed(3)}) * (1.0 - band);
+      vec3 warm = mix(vec3(1.0, 0.7, 0.38), vec3(0.75, 0.85, 1.0), step(0.8, fract(hsh * 7.0))) * 1.5;
+      vec3 avg = ${v3(windowGlowAverage('office'))};
+      emissive += uNight * mix(avg, warm * lit, detail);
+    }
+  } else if (vWin > 6.5 && vWin < 7.5) {
     // balcony bands (aWin 7, the Scene apartments): a white slab edge (0.45 m) every 3.2 m storey, frosted balustrades
     // and dark glazing between; blends to the band's average once a storey is a few pixels; some bays lit at night
     float y = fract(vWorld.y / 3.2);
@@ -178,7 +220,7 @@ void main() {
       float lit = step(hash12(id + floor(vWorld.xz / 37.0) * 7.0), 0.3) * (1.0 - slab);
       emissive += uNight * mix(vec3(0.22, 0.16, 0.09), vec3(1.0, 0.7, 0.38) * 1.5 * lit, detail);
     }
-  } else if (vWin > 5.5) {
+  } else if (vWin > 5.5 && vWin < 6.5) {
     // curtain-wall glass (aWin 6): sky reflections between the mullions of a 3 m × 2.7 m grid by day;
     // at night lit from inside, panel columns warm white or the arena's purple
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
@@ -195,14 +237,14 @@ void main() {
       vec3 inside = mix(vec3(1.0, 0.62, 0.3), vec3(0.42, 0.12, 1.0), step(0.45, col)) * (0.5 + 0.5 * hash12(floor(g) + 7.0));
       emissive += uNight * inside * (1.0 - frame * 0.9) * 0.55;
     }
-  } else if (vWin > 4.5) {
+  } else if (vWin > 4.5 && vWin < 5.5) {
     // ribbed sheet metal (aWin 5): a bright seam every 0.63 m across the face's fall line (the ribs run
     // down a sloped roof and up a wall), blending into the sheet's average once a rib is under a pixel
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
     float seam = pow(0.5 + 0.5 * cos(6.2831853 * dot(vWorld.xz, t) / 0.63), 6.0);
     // (the mean of the seam profile is 924 / 4096: the sheet's colour on average stays its own)
     base *= 1.0 + 0.35 * (mix(seam, 0.2256, smoothstep(0.2, 0.6, mpp / 0.63)) - 0.2256);
-  } else if (vWin > 3.5) {
+  } else if (vWin > 3.5 && vWin < 4.5) {
     emissive += base * uNight * 1.6;
   }
   vec3 lit = atmoDiffuse(base, N, 1.0);

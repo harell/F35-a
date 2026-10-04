@@ -1,0 +1,974 @@
+{
+ "1": {
+  "name": "Seascape",
+  "wall": "#b7afa3",
+  "podium": "#d8c9ac",
+  "wall_raw": "#b0a6b3",
+  "podium_raw": "#c9bcc5",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023, under construction), by eye",
+  "note": "2024 LiDAR: topped out, roof ramps 188 → 126 m (construction state)"
+ },
+ "2": {
+  "name": "The Pacifica",
+  "wall": "#6d7e8c",
+  "podium": "#b1b09e",
+  "wall_raw": "#697899",
+  "podium_raw": "#a5a4b5",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark blue glass, white diagonal bracing on the lower third",
+  "merge_above": 170
+ },
+ "3": {
+  "name": "PwC Tower at Commercial Bay",
+  "wall": "#90969e",
+  "podium": "#627080",
+  "wall_raw": "#8b8fad",
+  "podium_raw": "#5b6992",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: blue glass, a white glazed crown screen rising to the north-east",
+  "crown_above": 159,
+  "crown": "lit",
+  "crownColour": "#e9edf0"
+ },
+ "4": {
+  "name": "Vero Centre",
+  "wall": "#a8b0b1",
+  "podium": "#78818c",
+  "wall_raw": "#a2a7c2",
+  "podium_raw": "#7079a0",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: glass with white mullions, a white sail crown and a mast",
+  "crown_above": 150,
+  "crown": "lit",
+  "crownColour": "#eef0f0",
+  "mast": 170
+ },
+ "5": {
+  "name": "51 Albert (Hotel Indigo)",
+  "wall": "#988f90",
+  "podium": "#5e687b",
+  "wall_raw": "#93889e",
+  "podium_raw": "#58618d",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark glass, plant on the roof"
+ },
+ "6": {
+  "name": "Voco Hotel / Holiday Inn",
+  "wall": "#efecc9",
+  "podium": "#878a8e",
+  "wall_raw": "#e6e0dc",
+  "podium_raw": "#7e81a2",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: white precast, two set-back slabs",
+  "merge_above": 135
+ },
+ "7": {
+  "name": "ANZ Centre",
+  "wall": "#a9a5a5",
+  "podium": "#747e8c",
+  "wall_raw": "#a39db5",
+  "podium_raw": "#6c76a0",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye: precast bands, a blue glass crown box",
+  "crown_above": 138,
+  "crown": "lit",
+  "crownColour": "#3f9fd6"
+ },
+ "8": {
+  "name": "Metropolis",
+  "wall": "#afadaa",
+  "podium": "#9b928a",
+  "wall_raw": "#a9a4ba",
+  "podium_raw": "#90889e",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: stone grid, stepped set-backs, a pyramid crown and spire",
+  "crown_above": 128,
+  "crownColour": "#d8d0c2",
+  "mast": 155,
+  "merge_above": 128,
+  "steps": 1.5
+ },
+ "9": {
+  "name": "Auckland Harbour Suites",
+  "wall": "#9aa4b2",
+  "podium": "#818890",
+  "wall_raw": "#949cc3",
+  "podium_raw": "#787fa5",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: blue glass grid"
+ },
+ "10": {
+  "name": "Auckland Council Tower",
+  "wall": "#868a97",
+  "podium": "#6d7b8e",
+  "wall_raw": "#8183a5",
+  "podium_raw": "#6673a2",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark glass, white edges"
+ },
+ "11": {
+  "name": "HSBC Tower",
+  "wall": "#b0bbc2",
+  "podium": "#abafaa",
+  "wall_raw": "#aab2d4",
+  "podium_raw": "#9fa3c2",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye: white bands, a mast on the roof",
+  "mast": 138
+ },
+ "12": {
+  "name": "Quay West",
+  "wall": "#c2bcb0",
+  "podium": "#868a8e",
+  "wall_raw": "#bbb3c1",
+  "podium_raw": "#7d81a2",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: beige precast, gabled crown"
+ },
+ "13": {
+  "name": "Park Residences",
+  "wall": "#737c8d",
+  "podium": "#626a7b",
+  "wall_raw": "#6f769a",
+  "podium_raw": "#5b638d",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: blue glass"
+ },
+ "14": {
+  "name": "BNZ Tower / QBE Centre",
+  "wall": "#b4afab",
+  "podium": "#918287",
+  "wall_raw": "#ada6bb",
+  "podium_raw": "#877a9a",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: dark glass, white corner edges, a crown box"
+ },
+ "15": {
+  "name": "205 Queen",
+  "wall": "#55627d",
+  "podium": "#899394",
+  "wall_raw": "#525d89",
+  "podium_raw": "#8089a9",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "16": {
+  "name": "SAP Tower",
+  "wall": "#6e6477",
+  "podium": "#b7988b",
+  "wall_raw": "#6a5f82",
+  "podium_raw": "#aa8e9f",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "17": {
+  "name": "Shortland & Fort",
+  "wall": "#688a9c",
+  "podium": "#8e8e8a",
+  "wall_raw": "#6483ab",
+  "podium_raw": "#84859e",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "18": {
+  "name": "Precinct Apartments",
+  "wall": "#c7c9c4",
+  "podium": "#aea28f",
+  "wall_raw": "#c0bfd7",
+  "podium_raw": "#a297a4",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "19": {
+  "name": "Aon Centre",
+  "wall": "#626881",
+  "podium": "#9ea29d",
+  "wall_raw": "#5f638d",
+  "podium_raw": "#9397b4",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "20": {
+  "name": "Crombie Lockwood Tower",
+  "wall": "#a2a8ae",
+  "podium": "#bbb29c",
+  "wall_raw": "#9ca0be",
+  "podium_raw": "#aea6b3",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "21": {
+  "name": "Huawei Centre",
+  "wall": "#c3b9ab",
+  "podium": "#cfbe9f",
+  "wall_raw": "#bcb0bb",
+  "podium_raw": "#c1b1b6",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "22": {
+  "name": "Campbell House",
+  "wall": "#d8d6c4",
+  "podium": "#a79c92",
+  "wall_raw": "#d0cbd7",
+  "podium_raw": "#9b92a7",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "23": {
+  "name": "80 Queen St",
+  "wall": "#596b80",
+  "podium": "#bbb19d",
+  "wall_raw": "#56668c",
+  "podium_raw": "#aea5b4",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "24": {
+  "name": "CityLife Auckland",
+  "wall": "#c0b5ad",
+  "podium": "#424f6b",
+  "wall_raw": "#b9acbd",
+  "podium_raw": "#3e4a7b",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "25": {
+  "name": "Victoria Residences",
+  "wall": "#c6c7be",
+  "podium": "#5d596f",
+  "wall_raw": "#bfbdd0",
+  "podium_raw": "#57537f",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "26": {
+  "name": "AIG Building",
+  "wall": "#888e9c",
+  "podium": "#6a7585",
+  "wall_raw": "#8387ab",
+  "podium_raw": "#636d98",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "27": {
+  "name": "Crowne Plaza Auckland",
+  "wall": "#a6a9b0",
+  "podium": "#a09f97",
+  "wall_raw": "#a0a1c1",
+  "podium_raw": "#9595ad",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "28": {
+  "name": "Deloitte Centre",
+  "wall": "#6c7d8e",
+  "podium": "#7b7879",
+  "wall_raw": "#68779c",
+  "podium_raw": "#73708b",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "29": {
+  "name": "Chorus House",
+  "wall": "#aa9da1",
+  "podium": "#7f7981",
+  "wall_raw": "#a495b0",
+  "podium_raw": "#767194",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "30": {
+  "name": "SkyCity Grand Hotel",
+  "wall": "#a59397",
+  "podium": "#7b7c84",
+  "wall_raw": "#9f8ca5",
+  "podium_raw": "#737497",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "31": {
+  "name": "Barclay Suites",
+  "wall": "#a1a8af",
+  "podium": "#636b7d",
+  "wall_raw": "#9ba0c0",
+  "podium_raw": "#5c648f",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "32": {
+  "name": "JW Marriott",
+  "wall": "#76808a",
+  "podium": "#4e5971",
+  "wall_raw": "#727a97",
+  "podium_raw": "#495382",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "33": {
+  "name": "Four Points by Sheraton",
+  "wall": "#a9b2b3",
+  "podium": "#7f8991",
+  "wall_raw": "#a3a9c4",
+  "podium_raw": "#7680a6",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "34": {
+  "name": "City Gardens Apartments",
+  "wall": "#858a96",
+  "podium": "#44516c",
+  "wall_raw": "#8083a4",
+  "podium_raw": "#404c7c",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "35": {
+  "name": "West Plaza",
+  "wall": "#b1b6b7",
+  "podium": "#808a95",
+  "wall_raw": "#abadc8",
+  "podium_raw": "#7781aa",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "36": {
+  "name": "Queens Residences",
+  "wall": "#bec3c1",
+  "podium": "#797776",
+  "wall_raw": "#b7b9d3",
+  "podium_raw": "#716f87",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "37": {
+  "name": "The CAB",
+  "wall": "#b3b2b2",
+  "podium": "#989a96",
+  "wall_raw": "#aca9c3",
+  "podium_raw": "#8e90ac",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "38": {
+  "name": "The AA Centre",
+  "wall": "#a9adae",
+  "podium": "#71767f",
+  "wall_raw": "#a3a4bf",
+  "podium_raw": "#696e91",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "39": {
+  "name": "2 Wakefield Street",
+  "wall": "#b8bab7",
+  "podium": "#aba495",
+  "wall_raw": "#b1b1c8",
+  "podium_raw": "#9f99aa",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "40": {
+  "name": "Commercial Bay (eastern block)",
+  "wall": "#717d89",
+  "podium": "#707e86",
+  "wall_raw": "#6d7796",
+  "podium_raw": "#687699",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "41": {
+  "name": "Fifty Albert",
+  "wall": "#cdc1ad",
+  "podium": "#b7ab93",
+  "wall_raw": "#c5b7bd",
+  "podium_raw": "#aaa0a8",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "42": {
+  "name": "Tower Centre",
+  "wall": "#a4a5a3",
+  "podium": "#918f8b",
+  "wall_raw": "#9e9db2",
+  "podium_raw": "#87869f",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "43": {
+  "name": "Telco Building",
+  "wall": "#727587",
+  "podium": "#5b687e",
+  "wall_raw": "#6e6f94",
+  "podium_raw": "#556190",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "44": {
+  "name": "The Shortland Centre",
+  "wall": "#6a6b7c",
+  "podium": "#3a4a68",
+  "wall_raw": "#666688",
+  "podium_raw": "#364577",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "45": {
+  "name": "Waipārūrū Hall",
+  "wall": "#8f94a0",
+  "podium": "#6e6774",
+  "wall_raw": "#8a8daf",
+  "podium_raw": "#676085",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "46": {
+  "name": "SO/ Auckland",
+  "wall": "#b0aaa3",
+  "podium": "#8d9283",
+  "wall_raw": "#aaa2b3",
+  "podium_raw": "#838896",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "47": {
+  "name": "The Wiltshire on Victoria",
+  "wall": "#aea1a2",
+  "podium": "#707583",
+  "wall_raw": "#a899b1",
+  "podium_raw": "#686d96",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
+ },
+ "48": {
+  "name": "President Hotel",
+  "wall": "#bcb7ae",
+  "podium": "#6c737f",
+  "wall_raw": "#b5aebf",
+  "podium_raw": "#656c91"
+ },
+ "49": {
+  "name": "92 Albert Street",
+  "wall": "#8a888f",
+  "podium": "#57667a",
+  "wall_raw": "#85819d",
+  "podium_raw": "#515f8c"
+ },
+ "50": {
+  "name": "Augusta House",
+  "wall": "#586a84",
+  "podium": "#57687a",
+  "wall_raw": "#556591",
+  "podium_raw": "#51618c"
+ },
+ "51": {
+  "name": "Citigroup Centre",
+  "wall": "#b4aea7",
+  "podium": "#b2a997",
+  "wall_raw": "#ada5b7",
+  "podium_raw": "#a69ead"
+ },
+ "52": {
+  "name": "Atrium on Elliott",
+  "wall": "#c6c5bf",
+  "podium": "#d3c2a3",
+  "wall_raw": "#bfbbd1",
+  "podium_raw": "#c4b5bb"
+ },
+ "53": {
+  "name": "10–14 Lorne St",
+  "wall": "#acaeae",
+  "podium": "#727988",
+  "wall_raw": "#a6a5be",
+  "podium_raw": "#6a719c"
+ },
+ "54": {
+  "name": "CTS House",
+  "wall": "#cabbac",
+  "podium": "#938b81",
+  "wall_raw": "#c3b2bc",
+  "podium_raw": "#898294"
+ },
+ "55": {
+  "name": "Swanson House",
+  "wall": "#daccb4",
+  "podium": "#77757d",
+  "wall_raw": "#d2c2c5",
+  "podium_raw": "#6f6d8f"
+ },
+ "56": {
+  "name": "Shortland Chambers",
+  "wall": "#bbb4b7",
+  "podium": "#9b9a94",
+  "wall_raw": "#b4abc8",
+  "podium_raw": "#9090a9"
+ },
+ "57": {
+  "name": "48 Emily Place",
+  "wall": "#b0b3b3",
+  "podium": "#76818e",
+  "wall_raw": "#aaaac4",
+  "podium_raw": "#6e79a3"
+ },
+ "58": {
+  "name": "Symphony House",
+  "wall": "#ebe7cb",
+  "podium": "#656a78",
+  "wall_raw": "#e2dbde",
+  "podium_raw": "#5e638a"
+ },
+ "59": {
+  "name": "Quay Regency",
+  "wall": "#d1cdbe",
+  "podium": "#f8f3c5",
+  "wall_raw": "#c9c3d0",
+  "podium_raw": "#e7e3e1"
+ },
+ "60": {
+  "name": "Altitude Apartments",
+  "wall": "#b4b7b9",
+  "podium": "#7f818b",
+  "wall_raw": "#adaecb",
+  "podium_raw": "#76799f"
+ },
+ "61": {
+  "name": "Columbard",
+  "wall": "#979aa2",
+  "podium": "#989090",
+  "wall_raw": "#9292b1",
+  "podium_raw": "#8e87a5"
+ },
+ "62": {
+  "name": "Club Tower",
+  "wall": "#5b6581",
+  "podium": "#737582",
+  "wall_raw": "#58608d",
+  "podium_raw": "#6b6d95"
+ },
+ "63": {
+  "name": "Acrossia House",
+  "wall": "#a79e9e",
+  "podium": "#a3958d",
+  "wall_raw": "#a196ad",
+  "podium_raw": "#988ba1"
+ },
+ "64": {
+  "name": "The Quadrant Hotel and Suites",
+  "wall": "#b3b4af",
+  "podium": "#a49e90",
+  "wall_raw": "#acabc0",
+  "podium_raw": "#9994a5"
+ },
+ "65": {
+  "name": "Whitaker Park Apartments",
+  "wall": "#9096a3",
+  "podium": "#626a7e",
+  "wall_raw": "#8b8fb3",
+  "podium_raw": "#5b6390"
+ },
+ "66": {
+  "name": "36 Kitchener Street",
+  "wall": "#88888d",
+  "podium": "#898987",
+  "wall_raw": "#83819a",
+  "podium_raw": "#80809a"
+ },
+ "67": {
+  "name": "Airedale St building",
+  "wall": "#cac6b8",
+  "podium": "#7f8588",
+  "wall_raw": "#c3bcc9",
+  "podium_raw": "#767c9c"
+ },
+ "68": {
+  "name": "Library 27",
+  "wall": "#c6c9c0",
+  "podium": "#b2afa0",
+  "wall_raw": "#bfbfd2",
+  "podium_raw": "#a6a3b7"
+ },
+ "69": {
+  "name": "Connect Apartments",
+  "wall": "#c2c2b8",
+  "podium": "#95938a",
+  "wall_raw": "#bbb8c9",
+  "podium_raw": "#8b899e"
+ },
+ "70": {
+  "name": "University Hall",
+  "wall": "#938083",
+  "podium": "#857d81",
+  "wall_raw": "#8e7a90",
+  "podium_raw": "#7c7594"
+ },
+ "71": {
+  "name": "Portland Tower",
+  "wall": "#efeed1",
+  "podium": "#b6b09d",
+  "wall_raw": "#e6e2e5",
+  "podium_raw": "#a9a4b4"
+ },
+ "72": {
+  "name": "Shine Building",
+  "wall": "#576580",
+  "podium": "#495a74",
+  "wall_raw": "#54608c",
+  "podium_raw": "#445485"
+ },
+ "73": {
+  "name": "Mövenpick Hotel",
+  "wall": "#8d888d",
+  "podium": "#b9ac92",
+  "wall_raw": "#88819b",
+  "podium_raw": "#aca1a7"
+ },
+ "74": {
+  "name": "Pinnacle Apartments",
+  "wall": "#849c9c",
+  "podium": "#7a8987",
+  "wall_raw": "#7f94ab",
+  "podium_raw": "#72809b"
+ },
+ "75": {
+  "name": "The Connaught",
+  "wall": "#afb1b3",
+  "podium": "#939293",
+  "wall_raw": "#a9a8c4",
+  "podium_raw": "#8988a8"
+ },
+ "76": {
+  "name": "UniLodge Anzac",
+  "wall": "#888e9c",
+  "podium": "#d3caad",
+  "wall_raw": "#8387ab",
+  "podium_raw": "#c4bdc6"
+ },
+ "77": {
+  "name": "Te Tirohanga o te Tōangaroa",
+  "wall": "#baada1",
+  "podium": "#5b687f",
+  "wall_raw": "#b3a4b0",
+  "podium_raw": "#556191"
+ },
+ "78": {
+  "name": "WQ Building",
+  "wall": "#f4f3d3",
+  "podium": "#e0d9b9",
+  "wall_raw": "#ebe7e7",
+  "podium_raw": "#d0cbd4"
+ },
+ "79": {
+  "name": "The International",
+  "wall": "#7e848d",
+  "podium": "#9e9b96",
+  "wall_raw": "#7a7e9a",
+  "podium_raw": "#9391ac"
+ },
+ "80": {
+  "name": "Group M",
+  "wall": "#a1a8ae",
+  "podium": "#798892",
+  "wall_raw": "#9ba0bf",
+  "podium_raw": "#717fa7"
+ },
+ "81": {
+  "name": "Mount Terrace",
+  "wall": "#a4a7ab",
+  "podium": "#6c7787",
+  "wall_raw": "#9e9fbb",
+  "podium_raw": "#656f9a"
+ },
+ "82": {
+  "name": "Auckland District Court",
+  "wall": "#9a9098",
+  "podium": "#7b818c",
+  "wall_raw": "#9489a6",
+  "podium_raw": "#7379a0"
+ },
+ "83": {
+  "name": "Science Centre 302",
+  "wall": "#8f948b",
+  "podium": "#605a6a",
+  "wall_raw": "#8a8d98",
+  "podium_raw": "#5a547a"
+ },
+ "84": {
+  "name": "Princeton Apartments",
+  "wall": "#e7e1c3",
+  "podium": "#a4988e",
+  "wall_raw": "#ded6d5",
+  "podium_raw": "#998ea2"
+ },
+ "85": {
+  "name": "Auckland Bioengineering House",
+  "wall": "#9c908c",
+  "podium": "#7c7579",
+  "wall_raw": "#968999",
+  "podium_raw": "#746d8b"
+ },
+ "86": {
+  "name": "Vincent Tower",
+  "wall": "#73687a",
+  "podium": "#816877",
+  "wall_raw": "#6f6386",
+  "podium_raw": "#786188"
+ },
+ "87": {
+  "name": "Cordis",
+  "wall": "#b6b8b1",
+  "podium": "#727a89",
+  "wall_raw": "#afafc2",
+  "podium_raw": "#6a729d"
+ },
+ "88": {
+  "name": "Delta Insurance",
+  "wall": "#d6d7c0",
+  "podium": "#f3f0c1",
+  "wall_raw": "#ceccd2",
+  "podium_raw": "#e2e0dd"
+ },
+ "89": {
+  "name": "Union House",
+  "wall": "#918e90",
+  "podium": "#858081",
+  "wall_raw": "#8c879e",
+  "podium_raw": "#7c7894"
+ },
+ "90": {
+  "name": "AMI Building",
+  "wall": "#a8a1a0",
+  "podium": "#b0a694",
+  "wall_raw": "#a299af",
+  "podium_raw": "#a49ba9"
+ },
+ "91": {
+  "name": "Centur on Anzac",
+  "wall": "#a7afb5",
+  "podium": "#51667e",
+  "wall_raw": "#a1a6c6",
+  "podium_raw": "#4c5f90"
+ },
+ "92": {
+  "name": "Waterloo Towers",
+  "wall": "#aca7a9",
+  "podium": "#9c9384",
+  "wall_raw": "#a69fb9",
+  "podium_raw": "#918997"
+ },
+ "93": {
+  "name": "33 Lorne Street",
+  "wall": "#8d939f",
+  "podium": "#68778a",
+  "wall_raw": "#888cae",
+  "podium_raw": "#616f9e"
+ },
+ "94": {
+  "name": "290 Queen Street",
+  "wall": "#877e8e",
+  "podium": "#7e8990",
+  "wall_raw": "#82789c",
+  "podium_raw": "#7580a5"
+ },
+ "95": {
+  "name": "nesuto",
+  "wall": "#8693a6",
+  "podium": "#677180",
+  "wall_raw": "#818cb6",
+  "podium_raw": "#606a93"
+ },
+ "96": {
+  "name": "CityZone",
+  "wall": "#c5c4bc",
+  "podium": "#d3c6a1",
+  "wall_raw": "#bebace",
+  "podium_raw": "#c4b9b8"
+ },
+ "97": {
+  "name": "Queens Square Residences",
+  "wall": "#aab1b3",
+  "podium": "#777b83",
+  "wall_raw": "#a4a8c4",
+  "podium_raw": "#6f7396"
+ },
+ "98": {
+  "name": "152 Quay Street apartments",
+  "wall": "#dedcc8",
+  "podium": "#f8f5c2",
+  "wall_raw": "#d6d1db",
+  "podium_raw": "#e7e5de"
+ },
+ "99": {
+  "name": "Life Apartments",
+  "wall": "#a2a6a9",
+  "podium": "#9c978e",
+  "wall_raw": "#9c9eb9",
+  "podium_raw": "#918da2"
+ },
+ "100": {
+  "name": "Tower Hill Apartments",
+  "wall": "#b8b0a8",
+  "podium": "#858687",
+  "wall_raw": "#b1a7b8",
+  "podium_raw": "#7c7d9b"
+ },
+ "101": {
+  "name": "Symonds Centre",
+  "wall": "#b9b3b0",
+  "podium": "#898488",
+  "wall_raw": "#b2aac1",
+  "podium_raw": "#807b9c"
+ },
+ "102": {
+  "name": "Southern Cross Building",
+  "wall": "#a8b0b3",
+  "podium": "#7f8a8f",
+  "wall_raw": "#a2a7c4",
+  "podium_raw": "#7681a4"
+ },
+ "103": {
+  "name": "WO Building",
+  "wall": "#acada9",
+  "podium": "#646a7a",
+  "wall_raw": "#a6a4b9",
+  "podium_raw": "#5d638c"
+ },
+ "104": {
+  "name": "Volt Apartments",
+  "wall": "#b3b9b9",
+  "podium": "#79848f",
+  "wall_raw": "#acb0cb",
+  "podium_raw": "#717ba4"
+ },
+ "105": {
+  "name": "55 Symonds Accommodation",
+  "wall": "#c4cbc4",
+  "podium": "#a3a39f",
+  "wall_raw": "#bdc1d7",
+  "podium_raw": "#9898b6"
+ },
+ "106": {
+  "name": "Argent Hall",
+  "wall": "#a29c9a",
+  "podium": "#777880",
+  "wall_raw": "#9c94a9",
+  "podium_raw": "#6f7093"
+ },
+ "107": {
+  "name": "Crown on Cintra",
+  "wall": "#a6b1b9",
+  "podium": "#828689",
+  "wall_raw": "#a0a8ca",
+  "podium_raw": "#797d9d"
+ },
+ "108": {
+  "name": "Atrium on Takutai",
+  "wall": "#777d87",
+  "podium": "#7c7e82",
+  "wall_raw": "#737794",
+  "podium_raw": "#747695"
+ },
+ "109": {
+  "name": "Empire Apartments",
+  "wall": "#8691a2",
+  "podium": "#6c7789",
+  "wall_raw": "#818ab1",
+  "podium_raw": "#656f9d"
+ },
+ "110": {
+  "name": "Hotel Grand Chancellor",
+  "wall": "#929094",
+  "podium": "#918b84",
+  "wall_raw": "#8d89a2",
+  "podium_raw": "#878297"
+ },
+ "111": {
+  "name": "The Statesman",
+  "wall": "#aeb1ad",
+  "podium": "#656d7e",
+  "wall_raw": "#a8a8bd",
+  "podium_raw": "#5e6690"
+ },
+ "112": {
+  "name": "Engineering 405",
+  "wall": "#8f939a",
+  "podium": "#7a7979",
+  "wall_raw": "#8a8ca9",
+  "podium_raw": "#72718b"
+ },
+ "114": {
+  "name": "32 Eden",
+  "wall": "#b3b5b6",
+  "podium": "#878990",
+  "wall_raw": "#acacc7",
+  "podium_raw": "#7e80a5"
+ },
+ "115": {
+  "name": "Quest on Eden",
+  "wall": "#c39e93",
+  "podium": "#6a6b73",
+  "wall_raw": "#bc96a1",
+  "podium_raw": "#636484"
+ },
+ "116": {
+  "name": "Waldorf Celestion",
+  "wall": "#afaeb1",
+  "podium": "#908c8e",
+  "wall_raw": "#a9a5c2",
+  "podium_raw": "#8683a3"
+ },
+ "201": {
+  "name": "Ferry Building",
+  "wall_raw": "#ebbaa0",
+  "podium_raw": "#cea197",
+  "wall": "#f4c492",
+  "podium": "#ddac84",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: red brick, sandstone dressings, the clock tower",
+  "steps_above": 26,
+  "crownColour": "#e2c7a3"
+ },
+ "202": {
+  "name": "Chief Post Office (Britomart station)",
+  "wall_raw": "#9e9cb2",
+  "podium_raw": "#868194",
+  "wall": "#a4a4a3",
+  "podium": "#908a81",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: brick and stone, the corner towers",
+  "steps_above": 26
+ },
+ "203": {
+  "name": "Auckland Town Hall",
+  "wall_raw": "#a89fb5",
+  "podium_raw": "#9d98b0",
+  "wall": "#aea7a5",
+  "podium": "#a9a39a",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye: stone, the clock tower on Queen St",
+  "steps_above": 22,
+  "crownColour": "#c9c2b0"
+ },
+ "204": {
+  "name": "Silo 6 (Silo Park)",
+  "wall_raw": "#e0cac2",
+  "podium_raw": "#d8c7c6",
+  "wall": "#cfc9bd",
+  "podium": "#cfc9bd",
+  "facade": "plain",
+  "facade_from": "2024 aerial and 3D mesh: bare concrete cement silos",
+  "lock": true,
+  "colour_from": "locked: weathered concrete (the balanced mesh colour read yellow on near-white)"
+ },
+ "205": {
+  "name": "Silo 7 (Silo Park)",
+  "wall_raw": "#d4c5c1",
+  "podium_raw": "#d4c6c4",
+  "wall": "#cfc9bd",
+  "podium": "#cfc9bd",
+  "facade": "plain",
+  "facade_from": "2024 aerial and 3D mesh: bare concrete cement silos",
+  "lock": true,
+  "colour_from": "locked: weathered concrete (the balanced mesh colour read yellow on near-white)"
+ }
+}
