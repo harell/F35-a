@@ -9,6 +9,7 @@
  * Budgets: particle capacities and emission rates scale with QualitySettings.particleScale and with
  * distance to the camera. Everything is pooled; the per-frame path allocates nothing.
  */
+import { HB_DIR } from '../../core/harbourBridge';
 import { COLLAPSE_DELAY, buildingCollapseTime } from '../../sim/buildings';
 import { Color, Group, Matrix4, Vector3 } from 'three';
 import type { CreateEffects, EffectsApi, FrameContext } from '../../core/contracts';
@@ -862,7 +863,8 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     for (const g of world.ground) {
       if (g.type !== 'ship' || !g.alive || !g.vessel) continue;
       if (g.hits > 0) burnHitShip(g, t, dt);
-      const funnel = shipDims(g.vessel).funnel!;
+      const funnel = shipDims(g.vessel).funnel;
+      if (!funnel) continue; // a harbour ferry: no funnel
       const d = distCam(g.position.x, 40, g.position.z);
       if (d > FUNNEL_SMOKE_FAR) {
         funnelAcc.delete(g.id);
@@ -1058,6 +1060,17 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     // go off round it while it still stands, then it drops (world/scenery/cbdCollapse.ts) onto ground blasts.
     events.on('building:collapsed', ({ position: p, x, z, ground, top, radius, hero }) => {
       schedule(0, p.x, p.y, p.z, 'huge', 'air');
+      if (hero?.id === 'harbour_bridge') {
+        // a span of the Harbour Bridge (world/scenery/bridgeCollapse.ts): charges along the deck by the impact, then
+        // the steel hits the water in a row of splashes along the span (nothing is left up there to burn)
+        for (let i = 0; i < 6; i++) schedule(0.15 + (i / 6) * COLLAPSE_DELAY, p.x + (rnd() - 0.5) * 60, p.y - rnd() * 10, p.z + (rnd() - 0.5) * 60, i % 2 ? 'medium' : 'large', 'air');
+        const fall = Math.sqrt((2 * Math.max(10, p.y)) / 9.8) + COLLAPSE_DELAY;
+        for (let i = 0; i < 7; i++) {
+          const u = (i / 6 - 0.5) * radius * 1.6 + (rnd() - 0.5) * 20;
+          schedule(fall + rnd() * 0.8, x + HB_DIR[0] * u, 0.5, z + HB_DIR[1] * u, i % 2 ? 'huge' : 'large', 'water');
+        }
+        return;
+      }
       collapseDust(x, ground, z, rnd() * Math.PI * 2);
       startFire(x, ground + 6, z, 1.6, 90);
       if (!hero) return;

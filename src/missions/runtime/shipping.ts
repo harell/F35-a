@@ -5,7 +5,9 @@
  * Wartime, port closed: the ships alongside at the Ports of Auckland and Princes Wharf stay moored,
  * 2–4 more swing at anchor in the outer Hauraki Gulf, and 1–2 steam slow loops in the deep-water
  * channel north of Rangitoto, well clear of the enemy-held islands. At most 8 ships per sortie.
- * A Stroll in the Park is peacetime: two more sail the harbour lane past the city (HARBOUR_LANE).
+ * A Stroll in the Park is peacetime: two more sail the harbour lane past the city (HARBOUR_LANE), and the harbour
+ * ferries run their timetable as sim ships too (vessel 'ferry', placed every step by render/traffic/ferryRoutes.ts and
+ * drawn by HarbourFerries), so the player can box and shoot them like the rest; in wartime they are scenery only.
  *
  * They are ordinary sim ground entities (type 'ship', team 'neutral', a VesselClass): the player's
  * EOTS and radar ground map see them, AI crews and SAMs never do, and TGT cycling ranks them behind
@@ -13,6 +15,8 @@
  */
 import { Vector3 } from 'three';
 import { mulberry32 } from '../../core/math';
+import { setQuatFromHPR } from '../../sim/flight/attitude';
+import { FERRY_FLEET, ferryAt, ferryRoutes, type FerryState } from '../../render/traffic/ferryRoutes';
 import type { VesselClass } from '../../core/types';
 import type { GroundTargetEntity } from '../../sim/entities';
 import type { MissionState } from './state';
@@ -171,13 +175,18 @@ const CONTAINER_NAMES = ['MV Kōtuku Trader', 'MV Tasman Kererū', 'MV Hauraki P
 const CRUISE_NAMES = ['Southern Barnacle', 'Pacific Interislander', 'SuperGold Majesty'];
 /** Crude carriers (the random traffic has none; a mission's escorted tanker may take one of these). */
 export const TANKER_NAMES = ['MT Marsden Point', 'MT Tasman Spirit', 'MT Pacific Kauri'];
-const NAMES: Record<VesselClass, readonly string[]> = { container: CONTAINER_NAMES, cruise: CRUISE_NAMES, tanker: TANKER_NAMES };
+/** Harbour ferries of the fictional Waitematā Ferry Co. (by fleet slot). */
+export const FERRY_NAMES = ['Kōtare', 'Pīwakawaka', 'Kawau', 'Tākapu', 'Kākāriki', 'Toroa', 'Matuku', 'Kererū', 'Tōrea', 'Pūkeko', 'Kōkako', 'Tara', 'Kuaka', 'Tūturiwhatu', 'Karearea', 'Pīpīwharauroa'];
+const NAMES: Record<VesselClass, readonly string[]> = { container: CONTAINER_NAMES, cruise: CRUISE_NAMES, tanker: TANKER_NAMES, ferry: FERRY_NAMES };
 
 export class CivilShipping {
   private readonly rng: () => number;
   /** Every civil ship spawned this sortie. */
   readonly ships: GroundTargetEntity[] = [];
-  private nameIdx: Record<VesselClass, number> = { container: 0, cruise: 0, tanker: 0 };
+  private nameIdx: Record<VesselClass, number> = { container: 0, cruise: 0, tanker: 0, ferry: 0 };
+  /** The harbour ferries (free flight): sailed by their timetable in update(). */
+  readonly ferries: GroundTargetEntity[] = [];
+  private readonly ferryState: FerryState = { x: 0, z: 0, heading: 0, speed: 0, dock: -1 };
 
   constructor(private readonly s: MissionState) {
     this.rng = mulberry32(((s.def.seed ?? 1) * 4099 + 31) >>> 0);
@@ -197,7 +206,46 @@ export class CivilShipping {
     }
     for (const b of slots.slice(0, anchored)) this.spawnAt(b, b.heading + (this.rng() - 0.5) * 30, true);
     for (const r of SHIP_ROUTES.slice(0, moving)) this.spawnOnRoute(r);
-    if (this.s.script.freeFlight) this.spawnHarbourLane();
+    if (this.s.script.freeFlight) {
+      this.spawnHarbourLane();
+      this.spawnFerries();
+    }
+  }
+
+  /** Every step: the live ferries to where their timetable has them now (the dead ones sink where they were hit). */
+  update(): void {
+    if (!this.ferries.length) return;
+    const routes = ferryRoutes();
+    const t = this.s.world.time;
+    for (const e of this.ferries) {
+      if (!e.alive) continue;
+      const f = FERRY_FLEET[e.ferrySlot];
+      const st = ferryAt(routes[f.route], f.k, t, this.ferryState);
+      e.position.set(st.x, 0, st.z);
+      setQuatFromHPR(e.quaternion, st.heading, 0, 0);
+      e.speed = Math.abs(st.speed);
+      e.velocity.set(Math.sin(st.heading) * st.speed, 0, -Math.cos(st.heading) * st.speed);
+    }
+  }
+
+  /** Peacetime: the whole ferry fleet (FERRY_FLEET) as neutral ships on their timetable. */
+  private spawnFerries(): void {
+    const routes = ferryRoutes();
+    FERRY_FLEET.forEach((f, i) => {
+      const st = ferryAt(routes[f.route], f.k, this.s.world.time, this.ferryState);
+      const e = this.s.world.spawnGround({
+        type: 'ship',
+        team: 'neutral',
+        vessel: 'ferry',
+        position: new Vector3(st.x, 0, st.z),
+        heading: st.heading,
+        name: FERRY_NAMES[i % FERRY_NAMES.length],
+        groupId: 'civil-ship',
+        scenery: true,
+      });
+      e.ferrySlot = i;
+      this.ferries.push(this.register(e));
+    });
   }
 
   /** Peacetime (free flight): a cruise liner and a container ship sail the harbour lane, half a loop apart. */

@@ -7,8 +7,8 @@
  * jet flying into one crashes and brings it down at once; it explodes and collapses, and the world
  * records the strike (SimWorld.structureStrike: the death cam frames it, the outro waits for it, the HUD
  * names it). Anybody else's aircraft crashes on it and it stands (a Shahed's warhead is its own hit on
- * the Sky Tower: drone:impact, two bring it down). A CBD skyscraper collapses under any aircraft (#128);
- * the port's cranes never do.
+ * the Sky Tower: drone:impact, two bring it down). The Harbour Bridge's spans are such heroes. A CBD skyscraper
+ * collapses under any aircraft (#128), and the player's crash names it too; the port's cranes never come down.
  */
 import { Vector3 } from 'three';
 import type { EventBus } from '../../core/events';
@@ -69,8 +69,8 @@ export class CollisionSystem {
         if (ac.isPlayer && this.host) {
           const h = b.top - b.ground;
           this.host.structureStrike = {
-            name: b.hero?.name ?? null,
-            label: b.hero?.label ?? null,
+            name: b.name ?? null,
+            label: b.label ?? null,
             time,
             duration: buildingCollapseTime(h),
             center: new Vector3(b.x, b.ground + h * 0.45, b.z),
@@ -92,6 +92,8 @@ export class CollisionSystem {
         top: b.top,
         radius: b.radius,
         hero: b.hero ?? null,
+        name: b.name ?? null,
+        label: b.label ?? null,
       });
     }
   }

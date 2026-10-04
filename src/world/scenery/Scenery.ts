@@ -26,6 +26,7 @@ import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTextu
 import { sparkArenaCovers } from '../../core/sparkArena';
 import { buildWestfieldNewmarket, westfieldCovers } from './westfieldNewmarket';
 import { CbdCollapseVisual, type HeroCollapseRange } from './cbdCollapse';
+import { BridgeCollapseVisual } from './bridgeCollapse';
 import { MUSEUM } from '../../core/museum';
 import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
@@ -91,6 +92,8 @@ export class Scenery {
   skyTower: SkyTowerVisual | null = null;
   /** Collapsed CBD skyscrapers flattened in the merged CBD mesh (#128); null for the procedural CBD. */
   cbdCollapse: CbdCollapseVisual | null = null;
+  /** The Harbour Bridge's spans falling into the harbour (Auckland). */
+  bridgeCollapse: BridgeCollapseVisual | null = null;
   cbdStats: CbdStats | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
@@ -256,8 +259,10 @@ export class Scenery {
         this.group.add(railMesh);
       }
       const bridge = new GeometryBuilder();
+      const bridgeLights = lights.count;
       buildHarbourBridge(bridge, lights, height, detail);
-      addMesh(bridge, 'akl-harbour-bridge');
+      const bridgeGeo = addMesh(bridge, 'akl-harbour-bridge');
+      if (bridgeGeo) this.bridgeCollapse = new BridgeCollapseVisual(bridgeGeo, null, [bridgeLights, lights.count]);
       const port = new GeometryBuilder();
       buildPort(port, lights, height, detail);
       buildMarinas(port, lights, height, detail);
@@ -317,6 +322,7 @@ export class Scenery {
       const pts = lights.build(this.lightsMat);
       if (pts) {
         if (this.cbdCollapse) this.cbdCollapse.lights = pts.geometry;
+        if (this.bridgeCollapse) this.bridgeCollapse.lights = pts.geometry;
         this.geometries.push(pts.geometry);
         this.group.add(pts);
         this.stats.lights = lights.count;
@@ -448,6 +454,7 @@ export class Scenery {
   updateLandmarks(world: SimWorld | null | undefined): void {
     this.skyTower?.update(world);
     this.cbdCollapse?.update(world);
+    this.bridgeCollapse?.update(world);
   }
 
   get idle(): boolean {

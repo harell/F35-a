@@ -130,3 +130,37 @@ export function hbFrame(x: number, z: number): [number, number] {
   const dz = z - HB_ORIGIN.z;
   return [dx * HB_DIR[0] + dz * HB_DIR[1], dx * HB_NRM[0] + dz * HB_NRM[1]];
 }
+
+/** The bridge's supports along s: the two abutments and the six piers. Span i runs from HB_SUPPORTS[i] to HB_SUPPORTS[i + 1]. */
+export const HB_SUPPORTS: readonly number[] = [HB_S_SOUTH, ...HB_PIERS, HB_S_NORTH];
+
+/** A solid of the bridge for the sim (sim/buildings.ts): a footprint ring (game XZ) from y0 up to y1 (m above the datum). */
+export interface HbSolid {
+  ring: number[];
+  y0: number;
+  y1: number;
+}
+
+/**
+ * The solids of span `i` (between HB_SUPPORTS[i] and [i + 1]) in ~16 m pieces: the deck from the bottom of its truss or
+ * clip-on girders up to the parapets, and over the main spans the through truss from the road up to its top chord.
+ * The water and the navigation clearance under the deck stay open (a jet can still fly under the bridge).
+ */
+export function hbSpanSolids(i: number): HbSolid[] {
+  const a = HB_SUPPORTS[i];
+  const b = HB_SUPPORTS[i + 1];
+  const n = Math.max(1, Math.round((b - a) / 16));
+  const out: HbSolid[] = [];
+  const quad = (s0: number, s1: number, t: number) => [...hbAt(s0, -t), ...hbAt(s1, -t), ...hbAt(s1, t), ...hbAt(s0, t)];
+  for (let k = 0; k < n; k++) {
+    const s0 = a + ((b - a) * k) / n;
+    const s1 = a + ((b - a) * (k + 1)) / n;
+    const d0 = hbDeck(s0);
+    const d1 = hbDeck(s1);
+    const depth = Math.max(hbTrussDepth(s0), hbTrussDepth(s1), hbClipDepth(s0), hbClipDepth(s1));
+    out.push({ ring: quad(s0, s1, HB_HALF_WIDTH), y0: Math.min(d0, d1) - depth, y1: Math.max(d0, d1) + 1.1 });
+    const top = Math.max(hbChord(s0), hbChord(s1));
+    if (top > Math.max(d0, d1) + 1.5) out.push({ ring: quad(s0, s1, HB_TRUSS_T + 0.6), y0: Math.min(d0, d1), y1: top + 0.5 });
+  }
+  return out;
+}

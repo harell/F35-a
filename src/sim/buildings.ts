@@ -20,19 +20,26 @@
  * The Ports of Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9) are `fixed`:
  * their portals up to the A-frame crash an aircraft and never collapse. So is Westfield Newmarket
  * (core/westfieldNewmarket.ts, id −101): its measured blocks crash an aircraft and stand.
+ * The Auckland Harbour Bridge is a hero too, one per span (ids −20…−26, core/harbourBridge.ts hbSpanSolids): its deck
+ * and through truss with their own bases, so the water and the clearance under the deck stay open; the span the
+ * player's jet hits falls into the harbour (world/scenery/bridgeCollapse.ts).
+ * Every building here has a name for the HUD and the debrief: a hero's, a tower kit tower's, a Scene apartment's, or
+ * the OpenStreetMap name or address of the rest (core/cbdBuildingNames.ts); the port's cranes have none.
  */
 import type { Vector3 } from 'three';
 import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
 import { PORT_CRANES } from '../core/portOfAuckland';
 import { MUSEUM, museumSolids } from '../core/museum';
 import { WESTFIELD_CENTRE, WESTFIELD_PRISMS } from '../core/westfieldNewmarket';
-import { aucklandBuildings, aucklandBuildingsVersion } from '../world/scenery/aucklandBuildings';
+import { CBD_BUILDING_NAMES } from '../core/cbdBuildingNames';
+import { HB_SUPPORTS, hbAt, hbSpanSolids } from '../core/harbourBridge';
+import { aucklandBuildings, aucklandBuildingsVersion, type Building } from '../world/scenery/aucklandBuildings';
 
 /** Roof height above the ground (m) from which a building is a skyscraper the sim knows about (≈ 12 storeys). */
 export const SKYSCRAPER_MIN_HEIGHT = 40;
 /** A 3D-modelled landmark in the index: what the HUD and the debrief call it. */
 export interface HeroBuilding {
-  readonly id: 'spark_arena' | 'museum';
+  readonly id: 'spark_arena' | 'museum' | 'harbour_bridge';
   /** Its name in a sentence ("Crashed into the Auckland Museum"). */
   readonly name: string;
   /** Its name on the HUD ("AUCKLAND MUSEUM DESTROYED"). */
@@ -42,6 +49,7 @@ export interface HeroBuilding {
 export const HERO_BUILDINGS = {
   spark_arena: { id: 'spark_arena', name: 'Spark Arena', label: 'SPARK ARENA' },
   museum: { id: 'museum', name: 'the Auckland Museum', label: 'AUCKLAND MUSEUM' },
+  harbour_bridge: { id: 'harbour_bridge', name: 'the Auckland Harbour Bridge', label: 'HARBOUR BRIDGE' },
 } as const satisfies Record<HeroBuilding['id'], HeroBuilding>;
 
 /** Building ids of the hero buildings in the index (the LINZ ones count up from 0). */
@@ -49,6 +57,14 @@ export const SPARK_ARENA_ID = -1;
 export const MUSEUM_ID = -10;
 /** Westfield Newmarket: `fixed`, it stands whatever hits it. */
 export const WESTFIELD_ID = -101;
+/**
+ * The Auckland Harbour Bridge's seven spans (core/harbourBridge.ts HB_SUPPORTS), south to north: ids
+ * HARBOUR_BRIDGE_ID − i. Each is a hero of its own, so the span the player's jet flies into falls and the rest stand.
+ */
+export const HARBOUR_BRIDGE_ID = -20;
+export const HARBOUR_BRIDGE_SPANS = HB_SUPPORTS.length - 1;
+/** The navigation span (between the main piers): `crashInto('harbour_bridge')` aims at it. */
+export const HARBOUR_BRIDGE_MAIN_SPAN = 5;
 
 /**
  * How long a collapsing building takes to come down (s): it stands for COLLAPSE_DELAY while the
@@ -88,6 +104,9 @@ export interface SolidBuilding {
   readonly fixed?: boolean;
   /** A 3D-modelled landmark: only the player's jet brings it down. */
   readonly hero?: HeroBuilding;
+  /** What a crash into it is called: in a sentence ("Crashed into the Vero Centre") and on the HUD ("VERO CENTRE"). */
+  readonly name?: string;
+  readonly label?: string;
   /** Horizontal half-extent of the footprint bounds (m): the collapse's dust and the death cam's framing. */
   readonly radius: number;
 }
@@ -106,6 +125,20 @@ export interface BuildingGeometry {
 
 const cellKey = (ix: number, iz: number) => (ix + 2048) * 4096 + (iz + 2048);
 
+/**
+ * The name of a LINZ building the sim knows: a tower of the tower kit or a Scene apartment carries its own, the rest
+ * come from core/cbdBuildingNames.ts (OpenStreetMap names and addresses, a point inside each footprint).
+ */
+export function buildingName(b: Building): { name: string; label?: string } | undefined {
+  if (b.tower) return { name: b.tower.name };
+  if (b.name) return { name: b.name };
+  const p = b.prisms[0];
+  for (const n of CBD_BUILDING_NAMES) {
+    if (Math.hypot(n.x - p.cx, n.z - p.cz) < 1.5 || pointInRing(p.ring, n.x, n.z)) return n;
+  }
+  return undefined;
+}
+
 /** Build the solid prisms of every building whose roof is at least `minHeight` above the ground. */
 export function buildBuildingGeometry(
   groundAt: (x: number, z: number) => number,
@@ -119,8 +152,18 @@ export function buildBuildingGeometry(
   let gx1 = -Infinity;
   let gz0 = Infinity;
   let gz1 = -Infinity;
-  const add = (id: number, x: number, z: number, parts: readonly { ring: Float32Array; h: number }[], fixed?: boolean, hero?: HeroBuilding) => {
-    const ground = groundAt(x, z);
+  /** A part's roof is `h` above the ground and its base under the ground, unless it gives its own y0 / y1 (world Y: a bridge deck). */
+  const add = (
+    id: number,
+    x: number,
+    z: number,
+    parts: readonly { ring: Float32Array; h: number; y0?: number; y1?: number }[],
+    fixed?: boolean,
+    hero?: HeroBuilding,
+    named?: { name: string; label?: string },
+    groundY?: number,
+  ) => {
+    const ground = groundY ?? groundAt(x, z);
     const prisms: SolidPrism[] = [];
     let top = ground;
     let bx0 = Infinity;
@@ -138,8 +181,8 @@ export function buildBuildingGeometry(
         minZ = Math.min(minZ, p.ring[i + 1]);
         maxZ = Math.max(maxZ, p.ring[i + 1]);
       }
-      const y1 = ground + p.h;
-      prisms.push({ ring: p.ring, y0: ground - 5, y1, minX, maxX, minZ, maxZ });
+      const y1 = p.y1 ?? ground + p.h;
+      prisms.push({ ring: p.ring, y0: p.y0 ?? ground - 5, y1, minX, maxX, minZ, maxZ });
       top = Math.max(top, y1);
       bx0 = Math.min(bx0, minX);
       bx1 = Math.max(bx1, maxX);
@@ -148,7 +191,8 @@ export function buildBuildingGeometry(
     }
     const k = buildings.length;
     const radius = Math.max(bx1 - bx0, bz1 - bz0) / 2;
-    const b: SolidBuilding = { id, prisms, x, z, ground, top, radius, ...(fixed ? { fixed } : {}), ...(hero ? { hero } : {}) };
+    const name = hero ? { name: hero.name, label: hero.label } : named ? { name: named.name, label: named.label ?? named.name.toUpperCase() } : {};
+    const b: SolidBuilding = { id, prisms, x, z, ground, top, radius, ...(fixed ? { fixed } : {}), ...(hero ? { hero } : {}), ...name };
     buildings.push(b);
     maxTop = Math.max(maxTop, top);
     gx0 = Math.min(gx0, bx0);
@@ -167,7 +211,7 @@ export function buildBuildingGeometry(
   for (let id = 0; list && id < list.length; id++) {
     const b = list[id];
     if (!b.prisms.length || !b.prisms.some((p) => p.h >= minHeight)) continue;
-    add(id, b.prisms[0].cx, b.prisms[0].cz, b.prisms);
+    add(id, b.prisms[0].cx, b.prisms[0].cz, b.prisms, false, undefined, buildingName(b));
   }
   // Ports of Auckland's ship-to-shore cranes: the portal between the legs, up to the A-frame (core/portOfAuckland.ts)
   PORT_CRANES.forEach((c, i) => {
@@ -182,7 +226,13 @@ export function buildBuildingGeometry(
   // the Auckland Museum on the Domain: its measured block, domes and portico columns (core/museum.ts)
   add(MUSEUM_ID, MUSEUM.x, MUSEUM.z, museumSolids(), false, HERO_BUILDINGS.museum);
   // Westfield Newmarket: its measured blocks (core/westfieldNewmarket.ts), a landmark that stands
-  add(WESTFIELD_ID, WESTFIELD_CENTRE.x, WESTFIELD_CENTRE.z, WESTFIELD_PRISMS.map((p) => ({ ring: Float32Array.from(p.ring), h: p.h })), true);
+  add(WESTFIELD_ID, WESTFIELD_CENTRE.x, WESTFIELD_CENTRE.z, WESTFIELD_PRISMS.map((p) => ({ ring: Float32Array.from(p.ring), h: p.h })), true, undefined, { name: 'Westfield Newmarket' });
+  // the Harbour Bridge: each span its deck and through truss over the open water (core/harbourBridge.ts hbSpanSolids)
+  for (let i = 0; i < HARBOUR_BRIDGE_SPANS; i++) {
+    const [x, z] = hbAt((HB_SUPPORTS[i] + HB_SUPPORTS[i + 1]) / 2, 0);
+    const parts = hbSpanSolids(i).map((p) => ({ ring: Float32Array.from(p.ring), h: 0, y0: p.y0, y1: p.y1 }));
+    add(HARBOUR_BRIDGE_ID - i, x, z, parts, false, HERO_BUILDINGS.harbour_bridge, undefined, 0);
+  }
   if (!buildings.length) return null;
   return { buildings, maxTop, minX: gx0, maxX: gx1, minZ: gz0, maxZ: gz1, cells };
 }
