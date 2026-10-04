@@ -29,6 +29,21 @@ import type {
 import type { BuildingIndex } from './buildings';
 import type { LandmarkEntity } from './landmarks';
 
+/** A structure the player's jet brought down (SimWorld.structureStrike). */
+export interface StructureStrike {
+  /** In a sentence ("the Sky Tower", "Spark Arena"); null for an unnamed CBD skyscraper. */
+  name: string | null;
+  /** On the HUD ("SKY TOWER"); null for an unnamed CBD skyscraper. */
+  label: string | null;
+  /** Sim time of the impact. */
+  time: number;
+  /** Seconds from the impact until it lies in rubble. */
+  duration: number;
+  /** A sphere that holds the collapse (world): the death cam frames it. */
+  center: Vector3;
+  radius: number;
+}
+
 /* ───────────────────────── Terrain (implemented by WORLD agent) ───────────────────────── */
 
 /** CPU-side terrain queries. Implemented by world/Terrain (deterministic from the seed). */
@@ -288,9 +303,16 @@ export interface SimWorld {
   readonly landmarks: LandmarkEntity[];
   /**
    * The CBD's skyscrapers as obstacles (#128, sim/buildings.ts): flying into one destroys the
-   * aircraft and collapses the building; Spark Arena (always there) crashes it and stands. All standing in a new world.
+   * aircraft and collapses the building. The 3D-modelled landmarks (Spark Arena, the Auckland Museum)
+   * collapse only under the player's jet; others crash on them. All standing in a new world.
    */
   readonly buildings?: BuildingIndex | null;
+  /**
+   * The structure the player's jet flew into and brought down (null until then): the death cam frames
+   * its collapse and the end of the mission waits for it to play out. Set before the jet's
+   * 'player:down', so the mission can name the building in the end reason.
+   */
+  readonly structureStrike?: StructureStrike | null;
   /** Pooled projectiles (check `active`). */
   readonly projectiles: Projectile[];
   readonly player: AircraftEntity | null;

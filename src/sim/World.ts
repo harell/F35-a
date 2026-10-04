@@ -19,6 +19,7 @@ import type {
   SamSpawn,
   SimWorld,
   SimWorldOptions,
+  StructureStrike,
   TerrainQuery,
 } from './api';
 import {
@@ -104,8 +105,10 @@ class SimWorldImpl implements SimWorld {
   readonly ground: GroundTargetEntity[] = [];
   readonly decoys: DecoyEntity[] = [];
   readonly landmarks: LandmarkEntity[] = [];
-  /** The CBD's skyscrapers (#128) and Spark Arena as obstacles (sim/buildings.ts). All standing in a new world. */
+  /** The CBD's skyscrapers (#128) and the hero landmarks as obstacles (sim/buildings.ts). All standing in a new world. */
   readonly buildings: BuildingIndex | null;
+  /** The structure the player's jet brought down (Collisions sets it). */
+  structureStrike: StructureStrike | null = null;
   readonly projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
 
@@ -560,6 +563,7 @@ class SimWorldImpl implements SimWorld {
     this.decoys.length = 0;
     this.landmarks.length = 0;
     this.buildings?.reset();
+    this.structureStrike = null;
     for (const p of this.projectiles) p.active = false;
     this.byId.clear();
     this.player = null;
