@@ -18,13 +18,16 @@ import { buildAirbase, buildExtraRunway, buildRealAirfield } from './airbase';
 import { airfieldLayout } from './aucklandOsm';
 import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayout } from './aucklandSites';
 import { buildSettlement } from './settlements';
-import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildMarinas, buildMuseumAndObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
+import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildMarinas, buildObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
+import { buildMuseum } from './museum';
 import { SkyTowerVisual } from './skyTower';
 import { buildHarbourBridge } from './harbourBridge';
-import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTexture } from './sparkArena';
+import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTexture, sparkArenaGround } from './sparkArena';
 import { sparkArenaCovers } from '../../core/sparkArena';
 import { buildWestfieldNewmarket, westfieldCovers } from './westfieldNewmarket';
-import { CbdCollapseVisual } from './cbdCollapse';
+import { CbdCollapseVisual, type HeroCollapseRange } from './cbdCollapse';
+import { MUSEUM } from '../../core/museum';
+import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { LotMask, urbanBounds } from './lotMask';
@@ -181,11 +184,22 @@ export class Scenery {
       this.group.add(this.skyTower.group);
       this.stats.meshes++;
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
-      buildMuseumAndObelisk(city, lights, height);
+      // the hero landmarks in the CBD mesh collapse when the player's jet flies into one (sim/buildings.ts):
+      // their vertex and night-light ranges
+      const heroes: HeroCollapseRange[] = [];
+      const hero = (id: number, ground: number, build: () => void) => {
+        const v0 = city.vertexCount;
+        const l0 = lights.count;
+        build();
+        heroes.push({ id, v0, v1: city.vertexCount, ground, l0, l1: lights.count });
+        return heroes[heroes.length - 1];
+      };
+      hero(MUSEUM_ID, height(MUSEUM.x, MUSEUM.z) - 1.5, () => buildMuseum(city, lights, height));
+      buildObelisk(city, lights, height);
       // Westfield Newmarket, measured from the LiDAR and OSM (westfieldNewmarket.ts), in the same mesh
       buildWestfieldNewmarket(city, lights, height);
       // Spark Arena (hand-built from the LiDAR, sparkArena.ts) rides in the CBD mesh; its three signs are one small mesh
-      buildSparkArena(city, lights, height, detail);
+      const arena = hero(SPARK_ARENA_ID, sparkArenaGround(height), () => buildSparkArena(city, lights, height, detail));
       const cityGeo = addMesh(city, 'akl-cbd');
       {
         const tex = createSparkArenaSignTexture(o.cfg.anisotropy);
@@ -198,10 +212,11 @@ export class Scenery {
         sign.name = 'akl-spark-arena-sign';
         sign.matrixAutoUpdate = false;
         this.group.add(sign);
+        arena.objects = [sign];
         this.stats.meshes++;
       }
       const cs = this.cbdStats;
-      if (cityGeo && cs.buildingVerts && cs.buildingGround) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts, cs.buildingGround);
+      if (cityGeo) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts ?? new Int32Array(0), cs.buildingGround ?? new Float32Array(0), heroes);
       const centres = new GeometryBuilder();
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
       buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20));
@@ -296,6 +311,7 @@ export class Scenery {
     if (o.lights > 0.01) {
       const pts = lights.build(this.lightsMat);
       if (pts) {
+        if (this.cbdCollapse) this.cbdCollapse.lights = pts.geometry;
         this.geometries.push(pts.geometry);
         this.group.add(pts);
         this.stats.lights = lights.count;
