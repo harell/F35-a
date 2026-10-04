@@ -30,6 +30,13 @@ const MIN_GAP = 70;
 const MAX_GAP = 140;
 /** Departure exit headings (deg): Wellington / Christchurch, Tasman, Northland, Pacific, East Cape. */
 const EXITS = [195, 255, 330, 25, 110];
+/**
+ * Peacetime (A Stroll in the Park, #113's "Everyone's friendly"): a busier airport, and most
+ * departures turn north over the isthmus and the harbour (Northland, the Pacific, Asia), climbing
+ * through 2–3 km over the city, where the tour flies. A playtest found no airliner anywhere near the
+ * stroll: with the wartime flow they all stayed round the airport, 25 km from the start.
+ */
+const PEACE = { max: 5, minGap: 35, maxGap: 70, exits: [330, 345, 0, 15, 25, 195] } as const;
 const FLIGHT_NUMBERS = [103, 115, 279, 401, 415, 421, 437, 443, 501, 521, 533, 547, 561, 573, 609, 1257];
 
 export class CivilTraffic {
@@ -38,8 +45,17 @@ export class CivilTraffic {
   private nextAt = 0;
   private nextKind: 'arrival' | 'departure' = 'departure';
   private seq = 0;
+  private readonly max: number;
+  private readonly minGap: number;
+  private readonly maxGap: number;
+  private readonly exits: readonly number[];
 
   constructor(private readonly s: MissionState) {
+    const peace = !!s.script.freeFlight;
+    this.max = peace ? PEACE.max : MAX_CIVIL;
+    this.minGap = peace ? PEACE.minGap : MIN_GAP;
+    this.maxGap = peace ? PEACE.maxGap : MAX_GAP;
+    this.exits = peace ? PEACE.exits : EXITS;
     this.rng = mulberry32(((s.def.seed ?? 1) * 7919 + 17) >>> 0);
     const heading = this.rng() < 0.5 ? RUNWAY_AXIS : RUNWAY_AXIS - Math.PI; // 23L or 05R flow
     const { x, z } = AKL_05R;
@@ -59,18 +75,18 @@ export class CivilTraffic {
     if (world.time < this.nextAt) return;
     let live = 0;
     for (const a of world.aircraft) if (a.civil && a.alive) live++;
-    if (live >= MAX_CIVIL || !this.clear(this.nextKind)) {
+    if (live >= this.max || !this.clear(this.nextKind)) {
       this.nextAt = world.time + 10;
       return;
     }
     if (this.nextKind === 'arrival') this.spawn(createArrival(this.runway, ARRIVAL_SPAWN, A320_GEAR_HEIGHT));
     else {
-      const exit = EXITS[Math.floor(this.rng() * EXITS.length)] * DEG;
+      const exit = this.exits[Math.floor(this.rng() * this.exits.length)] * DEG;
       const cruise = 6_000 + Math.round(this.rng() * 6) * 500;
       this.spawn(createDeparture(this.runway, exit, cruise, A320_GEAR_HEIGHT));
     }
     this.nextKind = this.nextKind === 'arrival' ? 'departure' : 'arrival';
-    this.nextAt = world.time + MIN_GAP + this.rng() * (MAX_GAP - MIN_GAP);
+    this.nextAt = world.time + this.minGap + this.rng() * (this.maxGap - this.minGap);
   }
 
   /** Runway / final approach separation. */

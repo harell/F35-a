@@ -10,7 +10,7 @@ import { AKL, AKL_LANDMARKS } from '../src/core/auckland';
 import { DIFFICULTIES } from '../src/core/data';
 import { EventBus, type GameEventMap } from '../src/core/events';
 import { ARENA_LENSES, SPARK_ARENA, ringArea, runsToRing, sparkArenaCovers, sparkArenaRoofAt, sparkArenaRuns } from '../src/core/sparkArena';
-import { BuildingIndex, buildBuildingGeometry } from '../src/sim/buildings';
+import { BuildingIndex, HERO_BUILDINGS, SPARK_ARENA_ID, buildBuildingGeometry } from '../src/sim/buildings';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
@@ -77,12 +77,15 @@ describe('Spark Arena', () => {
     expect(area).toBeLessThan(12000);
   });
 
-  it('is solid: the building index has it, as high as its roof, and it never collapses', () => {
+  it('is solid: the building index has it as a hero landmark, as high as its roof', () => {
     const geo = buildBuildingGeometry(() => 4.8)!;
-    const arena = geo.buildings[geo.buildings.length - 1];
-    expect(arena.fixed).toBe(true);
-    expect(arena.id).toBe(-1);
+    const k = geo.buildings.findIndex((b) => b.hero?.id === 'spark_arena');
+    const arena = geo.buildings[k];
+    expect(arena.fixed).toBeUndefined();
+    expect(arena.hero).toEqual(HERO_BUILDINGS.spark_arena);
+    expect(arena.id).toBe(SPARK_ARENA_ID);
     const idx = new BuildingIndex(geo);
+    expect(idx.heroIndex('spark_arena')).toBe(k);
     // the roof at the centre (walkway between the lenses) is the collision height there
     const roof = 4.8 + sparkArenaRoofAt(SPARK_ARENA.x, SPARK_ARENA.z);
     const near = idx.roofNear(SPARK_ARENA.x, SPARK_ARENA.z, 1);
@@ -94,26 +97,43 @@ describe('Spark Arena', () => {
     expect(hitY).toBeGreaterThanOrEqual(roof - 0.5);
     expect(hitY).toBeLessThan(roof + 2.5);
     expect(idx.firstHit(new Vector3(SPARK_ARENA.x - 200, 45, SPARK_ARENA.z), new Vector3(SPARK_ARENA.x + 200, 45, SPARK_ARENA.z))).toBeNull();
-    idx.collapse(geo.buildings.length - 1);
-    expect(idx.collapsed.size).toBe(0);
   });
 
-  it('a jet flown into it crashes (down reason "building") and the arena stands', () => {
+  function flyInto(isPlayer: boolean) {
     const events = new EventBus();
     const world = createSimWorld({ terrain: flatLand(0), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(1) });
-    const jet = world.spawnAircraft({ type: 'f35a', team: 'blue', position: new Vector3(SPARK_ARENA.x - 300, 15, SPARK_ARENA.z), heading: Math.PI / 2, speed: 250, isPlayer: true, fuel: 0.8 });
+    const jet = world.spawnAircraft({ type: 'f35a', team: isPlayer ? 'blue' : 'red', position: new Vector3(SPARK_ARENA.x - 300, 15, SPARK_ARENA.z), heading: Math.PI / 2, speed: 250, isPlayer, fuel: 0.8 });
     jet.position.y = 15; // (spawning lifts a jet clear of the ground)
     const downs: GameEventMap['player:down'][] = [];
     const falls: GameEventMap['building:collapsed'][] = [];
     events.on('player:down', (e) => downs.push(e));
     events.on('building:collapsed', (e) => falls.push(e));
     for (let i = 0; i < 180 && jet.alive; i++) world.step(1 / 60);
+    return { world, jet, downs, falls };
+  }
+
+  it("the player's jet flown into it crashes (down reason \"building\") and brings the arena down, named", () => {
+    const { world, jet, downs, falls } = flyInto(true);
     expect(jet.alive).toBe(false);
     expect(downs.map((d) => d.reason)).toEqual(['building']);
-    expect(falls).toHaveLength(0);
-    expect(world.buildings!.collapsed.size).toBe(0);
     // stopped at the drum's west face, not inside
     expect(jet.position.x).toBeLessThan(SPARK_ARENA.x - 55);
+    expect(falls).toHaveLength(1);
+    expect(falls[0]).toMatchObject({ building: SPARK_ARENA_ID, isPlayer: true, hero: HERO_BUILDINGS.spark_arena });
+    const idx = world.buildings!;
+    expect([...idx.collapsed]).toEqual([idx.heroIndex('spark_arena')]);
+    expect(world.structureStrike).toMatchObject({ name: 'Spark Arena', label: 'SPARK ARENA' });
+    expect(world.structureStrike!.duration).toBeGreaterThan(2);
+    expect(world.structureStrike!.duration).toBeLessThan(5);
+  });
+
+  it("anybody else's aircraft crashes on it and the arena stands", () => {
+    const { world, jet, downs, falls } = flyInto(false);
+    expect(jet.alive).toBe(false);
+    expect(downs).toEqual([]);
+    expect(falls).toHaveLength(0);
+    expect(world.buildings!.collapsed.size).toBe(0);
+    expect(world.structureStrike).toBeNull();
   });
 
   it('houses, trees and suburb centres keep off it', () => {
