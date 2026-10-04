@@ -102,231 +102,297 @@
   "wall": "#55627c",
   "podium": "#8a9393",
   "wall_raw": "#525d89",
-  "podium_raw": "#8089a9"
+  "podium_raw": "#8089a9",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "16": {
   "name": "SAP Tower",
   "wall": "#6e6476",
   "podium": "#b8988a",
   "wall_raw": "#6a5f82",
-  "podium_raw": "#aa8e9f"
+  "podium_raw": "#aa8e9f",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "17": {
   "name": "Shortland & Fort",
   "wall": "#688a9b",
   "podium": "#8f8f89",
   "wall_raw": "#6483ab",
-  "podium_raw": "#84859e"
+  "podium_raw": "#84859e",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "18": {
   "name": "Precinct Apartments",
   "wall": "#c8c9c3",
   "podium": "#afa28e",
   "wall_raw": "#c0bfd7",
-  "podium_raw": "#a297a4"
+  "podium_raw": "#a297a4",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "19": {
   "name": "Aon Centre",
   "wall": "#636880",
   "podium": "#9fa29c",
   "wall_raw": "#5f638d",
-  "podium_raw": "#9397b4"
+  "podium_raw": "#9397b4",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "20": {
   "name": "Crombie Lockwood Tower",
   "wall": "#a3a9ad",
   "podium": "#bcb29b",
   "wall_raw": "#9ca0be",
-  "podium_raw": "#aea6b3"
+  "podium_raw": "#aea6b3",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "21": {
   "name": "Huawei Centre",
   "wall": "#c4b9aa",
   "podium": "#d1be9e",
   "wall_raw": "#bcb0bb",
-  "podium_raw": "#c1b1b6"
+  "podium_raw": "#c1b1b6",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "22": {
   "name": "Campbell House",
   "wall": "#d9d6c3",
   "podium": "#a89c91",
   "wall_raw": "#d0cbd7",
-  "podium_raw": "#9b92a7"
+  "podium_raw": "#9b92a7",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "23": {
   "name": "80 Queen St",
   "wall": "#596b7f",
   "podium": "#bcb19c",
   "wall_raw": "#56668c",
-  "podium_raw": "#aea5b4"
+  "podium_raw": "#aea5b4",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "24": {
   "name": "CityLife Auckland",
   "wall": "#c1b5ac",
   "podium": "#434f6b",
   "wall_raw": "#b9acbd",
-  "podium_raw": "#3e4a7b"
+  "podium_raw": "#3e4a7b",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "25": {
   "name": "Victoria Residences",
   "wall": "#c7c7bd",
   "podium": "#5e596e",
   "wall_raw": "#bfbdd0",
-  "podium_raw": "#57537f"
+  "podium_raw": "#57537f",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "26": {
   "name": "AIG Building",
   "wall": "#898e9b",
   "podium": "#6b7584",
   "wall_raw": "#8387ab",
-  "podium_raw": "#636d98"
+  "podium_raw": "#636d98",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "27": {
   "name": "Crowne Plaza Auckland",
   "wall": "#a7aaaf",
   "podium": "#a1a096",
   "wall_raw": "#a0a1c1",
-  "podium_raw": "#9595ad"
+  "podium_raw": "#9595ad",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "28": {
   "name": "Deloitte Centre",
   "wall": "#6c7d8e",
   "podium": "#7c7878",
   "wall_raw": "#68779c",
-  "podium_raw": "#73708b"
+  "podium_raw": "#73708b",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "29": {
   "name": "Chorus House",
   "wall": "#ab9da0",
   "podium": "#807980",
   "wall_raw": "#a495b0",
-  "podium_raw": "#767194"
+  "podium_raw": "#767194",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "30": {
   "name": "SkyCity Grand Hotel",
   "wall": "#a69396",
   "podium": "#7c7c83",
   "wall_raw": "#9f8ca5",
-  "podium_raw": "#737497"
+  "podium_raw": "#737497",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "31": {
   "name": "Barclay Suites",
   "wall": "#a2a9ae",
   "podium": "#636b7c",
   "wall_raw": "#9ba0c0",
-  "podium_raw": "#5c648f"
+  "podium_raw": "#5c648f",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "32": {
   "name": "JW Marriott",
   "wall": "#778089",
   "podium": "#4f5971",
   "wall_raw": "#727a97",
-  "podium_raw": "#495382"
+  "podium_raw": "#495382",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "33": {
   "name": "Four Points by Sheraton",
   "wall": "#aab2b2",
   "podium": "#808990",
   "wall_raw": "#a3a9c4",
-  "podium_raw": "#7680a6"
+  "podium_raw": "#7680a6",
+  "facade": "bands",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "34": {
   "name": "City Gardens Apartments",
   "wall": "#858a95",
   "podium": "#45516b",
   "wall_raw": "#8083a4",
-  "podium_raw": "#404c7c"
+  "podium_raw": "#404c7c",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "35": {
   "name": "West Plaza",
   "wall": "#b2b6b6",
   "podium": "#818a93",
   "wall_raw": "#abadc8",
-  "podium_raw": "#7781aa"
+  "podium_raw": "#7781aa",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "36": {
   "name": "Queens Residences",
   "wall": "#bfc3c0",
   "podium": "#7a7775",
   "wall_raw": "#b7b9d3",
-  "podium_raw": "#716f87"
+  "podium_raw": "#716f87",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "37": {
   "name": "The CAB",
   "wall": "#b3b2b1",
   "podium": "#9a9a95",
   "wall_raw": "#aca9c3",
-  "podium_raw": "#8e90ac"
+  "podium_raw": "#8e90ac",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "38": {
   "name": "The AA Centre",
   "wall": "#aaadae",
   "podium": "#71767e",
   "wall_raw": "#a3a4bf",
-  "podium_raw": "#696e91"
+  "podium_raw": "#696e91",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "39": {
   "name": "2 Wakefield Street",
   "wall": "#b9bab6",
   "podium": "#aca493",
   "wall_raw": "#b1b1c8",
-  "podium_raw": "#9f99aa"
+  "podium_raw": "#9f99aa",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "40": {
   "name": "Commercial Bay (eastern block)",
   "wall": "#727d88",
   "podium": "#707e85",
   "wall_raw": "#6d7796",
-  "podium_raw": "#687699"
+  "podium_raw": "#687699",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "41": {
   "name": "Fifty Albert",
   "wall": "#cec1ac",
   "podium": "#b8ac92",
   "wall_raw": "#c5b7bd",
-  "podium_raw": "#aaa0a8"
+  "podium_raw": "#aaa0a8",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "42": {
   "name": "Tower Centre",
   "wall": "#a5a5a2",
   "podium": "#92908a",
   "wall_raw": "#9e9db2",
-  "podium_raw": "#87869f"
+  "podium_raw": "#87869f",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "43": {
   "name": "Telco Building",
   "wall": "#737586",
   "podium": "#5c687d",
   "wall_raw": "#6e6f94",
-  "podium_raw": "#556190"
+  "podium_raw": "#556190",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "44": {
   "name": "The Shortland Centre",
   "wall": "#6a6b7b",
   "podium": "#3a4a67",
   "wall_raw": "#666688",
-  "podium_raw": "#364577"
+  "podium_raw": "#364577",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "45": {
   "name": "Waipārūrū Hall",
   "wall": "#90949f",
   "podium": "#6f6773",
   "wall_raw": "#8a8daf",
-  "podium_raw": "#676085"
+  "podium_raw": "#676085",
+  "facade": "punched",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "46": {
   "name": "SO/ Auckland",
   "wall": "#b1aba3",
   "podium": "#8e9282",
   "wall_raw": "#aaa2b3",
-  "podium_raw": "#838896"
+  "podium_raw": "#838896",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "47": {
   "name": "The Wiltshire on Victoria",
   "wall": "#afa1a1",
   "podium": "#707582",
   "wall_raw": "#a899b1",
-  "podium_raw": "#686d96"
+  "podium_raw": "#686d96",
+  "facade": "balcony",
+  "facade_from": "3D mesh side views (2023), by eye"
  },
  "48": {
   "name": "President Hotel",

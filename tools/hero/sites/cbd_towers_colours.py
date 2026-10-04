@@ -71,6 +71,33 @@ def node_points(base, n, area, rng):
     return p, c
 
 
+def side_views(P, C, g, top, path, name):
+    """Two orthographic elevations (from the south and the east), 0.25 m/px, side by side, for picking a facade."""
+    from PIL import ImageDraw
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    px = 0.25
+    out = []
+    for u, d in ((P[:, 0], -P[:, 1]), (-P[:, 1], -P[:, 0])):  # south: x across, depth north; east: −y across, depth −x
+        u0 = np.percentile(u, 0.5)
+        W = int((np.percentile(u, 99.5) - u0) / px) + 1
+        H = int((top + 6) / px) + 1
+        iu, iv = ((u - u0) / px).astype(int), (H - 1 - (P[:, 2] - g) / px).astype(int)
+        ok = (iu >= 0) & (iu < W) & (iv >= 0) & (iv < H)
+        o = np.argsort(-d[ok])  # far first, near last
+        img = np.full((H, W, 3), 255, np.uint8)
+        img[iv[ok][o], iu[ok][o]] = C[ok][o]
+        out.append(Image.fromarray(img))
+    h = max(i.height for i in out)
+    sheet = Image.new('RGB', (sum(i.width for i in out) + 10, h + 16), (255, 255, 255))
+    x = 0
+    for i in out:
+        sheet.paste(i, (x, 16 + h - i.height))
+        x += i.width + 10
+    ImageDraw.Draw(sheet).text((2, 2), name, fill=(0, 0, 0))
+    sheet.thumbnail((900, 900))
+    sheet.save(path, quality=85)
+
+
 def colour(c):
     if len(c) < 200:
         return None
@@ -85,6 +112,8 @@ def main():
     ap.add_argument('--out', default=os.path.join(HERE, 'cbd_towers_style.json'))
     ap.add_argument('--zone', default='1A')
     ap.add_argument('--only', default='')
+    ap.add_argument('--tiers', default='')
+    ap.add_argument('--views', default='', help='folder: also write a side view of each tower (<n>.jpg) to pick its facade by eye')
     a = ap.parse_args()
     towers = json.load(open(f'{a.site}/towers.json'))
     only = {int(x) for x in a.only.split(',') if x}
@@ -92,7 +121,7 @@ def main():
     base = SERVICE.format(zone=a.zone)
     rng = np.random.default_rng(7)
     for t in towers:
-        if only and t['n'] not in only:
+        if (only and t['n'] not in only) or (a.tiers and t['tier'] not in a.tiers.split(',')):
             continue
         o = t['outline']
         poly = Polygon([nztm(o[i], o[i + 1]) for i in range(0, len(o), 2)]).buffer(2)
@@ -111,6 +140,8 @@ def main():
         C = np.concatenate([r[1] for r in res])
         g = float(np.percentile(P[:, 2], 1))
         h = P[:, 2] - g
+        if a.views:
+            side_views(P, C, g, top, f"{a.views}/{t['n']}.jpg", t['name'])
         st = styles.setdefault(str(t['n']), {})
         st['name'] = t['name']
         if not st.get('lock'):
