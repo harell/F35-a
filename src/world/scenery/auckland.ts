@@ -13,7 +13,7 @@ import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfield
 import { airfieldLayout } from './aucklandOsm';
 import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
 import { buildMuseum } from './museum';
@@ -632,7 +632,7 @@ function buildSceneFins(B: GeometryBuilder, height: HeightFn): void {
 }
 
 /** Window style of a kit tower's shaft facade (core/cbdTowers.ts). */
-const TOWER_WIN: Record<TowerFacade, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, balcony: WIN_BALCONY };
+const TOWER_WIN: Record<TowerFacade, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, balcony: WIN_BALCONY, plain: WIN_FLOOD };
 
 /** Wall colour, roof colour and window style of a kit tower's part. */
 function towerPartFacade(t: CbdTower, kind: string | undefined, tmp: Color): [number, number, number] {

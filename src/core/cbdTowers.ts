@@ -13,8 +13,9 @@
 /** podium: below 55 % of the top; shaft: the tower; crown: a small top level; plant: lift overruns and plant; spire: a mast. */
 export type TowerPartKind = 'podium' | 'shaft' | 'crown' | 'plant' | 'spire';
 
-/** Facade of a tower's shaft: curtain glass, ribbon windows between precast bands, punched windows, balconies. */
-export type TowerFacade = 'glass' | 'bands' | 'punched' | 'balcony';
+/** Facade of a tower's shaft: curtain glass, ribbon windows between precast bands, punched windows, balconies, or plain
+ * concrete or stone with no windows, floodlit at night (the Wynyard silos). */
+export type TowerFacade = 'glass' | 'bands' | 'punched' | 'balcony' | 'plain';
 
 export interface TowerPrismPart {
   kind: Exclude<TowerPartKind, 'spire'>;
@@ -41,7 +42,7 @@ export type TowerPart = TowerPrismPart | TowerSpire;
 export interface CbdTower {
   /** Row of issue #156's table (tallest first); 201+ the landmarks. */
   n: number;
-  /** #156's tiers; L: a landmark of #143 through the same kit (Ferry Building, Chief Post Office, Town Hall). */
+  /** #156's tiers; L: a landmark of #143 through the same kit (Ferry Building, Chief Post Office, Town Hall, the Wynyard silos). */
   tier: 'A' | 'B' | 'C' | 'C*' | 'L';
   name: string;
   address: string;
