@@ -1,7 +1,7 @@
 /**
  * Issue #116, playtest 1.2-j: a bomb's TTI after release is its predicted time of flight (the bomb's
  * own glide law flown to the target: glideTimeToGo), not range ÷ closing speed, which read 99 s on a
- * StormBreaker from 12 NM that took ~120 s. Flies real GBU-53 / GBU-39 / GBU-31 releases in the sim and
+ * StormBreaker from 12 NM that took ~120 s. Flies real GBU-53 / GBU-31 releases in the sim and
  * compares the estimate along the way with the time the bomb actually took.
  */
 import { describe, expect, it } from 'vitest';
@@ -40,7 +40,7 @@ function naive(m: MissileEntity, target: Vector3): number {
   return d / Math.max(80, m.velocity.dot(r) / d);
 }
 
-function fly(weapon: 'gbu53' | 'gbu39' | 'gbu31', loadout: LoadoutId, range: number, alt: number) {
+function fly(weapon: 'gbu53' | 'gbu31', loadout: LoadoutId, range: number, alt: number) {
   const w = makeWorld();
   const tgt = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(0, 0, 0), heading: 0, name: 'Fuel Depot' });
   const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, alt, range), heading: 0, speed: 250, loadout });
@@ -67,7 +67,7 @@ function fly(weapon: 'gbu53' | 'gbu39' | 'gbu31', loadout: LoadoutId, range: num
 
 describe('bomb TTI is the predicted time of flight (#116 1.2-j)', () => {
   it('GBU-53 from 12 NM: ~113 s (range ÷ closing read 99), and the estimate tracks the real flight within 10 % all the way', () => {
-    const r = fly('gbu53', 'strike_sdb2', 12 * NM, 8_000);
+    const r = fly('gbu53', 'sead_stealth', 12 * NM, 8_000);
     expect(r.tof).toBeGreaterThan(100);
     expect(r.tof).toBeLessThan(150);
     const first = r.samples[0];
@@ -80,9 +80,9 @@ describe('bomb TTI is the predicted time of flight (#116 1.2-j)', () => {
     }
   });
 
-  it('GBU-39 and GBU-31: the estimate at release is close to the real flight (90 s / 53 s here)', () => {
+  it('GBU-53 from 10 NM and GBU-31: the estimate at release is close to the real flight', () => {
     for (const [weapon, loadout, range, tol] of [
-      ['gbu39', 'sead_stealth', 10 * NM, 0.05],
+      ['gbu53', 'sead_stealth', 10 * NM, 0.05],
       // (the JDAM's short, steep fall: 59 s predicted for 53 s, where range ÷ closing read 64 s)
       ['gbu31', 'strike_stealth', 5 * NM, 0.15],
     ] as const) {

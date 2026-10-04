@@ -308,7 +308,7 @@ describe('air-defence boat (moving SAM)', { timeout: 60_000 }, () => {
   });
 
   it('in a mission: escorts its boat group and moves on when that boat is gone; boats find a tanker listed after them', () => {
-    const base = missionById('c01')!;
+    const base = missionById('g01')!;
     const script = emptyScript();
     // the boats come BEFORE the tanker they attack, and SAM sites spawn before every ground target
     script.ground.push(
@@ -453,7 +453,7 @@ describe('GBU-53/B vs a weaving boat', { timeout: 60_000 }, () => {
     const w = seaWorld(3);
     const t = tanker(w, 0, -20_000);
     const boat = w.spawnGround({ type: 'suicide_boat', team: 'red', position: new Vector3(0, 0, -2000), boat: { chaseId: t.id } });
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 7000, 12_000), heading: 0, speed: 250, loadout: 'strike_sdb2' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 7000, 12_000), heading: 0, speed: 250, loadout: 'sead_stealth' });
     w.combat.selectWeapon(p, 'gbu53', w);
     run(w, 1);
     w.combat.designate(p, boat.id, w);
@@ -545,7 +545,7 @@ describe('boat presentation and mission options', () => {
   });
 
   it('a mission can chase / strike / escort by group, and the validator checks it', () => {
-    const base = missionById('c01')!;
+    const base = missionById('g01')!;
     const script = emptyScript();
     script.ground.push(
       { id: 'mt', group: 'tanker', type: 'ship', team: 'neutral', vessel: 'tanker', hitsToSink: 2, x: 0, z: -5000 },
@@ -558,7 +558,7 @@ describe('boat presentation and mission options', () => {
     const errs = validateMission(def).filter((e) => /sb1|mb1|ad1|chase|strike|escort/.test(e));
     expect(errs).toEqual([]);
     const bad = emptyScript();
-    bad.ground.push({ id: 'x', group: 'g', type: 'truck', x: 0, z: 0, chase: 'nope' });
+    bad.ground.push({ id: 'x', group: 'g', type: 'bunker', x: 0, z: 0, chase: 'nope' });
     bad.sams.push({ id: 'y', group: 'g', type: 'sa6', x: 0, z: 0, path: [{ x: 1, z: 1 }] });
     const badErrs = validateMission({ ...base, script: bad } as MissionDef);
     expect(badErrs.some((e) => /only a suicide boat chases/.test(e))).toBe(true);

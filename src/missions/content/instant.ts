@@ -137,7 +137,7 @@ const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
  */
 export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = { ace: 1 };
 
-const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa8', 'sa15', 'sa6', 'zsu23', 'sa8', 'sa15'];
+const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa15', 'sa15', 'sa6', 'zsu23', 'sa15', 'sa15'];
 
 export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: number): MissionDef {
   const rng = mulberry32(seed >>> 0);
@@ -163,7 +163,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // free flight: no hostiles, only the civil traffic; every loadout, a clean jet first and by
       // default (a calm cockpit and the slowest flight, #113)
       loadout = 'clean';
-      allowed = ['clean', 'strike_beast', 'a2a_beast', 'strike_sdb2_full', 'strike_maritime', 'strike_sdb2', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
+      allowed = ['clean', 'strike_beast', 'a2a_beast', 'strike_maritime', 'sead_stealth', 'strike_stealth', 'a2a_stealth'];
       script.freeFlight = true;
       objectiveText = ['Free flight: no objectives. Explore Auckland at your own pace.'];
       // start low and steady over the upper Waitematā, the Harbour Bridge ahead (not 5,000 m at 470 kt)
@@ -200,17 +200,19 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'sam_gauntlet': {
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'];
+      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
-        // the SA-15 Tor shoots down glide bombs and AARGMs: Veteran and up only, as in c04 and Strike
-        sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35, ...(type === 'sa15' ? { minDifficulty: 'veteran' as const } : {}) }));
+        // the SA-15 Tor shoots down glide bombs and AARGMs: the first Tor of each pair flies on every
+        // difficulty (it took the SA-8's slot), the second only on Veteran and up
+        sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35, ...(type === 'sa15' && i % 4 === 3 ? { minDifficulty: 'veteran' as const } : {}) }));
       }
       ground.push(
         target('fuel1', 'target', 'fuel', { x: lay.target.x - 120, z: lay.target.z }),
         target('fuel2', 'target', 'fuel', { x: lay.target.x + 120, z: lay.target.z + 60 }),
-        target('bunker', 'target', 'bunker', { x: lay.target.x, z: lay.target.z + 260 }),
+        // a hangar, not a bunker: one GBU-53 from the SEAD loadout kills it (a bunker takes two, or one JDAM)
+        target('hangar', 'target', 'hangar', { x: lay.target.x, z: lay.target.z + 260 }),
       );
       objectives.push(
         { id: 'o_target', kind: 'destroy', groups: ['target'], label: 'Destroy the depot at the end of the gauntlet', primary: true },
@@ -245,7 +247,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // SEAD fit (issue #60): 4 SDBs take the 3 parked jets in one sortie (the 2 JDAMs of
       // strike_stealth needed a second pass through the SA-6 ring), the AARGMs answer the SA-6
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast', 'strike_sdb2'];
+      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
       if (!features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);

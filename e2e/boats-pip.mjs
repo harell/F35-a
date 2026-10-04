@@ -1,5 +1,5 @@
 /**
- * IRGC Navy fast boats in the target camera (issue #79): in an Auckland sortie (c02, day) spawns a
+ * IRGC Navy fast boats in the target camera (issue #79): in an Auckland sortie (the Instant Action stroll, day) spawns a
  * suicide boat, a missile boat and an air-defence boat on open water near a civil ship, designates
  * each in turn and screenshots the PiP (full frame + a crop of the PiP) to e2e/screenshots/boats/.
  *
@@ -28,7 +28,7 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto(`${base}?mission=c02&autostart=1&view=cockpit&quality=${quality}&fps=1&loadout=strike_sdb2`, { waitUntil: 'load' });
+await page.goto(`${base}?mission=ia_stroll_auckland&autostart=1&view=cockpit&quality=${quality}&fps=1&loadout=strike_maritime`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 90000 });
 await page.waitForTimeout(2000);
 

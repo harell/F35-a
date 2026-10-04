@@ -155,7 +155,6 @@ export class FakeWorld implements SimWorld {
   spawnGround(spec: GroundSpawn): GroundTargetEntity {
     const e = new GroundTargetEntity(this.nextId(), spec.type, spec.team, { name: spec.name, health: spec.health });
     e.position.set(spec.position.x, this.terrain.heightAt(spec.position.x, spec.position.z), spec.position.z);
-    e.emitter = spec.type === 'ewr';
     this.ground.push(e);
     this.map.set(e.id, e);
     return e;

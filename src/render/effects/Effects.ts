@@ -1036,7 +1036,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         shipKill(entity);
       } else if (entity.kind === 'sam' || entity.kind === 'ground') {
         const type = (entity as { type: string }).type;
-        const bigFire = type === 'fuel' || type === 'factory' || type === 'sa10';
+        const bigFire = type === 'fuel';
         const gy = groundAt(p.x, p.z);
         // tall, long-lived fire + smoke column readable from several km
         startFire(p.x, gy, p.z, bigFire ? 2.8 : 1.7, bigFire ? 170 : 120);

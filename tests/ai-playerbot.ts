@@ -26,6 +26,7 @@ import { AB_DETENT, isHostile, type Difficulty, type LoadoutId } from '../src/co
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
+import type { MissionDef } from '../src/core/contracts';
 import { createMissionRunner, missionById } from '../src/missions';
 import { mulberry32 } from '../src/core/math';
 import type { AircraftEntity, IncomingMissile } from '../src/sim/entities';
@@ -535,7 +536,7 @@ export interface BalanceResult {
  * `terrain` lets tests use a flat sea (fast); the e2e harness passes the real Auckland terrain.
  */
 export function runBalanceMission(
-  missionId: string,
+  missionIdOrDef: string | MissionDef,
   diff: Difficulty,
   seed: number,
   terrain: TerrainQuery,
@@ -555,14 +556,16 @@ export function runBalanceMission(
      * ia_dogfight_auckland run, and the playtest's seeds 1-3 still fire 0 in both missions. Most
      * runs still end at the first merge (two missile hits kill on Pilot), and in the Instant
      * Action dogfight the a2a_beast wingman often splashes all four bandits first. A sweep
-     * measures the gun and the bot's dogfighting together.
+     * measures the gun and the bot's dogfighting together. (c01 is gone; its shape lives on as
+     * sweepFixture() in tests/missions-helpers.ts.)
      */
     gunOnly?: boolean;
     onStep?: (world: SimWorld, p: AircraftEntity, bot: PlayerBot) => void;
   } = {},
 ): BalanceResult {
-  const def = missionById(missionId);
-  if (!def) throw new Error(`no mission ${missionId}`);
+  const def = typeof missionIdOrDef === 'string' ? missionById(missionIdOrDef) : missionIdOrDef;
+  if (!def) throw new Error(`no mission ${String(missionIdOrDef)}`);
+  const missionId = def.id;
   const events = new EventBus();
   const d = DIFFICULTIES[diff];
   const world = createSimWorld({ terrain, difficulty: d, events, combat: createCombatSystemSeeded(seed) });

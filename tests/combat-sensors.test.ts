@@ -301,12 +301,11 @@ describe('combat: shoot list', () => {
 });
 
 describe('combat: RWR & MAWS', () => {
-  it('RWR shows a locking fighter as track, a SAM search radar, and nothing for MANPADS', () => {
+  it('RWR shows a locking fighter as track and a SAM search radar', () => {
     const w = new FakeWorld();
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 3000, 0), heading: 0, speed: 250, loadout: 'a2a_beast' });
     const su = w.spawnAircraft({ type: 'su35', team: 'red', position: v3(0, 3000, -18000), heading: Math.PI, speed: 250 });
     const sa6 = w.spawnSam({ type: 'sa6', team: 'red', position: v3(20000, 0, 0) });
-    const manpads = w.spawnSam({ type: 'sa18', team: 'red', position: v3(-2000, 0, -1000) });
     const newRwr = w.record('rwr:new');
     w.run(0.5);
     su.radar.designatedId = f35.id;
@@ -320,7 +319,6 @@ describe('combat: RWR & MAWS', () => {
     expect(sam?.kind).toBe('sam');
     expect(sam?.symbol).toBe('6');
     expect(sam!.bearing).toBeGreaterThan(1.2); // off the right wing
-    expect(f35.rwr.some((r) => r.sourceId === manpads.id)).toBe(false);
     expect(newRwr.some((e) => e.contact.sourceId === su.id)).toBe(true);
     expect(sa6.known).toBe(true);
   });

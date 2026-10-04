@@ -3,12 +3,12 @@
  *
  *   node e2e/ui-touch.mjs [--base=http://localhost:5173/] [--part=flight|menus|all]
  *
- * flight: ?mission=c01&autostart=1 → multi-touch stick + throttle, AB detent/double-tap, FIRE/GUN/CMS,
+ * flight: ?mission=g01&autostart=1 → multi-touch stick + throttle, AB detent/double-tap, FIRE/GUN/CMS,
  *         TGT/WPN/RADAR, CAM tap + long-press padlock, look drag, tap designation in the target (padlock)
- *         view, pause → resume, then the fly() hook from the pause menu → c02's pause menu → quit → main menu.
+ *         view, pause → resume, then the fly() hook from the pause menu → g02's pause menu → quit → main menu.
  * menus:  first launch (fresh context): New pilot card → Start training → Training list → briefing → back
  *         → Training list; then splash → main menu (Not now on the card) → settings round-trip → Campaign
- *         (one playable campaign since Southern Cross was disabled, so no picker) → the IRGC campaign's list
+ *         (one playable campaign, so no picker) → the IRGC campaign's list
  *         → briefing → back → campaign list → briefing (tabs, loadout) → FLY → pause → quit → main menu,
  *         instant action → briefing → back → setup → back → main menu, credits, fly() from the main
  *         menu → quit → main menu.
@@ -127,13 +127,13 @@ const rectOf = (page, sel) => page.evaluate((s) => {
 
 /* ───────────────────────── flight controls ───────────────────────── */
 async function flight() {
-  console.log('\n[flight] touch controls in c01');
+  console.log('\n[flight] touch controls in g01');
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   if (args.debug) page.on('console', (m) => m.type() === 'log' && console.log('    ·', m.text()));
-  await page.goto(`${base}?mission=c01&autostart=1&view=chase`, { waitUntil: 'load' });
+  await page.goto(`${base}?mission=g01&autostart=1&view=chase`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__f35?.state?.().inMission && window.__f35.state().player, null, { timeout: 120_000 }); // a mission load under a loaded box can pass 60 s
   await page.waitForTimeout(1500);
   const t = await touchApi(page);
@@ -357,15 +357,15 @@ async function flight() {
   // ── the fly() hook over the pause menu (#71): the new mission's pause menu still opens ──
   await page.evaluate(() => {
     window.__f35.pause();
-    window.__f35.fly('c02');
+    window.__f35.fly('g02');
     window.__f35.pause();
   });
   const fp = await page
-    .waitForFunction(() => window.__f35.state().mission === 'c02' && !!document.querySelector('.scr-pause:not(.is-leaving)'), null, { timeout: 120_000 })
+    .waitForFunction(() => window.__f35.state().mission === 'g02' && !!document.querySelector('.scr-pause:not(.is-leaving)'), null, { timeout: 120_000 })
     .then(() => page.evaluate(() => ({ mission: window.__f35.state().mission, paused: window.__f35.state().paused, menu: true })), () =>
       page.evaluate(() => ({ mission: window.__f35.state().mission, paused: window.__f35.state().paused, menu: false })),
     );
-  check(fp.mission === 'c02' && fp.paused && fp.menu, "pause(); fly('c02'); pause() → c02's pause menu", JSON.stringify(fp));
+  check(fp.mission === 'g02' && fp.paused && fp.menu, "pause(); fly('g02'); pause() → g02's pause menu", JSON.stringify(fp));
   // the autostart flow ends in the main menu, and so does the mission fly() put in its place
   if (fp.menu) await quitFromPause(page);
   const back = await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 30_000 }).then(() => true, () => false);
@@ -454,12 +454,12 @@ async function menus() {
   const diff = await page.evaluate(() => window.__f35.game.settings.difficulty);
   check(diff === 'ace', 'settings resolve with the edited object and the game applies it', diff);
 
-  // campaign → the IRGC campaign's mission list (Southern Cross is disabled, so there is no picker) → briefing
+  // campaign → the IRGC campaign's mission list (the only playable campaign, so there is no picker) → briefing
   await page.tap('.mm-item[data-id="campaign"]');
   await page.waitForSelector('.scr-missions:not(.is-leaving) .mcard');
   check(!(await page.$('.scr-campaigns:not(.is-leaving)')), 'one playable campaign: Campaign opens its mission list, no picker');
   const missionCards = await page.evaluate(() => document.querySelectorAll('.scr-missions:not(.is-leaving) .mcard').length);
-  check(missionCards === 2, 'the list is the IRGC campaign (g01, g02), not the disabled Southern Cross', String(missionCards));
+  check(missionCards === 2, 'the list is the IRGC campaign (g01, g02)', String(missionCards));
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'e2e/screenshots/ui/flow-3-campaign.png' });
   const row = await rectOf(page, '.ml-row');
@@ -558,8 +558,8 @@ async function menus() {
   check(true, 'credits + Escape → main menu');
   // fly() from the main menu (#71): the menu's wait is dropped, and quitting brings the menu back
   await page.waitForTimeout(400);
-  const flying = await flyHook(page, 'c01');
-  check(flying && !(await page.$('.scr-main:not(.is-leaving)')), 'fly() from the main menu → c01 running, menu gone');
+  const flying = await flyHook(page, 'g01');
+  check(flying && !(await page.$('.scr-main:not(.is-leaving)')), 'fly() from the main menu → g01 running, menu gone');
   await page.evaluate(() => window.__f35.pause());
   const paused = await page.waitForSelector('.scr-pause:not(.is-leaving)', { timeout: 30_000 }).then(() => true, () => false);
   if (paused) await quitFromPause(page);

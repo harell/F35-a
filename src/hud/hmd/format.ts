@@ -13,8 +13,6 @@ export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   su27: 'SU-27',
   su35: 'SU-35',
   su57: 'SU-57',
-  tu22m: 'TU-22M',
-  a50: 'A-50',
   a320: 'A320',
   shahed136: 'SHAHED-136',
 };
@@ -26,33 +24,23 @@ export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
   su27: '27',
   su35: '35',
   su57: '57',
-  tu22m: '22M',
-  a50: 'A50',
   a320: 'CIV',
   shahed136: 'UAV',
 };
 
 export const SAM_LABEL: Record<SamType, string> = {
   sa6: 'SA-6',
-  sa8: 'SA-8',
-  sa10: 'SA-10',
   sa15: 'SA-15',
-  sa18: 'SA-18',
   zsu23: 'ZSU-23',
   ad_boat: 'AD BOAT',
 };
 
 export const GROUND_LABEL: Record<GroundTargetType, string> = {
-  ewr: 'EWR',
   bunker: 'BUNKER',
   fuel: 'FUEL DEPOT',
   hangar: 'HAS',
   parked_jet: 'JET',
-  truck: 'TRUCK',
-  tank: 'ARMOR',
   ship: 'SHIP',
-  factory: 'FACTORY',
-  bridge: 'BRIDGE',
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MSL BOAT',
 };
@@ -63,7 +51,6 @@ export const WEAPON_HUD: Record<WeaponId, string> = {
   aim120: 'AMRAAM',
   aim9x: '9X',
   gbu31: 'JDAM',
-  gbu39: 'SDB',
   gbu53: 'SDB II',
   aargm: 'AARGM',
 };
@@ -73,7 +60,6 @@ export const WEAPON_IS_AG: Record<WeaponId, boolean> = {
   aim120: false,
   aim9x: false,
   gbu31: true,
-  gbu39: true,
   gbu53: true,
   aargm: true,
 };
@@ -84,7 +70,6 @@ export const WEAPON_IS_BOMB: Record<WeaponId, boolean> = {
   aim120: false,
   aim9x: false,
   gbu31: true,
-  gbu39: true,
   gbu53: true,
   aargm: false,
 };
@@ -95,7 +80,6 @@ export const WEAPON_BREVITY: Record<WeaponId, string> = {
   aim120: 'FOX 3',
   aim9x: 'FOX 2',
   gbu31: 'RIFLE',
-  gbu39: 'RIFLE',
   gbu53: 'RIFLE',
   aargm: 'MAGNUM',
 };

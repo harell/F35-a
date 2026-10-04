@@ -204,7 +204,7 @@ export function kinematicZone(def: CombatMunitionDef, g: ZoneGeometry, out: Laun
 /* ───────────────────────── GPS glide envelope ───────────────────────── */
 
 const gpsCache = new Map<number, number>();
-const MUN_INDEX: Record<string, number> = { gbu31: 1, gbu39: 2, gbu53: 3, kab500: 4 };
+const MUN_INDEX: Record<string, number> = { gbu31: 1, gbu53: 3, kab500: 4 };
 
 /**
  * Max horizontal reach (m) of a GPS glide weapon released level at `speed` from `height` above
@@ -584,7 +584,7 @@ export function launchZoneFor(
       break;
     }
     case 'anti_radiation':
-      out.shoot = (target.kind === 'sam' && (target.radarOn || target.known)) || (target.kind === 'ground' && target.emitter);
+      out.shoot = target.kind === 'sam' && (target.radarOn || target.known);
       break;
     default:
       out.shoot = true;

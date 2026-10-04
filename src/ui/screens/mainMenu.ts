@@ -82,7 +82,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
     const list = h('nav', { class: 'mm-list', attrs: { 'aria-label': 'Main menu' } });
     let first: HTMLButtonElement | null = null;
     for (const it of ITEMS) {
-      // the Campaign line names every playable campaign (a disabled one, like Southern Cross, isn't shown)
+      // the Campaign line names every playable campaign (a disabled one isn't shown)
       const sub = it.id === 'campaign' && PLAYABLE_CAMPAIGNS.length > 0 ? PLAYABLE_CAMPAIGNS.map((c) => c.name).join(' · ') : it.sub;
       const recBadge = it.id === 'training' && needsTraining ? '<span class="badge mm-recb">RECOMMENDED</span>' : '';
       const b = h('button', {

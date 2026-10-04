@@ -8,11 +8,19 @@
 import { describe, expect, it } from 'vitest';
 import hintsSrc from '../src/missions/runtime/hints.ts?raw';
 import weaponsSrc from '../src/hud/hmd/weapons.ts?raw';
-import { CAMPAIGN, TRAINING } from '../src/missions';
+import type { MissionDef } from '../src/core/contracts';
+import { CAMPAIGNS, TRAINING, missionById } from '../src/missions';
 import { RADIO_PAGE_LINES } from '../src/hud/hmd/feeds';
 import { CHAR_W } from '../src/hud/dev/fakeCanvas';
 import { RADIO_FONT, computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { objectiveLines, wrap } from '../src/hud/hmd/overlays';
+
+/** Every mission the player can fly: the campaigns, training and each Instant Action mode. */
+const MISSIONS: MissionDef[] = [
+  ...CAMPAIGNS.flatMap((c) => c.missions),
+  ...TRAINING,
+  ...(['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend'] as const).map((mode) => missionById(`ia_${mode}_auckland`)!),
+];
 
 const noSafe = { top: 0, right: 0, bottom: 0, left: 0 };
 const tan30 = Math.tan(Math.PI / 6);
@@ -43,7 +51,7 @@ function collect(): { radio: { from: string; text: string; where: string }[]; hi
     if (r.kind === 'hint' && typeof r.text === 'string') hints.push(r.text);
     for (const v of Object.values(r)) walk(v, where);
   };
-  for (const m of [...CAMPAIGN, ...TRAINING]) {
+  for (const m of MISSIONS) {
     walk(m.script, m.id);
     for (const h of m.script.hints ?? []) hints.push(h.text);
     for (const ob of m.script.objectives ?? []) if (ob.label) objectives.push(ob.label);
@@ -57,7 +65,7 @@ describe('HUD text budget lint (mission content vs the phone layout)', () => {
   const content = collect();
 
   it('finds the mission content', () => {
-    expect(content.radio.length).toBeGreaterThan(30);
+    expect(content.radio.length).toBeGreaterThan(15);
     expect(content.objectives.length).toBeGreaterThan(20);
     expect(content.hints.length).toBeGreaterThan(10);
   });
@@ -103,7 +111,7 @@ describe('HUD text budget lint (mission content vs the phone layout)', () => {
   it('the HUD bomb release cue reads what the briefings and hints say to wait for (playtest 1.3-a: IN RNG vs IN RANGE)', () => {
     const cue = /addCue\('(IN R[A-Z ]*)'/.exec(weaponsSrc as string)?.[1];
     expect(cue).toBe('IN RANGE');
-    const content = JSON.stringify([...CAMPAIGN, ...TRAINING].map((m) => [m.briefing, m.script]));
+    const content = JSON.stringify(MISSIONS.map((m) => [m.briefing, m.script]));
     expect(content).toContain(cue);
     expect(hintsSrc as string).toContain(cue);
     expect(content + hintsSrc).not.toMatch(/IN RNG/);

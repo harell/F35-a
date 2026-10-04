@@ -4,22 +4,27 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { InstantActionOptions } from '../src/core/contracts';
-import { CAMPAIGN, TRAINING, buildInstantMission, buildInstantMissionSeeded, missionById, terrainPadsFor, validateMission } from '../src/missions';
+import { CAMPAIGNS, TRAINING, buildInstantMission, buildInstantMissionSeeded, missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { mergePads } from '../src/missions/pads';
+import { P, target } from '../src/missions/content/common';
 import type { TheaterId } from '../src/core/types';
+import { seadFixture } from './missions-helpers';
 
+const CAMPAIGN = CAMPAIGNS.flatMap((c) => c.missions);
 const ALL = [...CAMPAIGN, ...TRAINING];
 
 describe('missions: campaign & training content', () => {
-  it('has 10 campaign missions and 3 training missions in order; only the last is the finale', () => {
-    // c07 and c12 were removed with rearming (issue #63); the other ids keep their numbers
-    expect(CAMPAIGN.map((m) => m.id)).toEqual(['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c08', 'c09', 'c10', 'c11']);
-    expect(CAMPAIGN.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual(['c11']);
+  it('has the IRGC campaign (2 missions) and 3 training missions in order; only the last is the finale', () => {
+    expect(CAMPAIGNS.map((c) => c.id)).toEqual(['irgc']);
+    expect(CAMPAIGN.map((m) => m.id)).toEqual(['g01', 'g02']);
+    expect(CAMPAIGN.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual(['g02']);
     expect(TRAINING).toHaveLength(3);
-    CAMPAIGN.forEach((m, i) => {
-      expect(m.kind).toBe('campaign');
-      expect(m.index).toBe(i + 1);
-    });
+    for (const c of CAMPAIGNS) {
+      c.missions.forEach((m, i) => {
+        expect(m.kind).toBe('campaign');
+        expect(m.index).toBe(i + 1);
+      });
+    }
     TRAINING.forEach((m) => expect(m.kind).toBe('training'));
   });
 
@@ -33,11 +38,8 @@ describe('missions: campaign & training content', () => {
     expect(errors).toEqual([]);
   });
 
-  it('campaign and training are set in Auckland with time-of-day / weather variety', () => {
+  it('campaign and training are set in Auckland', () => {
     for (const m of ALL) expect(m.theater).toBe('auckland');
-    const tods = new Set(CAMPAIGN.map((m) => m.timeOfDay));
-    expect(tods).toEqual(new Set(['dawn', 'day', 'dusk', 'night']));
-    expect(new Set(CAMPAIGN.map((m) => m.weather)).size).toBeGreaterThanOrEqual(3);
   });
 
   it('briefings are substantial and objectives are listed', () => {
@@ -50,13 +52,17 @@ describe('missions: campaign & training content', () => {
     }
   });
 
-  it('SAM sites and static compounds get terrain pads; ships do not', () => {
-    const c06 = CAMPAIGN.find((m) => m.id === 'c06')!;
-    const pads = terrainPadsFor(c06);
-    for (const s of c06.script.sams) expect(pads.some((p) => Math.hypot(p.x - s.x, p.z - s.z) <= p.radius)).toBe(true);
-    for (const g of c06.script.ground.filter((g) => g.type === 'ship')) {
-      expect(pads.some((p) => Math.hypot(p.x - g.x, p.z - g.z) <= p.radius)).toBe(false);
-    }
+  it('SAM sites and static compounds get terrain pads; ships and boats do not', () => {
+    // land SAMs and a command bunker (a test fixture: no remaining mission has a land SAM site)
+    const base = seadFixture();
+    const sead = { ...base, script: { ...base.script, ground: [target('bunker', 'rangi_bunker', 'bunker', P.rangN, { name: 'Command Bunker' })] } };
+    const pads = terrainPadsFor(sead);
+    for (const s of [...sead.script.sams, ...sead.script.ground]) expect(pads.some((p) => Math.hypot(p.x - s.x, p.z - s.z) <= p.radius)).toBe(true);
+    // g02: the tanker, the boats and the air-defence boats (SAM sites at sea) never raise an island
+    const g02 = CAMPAIGN.find((m) => m.id === 'g02')!;
+    const atSea = [...g02.script.ground, ...g02.script.sams];
+    expect(atSea.length).toBeGreaterThan(0);
+    expect(terrainPadsFor(g02)).toEqual([]);
   });
 
   it('merges overlapping pads into one bounding circle', () => {
@@ -72,16 +78,17 @@ describe('missions: campaign & training content', () => {
   });
 
   it('SAM missions keep the player outside the threat rings (validator catches violations)', () => {
-    const c03 = CAMPAIGN.find((m) => m.id === 'c03')!;
-    const bad = { ...c03, player: { ...c03.player, x: c03.script.sams[0].x + 2000, z: c03.script.sams[0].z } };
+    const sead = seadFixture();
+    expect(validateMission(sead)).toEqual([]);
+    const bad = { ...sead, player: { ...sead.player, x: sead.script.sams[0].x + 2000, z: sead.script.sams[0].z } };
     expect(validateMission(bad).some((e) => e.includes('threat ring'))).toBe(true);
   });
 
   it('validator catches dangling references', () => {
-    const c01 = CAMPAIGN[0];
+    const g01 = CAMPAIGN[0];
     const bad = {
-      ...c01,
-      script: { ...c01.script, objectives: [...c01.script.objectives, { id: 'o_x', kind: 'destroy' as const, groups: ['nope'], label: 'x', primary: false }] },
+      ...g01,
+      script: { ...g01.script, objectives: [...g01.script.objectives, { id: 'o_x', kind: 'destroy' as const, groups: ['nope'], label: 'x', primary: false }] },
     };
     expect(validateMission(bad).some((e) => e.includes('unknown group "nope"'))).toBe(true);
   });

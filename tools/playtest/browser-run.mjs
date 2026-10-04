@@ -6,8 +6,8 @@
  * waiting in real time shows nothing past the first second.
  *
  *   npx vite --config vite.e2e.config.ts --port 5190 &      # test hooks are on in dev
- *   node tools/playtest/browser-run.mjs --mission=c09 [--at=0,30,120,300] [--view=chase|cockpit|hud|...]
- *       [--missions=c01,c02,ia_defend_auckland] [--loadout=strike_sdb2] [--shots=0] [--text]
+ *   node tools/playtest/browser-run.mjs --mission=g01 [--at=0,30,120,300] [--view=chase|cockpit|hud|...]
+ *       [--missions=g01,g02,ia_defend_auckland] [--loadout=sead_stealth] [--shots=0] [--text]
  *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}'] [--seed=7]
  *       [--device=phone|desktop] [--base=http://localhost:5190/] [--out=e2e/screenshots/playtest]
  *       [--tod=dawn|day|dusk|night] [--weather=clear|scattered|overcast]   (Instant Action ids, first mission)
@@ -41,7 +41,7 @@ const args = Object.fromEntries(
   }),
 );
 const base = args.base || 'http://localhost:5190/';
-const missions = String(args.missions || args.mission || 'c01').split(',').filter(Boolean);
+const missions = String(args.missions || args.mission || 'g01').split(',').filter(Boolean);
 const shots = args.shots !== '0';
 const at = String(args.at || '0,60,180').split(',').map(Number).sort((a, b) => a - b);
 const view = args.view || 'chase';

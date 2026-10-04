@@ -75,7 +75,7 @@ describe('target camera far plane', () => {
     const range = QUALITY_PRESETS.low.targetCamRange;
     expect(range).toBeGreaterThanOrEqual(2_000);
     expect(range).toBeLessThanOrEqual(8_000);
-    const sam = new SamSiteEntity(5, 'sa10', 'red');
+    const sam = new SamSiteEntity(5, 'sa6', 'red');
     for (const t of [mig(), sam]) {
       const d = framingDistance(t);
       const far = targetCamFar(MAIN_FAR, d, range);

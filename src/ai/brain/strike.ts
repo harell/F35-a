@@ -16,7 +16,7 @@ import { gammaForAltitude } from '../pilot/Autopilot';
 import { dirWithElevation } from '../geom';
 import type { TickCtx } from './context';
 
-const AG: readonly Exclude<WeaponId, 'gun' | 'aim120' | 'aim9x'>[] = ['aargm', 'gbu39', 'gbu31'];
+const AG: readonly Exclude<WeaponId, 'gun' | 'aim120' | 'aim9x'>[] = ['aargm', 'gbu53', 'gbu31'];
 const _h = new Vector3();
 /** Steepest GPS-bomb release: height / horizontal range (tan ≈ 45°). */
 const STEEP_SLOPE = 1.1;
@@ -37,7 +37,7 @@ export class StrikePlanner {
     const { ac, world } = c;
     for (const w of AG) {
       if (world.combat.remaining(ac, w) <= 0) continue;
-      if (w === 'aargm' && !((t.kind === 'sam' && (t.radarOn || t.known)) || (t.kind === 'ground' && t.emitter))) continue;
+      if (w === 'aargm' && !(t.kind === 'sam' && (t.radarOn || t.known))) continue;
       return w;
     }
     return null;

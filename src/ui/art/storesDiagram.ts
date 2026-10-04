@@ -13,12 +13,11 @@ export const STORE_SIZE: Record<Store, [number, number]> = {
   aim120: [3.1, 0.3],
   aim9x: [2.7, 0.26],
   gbu31: [3.6, 0.5],
-  gbu39: [1.7, 0.24],
   gbu53: [1.7, 0.24],
   aargm: [3.9, 0.3],
 };
 
-const AG = new Set<Store>(['gbu31', 'gbu39', 'gbu53', 'aargm']);
+const AG = new Set<Store>(['gbu31', 'gbu53', 'aargm']);
 
 interface Placed {
   weapon: Store;
@@ -28,7 +27,7 @@ interface Placed {
 }
 
 /** Small-diameter bombs: short enough to sit two in a row, fore and aft, in a bay. */
-const SDB = new Set<Store>(['gbu39', 'gbu53']);
+const SDB = new Set<Store>(['gbu53']);
 /** More store columns than this in one bay and they overlap (the bay is 0.9 m wide). */
 const MAX_BAY_COLUMNS = 4;
 /** Fore / aft offset (m) of the two rows of a stacked SDB column. */

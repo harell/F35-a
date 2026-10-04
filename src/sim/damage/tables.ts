@@ -13,11 +13,8 @@ export interface SamSiteData {
 }
 
 export const SAM_SITE_DATA: Record<SamType, SamSiteData> = {
-  sa10: { radius: 45, health: 160, missiles: 8, explosion: 'huge' }, // Flap Lid + TELs spread out
   sa6: { radius: 35, health: 120, missiles: 6, explosion: 'huge' }, // Straight Flush + 3 launchers
-  sa8: { radius: 10, health: 80, missiles: 6, explosion: 'large' },
   sa15: { radius: 10, health: 90, missiles: 8, explosion: 'large' },
-  sa18: { radius: 6, health: 30, missiles: 4, explosion: 'large' },
   zsu23: { radius: 8, health: 60, missiles: 4, explosion: 'large' }, // "missiles" = ammo bursts
   ad_boat: { radius: 11, health: 50, missiles: 4, explosion: 'large' }, // ~22 m fast boat, a few gun hits
 };
@@ -26,26 +23,19 @@ export interface GroundTargetData {
   radius: number;
   health: number;
   explosion: ExplosionSize;
-  /** Radar emitter (shows on RWR / AARGM target). */
-  emitter: boolean;
   /** Sails on the sea surface. */
   naval: boolean;
 }
 
 export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
-  ewr: { radius: 15, health: 80, explosion: 'large', emitter: true, naval: false },
-  bunker: { radius: 22, health: 260, explosion: 'huge', emitter: false, naval: false },
-  fuel: { radius: 18, health: 60, explosion: 'huge', emitter: false, naval: false },
-  hangar: { radius: 25, health: 200, explosion: 'huge', emitter: false, naval: false },
-  parked_jet: { radius: 9, health: 40, explosion: 'large', emitter: false, naval: false },
-  truck: { radius: 5, health: 30, explosion: 'large', emitter: false, naval: false },
-  tank: { radius: 5, health: 70, explosion: 'large', emitter: false, naval: false },
-  ship: { radius: 60, health: 400, explosion: 'huge', emitter: false, naval: true },
-  factory: { radius: 40, health: 300, explosion: 'huge', emitter: false, naval: false },
-  bridge: { radius: 40, health: 300, explosion: 'huge', emitter: false, naval: false },
+  bunker: { radius: 22, health: 260, explosion: 'huge', naval: false },
+  fuel: { radius: 18, health: 60, explosion: 'huge', naval: false },
+  hangar: { radius: 25, health: 200, explosion: 'huge', naval: false },
+  parked_jet: { radius: 9, health: 40, explosion: 'large', naval: false },
+  ship: { radius: 60, health: 400, explosion: 'huge', naval: true },
   // IRGC Navy fast boats (sim/boats.ts): small, unarmoured, a short gun burst sinks one
-  suicide_boat: { radius: 8, health: 40, explosion: 'huge', emitter: false, naval: true }, // ~16 m, packed with explosive
-  missile_boat: { radius: 9, health: 50, explosion: 'large', emitter: false, naval: true }, // Peykaap II, ~17 m
+  suicide_boat: { radius: 8, health: 40, explosion: 'huge', naval: true }, // ~16 m, packed with explosive
+  missile_boat: { radius: 9, health: 50, explosion: 'large', naval: true }, // Peykaap II, ~17 m
 };
 
 export interface VesselData {
@@ -102,5 +92,5 @@ export const AIRCRAFT_WARHEAD: Partial<Record<AircraftType, WarheadData>> = {
 
 /** Explosion for an aircraft blowing up (in the air or on impact). */
 export function aircraftExplosion(type: AircraftType): ExplosionSize {
-  return type === 'tu22m' || type === 'a50' || type === 'a320' ? 'huge' : 'large';
+  return type === 'a320' ? 'huge' : 'large';
 }

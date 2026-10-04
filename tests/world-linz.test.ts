@@ -17,7 +17,7 @@ import { segmentDistance } from '../src/world/terrain/coastline';
 import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
 import { aucklandLinz, decodeLinz, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
 import { AKL_CONES, AKL_RANGITOTO } from '../src/world/terrain/theaters/aucklandMap';
-import { CAMPAIGN, TRAINING, terrainPadsFor } from '../src/missions';
+import { CAMPAIGNS, TRAINING, missionById, terrainPadsFor } from '../src/missions';
 import { BASE_FEATURES, FEATURES } from '../src/missions/content/common';
 
 const features = allFeatures('auckland', BASE_FEATURES);
@@ -106,10 +106,16 @@ describe('real terrain heights (LiDAR) on the 86 m heightfield', () => {
 
 describe('mission content fits the real coast', () => {
   it('every terrain pad (SAM sites, compounds) is on land with its radius to spare', () => {
-    for (const m of [...CAMPAIGN, ...TRAINING]) {
+    const instant = (['sam_gauntlet', 'strike', 'defend'] as const).map((mode) => missionById(`ia_${mode}_auckland`)!);
+    let pads = 0;
+    for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
       if (m.theater !== 'auckland') continue;
-      for (const p of terrainPadsFor(m)) expect(coastDist(p.x, p.z), `${m.id} pad at ${p.x},${p.z}`).toBeGreaterThan(p.radius * 0.5);
+      for (const p of terrainPadsFor(m)) {
+        expect(coastDist(p.x, p.z), `${m.id} pad at ${p.x},${p.z}`).toBeGreaterThan(p.radius * 0.5);
+        pads++;
+      }
     }
+    expect(pads).toBeGreaterThan(0);
   });
 
   it('runways, taxiways and aprons of every Auckland airfield are on land', () => {

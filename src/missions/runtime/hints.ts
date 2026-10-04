@@ -36,14 +36,6 @@ const COOLDOWN = 25;
 const MAX_SHOWS = 3;
 const COS_LOCK_CONE = Math.cos((30 * Math.PI) / 180);
 
-function nearestLiveSam(s: MissionState, p: AircraftEntity, type: string, within: number): boolean {
-  for (const site of s.world.sams) {
-    if (!site.alive || site.team === p.team || site.type !== type) continue;
-    if (Math.hypot(site.position.x - p.position.x, site.position.z - p.position.z) < within) return true;
-  }
-  return false;
-}
-
 function remaining(p: AircraftEntity, w: WeaponId): number {
   if (w === 'gun') return p.gunAmmo;
   let n = 0;
@@ -87,7 +79,7 @@ function inLockCone(p: AircraftEntity, e: AnyEntity): boolean {
 
 /** Radar SAM that is emitting (or known) — an AARGM target. */
 function armTargetable(e: AnyEntity): boolean {
-  return (e.kind === 'sam' && e.type !== 'zsu23' && e.type !== 'sa18' && (e.radarOn || e.known)) || (e.kind === 'ground' && e.emitter);
+  return e.kind === 'sam' && e.type !== 'zsu23' && (e.radarOn || e.known);
 }
 
 /** Nearest live hostile surface target of an active PRIMARY objective within `within` m. */
@@ -127,11 +119,10 @@ function surfaceObjectiveTarget(s: MissionState, p: AircraftEntity, within: numb
 /** SDB releases beyond this (m) glide so long and arrive so slow that point defences eat them. */
 export const SDB_PRESS_RANGE = 22_000;
 
-/** Best air-to-ground store for a target (AARGM for emitters, then SDB II, SDB, then JDAM). */
+/** Best air-to-ground store for a target (AARGM for radars, then SDB II, then JDAM). */
 function agWeaponFor(p: AircraftEntity, t: AnyEntity): WeaponId | null {
   if (armTargetable(t) && remaining(p, 'aargm') > 0) return 'aargm';
   if (remaining(p, 'gbu53') > 0) return 'gbu53';
-  if (remaining(p, 'gbu39') > 0) return 'gbu39';
   if (remaining(p, 'gbu31') > 0) return 'gbu31';
   return null;
 }
@@ -158,13 +149,6 @@ const AUTO: AutoHint[] = [
       if (w.current === 'winchester') return p.gunAmmo > 0 ? 'WINCHESTER: missiles and bombs gone — the gun is all you have left' : 'WINCHESTER: no weapons left — stay clear of the threats';
       if (w.current === 'bingo') return 'BINGO FUEL: finish the job before the tanks run dry';
       return null;
-    },
-  },
-  {
-    id: 'sa10_low',
-    test(p, s) {
-      if (p.flight.agl < 150 || !nearestLiveSam(s, p, 'sa10', 40_000)) return null;
-      return 'SA-10 up: fly below 300 ft and keep the terrain between you and Motutapu';
     },
   },
   {
@@ -214,7 +198,7 @@ const AUTO: AutoHint[] = [
         if (z && z.shoot) return 'SHOOT — fire the AARGM: it keeps homing even if the radar shuts down';
         return 'Close in: fire the AARGM when SHOOT shows';
       }
-      if (w === 'gbu31' || w === 'gbu39' || w === 'gbu53') {
+      if (w === 'gbu31' || w === 'gbu53') {
         const b = s.world.combat.bombImpactPoint(p, s.world);
         if (!p.radar.groundPoint) return `Tap TGT to designate a ground target for the ${name}`;
         if (b && b.inRange) {

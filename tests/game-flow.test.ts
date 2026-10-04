@@ -100,12 +100,12 @@ describe('FlowInterrupt', () => {
       for (let i = 0; i < 3; i++) await round();
     })();
     await tick();
-    pending = 'c02'; // fly('c02') from the main menu
+    pending = 'g02'; // fly('g02') from the main menu
     menu = screen<string>(); // the menu shown after that flight
     flow.abort();
     await tick();
     menu.answer('credits');
     await loop;
-    expect(log).toEqual(['main menu', 'fly c02', 'main menu', 'chose credits']);
+    expect(log).toEqual(['main menu', 'fly g02', 'main menu', 'chose credits']);
   });
 });

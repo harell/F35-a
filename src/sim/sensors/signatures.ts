@@ -22,8 +22,6 @@ export const TYPE_RCS: Record<AircraftType, number> = {
   su27: 10,
   su35: 6,
   su57: 0.1,
-  tu22m: 40,
-  a50: 60,
   a320: 40,
   // Shahed-136: 2.5 m composite delta wing; small, but not LO-shaped (see isStealthy)
   shahed136: 0.1,
@@ -36,8 +34,6 @@ export const TYPE_IR: Record<AircraftType, number> = {
   su27: 1.2,
   su35: 1.2,
   su57: 0.9,
-  tu22m: 2.5,
-  a50: 2,
   a320: 1.8,
   // a ~50 hp pusher piston engine: small, but enough for an AIM-9X inside a few km
   shahed136: 0.2,
@@ -69,19 +65,11 @@ export const FIGHTER_RADAR: Record<AircraftType, FighterRadarSpec> = {
   su27: { range: 45_000, gimbal: 60 * DEG, lpi: false, irst: 13_000, notchResistance: 0.4 },
   su35: { range: 55_000, gimbal: 60 * DEG, lpi: false, irst: 16_000, notchResistance: 0.55 },
   su57: { range: 55_000, gimbal: 60 * DEG, lpi: true, irst: 16_000, notchResistance: 0.6 },
-  tu22m: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
-  // A-50 AEW&C: 360° rotodome, strong look-down radar (feeds the red datalink)
-  a50: { range: 110_000, gimbal: Math.PI, lpi: false, irst: 0, notchResistance: 0.5 },
   // airliner: weather radar only, no fire control
   a320: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
   // one-way attack drone: no radar at all (nothing on the RWR)
   shahed136: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
 };
-
-/** Early-warning radar (ground, VHF): long range and better against stealth shaping. */
-export const EWR_RANGE = 90_000;
-/** VHF radars see stealth jets much better than X-band fire-control radars. */
-export const EWR_STEALTH_BONUS = 25;
 
 export function isStealthy(ac: AircraftEntity): boolean {
   // the Shahed-136 is small, not low-observable: no LO shaping (beam/rear multipliers, FCR factor)

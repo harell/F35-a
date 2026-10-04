@@ -1,6 +1,6 @@
 /**
  * Civil ships in the target camera (issue #29): designates a container ship and a cruise liner in an
- * Auckland sortie (day: c02, night: c10), screenshots the PiP, then sinks one and captures the
+ * Auckland sortie (the Instant Action stroll, by day and by night), screenshots the PiP, then sinks one and captures the
  * sinking at several stages. Screenshots (full frame + a 3× crop of the PiP) go to
  * e2e/screenshots/ships/.
  *
@@ -52,12 +52,12 @@ async function shot(page, name) {
   return r;
 }
 
-async function fly(mission) {
+async function fly(mission, tod) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await page.goto(`${base}?mission=${mission}&autostart=1&view=cockpit&quality=${quality}&fps=1&loadout=strike_stealth`, { waitUntil: 'load' });
+  await page.goto(`${base}?mission=${mission}&tod=${tod}&autostart=1&view=cockpit&quality=${quality}&fps=1&loadout=strike_stealth`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 90000 });
   await page.waitForTimeout(3000);
   return { page, errors };
@@ -65,10 +65,10 @@ async function fly(mission) {
 
 const report = [];
 for (const [mission, tod] of [
-  ['c02', 'day'],
-  ['c10', 'night'],
+  ['ia_stroll_auckland', 'day'],
+  ['ia_stroll_auckland', 'night'],
 ].filter(([, tod]) => !args.only || args.only === tod)) {
-  const { page, errors } = await fly(mission);
+  const { page, errors } = await fly(mission, tod);
   for (const vessel of ['container', 'cruise']) {
     const s = await designate(page, vessel);
     if (!s) {

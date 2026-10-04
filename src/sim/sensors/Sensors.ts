@@ -7,19 +7,18 @@
  *  F-35 EOTS           forward: ground targets / SAM sites within 20 km with line of sight
  *  F-35 SAR            radar ground mode: ground targets / SAMs within 40 km in the gimbal
  *  Enemy IRST          forward ±60°, range ∝ √IR — finds a silent F-35 close in, no RWR warning
- *  Datalink            team picture (friendly own-sensor tracks, red GCI from EWRs/SAM radars,
- *                      A-50), friendly positions, known SAM sites / targets for blue
+ *  Datalink            team picture (friendly own-sensor tracks, red GCI from SAM radars),, friendly positions, known SAM sites / targets for blue
  *
  * Also: designation (cycle / nearest-to / direct / auto / shoot list), radar lock, ground designation point.
  */
 import { Vector3 } from 'three';
-import { isHostile, type Team } from '../../core/types';
+import type { Team } from '../../core/types';
 import { forwardOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, SamSiteEntity } from '../entities';
 import type { AcCombatState, CombatCtx, TrackContact } from '../weapons/context';
 import { acState, CONTACT_MEMORY, playerTeam, SENSOR_DIV } from '../weapons/context';
 import { cmFactor, notchDepth, rollNotchNeed, stepNotch } from '../weapons/ew';
-import { aircraftRcs, EWR_RANGE, EWR_STEALTH_BONUS, fcrStealthFactor, FIGHTER_RADAR, irIntensity, isStealthy, rcsRangeFactor } from './signatures';
+import { aircraftRcs, fcrStealthFactor, FIGHTER_RADAR, irIntensity, rcsRangeFactor } from './signatures';
 import { lineOfSight } from './los';
 import { updateRwr } from './rwr';
 import { updateMaws } from './maws';
@@ -100,23 +99,6 @@ function buildTeamPictures(ctx: CombatCtx, sh: SensorShared): void {
     if (!s.alive || !s.radarOn || s.trackedTargetId == null) continue;
     const t = world.getEntity(s.trackedTargetId);
     if (t && t.alive) pictureAdd(sh, s.team, t, now);
-  }
-  // GCI: early-warning radars (VHF — better against stealth), terrain-masked, radar horizon
-  for (const g of world.ground) {
-    if (!g.alive || !g.emitter) continue;
-    _eye.copy(g.position);
-    _eye.y += 20;
-    for (const t of world.aircraft) {
-      if (!t.alive || !isHostile(g.team, t.team)) continue;
-      const d = t.position.distanceTo(g.position);
-      if (d > EWR_RANGE * 1.6) continue;
-      const sigma = aircraftRcs(t, g.position) * (isStealthy(t) ? EWR_STEALTH_BONUS : 1);
-      if (d > EWR_RANGE * rcsRangeFactor(sigma)) continue;
-      const agl = t.position.y - world.terrain.surfaceHeightAt(t.position.x, t.position.z);
-      if (agl < 150 && d > 20_000) continue; // below the radar horizon / in the clutter
-      if (!lineOfSight(world.terrain, _eye, t.position)) continue;
-      pictureAdd(sh, g.team, t, now);
-    }
   }
 }
 
@@ -217,7 +199,7 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
       inGimbal = true;
       let R = spec.range * rcsRangeFactor(aircraftRcs(t, ac.position));
       // X-band fighter radar vs LO shaping (hostile crews: better trained on harder difficulties)
-      if (ac.type !== 'a50') R *= fcrStealthFactor(t, ac.team === playerTeam(world) ? 0.2 : world.difficulty.aiSkill);
+      R *= fcrStealthFactor(t, ac.team === playerTeam(world) ? 0.2 : world.difficulty.aiSkill);
       if (ac.radar.mode === 'acm') R = Math.min(R, ACM_RANGE);
       else if (ac.radar.mode === 'ground') R *= 0.6; // interleaved A/A while mapping
       if (_rel.y < -0.03 * d) R *= 0.85; // look-down clutter
@@ -394,7 +376,7 @@ function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): numb
   const neutral = c.team === 'neutral' ? NEUTRAL_RANK_PENALTY : 0;
   if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d - neutral;
   const e = ctx.world.getEntity(c.id);
-  const emitting = e && ((e.kind === 'sam' && e.radarOn) || (e.kind === 'ground' && e.emitter)) ? 1 : 0;
+  const emitting = e && e.kind === 'sam' && e.radarOn ? 1 : 0;
   const objective = e && (e.kind === 'sam' || e.kind === 'ground') && e.objective ? 1 : 0;
   return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 + objective * 1e6 - d - neutral;
 }

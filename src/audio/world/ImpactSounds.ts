@@ -32,7 +32,7 @@ interface Pending {
   z: number;
 }
 
-const HEAVY_SAM = new Set(['m_48n6', 'm_3m9']);
+const HEAVY_SAM = new Set(['m_3m9']);
 
 export class ImpactSounds {
   private readonly queue = new DelayQueue<Pending>(24, () => ({ kind: 'explosion', size: 'small', surface: 'air', heavy: false, x: 0, y: 0, z: 0 }));

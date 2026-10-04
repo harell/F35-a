@@ -14,26 +14,18 @@ export interface Pad {
 }
 
 export const SAM_PAD_RADIUS: Record<SamType, number> = {
-  sa10: 160,
   sa6: 130,
-  sa8: 60,
   sa15: 60,
-  sa18: 35,
   zsu23: 45,
   ad_boat: 0, // a boat: no pad
 };
 
 export const GROUND_PAD_RADIUS: Record<GroundTargetType, number> = {
-  ewr: 60,
   bunker: 70,
   fuel: 60,
   hangar: 80,
   parked_jet: 35,
-  truck: 30,
-  tank: 30,
   ship: 0,
-  factory: 100,
-  bridge: 0,
   suicide_boat: 0,
   missile_boat: 0,
 };

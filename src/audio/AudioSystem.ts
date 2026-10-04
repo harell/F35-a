@@ -140,7 +140,7 @@ export class AudioSystem implements AudioApi {
         if (c.state === 'launch') launch = true;
         if (c.state !== 'track' && c.state !== 'launch') continue;
         if (c.kind === 'sam' || c.kind === 'aaa') ground = true;
-        else if (c.kind !== 'ewr' && c.kind !== 'awacs') air = true;
+        else air = true;
       }
       n = Math.min(p.incoming.length, this.incomingIds.length);
       for (let i = 0; i < n; i++) this.incomingIds[i] = p.incoming[i].missileId;

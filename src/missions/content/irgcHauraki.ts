@@ -84,8 +84,8 @@ export const G02: MissionDef = mission({
   ],
   recommendedLoadout: 'strike_maritime',
   // air-to-ground only, the weapons that kill a moving boat (#136): StormBreakers for any boat, an
-  // AARGM-ER for each air-defence boat's radar. No AMRAAM (nothing hostile flies), no GBU-31 / GBU-39
-  // (they can't hit a moving boat: #65's c08 trap).
+  // AARGM-ER for each air-defence boat's radar. No AMRAAM (nothing hostile flies), no GBU-31
+  // (it can't hit a moving boat: #65's c08 trap).
   allowedLoadouts: ['strike_maritime'],
   player: g02Start,
   // eight bombs for five to nine boats: on Ace the gun is part of the plan (#77)
@@ -179,7 +179,9 @@ export const G02: MissionDef = mission({
     ],
     hints: [{ id: 'h_boats', text: 'Boats: TGT, StormBreaker, release early. Kill the missile boats before they count down', when: { kind: 'time', t: 6 }, duration: 8 }],
     opening: [
-      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. IRGC fast boats in the Gulf, heading for the tanker: suicide boats with an air-defence boat. The mother ship is putting missile boats in the water behind them. Weapons free on the boats.', priority: 2 },
+      // two calls: one was 4 subtitle pages on a phone (tests/hud-textbudget.test.ts allows 3)
+      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. IRGC fast boats in the Gulf, heading for the tanker: suicide boats with an air-defence boat.', priority: 2 },
+      { kind: 'radio', from: DS, text: 'The mother ship is putting missile boats in the water behind them. Weapons free on the boats.', priority: 2 },
     ],
     successText: 'The Gulf is clear and the Kōtuku Star is on her way to Singapore. Good hunting, Viper.',
     // the IRGC campaign's last mission: the win plays its ending (playtest 2026-10-02 bc94edd, 1.4-e)

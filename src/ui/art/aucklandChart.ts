@@ -217,14 +217,17 @@ export function drawAucklandChart(g: CanvasRenderingContext2D, w: number, h: num
   return true;
 }
 
-/** Named places for chart labels (world km). */
+/**
+ * Fixed chart labels (world km): seas, the city, the air base, Waiheke and the ranges. The other islands and suburbs
+ * come from the baked LINZ names (`chooseChartNames`, src/ui/screens/placeNames.ts).
+ */
 export const CHART_LABELS: { text: string; x: number; z: number; kind: 'sea' | 'land' | 'island' }[] = [
   { text: 'HAURAKI GULF', x: 22, z: -18, kind: 'sea' },
   { text: 'TASMAN SEA', x: -36, z: 4, kind: 'sea' },
   { text: 'WAITEMATĀ', x: -6.5, z: -1.2, kind: 'sea' },
   { text: 'MANUKAU', x: -9, z: 15, kind: 'sea' },
   { text: 'AUCKLAND', x: 1.5, z: 2.4, kind: 'land' },
-  { text: 'RANGITOTO', x: 8.7, z: -10.4, kind: 'island' },
+  // Waiheke's LINZ label point (32.6 km east) sits at the chart's edge; this one stays on screen
   { text: 'WAIHEKE', x: 28, z: -9.8, kind: 'island' },
   { text: 'WHENUAPAI', x: -11.6, z: -5.6, kind: 'land' },
   { text: 'WAITĀKERE RANGES', x: -20, z: 6, kind: 'land' },

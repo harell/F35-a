@@ -7,7 +7,7 @@ import type { CampaignProgress } from '../src/core/contracts';
 import { DIFFICULTIES } from '../src/core/data';
 import { loadSettings } from '../src/core/settings';
 import type { Settings } from '../src/core/types';
-import { CAMPAIGN, MEDAL_LIST, TRAINING, failStreak, recordResult } from '../src/missions';
+import { MEDAL_LIST, TRAINING, failStreak, recordResult } from '../src/missions';
 import {
   BASIC_TRAINING,
   DIFFICULTY_ORDER,
@@ -49,7 +49,7 @@ afterEach(() => {
   delete g.localStorage;
 });
 
-const emptyProgress = (): CampaignProgress => ({ unlocked: ['c01', ...TRAINING.map((m) => m.id)], best: {}, totals: { missions: 0, airKills: 0, groundKills: 0, deaths: 0 } });
+const emptyProgress = (): CampaignProgress => ({ unlocked: ['g01', ...TRAINING.map((m) => m.id)], best: {}, totals: { missions: 0, airKills: 0, groundKills: 0, deaths: 0 } });
 
 describe('difficulty text comes from the live numbers', () => {
   it('covers the four levels in order', () => {
@@ -96,11 +96,11 @@ describe('briefing difficulty picker', () => {
   it('debrief offers Retry on Recruit after two failures in a row (progress failStreak)', () => {
     expect(RECRUIT_OFFER_AFTER).toBe(2);
     let p = emptyProgress();
-    const fail = { missionId: 'c01', title: 'x', success: false, reason: 'Shot down', difficulty: 'pilot' as const, time: 60, score: 0, grade: 'F' as const, kills: { air: 0, sam: 0, ground: 0 }, friendlyLosses: 0, shotsFired: 0, hits: 0, accuracy: 0, damageTaken: 100, objectives: [] };
+    const fail = { missionId: 'g01', title: 'x', success: false, reason: 'Shot down', difficulty: 'pilot' as const, time: 60, score: 0, grade: 'F' as const, kills: { air: 0, sam: 0, ground: 0 }, friendlyLosses: 0, shotsFired: 0, hits: 0, accuracy: 0, damageTaken: 100, objectives: [] };
     p = recordResult(p, fail);
-    expect(failStreak(p, 'c01')).toBe(1);
+    expect(failStreak(p, 'g01')).toBe(1);
     p = recordResult(p, fail);
-    expect(failStreak(p, 'c01')).toBeGreaterThanOrEqual(RECRUIT_OFFER_AFTER);
+    expect(failStreak(p, 'g01')).toBeGreaterThanOrEqual(RECRUIT_OFFER_AFTER);
   });
 });
 
@@ -153,17 +153,14 @@ describe('service record', () => {
   it('medals from a sortie are tallied; first-time medals are reported as new', () => {
     expect(MEDAL_LIST.length).toBeGreaterThan(3);
     const m = MEDAL_LIST[0];
-    expect(recordMedals({ missionId: 'c01', medals: [m] })).toEqual([m.id]);
-    expect(recordMedals({ missionId: 'c02', medals: [m] })).toEqual([]);
-    expect(loadMedals()[m.id]).toEqual({ count: 2, first: 'c01' });
-    expect(recordMedals({ missionId: 'c03' })).toEqual([]);
+    expect(recordMedals({ missionId: 'g01', medals: [m] })).toEqual([m.id]);
+    expect(recordMedals({ missionId: 'g02', medals: [m] })).toEqual([]);
+    expect(loadMedals()[m.id]).toEqual({ count: 2, first: 'g01' });
+    expect(recordMedals({ missionId: 't01' })).toEqual([]);
   });
   it('corrupt medal storage is ignored', () => {
     g.localStorage!.setItem('f35a.medals.v1', '{not json');
     expect(loadMedals()).toEqual({});
-  });
-  it('campaign list is intact (10 missions since c07 and c12 were removed, issue #63) for the grade strip', () => {
-    expect(CAMPAIGN.length).toBe(10);
   });
 });
 

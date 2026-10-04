@@ -313,8 +313,8 @@ export interface MissionDef {
   script: MissionScript;
 }
 
-/** Campaign ids: Operation Southern Cross, and the IRGC campaign over Auckland (epic #72). */
-export type CampaignId = 'southern_cross' | 'irgc';
+/** Campaign ids: the IRGC campaign over Auckland (epic #72). */
+export type CampaignId = 'irgc';
 
 /**
  * A campaign: an ordered chain of missions with its own unlocks and ending. Each campaign's first
@@ -323,7 +323,7 @@ export type CampaignId = 'southern_cross' | 'irgc';
  */
 export interface CampaignDef {
   id: CampaignId;
-  /** "Operation Southern Cross" */
+  /** "IRGC Campaign" */
   name: string;
   /** One line for the campaign picker. */
   description: string;

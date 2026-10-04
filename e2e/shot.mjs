@@ -1,7 +1,7 @@
 /**
  * Screenshot / smoke helper for agents and CI.
  *
- *   node e2e/shot.mjs [--url=http://localhost:5173/?mission=c01&autostart=1] [--wait=4000]
+ *   node e2e/shot.mjs [--url=http://localhost:5173/?mission=g01&autostart=1] [--wait=4000]
  *                     [--out=e2e/screenshots/shot.png] [--device=phone|desktop] [--eval="js"]
  *                     [--steps=N --every=ms]  (take N screenshots every ms)
  *
@@ -18,7 +18,7 @@ const args = Object.fromEntries(
     return m ? [m[1], m[2] === '' ? true : m[2]] : [a, true];
   }),
 );
-const url = args.url || 'http://localhost:5173/?mission=c01&autostart=1';
+const url = args.url || 'http://localhost:5173/?mission=g01&autostart=1';
 const wait = Number(args.wait || 4000);
 const out = args.out || 'e2e/screenshots/shot.png';
 const steps = Number(args.steps || 1);

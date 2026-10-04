@@ -17,18 +17,18 @@
  *   brain/bfm.ts             dogfight manoeuvring + energy / hard-deck rules
  *   brain/strike.ts          air-to-ground attack runs (friendly strike packages)
  *   brain/FighterBrain.ts    fighter / interceptor / CAP / escort / friendly wingman
- *   brain/BomberBrain.ts     bomber + AWACS
+ *   brain/BomberBrain.ts     bomber
  *
  * aiState labels: PATROL ROUTE FORM ESCORT RTB EGRESS INTERCEPT BVR CRANK MERGE BFM GUNS
  * DEFENSIVE NOTCH EXTEND BUGOUT STRIKE (fighters); ROUTE FORM ATTACK JINK DEFENSIVE RTB PATROL
- * (bombers); ORBIT FLEE DEFENSIVE (AWACS); 'PULL UP' while the terrain recovery has control.
+ * (bombers); 'PULL UP' while the terrain recovery has control.
  *
  * AI controls aircraft only through `ac.input` (stick, throttle, triggers, flares, chaff) and
  * world.combat (designate / select / fire) — the same physics and release rules as the player.
  */
 import type { AiBrain, CreateAiBrain } from '../sim/api';
 import { FighterBrain, FIGHTER_CONFIGS } from './brain/FighterBrain';
-import { AwacsBrain, BomberBrain } from './brain/BomberBrain';
+import { BomberBrain } from './brain/BomberBrain';
 
 export const createAiBrain: CreateAiBrain = (role, opts) => {
   const o = { skill: opts?.skill ?? 0.5, task: opts?.task, seed: opts?.seed, orders: opts?.orders };
@@ -36,9 +36,6 @@ export const createAiBrain: CreateAiBrain = (role, opts) => {
   switch (role) {
     case 'bomber':
       brain = new BomberBrain(o);
-      break;
-    case 'awacs':
-      brain = new AwacsBrain(o);
       break;
     case 'fighter':
     case 'interceptor':
@@ -54,7 +51,7 @@ export const createAiBrain: CreateAiBrain = (role, opts) => {
 };
 
 export { FighterBrain, FIGHTER_CONFIGS, ENGAGED_STATES } from './brain/FighterBrain';
-export { BomberBrain, AwacsBrain } from './brain/BomberBrain';
+export { BomberBrain } from './brain/BomberBrain';
 export { Autopilot, gammaForAltitude, type FlightIntent } from './pilot/Autopilot';
 export { FormationKeeper, SLOT_FINGERTIP, SLOT_FIGHTING_WING, SLOT_ESCORT, type FormationSlot } from './pilot/formation';
 export { deriveSkill, type PilotSkill } from './skill';

@@ -164,8 +164,8 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
   const checkTick = (ctx.tick + m.id) % SENSOR_DIV === 0;
 
   if (def.guidance === 'anti_radiation') {
-    if (!target || (target.kind !== 'sam' && target.kind !== 'ground')) return; // keep flying to the last point
-    const emitting = target.alive && (target.kind === 'sam' ? target.radarOn : target.emitter);
+    if (!target || target.kind !== 'sam') return; // keep flying to the last point
+    const emitting = target.alive && target.radarOn;
     const dist = m.position.distanceTo(target.position);
     if (emitting && dist <= def.seekerRange && inGimbal(m, target.position, def.gimbalLimit)) {
       setEstimate(ctx, m, target.position, target.velocity);
@@ -344,7 +344,7 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
     const seekerOk = def.guidance === 'command' || inGimbal(m, target.position, def.gimbalLimit);
     if (supported && seekerOk) {
       setEstimate(ctx, m, target.position, target.velocity);
-      // TVM (SA-10) seeker / SARH seeker "locked" once the missile is near
+      // command / SARH seeker "locked" once the missile is near
       m.seekerLocked = def.guidance === 'semi_active' || m.position.distanceTo(target.position) < Math.max(3_000, def.seekerRange);
     } else {
       m.seekerLocked = false;

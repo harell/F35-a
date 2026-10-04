@@ -190,7 +190,7 @@ export interface AircraftGroupDef {
   /** Radio callsign stem: "Viper" → "Viper 2", "Viper 3"… (numbering starts at `firstNumber`, default 1). */
   callsign?: string;
   firstNumber?: number;
-  /** Plural noun the AWACS uses for this group ("bandits", "Backfires", "bombers"…). */
+  /** Plural noun the AWACS uses for this group ("bandits", "drones", "bombers"…). */
   noun?: string;
   /** AWACS announces the group when it spawns after the start (default true for red air). */
   announce?: boolean;

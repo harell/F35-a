@@ -13,14 +13,8 @@ import { formatScore } from '../format';
 import type { UiHost } from '../host';
 import { CAMPAIGNS, campaignOf, loadProgress } from '../../missions';
 
-const EPILOGUE = [
-  'The last enemy battalion on the Hauraki Gulf islands has surrendered. Rangitoto, Motutapu and Waiheke are back in New Zealand hands.',
-  'For ten sorties No. 75 Squadron held the line over Auckland: the Harbour Bridge still stands, the Sky Tower still lights the city, and the ferries are running again.',
-  'Operation Southern Cross is complete. Welcome home, Lightning.',
-];
-
+/** The credits after the campaign's own first line. */
 const ROLL: [string, string][] = [
-  ['Operation', 'Southern Cross'],
   ['Aircraft', 'F-35A Lightning II'],
   ['Theatre', 'Auckland · Waitematā · Hauraki Gulf'],
   ['Home base', 'RNZAF Base Auckland (Whenuapai)'],
@@ -51,18 +45,10 @@ const IRGC_EPILOGUE = (name: string) => [
   `${name} is complete. Welcome home, Lightning.`,
 ];
 
-/** The ending of a campaign (Southern Cross for an unknown id). */
-export function campaignEnding(id: CampaignId | null): CampaignEnding {
-  if (id === 'irgc') {
-    const name = irgcName();
-    return {
-      tag: name.toUpperCase(),
-      epilogue: IRGC_EPILOGUE(name),
-      roll: [['Campaign', name], ...ROLL.slice(1)],
-      medal: null,
-    };
-  }
-  return { tag: 'OPERATION SOUTHERN CROSS', epilogue: EPILOGUE, roll: ROLL, medal: 'southern_cross' };
+/** The ending of a campaign (the IRGC campaign is the only one; an unknown id gets its ending too). */
+export function campaignEnding(_id: CampaignId | null): CampaignEnding {
+  const name = irgcName();
+  return { tag: name.toUpperCase(), epilogue: IRGC_EPILOGUE(name), roll: [['Campaign', name], ...ROLL], medal: null };
 }
 
 export function showCampaignEnding(host: UiHost, r: MissionResult): Promise<void> {

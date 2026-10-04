@@ -1,13 +1,11 @@
 /**
- * F35-A — debrief extras: the informative end reason ("Shot down by an SA-10 Grumble"), 1–3
+ * F35-A — debrief extras: the informative end reason ("Shot down by an SA-6 Gainful"), 1–3
  * specific tips built from how the sortie went, and the medals earned (MEDALS catalogue, exported
  * through src/missions/index.ts for the UI).
  */
 import type { MissionResult } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, SamType } from '../../core/types';
-import { CAMPAIGN_PART1 } from '../content/campaign1';
-import { CAMPAIGN_PART2 } from '../content/campaign2';
 import { fixedDifficulty } from '../difficulty';
 import type { MissionScript } from '../schema';
 import { REASONS } from './reasons';
@@ -31,7 +29,6 @@ export const MEDALS = {
   sharpshooter: { id: 'sharpshooter', name: 'Sharpshooter', description: 'Four or more shots with 80 % or better accuracy.' },
   gunslinger: { id: 'gunslinger', name: 'Gunslinger', description: 'Shot down an enemy aircraft with the GAU-22 gun.' },
   shepherd: { id: 'shepherd', name: 'Good Shepherd', description: 'Brought every friendly aircraft home.' },
-  southern_cross: { id: 'southern_cross', name: 'Southern Cross Campaign Medal', description: 'Completed Operation Southern Cross — Auckland is safe.' },
 } as const satisfies Record<string, MedalDef>;
 
 export type MedalId = keyof typeof MEDALS;
@@ -39,16 +36,16 @@ export type MedalId = keyof typeof MEDALS;
 /** Every medal, in display order. */
 export const MEDAL_LIST: MedalDef[] = Object.values(MEDALS);
 
-const SAM_MUNITION: Record<string, SamType> = { m_3m9: 'sa6', m_9m33: 'sa8', m_48n6: 'sa10', m_9m330: 'sa15', m_igla: 'sa18' };
+const SAM_MUNITION: Record<string, SamType> = { m_3m9: 'sa6', m_9m330: 'sa15', m_igla: 'ad_boat' };
 const IR_MUNITIONS = new Set(['r73', 'm_igla', 'aim9x']);
-const RADAR_MUNITIONS = new Set(['r27', 'r77', 'aim120', 'm_3m9', 'm_9m33', 'm_48n6', 'm_9m330']);
+const RADAR_MUNITIONS = new Set(['r27', 'r77', 'aim120', 'm_3m9', 'm_9m330']);
 
-/** "an SA-10", "an F-35", "a MiG-29", "an A-50". */
+/** "an SA-10", "an F-35", "a MiG-29". */
 function article(word: string): string {
   return /^[aeiou]/i.test(word) || /^(SA-|F-|A-\d)/.test(word) ? 'an' : 'a';
 }
 
-/** What killed the player, readable ("an SA-10 Grumble", "a MiG-29's R-73", "Shilka fire"), or null. */
+/** What killed the player, readable ("an SA-6 Gainful", "a MiG-29's R-73", "Shilka fire"), or null. */
 export function killerText(s: MissionState): string | null {
   const st = s.stats;
   const w = st.lastHitWeapon;
@@ -73,7 +70,7 @@ export function killerText(s: MissionState): string | null {
   return null;
 }
 
-/** Death reason for the debrief, e.g. "Shot down by an SA-10 Grumble". */
+/** Death reason for the debrief, e.g. "Shot down by an SA-6 Gainful". */
 export function deathReason(s: MissionState, reason: 'crash' | 'shot' | 'collision' | 'fuel'): string {
   const base = REASONS[reason] ?? REASONS.shot;
   if (reason !== 'shot') return base;
@@ -113,9 +110,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
           ? 'Watch your altitude and let Auto-GCAS fly the pull-up — don’t fight the stick when it takes over.'
           : 'Watch your altitude: above Recruit there is no Auto-GCAS, so the pull-up is yours — start it early.',
       );
-    else if (samType === 'sa10') add('Stay below 300 ft and keep Rangitoto between you and Motutapu: the SA-10 cannot see through the volcano.');
     else if (samType === 'zsu23') add('Shilkas shred anything low and close: stay above 5,000 ft or more than 3 km from the flak.');
-    else if (samType === 'sa18' || IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');
+    else if (IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');
     else if (samType) add('SAM launch: beam it — turn 90° to the missile, dive for the deck and pump CHAFF in the last seconds.');
     else if (RADAR_MUNITIONS.has(w)) add('Radar missile: put it on your wing (beam), drop CHAFF — and shoot first: a clean F-35 sees them long before they see you.');
     else if (w === 'gun') add('Guns kill: don’t let a bandit sit behind you — keep your speed up and turn into him.');
@@ -127,7 +123,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     else if (r.reason.startsWith('Objective failed')) {
       if (/tanker|Kōtuku/i.test(r.reason)) add('Escort the tanker: StormBreakers on the suicide boats first, released early from height, then the missile boats before they count down.');
       else if (/Hammer|Kiwi|package|alive/i.test(r.reason)) add('Protect missions: kill the fighters going for the friendlies first — ignore bonus targets until they are safe.');
-      else if (/raid|Backfire|bomber/i.test(r.reason)) add('Bombers don’t dodge: shoot them from long range the moment SHOOT shows, then deal with the escort.');
+      else if (/raid|bomber/i.test(r.reason)) add('Bombers don’t dodge: shoot them from long range the moment SHOOT shows, then deal with the escort.');
       else add('A primary objective failed: the objective list in the pause menu shows what must survive or die.');
     }
   }
@@ -159,20 +155,11 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   return tips;
 }
 
-/**
- * Operation Southern Cross's mission ids: CAMPAIGN in ../index.ts, which can't be imported here
- * (index.ts imports this module through MissionRunner).
- */
-const SOUTHERN_CROSS_IDS = new Set([...CAMPAIGN_PART1, ...CAMPAIGN_PART2].map((m) => m.id));
-
-/** Medals earned this sortie. `campaignFinale`: the sortie won a campaign's finale (any campaign). */
-export function awardMedals(s: MissionState, r: MissionResult, campaignFinale: boolean): MedalDef[] {
+/** Medals earned this sortie. */
+export function awardMedals(s: MissionState, r: MissionResult): MedalDef[] {
   const out: MedalDef[] = [];
   const give = (m: MedalDef) => out.push({ ...m });
   const campaign = s.def.kind === 'campaign';
-  // the Southern Cross medal is for Operation Southern Cross's finale only: the IRGC campaign's
-  // finale (#78 / #82) still completes its campaign, and needs a medal of its own
-  const finale = campaignFinale && SOUTHERN_CROSS_IDS.has(s.def.id);
   if (s.stats.bridge) give(MEDALS.bridge_runner);
   if (r.kills.air >= 5) give(MEDALS.ace_in_a_day);
   if (r.kills.sam >= 2) give(MEDALS.iron_hand);
@@ -189,7 +176,6 @@ export function awardMedals(s: MissionState, r: MissionResult, campaignFinale: b
     let friendlies = 0;
     for (const g of s.groups.values()) if (g.team === 'blue' && g.air && g.air.role !== 'wingman') friendlies += g.expected;
     if (friendlies > 0 && r.friendlyLosses === 0) give(MEDALS.shepherd);
-    if (finale) give(MEDALS.southern_cross);
   }
   return out;
 }

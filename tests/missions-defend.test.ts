@@ -13,6 +13,7 @@ import type { Difficulty } from '../src/core/types';
 import type { MissionDef } from '../src/core/contracts';
 import { buildInstantMissionSeeded, createMissionRunner, missionById, validateMission } from '../src/missions';
 import { DEFEND_MIN_TANKS } from '../src/missions/content/instant';
+import { flight, mission } from '../src/missions/content/common';
 import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -24,6 +25,32 @@ import { terrainPadsFor } from '../src/missions';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
+
+/** A test-only mission whose protect objective is on an aircraft group (two unarmed friendly F-35As). */
+const protectFlight = (): MissionDef =>
+  mission({
+    id: 'fx_protect_flight',
+    kind: 'campaign',
+    index: 1,
+    title: 'Protect fixture',
+    subtitle: 'test',
+    timeOfDay: 'day',
+    weather: 'clear',
+    briefing: ['test'],
+    recommendedLoadout: 'a2a_beast',
+    allowedLoadouts: ['a2a_beast'],
+    player: { x: -6000, z: -14000, altitude: 4500, heading: 70, speed: 240 },
+    script: {
+      groups: [
+        flight('kiwi', 'f35a', 2, { x: 17000, z: -19000 }, 6000, 243, 200, 'bomber', { team: 'blue', callsign: 'Kiwi', fixedCount: true, unarmed: true, announce: false }),
+        flight('hunters', 'mig29', 2, { x: 33000, z: -28000 }, 6500, 243, 260, 'interceptor', { task: { kind: 'attack_group', group: 'kiwi' } }),
+      ],
+      objectives: [
+        { id: 'o_kiwi', kind: 'protect', group: 'kiwi', minSurvivors: 1, until: { kind: 'objective', id: 'o_hunters', state: 'complete' }, label: 'Protect Kiwi flight', primary: true },
+        { id: 'o_hunters', kind: 'destroy', groups: ['hunters'], label: 'Splash the MiGs', primary: true },
+      ],
+    },
+  });
 
 const defend = (enemyCount = 4): MissionDef =>
   buildInstantMissionSeeded({ mode: 'defend', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount }, 49);
@@ -150,13 +177,12 @@ describe('missions: defend the Wiri oil terminal', () => {
     expect(sites[0].label).toBe(`DEFEND ${tanks.length - 1}/${tanks.length}`);
     // the enemy's view: no site
     expect(protectedSites(h.runner, w, 'red').length).toBe(0);
-    // protected aircraft (Kiwi flight in c02, the Hammer package in c09) are drawn as friendlies, not sites
-    for (const id of ['c02', 'c09']) {
-      const c = harness(missionById(id)!);
-      c.run(1);
-      expect(c.runner.objectives.some((o) => o.id === (id === 'c02' ? 'o_kiwi' : 'o_hammer')), id).toBe(true);
-      expect(protectedSites(c.runner, c.world, 'blue').length, id).toBe(0);
-    }
+    // protected aircraft (an escorted friendly flight) are drawn as friendlies, not sites
+    const c = harness(protectFlight());
+    c.run(1);
+    expect(c.runner.objectives.some((o) => o.id === 'o_kiwi')).toBe(true);
+    expect(c.world.aircraft.filter((a) => a.groupId === 'kiwi' && a.alive)).toHaveLength(2);
+    expect(protectedSites(c.runner, c.world, 'blue').length).toBe(0);
   });
 
   it('parking 35 km away is no win: the raid between bomb passes is not "driven off" (playtest 2026-10-02, 2.3-a)', { timeout: 30_000 }, () => {

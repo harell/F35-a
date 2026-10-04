@@ -4,8 +4,8 @@
  *
  * Missions: g01 "Buzz Kill", the Shahed swarm on the Sky Tower (#78); g02 "Straight Outta
  * Hauraki" (#82, irgcHauraki.ts), the escort through the boat swarm and the campaign's finale.
- * Mission ids are g01, g02, … ("Gulf"), next to Southern Cross's
- * c01–c11; every id must stay unique across campaigns (progress is keyed by mission id).
+ * Mission ids are g01, g02, … ("Gulf"); every id must stay unique across campaigns and training
+ * (progress is keyed by mission id). Old saves may still hold Southern Cross's c01–c11: don't reuse them.
  */
 import { AKL } from '../../core/auckland';
 import type { CampaignDef, MissionDef } from '../../core/contracts';

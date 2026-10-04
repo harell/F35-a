@@ -50,7 +50,6 @@ async function main(): Promise<void> {
   world.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(1800, 0, 6500) });
   world.spawnSam({ type: 'zsu23', team: 'red', position: new Vector3(-600, 0, 8000) });
   world.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(900, 0, 8500) });
-  world.spawnGround({ type: 'truck', team: 'red', position: new Vector3(-300, 0, 9000) });
 
   const entities = createEntityRenderer(scene, world, env, quality);
   const effects = createEffects(scene, world, events, env, quality);

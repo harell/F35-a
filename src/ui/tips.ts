@@ -15,7 +15,7 @@ export const TIPS: string[] = [
   'The AIM-9X locks on at up to 90° off the nose. Look at the bandit and listen for the growl.',
   'Speed is life. Bleed too much energy in a turn and the next bandit will eat you alive.',
   'Pull the throttle all the way to IDLE to pop the speed brakes.',
-  'SA-18 MANPADS are heat-seekers with no radar, so the RWR stays quiet. Keep flares ready when you fly low.',
+  'Air-defence boats carry SA-18 MANPADS: heat-seekers with no radar, so the RWR stays quiet. Keep flares ready when you fly low over them.',
   'Bonus points: the Harbour Bridge has 43 m of clearance. Fly under it if you dare.',
   'Tilt steering can be recalibrated at any time with the RECENTER button.',
   'Enemy bombers are heading for the CBD. Kill them before they reach their release point.',

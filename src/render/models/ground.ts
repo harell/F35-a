@@ -1,10 +1,9 @@
 /**
- * Ground target prototypes: EWR (rotating array on a mast), command bunker, fuel farm, hardened
- * aircraft shelter, parked jet, truck, tank, corvette, factory, bridge, IRGC fast boats, plus the civil
+ * Ground target prototypes: command bunker, fuel farm, hardened aircraft shelter, parked jet,
+ * corvette, IRGC fast boats, plus the civil
  * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
- *  'span:mid' bridge middle span (drops when destroyed)
  * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
  * Civil ships also carry their night lights (ShipLight, drawn as sprites by the EntityRenderer).
  */
@@ -13,13 +12,12 @@ import type { GroundTargetType, VesselClass } from '../../core/types';
 import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
 import { loftRings, prismX, prismZ } from './geom/loft';
-import { capsuleRing } from './aircraft/parts';
 import { getAircraftPrototype } from './aircraft';
 import { SHIP_DIMS } from '../visuals/shipMotion';
 import { missileBoat, suicideBoat } from './boats';
-import { PALETTES, building, mast, meshFrom, nodeFrom, panel, sawtoothHall, tank, trackedChassis, wheeledChassis, type Palette, type PaletteId } from './vehicles';
+import { PALETTES, mast, meshFrom, panel, tank, type Palette, type PaletteId } from './vehicles';
 
-export type WreckStyle = 'vehicle' | 'building' | 'bridge' | 'ship' | 'aircraft';
+export type WreckStyle = 'vehicle' | 'building' | 'ship' | 'aircraft';
 
 /**
  * A ship's night light (local position, bow at -Z). COLREGS-ish: 'way' lights (red port / green
@@ -61,24 +59,6 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
   let mat = 'vehicle';
 
   switch (type) {
-    case 'ewr': {
-      statics.push(...mast(14, 3, pal.metal));
-      statics.push(place(box(6, 2.6, 2.5, pal.body), [8, 1.3, 3]), place(box(2.2, 2.0, 2.2, pal.dark), [8, 1.0, -1]));
-      statics.push(...wheeledChassis(7, 2.4, [-2, 1.5, 2.6], 0.5, pal).map((g) => place(g, [-9, 0, 4], [0, 0.4, 0])));
-      const spin = new Object3D();
-      spin.name = 'spin:0';
-      spin.position.set(0, 14.3, 0);
-      const ant: BufferGeometry[] = [cylinder(0.5, 0.6, 0.6, 8, pal.dark), place(box(0.3, 1.5, 0.3, pal.dark), [0, 0.9, 0])];
-      ant.push(...panel(11, 3.2, 0.3, pal.body).map((g) => place(g, [0, 2.4, -0.4], [-0.12, 0, 0])));
-      for (let i = -5; i <= 5; i++) ant.push(place(box(0.06, 0.06, 1.2, pal.white), [i, 2.4, -1.0]));
-      spin.add(meshFrom(ant));
-      root.add(spin);
-      spinners.push({ name: 'spin:0', rate: (Math.PI * 2) / 8 });
-      wreck = 'building';
-      radius = 16;
-      farScale = 1.6;
-      break;
-    }
     case 'bunker': {
       mat = 'building';
       statics.push(
@@ -149,36 +129,6 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
       radius = 9;
       break;
     }
-    case 'truck': {
-      statics.push(...wheeledChassis(7.4, 2.5, [-2.3, 1.3, 2.7], 0.55, pal, 2.3, 2.3));
-      statics.push(place(box(2.5, 1.0, 4.6, pal.body), [0, 1.65, 1.35]));
-      const canvasTop = loftRings(
-        [
-          { z: -0.95, ring: capsuleRing(1.25, 1.0, 0.02, 2.6, 10, 2.15) },
-          { z: 3.65, ring: capsuleRing(1.25, 1.0, 0.02, 2.6, 10, 2.15) },
-        ],
-        { capStart: true, capEnd: true, color: pal.canvas },
-      );
-      statics.push(canvasTop);
-      radius = 5;
-      break;
-    }
-    case 'tank': {
-      statics.push(...trackedChassis(6.9, 3.5, 0.95, pal));
-      const turret = loftRings(
-        [
-          { z: -1.6, ring: capsuleRing(1.0, 0.45, 0.05, 2.2, 12, 1.4) },
-          { z: -0.6, ring: capsuleRing(1.6, 0.75, 0.05, 2.2, 12, 1.4) },
-          { z: 1.2, ring: capsuleRing(1.45, 0.7, 0.05, 2.2, 12, 1.4) },
-          { z: 1.9, ring: capsuleRing(0.9, 0.45, 0.05, 2.2, 12, 1.4) },
-        ],
-        { capStart: true, capEnd: true, color: pal.body },
-      );
-      statics.push(place(turret, [0, 0, 0.3]));
-      statics.push(place(cylinder(0.09, 0.12, 5.2, 8, pal.dark), [0, 1.85, -3.6], [Math.PI / 2, 0, 0]));
-      radius = 5;
-      break;
-    }
     case 'ship': {
       mat = 'building';
       // hull: pointed bow at -Z, transom stern at +Z; waterline y = 0
@@ -219,42 +169,6 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
       wreck = 'ship';
       radius = 36;
       farScale = 2;
-      break;
-    }
-    case 'factory': {
-      mat = 'building';
-      statics.push(...sawtoothHall(40, 9, 30, 5, 0x9a938a, 0x6d6e6c, [-8, 0, 0]));
-      statics.push(...building(16, 14, 14, 0x8c8a86, 0x5d5f5f, [22, 0, -6]));
-      for (const [x, z] of [
-        [18, 12],
-        [26, 12],
-      ])
-        statics.push(place(cylinder(1.2, 1.7, 32, 10, 0x7a716a), [x, 16, z]), place(cylinder(1.25, 1.25, 1.5, 10, 0x9a3a2a), [x, 30, z]));
-      statics.push(...tank(4, 7, 0xd8d6cf, [-8, 0, 24]));
-      wreck = 'building';
-      radius = 30;
-      farScale = 2;
-      break;
-    }
-    case 'bridge': {
-      mat = 'building';
-      const span = 64;
-      const deckY = 11;
-      const spanGeo = (z0: number): BufferGeometry[] => {
-        const g: BufferGeometry[] = [place(box(12, 1.4, span, pal.concrete), [0, deckY, z0])];
-        for (const s of [-1, 1]) {
-          g.push(place(box(0.4, 3.2, span, 0x6b6f70), [s * 6.2, deckY + 2.3, z0]));
-          for (let k = -3; k <= 3; k++) g.push(place(box(0.35, 4.2, 0.35, 0x6b6f70), [s * 6.2, deckY + 2.0, z0 + (k * span) / 7], [(k % 2) * 0.6, 0, 0]));
-        }
-        return g;
-      };
-      statics.push(...spanGeo(-span), ...spanGeo(span));
-      for (const z of [-span / 2, span / 2]) statics.push(place(box(8, deckY + 14, 4, pal.concrete), [0, (deckY - 14) / 2, z]));
-      const mid = nodeFrom('span:mid', spanGeo(0), [0, 0, 0], 'building');
-      root.add(mid);
-      wreck = 'bridge';
-      radius = 40;
-      farScale = 2.2;
       break;
     }
     case 'suicide_boat':
