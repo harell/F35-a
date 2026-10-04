@@ -13,11 +13,12 @@
  *
  * Spark Arena (core/sparkArena.ts), the hand-built landmark east of the LINZ building box, joins the
  * index as a `fixed` building (id −1, after the LINZ ones): flying into it crashes the aircraft like a
- * tower does, but it never collapses. It is there with or without the LINZ building data. So are the Ports of
+ * tower does, but it never collapses. So does the War Memorial Museum on Pukekawa (core/museum.ts, id −100). It is there with or without the LINZ building data. So are the Ports of
  * Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9, added before the arena): their portals up to the A-frame.
  */
 import type { Vector3 } from 'three';
 import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
+import { MUSEUM_CENTRE, MUSEUM_PARTS } from '../core/museum';
 import { PORT_CRANES } from '../core/portOfAuckland';
 import { aucklandBuildings, aucklandBuildingsVersion } from '../world/scenery/aucklandBuildings';
 
@@ -134,6 +135,8 @@ export function buildBuildingGeometry(
     const [cx, cz] = corner((u0 + u1) / 2, 0);
     add(-2 - i, cx, cz, [{ ring, h: c.apex }], true);
   });
+  // the War Memorial Museum on Pukekawa: its measured block and domes (core/museum.ts), a landmark that stands
+  add(-100, MUSEUM_CENTRE.x, MUSEUM_CENTRE.z, MUSEUM_PARTS.map((p) => ({ ring: Float32Array.from(p.ring), h: p.h })), true);
   // Spark Arena: its roof outline in 10 m cells, each as high as the roof over it (core/sparkArena.ts)
   add(-1, SPARK_ARENA.x, SPARK_ARENA.z, sparkArenaSolids(), true);
   if (!buildings.length) return null;

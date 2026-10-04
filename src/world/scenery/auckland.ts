@@ -16,6 +16,7 @@ import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
+import { buildMuseum } from './museum';
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
@@ -991,18 +992,8 @@ export function buildMarinas(B: GeometryBuilder, lights: LightList, height: Heig
 }
 
 export function buildMuseumAndObelisk(B: GeometryBuilder, lights: LightList, height: HeightFn): void {
-  // Auckland War Memorial Museum on the Domain
-  const mx = AKL.domain.x;
-  const mz = AKL.domain.z;
-  const g = height(mx, mz) - 1.5;
-  const fr = frameFromHeading(mx, g, mz, 0.3);
-  const stone = 0xe8e0cc;
-  B.box(fr, 0, 0, 0, 104, 22, 62, stone, 0x9c9486, WIN_NONE);
-  B.box(fr, 0, 0, -35, 40, 20, 10, stone, 0x9c9486, WIN_NONE); // portico
-  B.box(fr, 0, 22, 0, 40, 6, 30, stone, 0x9c9486);
-  B.cylinder(fr, 0, 28, 0, 14, 14, 4, 16, stone, WIN_NONE, false);
-  B.cylinder(fr, 0, 32, 0, 14, 2, 10, 16, 0x9aa8ae, WIN_NONE, true);
-  lights.add(mx, g + 30, mz, 0xfff0d0, 12);
+  // Auckland War Memorial Museum on Pukekawa: measured from the LiDAR and OpenStreetMap (core/museum.ts)
+  buildMuseum(B, lights, height);
   // One Tree Hill obelisk
   const ox = AKL.one_tree_hill.x;
   const oz = AKL.one_tree_hill.z;

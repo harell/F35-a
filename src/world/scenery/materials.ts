@@ -160,6 +160,9 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit, detail);
     }
+  } else if (vWin > 9.5) {
+    // floodlit stone (aWin 10, the War Memorial Museum): plain walls by day, washed warm white by floodlights at night
+    if (uNight > 0.0 && abs(N.y) < 0.5) emissive += uNight * base * vec3(1.0, 0.92, 0.78) * 0.55;
   } else if (vWin > 7.5 && abs(N.y) < 0.5) {
     // the CBD tower kit's facades (core/cbdTowers.ts): aWin 8 curtain-wall glass on a 1.5 m × 3.8 m storey grid with a dark
     // spandrel at each slab; aWin 9 ribbon windows between precast bands (1.5 m band, 2.1 m glass, mullions every 1.8 m).
