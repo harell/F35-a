@@ -94,7 +94,9 @@
   "wall": "#9aa4b1",
   "podium": "#82888f",
   "wall_raw": "#949cc3",
-  "podium_raw": "#787fa5"
+  "podium_raw": "#787fa5",
+  "facade": "glass",
+  "facade_from": "3D mesh side views (2023), by eye: blue glass grid"
  },
  "10": {
   "name": "Auckland Council Tower",
