@@ -1,5 +1,5 @@
 /**
- * Reusable airframe part builders for the non-hero aircraft (MiG-29, Flankers, Su-57, Tu-22M3, A-50):
+ * Reusable airframe part builders for the non-hero aircraft (MiG-29, Flankers, Su-57):
  * rounded fuselage lofts, bubble canopies, engine nacelles with intakes, nozzles, and lifting
  * surfaces with hinged control surfaces (added to a ModelBuilder together with their drives).
  */

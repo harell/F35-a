@@ -37,7 +37,8 @@ export function showServiceRecord(host: UiHost, progress: CampaignProgress | nul
     };
     const p: CampaignProgress = progress ?? { unlocked: [], best: {}, totals: { missions: 0, airKills: 0, groundKills: 0, deaths: 0 } };
     const r = careerRank(p);
-    const campaign = (Missions.CAMPAIGN ?? []).slice().sort((a, b) => a.index - b.index);
+    // every playable campaign's missions, campaign by campaign (a disabled campaign's old grades aren't counted)
+    const campaign = (Missions.PLAYABLE_CAMPAIGNS ?? []).flatMap((c) => c.missions.slice().sort((a, b) => a.index - b.index));
     const training = (Missions.TRAINING ?? []).slice().sort((a, b) => a.index - b.index);
     const campDone = campaign.filter((m) => p.best[m.id]).length;
     const trainDone = training.filter((m) => p.best[m.id]).length;

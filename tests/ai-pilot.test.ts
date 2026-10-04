@@ -11,16 +11,16 @@ import type { AircraftType } from '../src/core/types';
 import { every, hills, makeAiWorld, runFor, v3 } from './ai-helpers';
 
 /** Minimal brain: fly a heading / altitude with the Autopilot. */
-function headingBrain(hdg: () => number, alt: number, speed: number, heavy: boolean): AiBrain {
+function headingBrain(hdg: () => number, alt: number, speed: number): AiBrain {
   const ap = new Autopilot();
   const h = new Vector3();
   return {
     role: 'fighter',
     update(ac, world, dt) {
       const it = ap.begin(ac, 150);
-      dirWithElevation(headingDir(hdg(), h), gammaForAltitude(ac, alt, heavy ? 0.15 : 0.35, heavy ? 10 : 6), it.dir);
-      it.gMax = heavy ? 1.8 : 5;
-      it.gain = heavy ? 0.5 : 1.2;
+      dirWithElevation(headingDir(hdg(), h), gammaForAltitude(ac, alt, 0.35, 6), it.dir);
+      it.gMax = 5;
+      it.gain = 1.2;
       it.speed = speed;
       it.allowAb = true;
       ap.fly(ac, world, dt);
@@ -29,12 +29,11 @@ function headingBrain(hdg: () => number, alt: number, speed: number, heavy: bool
 }
 
 describe('AI autopilot', () => {
-  for (const type of ['f35a', 'su35', 'tu22m', 'a50'] as AircraftType[]) {
+  for (const type of ['f35a', 'su35'] as AircraftType[]) {
     it(`${type}: captures heading and altitude without oscillation`, () => {
-      const heavy = type === 'tu22m' || type === 'a50';
       const { world } = makeAiWorld('veteran');
       let hdg = Math.PI / 2;
-      const ac = world.spawnAircraft({ type, team: 'red', position: v3(0, 3000, 0), heading: 0, speed: 230, ai: headingBrain(() => hdg, 4000, heavy ? 200 : 250, heavy) });
+      const ac = world.spawnAircraft({ type, team: 'red', position: v3(0, 3000, 0), heading: 0, speed: 230, ai: headingBrain(() => hdg, 4000, 250) });
       let maxHdgErr = 0;
       let maxAltErr = 0;
       let maxRollLevel = 0;
@@ -57,7 +56,7 @@ describe('AI autopilot', () => {
       });
       expect(ac.alive).toBe(true);
       expect(maxHdgErr).toBeLessThan(0.03); // < 2°
-      expect(maxAltErr).toBeLessThan(heavy ? 120 : 40);
+      expect(maxAltErr).toBeLessThan(40);
       expect(reversals).toBeLessThanOrEqual(1); // no porpoising
       expect(maxRollLevel).toBeLessThan(0.1);
       // after the reversal: settled on the new heading
@@ -130,7 +129,7 @@ describe('AI terrain & collision safety', () => {
       // red jets have no Auto-GCAS: the AI's own terrain layer must keep them alive
       world.spawnAircraft({ type: 'su27', team: 'red', position: v3(0, 900, 0), heading: 0.7, speed: 250, ai: createAiBrain('fighter', { skill: 0, seed: 1, task: route(false) }) }),
       world.spawnAircraft({ type: 'mig29', team: 'red', position: v3(2_000, 900, 2_000), heading: 3, speed: 260, ai: createAiBrain('fighter', { skill: 1, seed: 2, task: route(true) }) }),
-      world.spawnAircraft({ type: 'tu22m', team: 'red', position: v3(-3_000, 1_200, 3_000), heading: 1, speed: 240, ai: createAiBrain('bomber', { skill: 0.5, seed: 3, task: route(false) }) }),
+      world.spawnAircraft({ type: 'su27', team: 'red', position: v3(-3_000, 1_200, 3_000), heading: 1, speed: 240, ai: createAiBrain('bomber', { skill: 0.5, seed: 3, task: route(false) }) }),
     ];
     const minAgl = jets.map(() => Infinity);
     runFor(world, 180, (t) => {

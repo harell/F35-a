@@ -94,9 +94,9 @@ describe('g02 Straight Outta Hauraki: content', () => {
   it('offers only loadouts whose bombs can hit a moving boat (GBU-53/B), recommends all eight, and loads 360 rounds', () => {
     expect(G02.recommendedLoadout).toBe('strike_maritime');
     for (const id of G02.allowedLoadouts) {
-      const bombs = LOADOUTS[id].stores.filter((s) => s.weapon === 'gbu31' || s.weapon === 'gbu39' || s.weapon === 'gbu53');
+      const bombs = LOADOUTS[id].stores.filter((s) => s.weapon === 'gbu31' || s.weapon === 'gbu53');
       expect(bombs.length, id).toBeGreaterThan(0);
-      for (const b of bombs) expect(b.weapon, id).toBe('gbu53'); // GPS-only JDAM / GBU-39 miss a moving boat (#65)
+      for (const b of bombs) expect(b.weapon, id).toBe('gbu53'); // a GPS-only JDAM misses a moving boat (#65)
       for (const d of DIFFS) expect(missionGunAmmo(G02, d, id), `${id} ${d}`).toBe(360);
     }
   });

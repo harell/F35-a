@@ -84,7 +84,7 @@ describe('target camera pose', () => {
 
   it('scales the framing distance with the airframe and frames it inside the FOV', () => {
     const small = framingDistance(jet('mig29'));
-    const big = framingDistance(jet('a50'));
+    const big = framingDistance(jet('a320'));
     expect(big).toBeGreaterThan(small * 3);
     // the span fits the frame width (16:9) with room to spare
     const halfW = Math.tan((TARGET_CAM_FOV * Math.PI) / 360) * (16 / 9) * small;
@@ -92,7 +92,7 @@ describe('target camera pose', () => {
   });
 
   it('orbits SAM sites slowly at low elevation and never goes below the terrain', () => {
-    for (const type of ['sa6', 'sa8', 'sa10', 'sa15', 'sa18', 'zsu23'] as SamType[]) {
+    for (const type of ['sa6', 'sa15', 'zsu23'] as SamType[]) {
       const s = new SamSiteEntity(7, type, 'red');
       s.position.set(500, 120, 800);
       const p0 = targetCamPose(s, 0, makePose()).position.clone();
@@ -231,7 +231,7 @@ describe('target camera labels', () => {
     expect(pipName(jet('mig29'))).toBe('MIG-29 FULCRUM');
     expect(pipName(jet('su57'))).toBe('SU-57 FELON');
     expect(pipName(new SamSiteEntity(2, 'sa6', 'red'))).toBe('SA-6 GAINFUL');
-    expect(pipName(new SamSiteEntity(2, 'sa10', 'red'))).toBe('SA-10 GRUMBLE');
+    expect(pipName(new SamSiteEntity(2, 'sa15', 'red'))).toBe('SA-15 GAUNTLET');
     expect(pipName(new GroundTargetEntity(3, 'ship', 'red'))).toBe('SHIP');
     // every military type has a reporting name (the civil A320 shows its callsign instead; the IRGC
     // Navy air-defence boat has no confirmed class or reporting name, so its PiP title is "AD BOAT")

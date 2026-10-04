@@ -55,6 +55,8 @@ export interface FlightIntent {
   minAgl: number;
   /** Allow rolling past 90° to pull down (split-S). */
   allowInverted: boolean;
+  /** Steering bank limit (rad, π = none): the g cap alone lets a descending turn bank past it. */
+  bankMax: number;
   /** Entity the mid-air avoidance treats as a formation partner (closer spacing allowed). */
   partnerId: number;
 }
@@ -97,6 +99,7 @@ export class Autopilot {
     track: false,
     minAgl: 150,
     allowInverted: true,
+    bankMax: Math.PI,
     partnerId: -1,
   };
   /** What the safety layer did on the last tick (read by brains, e.g. to label 'PULL UP'). */
@@ -131,6 +134,7 @@ export class Autopilot {
     it.track = false;
     it.minAgl = minAgl;
     it.allowInverted = true;
+    it.bankMax = Math.PI;
     it.partnerId = -1;
     return it;
   }
@@ -239,6 +243,7 @@ export class Autopilot {
     let nDes = Math.hypot(aLat, aUp) / G;
     if (nDes > gMax) nDes = gMax;
     let bankDes = Math.atan2(aLat, aUp);
+    if (Math.abs(bankDes) > it.bankMax) bankDes = Math.sign(bankDes) * it.bankMax;
     // At very low load the lift direction hardly matters: don't chase it around.
     if (nDes < 0.6) bankDes = bankCur + wrapAngle(bankDes - bankCur) * (nDes / 0.6);
 

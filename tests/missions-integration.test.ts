@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES } from '../src/core/data';
-import { CAMPAIGN, TRAINING, buildInstantMissionSeeded, createMissionRunner } from '../src/missions';
+import { CAMPAIGNS, TRAINING, buildInstantMissionSeeded, createMissionRunner } from '../src/missions';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
@@ -18,7 +18,7 @@ const instant: MissionDef[] = (['stroll', 'dogfight', 'sam_gauntlet', 'strike', 
 );
 
 describe('missions: integration with the real AI and combat', () => {
-  for (const def of [...CAMPAIGN, ...TRAINING, ...instant]) {
+  for (const def of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
     it(`${def.id} runs 20 s cleanly`, () => {
       const events = new EventBus();
       const diff = DIFFICULTIES.veteran;

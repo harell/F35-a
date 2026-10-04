@@ -6,7 +6,7 @@
  * HD file's download time on an emulated mid-range connection (--mbps, default 10 Mbit/s, 40 ms RTT).
  *
  *   npm run build:test && npx vite preview --port 4173 &
- *   node e2e/hd-terrain.mjs [--base=http://localhost:4173/] [--mission=c01] [--mbps=10]
+ *   node e2e/hd-terrain.mjs [--base=http://localhost:4173/] [--mission=g01] [--mbps=10]
  *
  * Run it against a production build (vite preview): the service worker only registers there. It has
  * to be the test build (VITE_TEST_HOOKS=1), the only production build with ?autostart and window.__f35.
@@ -20,7 +20,7 @@ const args = Object.fromEntries(
   }),
 );
 const base = args.base || 'http://localhost:4173/';
-const mission = args.mission || 'c01';
+const mission = args.mission || 'g01';
 const mbps = Number(args.mbps || 10);
 const HD = /auckland-linz-hd-[\w-]+\.bin$/;
 

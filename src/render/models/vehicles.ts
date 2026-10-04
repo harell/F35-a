@@ -86,35 +86,6 @@ export function trackedChassis(L: number, W: number, H: number, pal: Palette, z0
   return out;
 }
 
-/** Wheeled truck chassis (front = -Z): frame, wheels at axle z positions, cab with windows. */
-export function wheeledChassis(L: number, W: number, axles: number[], wheelR: number, pal: Palette, cabLen = 2.2, cabH = 2.4): BufferGeometry[] {
-  const out: BufferGeometry[] = [];
-  out.push(place(box(W * 0.8, 0.35, L, pal.dark), [0, wheelR + 0.15, 0]));
-  for (const z of axles) {
-    for (const s of [-1, 1]) out.push(place(cylinder(wheelR, wheelR, 0.42, 10, pal.track), [s * (W / 2 - 0.2), wheelR, z], [0, 0, Math.PI / 2]));
-  }
-  const cz = -L / 2 + cabLen / 2;
-  // load deck / body behind the cab, over the wheels
-  const deckLen = L - cabLen - 0.2;
-  if (deckLen > 0.5) out.push(place(box(W, 0.5, deckLen, pal.body), [0, wheelR * 2 + 0.05, -L / 2 + cabLen + 0.2 + deckLen / 2]));
-  out.push(
-    prismX(
-      [
-        [cz - cabLen / 2, wheelR + 0.3],
-        [cz + cabLen / 2, wheelR + 0.3],
-        [cz + cabLen / 2, wheelR + cabH],
-        [cz - cabLen / 2 + 0.45, wheelR + cabH],
-        [cz - cabLen / 2, wheelR + cabH * 0.62],
-      ].reverse() as [number, number][],
-      W,
-      pal.body,
-    ),
-  );
-  // windscreen band
-  out.push(place(box(W * 0.9, cabH * 0.25, 0.08, pal.glass), [0, wheelR + cabH * 0.8, cz - cabLen / 2 + 0.24], [-0.35, 0, 0]));
-  return out;
-}
-
 /** Parabolic dish of radius R opening towards -Z (forward): concave front + convex back shell, feed horn. */
 export function dish(R: number, depth: number, color: number, feed = true): BufferGeometry[] {
   const prof: [number, number][] = [];
@@ -159,33 +130,6 @@ export function soldier(pal: Palette, kneel = false): BufferGeometry[] {
     place(box(0.42, 0.62, 0.26, pal.canvas), [0, 1.12 - k, 0]),
     place(ellipsoid(0.13, 0.14, 0.13, 8, 6, 0x3f4436), [0, 1.55 - k, 0]),
   ];
-}
-
-/** Box building with flat roof slab. */
-export function building(w: number, h: number, d: number, wall: number, roof: number, pos: [number, number, number] = [0, 0, 0]): BufferGeometry[] {
-  return [place(box(w, h, d, wall), [pos[0], pos[1] + h / 2, pos[2]]), place(box(w + 0.3, 0.3, d + 0.3, roof), [pos[0], pos[1] + h + 0.15, pos[2]])];
-}
-
-/** Sawtooth-roof factory hall along X. */
-export function sawtoothHall(w: number, h: number, d: number, teeth: number, wall: number, roof: number, pos: [number, number, number]): BufferGeometry[] {
-  const out = [place(box(w, h, d, wall), [pos[0], pos[1] + h / 2, pos[2]])];
-  const tw = d / teeth;
-  for (let i = 0; i < teeth; i++) {
-    const z0 = pos[2] - d / 2 + i * tw;
-    out.push(
-      prismX(
-        [
-          [z0, pos[1] + h],
-          [z0 + tw, pos[1] + h],
-          [z0 + tw, pos[1] + h + tw * 0.55],
-        ],
-        w,
-        roof,
-        pos[0] - w / 2,
-      ),
-    );
-  }
-  return out;
 }
 
 /** Vertical cylinder tank with a shallow dome roof. */

@@ -85,7 +85,7 @@ describe('hud formatting', () => {
     expect(entityLabel(new AircraftEntity(1, 'mig29', 'red'))).toBe('MIG-29');
     expect(entityLabel(new SamSiteEntity(2, 'sa6', 'red'))).toBe('SA-6');
     expect(killText(new AircraftEntity(3, 'su35', 'red'))).toBe('SPLASH SU-35');
-    expect(killText(new SamSiteEntity(4, 'sa10', 'red'))).toBe('SA-10 DESTROYED');
+    expect(killText(new SamSiteEntity(4, 'sa15', 'red'))).toBe('SA-15 DESTROYED');
     expect(killText(new GroundTargetEntity(5, 'ship', 'red'))).toBe('SHIP DESTROYED');
     expect(WARNING_INFO.pull_up.level).toBe(2);
     expect(WARNING_INFO.bingo.label).toBe('BINGO');

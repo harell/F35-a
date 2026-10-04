@@ -16,7 +16,7 @@ import { GeometryBuilder } from './GeometryBuilder';
 import { DecalBuilder, LightList } from './builders';
 import { buildAirbase, buildExtraRunway, buildRealAirfield } from './airbase';
 import { airfieldLayout } from './aucklandOsm';
-import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayout } from './aucklandSites';
+import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayout, siteRings } from './aucklandSites';
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildMarinas, buildObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { buildMuseum } from './museum';
@@ -30,7 +30,8 @@ import { MUSEUM } from '../../core/museum';
 import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
-import { LotMask, urbanBounds } from './lotMask';
+import { LotMask, maskFromRings, urbanBounds } from './lotMask';
+import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial, createSignMaterial } from './materials';
@@ -84,6 +85,8 @@ export class Scenery {
   roads: RoadNetwork | null = null;
   /** Lots left unbuilt along the road and railway ribbons (Auckland); the terrain shader takes it too. */
   lotMask: LotMask | null = null;
+  /** Landmark sites (stadium grounds, the oil terminal) where the procedural street grid stops (terrain shader, houses). */
+  siteMask: LotMask | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
   /** Collapsed CBD skyscrapers flattened in the merged CBD mesh (#128); null for the procedural CBD. */
@@ -175,6 +178,8 @@ export class Scenery {
       // the suburbs' lots cleared along the ribbons (the houses here and the terrain's painted ones)
       const urban = urbanBounds(o.colorData, o.colorSize, hf.origin, hf.extent);
       this.lotMask = urban ? LotMask.fromSegments(roads.segments, urban) : null;
+      // no painted streets or houses through a stadium (its stands are 3D): its site plus a street's width
+      this.siteMask = maskFromRings(siteRings(), 8);
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
@@ -379,11 +384,13 @@ export class Scenery {
     // nothing grows or is built on the roads or inside the port, the naval base, the oil terminal or a stadium
     // (nor under the aerial photo, which shows the real houses and trees)
     const sites = siteBlocker();
-    const onSite = o.aerial ? (x: number, z: number, m: number) => aerialCovers(x, z) || (sites?.(x, z, m) ?? false) : sites;
+    // (the hero neighbourhoods grow their measured canopy under the photo too: TreeSource.nbTree)
+    const nbs = aucklandNeighbourhoods();
+    const onSite = o.aerial ? (x: number, z: number, m: number) => (aerialCovers(x, z) && !neighbourhoodAt(x, z, nbs)) || (sites?.(x, z, m) ?? false) : sites;
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
@@ -402,7 +409,7 @@ export class Scenery {
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, this.lotMask),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask)),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
         { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
@@ -460,4 +467,10 @@ export class Scenery {
     for (const m of this.materials) m.dispose();
     for (const t of this.textures) t.dispose();
   }
+}
+
+/** Either mask (a lot cleared by a road corridor or a landmark site), as HouseSource asks it. */
+function joinMasks(a: LotMask | null, b: LotMask | null): Pick<LotMask, 'masked'> | null {
+  if (!a || !b) return a ?? b;
+  return { masked: (x, z) => a.masked(x, z) || b.masked(x, z) };
 }

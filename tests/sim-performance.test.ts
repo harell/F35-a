@@ -51,8 +51,8 @@ describe('performance helpers (AI)', () => {
       const tw = makeWorld('pilot');
       // the Shahed flies a scripted profile while alive (sim/drone/oneWay.ts) and its flight-model
       // numbers only fly the wreck: trim it at its own cruise point
-      const alt = type === 'a50' || type === 'tu22m' ? 8000 : type === 'shahed136' ? 1000 : 5000;
-      const speed = type === 'a50' ? 200 : type === 'shahed136' ? 51 : 240;
+      const alt = type === 'shahed136' ? 1000 : 5000;
+      const speed = type === 'shahed136' ? 51 : 240;
       const ac = tw.world.spawnAircraft({ type, team: 'red', position: new Vector3(0, alt, 0), heading: 1, speed });
       run(tw.world, 15);
       expect(Math.abs(ac.position.y - alt)).toBeLessThan(60);

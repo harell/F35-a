@@ -104,7 +104,7 @@ describe('A Stroll in the Park: a calm cockpit (1.1-g)', () => {
     const def = stroll();
     expect(def.recommendedLoadout).toBe('clean');
     expect(def.allowedLoadouts[0]).toBe('clean');
-    expect(def.allowedLoadouts).toEqual(expect.arrayContaining(['strike_beast', 'a2a_beast', 'strike_sdb2_full', 'a2a_stealth']));
+    expect(def.allowedLoadouts).toEqual(expect.arrayContaining(['strike_beast', 'a2a_beast', 'strike_maritime', 'a2a_stealth']));
     expect(hangarLoadouts(def)).toEqual({ cards: def.allowedLoadouts, initial: 'clean' });
     const l = LOADOUTS.clean;
     expect(l.stores).toEqual([]);

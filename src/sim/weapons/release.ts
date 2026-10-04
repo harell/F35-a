@@ -39,7 +39,6 @@ const CALLS: Record<StoreWeapon, { text: string; voice: VoiceId }> = {
   aim120: { text: 'Fox Three', voice: 'p_fox3' },
   aim9x: { text: 'Fox Two', voice: 'p_fox2' },
   gbu31: { text: 'Rifle', voice: 'p_rifle' },
-  gbu39: { text: 'Rifle', voice: 'p_rifle' },
   gbu53: { text: 'Rifle', voice: 'p_rifle' },
   aargm: { text: 'Magnum', voice: 'p_magnum' },
 };
@@ -76,7 +75,6 @@ function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number;
   const pick = world.getEntity(requested ?? ac.radar.designatedId);
   if (pick && pick.alive && pick.team !== ac.team && pick.team !== 'neutral') {
     if (pick.kind === 'sam' && (pick.radarOn || pick.known)) return pick;
-    if (pick.kind === 'ground' && pick.emitter) return pick;
   }
   forwardOf(ac.quaternion, _fwd);
   const cosFov = Math.cos(def.seekerFov);
@@ -94,7 +92,6 @@ function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number;
     }
   };
   for (const s of world.sams) consider(s, s.radarOn);
-  for (const g of world.ground) consider(g, g.emitter);
   return best;
 }
 

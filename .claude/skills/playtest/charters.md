@@ -12,7 +12,7 @@ Pick from this menu. "Agent can judge" says how far an agent's verdict can be tr
 |---|---|---|---|---|
 | **Smoke** | Does every touched mission and screen start without errors? | `browser-run.mjs --at=0`, `e2e/missions.mjs --only=` | ~15–20 s per mission | yes |
 | **Winnability** | Can a competent player win it at each difficulty? Is anything a wall? | `bot-sweep.ts` | ~4 s per run, parallel | yes |
-| **Difficulty curve** | Do win rates fall from Recruit to Ace, and do the playable campaigns get harder in order without spikes? | `bot-sweep.ts --diffs=recruit,pilot,veteran,ace` (default `all`: playable campaigns + training, not the disabled Southern Cross) | 2–3 min | yes |
+| **Difficulty curve** | Do win rates fall from Recruit to Ace, and do the playable campaigns get harder in order without spikes? | `bot-sweep.ts --diffs=recruit,pilot,veteran,ace` (default `all`: playable campaigns + training) | 2–3 min | yes |
 | **Soft-lock / flow** | Does every objective progress, or does a mission hang? | `bot-sweep.ts`: `HUNG` rows (still running at `maxT`), `reason`, `events` in `--json` | with the sweep | yes |
 | **Exploit / dominant strategy** | Is there a cheap way to win that skips the intended play (stay low, stand off, gun-only, ignore the escort)? | `browser-run.mjs --autopilot=off --controls=…` plus `simulate()`; a bot variant in a scratch test | 5–20 min | partly: it finds what it tries |
 | **Regression** | Are last run's findings still fixed? | the repro line of each finding in the last `docs/playtests/` file | per finding | yes |
@@ -50,7 +50,7 @@ gap:        +2 if this type/area wasn't tested in the last 3 runs (coverage tabl
 
 Sort by `risk / estimated minutes` and take charters from the top until the round's review budget is spent. Name what you are **not** testing and why. That list goes into the ledger and seeds the gap score of the next run.
 
-With no previous run (no SHA in the ledger), the first run is a **baseline**: a Difficulty curve sweep of every playable mission, Smoke on all playable missions (not the disabled Southern Cross), and one HUD and one First-time charter. Then the risk model has something to compare against.
+With no previous run (no SHA in the ledger), the first run is a **baseline**: a Difficulty curve sweep of every playable mission, Smoke on all playable missions, and one HUD and one First-time charter. Then the risk model has something to compare against.
 
 ## 3. Charter format
 

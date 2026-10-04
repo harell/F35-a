@@ -57,31 +57,21 @@ export type AircraftType =
   | 'su27' // Su-27 Flanker
   | 'su35' // Su-35 Flanker-E
   | 'su57' // Su-57 Felon (low observable)
-  | 'tu22m' // Tu-22M3 Backfire bomber (intercept target)
-  | 'a50' // A-50 Mainstay AEW&C (high value target)
   | 'a320' // Airbus A320neo airliner (neutral civilian traffic)
   | 'shahed136'; // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles
-  | 'sa8' // 9K33 Osa — single amphibious vehicle, command guided
-  | 'sa10' // S-300PS — Flap Lid + Clam Shell + vertical launch TELs, long range, TVM
   | 'sa15' // 9K330 Tor — single vehicle, vertical launch, command guided, short range
-  | 'sa18' // 9K38 Igla MANPADS team — passive IR, no radar (no RWR warning!)
   | 'zsu23' // ZSU-23-4 Shilka radar-directed AAA
   | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
 export type GroundTargetType =
-  | 'ewr' // early warning radar
   | 'bunker' // command bunker
   | 'fuel' // fuel tanks
   | 'hangar' // hardened aircraft shelter
   | 'parked_jet' // parked enemy fighter
-  | 'truck' // supply truck (can move along a path)
-  | 'tank' // armour (can move)
   | 'ship' // corvette / frigate (can move)
-  | 'factory' // industrial building
-  | 'bridge' // bridge span
   | 'suicide_boat' // IRGC Navy unmanned explosive boat (Ya Mahdi type): chases a ship and rams it (sim/boats.ts)
   | 'missile_boat'; // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
 
@@ -97,7 +87,6 @@ export type WeaponId =
   | 'aim120' // AIM-120D AMRAAM — active radar BVR missile
   | 'aim9x' // AIM-9X Sidewinder — IR, high off-boresight via HMD
   | 'gbu31' // GBU-31 JDAM — 2000 lb GPS guided bomb
-  | 'gbu39' // GBU-39 SDB — 250 lb GPS guided glide bomb (standoff)
   | 'gbu53' // GBU-53/B StormBreaker (SDB II): datalinked glide bomb with a tri-mode terminal seeker, hits moving targets
   | 'aargm'; // AGM-88G AARGM-ER — anti-radiation missile for SEAD
 
@@ -109,19 +98,14 @@ export type MunitionId =
   | 'r77' // AA-12 Adder, active radar
   | 'kab500' // KAB-500S-E, satellite-guided 500 kg bomb (enemy strike jets, carried on the 'gbu31' slot)
   | 'm_3m9' // SA-6 missile, semi-active radar
-  | 'm_9m33' // SA-8 missile, command guided
-  | 'm_48n6' // SA-10 missile, track-via-missile / command
   | 'm_9m330' // SA-15 missile, command guided
-  | 'm_igla' // SA-18 MANPADS missile, IR
+  | 'm_igla' // 9M39 Igla MANPADS missile, IR (the air-defence boat's shoulder-launched rounds)
   | 'kowsar'; // Kowsar anti-ship missile of the missile boat: visual only, flown by sim/boats.ts, never a target
 
 export type LoadoutId =
   | 'a2a_stealth'
   | 'strike_stealth'
   | 'sead_stealth'
-  | 'strike_sdb2'
-  /** 8× GBU-53/B + 2× AIM-120D: only in missions that list it in allowedLoadouts (the boat swarm, #82). */
-  | 'strike_sdb2_full'
   /** 8× GBU-53/B + 2× AARGM-ER, no air-to-air missile: the boat swarm's only loadout (#136). */
   | 'strike_maritime'
   | 'a2a_beast'

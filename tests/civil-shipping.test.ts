@@ -173,7 +173,7 @@ describe('civil shipping in missions', () => {
   }
 
   it('Auckland sorties get 3 moored, 2–4 anchored and 1–2 moving civil ships (≤ 8)', () => {
-    const m = setup(missionById('c01')!);
+    const m = setup(missionById('g01')!);
     const ships = m.ships();
     expect(ships.length).toBeGreaterThanOrEqual(3 + 2 + 1);
     expect(ships.length).toBeLessThanOrEqual(8);
@@ -214,7 +214,7 @@ describe('civil shipping in missions', () => {
     const anchored = new Set<number>();
     const moving = new Set<number>();
     for (let seed = 1; seed <= 24; seed++) {
-      const m = setup({ ...missionById('c01')!, seed });
+      const m = setup({ ...missionById('g01')!, seed });
       const ships = m.ships();
       const nMoving = ships.filter((s) => s.path).length;
       const nAnchored = ships.length - PORT_BERTHS.length - nMoving;
@@ -230,7 +230,7 @@ describe('civil shipping in missions', () => {
   });
 
   it('a moving ship steams round its loop at its route speed', () => {
-    const m = setup(missionById('c01')!);
+    const m = setup(missionById('g01')!);
     const s = m.ships().find((e) => e.path)!;
     const route = SHIP_ROUTES.find((r) => r.vessel === s.vessel)!;
     const p0 = s.position.clone();
@@ -266,23 +266,23 @@ describe('civil shipping in missions', () => {
       m.runner.dispose?.();
     }
     // a wartime sortie has nobody on the lane
-    const war = setup(missionById('c01')!);
+    const war = setup(missionById('g01')!);
     expect(war.ships().filter((s) => s.speed === LANE_SPEED)).toHaveLength(0);
     war.runner.dispose?.();
   });
 
   it('no ships with civil traffic switched off', () => {
-    const off = setup(missionById('c01')!, false);
+    const off = setup(missionById('g01')!, false);
     expect(off.ships()).toHaveLength(0);
     off.runner.dispose?.();
   });
 
   it('player sinks one: CIVILIAN SHIP DESTROYED, AWACS check-fire naming the vessel, no kill, penalty, debrief row', () => {
-    const m = setup(missionById('c01')!);
+    const m = setup(missionById('g01')!);
     m.tick(1);
     const p = m.world.player!;
     const ship = m.ships().find((s) => s.vessel === 'cruise')!;
-    m.world.applyDamage(ship, 1, p.id, 'gbu39'); // a near miss's worth of blast still sinks it
+    m.world.applyDamage(ship, 1, p.id, 'gbu53'); // a near miss's worth of blast still sinks it
     m.tick(6);
     expect(ship.alive).toBe(false);
     expect(m.hud).toContain('CIVILIAN SHIP DESTROYED');
@@ -298,7 +298,7 @@ describe('civil shipping in missions', () => {
   });
 
   it('an airliner and a ship: both counted as civilian losses, shown on separate debrief rows', () => {
-    const m = setup(missionById('c01')!);
+    const m = setup(missionById('g01')!);
     m.tick(1);
     const p = m.world.player!;
     const civ = m.world.aircraft.find((a) => a.civil)!;
@@ -318,7 +318,7 @@ describe('civil shipping in missions', () => {
   });
 
   it('a ship lost to somebody else is reported, but is not the player’s civilian loss', () => {
-    const m = setup(missionById('c01')!);
+    const m = setup(missionById('g01')!);
     m.tick(1);
     const ship = m.ships()[0];
     m.world.applyDamage(ship, 50, null, 'gbu31');
@@ -374,7 +374,7 @@ describe('civil ship damage', () => {
     const a = spawnShip(w, 'container', 0, -2000);
     expect(a.destroyedAt).toBe(-1);
     run(w, 1);
-    w.applyDamage(a, 3, p.id, 'gbu39');
+    w.applyDamage(a, 3, p.id, 'gbu53');
     expect(a.alive).toBe(false);
     expect(a.destroyedAt).toBeCloseTo(w.time, 6); // paces the sinking animation
     const b = spawnShip(w, 'cruise', 2000, -2000, 0, 'Southern Barnacle');

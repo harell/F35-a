@@ -10,7 +10,7 @@ import { PerspectiveCamera } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { FrameContext, MissionDef } from '../src/core/contracts';
 import { DEFAULT_SETTINGS, LOADOUTS, QUALITY_PRESETS } from '../src/core/data';
-import { CAMPAIGN, TRAINING, missionGunAmmo, validateMission } from '../src/missions';
+import { TRAINING, missionGunAmmo, validateMission } from '../src/missions';
 import { gunAmmoOverride } from '../src/missions/runtime/gunAmmo';
 import { drawSmsPage } from '../src/hud/cockpit/pages';
 import { createHud } from '../src/hud/Hud';
@@ -23,9 +23,9 @@ import { harness } from './missions-helpers';
 vi.setConfig({ testTimeout: 60_000 });
 installPath2D();
 
-const byId = (id: string) => [...CAMPAIGN, ...TRAINING].find((m) => m.id === id)!;
-/** c01 (CAP over the Waitematā) with its own gun rounds. */
-const withGun = (gunAmmo: MissionDef['gunAmmo']): MissionDef => ({ ...byId('c01'), gunAmmo });
+const byId = (id: string) => TRAINING.find((m) => m.id === id)!;
+/** t02 (the air-to-air lesson, no gunAmmo of its own) with its own gun rounds. */
+const withGun = (gunAmmo: MissionDef['gunAmmo']): MissionDef => ({ ...byId('t02'), gunAmmo });
 
 describe('MissionDef.gunAmmo: resolving the rounds', () => {
   it('a number applies on every difficulty; no override → null (keep the loadout)', () => {
@@ -48,7 +48,7 @@ describe('MissionDef.gunAmmo: resolving the rounds', () => {
 
   it("missionGunAmmo falls back to the loadout's rounds (the briefing's hangar cards)", () => {
     expect(LOADOUTS.a2a_stealth.gunAmmo).toBe(180);
-    expect(missionGunAmmo(byId('c01'), 'pilot', 'a2a_stealth')).toBe(180);
+    expect(missionGunAmmo(byId('t02'), 'pilot', 'a2a_stealth')).toBe(180);
     expect(missionGunAmmo(withGun(400), 'pilot', 'a2a_stealth')).toBe(400);
     expect(missionGunAmmo(withGun({ recruit: 400, ace: 300 }), 'ace', 'a2a_beast')).toBe(300);
   });
@@ -66,9 +66,9 @@ describe('MissionDef.gunAmmo: resolving the rounds', () => {
 describe('MissionDef.gunAmmo: launch', () => {
   it('a mission without it starts with the loadout\'s 180 rounds (unchanged)', () => {
     for (const [def, loadout] of [
-      [byId('c01'), undefined],
-      [byId('c03'), undefined],
-      [byId('c01'), 'a2a_beast'],
+      [byId('t02'), undefined],
+      [byId('t03'), undefined],
+      [byId('t02'), 'a2a_beast'],
     ] as const) {
       const h = harness(def, 'pilot', loadout);
       const p = h.world.player!;
@@ -79,7 +79,7 @@ describe('MissionDef.gunAmmo: launch', () => {
   });
 
   it('a mission with gunAmmo: 400 starts with 400 rounds, whatever the loadout', () => {
-    for (const loadout of byId('c01').allowedLoadouts) {
+    for (const loadout of byId('t02').allowedLoadouts) {
       const h = harness(withGun(400), 'pilot', loadout);
       expect(h.world.player!.gunAmmo, loadout).toBe(400);
       expect(h.world.player!.gunMaxAmmo, loadout).toBe(400);

@@ -126,11 +126,16 @@ under vite-node so it reprojects with the game's own `geoToWorld` (WGS84 request
 
 What comes out:
 
-- **CBD region**: a polygon traced along the real road graph (Dijkstra over the LINZ sections): down the SH1
-  carriageways from St Marys Bay, round the Central Motorway Junction, up SH16 Grafton Gully, along Stanley St / Beach Rd
-  / Quay St to the west edge of the port's wharves, then through the harbour round Queens Wharf and the Wynyard Quarter.
-  Inside it the terrain shader paints the real streets instead of the procedural Voronoi grid and `buildCBD` places the
-  buildings along them; the hand-over to the procedural suburbs happens under a motorway, along a street or over water.
+- **CBD region** (the real-streets region): a polygon traced along the real road graph (Dijkstra over the LINZ
+  sections): along Jervois Rd from Herne Bay's west end and up Shelly Beach Rd (a graph of those two roads alone), down
+  the SH1 carriageways from the bridge approach through St Marys Bay, round the Central Motorway Junction, up SH16 Grafton
+  Gully, along Stanley St / Beach Rd / Quay St to the west edge of the port's wharves, then through the harbour round
+  Queens Wharf, the Wynyard Quarter and outside Westhaven's breakwaters, under the Harbour Bridge and along Herne Bay's
+  shore to Cox's Bay. Inside it the terrain shader paints the real streets instead of the procedural Voronoi grid and
+  `buildCBD` places the buildings along them (in Herne Bay and Westhaven: the hero neighbourhoods,
+  `src/world/scenery/aucklandNeighbourhoods.ts`); the hand-over to the procedural suburbs happens under a motorway, along
+  a street or over water. St Marys Bay and Ponsonby stay procedural: inside the region every building has to come from
+  data, so it only grows where the buildings exist.
 - **Streets**: the sections within 60 m of the region, chained into polylines (Douglas–Peucker 0.6 m) with a width
   class: 19 m main streets (Queen St, Customs St, Symonds St, K Rd, …), 12 m streets, 7 m lanes; steps, walks, arcades
   and marina accessways are left out.
@@ -141,9 +146,15 @@ What comes out:
 - **Arterials**: Dominion Rd, Mt Eden Rd, Manukau Rd, Remuera Rd, Sandringham Rd, New North Rd, Lake Rd, Onewa Rd and East
   Coast Rd along their hand-traced corridors (± 700 m), Great North Rd by suburb from Grey Lynn over the Whau to New Lynn;
   the parts inside the CBD region are left to the street map.
+- **Streets round the landmarks**: for every OSM stadium outside the region (`auckland-osm.bin`), the LINZ sections
+  within 90 m of its outline, clipped there and off the grounds, as arterial-kind ribbons (widths of the street classes,
+  at most 12 m); runs along an existing motorway or arterial are left out. With the terrain shader's site mask
+  (`Scenery.siteMask`: no procedural grid on a stadium's grounds), a 3D stadium stands among its own streets.
 
 At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over the region (kerb distance, region
-distance, parks, motorway verges); the shader and the JS placement code read the same texels.
+distance, parks and the hero neighbourhoods' gardens, motorway verges); the shader and the JS placement code read the same
+texels. Since the region took in Herne Bay and Westhaven it is ≈ 1190 × 790 texels (3.7 MB of GPU memory, ≈ 0.22 s to
+build on the cloud container, ≈ 0.1 s before).
 
 # Railways (#31)
 

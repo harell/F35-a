@@ -76,7 +76,7 @@ describe('Auckland theatre geography', () => {
     }
   });
 
-  it('Rangitoto masks a low-level ingress from the SA-10 on Motutapu', () => {
+  it('Rangitoto masks a low-level ingress from a SAM radar on Motutapu', () => {
     // SAM radar on Motutapu, low jet south-west of Rangitoto: the cone blocks the line of sight
     const sam = new Vector3(12_900, q.surfaceHeightAt(12_900, -8600) + 15, -8600);
     const jet = new Vector3(5600, 60, -4800);

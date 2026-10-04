@@ -467,7 +467,7 @@ describe('engine', () => {
 });
 
 describe('stability', () => {
-  const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50'];
+  const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57'];
   for (const diff of ['pilot', 'ace'] as Difficulty[]) {
     it(`every type survives random stick abuse without NaNs (${diff})`, () => {
       const tw = makeWorld(diff);

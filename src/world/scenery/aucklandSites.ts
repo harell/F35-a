@@ -23,6 +23,8 @@ import { sparkArenaCovers } from '../../core/sparkArena';
 import { EDEN_PARK_STANDS } from '../../core/edenPark';
 import { CONTAINER_TIER, PORT_CRANES, PORT_MASTS, type PortCrane } from '../../core/portOfAuckland';
 import { aucklandPortStacks } from './aucklandPort';
+import { WESTFIELD_PRISMS } from '../../core/westfieldNewmarket';
+import { aucklandNeighbourhoods, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, IDENT_FRAME, WIN_FLOOD, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
 import type { DecalBuilder, HeightFn, LightList } from './builders';
@@ -172,6 +174,17 @@ export function siteBlocker(): (x: number, z: number, margin: number) => boolean
   const pad = ringOf(Float32Array.from(wiriHardstand(s)));
   const rings = s ? [...s.port, ...(s.naval ? [s.naval] : []), pad, ...s.stadiums.map((st) => st.outline)] : [pad];
   return (x, z) => sparkArenaCovers(x, z, 15) || rings.some((r) => inRing(r, x, z));
+}
+
+/**
+ * The landmark sites the procedural street grid must not run through (Scenery.siteMask → the terrain shader's
+ * siteMasked()): every stadium's grounds, the oil terminal's hardstand and Westfield Newmarket's buildings, where a 3D
+ * landmark stands. The port and the
+ * naval base are not here: they lie in the real-streets region or under the aerial photo, which never paint the grid.
+ */
+export function siteRings(): Float32Array[] {
+  const s = siteLayout();
+  return [Float32Array.from(wiriHardstand(s)), ...(s ? s.stadiums.map((st) => st.outline.pts) : []), ...WESTFIELD_PRISMS.map((p) => Float32Array.from(p.ring))];
 }
 
 /**
@@ -457,11 +470,15 @@ export function buildRealWaterside(B: GeometryBuilder, lights: LightList, height
   const linz = aucklandLinz();
   const onLand = (x: number, z: number) => (linz ? linzIsLand(linz, x, z) : height(x, z) > 0.5);
   const pontoons: Ring[] = [];
+  // a hero neighbourhood with a measured marina (Westhaven) brings its own pontoons and boats
+  const marine = (aucklandNeighbourhoods() ?? []).filter((n) => n.pontoons.length || n.boats.length);
+  const measured = (x: number, z: number) => !!neighbourhoodAt(x, z, marine);
   for (const r of s.piers) {
     const area = areaOf(r.pts);
     if (area < 6) continue;
     const [cx, cz] = centreOf(r.pts);
     if (inPort(cx, cz) || onLand(cx, cz)) continue;
+    if (inMarina(cx, cz) && area < 20_000 && measured(cx, cz)) continue;
     if (inMarina(cx, cz) && area < 20_000) {
       B.prism(r.pts, 0, () => 0.8, pontoonCol, pontoonCol, 0, false);
       pontoons.push(r);
@@ -482,11 +499,52 @@ export function buildRealWaterside(B: GeometryBuilder, lights: LightList, height
   }
   let boats = 0;
   const max = detail > 0.5 ? 2400 : 900;
+  for (const n of marine) boats += buildMeasuredMarina(B, lights, n, pontoonCol, detail, max - boats);
   for (const m of s.marinas) {
     const mine = pontoons.filter((r) => inRing(m, ...centreOf(r.pts)));
     if (mine.length) boats += berthYachts(B, waterMask(m.x0 - 30, m.z0 - 30, m.x1 + 30, m.z1 + 30, 2, height), detail, mine, max - boats, rnd);
   }
   return boats;
+}
+
+/**
+ * A hero neighbourhood's marina as measured (aucklandNeighbourhoods.ts, Westhaven): every pontoon and finger from the
+ * 2024 aerial as a slab 0.8 m over the water, every boat with its own length, beam, heading, hull colour and the
+ * LiDAR's deck, cabin and mast heights. Low detail drops the cabins and masts. Returns the number of boats.
+ */
+function buildMeasuredMarina(B: GeometryBuilder, lights: LightList, n: Neighbourhood, pontoonCol: Color, detail: number, max: number): number {
+  for (const r of n.pontoons) {
+    B.prism(r, 0, () => 0.8, pontoonCol, pontoonCol, 0, false);
+    if (Math.abs(areaOf(r)) > 400) {
+      const [cx, cz] = centreOf(r);
+      lights.add(cx, 3, cz, 0xfff0d0, 2.5);
+    }
+  }
+  const col = new Color();
+  const side = new Color();
+  const cabin = new Color(0xe8eaea);
+  const mast = new Color(0xd0d0cc);
+  let k = 0;
+  for (const b of n.boats) {
+    if (k >= max) break;
+    const fr = frameFromHeading(b.x, 0, b.z, Math.atan2(-Math.cos(b.heading), Math.sin(b.heading))); // local +Z towards the bow
+    const l = b.length / 2;
+    const hw = b.beam / 2;
+    const deck = Math.max(0.9, Math.min(3, b.deck));
+    col.setHex(b.color).lerp(cabin, 0.35);
+    side.copy(col).multiplyScalar(0.85);
+    // deck (pointed at the bow) + two sloped sides meeting at the keel line
+    B.quad(fr, [-hw, deck, l * 0.55, hw, deck, l * 0.55, hw, deck, -l, -hw, deck, -l], col);
+    B.tri(fr, [-hw, deck, l * 0.55, 0, deck, l, hw, deck, l * 0.55], col);
+    B.quad(fr, [hw, deck, l * 0.55, 0, 0, l - 0.5, 0, 0, -l + 0.5, hw, deck, -l], side);
+    B.quad(fr, [-hw, deck, -l, 0, 0, -l + 0.5, 0, 0, l - 0.5, -hw, deck, l * 0.55], side);
+    if (detail > 0.3) {
+      if (b.cabin > 0.3) B.box(fr, 0, deck, -l * 0.1, b.beam * 0.55, Math.min(b.cabin, 3), b.length * 0.4, cabin, cabin);
+      if (b.mast > deck + 3) B.quad(fr, [-0.12, deck, l * 0.15, 0.12, deck, l * 0.15, 0.08, b.mast, l * 0.15, -0.08, b.mast, l * 0.15], mast);
+    }
+    k++;
+  }
+  return k;
 }
 
 interface Boat {

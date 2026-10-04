@@ -31,7 +31,7 @@ describe('bot-sweep --park / --gunonly (tests/missions-probes.ts)', () => {
   });
 
   it('park: the parked jet never flies, shoots or dies; the row and log say which park', { timeout: 60_000 }, () => {
-    const r = runPlaythrough('c01', 'recruit', 1, flat(0), { maxT: 60, log: true, probe: { kind: 'park', at: 'far' } });
+    const r = runPlaythrough('g01', 'recruit', 1, flat(0), { maxT: 60, log: true, probe: { kind: 'park', at: 'far' } });
     expect(r.probe?.label).toBe('park:far');
     expect(r.events[0]).toMatch(/PROBE park:far/);
     expect(r.launches).toEqual([]);
@@ -41,14 +41,14 @@ describe('bot-sweep --park / --gunonly (tests/missions-probes.ts)', () => {
   });
 
   it('gun-only: no missile or bomb ever leaves the jet', { timeout: 60_000 }, () => {
-    const r = runPlaythrough('c01', 'recruit', 0, flat(0), { maxT: 90, probe: { kind: 'gunonly' } });
+    const r = runPlaythrough('g01', 'recruit', 0, flat(0), { maxT: 90, probe: { kind: 'gunonly' } });
     expect(r.probe?.label).toBe('gunonly');
     expect(r.launches).toEqual([]);
     expect(Object.keys(r.modes)).toEqual(['GUNONLY']);
   });
 
   it('no probe: the plain bot, no probe field', { timeout: 60_000 }, () => {
-    const r = runPlaythrough('c01', 'recruit', 0, flat(0), { maxT: 5 });
+    const r = runPlaythrough('g01', 'recruit', 0, flat(0), { maxT: 5 });
     expect(r.probe).toBeUndefined();
   });
 });
@@ -69,8 +69,10 @@ describe('Instant Action time of day and weather (?tod= / ?weather=, missionById
   });
 
   it("conditions don't change campaign or training missions", () => {
-    const c10 = missionById('c10')!;
-    expect(missionById('c10', { timeOfDay: 'day', weather: 'clear' })).toBe(c10);
+    for (const id of ['g02', 't01']) {
+      const m = missionById(id)!;
+      expect(missionById(id, { timeOfDay: 'night', weather: 'clear' }), id).toBe(m);
+    }
   });
 
   it('parses and validates the URL values (case-insensitive); unknown values are listed, not applied', () => {

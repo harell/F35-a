@@ -7,8 +7,8 @@
 <p align="center"><img src="docs/cover.jpg" width="420" alt="F-35-a Ratites game cover: an F-35A over Auckland's Sky Tower and skyline, with a kiwi in the flames"></p>
 
 **A combat flight simulator for your phone's browser.** Fly the F-35A Lightning II over Auckland, New Zealand.
-Defend the city against a hostile force dug in on the Hauraki Gulf islands: dogfight MiGs and Flankers over the Waitematā,
-dodge SA-10s behind Rangitoto, and thread the Harbour Bridge at 40 m.
+Defend the city: shoot down Shahed drones over the CBD, sink IRGC fast boats in the Hauraki Gulf, dogfight MiGs and
+Flankers over the Waitematā, and thread the Harbour Bridge at 40 m.
 
 Inspired by NovaLogic's *F-22 Raptor* (1997). Built with three.js (WebGL 2), TypeScript and Web Audio, and installable as a PWA.
 
@@ -41,15 +41,15 @@ Clarity can't see inside the WebGL canvas, so the useful data is the custom even
 |---|---|
 | **Flight model** | Force-based 6-DOF with an F-35-style fly-by-wire g/AoA command law, engine spool, afterburner fuel burn, energy bleed, transonic drag, and Auto-GCAS ground-collision avoidance (Recruit only: from Pilot up you can fly into the ground) |
 | **Air-to-air** | Designation, then a nose-pointing ±30° radar lock (or a silent TWS shot). AIM-120D with loft, datalink and pitbull; AIM-9X with a ±90° HMD seeker and growl; GAU-22 25 mm with LCOS/funnel; a Pk-calibrated SHOOT cue on the DLZ |
-| **Threats** | SA-6, SA-8, SA-10, SA-15, SA-18 MANPADS and ZSU-23-4 with search → track → launch → guide. RWR, DAS missile warning, flares and chaff, beam-notching, terrain masking, EMCON pop-up ambushes, point defence, SEAD with AARGM and SDB |
-| **Enemies** | MiG-29, Su-27, Su-35, Su-57, Tu-22M3 and A-50 flown by AI that uses its own sensors, flies BVR/BFM, defends against missiles and bugs out |
+| **Threats** | SA-6, SA-15, ZSU-23-4 and the IRGC Navy air-defence boat (a moving SAM with SA-18 MANPADS), with search → track → launch → guide. RWR, DAS missile warning, flares and chaff, beam-notching, terrain masking, EMCON pop-up ambushes, point defence, SEAD with AARGM and SDB |
+| **Enemies** | MiG-29, Su-27, Su-35 and Su-57 flown by AI, Shahed-136 drones and IRGC Navy fast boats that uses its own sensors, flies BVR/BFM, defends against missiles and bugs out |
 | **Cockpit** | F-35 HMD symbology plus a 3D cockpit with a panoramic display (TSD, SMS, FUEL, ENG, RWR, ICAWS, radar pages; tap to zoom) |
 | **Views** | Cockpit, HMD-only, chase, orbit, padlock/target, missile cam, flyby and tactical map, plus a picture-in-picture target camera: a live head-on shot of the bandit, a slow orbit of the SAM site (radars spinning) or a wide orbit over open water round a ship, with name, range and radar state / aspect |
 | **Sound** | Synthesized F135 roar and afterburner, gun, missile launches, explosions delayed by distance, RWR search/lock/launch tones, AIM-9 growl, "Bitching Betty" voice warnings, radio chatter, adaptive music |
 | **Auckland** | Map-driven terrain from LINZ open data: Waitematā and Manukau harbours, Hauraki Gulf islands, volcanic cones, the real CBD (LINZ streets, and every building extruded from its outline to its 2024 LiDAR height) with the Sky Tower (built from its OpenStreetMap 3D model), the Harbour Bridge and the port. Whenuapai, Auckland Airport, Ardmore and North Shore (Dairy Flat) are their real OpenStreetMap layouts: runways, taxiways, aprons, hangars, and lighting driven from the real runway ends |
 | **Civil traffic** | A320neos of *AeroFlop*, a fictional airline in Air NZ-style black-and-white colours, land on and depart from Auckland Airport's 05R/23L. They're a neutral side: enemy AI and SAMs ignore them, and they never get auto-locked or picked before a bandit. You *can* box and shoot one down, but AWACS calls check fire, it costs 500 points, and it shows in the debrief. At sea, container ships and cruise liners of the fictional *Kōtuku Line* lie moored at the port and Princes Wharf, swing at anchor in the outer Gulf, or steam slowly up the channel. They show (white, `CIV`) on the radar ground map and EOTS only, rank behind every hostile in TGT cycling, and no AI, SAM or anti-radiation missile ever targets them. They ride the swell and swing at anchor, with funnel smoke, turning radars and, at night, navigation, cabin and deck lights. One bomb or missile sinks one (it burns, lists, settles by the bow or stern and is gone in 60–90 s), the gun wears them down over a few passes, and each costs the same as an airliner ("Civil ships destroyed" in the debrief) |
 | **Sky Tower** | A protected landmark. One stray bomb or missile from you brings it down: AWACS calls check fire, the mission fails on the spot and the tower topples onto the CBD. An enemy hit sets it burning; a second brings it down. It's rebuilt for every new sortie and every restart. The gun can't hurt it, and flying into it is fatal |
-| **Campaign** | *Operation Southern Cross*: 10 missions (CAP, raid intercepts, SEAD, strike, ship strike, escort, night defence, and the SA-10 finale), 3 training missions, Instant Action (free flight, dogfight, SAM gauntlet, strike, defend) over Auckland, medals and debrief tips. There is no rearming: every sortie is flown on the loadout you take off with |
+| **Campaign** | The IRGC campaign: a Shahed drone swarm over the city and a tanker escort through an IRGC Navy boat swarm in the Hauraki Gulf, 3 training missions, Instant Action (free flight, dogfight, SAM gauntlet, strike, defend) over Auckland, medals and debrief tips. There is no rearming: every sortie is flown on the loadout you take off with |
 | **Difficulty** | Recruit, Pilot, Veteran and Ace, scaling AI skill, SAM reaction, missile lethality, countermeasure effectiveness, lock time, damage and G-LOC |
 | **Mobile** | Floating side-stick, throttle with an afterburner detent, thumb buttons, optional tilt steering, haptics, safe-area aware, dynamic resolution, PWA/offline, wake lock |
 
@@ -83,9 +83,9 @@ badge's numbers on the `badges` branch (`tools/coverage-badge.mjs`); it never bl
 
 Handy URL parameters: `?view=chase&difficulty=veteran&quality=high&fps=1` (`&hdterrain=0` turns off the high tier's HD terrain download).
 
-Test hooks, on the dev server and in `npm run build:test` builds only (never in the deployed game): `?mission=c01&autostart=1` flies any mission straight away,
+Test hooks, on the dev server and in `npm run build:test` builds only (never in the deployed game): `?mission=g01&autostart=1` flies any mission straight away,
 whatever the campaign has unlocked, and `window.__f35` exposes state, autopilot and fast-forward for Playwright.
-Missions: `c01`–`c06` and `c08`–`c11` (the ids skip `c07`: c07 and c12 were removed), `t01`–`t03`, and Instant Action ids like `ia_dogfight_auckland`.
+Missions: `g01`, `g02` (the IRGC campaign), `t01`–`t03`, and Instant Action ids like `ia_dogfight_auckland`.
 Playtesting (`/playtest`) is described in [`.claude/skills/playtest`](.claude/skills/playtest/SKILL.md) and logged in [`docs/playtests/`](docs/playtests/).
 
 Architecture, conventions and module ownership are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Developer labs for models,

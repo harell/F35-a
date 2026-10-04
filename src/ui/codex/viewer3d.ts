@@ -19,7 +19,7 @@ const XA = new THREE.Vector3(1, 0, 0);
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const TARGET_NAME: Record<string, string> = {
-  fighter: 'Fighter', sa6: 'SAM site', fuel: 'Fuel depot', bunker: 'Bunker', bridge: 'Bridge', ship: 'Warship', missile_boat: 'Missile boat',
+  fighter: 'Fighter', sa6: 'SAM site', fuel: 'Fuel depot', bunker: 'Bunker', ship: 'Warship', missile_boat: 'Missile boat',
 };
 
 interface Target {
@@ -305,10 +305,6 @@ function buildTarget(t: Target): TargetModel {
       box(0.8, 0.6, 0.4, 0x2b2a26, R * 0.9, 0.3, 0);
       break;
     }
-    case 'bridge':
-      box(R * 2.2, 0.35, 1.4, 0x6e6e68, 0, 1.6);
-      for (let i = -2; i <= 2; i++) box(0.4, 1.6, 0.6, 0x5c5c56, i * R * 0.5, 0);
-      break;
     case 'ship':
       box(R * 2, 0.8, R * 0.32, 0x5e666c);
       box(R * 0.5, 0.9, R * 0.22, 0x6d767c, -R * 0.1, 0.8);

@@ -172,7 +172,7 @@ export class LabWorld {
   /** SAM site `dist` m ahead-left launches at the player; the missile flies past close by. */
   launchSam(dist: number, id: MunitionId = 'm_3m9'): void {
     const p = this.player;
-    const site = new SamSiteEntity(this.id++, id === 'm_48n6' ? 'sa10' : 'sa6', 'red');
+    const site = new SamSiteEntity(this.id++, id === 'm_9m330' ? 'sa15' : 'sa6', 'red');
     site.position.set(p.position.x - dist * 0.5, 0, p.position.z - dist * 0.85);
     this.sams.push(site);
     const m = new MissileEntity(this.id++, MUNITIONS[id], 'red', site.id, p.id);

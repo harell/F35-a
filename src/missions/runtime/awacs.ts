@@ -3,7 +3,7 @@
  * periodic picture updates and "picture clean", in BRAA or bullseye format.
  *
  *   "Viper 1, Darkstar, single group, two bandits, BRAA 045, 40 miles, angels 25, hot."
- *   "Viper 1, Darkstar, pop-up group, four Backfires, bullseye 030, 22 miles, angels 30, track southwest."
+ *   "Viper 1, Darkstar, pop-up group, four bandits, bullseye 030, 22 miles, angels 30, track southwest."
  */
 import { FEET_PER_M, NM, RAD, wrapPi } from '../../core/math';
 import type { AircraftEntity } from '../../sim/entities';

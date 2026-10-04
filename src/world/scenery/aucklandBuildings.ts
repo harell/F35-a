@@ -22,6 +22,8 @@ import { type CbdTower, spirePrisms, type TowerPartKind } from '../../core/cbdTo
 import { CBD_TOWERS } from '../../core/cbdTowersData';
 import { SCENE_OUTLINES, SCENE_TERRACES, type SceneTerraceKind } from '../../core/sceneApartments';
 import buildingsUrl from '../terrain/data/auckland-buildings.bin?url';
+import { aucklandNeighbourhoods, aucklandNeighbourhoodsVersion, type Neighbourhood } from './aucklandNeighbourhoods';
+import { pitchedHeight, ridgeHeight, type PitchedRoof } from './pitchedRoof';
 import { fetchMaybeGzip } from '../terrain/theaters/aucklandLinz';
 
 /** Resolved by Vite relative to the bundle (works from the game, the labs and the artifact build). */
@@ -40,10 +42,13 @@ export interface BuildingPrism {
   cz: number;
   /** A hero building's part (tower, podium, round bay…): picks its facade in the scenery. */
   kind?: SceneTerraceKind | TowerPartKind;
+  /** A gable or hip roof (hero neighbourhood houses): replaces the flat / tilted one; `h` is then its ridge. */
+  pitch?: PitchedRoof;
 }
 
 /** Roof height of a prism above the ground at (x, z) (m). */
 export function roofHeight(p: BuildingPrism, x: number, z: number): number {
+  if (p.pitch) return pitchedHeight(p.pitch, x, z);
   return p.h + p.sx * (x - p.cx) + p.sz * (z - p.cz);
 }
 
@@ -76,9 +81,11 @@ export interface Building {
   /** The first prism is the whole footprint (or the tallest part); towers on a podium follow. */
   prisms: BuildingPrism[];
   /** A hand-measured hero building that replaced LINZ blocks (applyHeroBuildings): its own facades. */
-  hero?: 'scene' | 'tower';
+  hero?: 'scene' | 'tower' | 'house';
   /** The CBD tower kit's tower (hero 'tower'): its facade and parts. */
   tower?: CbdTower;
+  /** Measured colours (sRGB 0xRRGGBB) of a hero neighbourhood building: walls and roof. */
+  colors?: { wall: number; roof: number };
 }
 
 const MAGIC = 'AKLB';
@@ -87,14 +94,26 @@ const VERSION = 1;
 let current: Building[] | null = null;
 let version = 0;
 
-/** Decoded buildings, or null when they have not been (or could not be) loaded. */
+let merged: Building[] | null = null;
+let mergedKey = '';
+
+/**
+ * Decoded buildings with the hero neighbourhoods' swapped in (applyNeighbourhoods), or null when the LINZ buildings
+ * have not been (or could not be) loaded.
+ */
 export function aucklandBuildings(): Building[] | null {
-  return current;
+  if (!current) return null;
+  const key = `${version}:${aucklandNeighbourhoodsVersion()}`;
+  if (key !== mergedKey) {
+    merged = applyNeighbourhoods(current, aucklandNeighbourhoods());
+    mergedKey = key;
+  }
+  return merged;
 }
 
 /** Changes whenever the installed data changes (cache key for derived data). */
 export function aucklandBuildingsVersion(): number {
-  return version;
+  return version * 4096 + aucklandNeighbourhoodsVersion();
 }
 
 /** Install decompressed bytes (null clears → procedural fallback). Throws on malformed data. */
@@ -272,4 +291,25 @@ function pointInFlatRing(r: ArrayLike<number>, x: number, z: number): boolean {
     if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
   }
   return c;
+}
+
+/**
+ * The hero neighbourhoods (Herne Bay, Westhaven: aucklandNeighbourhoods.ts) replace whatever LINZ building has its
+ * footprint centre inside their outline, and add every building of theirs: one prism per part, a pitched part with its
+ * ridge as `h` (collision) and its roof in `pitch`, the measured colours on the building.
+ */
+export function applyNeighbourhoods(list: Building[], areas: Neighbourhood[] | null): Building[] {
+  if (!areas?.length) return list;
+  const inside = (x: number, z: number) => areas.some((a) => pointInFlatRing(a.footprint, x, z));
+  const out = list.filter((b) => !b.prisms.length || !inside(b.prisms[0].cx, b.prisms[0].cz));
+  for (const a of areas)
+    for (const parts of a.buildings) {
+      const prisms: BuildingPrism[] = parts.map((p) => {
+        const [cx, cz] = ringCentroid(p.ring);
+        const pitch: PitchedRoof | undefined = p.roof ? { ...p.roof, eave: p.eave } : undefined;
+        return { h: pitch ? ridgeHeight(pitch) : p.eave, ring: p.ring, sx: 0, sz: 0, cx, cz, pitch };
+      });
+      out.push({ lidar: true, hero: 'house', colors: { wall: parts[0].wallColor, roof: parts[0].roofColor }, prisms });
+    }
+  return out;
 }

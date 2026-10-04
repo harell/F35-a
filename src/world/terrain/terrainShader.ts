@@ -168,6 +168,9 @@ uniform vec4 uAerialGrade; // colour grade toward the procedural palette: rgb ga
 uniform sampler2D uLotMask; // lots cleared along the road / rail ribbons (lotMask.ts): 1 bit per cell, 8 × 4 cells per texel
 uniform vec4 uLotMaskRect; // x0, z0, cell (m), texels across; texels across 0 = none
 uniform float uLotMaskRows; // texels down
+uniform sampler2D uSiteMask; // landmark sites (stadium grounds, the oil terminal…): no procedural streets or lots; same layout
+uniform vec4 uSiteMaskRect;
+uniform float uSiteMaskRows;
 varying vec3 vWorld;
 varying vec2 vUv;
 varying float vH;
@@ -235,18 +238,23 @@ vec4 aerialPhoto(vec2 wp) {
   return vec4(p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
 }
 
-// 1 when a lot centred at wp is cleared for a road or railway corridor (lotMask.ts LotMask.masked()).
-float lotMasked(vec2 wp) {
-  if (uLotMaskRect.w <= 0.0) return 0.0;
-  vec2 g = floor((wp - uLotMaskRect.xy) / uLotMaskRect.z);
+// The bit of a cell mask (lotMask.ts LotMask.masked()) at wp: 1 bit per cell, 8 × 4 cells per RGBA8 texel.
+float maskBit(sampler2D tex, vec4 rect, float rows, vec2 wp) {
+  if (rect.w <= 0.0) return 0.0;
+  vec2 g = floor((wp - rect.xy) / rect.z);
   vec2 t = floor(g / vec2(8.0, 4.0));
-  vec2 size = vec2(uLotMaskRect.w, uLotMaskRows);
+  vec2 size = vec2(rect.w, rows);
   if (t.x < 0.0 || t.y < 0.0 || t.x >= size.x || t.y >= size.y) return 0.0;
-  vec4 v = floor(texture2D(uLotMask, (t + 0.5) / size) * 255.0 + 0.5);
+  vec4 v = floor(texture2D(tex, (t + 0.5) / size) * 255.0 + 0.5);
   vec2 f = g - t * vec2(8.0, 4.0);
   float byte = dot(v, vec4(equal(vec4(f.y), vec4(0.0, 1.0, 2.0, 3.0))));
   return mod(floor(byte / exp2(f.x)), 2.0);
 }
+// 1 when a lot centred at wp is cleared for a road or railway corridor.
+float lotMasked(vec2 wp) { return maskBit(uLotMask, uLotMaskRect, uLotMaskRows, wp); }
+// 1 on a landmark's site (aucklandSites.ts siteRings: a stadium's grounds, the oil terminal): the procedural grid
+// stops there, so a 3D landmark never stands on painted streets and houses; its real streets are ribbons around it.
+float siteMasked(vec2 wp) { return maskBit(uSiteMask, uSiteMaskRect, uSiteMaskRows, wp); }
 
 // Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts).
 vec4 urbanDistrict(vec2 wp) {
@@ -272,7 +280,8 @@ float denseTreeFrac(float leafy) {
 
 // Auckland CBD with its real streets (inside the region of the LINZ street map, sm = streetMap()):
 // asphalt carriageways and footpaths from the kerb distance field, paved / flat-roofed block interiors
-// (the 3D buildings of buildCBD stand on them), lawns and trees in the parks. The far colour is the
+// (the 3D buildings of buildCBD stand on them), lawns and trees in the parks and lawns in the hero
+// neighbourhoods' gardens. The far colour is the
 // suburbs' dense-city average, so nothing changes at the region border from altitude.
 vec3 cbdPattern(vec2 wp, float mpp, vec4 sm, out vec3 emissive) {
   vec3 asphalt = vec3(0.085, 0.086, 0.09);
@@ -307,7 +316,9 @@ vec3 cbdPattern(vec2 wp, float mpp, vec4 sm, out vec3 emissive) {
     float tr = 3.0 + 1.6 * fract(th * 3.3);
     vec2 tv = wp - tp;
     vec2 shOff = clamp(-uSunDir.xz / max(uSunDir.y, 0.18) * 5.5, -18.0, 18.0);
-    float hasTree = step(fract(th * 11.3), 0.55 - 0.3 * verge) * park;
+    // a hero neighbourhood's gardens (sm.z = GARDEN_B / 255): its 3D trees are the canopy, so few painted crowns
+    float garden = step(0.5, sm.z) * step(sm.z, 0.8);
+    float hasTree = step(fract(th * 11.3), (0.55 - 0.3 * verge) * (1.0 - 0.75 * garden)) * park;
     float tree = hasTree * (1.0 - smoothstep(tr - aa * 0.6, tr + aa * 0.6, length(tv)));
     float tshadow = hasTree * (1.0 - smoothstep(tr - aa, tr + aa, length(tv - shOff * 0.8))) * (1.0 - tree);
     float tlit = mix(clamp(0.8 + 0.5 * dot(tv / tr, normalize(uSunDir.xz + 1e-4)), 0.5, 1.35), 0.95, smoothstep(2.0, 6.0, mpp));
@@ -368,7 +379,8 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec2 sunL = R * uSunDir.xz;
   vec2 bid = floor(p / BLOCK);
   float bh = hash12(bid + dist.z * 91.0);
-  float park = step(0.975 - dens * 0.03, bh);
+  float site = mpp < 120.0 ? siteMasked(wp) : 0.0;
+  float park = max(step(0.975 - dens * 0.03, bh), site);
   vec2 lid = floor(p / LOT);
   vec2 lf = fract(p / LOT);
   float lh = hash12(lid + 17.0 + dist.z * 13.0);
@@ -383,7 +395,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // District borders are ordinary streets where two grid orientations meet (no arterial width,
   // lane marks or extra lamps: painted on every jittered Voronoi border those read as cracked
   // paving from altitude). Real arterials are road ribbons (motorways.ts ARTERIALS).
-  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w));
+  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w)) * (1.0 - site);
 
   vec3 asphalt = vec3(0.085, 0.086, 0.09);
   vec3 paving = vec3(0.28, 0.275, 0.26);
@@ -412,7 +424,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   lotCol = mix(lotCol, mix(roofColor(lh), flatAvg * (0.75 + 0.5 * fract(lh * 3.7)), apt), lotRoof);
   lotCol = mix(lotCol, uGarden * 0.8 + uCanopy * 0.3, park);
   float w = max(mpp, 1.0);
-  float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0);
+  float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0) * (1.0 - site);
   vec3 mid = mix(lotCol, mix(asphalt, paving, 0.35), roadCov * 0.9);
   vec3 col = mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp));
   if (mpp < 8.0) {
@@ -469,7 +481,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     vec3 parkCol = uGarden * (0.8 + 0.12 * step(0.5, fract(p.x / 9.0)));
     near = mix(near, mix(parkCol, uCanopy * tlit, tree), park);
     // footpaths, kerbs and streets (lane marks on arterials)
-    float foot = 1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD);
+    float foot = (1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD)) * (1.0 - site);
     near = mix(near, paving * 1.15, foot * (1.0 - tree));
     near = mix(near, asphalt, road);
     col = mix(near, col, smoothstep(4.5, 8.0, mpp));
