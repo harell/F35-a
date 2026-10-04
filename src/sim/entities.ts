@@ -163,12 +163,6 @@ export class AircraftEntity implements Entity {
   name: string;
   callsign: string;
   isPlayer = false;
-  /**
-   * (sensors) Civil traffic shows on this jet's sensors (CIV boxes) but can't be designated: no TGT
-   * cycling, tap or HMD-cue onto an airliner or a cruise ship (free flight: #113's calm cockpit, while
-   * the player can still find the traffic).
-   */
-  civilWatchOnly = false;
 
   position = new Vector3();
   velocity = new Vector3();

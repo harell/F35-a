@@ -170,10 +170,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.script.freeFlight) {
       world.combat.selectWeapon(p, 'gun', world);
       // a calm cockpit (#113): radar off at the start (the player can turn it on); the civil traffic
-      // shows as CIV boxes so the player can find it, but TGT can't designate it, so it can't steer a
-      // bomb onto a moored cruise ship
+      // shows as CIV boxes, and a tap or TGT designates it like anything else (owner, 2026-10-04)
       world.combat.setRadarEmitting(p, false, world);
-      p.civilWatchOnly = true;
     }
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)

@@ -9,7 +9,7 @@
  *                                                         8 g ≈ 18 s, 7 g ≈ 40 s, 6 g never
  * and recovers below RECOVER_G (1/RECOVER_TIME per second). At S ≥ 1 the pilot blacks out for
  * GLOC_TIME s (absolute incapacitation: the stick goes neutral, so the FBW unloads to ~1 g and
- * Auto-GCAS keeps the jet off the ground — what the real system was built for), then regains
+ * nothing keeps the jet off the ground: Auto-GCAS is a Recruit assist), then regains
  * the stick over RECOVERY_TIME s (relative incapacitation: authority ramps back up).
  *
  * Published as `ac.gloc` (0..1 g stress, exactly 1 while unconscious) for the HUD / camera; the
