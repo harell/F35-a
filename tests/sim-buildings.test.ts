@@ -174,6 +174,57 @@ describe('g01: the Shaheds only ever hit the Sky Tower (#128)', () => {
 });
 
 describe('the collapse in the merged CBD mesh (#128)', () => {
+  it('comes down over time: it stands while the charges go off, then the top falls at about free fall onto the heap', async () => {
+    const { BufferAttribute, BufferGeometry, Object3D } = await import('three');
+    const { CbdCollapseVisual, RUBBLE_HEIGHT, collapsedY } = await import('../src/world/scenery/cbdCollapse');
+    const { COLLAPSE_DELAY, MUSEUM_ID, buildingCollapseTime } = await import('../src/sim/buildings');
+    // the pure fall
+    expect(collapsedY(100, 0, 0)).toBe(100);
+    expect(collapsedY(100, 0, COLLAPSE_DELAY)).toBe(100);
+    expect(collapsedY(100, 0, COLLAPSE_DELAY + 1)).toBeCloseTo(100 - 4.9, 6);
+    expect(collapsedY(100, 0, buildingCollapseTime(100))).toBeCloseTo(RUBBLE_HEIGHT, 6);
+    expect(collapsedY(5, 0, 99)).toBe(5); // below the heap: untouched
+    expect(buildingCollapseTime(42)).toBeGreaterThan(3);
+    expect(buildingCollapseTime(42)).toBeLessThan(4);
+    // a hero (the museum, id −10) in a fake mesh: vertices 0..3, its light and a separate mesh go out
+    const world = createSimWorld({ terrain: flat, difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
+    const idx = world.buildings!;
+    const k = idx.heroIndex('museum');
+    expect(idx.geo.buildings[k].id).toBe(MUSEUM_ID);
+    const pos = new Float32Array(4 * 3);
+    for (let v = 0; v < 4; v++) pos[v * 3 + 1] = v % 2 ? 42 : 0;
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new BufferAttribute(pos, 3));
+    const lights = new BufferGeometry();
+    lights.setAttribute('aColor', new BufferAttribute(new Float32Array([1, 1, 1, 0.5, 0.5, 0.5]), 3));
+    const sign = new Object3D();
+    const vis = new CbdCollapseVisual(geo, new Int32Array(0), new Float32Array(0), [{ id: MUSEUM_ID, v0: 0, v1: 4, ground: 0, l0: 1, l1: 2, objects: [sign] }], lights);
+    idx.collapse(k, world.time);
+    vis.update(world);
+    expect(vis.collapsed).toEqual([MUSEUM_ID]);
+    expect(vis.animating).toBe(true);
+    expect(pos[1 * 3 + 1]).toBe(42); // still standing at t = 0
+    expect(sign.visible).toBe(false);
+    expect(Array.from(lights.getAttribute('aColor').array)).toEqual([1, 1, 1, 0, 0, 0]);
+    const h = idx.geo.buildings[k].top - idx.geo.buildings[k].ground;
+    let lastY = 42;
+    for (let i = 0; i < 60 * (buildingCollapseTime(h) + 0.5); i++) {
+      world.step(1 / 60);
+      vis.update(world);
+      const y = pos[1 * 3 + 1];
+      expect(y).toBeLessThanOrEqual(lastY);
+      lastY = y;
+    }
+    expect(lastY).toBe(RUBBLE_HEIGHT);
+    expect(vis.animating).toBe(false);
+    // the next mission stands it up, lights and sign back
+    const next = createSimWorld({ terrain: flat, difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
+    vis.update(next);
+    expect(pos[1 * 3 + 1]).toBe(42);
+    expect(sign.visible).toBe(true);
+    expect(Array.from(lights.getAttribute('aColor').array)).toEqual([1, 1, 1, 0.5, 0.5, 0.5]);
+  });
+
   it('flattens a collapsed building to a rubble heap and stands it up again in a new world', async () => {
     const { BufferAttribute, BufferGeometry } = await import('three');
     const { CbdCollapseVisual, RUBBLE_HEIGHT } = await import('../src/world/scenery/cbdCollapse');
@@ -193,9 +244,11 @@ describe('the collapse in the merged CBD mesh (#128)', () => {
     const vis = new CbdCollapseVisual(geo, verts, ground);
     vis.update(world);
     expect(vis.collapsed).toEqual([]);
-    idx.collapse(k);
+    // it came down long ago: a rubble heap
+    idx.collapse(k, world.time - 60);
     vis.update(world);
     expect(vis.collapsed).toEqual([id]);
+    expect(vis.animating).toBe(false);
     const ys = () => Array.from({ length: 8 }, (_, v) => pos[v * 3 + 1]);
     expect(ys()).toEqual([0, 120, 0, RUBBLE_HEIGHT, 0, RUBBLE_HEIGHT, 0, 120]);
     // the next mission: a fresh world, every building standing
