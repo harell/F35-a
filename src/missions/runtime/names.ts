@@ -5,7 +5,7 @@ import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, GroundTargetType, SamType } from '../../core/types';
 import type { AnyEntity } from '../../sim/entities';
 
-/** Short HUD name of an aircraft type ("MIG-29", "SU-35", "TU-22M3", "A-50"). */
+/** Short HUD name of an aircraft type ("MIG-29", "SU-35", "SHAHED"). */
 export function aircraftHudName(type: AircraftType): string {
   return AIRCRAFT_INFO[type].name.split(' ')[0].toUpperCase();
 }
@@ -21,16 +21,11 @@ const SAM_HUD: Record<SamType, string> = {
 };
 
 const GROUND_HUD: Record<GroundTargetType, string> = {
-  ewr: 'EW RADAR',
   bunker: 'BUNKER',
   fuel: 'FUEL DEPOT',
   hangar: 'HANGAR',
   parked_jet: 'PARKED JET',
-  truck: 'TRUCK',
-  tank: 'ARMOUR',
   ship: 'SHIP',
-  factory: 'DEPOT',
-  bridge: 'BRIDGE',
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MISSILE BOAT',
 };
@@ -61,10 +56,6 @@ export function killHudText(e: AnyEntity): string {
 export function aircraftNoun(type: AircraftType, count: number): string {
   const one = count === 1;
   switch (type) {
-    case 'tu22m':
-      return one ? 'Backfire' : 'Backfires';
-    case 'a50':
-      return one ? 'Mainstay' : 'Mainstays';
     case 'shahed136':
       return one ? 'drone' : 'drones';
     default:

@@ -247,10 +247,9 @@ export function gsuitDeflate(env: SynthEnv, when: number, gain: number): void {
 
 /** RWR "new guy": a short burst of beeps — pitch by threat class. */
 export function rwrNew(env: SynthEnv, when: number, kind: string): void {
-  const f = kind === 'sam' ? 980 : kind === 'aaa' ? 1650 : kind === 'ewr' || kind === 'awacs' ? 720 : 1320;
+  const f = kind === 'sam' ? 980 : kind === 'aaa' ? 1650 : 1320;
   const shot = env.pool.begin(bus(env, 'warn'), when, 0.5, 1);
-  const n = kind === 'ewr' || kind === 'awacs' ? 1 : 3;
-  for (let i = 0; i < n; i++) beep(env, shot, when + i * 0.075, 'square', f, 0.045, 0.22, 3200);
+  for (let i = 0; i < 3; i++) beep(env, shot, when + i * 0.075, 'square', f, 0.045, 0.22, 3200);
 }
 
 /** Own radar lock (STT) confirmation: three rising beeps. */

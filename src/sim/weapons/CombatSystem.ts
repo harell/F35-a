@@ -188,7 +188,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
       const w = ac.selectedWeapon;
       const aaWeapon = w === 'aim120' || w === 'aim9x' || w === 'gun';
       if (air !== aaWeapon) return null;
-      if (w === 'aargm' && target.kind !== 'sam' && !(target.kind === 'ground' && target.emitter)) return null;
+      if (w === 'aargm' && target.kind !== 'sam') return null;
       return launchZoneFor(ctx, ac, w, target, hooks, emptyZone(w, target.id));
     },
 

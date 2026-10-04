@@ -147,14 +147,14 @@ describe('combat: weapon release', () => {
     const mig = w.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 5000, 0), heading: 0, speed: 250 });
     const su27 = w.spawnAircraft({ type: 'su27', team: 'red', position: v3(0, 5000, 0), heading: 0, speed: 250 });
     const su57 = w.spawnAircraft({ type: 'su57', team: 'red', position: v3(0, 5000, 0), heading: 0, speed: 250 });
-    const tu = w.spawnAircraft({ type: 'tu22m', team: 'red', position: v3(0, 5000, 0), heading: 0, speed: 250 });
+    const shahed = w.spawnAircraft({ type: 'shahed136', team: 'red', position: v3(0, 5000, 0), heading: 0, speed: 250 });
     const wing = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 5000, 0), heading: 0, speed: 250 });
     const muns = (ac: typeof mig) => ac.stores.flatMap((s, i) => Array(s.count).fill(stationMunition(ac, i))).sort();
     expect(muns(mig)).toEqual(['r27', 'r27', 'r73', 'r73', 'r73', 'r73']);
     expect(muns(su27)).toEqual(['r27', 'r27', 'r27', 'r27', 'r73', 'r73', 'r73', 'r73']); // i2: baseline Su-27 has no R-77
     expect(su57.stores.every((s) => s.internal)).toBe(true);
     expect(muns(su57)).toEqual(['r73', 'r73', 'r77', 'r77', 'r77', 'r77']);
-    expect(tu.stores.length).toBe(0);
+    expect(shahed.stores.length).toBe(0);
     expect(wing.loadout).toBe('a2a_stealth');
     expect(mig.gunAmmo).toBeGreaterThan(0);
     // stealth jets keep a low base RCS

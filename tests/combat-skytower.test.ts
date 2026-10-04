@@ -118,30 +118,30 @@ describe('Sky Tower: one hit from the player destroys it', () => {
     expect(tower.hits).toBe(0); // nor does it count as an enemy hit
   });
 
-  function jdamOnTruck(dx: number) {
+  function jdamOnJet(dx: number) {
     const { w, tower } = towerWorld();
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: at(3000, 4000, 0), heading: WEST, speed: 240, isPlayer: true, loadout: 'strike_beast' });
-    // a designated military target (a truck) parked on the street west of the tower
-    const truck = w.spawnGround({ type: 'truck', team: 'red', position: at(dx, 0, 0) });
+    // a designated military target (a parked jet) on the street west of the tower
+    const jet = w.spawnGround({ type: 'parked_jet', team: 'red', position: at(dx, 0, 0) });
     w.run(0.5);
     w.combat.selectWeapon(f35, 'gbu31', w);
-    w.combat.designate(f35, truck.id, w);
+    w.combat.designate(f35, jet.id, w);
     const ends = w.record('munition:end');
     const destroyed = w.record('landmark:destroyed');
-    expect(w.combat.fire(f35, w, 'gbu31', truck.id)).not.toBeNull();
+    expect(w.combat.fire(f35, w, 'gbu31', jet.id)).not.toBeNull();
     w.run(60, () => ends.length > 0);
     expect(ends).toHaveLength(1);
-    expect(truck.alive).toBe(false);
+    expect(jet.alive).toBe(false);
     return { tower, destroyed };
   }
 
-  it('a JDAM on a truck 18 m from the axis brings it down; one 30 m out does not', () => {
-    const near = jdamOnTruck(-18);
+  it('a JDAM on a parked jet 18 m from the axis brings it down; one 30 m out does not', () => {
+    const near = jdamOnJet(-18);
     expect(near.tower.alive).toBe(false);
     expect(near.destroyed[0].weapon).toBe('gbu31');
     // hit from the west → falls east
     expect(near.tower.fallHeading).toBeCloseTo(Math.PI / 2, 3);
-    const far = jdamOnTruck(-30);
+    const far = jdamOnJet(-30);
     expect(far.tower.alive).toBe(true);
     expect(far.destroyed).toHaveLength(0);
   });

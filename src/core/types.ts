@@ -57,8 +57,6 @@ export type AircraftType =
   | 'su27' // Su-27 Flanker
   | 'su35' // Su-35 Flanker-E
   | 'su57' // Su-57 Felon (low observable)
-  | 'tu22m' // Tu-22M3 Backfire bomber (intercept target)
-  | 'a50' // A-50 Mainstay AEW&C (high value target)
   | 'a320' // Airbus A320neo airliner (neutral civilian traffic)
   | 'shahed136'; // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
 
@@ -72,16 +70,11 @@ export type SamType =
   | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
 export type GroundTargetType =
-  | 'ewr' // early warning radar
   | 'bunker' // command bunker
   | 'fuel' // fuel tanks
   | 'hangar' // hardened aircraft shelter
   | 'parked_jet' // parked enemy fighter
-  | 'truck' // supply truck (can move along a path)
-  | 'tank' // armour (can move)
   | 'ship' // corvette / frigate (can move)
-  | 'factory' // industrial building
-  | 'bridge' // bridge span
   | 'suicide_boat' // IRGC Navy unmanned explosive boat (Ya Mahdi type): chases a ship and rams it (sim/boats.ts)
   | 'missile_boat'; // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
 

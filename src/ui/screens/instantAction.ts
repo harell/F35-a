@@ -34,7 +34,7 @@ const CITIES: { name: string; tagline: string; art: LandmarkId; theater?: Theate
   { name: 'Christchurch', tagline: 'Which High School?', art: 'cathedral' },
 ];
 const PLAYABLE: TheaterId[] = CITIES.flatMap((c) => (c.theater ? [c.theater] : []));
-const ENEMIES: (AircraftType | 'mixed')[] = ['mixed', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50'];
+const ENEMIES: (AircraftType | 'mixed')[] = ['mixed', 'mig29', 'su27', 'su35', 'su57'];
 
 const DEFAULTS: InstantActionOptions = { mode: 'stroll', theater: 'auckland', timeOfDay: 'day', weather: 'scattered', enemyType: 'mixed', enemyCount: 4 };
 

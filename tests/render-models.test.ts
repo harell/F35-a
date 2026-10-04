@@ -9,7 +9,7 @@ import { getGroundPrototype } from '../src/render/models/ground';
 import { signedVolume } from '../src/render/models/geom/core';
 import { liftingSurface, loftRings } from '../src/render/models/geom/loft';
 
-const AIRCRAFT: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57', 'tu22m', 'a50'];
+const AIRCRAFT: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57'];
 
 function trianglesOf(root: Object3D): number {
   let n = 0;
@@ -107,7 +107,7 @@ describe('render SAM sites and ground targets', () => {
       expect(trianglesOf(p.root)).toBeLessThan(15000);
     });
   }
-  const ground: GroundTargetType[] = ['ewr', 'bunker', 'fuel', 'hangar', 'parked_jet', 'truck', 'tank', 'ship', 'factory', 'bridge'];
+  const ground: GroundTargetType[] = ['bunker', 'fuel', 'hangar', 'parked_jet', 'ship'];
   for (const t of ground) {
     it(`${t}: builds within budget`, () => {
       const p = getGroundPrototype(t, 'green');

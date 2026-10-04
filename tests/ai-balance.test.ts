@@ -111,13 +111,12 @@ describe('stealth matters (1v1 head-on vs a MiG-29, competent player)', () => {
 
   it('hostile jets never launch a radar missile at the player without their own sensor track on it', () => {
     let checked = 0;
-    // every red radar-missile launch is checked at the moment it happens (an EWR feeds red a
-    // datalink picture of the F-35 from far out — they still have to find it themselves)
+    // every red radar-missile launch is checked at the moment it happens (a wingman's track may
+    // reach the other jet over the datalink — each shooter still has to find the F-35 itself)
     const tw = makeAiWorld('ace', undefined, 7);
     const w = tw.world;
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 5_000, 0), heading: 0, speed: 250, loadout: 'a2a_beast' });
     for (let i = 0; i < 2; i++) w.spawnAircraft({ type: i ? 'su35' : 'mig29', team: 'red', position: v3(i * 3_000, 5_500, -30_000), heading: Math.PI, speed: 250, ai: createAiBrain('fighter', { skill: 0.9, seed: 4 + i }) });
-    w.spawnGround({ type: 'ewr', team: 'red', position: v3(0, 0, -45_000) }); // datalink picture for red
     tw.events.on('munition:launch', (e) => {
       if (e.shooter.kind !== 'aircraft' || e.shooter.team !== 'red' || e.missile.def.guidance === 'ir') return;
       const c = e.shooter.radar.contacts.find((k) => k.id === e.targetId);

@@ -76,7 +76,6 @@ function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number;
   const pick = world.getEntity(requested ?? ac.radar.designatedId);
   if (pick && pick.alive && pick.team !== ac.team && pick.team !== 'neutral') {
     if (pick.kind === 'sam' && (pick.radarOn || pick.known)) return pick;
-    if (pick.kind === 'ground' && pick.emitter) return pick;
   }
   forwardOf(ac.quaternion, _fwd);
   const cosFov = Math.cos(def.seekerFov);
@@ -94,7 +93,6 @@ function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number;
     }
   };
   for (const s of world.sams) consider(s, s.radarOn);
-  for (const g of world.ground) consider(g, g.emitter);
   return best;
 }
 

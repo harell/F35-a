@@ -109,10 +109,10 @@ describe('applyDamage — events, credit, subsystems', () => {
     const { tw, player } = setup('pilot');
     const sam = tw.world.spawnSam({ type: 'sa10', team: 'red', position: new Vector3(2000, 0, 2000) });
     const fuel = tw.world.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(-2000, 0, 2000) });
-    const tank = tw.world.spawnGround({ type: 'tank', team: 'red', position: new Vector3(-2500, 0, 2000), path: [new Vector3(-2500, 0, 0)] });
+    const jet = tw.world.spawnGround({ type: 'parked_jet', team: 'red', position: new Vector3(-2500, 0, 2000), path: [new Vector3(-2500, 0, 0)] });
     tw.world.applyDamage(sam, 1000, player.id, 'aargm');
     tw.world.applyDamage(fuel, 1000, player.id, 'gbu31');
-    tw.world.applyDamage(tank, 1000, player.id, 'gbu39');
+    tw.world.applyDamage(jet, 1000, player.id, 'gbu39');
     expect(sam.alive).toBe(false);
     expect(sam.radarOn).toBe(false);
     expect(player.kills).toBe(3);
@@ -122,7 +122,7 @@ describe('applyDamage — events, credit, subsystems', () => {
     run(tw.world, 30);
     expect(tw.world.sams).toContain(sam);
     expect(tw.world.ground).toContain(fuel);
-    expect(tank.position.z).toBeCloseTo(2000); // dead movers stop
+    expect(jet.position.z).toBeCloseTo(2000); // dead movers stop
     expect(tw.world.hostilesOf('blue')).not.toContain(sam);
   });
 

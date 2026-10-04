@@ -40,7 +40,7 @@ const SAM_MUNITION: Record<string, SamType> = { m_3m9: 'sa6', m_9m33: 'sa8', m_4
 const IR_MUNITIONS = new Set(['r73', 'm_igla', 'aim9x']);
 const RADAR_MUNITIONS = new Set(['r27', 'r77', 'aim120', 'm_3m9', 'm_9m33', 'm_48n6', 'm_9m330']);
 
-/** "an SA-10", "an F-35", "a MiG-29", "an A-50". */
+/** "an SA-10", "an F-35", "a MiG-29". */
 function article(word: string): string {
   return /^[aeiou]/i.test(word) || /^(SA-|F-|A-\d)/.test(word) ? 'an' : 'a';
 }
@@ -124,7 +124,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     else if (r.reason.startsWith('Objective failed')) {
       if (/tanker|Kōtuku/i.test(r.reason)) add('Escort the tanker: StormBreakers on the suicide boats first, released early from height, then the missile boats before they count down.');
       else if (/Hammer|Kiwi|package|alive/i.test(r.reason)) add('Protect missions: kill the fighters going for the friendlies first — ignore bonus targets until they are safe.');
-      else if (/raid|Backfire|bomber/i.test(r.reason)) add('Bombers don’t dodge: shoot them from long range the moment SHOOT shows, then deal with the escort.');
+      else if (/raid|bomber/i.test(r.reason)) add('Bombers don’t dodge: shoot them from long range the moment SHOOT shows, then deal with the escort.');
       else add('A primary objective failed: the objective list in the pause menu shows what must survive or die.');
     }
   }

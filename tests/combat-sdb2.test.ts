@@ -203,16 +203,17 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
     expect(MUNITIONS.gbu53.damage).toBeLessThan(bunker.maxHealth);
   });
 
-  it('still hits an EWR that switches its radar off right after release', () => {
+  it('still hits a SAM site that switches its radar off right after release', () => {
     const w = makeWorld(4, true);
-    const ewr = w.spawnGround({ type: 'ewr', team: 'red', position: new Vector3(2_000, 0, -3_000), name: 'EWR' });
-    const p = jetToward(w, ewr.position, 20_000, 8_000, 'strike_sdb2');
+    const sam = w.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(2_000, 0, -3_000), name: 'SA-6' });
+    const p = jetToward(w, sam.position, 20_000, 8_000, 'strike_sdb2');
     run(w, 1);
-    w.combat.designate(p, ewr.id, w);
-    const m = release(w, p, 'gbu53', ewr.id);
-    ewr.emitter = false; // EMCON
+    w.combat.designate(p, sam.id, w);
+    const m = release(w, p, 'gbu53', sam.id);
+    sam.state = 'emcon'; // EMCON
+    sam.radarOn = false;
     run(w, 200, () => !m.alive);
-    expect(ewr.alive).toBe(false);
+    expect(sam.alive).toBe(false);
   });
 });
 
@@ -265,8 +266,8 @@ describe('GBU-53 StormBreaker: never retargets', () => {
 describe('GBU-53 StormBreaker: release rules and envelope', () => {
   it('denied with NO TARGET without a designation (no CCIP drop) and OUT OF RANGE beyond the envelope', () => {
     const w = makeWorld(1, true);
-    const ewr = w.spawnGround({ type: 'ewr', team: 'red', position: new Vector3(0, 0, 0), name: 'EWR' });
-    const p = jetToward(w, ewr.position, 45_000, 6_000, 'strike_sdb2');
+    const tgt = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(0, 0, 0), name: 'Fuel depot' });
+    const p = jetToward(w, tgt.position, 45_000, 6_000, 'strike_sdb2');
     expect(p.selectedWeapon).toBe('gbu53');
     run(w, 1);
     const denied: string[] = [];
@@ -274,7 +275,7 @@ describe('GBU-53 StormBreaker: release rules and envelope', () => {
     w.combat.designate(p, null, w);
     expect(w.combat.fire(p, w, 'gbu53')).toBeNull();
     expect(w.combat.bombImpactPoint(p, w)).toBeNull(); // no CCIP pipper either
-    expect(w.combat.fire(p, w, 'gbu53', ewr.id)).toBeNull();
+    expect(w.combat.fire(p, w, 'gbu53', tgt.id)).toBeNull();
     run(w, 2);
     expect(denied).toEqual(['NO TARGET', 'OUT OF RANGE']);
     expect(w.missiles.filter((m) => m.alive)).toHaveLength(0);
@@ -370,7 +371,7 @@ describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to 
   const cue = (weapon: 'gbu53' | 'gbu39' | 'gbu31', alt: number, d: number, deg: number) => {
     const w = makeWorld(1, true);
     const loadout: LoadoutId = weapon === 'gbu53' ? 'strike_sdb2' : weapon === 'gbu39' ? 'sead_stealth' : 'strike_stealth';
-    const tgt = w.spawnGround({ type: 'ewr', team: 'red', position: new Vector3(0, 0, 0), name: 'EWR' });
+    const tgt = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(0, 0, 0), name: 'Fuel depot' });
     const p = jetToward(w, tgt.position, 5_000, alt, loadout);
     run(w, 1);
     w.combat.selectWeapon(p, weapon, w);

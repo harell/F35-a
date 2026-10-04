@@ -1,5 +1,5 @@
 /**
- * AI roles & tasks: bomber route, AWACS orbit/flee, escort, CAP commit, friendly wingman
+ * AI roles & tasks: bomber route, escort, CAP commit, friendly wingman
  * (engage + radio), setTask re-tasking, difficulty/skill scaling.
  */
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,7 @@ describe('AI bomber', () => {
     const { world } = makeAiWorld('veteran');
     const wps = [v3(0, 8_000, -20_000), v3(18_000, 8_000, -30_000), v3(30_000, 8_500, -10_000), v3(15_000, 8_000, 8_000)];
     const brain = createAiBrain('bomber', { skill: 0.5, seed: 1, task: { kind: 'route', waypoints: wps, loop: false } });
-    const ac = world.spawnAircraft({ type: 'tu22m', team: 'red', position: v3(0, 8_000, 5_000), heading: 0, speed: 240, ai: brain });
+    const ac = world.spawnAircraft({ type: 'su27', team: 'red', position: v3(0, 8_000, 5_000), heading: 0, speed: 240, ai: brain });
     const minD = wps.map(() => Infinity);
     const order: number[] = [];
     let maxBank = 0;
@@ -37,7 +37,7 @@ describe('AI bomber', () => {
   it('dispenses countermeasures and weaves when a missile is inbound', () => {
     const tw = makeAiWorld('veteran', undefined, 4);
     const w = tw.world;
-    const bomber = w.spawnAircraft({ type: 'tu22m', team: 'red', position: v3(0, 6_000, 0), heading: 0, speed: 240, ai: createAiBrain('bomber', { skill: 0.7, seed: 2 }) });
+    const bomber = w.spawnAircraft({ type: 'su27', team: 'red', position: v3(0, 6_000, 0), heading: 0, speed: 240, ai: createAiBrain('bomber', { skill: 0.7, seed: 2 }) });
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(1_200, 6_000, 3_000), heading: -0.3, speed: 280, loadout: 'a2a_beast' });
     const flares0 = bomber.flares;
     let fired = false;
@@ -52,35 +52,11 @@ describe('AI bomber', () => {
   });
 });
 
-describe('AI AWACS', () => {
-  it('orbits, flees from a hostile fighter inside ~25 km, and returns to the orbit once clear', () => {
-    const { world } = makeAiWorld('veteran');
-    const awacs = world.spawnAircraft({ type: 'a50', team: 'red', position: v3(0, 8_000, 0), heading: Math.PI / 2, speed: 190, ai: createAiBrain('awacs', { skill: 0.5, seed: 1 }) });
-    runFor(world, 30);
-    expect(awacs.aiState).toBe('ORBIT');
-    // a hostile appears 20 km away, flying at it
-    const f = world.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(-20_000, 8_000, 0), heading: Math.PI / 2, speed: 250 });
-    let fled = false;
-    let dFlee = 0;
-    runFor(world, 60, () => {
-      if (awacs.aiState === 'FLEE') fled = true;
-      dFlee = awacs.position.distanceTo(f.position);
-    });
-    expect(fled).toBe(true);
-    // the threat goes away: back to the orbit
-    f.alive = false;
-    runFor(world, 40);
-    expect(awacs.aiState).toBe('ORBIT');
-    expect(awacs.alive).toBe(true);
-    expect(dFlee).toBeGreaterThan(5_000);
-  });
-});
-
 describe('AI escort & CAP', () => {
   it('escort stays with its bomber, engages a threat to it, then returns', () => {
     const tw = makeAiWorld('veteran', undefined, 6);
     const w = tw.world;
-    const bomber = w.spawnAircraft({ type: 'tu22m', team: 'red', position: v3(0, 7_000, 0), heading: 0, speed: 240, ai: createAiBrain('bomber', { skill: 0.5, seed: 1 }) });
+    const bomber = w.spawnAircraft({ type: 'su27', team: 'red', position: v3(0, 7_000, 0), heading: 0, speed: 240, ai: createAiBrain('bomber', { skill: 0.5, seed: 1 }) });
     const esc = w.spawnAircraft({ type: 'su27', team: 'red', position: v3(1_500, 7_500, 1_500), heading: 0, speed: 240, ai: createAiBrain('escort', { skill: 0.8, seed: 2, task: { kind: 'escort', leaderId: bomber.id } }) });
     let maxD = 0;
     runFor(w, 50, (t) => {
@@ -176,26 +152,6 @@ describe('AI friendly wingman', () => {
   });
 });
 
-describe('AI GCI & stealth', () => {
-  it('a red CAP commits on a clean (stealthy) F-35 only when an EWR puts it on the datalink', () => {
-    const run = (withEwr: boolean) => {
-      const { world } = makeAiWorld('veteran', undefined, 5);
-      if (withEwr) world.spawnGround({ type: 'ewr', team: 'red', position: v3(0, 0, -45_000) });
-      const cap = world.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 5_000, -30_000), heading: Math.PI / 2, speed: 230, ai: createAiBrain('cap', { skill: 0.6, seed: 2 }) });
-      // clean F-35 30 km away, crossing: invisible to the MiG's radar at this range
-      world.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(-10_000, 6_000, -2_000), heading: Math.PI / 2, speed: 240, loadout: 'a2a_stealth' });
-      let committed = false;
-      runFor(world, 25, () => {
-        if (cap.aiState === 'INTERCEPT' || cap.aiState === 'BVR') committed = true;
-        return committed;
-      });
-      return committed;
-    };
-    expect(run(false)).toBe(false);
-    expect(run(true)).toBe(true);
-  });
-});
-
 describe('AI RWR spike', () => {
   it('a red fighter that cannot see the stealthy F-35 turns towards its radar lock', () => {
     const { world } = makeAiWorld('veteran', undefined, 5);
@@ -246,8 +202,8 @@ describe('AI strike', () => {
 
   it('bomber raid: runs in on its target, then turns for home', () => {
     const { world } = makeAiWorld('veteran');
-    const tgt = world.spawnGround({ type: 'factory', team: 'blue', position: v3(0, 0, -30_000) });
-    const b = world.spawnAircraft({ type: 'tu22m', team: 'red', position: v3(8_000, 7_000, 10_000), heading: 0, speed: 250, ai: createAiBrain('bomber', { skill: 0.5, seed: 1, task: { kind: 'attack', targetId: tgt.id } }) });
+    const tgt = world.spawnGround({ type: 'bunker', team: 'blue', position: v3(0, 0, -30_000) });
+    const b = world.spawnAircraft({ type: 'su27', team: 'red', position: v3(8_000, 7_000, 10_000), heading: 0, speed: 250, ai: createAiBrain('bomber', { skill: 0.5, seed: 1, task: { kind: 'attack', targetId: tgt.id } }) });
     let minD = Infinity;
     runFor(world, 240, () => {
       minD = Math.min(minD, Math.hypot(b.position.x - tgt.position.x, b.position.z - tgt.position.z));

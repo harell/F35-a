@@ -32,12 +32,12 @@ function run(world: SimWorld, seconds: number, each?: () => boolean | void): voi
 }
 
 /**
- * A jet with `weapon` selected and designated on an EWR at the origin, then put `d` m from it at
+ * A jet with `weapon` selected and designated on a fuel depot at the origin, then put `d` m from it at
  * `alt`, flying north (−z) with the target `deg` right of the ground track (negative = left).
  */
 function setup(weapon: Bomb, alt: number, d: number, deg: number, isPlayer = true): { w: SimWorld; p: AircraftEntity; tgt: number } {
   const w = createSimWorld({ terrain: new FlatTerrain(0), difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
-  const tgt = w.spawnGround({ type: 'ewr', team: 'red', position: new Vector3(0, 0, 0), name: 'EWR' });
+  const tgt = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(0, 0, 0), name: 'Fuel depot' });
   const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer, position: new Vector3(0, alt, 5_000), heading: 0, speed: 250, loadout: LOADOUT[weapon] });
   run(w, 1);
   w.combat.selectWeapon(p, weapon, w);
@@ -157,7 +157,7 @@ describe('BOMB AWAY while our own bomb is guiding (issue #65)', () => {
   it('set while our StormBreaker flies to the designated target, cleared for another target and once it lands', () => {
     const { w, p, tgt } = setup('gbu53', 7_000, 12_000, 0);
     // a second target near the first, picked up by the radar on the run-in
-    const other = w.spawnGround({ type: 'ewr', team: 'red', position: new Vector3(1_500, 0, -500), name: 'EWR 2' });
+    const other = w.spawnGround({ type: 'fuel', team: 'red', position: new Vector3(1_500, 0, -500), name: 'Fuel depot 2' });
     run(w, 1, () => place(p, 7_000, 12_000, 0));
     expect(w.combat.bombImpactPoint(p, w)!.bombAway).toBe(false);
     const r = pickle(w, p, 'gbu53', 7_000, 12_000, 0);

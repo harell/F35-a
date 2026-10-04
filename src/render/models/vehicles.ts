@@ -161,33 +161,6 @@ export function soldier(pal: Palette, kneel = false): BufferGeometry[] {
   ];
 }
 
-/** Box building with flat roof slab. */
-export function building(w: number, h: number, d: number, wall: number, roof: number, pos: [number, number, number] = [0, 0, 0]): BufferGeometry[] {
-  return [place(box(w, h, d, wall), [pos[0], pos[1] + h / 2, pos[2]]), place(box(w + 0.3, 0.3, d + 0.3, roof), [pos[0], pos[1] + h + 0.15, pos[2]])];
-}
-
-/** Sawtooth-roof factory hall along X. */
-export function sawtoothHall(w: number, h: number, d: number, teeth: number, wall: number, roof: number, pos: [number, number, number]): BufferGeometry[] {
-  const out = [place(box(w, h, d, wall), [pos[0], pos[1] + h / 2, pos[2]])];
-  const tw = d / teeth;
-  for (let i = 0; i < teeth; i++) {
-    const z0 = pos[2] - d / 2 + i * tw;
-    out.push(
-      prismX(
-        [
-          [z0, pos[1] + h],
-          [z0 + tw, pos[1] + h],
-          [z0 + tw, pos[1] + h + tw * 0.55],
-        ],
-        w,
-        roof,
-        pos[0] - w / 2,
-      ),
-    );
-  }
-  return out;
-}
-
 /** Vertical cylinder tank with a shallow dome roof. */
 export function tank(r: number, h: number, color: number, pos: [number, number, number]): BufferGeometry[] {
   return [place(cylinder(r, r, h, 16, color), [pos[0], pos[1] + h / 2, pos[2]]), place(dome(r, r * 0.25, r, 16, 3, color), [pos[0], pos[1] + h, pos[2]])];

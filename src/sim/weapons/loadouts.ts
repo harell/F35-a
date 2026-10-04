@@ -73,8 +73,6 @@ const ENEMY_LOADOUTS: Partial<Record<AircraftType, DefaultLoadout>> = {
     flares: 30,
     chaff: 30,
   },
-  tu22m: { stores: [], gunAmmo: 0, flares: 48, chaff: 48 },
-  a50: { stores: [], gunAmmo: 0, flares: 48, chaff: 48 },
   a320: { stores: [], gunAmmo: 0, flares: 0, chaff: 0 },
   shahed136: { stores: [], gunAmmo: 0, flares: 0, chaff: 0 },
 };

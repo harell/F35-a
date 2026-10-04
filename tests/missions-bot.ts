@@ -204,7 +204,7 @@ export class MissionBot {
     const c = this.world.combat;
     for (const w of AG) {
       if (c.remaining(this.p, w) <= 0) continue;
-      if (w === 'aargm' && !((t.kind === 'sam' && (t.radarOn || t.known) && t.type !== 'zsu23' && t.type !== 'sa18') || (t.kind === 'ground' && t.emitter))) continue;
+      if (w === 'aargm' && !(t.kind === 'sam' && (t.radarOn || t.known) && t.type !== 'zsu23' && t.type !== 'sa18')) continue;
       return w;
     }
     return null;
@@ -279,7 +279,7 @@ export class MissionBot {
       if (!isHostile(this.p.team, c.team)) continue;
       const e = this.world.getEntity(c.id);
       if (!e || e.kind !== 'aircraft' || !e.alive) continue;
-      if (fighters && (e.oneWay || e.type === 'tu22m' || e.type === 'a50')) continue;
+      if (fighters && (e.oneWay || e.ai?.role === 'bomber')) continue;
       const d = c.position.distanceTo(this.p.position);
       if (d < bestD) {
         bestD = d;
@@ -364,7 +364,7 @@ export class MissionBot {
     for (const c of p.radar.contacts) {
       if (!isHostile(p.team, c.team)) continue;
       const e = this.world.getEntity(c.id);
-      if (e && e.alive && e.kind === 'aircraft' && e.type !== 'tu22m' && e.type !== 'a50' && c.position.distanceTo(p.position) < 20_000) fighterNear = true;
+      if (e && e.alive && e.kind === 'aircraft' && e.ai?.role !== 'bomber' && c.position.distanceTo(p.position) < 20_000) fighterNear = true;
     }
     if (raider && !fighterNear) return this.intercept(raider, dt);
 

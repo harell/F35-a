@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { InstantActionOptions } from '../src/core/contracts';
 import { CAMPAIGNS, TRAINING, buildInstantMission, buildInstantMissionSeeded, missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { mergePads } from '../src/missions/pads';
+import { P, target } from '../src/missions/content/common';
 import type { TheaterId } from '../src/core/types';
 import { seadFixture } from './missions-helpers';
 
@@ -52,8 +53,9 @@ describe('missions: campaign & training content', () => {
   });
 
   it('SAM sites and static compounds get terrain pads; ships and boats do not', () => {
-    // land SAMs and an EW radar (a test fixture: no remaining mission has a land SAM site)
-    const sead = seadFixture();
+    // land SAMs and a command bunker (a test fixture: no remaining mission has a land SAM site)
+    const base = seadFixture();
+    const sead = { ...base, script: { ...base.script, ground: [target('bunker', 'rangi_bunker', 'bunker', P.rangN, { name: 'Command Bunker' })] } };
     const pads = terrainPadsFor(sead);
     for (const s of [...sead.script.sams, ...sead.script.ground]) expect(pads.some((p) => Math.hypot(p.x - s.x, p.z - s.z) <= p.radius)).toBe(true);
     // g02: the tanker, the boats and the air-defence boats (SAM sites at sea) never raise an island

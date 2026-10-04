@@ -87,7 +87,7 @@ function inLockCone(p: AircraftEntity, e: AnyEntity): boolean {
 
 /** Radar SAM that is emitting (or known) — an AARGM target. */
 function armTargetable(e: AnyEntity): boolean {
-  return (e.kind === 'sam' && e.type !== 'zsu23' && e.type !== 'sa18' && (e.radarOn || e.known)) || (e.kind === 'ground' && e.emitter);
+  return e.kind === 'sam' && e.type !== 'zsu23' && e.type !== 'sa18' && (e.radarOn || e.known);
 }
 
 /** Nearest live hostile surface target of an active PRIMARY objective within `within` m. */

@@ -13,7 +13,7 @@ import type { MissionDef } from '../src/core/contracts';
 import { TRAINING } from '../src/missions';
 import type { ObjectiveDef } from '../src/missions/schema';
 import { NEVER, flight, mission, site, target, wingmen } from '../src/missions/content/common';
-import { harness, killGroup, mainstayFixture, seadFixture, shieldPlayer, sweepFixture } from './missions-helpers';
+import { harness, killGroup, raiderFixture, seadFixture, shieldPlayer, sweepFixture } from './missions-helpers';
 import { AKL, BRIDGE_SPAN_T } from '../src/core/auckland';
 
 const DS = 'DARKSTAR';
@@ -80,7 +80,7 @@ const SEAD_FIXTURE: MissionDef = (() => {
   };
 })();
 
-/** Bomber intercept: three Tu-22M3s routed at the Sky Tower, fail inside 7 km, turn back after losing two-thirds (once c05). */
+/** Bomber intercept: three Su-27 strike jets (bomber role) routed at the Sky Tower, fail inside 7 km, turn back after losing two-thirds (once c05). */
 const raidStart = { x: -2000, z: -13000, altitude: 6500, heading: 50, speed: 250 };
 const RAID_FIXTURE: MissionDef = mission({
   ...base,
@@ -92,7 +92,7 @@ const RAID_FIXTURE: MissionDef = mission({
   player: raidStart,
   script: {
     groups: [
-      flight('raid', 'tu22m', 3, { x: 34000, z: -33000 }, 9000, 240, 240, 'bomber', {
+      flight('raid', 'su27', 3, { x: 34000, z: -33000 }, 9000, 240, 240, 'bomber', {
         maxCount: 4,
         formation: 'wall',
         spacing: 700,
@@ -193,7 +193,7 @@ const PACKAGE_FIXTURE: MissionDef = mission({
     ground: [
       target('fuel1', 'depot', 'fuel', { x: strip.x + 500, z: strip.z + 600 }),
       target('fuel2', 'depot', 'fuel', { x: strip.x + 580, z: strip.z + 600 }),
-      target('ewr', 'depot', 'ewr', { x: strip.x - 800, z: strip.z + 650 }, { name: 'Airfield Radar' }),
+      target('hangar', 'depot', 'hangar', { x: strip.x - 800, z: strip.z + 650 }, { name: 'Airfield Hangar' }),
     ],
     objectives: [
       { id: 'o_hammer', kind: 'protect', group: 'hammer', minSurvivors: 2, until: { kind: 'objective', id: 'o_strike', state: 'complete' }, label: 'Keep Hammer alive', primary: true },
@@ -411,7 +411,7 @@ describe('MissionRunner: objectives and outcome', () => {
   });
 
   it('time limit fails the mission', () => {
-    const def = mainstayFixture();
+    const def = raiderFixture();
     const h = harness(def);
     h.world.player!.position.set(-30000, 7000, 30000); // far from the fight
     h.run(0.2);
@@ -437,10 +437,10 @@ describe('MissionRunner: presentation', () => {
     expect(h.of('radio').some((r) => r.voice === 'a_good_kill')).toBe(true);
   });
 
-  it('kill callouts: target destroyed for SAM / ground kills', () => {
+  it('kill callouts: target destroyed for SAM kills', () => {
     const h = harness(SEAD_FIXTURE);
     h.run(0.5);
-    killGroup(h, 'rangi_ewr');
+    killGroup(h, 'rangi_aaa');
     h.run(8, () => shieldPlayer(h));
     expect(h.of('hud:message').some((m) => /DESTROYED/.test(m.text))).toBe(true);
     expect(h.of('radio').some((r) => r.voice === 'p_target_destroyed')).toBe(true);
@@ -455,7 +455,7 @@ describe('MissionRunner: presentation', () => {
   });
 
   it('AWACS uses bullseye when the mission asks for it', () => {
-    const h = harness(mainstayFixture());
+    const h = harness(raiderFixture());
     h.run(10, () => shieldPlayer(h));
     expect(h.of('radio').some((r) => /bullseye \d{3}, \d+ miles, angels \d+, track [a-z]+/.test(r.text))).toBe(true);
   });

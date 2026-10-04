@@ -13,8 +13,6 @@ export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   su27: 'SU-27',
   su35: 'SU-35',
   su57: 'SU-57',
-  tu22m: 'TU-22M',
-  a50: 'A-50',
   a320: 'A320',
   shahed136: 'SHAHED-136',
 };
@@ -26,8 +24,6 @@ export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
   su27: '27',
   su35: '35',
   su57: '57',
-  tu22m: '22M',
-  a50: 'A50',
   a320: 'CIV',
   shahed136: 'UAV',
 };
@@ -43,16 +39,11 @@ export const SAM_LABEL: Record<SamType, string> = {
 };
 
 export const GROUND_LABEL: Record<GroundTargetType, string> = {
-  ewr: 'EWR',
   bunker: 'BUNKER',
   fuel: 'FUEL DEPOT',
   hangar: 'HAS',
   parked_jet: 'JET',
-  truck: 'TRUCK',
-  tank: 'ARMOR',
   ship: 'SHIP',
-  factory: 'FACTORY',
-  bridge: 'BRIDGE',
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MSL BOAT',
 };

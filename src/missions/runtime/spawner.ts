@@ -17,8 +17,6 @@ import { JITTER_HDG, JITTER_POS, jitter } from './variation';
 /** Everything stays inside this half-extent (m). */
 export const SPAWN_LIMIT = 37_000;
 
-const HEAVIES = new Set(['tu22m', 'a50']);
-
 /**
  * Aircraft never spawn closer than this to the ground under them or SPAWN_CLEAR_AHEAD ahead (m).
  * Mission altitudes are above sea level, so a hill can sit under or in front of a "low" raid: Defend
@@ -179,8 +177,6 @@ function defaultTask(def: AircraftGroupDef): TaskDef | undefined {
       return { kind: 'escort_player' };
     case 'interceptor':
       return { kind: 'attack_player' };
-    case 'awacs':
-      return { kind: 'patrol', x: def.x, z: def.z, radius: 9000, altitude: def.altitude };
     case 'cap':
     case 'fighter':
       return { kind: 'patrol', x: def.x, z: def.z, radius: 8000, altitude: def.altitude };
@@ -239,7 +235,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
   const fz = -Math.cos(heading);
   const rx = Math.cos(heading);
   const rz = Math.sin(heading);
-  const spacing = def.spacing ?? (HEAVIES.has(groupType(def, s.difficulty.id)) ? 600 : 300);
+  const spacing = def.spacing ?? 300;
   const formation: Formation = def.formation ?? (n === 1 ? 'single' : n >= 4 ? 'box' : 'pair');
   const skill = groupSkill(def, s.difficulty.aiSkill);
   const task = def.task ?? defaultTask(def);

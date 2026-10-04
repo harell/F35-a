@@ -37,7 +37,7 @@ export class StrikePlanner {
     const { ac, world } = c;
     for (const w of AG) {
       if (world.combat.remaining(ac, w) <= 0) continue;
-      if (w === 'aargm' && !((t.kind === 'sam' && (t.radarOn || t.known)) || (t.kind === 'ground' && t.emitter))) continue;
+      if (w === 'aargm' && !(t.kind === 'sam' && (t.radarOn || t.known))) continue;
       return w;
     }
     return null;

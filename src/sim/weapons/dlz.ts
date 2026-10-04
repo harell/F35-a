@@ -584,7 +584,7 @@ export function launchZoneFor(
       break;
     }
     case 'anti_radiation':
-      out.shoot = (target.kind === 'sam' && (target.radarOn || target.known)) || (target.kind === 'ground' && target.emitter);
+      out.shoot = target.kind === 'sam' && (target.radarOn || target.known);
       break;
     default:
       out.shoot = true;

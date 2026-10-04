@@ -105,7 +105,6 @@ const fly = section('Flybys');
 button(fly, 'Su-27 flyby 280 m/s AB', () => lab.flyby(280, 'su27', 1));
 button(fly, 'MiG-29 flyby 220 m/s dry', () => lab.flyby(220, 'mig29', 0));
 button(fly, 'Su-35 SUPERSONIC 520 m/s', () => lab.flyby(520, 'su35', 1));
-button(fly, 'Tu-22M3 bomber 230 m/s', () => lab.flyby(230, 'tu22m', 0));
 
 const weap = section('Weapons');
 button(weap, 'GUN (hold)', () => undefined, (down) => lab.gun(down));
@@ -147,7 +146,7 @@ const av = section('RWR / MAWS / AIM-9X');
 select(av, 'RWR', 'rwr', ['none', 'search', 'track', 'track_sam', 'launch']);
 select(av, 'AIM-9X', 'growl', ['off', 'search', 'locked']);
 button(av, 'MAWS on/off', () => (lab.controls.maws = !lab.controls.maws));
-for (const k of ['fighter', 'sam', 'aaa', 'ewr'] as const)
+for (const k of ['fighter', 'sam', 'aaa'] as const)
   button(av, `RWR new ${k}`, () => lab.events.emit('rwr:new', { contact: { sourceId: 1, kind: k, symbol: '?', bearing: 0, strength: 0.5, state: 'search', age: 0 } }));
 
 const warn = section('Warnings (Betty)');

@@ -390,8 +390,6 @@ export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; r
   su27: { name: 'Su-27', nato: 'Flanker', rwrSymbol: '27' },
   su35: { name: 'Su-35', nato: 'Flanker-E', rwrSymbol: '35' },
   su57: { name: 'Su-57', nato: 'Felon', rwrSymbol: '57' },
-  tu22m: { name: 'Tu-22M3', nato: 'Backfire', rwrSymbol: '22' },
-  a50: { name: 'A-50', nato: 'Mainstay', rwrSymbol: '50' },
   a320: { name: 'A320neo', nato: 'Airliner', rwrSymbol: 'CV' },
   shahed136: { name: 'Shahed-136', nato: 'Shahed', rwrSymbol: 'UA' },
 };

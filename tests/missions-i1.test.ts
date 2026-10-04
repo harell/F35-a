@@ -31,7 +31,7 @@ import { remainingRoute, scaleTotal } from '../src/missions/runtime/spawner';
 import { WINCHESTER_CREDIT, WITHDRAW_CREDIT } from '../src/missions/runtime/withdrawal';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { flight, mission, site } from '../src/missions/content/common';
-import { flatLand, harness, killGroup, mainstayFixture, seadFixture, shieldPlayer, stubAi, sweepFixture, type Harness } from './missions-helpers';
+import { flatLand, harness, killGroup, raiderFixture, seadFixture, shieldPlayer, stubAi, sweepFixture, type Harness } from './missions-helpers';
 
 const byId = (id: string) => missionById(id)!;
 const WH = AKL.whenuapai;
@@ -239,15 +239,15 @@ describe('i1: driven-off bandits never soft-lock a destroy objective', () => {
     expect(h.runner.objectives.find((o) => o.id === 'o_sweep')!.state).toBe('complete');
   });
 
-  it('A-50 / bombers are never "driven off" (a fleeing Mainstay is a failure, not a win)', () => {
-    const h = harness(mainstayFixture());
-    const awacs = h.world.aircraft.find((x) => x.groupId === 'mainstay')!;
+  it('bombers are never "driven off" (a fleeing bomber is a failure, not a win)', () => {
+    const h = harness(raiderFixture());
+    const bomber = h.world.aircraft.find((x) => x.groupId === 'raider')!;
     h.run(60, () => {
-      awacs.aiState = 'RTB';
-      awacs.position.set(0, 9000, -36_000);
+      bomber.aiState = 'RTB';
+      bomber.position.set(0, 9000, -36_000);
       shieldPlayer(h);
     });
-    expect(h.runner.objectives.find((o) => o.id === 'o_awacs')!.state).toBe('active');
+    expect(h.runner.objectives.find((o) => o.id === 'o_raider')!.state).toBe('active');
   });
 });
 

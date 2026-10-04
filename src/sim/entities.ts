@@ -132,7 +132,7 @@ export interface RadarState {
   groundPoint: Vector3 | null;
 }
 
-export type RwrThreatKind = 'fighter' | 'sam' | 'aaa' | 'ewr' | 'missile' | 'awacs';
+export type RwrThreatKind = 'fighter' | 'sam' | 'aaa' | 'missile';
 
 export interface RwrContact {
   /** Emitting entity id (aircraft, SAM site, missile with active seeker). */
@@ -500,8 +500,6 @@ export class GroundTargetEntity implements Entity {
   speed = 0;
   /** Loops the path when reaching the end. */
   loopPath = false;
-  /** Is it an emitter (EWR) — shows on RWR. */
-  emitter = false;
   groupId = '';
   known = true;
   /** A target of an active primary objective (as on SamSiteEntity): A/G designation ranks it first. */

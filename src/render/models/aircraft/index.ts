@@ -8,8 +8,6 @@ import { buildF35 } from './f35a';
 import { buildMig29 } from './mig29';
 import { buildFlanker } from './flanker';
 import { buildSu57 } from './su57';
-import { buildTu22m } from './tu22m';
-import { buildA50 } from './a50';
 import { buildA320 } from './a320';
 import { buildShahed136 } from './shahed136';
 
@@ -21,8 +19,6 @@ const BUILDERS: Record<AircraftType, () => AircraftPrototype> = {
   su27: () => buildFlanker('su27'),
   su35: () => buildFlanker('su35'),
   su57: buildSu57,
-  tu22m: buildTu22m,
-  a50: buildA50,
   a320: buildA320,
   shahed136: buildShahed136,
 };

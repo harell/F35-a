@@ -43,7 +43,6 @@ export class AircraftVisual {
   private pylons = new Map<string, Object3D>();
   private wreck = false;
   private originalMats = new Map<Mesh, Material | Material[]>();
-  private sweep = 0;
   /** Variable-area nozzle: smoothed opening 0..1 (NaN until the first update snaps it). */
   private nozzleOpen = Number.NaN;
   private readonly nozzle: { mesh: Mesh; def: DriveDef } | null = null;
@@ -162,12 +161,9 @@ export class AircraftVisual {
     }
   }
 
-  private applyDrives(ac: AircraftEntity, time: number, dt: number): void {
+  private applyDrives(ac: AircraftEntity, time: number): void {
     const s = ac.flight.surfaces;
     const alpha = ac.flight.alpha;
-    // variable sweep (Tu-22M3): swept back with Mach
-    const sweepTarget = Math.min(1, Math.max(0, (ac.flight.mach - 0.55) / 0.35));
-    this.sweep += (sweepTarget - this.sweep) * Math.min(1, dt * 0.4);
     for (const { obj, def } of this.drives) {
       let a = 0;
       switch (def.kind) {
@@ -191,9 +187,6 @@ export class AircraftVisual {
           break;
         case 'door':
           a = ac.bayDoors * def.max;
-          break;
-        case 'sweep':
-          a = -def.side * this.sweep * def.max;
           break;
         case 'radome':
           a = time * def.max;
@@ -269,7 +262,7 @@ export class AircraftVisual {
     this.setWreck(!ac.alive);
     this.updateNozzle(ac, dt, level);
     if (level === 0) {
-      this.applyDrives(ac, time, dt);
+      this.applyDrives(ac, time);
       this.updateStores(ac);
     }
     const flameOn = ac.alive && level < 2 && dist < 9000;

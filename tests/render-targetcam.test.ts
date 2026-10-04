@@ -84,7 +84,7 @@ describe('target camera pose', () => {
 
   it('scales the framing distance with the airframe and frames it inside the FOV', () => {
     const small = framingDistance(jet('mig29'));
-    const big = framingDistance(jet('a50'));
+    const big = framingDistance(jet('a320'));
     expect(big).toBeGreaterThan(small * 3);
     // the span fits the frame width (16:9) with room to spare
     const halfW = Math.tan((TARGET_CAM_FOV * Math.PI) / 360) * (16 / 9) * small;

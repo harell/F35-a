@@ -164,8 +164,8 @@ export function updateGuidanceData(ctx: CombatCtx, m: CombatMissile, dt: number)
   const checkTick = (ctx.tick + m.id) % SENSOR_DIV === 0;
 
   if (def.guidance === 'anti_radiation') {
-    if (!target || (target.kind !== 'sam' && target.kind !== 'ground')) return; // keep flying to the last point
-    const emitting = target.alive && (target.kind === 'sam' ? target.radarOn : target.emitter);
+    if (!target || target.kind !== 'sam') return; // keep flying to the last point
+    const emitting = target.alive && target.radarOn;
     const dist = m.position.distanceTo(target.position);
     if (emitting && dist <= def.seekerRange && inGimbal(m, target.position, def.gimbalLimit)) {
       setEstimate(ctx, m, target.position, target.velocity);

@@ -11,7 +11,7 @@ import type { AiBrain, AiRole, AiTask, CreateAiBrain, SimWorld, TerrainQuery } f
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createMissionRunner } from '../src/missions';
-import { NEVER, P, flight, mission, site, target, wingmen } from '../src/missions/content/common';
+import { NEVER, P, flight, mission, site, wingmen } from '../src/missions/content/common';
 
 /** Flat land at `height` m everywhere (no water). */
 export function flatLand(height = 20): TerrainQuery {
@@ -213,11 +213,9 @@ export function seadFixture(timeLimit?: number): MissionDef {
         site('sa8', 'rangi_sa8', 'sa8', P.rangE, { heading: 90 }),
         site('zsu1', 'rangi_aaa', 'zsu23', P.rangS),
       ],
-      ground: [target('ewr', 'rangi_ewr', 'ewr', P.rangN, { name: 'EW Radar' })],
       objectives: [
         { id: 'o_sa6', kind: 'destroy', groups: ['rangi_sa6'], label: 'Destroy the SA-6 battery', primary: true },
         { id: 'o_sa8', kind: 'destroy', groups: ['rangi_sa8'], label: 'Destroy the SA-8', primary: true },
-        { id: 'o_ewr', kind: 'destroy', groups: ['rangi_ewr'], label: 'Destroy the early-warning radar', primary: false },
       ],
       waypoints: [
         { id: 'wp_sa6', label: 'SA-6', kind: 'target', x: P.rangSW.x, z: P.rangSW.z, objective: 'o_sa6' },
@@ -240,23 +238,24 @@ export function seadFixture(timeLimit?: number): MissionDef {
 }
 
 /**
- * A test-only mission: the sweep fixture plus an A-50 Mainstay to shoot down, bullseye AWACS calls
- * and a 720 s time limit (features no remaining campaign mission has).
+ * A test-only mission: the sweep fixture plus a lone Su-27 strike jet (bomber role, orbiting a
+ * station) to shoot down, bullseye AWACS calls and a 720 s time limit (features no remaining
+ * campaign mission has).
  */
-export function mainstayFixture(): MissionDef {
+export function raiderFixture(): MissionDef {
   const base = sweepFixture();
   return {
     ...base,
-    id: 'fx_mainstay',
+    id: 'fx_raider',
     timeLimit: 720,
     script: {
       ...base.script,
       awacs: { style: 'bullseye', bullseye: { x: 0, z: 0, name: 'Tower' } },
       groups: [
         ...base.script.groups,
-        flight('mainstay', 'a50', 1, { x: 9000, z: -29000 }, 9000, 0, 190, 'awacs', { fixedCount: true, task: { kind: 'patrol', x: 8000, z: -29000, radius: 5000, altitude: 9000 } }),
+        flight('raider', 'su27', 1, { x: 9000, z: -29000 }, 9000, 0, 220, 'bomber', { fixedCount: true, task: { kind: 'patrol', x: 8000, z: -29000, radius: 5000, altitude: 9000 } }),
       ],
-      objectives: [...base.script.objectives, { id: 'o_awacs', kind: 'destroy', groups: ['mainstay'], label: 'Shoot down the A-50 Mainstay', primary: true }],
+      objectives: [...base.script.objectives, { id: 'o_raider', kind: 'destroy', groups: ['raider'], label: 'Shoot down the Su-27 strike jet', primary: true }],
     },
   };
 }
