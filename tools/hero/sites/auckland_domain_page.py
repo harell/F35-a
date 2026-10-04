@@ -4,7 +4,7 @@ F35-A — hero landmarks: fill tools/hero/examples/auckland-domain.html with the
   python3 tools/hero/sites/auckland_domain.py --site /tmp/hero/auckland_domain          (→ domain_model.json)
   # the game's own Domain: a throwaway vitest writes <site>/game_export.json (see the skill's lessons):
   #   generateTerrain at 1024 (medium) and 2048 + LINZ HD (high), meshHeightAt on a 10 m grid ±800 m round the
-  #   site centre in game XZ, and the buildCBD + buildMuseumAndObelisk triangles inside that square
+  #   site centre in game XZ, and the buildCBD + buildMuseum + buildObelisk triangles inside that square
   node tools/hero/today-shot.mjs --x=1123 --z=1243 --dist=900 --alt=420 --from=sw|ne --out=<site>/today_<from>.jpg
   python3 tools/hero/sites/auckland_domain_page.py --site /tmp/hero/auckland_domain       (→ prototype.html)
 

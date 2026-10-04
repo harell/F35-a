@@ -206,7 +206,7 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
       continue;
     }
     // civil traffic only matters to the human player (AI crews and their datalink ignore it)
-    if (t.team === 'neutral' && (!ac.isPlayer || ac.ignoresCivil)) continue;
+    if (t.team === 'neutral' && !ac.isPlayer) continue;
     _rel.subVectors(t.position, ac.position);
     const d = _rel.length();
     if (d < 1) continue;
@@ -281,7 +281,7 @@ function scanGround(
   for (const g of list) {
     if (!g.alive || g.team === ac.team) continue;
     // civil ships only matter to the human player (AI crews never track or attack them)
-    if (g.team === 'neutral' && (!ac.isPlayer || ac.ignoresCivil)) continue;
+    if (g.team === 'neutral' && !ac.isPlayer) continue;
     _rel.subVectors(g.position, ac.position);
     const d = _rel.length();
     if (d > KNOWN_TARGET_RANGE) continue;
@@ -404,6 +404,7 @@ function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): Trac
   forwardOf(ac.quaternion, _fwd);
   const list: { c: TrackContact; key: number }[] = [];
   for (const c of st.contacts.values()) {
+    if (c.team === 'neutral' && ac.civilWatchOnly) continue;
     const key = candidateKey(ctx, ac, c);
     if (!Number.isNaN(key)) list.push({ c, key });
   }
@@ -478,7 +479,7 @@ export function designateNearestTo(ctx: CombatCtx, ac: AircraftEntity, dir: Vect
   let best: TrackContact | null = null;
   let bestCos = Math.cos(0.5);
   for (const c of st.contacts.values()) {
-    if (c.team === ac.team) continue;
+    if (c.team === ac.team || (c.team === 'neutral' && ac.civilWatchOnly)) continue;
     _rel.subVectors(c.position, ac.position);
     const d = _rel.length();
     if (d < 1) continue;
@@ -496,7 +497,7 @@ export function designate(ctx: CombatCtx, ac: AircraftEntity, id: number | null)
   if (id === null) return setDesignation(ctx, ac, null);
   const st = acState(ac);
   const c = st.contacts.get(id);
-  if (!c || c.team === ac.team) return;
+  if (!c || c.team === ac.team || (c.team === 'neutral' && ac.civilWatchOnly)) return;
   setDesignation(ctx, ac, id, true);
 }
 
