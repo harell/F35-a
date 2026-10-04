@@ -19,6 +19,16 @@ export const REASONS = {
   building: 'Crashed into a building',
 } as const;
 
+/** The player flew into a named 3D-modelled landmark ("Crashed into Spark Arena"); it collapsed. */
+export function crashedInto(name: string): string {
+  return `Crashed into ${name}`;
+}
+
+/** "the Auckland Museum" → "The Auckland Museum" (a name at the start of a sentence). */
+export function sentenceName(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 const DEATH_WORDS = ['shot down', 'crashed', 'collision', 'out of fuel'];
 
 /** True if a result reason means the player died. */

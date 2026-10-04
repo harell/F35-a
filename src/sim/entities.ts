@@ -163,8 +163,6 @@ export class AircraftEntity implements Entity {
   name: string;
   callsign: string;
   isPlayer = false;
-  /** (sensors) Civil traffic stays off this jet's sensors: no CIV boxes, nothing to designate (free flight, #113). */
-  ignoresCivil = false;
 
   position = new Vector3();
   velocity = new Vector3();
