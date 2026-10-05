@@ -259,6 +259,24 @@ tallest registered roofs at 0.15 m (`tests/fixtures/linz-roof-spotchecks.json`):
 (row 1024, an oval roof between two others) the 0.15 m search alone puts 6.3 m off on a neighbour's edge, and the 0.3 m
 overlay shows the baked offset on the roof. `--check` draws the ten tallest on the game's own photo.
 
+## Facade tags (#141)
+
+`facades.py` and `facades.ts` add each CBD building's OpenStreetMap tags to `auckland-buildings.bin` (format v3), for its
+facade (use, storeys, material, colour; `auckland.ts buildingFacade`), keeping every other byte:
+
+```sh
+pip install shapely
+npx vite-node tools/linz/roofs.ts dump <work>        # (as above)
+python3 tools/linz/facades.py <work>                 # OSM main API, 3 x 3 tiles (~70 MB, cached in <work>/osm) → facades.json
+npx vite-node tools/linz/facades.ts bake <work>      # → auckland-buildings.bin
+```
+
+A building takes the tags of the OSM building outline covering most of its footprint, if it covers at least half of it.
+2026-10-05: 531 of the 916 buildings the game draws from the file are tagged (apartments 125, education 78, retail 67,
+commercial 60, office 24, civic 19, hotel 15, industrial 12, parking 8, house 2; 326 with `building:levels`, 10 with a
+material, 5 with a colour). +0.9 kB gzip. OSM data: © OpenStreetMap contributors, ODbL 1.0 (the file is a derivative
+database for these tags).
+
 # Open data 4: CBD and waterfront aerial photo
 
 `aerial-mask.ts` and `aerial.py` bake the LINZ Auckland 0.075 m Urban Aerial Photos (2024–2025) into

@@ -4,11 +4,11 @@
 import { describe, expect, it } from 'vitest';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
-import { GeometryBuilder, ROOF_PHOTO, ROOF_Q, ROOF_WALL, WIN_OFFICE } from '../src/world/scenery/GeometryBuilder';
+import { FACADE_BASE, FACADE_BASE_Q, FACADE_GLASS, FACADE_STOREY_Q, GeometryBuilder, ROOF_PHOTO, ROOF_Q, ROOF_WALL, WIN_HOME, WIN_OFFICE } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
-import { buildCBD, simplifyRing } from '../src/world/scenery/auckland';
+import { buildCBD, buildingFacade, simplifyRing } from '../src/world/scenery/auckland';
 import { aucklandRoadPaths, RoadNetwork } from '../src/world/scenery/motorways';
-import { aucklandBuildings, decodeBuildings, encodeBuildings, ringArea, ringCentroid, roofHeight, roofPhotoOffset, setAucklandBuildings, type BuildingPrism } from '../src/world/scenery/aucklandBuildings';
+import { aucklandBuildings, BUILDING_USES, decodeBuildings, encodeBuildings, ringArea, ringCentroid, roofHeight, roofPhotoOffset, setAucklandBuildings, type BuildingPrism } from '../src/world/scenery/aucklandBuildings';
 import { aucklandStreets, pointInRing, type CbdStreets } from '../src/world/scenery/cbdStreets';
 import { buildCityLightPoints, buildFacadeLightPoints } from '../src/world/scenery/nightLights';
 import { aucklandCbd } from '../src/world/config';
@@ -124,6 +124,32 @@ describe('LINZ building data (auckland-buildings.bin)', () => {
     // one (#1024, an oval roof between two others) the 0.15 m search puts on a neighbour's edge, 6 m off: the 0.3 m
     // overlay shows the baked offset on the roof (tools/linz/README.md)
     expect(within).toBeGreaterThanOrEqual(9);
+  });
+
+  it('encodes the OSM facade tags (#141): use, material, storeys, colour', () => {
+    const ring = Float32Array.from([0, 0, 0, -20, 30, -20, 30, 0]);
+    const [cx, cz] = ringCentroid(ring);
+    const p = { h: 30, ring, sx: 0, sz: 0, cx, cz };
+    const src = [
+      { lidar: false, prisms: [p], roof: { dx: 1, dz: -2, measured: true }, osm: { use: 4, material: 1, levels: 9, colour: 0xd8cbb0 } },
+      { lidar: false, prisms: [p], osm: { use: 1, material: 0, levels: 0 } },
+      { lidar: false, prisms: [p] },
+    ];
+    const back = decodeBuildings(encodeBuildings(src));
+    expect(back[0]).toMatchObject({ roof: { dx: 1, dz: -2, measured: true }, osm: { use: 4, material: 1, levels: 9, colour: 0xd8cbb0 } });
+    expect(back[1].osm).toEqual({ use: 1, material: 0, levels: 0 });
+    expect(back[2].osm).toBeUndefined();
+    expect(() => decodeBuildings(encodeBuildings(src).subarray(0, 30))).toThrow();
+  });
+
+  it('OSM tags on about half the CBD buildings, a storey count on a third (tools/linz/facades.py)', () => {
+    const linz = bs.filter((b) => !b.hero);
+    const tagged = linz.filter((b) => b.osm);
+    expect(tagged.length).toBeGreaterThan(linz.length * 0.45);
+    expect(tagged.filter((b) => b.osm!.levels > 0).length).toBeGreaterThan(linz.length * 0.3);
+    const uses = new Set(tagged.map((b) => b.osm!.use).filter((u) => u > 0));
+    expect(uses.size).toBeGreaterThanOrEqual(8);
+    for (const b of bs.filter((b) => b.hero)) expect(b.osm).toBeUndefined();
   });
 
   it('holds the CBD region: ≈ 1000 buildings (some traced from the 2024 LiDAR), all inside it, on land', () => {
@@ -337,6 +363,76 @@ describe('the CBD built from the LINZ buildings', () => {
     expect(roofs).toBeGreaterThan(5000);
     expect(walls).toBeGreaterThan(roofs);
     expect(shifted).toBeGreaterThan(roofs * 0.3);
+  });
+
+  describe('facades by use and storey (#141)', () => {
+    const top = (b: (typeof bs)[number]) => Math.max(...b.prisms.map((p) => p.h));
+    const facadeOf = (b: (typeof bs)[number]) => buildingFacade(b, top(b), Math.abs(ringArea(b.prisms[0].ring)), 0.5);
+    const tagged = (use: string, min: number) => bs.filter((b) => !b.hero && b.osm && BUILDING_USES[b.osm.use - 1] === use && top(b) >= min);
+
+    it('storeys from the OSM count, else by use: offices ≈ 3.6–4 m, apartments ≈ 3 m, heritage ≈ 4.5 m', () => {
+      const ring = Float32Array.from([0, 0, 0, -20, 30, -20, 30, 0]);
+      const [cx, cz] = ringCentroid(ring);
+      const one = (h: number, osm?: { use: number; material: number; levels: number }) => buildingFacade({ lidar: false, prisms: [{ h, ring, sx: 0, sz: 0, cx, cz }], osm }, h, 600, 0.2);
+      const use = (u: string) => BUILDING_USES.indexOf(u as (typeof BUILDING_USES)[number]) + 1;
+      expect(one(40, { use: use('office'), material: 0, levels: 0 }).storey).toBeCloseTo(40 / 11, 5); // 3.64 m
+      expect(one(30, { use: use('apartments'), material: 0, levels: 0 }).storey).toBeCloseTo(3, 5);
+      expect(one(30, { use: use('apartments'), material: 0, levels: 0 }).win).toBe(WIN_HOME);
+      expect(one(18, { use: use('civic'), material: 0, levels: 0 }).storey).toBeCloseTo(4.5, 5);
+      expect(one(30, { use: use('office'), material: 0, levels: 8 }).storey).toBeCloseTo(3.75, 5); // the OSM count
+      expect(one(30, { use: use('office'), material: 0, levels: 30 }).storey).toBeCloseTo(30 / 8, 5); // 1 m storeys: not believed
+      expect(one(14).storey).toBeGreaterThanOrEqual(3.4); // untagged low-rise: heritage or mid-rise
+      expect(one(14).storey).toBeLessThanOrEqual(4.7);
+      expect(one(30, { use: use('apartments'), material: 3, levels: 0 }).glass).toBe(true); // building:material=glass
+    });
+
+    it('an office tower and a residential block of the CBD get different windows (storey, style)', () => {
+      const offices = tagged('office', 25).concat(tagged('commercial', 25)).map(facadeOf);
+      const homes = tagged('apartments', 25).map(facadeOf);
+      expect(offices.length).toBeGreaterThan(5);
+      expect(homes.length).toBeGreaterThan(10);
+      const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+      expect(mean(offices.map((f) => f.storey))).toBeGreaterThan(3.4);
+      expect(mean(homes.map((f) => f.storey))).toBeLessThan(3.3);
+      expect(offices.every((f) => f.win === WIN_OFFICE)).toBe(true);
+      expect(homes.every((f) => f.win === WIN_HOME)).toBe(true);
+    });
+
+    it('the CBD mesh carries each building’s base, storey, seed and glass; triangles unchanged', { timeout: 60_000 }, () => {
+      const B = new GeometryBuilder();
+      B.enableFacades();
+      const stats = buildCBD(B, new LightList(), height, 0.7, cbd, roads, bs);
+      expect(stats.triangles).toBe(medium.stats.triangles);
+      const g = B.build()!;
+      const a = g.getAttribute('aFacade');
+      const pos = g.getAttribute('position');
+      let based = 0;
+      let storeyed = 0;
+      let glass = 0;
+      let bad = 0;
+      const seeds = new Set<number>();
+      for (let v = 0; v < a.count; v++) {
+        const w = a.getW(v);
+        if (!(w & FACADE_BASE)) continue;
+        based++;
+        // the base is the building's ground: its walls' foot is 1.5 m below it
+        if (pos.getY(v) < a.getX(v) * FACADE_BASE_Q - 1.6) bad++;
+        if (a.getY(v) > 0) {
+          storeyed++;
+          const st = a.getY(v) * FACADE_STOREY_Q;
+          if (st < 2.59 || st > 6.51) bad++;
+        }
+        if (w & FACADE_GLASS) glass++;
+        seeds.add(a.getZ(v));
+      }
+      expect(bad).toBe(0);
+      expect(based).toBeGreaterThan(pos.count * 0.9);
+      expect(storeyed).toBeGreaterThan(based * 0.3);
+      expect(glass).toBeGreaterThan(0);
+      expect(seeds.size).toBeGreaterThan(500);
+      // the night lights follow the storeys
+      expect(stats.prisms.filter((p) => p.storey).length).toBeGreaterThan(stats.prisms.length * 0.5);
+    });
   });
 
   it('falls back to the procedural towers on the real streets without the building data', () => {

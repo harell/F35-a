@@ -80,9 +80,11 @@ export interface FacadePrism {
   ring: ArrayLike<number>;
   y0: number;
   y1: number;
+  /** Its storey height (m, #141: the facade shader's); FLOOR when unknown. */
+  storey?: number;
 }
 
-/** Window bays: ≈ 9 m along a facade, 3.6 m floors; the share lit at night. */
+/** Window bays: ≈ 9 m along a facade, 3.6 m floors (unless the prism has its own); the share lit at night. */
 const BAY = 9;
 const FLOOR = 3.6;
 const LIT = 0.35;
@@ -116,7 +118,8 @@ export function buildFacadeLightPoints(prisms: FacadePrism[], seed: number, maxL
         const nb = Math.max(1, Math.round(len / BAY));
         for (let b = 0; b < nb; b++) {
           const t = (b + 0.5) / nb;
-          for (let y = p.y0 + 6, fl = 0; y < p.y1 - 1; y += FLOOR, fl++) f(pi, i, b, fl, ax + dx * t + nx * 0.6, y, az + dz * t + nz * 0.6);
+          // (with its own storeys: at the shader's window centres, its floors counted from the ground 1.5 m above the foot)
+          for (let st = p.storey ?? FLOOR, y = p.storey ? p.y0 + 1.5 + 1.5 * st : p.y0 + 6, fl = 0; y < p.y1 - 1; y += st, fl++) f(pi, i, b, fl, ax + dx * t + nx * 0.6, y, az + dz * t + nz * 0.6);
         }
       }
     });
