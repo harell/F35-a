@@ -537,6 +537,13 @@ export class GroundTargetEntity implements Entity {
   boat?: import('./boats').BoatState;
   /** g03's stoat (#200): sim/stoat.ts runs it (route, stops, alert, bolting), not the ground-mover path. */
   stoat?: import('./stoat').StoatState;
+  /**
+   * A civil train ('train', #146): its unit in the sortie's timetable and its cars, posed every step by
+   * the mission's TrainTraffic (missions/runtime/trains.ts); hit tests run along the cars (sim/civil/vessels.ts).
+   */
+  train?: TrainBody;
+  /** Removed from the world at the next cleanup while alive (a civil train leaving the player's area). */
+  despawn = false;
 
   constructor(
     readonly id: number,
@@ -549,6 +556,14 @@ export class GroundTargetEntity implements Entity {
     this.radius = opts.radius ?? 12;
     this.health = this.maxHealth = opts.health ?? 100;
   }
+}
+
+/** A civil train entity's consist (GroundTargetEntity.train). */
+export interface TrainBody {
+  /** TrainUnit.id in the sortie's TrainService (world.trains). */
+  unit: number;
+  /** Its cars, refreshed every step while alive (frozen where it stopped once destroyed). */
+  cars: import('./civil/rail').CarPose[];
 }
 
 /* ───────────────────────────── Decoys ───────────────────────────── */

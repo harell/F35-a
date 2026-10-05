@@ -316,6 +316,11 @@ export interface SimWorld {
    * 'player:down', so the mission can name the building in the end reason.
    */
   readonly structureStrike?: StructureStrike | null;
+  /**
+   * The sortie's train timetable (Auckland civil traffic, #146; null without it): set by the mission
+   * (missions/runtime/trains.ts), read by the entity renderer to draw every train near the camera.
+   */
+  trains?: import('./civil/rail').TrainService | null;
   /** Pooled projectiles (check `active`). */
   readonly projectiles: Projectile[];
   readonly player: AircraftEntity | null;

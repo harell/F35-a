@@ -12,7 +12,7 @@ import { isHostile, type Team } from '../../core/types';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, Projectile, SamSiteEntity } from '../entities';
 import type { LaunchZone } from '../api';
 import { firstLandmarkHit } from '../landmarks';
-import { vesselSegmentHit } from '../civil/vessels';
+import { hasLongHull, vesselSegmentHit } from '../civil/vessels';
 import type { AcCombatState, CombatCtx } from './context';
 import { gaussian, radio } from './context';
 import { GUNS, type GunDef } from './defs';
@@ -278,7 +278,7 @@ function strafeHit(ctx: CombatCtx, p: Projectile, shooter: AircraftEntity, list:
     const dz = g.position.z - p.position.z;
     if (dx * dx + dz * dz > (stepLen + g.radius) ** 2) continue;
     let s = -1;
-    if (g.kind === 'ground' && g.vessel) s = vesselSegmentHit(g, p.prevPosition, p.position); // long hull, not a sphere
+    if (hasLongHull(g)) s = vesselSegmentHit(g, p.prevPosition, p.position); // long hull (or a train's cars), not a sphere
     else {
       _rel0.subVectors(p.prevPosition, g.position);
       _rel1.subVectors(p.position, g.position);

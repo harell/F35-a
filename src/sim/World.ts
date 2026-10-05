@@ -45,6 +45,7 @@ import { BuildingIndex, buildingGeometry } from './buildings';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
 import { BOAT_SPEED, makeBoat, stepBoats } from './boats';
 import { makeStoat, stepStoats } from './stoat';
+import type { TrainService } from './civil/rail';
 
 /** Ground target types that are IRGC Navy fast boats (sailed by sim/boats.ts). */
 const BOAT_TYPES = new Set<GroundTargetType>(['suicide_boat', 'missile_boat']);
@@ -70,6 +71,7 @@ const GROUND_NAMES: Record<GroundTargetType, string> = {
   suicide_boat: 'Suicide Boat',
   missile_boat: 'Peykaap II',
   stoat: 'Stoat',
+  train: 'Train',
 };
 
 function createProjectile(): Projectile {
@@ -106,6 +108,8 @@ class SimWorldImpl implements SimWorld {
   readonly buildings: BuildingIndex | null;
   /** The structure the player's jet brought down (Collisions sets it). */
   structureStrike: StructureStrike | null = null;
+  /** The sortie's train timetable (set by the mission's TrainTraffic, #146). */
+  trains: TrainService | null = null;
   readonly projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
 
@@ -531,6 +535,18 @@ class SimWorldImpl implements SimWorld {
       } else aircraft[w++] = a;
     }
     aircraft.length = w;
+
+    // ground entities that left (a civil train out of the player's area, #146); wrecks stay
+    const ground = this.ground;
+    w = 0;
+    for (let i = 0; i < ground.length; i++) {
+      const g = ground[i];
+      if (g.alive && g.despawn) {
+        this.byId.delete(g.id);
+        this.hostileDirty = true;
+      } else ground[w++] = g;
+    }
+    ground.length = w;
   }
 
   /** Remove entities that were already dead at the previous cleanup (one step of grace). */
@@ -564,6 +580,7 @@ class SimWorldImpl implements SimWorld {
     this.landmarks.length = 0;
     this.buildings?.reset();
     this.structureStrike = null;
+    this.trains = null;
     for (const p of this.projectiles) p.active = false;
     this.byId.clear();
     this.player = null;

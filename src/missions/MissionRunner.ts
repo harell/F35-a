@@ -39,6 +39,7 @@ import { assignGroundAttack, buildGroups, retaskGroup, spawnAirGroup, spawnGroun
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { CivilTraffic } from './runtime/civil';
 import { CivilShipping } from './runtime/shipping';
+import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
 import { SightseeingLog } from './runtime/sightseeing';
 
@@ -78,6 +79,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly civil: CivilTraffic | null;
   /** Neutral container ships and cruise liners (Auckland theatre only, gated with the airliners). */
   private readonly shipping: CivilShipping | null;
+  /** Auckland Transport and KiwiRail trains on their timetable (Auckland theatre only, gated with the airliners, #146). */
+  private readonly trains: TrainTraffic | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
   /** Free flight: tour stops, distance and passes for the debrief. */
@@ -125,6 +128,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const civilTraffic = def.theater === 'auckland' && deps.civilTraffic !== false;
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
+    this.trains = civilTraffic ? new TrainTraffic(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
     this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
@@ -182,6 +186,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     markObjectiveTargets(s);
     this.civil?.setup();
     this.shipping?.setup();
+    this.trains?.setup();
     this.landmarks.setup();
     this.callouts.attach();
     // ground-level steering for target waypoints without an explicit altitude
@@ -203,6 +208,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
       for (const a of s.script.opening ?? []) this.runAction(a);
     }
     s.radio.update(world.time);
+    // every step (they move whatever the mission's state): the trains near the player as sim entities
+    this.trains?.update();
     this.evalAcc += dt;
     if (this.evalAcc < EVAL_PERIOD - 1e-6) return;
     const edt = this.evalAcc;
@@ -294,6 +301,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     (r as MissionResultExt).playerShare = sc.playerShare;
     if (s.civilianKills > 0) (r as MissionResultExt).civilianKills = s.civilianKills;
     if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
+    if (s.civilianTrainKills > 0) (r as MissionResultExt).civilianTrainKills = s.civilianTrainKills;
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)

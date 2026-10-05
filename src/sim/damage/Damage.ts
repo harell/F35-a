@@ -211,6 +211,8 @@ export class DamageSystem {
     if (isCivilVessel(t) && isShipHit(weapon, attacker)) {
       amount = t.hitsToSink > 1 ? this.countVesselHit(t, attackerId, weapon) : Math.max(amount, t.health);
     }
+    // a civil train (#146): any bomb / missile hit on its cars destroys it, like a merchant ship
+    if (t.kind === 'ground' && t.train && isShipHit(weapon, attacker)) amount = Math.max(amount, t.health);
     t.health -= amount;
     const hostileAttacker = attacker instanceof AircraftEntity && isHostile(attacker.team, t.team);
     host.events.emit('damage', { target: t, amount, attackerId, weapon });

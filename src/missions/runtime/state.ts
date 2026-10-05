@@ -164,6 +164,8 @@ export class MissionState {
   civilianKills = 0;
   /** Of which civil ships (container ships, cruise liners). */
   civilianShipKills = 0;
+  /** Of which civil trains (#146). */
+  civilianTrainKills = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */
   scriptedStrike = false;
 
