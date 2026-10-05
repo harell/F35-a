@@ -216,6 +216,11 @@ def main():
     S = json.load(open(os.path.join(site, 'site.json')))
     excl = airfield_keep_out(osm_path, S['box_nztm'][0], S['box_nztm'][3])
     model, mesh, _ = model_area(site, osm_path, land, exclude=excl)
+    # a LiDAR-traced "building" on a carriageway is a bridge or overpass (Hobsonville: the SH18 overpass, 22 m up)
+    carriage = unary_union([LineString(r['pts']).buffer(r['width'] / 2 + 1, cap_style='flat') for r in model['roads'] if not r['tunnel'] and len(r['pts']) > 1])
+    bridges = [b['id'] for b in model['buildings'] if b['src'] == 'traced' and Polygon(b['ring']).intersection(carriage).area > 0.25 * Polygon(b['ring']).area]
+    model['buildings'] = [b for b in model['buildings'] if b['id'] not in bridges]
+    model['stats']['bridges_dropped'] = len(bridges)
     model['name'] = a.suburb
     model['face'] = [[round(x, 1), round(z, 1)] for x, z in max(getattr(piece, 'geoms', [piece]), key=lambda g: g.area).exterior.coords]
     model['stats']['dropped_parts_ha'] = dropped
