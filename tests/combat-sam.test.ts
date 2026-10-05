@@ -98,7 +98,7 @@ describe('combat: SAM sites', () => {
     let shutdowns = 0;
     let recovered = 0;
     for (let seed = 1; seed <= 6; seed++) {
-      const w = new FakeWorld({ seed, difficulty: 'ace' });
+      const w = new FakeWorld({ seed, difficulty: 'veteran' });
       const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 9000, 0), heading: 0, speed: 280, loadout: 'sead_stealth' });
       const site = w.spawnSam({ type: 'sa6', team: 'red', position: v3(0, 0, -40000) });
       f35.selectedWeapon = 'aargm';

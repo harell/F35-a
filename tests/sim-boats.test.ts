@@ -392,17 +392,18 @@ describe('air-defence boat (moving SAM)', { timeout: 60_000 }, () => {
  * The AD boat's close-in cue (#115, SamTypeData.closeCue): its electro-optical tracker sees the jet
  * inside 9 km whatever its shaping, and inside 12 km while the weapon bay is open, so a stand-off
  * release stays safe and a closer pass costs something. Veteran (samRangeScale 1): the ranges as
- * written. A clean (internal stores) F-35 is held at a fixed point, nose on the boat, 4,000 m up.
+ * written, with the harassment off (the cue alone: DifficultyParams.adBoatHarass is tested at the end). A clean
+ * (internal stores) F-35 is held at a fixed point, nose on the boat, 4,000 m up.
  */
 describe('air-defence boat: close-in cue (#115)', { timeout: 60_000 }, () => {
   const ALT = 4_000;
   /** Seconds until the boat holds a full track on the jet (−1 = never in `seconds`), and whether it fired. */
-  function cue(slant: number, opts: { bay?: boolean; noCue?: boolean; seconds?: number } = {}): { trackedAt: number; fired: boolean } {
+  function cue(slant: number, opts: { bay?: boolean; noCue?: boolean; seconds?: number; harass?: number } = {}): { trackedAt: number; fired: boolean } {
     const data = SAM_DATA.ad_boat;
     const saved = data.closeCue;
     if (opts.noCue) data.closeCue = null;
     try {
-      const w = createSimWorld({ terrain: new SeaTerrain(-20), difficulty: DIFFICULTIES.veteran, events: new EventBus(), combat: createCombatSystemSeeded(3) });
+      const w = createSimWorld({ terrain: new SeaTerrain(-20), difficulty: { ...DIFFICULTIES.veteran, adBoatHarass: opts.harass ?? 0 }, events: new EventBus(), combat: createCombatSystemSeeded(3) });
       const ad = w.spawnSam({ type: 'ad_boat', team: 'red', position: new Vector3(0, 0, 0), known: true, boat: {} });
       const at = new Vector3(0, ALT, Math.sqrt(slant * slant - ALT * ALT));
       const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: at.clone(), heading: 0, speed: 250, loadout: 'a2a_stealth' });
@@ -445,6 +446,18 @@ describe('air-defence boat: close-in cue (#115)', { timeout: 60_000 }, () => {
     expect(cue(11_500, { bay: true, noCue: true }).trackedAt).toBe(-1);
     // a stand-off release from 13 km is safe
     expect(cue(13_000, { bay: true }).trackedAt).toBe(-1);
+  });
+
+  it('harassing (DifficultyParams.adBoatHarass): an open bay out to 24 km × the strength is tracked, and the boat fires past its 12 km envelope', () => {
+    // the same 13 km release that is safe above now draws a track and a missile (a nuisance shot: it cannot reach)
+    const near = cue(16_000, { bay: true, harass: 1, seconds: 20 });
+    expect(near.trackedAt).toBeGreaterThan(0);
+    expect(near.fired).toBe(true);
+    // the cue is the open bay: a clean jet at the same range is not tracked, and nothing fires beyond reach (20 km)
+    expect(cue(16_000, { harass: 1, seconds: 20 }).trackedAt).toBe(-1);
+    expect(cue(26_000, { bay: true, harass: 1, seconds: 20 }).fired).toBe(false);
+    // off (0) it is the plain cue again
+    expect(cue(16_000, { bay: true, harass: 0, seconds: 20 }).trackedAt).toBe(-1);
   });
 });
 

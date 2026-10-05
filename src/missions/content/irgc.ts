@@ -133,7 +133,7 @@ export const G01: MissionDef = mission({
   allowedLoadouts: ['a2a_beast'],
   player: g01Start,
   // the gun is required (10 drones, at most 8 missiles): more than the real 180 rounds (#77)
-  gunAmmo: { recruit: 400, pilot: 400, veteran: 380, ace: 360 },
+  gunAmmo: { recruit: 400, pilot: 400, veteran: 380 },
   script: {
     autoHints: true,
     parTime: 210,

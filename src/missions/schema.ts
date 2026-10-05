@@ -248,6 +248,9 @@ export interface SamSiteDef {
   loop?: boolean;
   /** 'ad_boat': keep station on the first live member of this group (the boats it escorts; the next one when it dies). */
   escort?: string;
+  /** 'ad_boat' escort station: m behind its leader (negative = ahead of it, default 250) and m to its right (default 150). */
+  escortAft?: number;
+  escortRight?: number;
 }
 
 /**

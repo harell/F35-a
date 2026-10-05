@@ -254,7 +254,6 @@
 .diff-recruit { color: var(--green); }
 .diff-pilot { color: var(--acc); }
 .diff-veteran { color: var(--amber); }
-.diff-ace { color: var(--red); }
 
 .grade {
   font: 800 18px/1 var(--mono);
