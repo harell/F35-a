@@ -183,7 +183,8 @@ describe('4.3-f (#69): the PlayerBot fires its gun', () => {
     // the a2a_beast wingman often splashes all four first, or the bot dies in a four-ship merge),
     // so its rounds aren't asserted; its rows (the playtest's seeds) check that no missile flies.
     const probe: [string | MissionDef, number[]][] = [
-      [sweepFixture(), [0, 1, 2, 3, 4, 5]],
+      // (seeds 0–11: the civil helicopters, #144, shift every seeded sortie; with them 0–5 happened not to reach the gun)
+      [sweepFixture(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]],
       ['ia_dogfight_auckland', [1, 2, 3]],
     ];
     const rows: string[] = [];

@@ -139,6 +139,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 0.35,
     wakes: false,
     ferries: 10,
+    helicopters: 1,
+    trains: 4,
     railways: true,
     targetCamRange: 8_000,
     targetCamScenery: false,
@@ -158,6 +160,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 0.7,
     wakes: true,
     ferries: 13,
+    helicopters: 3,
+    trains: 8,
     railways: true,
     targetCamRange: 0,
     targetCamScenery: true,
@@ -177,6 +181,8 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 1,
     wakes: true,
     ferries: 16,
+    helicopters: 4,
+    trains: 14,
     railways: true,
     targetCamRange: 0,
     targetCamScenery: true,
@@ -358,14 +364,17 @@ export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; r
   su57: { name: 'Su-57', nato: 'Felon', rwrSymbol: '57' },
   a320: { name: 'A320neo', nato: 'Airliner', rwrSymbol: 'CV' },
   shahed136: { name: 'Shahed-136', nato: 'Shahed', rwrSymbol: 'UA' },
+  aw169: { name: 'AW169', nato: 'Helicopter', rwrSymbol: 'CV' },
+  bell429: { name: 'Bell 429', nato: 'Helicopter', rwrSymbol: 'CV' },
+  h130: { name: 'H130', nato: 'Helicopter', rwrSymbol: 'CV' },
 };
 
 export const SAM_INFO: Record<SamType, { name: string; nato: string; rwrSymbol: string }> = {
   sa6: { name: '2K12 Kub', nato: 'SA-6 Gainful', rwrSymbol: '6' },
   sa15: { name: '9K330 Tor', nato: 'SA-15 Gauntlet', rwrSymbol: '15' },
   zsu23: { name: 'ZSU-23-4 Shilka', nato: 'Shilka', rwrSymbol: 'A' },
-  // Rat navy fast boat with a short-range radar SAM and shoulder-launched SA-18s (no class name: none is confirmed)
-  ad_boat: { name: 'Rat navy air-defence boat', nato: 'AD boat', rwrSymbol: 'B' },
+  // IRGC Navy fast boat with a short-range radar SAM and shoulder-launched SA-18s (no class name: none is confirmed)
+  ad_boat: { name: 'IRGC Navy air-defence boat', nato: 'AD boat', rwrSymbol: 'B' },
 };
 
 export const THEATER_INFO: Record<TheaterId, { name: string; region: string }> = {

@@ -55,7 +55,7 @@ export class CollisionSystem {
   private buildingImpacts(aircraft: readonly AircraftEntity[], dt: number, buildings: BuildingIndex): void {
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
-      if (!ac.alive || ac.crashed || ac.civil) continue;
+      if (!ac.alive || ac.crashed || ac.civil || ac.heli) continue;
       _mid.copy(ac.position).addScaledVector(ac.velocity, -dt);
       const hit = buildings.firstHit(_mid, ac.position);
       if (!hit) continue;
@@ -135,8 +135,8 @@ export class CollisionSystem {
     const terrain = this.terrain;
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
-      // live civil traffic flies a scripted profile (incl. the landing roll on its gear)
-      if (ac.crashed || (ac.civil && ac.alive)) continue;
+      // live civil traffic flies a scripted profile (incl. the landing roll on its gear, a helicopter on its pad)
+      if (ac.crashed || ((ac.civil || ac.heli) && ac.alive)) continue;
       const pos = ac.position;
       let ground = terrain.surfaceHeightAt(pos.x, pos.z);
       let hit = pos.y - ground <= CONTACT_HEIGHT;

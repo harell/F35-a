@@ -40,13 +40,15 @@ import { DamageSystem, type DamageWeapon } from './damage/Damage';
 import { AIRCRAFT_HEALTH, AIRCRAFT_WARHEAD, GROUND_TARGET_DATA, SAM_SITE_DATA, VESSEL_DATA } from './damage/tables';
 import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
+import { stepHeli } from './civil/heli';
 import { stepOneWay } from './drone/oneWay';
 import { BuildingIndex, buildingGeometry } from './buildings';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
 import { BOAT_SPEED, makeBoat, stepBoats } from './boats';
 import { makeStoat, stepStoats } from './stoat';
+import type { TrainService } from './civil/rail';
 
-/** Ground target types that are Rat navy fast boats (sailed by sim/boats.ts). */
+/** Ground target types that are IRGC Navy fast boats (sailed by sim/boats.ts). */
 const BOAT_TYPES = new Set<GroundTargetType>(['suicide_boat', 'missile_boat']);
 
 /** Size of the pooled bullet / shell array. */
@@ -70,6 +72,7 @@ const GROUND_NAMES: Record<GroundTargetType, string> = {
   suicide_boat: 'Suicide Boat',
   missile_boat: 'Peykaap II',
   stoat: 'Stoat',
+  train: 'Train',
 };
 
 function createProjectile(): Projectile {
@@ -106,10 +109,14 @@ class SimWorldImpl implements SimWorld {
   readonly buildings: BuildingIndex | null;
   /** The structure the player's jet brought down (Collisions sets it). */
   structureStrike: StructureStrike | null = null;
+  /** The sortie's train timetable (set by the mission's TrainTraffic, #146). */
+  trains: TrainService | null = null;
   readonly projectiles: Projectile[] = [];
   player: AircraftEntity | null = null;
 
   private idSeq = 1;
+  /** Ids of the civil trains near the player (#146): their own range, so their coming and going never shifts the mission's ids. */
+  private civilIdSeq = 1_000_000_000;
   private readonly byId = new Map<number, AnyEntity>();
   private readonly env: FlightEnv;
   private readonly damage: DamageSystem;
@@ -276,7 +283,7 @@ class SimWorldImpl implements SimWorld {
     const data = GROUND_TARGET_DATA[spec.type];
     // civil merchant ship: hull size / hit points of its class (bounding radius = half its length)
     const vessel = spec.type === 'ship' && spec.vessel ? VESSEL_DATA[spec.vessel] : null;
-    const e = new GroundTargetEntity(this.nextId(), spec.type, spec.team, {
+    const e = new GroundTargetEntity(spec.civilId ? this.civilIdSeq++ : this.nextId(), spec.type, spec.team, {
       name: spec.name ?? GROUND_NAMES[spec.type],
       radius: vessel ? vessel.length / 2 : data.radius,
       health: spec.health ?? vessel?.health ?? data.health,
@@ -385,6 +392,7 @@ class SimWorldImpl implements SimWorld {
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
       if (ac.civil && ac.alive) stepCivil(ac, dt, this.terrain, this.player);
+      else if (ac.heli && ac.alive) stepHeli(ac, dt, this.terrain);
       else if (ac.oneWay && ac.alive) {
         if (stepOneWay(ac, dt, this.terrain, this.landmarks)) this.droneImpact(ac);
       } else stepFlight(ac, dt, this.env);
@@ -397,7 +405,7 @@ class SimWorldImpl implements SimWorld {
       this.reportError('combat', err);
     }
 
-    // 4. Ground movers, then the Rat navy fast boats (chase, strike countdown, moving SAMs, Kowsars)
+    // 4. Ground movers, then the IRGC Navy fast boats (chase, strike countdown, moving SAMs, Kowsars)
     this.updateMovers(dt);
     stepBoats(this, dt);
     stepStoats(this, dt);
@@ -531,6 +539,18 @@ class SimWorldImpl implements SimWorld {
       } else aircraft[w++] = a;
     }
     aircraft.length = w;
+
+    // ground entities that left (a civil train out of the player's area, #146); wrecks stay
+    const ground = this.ground;
+    w = 0;
+    for (let i = 0; i < ground.length; i++) {
+      const g = ground[i];
+      if (g.alive && g.despawn) {
+        this.byId.delete(g.id);
+        this.hostileDirty = true;
+      } else ground[w++] = g;
+    }
+    ground.length = w;
   }
 
   /** Remove entities that were already dead at the previous cleanup (one step of grace). */
@@ -564,6 +584,7 @@ class SimWorldImpl implements SimWorld {
     this.landmarks.length = 0;
     this.buildings?.reset();
     this.structureStrike = null;
+    this.trains = null;
     for (const p of this.projectiles) p.active = false;
     this.byId.clear();
     this.player = null;

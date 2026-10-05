@@ -15,6 +15,9 @@ export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   su57: 'SU-57',
   a320: 'A320',
   shahed136: 'SHAHED-136',
+  aw169: 'AW169',
+  bell429: 'BELL 429',
+  h130: 'H130',
 };
 
 /** Short type codes for crowded places (TSD, RWR). */
@@ -26,6 +29,9 @@ export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
   su57: '57',
   a320: 'CIV',
   shahed136: 'UAV',
+  aw169: 'CIV',
+  bell429: 'CIV',
+  h130: 'CIV',
 };
 
 export const SAM_LABEL: Record<SamType, string> = {
@@ -44,6 +50,7 @@ export const GROUND_LABEL: Record<GroundTargetType, string> = {
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MSL BOAT',
   stoat: 'STOAT',
+  train: 'TRAIN',
 };
 
 /** HMD weapon names ("AMRAAM 4", "9X 2", "GUN 180", "JDAM 2"). */

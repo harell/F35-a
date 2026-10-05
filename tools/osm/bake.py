@@ -1,13 +1,15 @@
 """
 Bake OpenStreetMap layers into compact game data for the Auckland theatre.
 
-Inputs: one or more OSM extracts (.osm.pbf / .osm / .osm.gz) covering the world box, normally the pinned
-Geofabrik New Zealand extract clipped by fetch.py (see README.md). Later files only add objects the
-earlier ones lack (same OSM id = same object), so a small supplement can fill a gap in a regional extract.
+Inputs: one or more OSM extracts (.osm.pbf / .osm / .osm.gz) covering the world box (see README.md). Several
+are merged into one first (each object once, at its newest version), so a supplement can fill a gap in a
+regional extract and an area cut at an extract's edge is assembled from both.
 
 Output (gzip): src/world/scenery/data/auckland-osm.bin, decoded by src/world/scenery/aucklandOsm.ts.
 Only the layers the game reads are kept (roads, streets and buildings come from LINZ, tools/linz):
-  aeroway   aerodrome, runway, taxiway, apron, hangar (+ building=hangar), terminal, control tower, helipad
+  aeroway   aerodrome, runway, taxiway, apron, hangar (+ building=hangar), terminal, control tower, helipad and
+            heliport (nodes, and polygons as their centre with their size; the full table with heights is
+            helipads.py's)
   waterside man_made=pier, man_made=breakwater, leisure=marina, landuse=port (or industrial=port), waterway=dock
   sites     man_made=storage_tank (>= 8 m across), landuse=military, military=naval_base, industrial=oil (fuel
             terminals), leisure=stadium (>= 1 ha) and its building=grandstand, and the buildings inside the
@@ -84,7 +86,7 @@ def layer_of(t, area):
         return 'terminal'
     if a == 'control_tower' or (t.get('man_made') == 'tower' and t.get('tower:type') in ('observation', 'air_traffic_control') and a):
         return 'tower'
-    if a == 'helipad':
+    if a in ('helipad', 'heliport'):
         return 'helipad'
     mm = t.get('man_made')
     if mm == 'pier':
@@ -153,7 +155,23 @@ class Collector(osmium.SimpleHandler):
     def area(self, a):
         tags = dict(a.tags)
         lay = layer_of(tags, True)
-        if lay is None or lay in ('runway', 'taxiway', 'helipad'):
+        if lay is None or lay in ('runway', 'taxiway'):
+            return
+        if lay == 'helipad':
+            # a pad mapped as a polygon: its centre, with its size (the long side of its minimum rectangle) as width
+            try:
+                g = unary_union([Polygon([world(n.lat, n.lon) for n in outer]).buffer(0) for outer in a.outer_rings()])
+            except (osmium.InvalidLocationError, ValueError):
+                return
+            if g.is_empty:
+                return
+            c = g.centroid
+            r = g.minimum_rotated_rectangle
+            xs = list(r.exterior.coords) if r.geom_type == 'Polygon' else [(c.x, c.y)] * 3
+            size = max(math.dist(xs[0], xs[1]), math.dist(xs[1], xs[2]))
+            lat, lon = O_LAT - c.y / M_LAT, O_LON + c.x / M_LON
+            if in_box(lat, lon):
+                self._add(('w' if a.from_way() else 'r', a.orig_id()), 'helipad', {**tags, 'width': str(round(size, 1))}, [(c.x, c.y)], False)
             return
         if lay in ('pier', 'breakwater') and tags.get('area') != 'yes' and a.from_way():
             return  # an open-style closed pier way stays a line (handled in way())
@@ -196,7 +214,7 @@ class SiteBuildings(osmium.SimpleHandler):
         t = a.tags
         if 'building' not in t or t.get('building') in ('grandstand', 'hangar', 'roof', 'no') or 'aeroway' in t:
             return
-        if t.get('man_made') == 'storage_tank':
+        if t.get('man_made') == 'storage_tank' or t.get('aeroway') in ('helipad', 'heliport'):
             return
         key = ('w' if a.from_way() else 'r', a.orig_id())
         if key in self.store:
@@ -355,6 +373,8 @@ def encode(items, attribution):
         flags = (1 if it['area'] else 0) | (2 if (t.get('surface') or '') in PAVED else 0)
         if it['layer'] == 'tank':
             flags |= 4 if t.get('content') in ('oil', 'fuel', 'petroleum', 'gas', 'diesel', 'lpg') else 0
+        if it['layer'] == 'helipad' and t.get('aeroway') == 'heliport':
+            flags |= 8
         recs.append((L[it['layer']], flags, name, ref, int(round(width * 2)), it['pts']))
     s(attribution)
     w = Writer()
@@ -406,17 +426,43 @@ def sha256(path):
             d.update(chunk)
     return d.hexdigest()
 
+class merged_input:
+    """Context manager: the path of one file holding every input's objects, each once at its newest version
+    (osmium's merge, sorted by type and id). A single input is used as it is."""
+
+    def __init__(self, inputs):
+        self.inputs = list(inputs)
+        self.tmp = None
+
+    def __enter__(self):
+        if len(self.inputs) == 1:
+            return self.inputs[0]
+        import tempfile
+        fd, self.tmp = tempfile.mkstemp(suffix='.osm.pbf')
+        os.close(fd)
+        os.remove(self.tmp)
+        reader = osmium.MergeInputReader()
+        for p in self.inputs:
+            reader.add_file(p)
+        writer = osmium.SimpleWriter(self.tmp)
+        reader.apply(writer, simplify=True)
+        writer.close()
+        return self.tmp
+
+    def __exit__(self, *exc):
+        if self.tmp and os.path.exists(self.tmp):
+            os.remove(self.tmp)
+
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     out = sys.argv[1]
     inputs = sys.argv[2:]
     store = {}
-    for p in inputs:
-        Collector(store).apply_file(p, locations=True, idx='flex_mem')
-    sites = [it['pts'] for it in store.values() if it['layer'] in SITE_LAYERS and it['area']]
-    for p in inputs:
-        SiteBuildings(store, sites).apply_file(p, locations=True, idx='flex_mem')
+    with merged_input(inputs) as src:
+        Collector(store).apply_file(src, locations=True, idx='flex_mem')
+        sites = [it['pts'] for it in store.values() if it['layer'] in SITE_LAYERS and it['area']]
+        SiteBuildings(store, sites).apply_file(src, locations=True, idx='flex_mem')
     items = []
     for it in store.values():
         lay = it['layer']
@@ -450,7 +496,13 @@ def main():
         inputs=[dict(file=os.path.basename(p), timestamp=t, sha256=sha256(p)) for p, t in zip(inputs, stamps)],
         layers=dict(sorted(counts.items())),
     )
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'manifest.json'), 'w') as f:
+    mpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'manifest.json')
+    if os.path.exists(mpath):
+        old = json.load(open(mpath))
+        for key in ('landuse', 'helipads'):  # landuse.py's and helipads.py's entries (same inputs, their own outputs)
+            if key in old:
+                manifest[key] = old[key]
+    with open(mpath, 'w') as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
         f.write('\n')
     print(json.dumps(manifest, indent=2, ensure_ascii=False))

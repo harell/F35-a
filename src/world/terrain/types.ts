@@ -47,6 +47,11 @@ export interface TerrainSpec {
    * instead of procedural noise, when that data is loaded and matches the installed 1024 grid.
    */
   hdTerrain?: boolean;
+  /**
+   * Auckland: take the built-up density from the real land use (scenery/aucklandLandUse.ts, #122) where that grid is
+   * loaded (medium and high tiers), instead of the hand-traced suburbs alone.
+   */
+  landUse?: boolean;
 }
 
 /** Flatten footprint of a scenery feature (local frame: +Z along `rotation` heading). */

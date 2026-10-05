@@ -42,6 +42,7 @@ import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './terrain/urbanColor';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
 import { loadAucklandOsm } from './scenery/aucklandOsm';
+import { aucklandLandUse, loadAucklandLandUse } from './scenery/aucklandLandUse';
 import { loadAucklandPort } from './scenery/aucklandPort';
 import { loadAucklandNeighbourhoods } from './scenery/aucklandNeighbourhoods';
 import { runwaysOf } from '../core/airfields';
@@ -87,10 +88,13 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
   // the main thread while the terrain generates, needed only for the GPU objects below.
   const aerialLoad = cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
-  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods()]);
+  // The real land use (#122, medium and high only: its grid is 12.5 MB on the GPU)
+  const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), landUseLoad]);
+  const landUse = cfg.landUse ? aucklandLandUse() : null;
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);
-  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain };
+  const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain, landUse: !!landUse };
   let pool = TerrainWorkerPool.create();
   if (pool) {
     try {
@@ -315,12 +319,14 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     style,
     lights: preset.lights,
     aerial,
+    landUse,
   });
   scene.add(scenery.group);
   // the terrain leaves the lots along the road and railway ribbons unbuilt, as the scenery's houses do
   terrain.setLotMask(scenery.lotMask);
   terrain.setSiteMask(scenery.siteMask);
   terrain.setFrontage(scenery.frontage);
+  terrain.setLandUse(landUse);
   let reflections: LightReflections | null = null;
   if (scenery.reflectionSources.length) {
     reflections = new LightReflections(atmo, scenery.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));

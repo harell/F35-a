@@ -78,7 +78,11 @@ describe('A Stroll in the Park: civil targets', () => {
     expect(Math.min(...civil.map((a) => a.position.distanceTo(p.position)))).toBeGreaterThan(15_000);
     for (const a of civil) expect(p.radar.contacts.some((c) => c.id === a.id), a.callsign).toBe(true);
     m.world.combat.cycleTarget(p, m.world);
-    expect(civil.map((a) => a.id)).toContain(p.radar.designatedId);
+    // TGT steps to a civil aircraft: an airliner, or one of the civil helicopters (#144), which broadcast ADS-B too
+    const helis = m.world.aircraft.filter((a) => a.heli && a.alive);
+    expect(helis.length).toBeGreaterThan(0);
+    for (const h of helis) expect(p.radar.contacts.some((c) => c.id === h.id), h.callsign).toBe(true);
+    expect([...civil, ...helis].map((a) => a.id)).toContain(p.radar.designatedId);
     m.runner.dispose?.();
   });
 
@@ -156,7 +160,8 @@ describe('A Stroll in the Park: civil targets', () => {
     for (const def of defs) {
       const m = sortie(def);
       for (const g of m.world.ground) {
-        if (g.team === 'neutral') expect(['container', 'cruise', 'tanker'], `${def.id}: ${g.name}`).toContain(g.vessel);
+        // (a civil train, #146, is a neutral ground entity too, but no ship)
+        if (g.team === 'neutral' && g.type !== 'train') expect(['container', 'cruise', 'tanker'], `${def.id}: ${g.name}`).toContain(g.vessel);
       }
       m.runner.dispose?.();
     }

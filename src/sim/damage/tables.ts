@@ -33,10 +33,12 @@ export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
   hangar: { radius: 25, health: 200, explosion: 'huge', naval: false },
   parked_jet: { radius: 9, health: 40, explosion: 'large', naval: false },
   ship: { radius: 60, health: 400, explosion: 'huge', naval: true },
-  // Rat navy fast boats (sim/boats.ts): small, unarmoured, a short gun burst sinks one
+  // IRGC Navy fast boats (sim/boats.ts): small, unarmoured, a short gun burst sinks one
   suicide_boat: { radius: 8, health: 40, explosion: 'huge', naval: true }, // ~16 m, packed with explosive
   missile_boat: { radius: 9, health: 50, explosion: 'large', naval: true }, // Peykaap II, ~17 m
   stoat: { radius: 0.2, health: 1, explosion: 'tiny', naval: false }, // g03: 0.38 m nose to tail tip, 0.3 kg
+  // a civil train (#146): one bomb / missile hit destroys it (Damage), a short gun burst too; radius = half the consist
+  train: { radius: 36, health: 300, explosion: 'large', naval: false },
 };
 
 export interface VesselData {

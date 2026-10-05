@@ -50,13 +50,17 @@ export function offerRecruitRetry(r: Pick<MissionResult, 'success' | 'missionId'
   return !(m && fixedDifficulty(m));
 }
 
-/** Debrief stat rows for civil losses: airliners downed and civil ships destroyed (only when > 0). */
+/** Debrief stat rows for civil losses: airliners and helicopters downed, civil ships and trains destroyed (only when > 0). */
 export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   const ships = r.civilianShipKills ?? 0;
-  const airliners = (r.civilianKills ?? 0) - ships;
+  const helis = r.civilianHeliKills ?? 0;
+  const trains = r.civilianTrainKills ?? 0;
+  const airliners = (r.civilianKills ?? 0) - ships - helis - trains;
   const rows: [string, string, string][] = [];
   if (airliners > 0) rows.push(['skull', 'Civil airliners downed', String(airliners)]);
+  if (helis > 0) rows.push(['skull', 'Civil helicopters downed', String(helis)]);
   if (ships > 0) rows.push(['skull', 'Civil ships destroyed', String(ships)]);
+  if (trains > 0) rows.push(['skull', 'Civil trains destroyed', String(trains)]);
   return rows;
 }
 

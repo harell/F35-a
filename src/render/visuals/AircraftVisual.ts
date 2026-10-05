@@ -47,6 +47,7 @@ export class AircraftVisual {
   private nozzleOpen = Number.NaN;
   private readonly nozzle: { mesh: Mesh; def: DriveDef } | null = null;
   private lodLevel = -1;
+  private readonly nightOnly: Object3D[] = [];
   /** World-space light anchors (updated by the renderer). */
   readonly lightLocal: { pos: Vector3; color: number; kind: 'nav' | 'strobe' | 'tail' }[];
 
@@ -55,10 +56,13 @@ export class AircraftVisual {
     readonly spec: AircraftSpec,
     private readonly isPlayer: boolean,
     shadows: boolean,
+    /** Keep an instanced type's own meshes (the models lab draws one helicopter alone, without its batch). */
+    ownMeshes = false,
   ) {
     this.lod0 = proto.lod0.clone(true);
     this.lod1 = proto.lod1.clone(true);
-    this.root.add(this.lod0, this.lod1);
+    // an instanced type (the civil helicopters) is drawn by its batch (HeliBatch) from this root's matrix
+    if (!proto.instanced || ownMeshes) this.root.add(this.lod0, this.lod1);
     this.root.add(this.flameGroup);
     for (const def of proto.drives) {
       const pivot = this.lod0.getObjectByName(`pivot:${def.part}`);
@@ -92,6 +96,10 @@ export class AircraftVisual {
       this.fixed.push(m);
     }
     this.lightLocal = spec.lights.map((l) => ({ pos: new Vector3(...l.pos), color: l.color, kind: l.kind }));
+    // parts shown only at night (the police helicopter's searchlight beam)
+    this.root.traverse((o) => {
+      if (o.name.startsWith('night:')) this.nightOnly.push(o);
+    });
     if (shadows && isPlayer) {
       this.lod0.traverse((o) => {
         if ((o as Mesh).isMesh) o.castShadow = true;
@@ -189,7 +197,8 @@ export class AircraftVisual {
           a = ac.bayDoors * def.max;
           break;
         case 'radome':
-          a = time * def.max;
+          // a wreck's rotodome / propeller / rotors stop where they were
+          a = ac.alive ? time * def.max : obj.rotation.x;
           break;
         case 'canard':
           a = -s.elevator * def.max;
@@ -260,6 +269,7 @@ export class AircraftVisual {
       this.lod1.visible = level === 1;
     }
     this.setWreck(!ac.alive);
+    for (const o of this.nightOnly) o.visible = night && ac.alive;
     this.updateNozzle(ac, dt, level);
     if (level === 0) {
       this.applyDrives(ac, time);

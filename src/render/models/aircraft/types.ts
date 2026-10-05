@@ -79,4 +79,9 @@ export interface AircraftPrototype {
   /** Fixed visual missiles for AI aircraft (hidden progressively as stores deplete). */
   fixedStores: { munition: MunitionId; pos: V3 }[];
   triangles: number;
+  /**
+   * Drawn instanced (the civil helicopters: visuals/HeliBatch.ts, one draw call per type): the AircraftVisual keeps
+   * no meshes of its own, only the pose, LOD distance and light anchors.
+   */
+  instanced?: boolean;
 }

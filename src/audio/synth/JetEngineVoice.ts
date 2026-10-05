@@ -40,6 +40,10 @@ export const ENGINE_PROFILES: Record<AircraftType, EngineProfile> = {
   // Shahed-136: no turbine; its piston buzz is PistonBuzzVoice (audio/world/DroneSounds.ts), and
   // the jet pool never picks it. Kept near-silent in case anything plays it as a jet.
   shahed136: { whine: 0.05, fan: 0.05, roar: 0.05, rumble: 0.1, ref: 15, maxDist: 1500 },
+  // civil helicopters: turboshaft whine and a low rumble standing in for the rotor beat
+  aw169: { whine: 0.55, fan: 0.3, roar: 0.15, rumble: 0.9, ref: 25, maxDist: 2500 },
+  bell429: { whine: 0.5, fan: 0.25, roar: 0.12, rumble: 0.8, ref: 22, maxDist: 2200 },
+  h130: { whine: 0.45, fan: 0.2, roar: 0.1, rumble: 0.7, ref: 20, maxDist: 2000 },
 };
 
 export interface EngineDrive {

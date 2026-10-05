@@ -217,7 +217,7 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
     }
     // peacetime civil traffic broadcasts ADS-B: a datalink track whatever the onboard sensors see (after
     // them, so a radar or DAS track keeps its own source)
-    if (t.team === 'neutral' && t.civil?.adsb) upsert(st, t, 'datalink', now, null, null, now);
+    if (t.team === 'neutral' && (t.civil?.adsb || t.heli?.adsb)) upsert(st, t, 'datalink', now, null, null, now);
     const c = st.contacts.get(t.id);
     if (c && inGimbal) c.inGimbal = true;
   }

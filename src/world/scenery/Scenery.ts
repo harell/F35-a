@@ -41,8 +41,10 @@ import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
-import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, TreeSource } from './sources';
-import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry } from './archetypes';
+import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource } from './sources';
+import type { LandUse } from './aucklandLandUse';
+import { buildHelipadDecks, buildHelipads, createHelipadTexture, roofLookup } from './helipads';
+import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry, shedGeometry } from './archetypes';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { AIRBASE, airfieldOf } from '../terrain/features';
 import { AIRFIELDS, airfieldRotation, runwaysOf } from '../../core/airfields';
@@ -67,6 +69,8 @@ export interface SceneryOptions {
    * faces, and no houses or trees are scattered where it covers the ground (it shows the real ones).
    */
   aerial?: AerialPhotoInfo | null;
+  /** The real land use (#122, medium and high tiers): houses off open ground, sheds on commercial land. */
+  landUse?: LandUse | null;
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + Auckland's built-ins). */
@@ -114,10 +118,16 @@ export class Scenery {
     this.lightsMat = createLightsMaterial(o.atmo);
     this.lightsMat.uniforms.uIntensity.value = o.lights;
     this.materials.push(buildingMat, this.lightsMat);
-    // (the CBD's towers keep their own roofs: the photo is not a true orthophoto, a tall tower's roof is
-    // drawn up to ~25 m off its footprint)
     const aerialMat = o.aerial ? createBuildingMaterial(o.atmo, { aerial: aerialUniforms(o.aerial, o.aerial.texture) }) : null;
     if (aerialMat) this.materials.push(aerialMat);
+    // the CBD mesh: the photo is not a true orthophoto (a roof is drawn displaced from its footprint by its height ×
+    // the camera's lean), so only the LINZ buildings' roofs take it, each at its registered offset (#140,
+    // aucklandBuildings.ts roofPhotoOffset); the tower kit and the other heroes keep their own roofs
+    // (and its buildings' facades: storeys, window rhythm, glass, contact shading, #141; on every tier)
+    const cbdMat = o.aerial
+      ? createBuildingMaterial(o.atmo, { aerial: aerialUniforms(o.aerial, o.aerial.texture), roofs: true, facades: true })
+      : createBuildingMaterial(o.atmo, { facades: true });
+    this.materials.push(cbdMat);
     const lights = new LightList();
     const addMesh = (b: GeometryBuilder, name: string, mat: ShaderMaterial = buildingMat) => {
       const g = b.build();
@@ -204,6 +214,8 @@ export class Scenery {
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
       const city = new GeometryBuilder();
+      if (o.aerial) city.enablePhotoRoofs();
+      city.enableFacades();
       if (!buildings) buildSkyCityPodium(city, height);
       this.skyTower = new SkyTowerVisual(buildingMat, o.lights > 0.01 ? this.lightsMat : null, height);
       this.group.add(this.skyTower.group);
@@ -231,7 +243,7 @@ export class Scenery {
       buildWestfieldNewmarket(city, lights, height);
       // Spark Arena (hand-built from the LiDAR, sparkArena.ts) rides in the CBD mesh; its three signs are one small mesh
       const arena = hero(SPARK_ARENA_ID, sparkArenaGround(height), () => buildSparkArena(city, lights, height, detail));
-      const cityGeo = addMesh(city, 'akl-cbd');
+      const cityGeo = addMesh(city, 'akl-cbd', cbdMat);
       {
         const tex = createSparkArenaSignTexture(o.cfg.anisotropy);
         this.textures.push(tex);
@@ -316,6 +328,8 @@ export class Scenery {
         buildStadiums(sites, lights, height, layout);
       }
       buildWiriTerminal(sites, lights, height, layout, concrete);
+      // the rooftop helipads on buildings the game does not model yet stand on a plain block (#125)
+      buildHelipadDecks(sites, height, roofLookup(aucklandBuildings(), height));
       addMesh(sites, 'akl-sites', aerialMat ?? buildingMat);
     }
 
@@ -354,6 +368,24 @@ export class Scenery {
         const m = new Mesh(g, mat);
         m.name = 'taxiways';
         m.renderOrder = -5;
+        this.group.add(m);
+      }
+    }
+    {
+      // every helipad and heliport (#125, core/sites.ts HELIPADS): one decal draw call, green edge lights at night
+      const pads = new DecalBuilder();
+      buildHelipads(pads, lights, height, roofLookup(aucklandBuildings(), height));
+      const g = pads.build();
+      if (g) {
+        const tex = createHelipadTexture();
+        tex.anisotropy = o.cfg.anisotropy;
+        this.textures.push(tex);
+        const mat = createDecalMaterial(o.atmo, tex);
+        this.materials.push(mat);
+        this.geometries.push(g);
+        const m = new Mesh(g, mat);
+        m.name = 'helipads';
+        m.renderOrder = -4;
         this.group.add(m);
       }
     }
@@ -438,7 +470,7 @@ export class Scenery {
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
@@ -450,17 +482,18 @@ export class Scenery {
     );
     for (const m of this.trees.meshes) this.group.add(m);
 
-    const houseGeoms = [houseGeometry(), apartmentGeometry()];
+    const houseGeoms = [houseGeometry(), apartmentGeometry(), ...(o.landUse ? [shedGeometry()] : [])];
     this.geometries.push(...houseGeoms);
     const houseMat = createBuildingMaterial(o.atmo, { houses: true });
     this.materials.push(houseMat);
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
         { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
+        ...(o.landUse ? [{ geometry: houseGeoms[2], material: houseMat, capacity: Math.round(hc / 6), kind: SHED, color: shedColorFn() }] : []),
       ],
       300,
       o.cfg.houseRadius,

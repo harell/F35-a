@@ -1,6 +1,6 @@
 /**
  * Ground target prototypes: command bunker, fuel farm, hardened aircraft shelter, parked jet,
- * corvette, Rat navy fast boats, plus the civil
+ * corvette, IRGC Navy fast boats, plus the civil
  * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
@@ -181,7 +181,7 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
     }
     case 'suicide_boat':
     case 'missile_boat': {
-      // Rat navy fast boats (models/boats.ts); a killed one stays afloat, burnt out
+      // IRGC Navy fast boats (models/boats.ts); a killed one stays afloat, burnt out
       statics.push(...(type === 'suicide_boat' ? suicideBoat() : missileBoat()));
       radius = 9;
       farScale = 1.2;

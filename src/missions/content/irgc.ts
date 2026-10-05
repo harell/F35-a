@@ -1,8 +1,8 @@
 /**
  * F35-A — the IRGC campaign over Auckland and the Hauraki Gulf (epic #72). IRGC is the Interspecies
  * Revolutionary Guard Corps (#211): New Zealand's invasive pests, organised into an army against
- * Predator Free 2050. The Wasp air wing's Shahed one-way attack drones over the city and the Rat
- * navy's fast attack boats in the Gulf, launched from the Guard's rusting mother ship.
+ * Predator Free 2050. The Guard's Shahed one-way attack drones over the city and the IRGC
+ * Navy's fast attack boats in the Gulf, launched from the Guard's rusting mother ship.
  *
  * Missions: g01 "Buzz Kill", the Shahed swarm on the Sky Tower (#78); g02 "Straight Outta
  * Hauraki" (#82, irgcHauraki.ts), the escort through the boat swarm; g03 "Stoat of Emergency"
@@ -128,7 +128,7 @@ export const G01: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
-    '13:40. The Guard\'s rusting mother ship, lying off the Hauraki Gulf, has launched its Wasp air wing: a swarm of Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the tallest tree in Auckland, the Sky Tower. Impact in under four minutes.',
+    '13:40. The Guard\'s rusting mother ship, lying off the Hauraki Gulf, has launched a swarm of Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the tallest tree in Auckland, the Sky Tower. Impact in under four minutes.',
     'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are more of them than the eight missiles you carry at most. The gun is not optional today: you have extra rounds.',
     'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 550 to 700 m. Sit about 400 ft below the drone: at that speed the jet flies nose-high and the pipper rides above your flight path, so level behind a drone it sits above it. From 400 ft below, the drone rises into the pipper at about 600 m. Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
@@ -175,7 +175,7 @@ export const G01: MissionDef = mission({
       { id: 't_half', when: { kind: 'group_destroyed', group: 'shaheds', count: 5 }, actions: [{ kind: 'radio', from: DS, text: 'Half the swarm is down. Keep going, Viper.' }] },
     ],
     hints: G01_HINTS,
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. The Wasp air wing, a Shahed swarm over Pakuranga, heading for the Sky Tower. Weapons free.', priority: 2 }],
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. A Shahed swarm over Pakuranga, heading for the Sky Tower. Weapons free.', priority: 2 }],
     successText: 'Swarm destroyed. The tower is still standing. Good shooting, Viper.',
   },
 });

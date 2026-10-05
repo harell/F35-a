@@ -8,6 +8,7 @@
  * Pipeline: Auckland base terrain (≤1024², with a border fade to a smooth outside profile)
  *   → optional 2× Catmull-Rom upsample + fine detail (2048² on high quality): procedural octaves, or
  *     with `spec.hdTerrain` a blend to the real 2048 LiDAR heights (aucklandLinzHd.ts)
+ *   → with `spec.landUse`, the real land use's built-up density on the base materials (landUse.ts)
  *   → flatten features (airfields, depots…) and pads (SAM sites).
  */
 import { Heightfield } from './Heightfield';
@@ -17,6 +18,8 @@ import { createAuckland } from './theaters/auckland';
 import { runwaysOf } from '../../core/airfields';
 import { aucklandLinz } from './theaters/aucklandLinz';
 import { aucklandLinzHd, linzHdHeights, linzHdMatches } from './theaters/aucklandLinzHd';
+import { aucklandLandUse } from '../scenery/aucklandLandUse';
+import { applyLandUseSteps } from './landUse';
 import {
   EDGE_FADE_END,
   EDGE_FADE_START,
@@ -113,6 +116,12 @@ export function* generateTerrain(spec: TerrainSpec): Generator<number, Heightfie
  * Progress continues from `p0` to 1.
  */
 export function* finishTerrain(base: Heightfield, spec: TerrainSpec, p0: number): Generator<number, Heightfield, void> {
+  // the real land use's built-up density (#122), on the base samples (the upsample copies their materials)
+  const lu = spec.landUse ? aucklandLandUse() : null;
+  if (lu) {
+    const g = applyLandUseSteps(base, lu, spec.seed);
+    for (let r = g.next(); !r.done; r = g.next()) yield p0 + r.value * 0.02;
+  }
   let hf = base;
   if (spec.resolution > base.n) {
     hf = new Heightfield(base.n * 2, HF_EXTENT);

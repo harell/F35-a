@@ -21,7 +21,7 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 >   The CBD sits on the south shore of the Waitematā Harbour, the Hauraki Gulf and its islands lie to the east/north-east,
 >   the Manukau Harbour and the airport to the south-west/south, and the Waitākere Ranges (≤474 m) plus the Tasman coast to the west.
 > * **Campaign fiction:** the IRGC campaign (epic #72, `src/missions/content/irgc.ts` and `irgcHauraki.ts`, mission ids
->   `g01`, `g02`, …): Shahed one-way attack drones over the city and Rat navy fast boats in the Hauraki Gulf. F-35As fly
+>   `g01`, `g02`, …): Shahed one-way attack drones over the city and IRGC Navy fast boats in the Hauraki Gulf. F-35As fly
 >   from **RNZAF Base Auckland (Whenuapai)** to defend Auckland. Enemy targets are always **military**; never target
 >   civilian landmarks. The CBD, Sky Tower and Harbour Bridge are things you **protect**. Optional bonus: flying under the
 >   Harbour Bridge (43 m clearance) earns a score bonus and a HUD message. Instant Action still uses a hostile SAM belt on
@@ -129,6 +129,32 @@ taxiways, aprons, hangars, terminals and a levelled outline. `allFeatures('auckl
 (`Footprint.kind = 'poly'`), and the scenery builds `buildRealAirfield`. Without the file, the template airbase is
 laid on the same real runways. `tests/world-osm.test.ts` keeps the table and the bake in step.
 
+## Real land use (OpenStreetMap, #122)
+
+**`src/world/scenery/data/auckland-landuse.bin`** (baked by `tools/osm/landuse.py`, ODbL; 436 kB gzip, loaded by
+`aucklandLandUse.ts` on the medium and high tiers only, `worldConfig().landUse`) is a 16 m class grid over the ±40 km
+world: residential, commercial / retail, industrial, park, pitch, golf, school, hospital, cemetery, vineyard,
+farmland, or none. Three readers: `applyLandUse` (`src/world/terrain/landUse.ts`, on the base heightfield in
+`finishTerrain`, main thread only, `TerrainSpec.landUse`) sets the built-up density from the class shares of each
+86 m sample, so the colour map, the garden trees and the house scatter follow the real suburbs and parks; the
+terrain shader (`landUseAt()`, the grid as an RGBA8 texture of 4 × 2 nibbles) paints open ground (pitches, fairways,
+headstones, vine rows; no procedural streets across parks and campuses) and sheds round car parks; `HouseSource`
+places houses only off open ground and one flat-roofed shed (`SHED`, a third instanced draw) per unit of three lots
+on commercial, industrial and hospital land and on some school land (`landUseLots.ts` holds the shared rules, so
+the painted and the 3D sheds agree). A cell without a class keeps the hand-traced suburbs (`AKL_URBAN`, `AKL_PARKS`),
+which stay the low tier's and the offline fallback. Gameplay never reads it.
+
+## Helipads (OpenStreetMap + LiDAR, #125)
+
+`HELIPADS` in `src/core/sites.ts` (generated `src/core/helipadsData.ts`, baked by `tools/osm/helipads.py`) is every
+OSM helipad and heliport in the world box with its size, heading, parent site (hospital, airfield, naval base,
+vineyard), area and height; rooftop pads carry the 2024 LiDAR roof height. It is synchronous and always present, like
+`WIRI_TANKS`: the scenery draws every pad in one decal draw call (`src/world/scenery/helipads.ts`: concrete with a
+yellow circle at hospitals, airfields and heliports, grass elsewhere; green edge lights at night on the hospital,
+airfield and heliport pads), and a rooftop pad whose building the game doesn't model yet (Auckland City Hospital:
+the LINZ CBD buildings stop short of Grafton) stands on a plain block in the sites mesh. Gameplay may read the table
+(the civil helicopters fly between its pads).
+
 ## Waterfront and strategic sites (OpenStreetMap)
 
 `src/world/scenery/aucklandSites.ts` builds from the same OSM file: the Ports of Auckland outline as a wharf deck (it
@@ -148,7 +174,7 @@ Wiri tanks still stand.
 the waterfront and Devonport (`AERIAL_RECT`; baked by `tools/linz/aerial.py`): 2048² on the medium tier, 4096² on
 high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial=0`). Its alpha marks land and the
 OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
-the wharf decks and the naval base take it on their top faces, and the house / tree scatter and the procedural
+the wharf decks and the naval base take it on their top faces, so do the CBD's LINZ buildings (below), and the house / tree scatter and the procedural
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
 procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
 photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
@@ -161,6 +187,31 @@ thinning with slant range (`aerialHouseShare`, the same curve as `scatterKeep` i
 At night the procedural ground still runs under the photo for its lamps and lit windows, and the photo gives half its
 colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
 sit on the warmer procedural colour instead of a cool grey square.
+
+**Photo roofs (#140).** The photo is a standard orthophoto, not a true one: a roof h m up is drawn displaced from its
+footprint by h × the camera's lean there (0.07 m per metre typically in the CBD, the mosaic switching frame to frame).
+`tools/linz/roofs.py` registers every LINZ building the game draws on the photo's 0.3 m source tiles (edge correlation of
+the outline, every side at once, the prisms leaning in proportion to their height) and bakes one offset per building into
+`auckland-buildings.bin` (format v2, `Building.roof`, `roofPhotoOffset`). The CBD mesh then carries an int16 `aRoof`
+attribute (`GeometryBuilder.enablePhotoRoofs`, only when the tier has the photo) and draws with the `roofs` variant of the
+building material: a photo roof samples the photo at its footprint + offset, its walls' top 0.9 m take the photo's roof
+border as a parapet band (no windows there), and every other part of the mesh (the tower kit, the heroes, the
+neighbourhoods) keeps its own roof. A roof under 35 m that failed the correlation takes the offset its neighbours'
+lean predicts; a taller one keeps today's plain roof. Same mesh, same draw call, same triangles; low tier unchanged.
+
+**Building lighting and facades (#141).** Every wall of the building material takes sky light on top of the hemisphere
+term: the sky dome's radiance half way up in the direction it faces (its horizon colour, warmer towards the sun,
+blended with the zenith; × `SKY_WALL_FILL`), so shaded towers keep their form and take the sky's tint. The CBD mesh also carries an int16 `aFacade` attribute on every tier
+(`GeometryBuilder.enableFacades` / `setFacade`, the `facades` variant of the material): each building's base (its walls
+darken over the bottom `CONTACT_HEIGHT` m, contact shading without SSAO), and for the LINZ blocks their storey height,
+a seed and a glass flag. `buildingFacade` (auckland.ts) picks colour, window style and storey from the building's
+OpenStreetMap tags where it has them (`Building.osm`, baked by `tools/linz/facades.py`: use, `building:levels`,
+material, colour) and from its height class as before where not; the shader draws one floor per storey from the base,
+window width and margins from the seed (`STOREY_WINDOWS`), and a glass facade as a curtain wall. Glass (window panes,
+glass facades, the tower kit's curtain walls) is a dark body colour plus the sky it reflects, added as radiance after the
+lighting and weighted by Schlick's Fresnel (`GLASS_REFLECT`, more towards grazing), so glass in shade still reads as
+glass. A building's own grid fades to its average once a cell is under ~6 px and keeps its style's mean night glow. The night facade lights
+(`buildFacadeLightPoints`) sit on the same storeys. Same mesh, draw calls and triangles.
 
 The terrain's night glow constants live in `src/world/terrain/nightGlow.ts`. In the CBD region (`cbdPattern`) the
 streets themselves glow with their lamps (the posts are `buildCBD`'s fixtures), with shop windows on the footpaths and
@@ -178,6 +229,23 @@ driveway; shops in the town centres), fitted in blocks between the grid's side s
 runs through turns its street grid to the road (`urbanGrid.ts districtAngles`). The shader's `frontageLot()` and
 `HouseSource` read the same lots (textures from `TerrainRenderer.setFrontage`), so painted and 3D houses agree there too.
 
+## Civil helicopters (#144)
+
+Three code-built types (`aw169` Westpac Rescue, `bell429` police "Eagle", `h130` sightseeing; `src/render/models/aircraft/helicopters.ts`)
+are neutral sim entities like the airliners, spawned once per Auckland sortie by `src/missions/runtime/helicopters.ts`
+(`QualitySettings.helicopters`: 1 low, 3 medium, 4 high; seeded from the mission) and flown kinematically by
+`src/sim/civil/heli.ts` (`AircraftEntity.heli`; the world skips the flight model, the collisions skip them while alive):
+the rescue AW169 shuttles between Auckland City Hospital's rooftop pad and Waiheke's Onetangi pad (now and then North
+Shore or Middlemore), the police Bell 429 orbits a point drifting over the CBD and the motorways at 1,000–1,500 ft, and
+the sightseeing H130s shuttle between Mechanics Bay and a Waiheke vineyard. Their pads come from `HELIPADS`
+(`src/core/sites.ts`, #125). Being neutral they are off the datalink, boxed `CIV`, ranked last for designation and
+broadcast ADS-B in the stroll; shooting one down is a civilian loss ("CIVILIAN HELICOPTER DOWN", −500, −0.15 rating,
+a debrief row, `MissionResultExt.civilianHeliKills`), never a kill and never a failed sortie, and the wreck falls on
+the flight model. They are drawn instanced, one draw call per type (`src/render/visuals/HeliBatch.ts`: the airframe
+and both rotors merged, the rotors turned in the vertex shader); their `AircraftVisual` keeps no meshes
+(`AircraftPrototype.instanced`), only the pose, LOD distance and nav-light anchors, which join the shared sprite batch.
+The Eagle's searchlight is one more instanced draw, at night only.
+
 ## Harbour ferries and wakes (render-only)
 
 The harbour ferries are not sim entities: no radar, no targeting, no sim cost. `src/render/traffic/ferryRoutes.ts`
@@ -193,7 +261,39 @@ first N of `FERRY_FLEET`; at night a second, unlit `InstancedMesh` on the same i
 and the `WakeBatch` (`src/render/effects/Wakes.ts`) draws the V-shaped foam wakes of every
 moving ship and ferry in one draw call (`QualitySettings.wakes`, off on `low`). Both are owned by the EntityRenderer.
 
-## Rat navy fast boats (moving threats)
+## Trains (#146: timetable, civil but targetable)
+
+Auckland Transport's AM class sets (3 and 6 cars) run the three post-CRL lines (East-West, South-City, Onehunga-West)
+and two KiwiRail container trains run between the Ports of Auckland's rail siding and the POAL sidings at Wiri. The
+network is baked by `tools/gtfs/trains.ts` into `src/sim/civil/railData.ts` (13 kB, base64 in the bundle so the sim
+and the tests have it synchronously): each line's two GTFS shapes (cleaned of their 1–3 m jogs, so cars don't bunch),
+its stations (each on the track within 10 m of its GTFS stop) with one representative weekday trip's stop times, and
+tunnel runs from OpenStreetMap (the CRL, Britomart, Parnell) and the LINZ ribbons (New Lynn, Purewa). The freight path
+is the OSM sidings joined to the GTFS main lines. `src/sim/civil/rail.ts` is the timetable, a pure function of mission
+time like `ferryAt`: every train is a unit circulating its line (out, a layover, back, a layover), the units a
+headway apart, so each direction departs every headway; a run between stations is a trapezoid (0.9 m/s², ≤ 110 km/h)
+fitted to the GTFS time less a 30 s dwell. Headways come from the GTFS by `servicePeriod(timeOfDay)`: dawn and dusk run
+the peak, day off-peak, night the evening service. `TrainService` (one per sortie, seeded) holds the units and the
+wrecks; the mission's `TrainTraffic` (`src/missions/runtime/trains.ts`) hangs it on `world.trains`.
+
+Trains are **sim entities only near the player**: every 0.5 s the nearest 12 within 15 km (released past 17 km, kept
+while designated or with a weapon in flight at them, never wholly underground) become neutral `'train'` ground
+entities (`known = false`, `scenery` so the entity renderer adds no model), posed every step from the timetable. That is
+the airliners' and merchant ships' path, so the consequences are the same with no new code in sensors, HUD or
+targeting: EOTS / radar ground-map contacts boxed CIV, designatable, AI and SAMs ignore them, a civilian loss in
+`callouts.ts` ("CIVILIAN TRAIN HIT", −500, −0.15 rating, a debrief row; never a mission failure). A render-only
+train with a separate hit test would have needed its own designation, TGT and kill path; 20–50 entities all the time
+would have cost every sensor scan. Hit tests run along the cars (`trainHullDistance` in `src/sim/civil/vessels.ts`; a
+car in a tunnel can't be hit), one bomb or missile destroys a train, the gun a few rounds. A destroyed train stops,
+burns (the ground kill fire), stays a charred wreck (`TrainService.wrecks`) and its unit leaves the timetable.
+
+`src/render/traffic/Trains.ts` draws the nearest `QualitySettings.trains` (4 / 8 / 14) within 6 / 9 / 13 km of the
+camera, plus the player's designated one, as four `InstancedMesh`es (AM end car, AM middle car, DL, container wagon:
+four draw calls day and night; windows and the destination display glow at night through a per-vertex term in the
+shared material; headlights and tail lights in the entity renderer's sprite batch). A car in a tunnel isn't drawn.
+`__f35.trains(x, z, { ahead })` lists the trains or finds when one passes a spot; `e2e/train-shots.mjs` shoots them.
+
+## IRGC Navy fast boats (moving threats)
 
 `src/sim/boats.ts` sails the IRGC campaign's boats after the ground movers each step. A **suicide boat**
 (`'suicide_boat'` ground target) chases a ship (`BoatState.chaseId`, weaving about the intercept course)

@@ -233,9 +233,9 @@ describe('target camera labels', () => {
     expect(pipName(new SamSiteEntity(2, 'sa6', 'red'))).toBe('SA-6 GAINFUL');
     expect(pipName(new SamSiteEntity(2, 'sa15', 'red'))).toBe('SA-15 GAUNTLET');
     expect(pipName(new GroundTargetEntity(3, 'ship', 'red'))).toBe('SHIP');
-    // every military type has a reporting name (the civil A320 shows its callsign instead; the IRGC
+    // every military type has a reporting name (the civil A320 and the civil helicopters show their callsigns instead; the IRGC
     // Navy air-defence boat has no confirmed class or reporting name, so its PiP title is "AD BOAT")
-    for (const k of Object.keys(NATO_AIR)) if (k !== 'a320') expect(NATO_AIR[k as AircraftType].length).toBeGreaterThan(2);
+    for (const k of Object.keys(NATO_AIR)) if (!['a320', 'aw169', 'bell429', 'h130'].includes(k)) expect(NATO_AIR[k as AircraftType].length).toBeGreaterThan(2);
     for (const k of Object.keys(NATO_SAM)) if (k !== 'ad_boat') expect(NATO_SAM[k as SamType].length).toBeGreaterThan(2);
     expect(pipName(new SamSiteEntity(2, 'ad_boat', 'red'))).toBe('AD BOAT');
   });

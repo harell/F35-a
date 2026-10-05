@@ -400,6 +400,8 @@ export type CreateMissionRunner = (
     createAi: CreateAiBrain;
     difficulty: DifficultyParams;
     events: EventBus;
+    /** Civil helicopters flying at once (the quality tier's; default 3). */
+    helicopters?: number;
   },
 ) => MissionRunnerApi;
 

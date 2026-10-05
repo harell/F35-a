@@ -262,6 +262,11 @@ export class AircraftEntity implements Entity {
    */
   civil?: import('./civil/route').CivilFlight;
   /**
+   * (civil) Scripted civil helicopter flight (rescue, police, sightseeing; sim/civil/heli.ts). Like `civil`: flown
+   * kinematically while alive, a falling wreck once destroyed.
+   */
+  heli?: import('./civil/heli').HeliFlight;
+  /**
    * (drone) One-way attack drone route (Shahed-136, see sim/drone/oneWay.ts). While alive the drone
    * flies it kinematically (no flight model, no AI) and dives into its target; once destroyed it is
    * an ordinary falling wreck. `oneWay.impacted` tells a drone that reached its target from one
@@ -463,7 +468,7 @@ export class SamSiteEntity implements Entity {
   engageRange?: number;
   /** (combat) Search/acquisition range vs a 5 m² fighter (m, difficulty-scaled). */
   detectRange?: number;
-  /** (sim-core) A moving SAM on a fast boat (the Rat navy AD boat, sim/boats.ts sails it); absent = a fixed site. */
+  /** (sim-core) A moving SAM on a fast boat (the IRGC Navy AD boat, sim/boats.ts sails it); absent = a fixed site. */
   boat?: import('./boats').BoatState;
   /**
    * (combat) This site's close-in cue (an electro-optical tracker that stealth shaping doesn't beat), in place
@@ -531,12 +536,19 @@ export class GroundTargetEntity implements Entity {
    */
   scenery = false;
   /**
-   * A Rat navy fast boat (suicide / missile boat): sim/boats.ts sails it (chase, strike countdown,
+   * A IRGC Navy fast boat (suicide / missile boat): sim/boats.ts sails it (chase, strike countdown,
    * route), not the ground-mover path above. Absent on every other ground target.
    */
   boat?: import('./boats').BoatState;
   /** g03's stoat (#200): sim/stoat.ts runs it (route, stops, alert, bolting), not the ground-mover path. */
   stoat?: import('./stoat').StoatState;
+  /**
+   * A civil train ('train', #146): its unit in the sortie's timetable and its cars, posed every step by
+   * the mission's TrainTraffic (missions/runtime/trains.ts); hit tests run along the cars (sim/civil/vessels.ts).
+   */
+  train?: TrainBody;
+  /** Removed from the world at the next cleanup while alive (a civil train leaving the player's area). */
+  despawn = false;
 
   constructor(
     readonly id: number,
@@ -549,6 +561,14 @@ export class GroundTargetEntity implements Entity {
     this.radius = opts.radius ?? 12;
     this.health = this.maxHealth = opts.health ?? 100;
   }
+}
+
+/** A civil train entity's consist (GroundTargetEntity.train). */
+export interface TrainBody {
+  /** TrainUnit.id in the sortie's TrainService (world.trains). */
+  unit: number;
+  /** Its cars, refreshed every step while alive (frozen where it stopped once destroyed). */
+  cars: import('./civil/rail').CarPose[];
 }
 
 /* ───────────────────────────── Decoys ───────────────────────────── */

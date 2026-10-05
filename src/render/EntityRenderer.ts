@@ -17,18 +17,20 @@ import { munitionGeometry } from './models/munitions';
 import { getGroundPrototype } from './models/ground';
 import type { PaletteId } from './models/vehicles';
 import { AircraftVisual } from './visuals/AircraftVisual';
+import { HeliBatch } from './visuals/HeliBatch';
 import { MissileVisual } from './visuals/MissileVisual';
 import { GroundVisual, SamVisual } from './visuals/SiteVisuals';
 import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
 import { WakeBatch } from './effects/Wakes';
 import { HarbourFerries } from './traffic/HarbourFerries';
+import { TrainRenderer } from './traffic/Trains';
 import { shipDims } from './visuals/shipMotion';
 import { BOAT_DIMS, type BoatKind } from './models/boats';
 
 const _p = new Vector3();
 const _fwd = new Vector3();
 
-/** Foam wake of a moving Rat navy fast boat (suicide, missile or air-defence boat). */
+/** Foam wake of a moving IRGC Navy fast boat (suicide, missile or air-defence boat). */
 function boatWake(wakes: WakeBatch, kind: BoatKind, pos: Vector3, vel: Vector3): void {
   const speed = Math.hypot(vel.x, vel.z);
   if (speed <= 0.5) return;
@@ -72,12 +74,17 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   // aircraft nav lights / strobes + civil ships' night lights (a cruise liner has ~100 cabin lights)
   const lights = new SpriteBatch(1024);
   group.add(lights.mesh);
+  // the civil helicopters: one instanced draw call per type (#144)
+  const helis = new HeliBatch(getAircraftPrototype);
+  group.add(helis.group);
   // foam wakes of every moving ship and ferry: one draw call ('low' quality: none)
   const wakes = quality.wakes ? new WakeBatch(64) : null;
   if (wakes) group.add(wakes.mesh);
   // visual-only harbour ferries (Auckland only; created on the first frame, once the mission is known)
   let ferries: HarbourFerries | null = null;
   let ferriesChecked = false;
+  // trains on the sortie's timetable (Auckland civil traffic, #146; created once world.trains is set)
+  let trains: TrainRenderer | null = null;
 
   let playerVisible = true;
   let frame = 0;
@@ -179,6 +186,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       if (env.isNight) {
         // the ferries first: a few dozen lights, which a harbour full of lit liners must not crowd out
         ferries?.addLights(lights, ctx.camera.position);
+        trains?.addLights(lights, ctx.camera.position);
         grounds.forEach(shipLightsFor);
       }
     }
@@ -207,6 +215,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       }
 
       // aircraft
+      helis.begin(t, env.isNight);
       for (const ac of world.aircraft) {
         let tr = aircraft.get(ac.id);
         if (!tr) {
@@ -220,7 +229,9 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         tr.seen = frame;
         const vis = tr.v.update(ac, t, dt, cam, lodCfg, env.isNight);
         tr.v.root.visible = vis && (!ac.isPlayer || playerVisible || !ac.alive);
+        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive);
       }
+      helis.end();
       aircraft.forEach(sweepAircraft);
 
       // missiles & bombs (pooled)
@@ -283,6 +294,17 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       // harbour ferries (render-only, placed by their timetable at sim time)
       ferries?.setNight(env.isNight);
       ferries?.update(t, wakes);
+
+      // trains: the nearest on the timetable (sim time), the player's designated one whatever its range
+      if (!trains && world.trains && q.trains > 0) {
+        trains = new TrainRenderer(q.trains, q.level);
+        for (const m of Object.values(trains.meshes)) group.add(m);
+      }
+      if (trains && world.trains) {
+        const des = world.player ? world.getEntity(world.player.radar.designatedId) : null;
+        trains.setNight(env.isNight);
+        trains.update(world.trains, t, cam, des && des.kind === 'ground' && des.train ? des.train.unit : -1);
+      }
       wakes?.end();
 
       updateLights(ctx);
@@ -325,6 +347,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
 
     dispose() {
       aircraft.forEach((tr) => tr.v.dispose());
+      helis.dispose();
       missiles.forEach((tr) => tr.v.dispose());
       missilePool.forEach((p) => p.forEach((v) => v.dispose()));
       sams.forEach((tr) => tr.v.dispose());
@@ -338,6 +361,8 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       wakes?.dispose();
       ferries?.dispose();
       ferries = null;
+      trains?.dispose();
+      trains = null;
       group.removeFromParent();
       // Free GPU copies of shared materials/textures; CPU-side prototypes stay cached so the next
       // mission starts fast (three.js re-uploads on next use).

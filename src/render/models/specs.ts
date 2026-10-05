@@ -222,6 +222,73 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     chase: { dist: 9, height: 2 },
     abLength: 0,
   },
+  // civil helicopters (#144): span = main rotor diameter; no jet exhaust; nav, tail and a belly anti-collision light
+  aw169: {
+    type: 'aw169',
+    length: 14.6,
+    span: 12.1,
+    height: 3.7,
+    eye: [0.35, 0.45, -4.8],
+    engines: [],
+    wingtips: [
+      [-6.05, 1.8, -0.3],
+      [6.05, 1.8, -0.3],
+    ],
+    lex: [],
+    gun: null,
+    lights: [
+      { pos: [-1.1, 0.15, 5.0], color: RED, kind: 'nav' },
+      { pos: [1.1, 0.15, 5.0], color: GREEN, kind: 'nav' },
+      { pos: [0, 1.3, 7.2], color: WHITE, kind: 'tail' },
+      { pos: [0, -1.05, 0.2], color: RED, kind: 'strobe' },
+    ],
+    chase: { dist: 22, height: 3.5 },
+    abLength: 0,
+  },
+  bell429: {
+    type: 'bell429',
+    length: 13.1,
+    span: 11.0,
+    height: 3.6,
+    eye: [0.35, 0.45, -4.3],
+    engines: [],
+    wingtips: [
+      [-5.5, 1.8, -0.3],
+      [5.5, 1.8, -0.3],
+    ],
+    lex: [],
+    gun: null,
+    lights: [
+      { pos: [-1.1, 0.15, 5.0], color: RED, kind: 'nav' },
+      { pos: [1.1, 0.15, 5.0], color: GREEN, kind: 'nav' },
+      { pos: [0, 1.3, 6.3], color: WHITE, kind: 'tail' },
+      { pos: [0, -1.05, 0.2], color: RED, kind: 'strobe' },
+    ],
+    chase: { dist: 20, height: 3.5 },
+    abLength: 0,
+  },
+  h130: {
+    type: 'h130',
+    length: 12.6,
+    span: 10.7,
+    height: 3.4,
+    eye: [0.35, 0.45, -4.1000000000000005],
+    engines: [],
+    wingtips: [
+      [-5.35, 1.8, -0.3],
+      [5.35, 1.8, -0.3],
+    ],
+    lex: [],
+    gun: null,
+    lights: [
+      { pos: [-1.1, 0.15, 5.0], color: RED, kind: 'nav' },
+      { pos: [1.1, 0.15, 5.0], color: GREEN, kind: 'nav' },
+      { pos: [0, 1.3, 6.2], color: WHITE, kind: 'tail' },
+      { pos: [0, -1.05, 0.2], color: RED, kind: 'strobe' },
+    ],
+    chase: { dist: 20, height: 3.5 },
+    abLength: 0,
+  },
 };
 
 /** Default munition dimensions (m) used to build models; instances are rescaled to def.length/diameter. */

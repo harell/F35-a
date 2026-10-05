@@ -168,7 +168,7 @@ describe('civil shipping in missions', () => {
         runner.update(world, DT);
       }
     };
-    const ships = () => world.ground.filter((g) => g.team === 'neutral');
+    const ships = () => world.ground.filter((g) => g.team === 'neutral' && g.type === 'ship'); // (not the civil trains, #146)
     return { world, runner, radio, hud, tick, ships };
   }
 

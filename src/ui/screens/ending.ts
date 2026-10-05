@@ -41,7 +41,7 @@ const irgcName = (): string => CAMPAIGNS.find((c) => c.id === 'irgc')?.name ?? '
  * not decided yet). Short on purpose; the real epilogue arrives with the campaign's last mission.
  */
 const IRGC_EPILOGUE = (name: string) => [
-  'The Wasp air wing is out of the sky over Auckland, the Rat navy out of the Hauraki Gulf and Stoat Command off Waiheke.',
+  'The Guard\'s drones are out of the sky over Auckland, the IRGC Navy out of the Hauraki Gulf and the Guard off Waiheke.',
   `${name}: the campaign is complete. 2050 is still ahead, and the Guard is counting too. Welcome home, Lightning.`,
 ];
 

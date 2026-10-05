@@ -23,7 +23,7 @@
  */
 
 /**
- * 'neutral' = civilian traffic (airliners, merchant ships). Neither side treats neutrals as hostile: AI, SAMs and
+ * 'neutral' = civilian traffic (airliners, merchant ships, trains). Neither side treats neutrals as hostile: AI, SAMs and
  * sensors' threat logic ignore them, but the human player can still designate, lock and shoot them.
  */
 export type Team = 'blue' | 'red' | 'neutral';
@@ -58,13 +58,16 @@ export type AircraftType =
   | 'su35' // Su-35 Flanker-E
   | 'su57' // Su-57 Felon (low observable)
   | 'a320' // Airbus A320neo airliner (neutral civilian traffic)
-  | 'shahed136'; // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
+  | 'shahed136' // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
+  | 'aw169' // Leonardo AW169 twin-engine helicopter: Westpac Rescue (neutral civil traffic, sim/civil/heli.ts)
+  | 'bell429' // Bell 429 GlobalRanger: NZ Police "Eagle" (neutral civil traffic)
+  | 'h130'; // Airbus H130 single-engine helicopter: harbour and Waiheke sightseeing (neutral civil traffic)
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles
   | 'sa15' // 9K330 Tor — single vehicle, vertical launch, command guided, short range
   | 'zsu23' // ZSU-23-4 Shilka radar-directed AAA
-  | 'ad_boat'; // Rat navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
+  | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
 export type GroundTargetType =
   | 'bunker' // command bunker
@@ -72,9 +75,10 @@ export type GroundTargetType =
   | 'hangar' // hardened aircraft shelter
   | 'parked_jet' // parked enemy fighter
   | 'ship' // corvette / frigate (can move)
-  | 'suicide_boat' // Rat navy unmanned explosive boat: chases a ship and rams it (sim/boats.ts)
-  | 'missile_boat' // Rat navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
-  | 'stoat'; // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
+  | 'suicide_boat' // IRGC Navy unmanned explosive boat: chases a ship and rams it (sim/boats.ts)
+  | 'missile_boat' // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
+  | 'stoat' // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
+  | 'train'; // Auckland's civil trains (AT AM class sets, KiwiRail freight): neutral, posed by their timetable (sim/civil/rail.ts)
 
 /**
  * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):
@@ -291,6 +295,10 @@ export interface QualitySettings {
   wakes: boolean;
   /** Visual-only harbour ferries (Auckland), 0 = none; capped by the fleet size (render/traffic/ferryRoutes.ts). */
   ferries: number;
+  /** Civil helicopters (Auckland: rescue, police, sightseeing; missions/runtime/helicopters.ts) flying at once. */
+  helicopters: number;
+  /** Trains drawn at once (Auckland, #146: the nearest to the camera, render/traffic/Trains.ts), 0 = none. */
+  trains: number;
   /** LINZ railway lines (Auckland) as ballast-and-track ribbons (one draw call); off = no tracks drawn. */
   railways: boolean;
   /**

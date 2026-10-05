@@ -13,7 +13,7 @@ import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfield
 import { airfieldLayout } from './aucklandOsm';
 import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { FACADE_GLASS, frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame, type PhotoRoof } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { towerSkin } from '../../core/cbdTowerSkins';
 import { CPO_ROW, GLASSHOUSE_ROW } from '../../core/britomart';
@@ -24,7 +24,7 @@ import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
 import { FOOTPATH, pointInRing, type CbdStreets } from './cbdStreets';
-import { ringArea, roofHeight, type Building, type BuildingPrism } from './aucklandBuildings';
+import { BUILDING_MATERIALS, BUILDING_USES, ringArea, roofHeight, roofPhotoOffset, type Building, type BuildingPrism, type BuildingUse } from './aucklandBuildings';
 
 const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
@@ -83,6 +83,111 @@ const GLASS = [0x4f6f7f, 0x3f5f66, 0x8fa1a8, 0x6b7c86, 0x2f4452, 0x7d6a58, 0x5a8
 const STONE = [0xcfc8bb, 0xb9b3a8, 0xe0dbd0, 0x9d978c, 0xc9b9a1, 0xa8a49a];
 /** Victorian / Edwardian brick and plaster (Queen St, Customs St, Britomart). */
 const HERITAGE = [0x9a5a44, 0x8a4c3a, 0xd8c8a8, 0xc9b28a, 0xb07a58];
+/** Facades by use (#141): rendered apartment blocks and hotels, precast concrete, face brick, sheet metal, timber. */
+const RENDER = [0xe4dfd4, 0xd6d0c3, 0xcac3b4, 0xc2c6c6, 0xece6da, 0xbcb1a0, 0xd9d2c0];
+const CONCRETE = [0xb8b6b0, 0xa9a7a1, 0xc4c1b9, 0x9d9c97];
+const BRICK = [0x9a5a44, 0x8a4c3a, 0xa86a4e, 0x7f4a3a, 0xb0765a];
+const METAL = [0x9da3a6, 0x8e959a];
+const WOOD = [0x9a7a5a, 0x8a6a4c];
+/** Flat roofs on the low tier (no photo there): concrete, bitumen, light and grey membranes. */
+const ROOFS = [0x8a8984, 0x6f6e6a, 0x9c9a93, 0x5d5f61, 0xa7a49b, 0x7a756c];
+
+/**
+ * Storey height (m) by use (#141): offices ≈ 3.6–4 m slab to slab, apartments and hotels ≈ 3 m, heritage and civic
+ * ≈ 4.5 m; the building's own count is then height / round(height / this), so its floors fit it exactly.
+ */
+export const STOREY_BY_USE: Record<BuildingUse | 'heritage' | 'midrise' | 'glass', number> = {
+  office: 3.8,
+  commercial: 3.7,
+  retail: 4.2,
+  apartments: 3.05,
+  hotel: 3.15,
+  civic: 4.5,
+  education: 3.9,
+  parking: 2.9,
+  industrial: 0,
+  house: 2.8,
+  heritage: 4.5,
+  midrise: 3.6,
+  glass: 3.8,
+};
+
+/** A LINZ building's facade (#141): wall colour, window style, storey height (0 = the style's own grid), glass. */
+export interface BuildingFacade {
+  col: number;
+  win: number;
+  storey: number;
+  glass: boolean;
+  use: BuildingUse | 'heritage' | 'midrise' | 'glass' | 'tower' | 'shed';
+}
+
+// (the same pick as before #141 for the height classes: their colours stay)
+const pick = (pal: readonly number[], h: number) => pal[Math.floor(h * 100) % pal.length];
+
+/**
+ * The facade of a LINZ building: by its OSM use and material (tools/linz/facades.py) where tagged, else by height class
+ * as before (glass towers, stone / glass mid-rise, brick and plaster low-rise, warehouses). Storeys from the OSM count
+ * where it gives 2.6–6.5 m a storey, else from the use's typical storey height and the LiDAR height.
+ */
+export function buildingFacade(b: Building, top: number, area: number, hsh: number): BuildingFacade {
+  const tags = b.osm;
+  const use = tags && tags.use > 0 ? BUILDING_USES[tags.use - 1] : undefined;
+  const mat = tags && tags.material > 0 ? BUILDING_MATERIALS[tags.material - 1] : undefined;
+  let f: BuildingFacade;
+  if (use) {
+    const h2 = (hsh * 7.31) % 1;
+    switch (use) {
+      case 'office':
+      case 'commercial':
+        f = h2 < (top >= 20 ? 0.65 : 0.35) ? { col: pick(GLASS, hsh), win: WIN_OFFICE, storey: 0, glass: true, use } : { col: pick(STONE, hsh), win: WIN_OFFICE, storey: 0, glass: false, use };
+        break;
+      case 'retail':
+        f = { col: h2 < 0.6 ? pick(STONE, hsh) : h2 < 0.85 && top < 20 ? pick(HERITAGE, hsh) : pick(CONCRETE, hsh), win: WIN_OFFICE, storey: 0, glass: false, use };
+        break;
+      case 'apartments':
+      case 'hotel':
+      case 'house':
+        f = { col: h2 < 0.7 ? pick(RENDER, hsh) : h2 < 0.85 ? pick(CONCRETE, hsh) : pick(BRICK, hsh), win: WIN_HOME, storey: 0, glass: false, use };
+        break;
+      case 'civic':
+        f = { col: h2 < 0.6 ? pick(STONE, hsh) : pick(HERITAGE, hsh), win: WIN_OFFICE, storey: 0, glass: false, use };
+        break;
+      case 'education':
+        f = { col: h2 < 0.4 ? pick(BRICK, hsh) : h2 < 0.7 ? pick(CONCRETE, hsh) : pick(STONE, hsh), win: WIN_OFFICE, storey: 0, glass: false, use };
+        break;
+      case 'parking':
+        f = { col: pick(CONCRETE, hsh), win: WIN_INDUSTRIAL, storey: 0, glass: false, use };
+        break;
+      case 'industrial':
+        f = { col: 0xa9aaa4, win: WIN_INDUSTRIAL, storey: 0, glass: false, use };
+        break;
+    }
+  } else if (top >= 60) {
+    f = hsh < 0.7 ? { col: pick(GLASS, hsh), win: WIN_OFFICE, storey: 0, glass: true, use: 'glass' } : { col: pick(STONE, hsh), win: WIN_OFFICE, storey: 0, glass: false, use: 'midrise' };
+  } else if (top >= 20) {
+    f = hsh < 0.35 ? { col: pick(GLASS, hsh), win: WIN_OFFICE, storey: 0, glass: true, use: 'glass' } : { col: pick(STONE, hsh), win: WIN_OFFICE, storey: 0, glass: false, use: 'midrise' };
+  } else if (area > 2500 && top < 16) {
+    f = { col: 0xa9aaa4, win: WIN_INDUSTRIAL, storey: 0, glass: false, use: 'shed' }; // wharf sheds, warehouses, the Viaduct's events centre
+  } else {
+    const heritage = hsh < 0.35;
+    f = { col: heritage ? pick(HERITAGE, hsh) : pick(STONE, hsh), win: top < 9 && area < 300 ? WIN_HOME : WIN_OFFICE, storey: 0, glass: false, use: heritage ? 'heritage' : 'midrise' };
+  }
+  // the OSM material and colour, where tagged, over the use's palette
+  if (mat) {
+    const pal = { brick: BRICK, concrete: CONCRETE, glass: GLASS, stone: STONE, plaster: RENDER, metal: METAL, wood: WOOD }[mat];
+    f.col = pick(pal, hsh);
+    f.glass = mat === 'glass';
+  }
+  if (tags?.colour !== undefined) f.col = tags.colour;
+  // storeys: the OSM count if it is plausible, else the use's storey height fitted to the LiDAR height
+  const nominal = f.use === 'shed' || f.use === 'tower' ? 0 : STOREY_BY_USE[f.use];
+  if (nominal > 0) {
+    const fromTags = tags && tags.levels > 0 ? top / tags.levels : 0;
+    f.storey = fromTags >= 2.6 && fromTags <= 6.5 ? fromTags : top / Math.max(1, Math.round(top / nominal));
+    f.storey = Math.min(6.5, Math.max(2.6, f.storey));
+  }
+  return f;
+}
 
 /** A glass / concrete tower in a building frame (base at y = 0). */
 function tower(B: GeometryBuilder, fr: Frame, style: TowerStyle, tw: number, td: number, h: number, col: number, rnd: () => number, lights: LightList, top: { x: number; y: number; z: number }): void {
@@ -548,6 +653,8 @@ export interface BuiltPrism extends BuildingPrism {
   /** World y of the walls' foot and of the roof at the centroid. */
   y0: number;
   y1: number;
+  /** Its storey height (m, #141), where the facade has one. */
+  storey?: number;
 }
 
 /** Douglas–Peucker on a closed ring (flat [x, z, ...]); keeps ≥ 3 vertices. */
@@ -683,23 +790,16 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     const top = Math.max(...b.prisms.map((p) => p.h));
     const area = Math.abs(ringArea(base.ring));
     const hsh = ringHash(base.ring);
-    // facade by height class
-    let col: number;
-    let win: number;
-    if (top >= 60) {
-      col = hsh < 0.7 ? GLASS[Math.floor(hsh * 100) % GLASS.length] : STONE[Math.floor(hsh * 100) % STONE.length];
-      win = WIN_OFFICE;
-    } else if (top >= 20) {
-      col = hsh < 0.35 ? GLASS[Math.floor(hsh * 100) % GLASS.length] : STONE[Math.floor(hsh * 100) % STONE.length];
-      win = WIN_OFFICE;
-    } else if (area > 2500 && top < 16) {
-      col = 0xa9aaa4;
-      win = WIN_INDUSTRIAL; // wharf sheds, warehouses, the Viaduct's events centre
-    } else {
-      col = hsh < 0.35 ? HERITAGE[Math.floor(hsh * 100) % HERITAGE.length] : STONE[Math.floor(hsh * 100) % STONE.length];
-      win = top < 9 && area < 300 ? WIN_HOME : WIN_OFFICE;
-    }
-    const roofCol = top >= 60 ? tmp.setHex(col).multiplyScalar(0.62).getHex() : tmp.setHex(0x7c7b77).lerp(new Color(col), 0.2).multiplyScalar(0.8 + hsh * 0.3).getHex();
+    // facade by use (OSM tags) or height class, storeys by use and height (#141)
+    const fac = buildingFacade(b, top, area, hsh);
+    const { col, win } = fac;
+    // the roof (the low tier's, and wherever the photo doesn't reach): a membrane, concrete or bitumen, a hint of the facade
+    const roofCol = top >= 60 ? tmp.setHex(col).multiplyScalar(0.62).getHex() : tmp.setHex(pick(ROOFS, (hsh * 13.7) % 1)).lerp(new Color(col), 0.15).multiplyScalar(0.85 + hsh * 0.25).getHex();
+    // every wall: its base for the contact shading; the LINZ blocks their storeys, window rhythm and glass
+    const H0 = b.hero === 'house' ? houseBuilder?.(b) ?? B : B;
+    const storey = b.hero ? 0 : fac.storey;
+    H0.setFacade(gMin, storey, hsh, !b.hero && fac.glass ? FACADE_GLASS : 0);
+    if (H0 !== B) B.setFacade(gMin, storey, hsh, 0);
     for (const p of b.prisms) {
       if (minArea && Math.abs(ringArea(p.ring)) < minArea) continue;
       if (detail < 0.5 && p.kind === 'plant') continue; // low tier: the kit towers' roof plant goes
@@ -756,10 +856,16 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
         heights.push(p.h);
         continue;
       }
-      // towers on a podium: a little darker, the crown's roof the facade colour
+      // towers on a podium: a little darker, the crown's roof the facade colour; the aerial photo on the roof where it
+      // shows it (#140: medium and high tiers, when the builder carries photo roofs)
       const c = p === base ? col : tmp.setHex(col).multiplyScalar(0.92).getHex();
-      B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win);
-      prisms.push({ ...p, y0, y1: g + p.h });
+      let photo: PhotoRoof | undefined;
+      if (b.roof) {
+        const [dx, dz] = roofPhotoOffset(b, p);
+        photo = { dx, dz };
+      }
+      B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win, true, photo);
+      prisms.push({ ...p, y0, y1: g + p.h, storey: fac.storey || undefined });
       heights.push(p.h);
     }
     const skin = b.hero === 'tower' && b.tower ? towerSkin(b.tower.n) : undefined;
@@ -772,6 +878,8 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     // Britomart station (core/britomart.ts): the CPO's domes and flagpole, the Glasshouse's canopy
     if (b.tower?.n === CPO_ROW) buildCpoCrowns(B, g, detail);
     if (b.tower?.n === GLASSHOUSE_ROW) buildGlasshouseCanopy(B, g);
+    B.clearFacade();
+    H0.clearFacade();
     buildingVerts[bi * 2 + 1] = B.vertexCount;
     buildingGround[bi] = g;
     tallest = Math.max(tallest, top);

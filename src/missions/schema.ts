@@ -262,7 +262,7 @@ export interface SamSiteDef {
 }
 
 /**
- * Rat navy missile boat's strike ('missile_boat', sim/boats.ts): it closes to `range` m (default
+ * IRGC Navy missile boat's strike ('missile_boat', sim/boats.ts): it closes to `range` m (default
  * BOAT_LAUNCH_RANGE) of the first live member of `group`, counts down `countdown` s (default
  * BOAT_COUNTDOWN) and fires one Kowsar per countdown, `missiles` in all (default BOAT_MISSILES = 1; a
  * Peykaap II carries 2). It only counts down with clear water and line of sight to the target.
