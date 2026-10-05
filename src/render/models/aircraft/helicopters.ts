@@ -182,7 +182,7 @@ let beamMat: MeshBasicMaterial | null = null;
 
 /** LOD1: the spinning rotors as faint discs (a blur), the main one and the tail one. */
 function addRotorDiscs(lod1: Group, D: Dims): void {
-  discMat ??= new MeshBasicMaterial({ color: 0x22252a, transparent: true, opacity: 0.32, depthWrite: false, side: DoubleSide });
+  discMat ??= new MeshBasicMaterial({ color: 0x22252a, transparent: true, opacity: 0.2, depthWrite: false, side: DoubleSide });
   const top = merge([
     place(cylinder(D.rotor, D.rotor, 0.01, 16, 0xffffff), [0, D.hubY, D.hubZ]),
     place(cylinder(D.tailRotor / 2, D.tailRotor / 2, 0.01, 10, 0xffffff), [-0.17, 0.75, D.tail + 0.05], [0, 0, Math.PI / 2]),
