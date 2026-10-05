@@ -35,6 +35,9 @@ const EXITS = [195, 255, 330, 25, 110];
  * departures turn north over the isthmus and the harbour (Northland, the Pacific, Asia), climbing
  * through 2–3 km over the city, where the tour flies. A playtest found no airliner anywhere near the
  * stroll: with the wartime flow they all stayed round the airport, 25 km from the start.
+ * They also broadcast ADS-B (CivilFlight.adsb): the stroll's jet starts with its radar off and only
+ * the gun (ACM radar, 18.5 km), and its DAS sees 15 km, so without it an airliner 20 km out was
+ * never a contact, never boxed and never designatable.
  */
 const PEACE = { max: 5, minGap: 35, maxGap: 70, exits: [330, 345, 0, 15, 25, 195] } as const;
 const FLIGHT_NUMBERS = [103, 115, 279, 401, 415, 421, 437, 443, 501, 521, 533, 547, 561, 573, 609, 1257];
@@ -49,6 +52,8 @@ export class CivilTraffic {
   private readonly minGap: number;
   private readonly maxGap: number;
   private readonly exits: readonly number[];
+  /** Peacetime: the airliners' ADS-B reaches the player's jet (route.ts CivilFlight.adsb). */
+  private readonly adsb: boolean;
 
   constructor(private readonly s: MissionState) {
     const peace = !!s.script.freeFlight;
@@ -56,6 +61,7 @@ export class CivilTraffic {
     this.minGap = peace ? PEACE.minGap : MIN_GAP;
     this.maxGap = peace ? PEACE.maxGap : MAX_GAP;
     this.exits = peace ? PEACE.exits : EXITS;
+    this.adsb = peace;
     this.rng = mulberry32(((s.def.seed ?? 1) * 7919 + 17) >>> 0);
     const heading = this.rng() < 0.5 ? RUNWAY_AXIS : RUNWAY_AXIS - Math.PI; // 23L or 05R flow
     const { x, z } = AKL_05R;
@@ -104,6 +110,7 @@ export class CivilTraffic {
   }
 
   private spawn(f: CivilFlight): AircraftEntity {
+    f.adsb = this.adsb;
     const n = FLIGHT_NUMBERS[(this.seq++ + Math.floor(this.rng() * FLIGHT_NUMBERS.length)) % FLIGHT_NUMBERS.length];
     const ac = this.s.world.spawnAircraft({
       type: 'a320',

@@ -215,6 +215,9 @@ function scan(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, sh: SensorS
       if (los < 0) los = lineOfSight(world.terrain, ac.position, t.position) ? 1 : 0;
       if (los === 1) upsert(st, t, f35 ? 'das' : 'eots', now, null, null, now);
     }
+    // peacetime civil traffic broadcasts ADS-B: a datalink track whatever the onboard sensors see (after
+    // them, so a radar or DAS track keeps its own source)
+    if (t.team === 'neutral' && t.civil?.adsb) upsert(st, t, 'datalink', now, null, null, now);
     const c = st.contacts.get(t.id);
     if (c && inGimbal) c.inGimbal = true;
   }
