@@ -122,7 +122,7 @@ function splitCsv(l: string): string[] {
 }
 function csvRows(file: string): Record<string, string>[] {
   const lines = fs.readFileSync(path.join(GT, file), 'utf8').split(/\r?\n/).filter((l) => l.length);
-  const head = lines[0].replace(/^﻿/, '').split(',');
+  const head = lines[0].replace(/^\uFEFF/, '').split(',');
   return lines.slice(1).map((l) => {
     const v = splitCsv(l);
     return Object.fromEntries(head.map((h, i) => [h, v[i] ?? '']));
@@ -135,7 +135,7 @@ async function streamRows(file: string, keep: (r: Record<string, string>) => boo
   for await (const l of rl) {
     if (!l) continue;
     if (!head) {
-      head = l.replace(/^﻿/, '').split(',');
+      head = l.replace(/^\uFEFF/, '').split(',');
       continue;
     }
     const v = splitCsv(l);
