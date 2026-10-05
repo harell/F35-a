@@ -83,8 +83,13 @@ describe('campaign progress', () => {
     // a worse run doesn't replace the best
     const p2 = recordResult(p1, result('g01', { score: 900, grade: 'C' }));
     expect(p2.best.g01.score).toBe(1500);
-    const p3 = recordResult(p2, result('g01', { score: 2600, grade: 'A', difficulty: 'ace' }));
-    expect(p3.best.g01).toEqual({ score: 2600, grade: 'A', difficulty: 'ace' });
+    const p3 = recordResult(p2, result('g01', { score: 2600, grade: 'A', difficulty: 'veteran' }));
+    expect(p3.best.g01).toEqual({ score: 2600, grade: 'A', difficulty: 'veteran' });
+  });
+
+  it("a saved best result with difficulty 'ace' (the removed level) loads as 'veteran'", () => {
+    g.localStorage!.setItem(PROGRESS_KEY, JSON.stringify({ unlocked: ['g01'], best: { g01: { score: 2600, grade: 'A', difficulty: 'ace' } }, totals: { missions: 1, airKills: 0, groundKills: 0, deaths: 0 } }));
+    expect(loadProgress().best.g01).toEqual({ score: 2600, grade: 'A', difficulty: 'veteran' });
   });
 
   it('failure does not unlock and counts deaths', () => {

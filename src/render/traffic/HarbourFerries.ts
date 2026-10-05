@@ -2,10 +2,7 @@
  * HarbourFerries: the visual-only Auckland harbour ferries (issue #30) in one InstancedMesh. Each frame
  * every ferry is placed by its timetable (ferryRoutes.ts, a pure function of mission time), bobs a little,
  * leaves a wake in the shared WakeBatch and, at night, shows its nav and cabin lights through the entity
- * renderer's sprite batch. In wartime they are scenery only: not on radar, not targetable. In A Stroll in the Park the
- * sim sails each one as a neutral ship (vessel 'ferry', GroundTargetEntity.ferrySlot: missions/runtime/shipping.ts), so
- * the player can box and shoot it; a ferry with a sim entity is drawn where the entity is, and once it is sunk it lists
- * and goes down like any civil ship (shipMatrix) and its lights and wake go out.
+ * renderer's sprite batch. Not sim entities: not on radar, not targetable (strafing a ferry does nothing).
  *
  * At night (#61) the cabin windows glow (a second InstancedMesh of window bands sharing the hulls'
  * instance matrices, unlit, drawn only at night) and the nav lights keep a few pixels wide, so a ferry
@@ -18,8 +15,6 @@ import type { ShipLight } from '../models/ground';
 import type { SpriteBatch } from '../effects/SpriteBatch';
 import type { WakeBatch } from '../effects/Wakes';
 import { FERRY_BEAM, FERRY_FLEET, FERRY_LENGTH, ferryAt, ferryRoutes, type FerryRoute, type FerryState } from './ferryRoutes';
-import type { GroundTargetEntity } from '../../sim/entities';
-import { shipMatrix } from '../visuals/shipMotion';
 
 /** Lights are drawn out to this range (m); cabin windows closer in. */
 const LIGHTS_FAR = 12_000;
@@ -98,18 +93,12 @@ export class HarbourFerries {
   private readonly fleet: readonly { route: number; k: number }[];
   private readonly st: FerryState[];
   private readonly mats: Matrix4[];
-  /** The sim's ferry by fleet slot (free flight), else null: drawn where it is, sinking once dead. */
-  private readonly sim: (GroundTargetEntity | null)[];
-  /** The ferry is sunk (hidden: no lights). */
-  private readonly sunk: boolean[];
 
   constructor(count: number) {
     this.routes = ferryRoutes();
     this.fleet = FERRY_FLEET.slice(0, Math.max(0, Math.min(count, FERRY_FLEET.length)));
     this.st = this.fleet.map(() => ({ x: 0, z: 0, heading: 0, speed: 0, dock: -1 }));
     this.mats = this.fleet.map(() => new Matrix4());
-    this.sim = this.fleet.map(() => null);
-    this.sunk = this.fleet.map(() => false);
     this.mesh = new InstancedMesh(ferryGeometry(), getMaterial('building'), Math.max(1, this.fleet.length));
     this.mesh.count = this.fleet.length;
     this.mesh.name = 'ferries';
@@ -133,12 +122,6 @@ export class HarbourFerries {
     return this.fleet.length;
   }
 
-  /** The sim's ferries (free flight: GroundTargetEntity.ferrySlot), or none: the timetable places every ferry. */
-  bindSim(ground: readonly GroundTargetEntity[]): void {
-    this.sim.fill(null);
-    for (const g of ground) if (g.ferrySlot >= 0 && g.ferrySlot < this.sim.length) this.sim[g.ferrySlot] = g;
-  }
-
   /** Places every ferry at mission time `time` and adds the wakes of those under way. */
   update(time: number, wakes: WakeBatch | null): void {
     for (let i = 0; i < this.fleet.length; i++) {
@@ -146,21 +129,6 @@ export class HarbourFerries {
       const r = this.routes[f.route];
       const s = ferryAt(r, f.k, time, this.st[i]);
       const sc = r.def.scale;
-      const e = this.sim[i];
-      this.sunk[i] = false;
-      if (e) {
-        // the sim's ferry: where it is (its timetable while afloat), listing and going down once it is sunk
-        s.x = e.position.x;
-        s.z = e.position.z;
-        const sink = shipMatrix(e, time, this.mats[i]);
-        if (!e.alive) s.speed = 0;
-        this.sunk[i] = sink.progress >= 1;
-        if (this.sunk[i]) this.mats[i].makeScale(0, 0, 0);
-        else this.mats[i].scale(_s.set(sc, sc, sc));
-        this.mesh.setMatrixAt(i, this.mats[i]);
-        if (wakes && e.alive && s.speed > 0) wakes.addHull(s.x, s.z, s.heading, FERRY_LENGTH * sc, FERRY_BEAM * sc, s.speed);
-        continue;
-      }
       // a gentle bob and roll; squat by the stern at speed
       const ph = i * 1.7;
       _e.set(0.004 * Math.sin(time * 0.9 + ph) + Math.max(0, s.speed) * 0.0012, -s.heading, 0.012 * Math.sin(time * 0.7 + ph * 1.3));
@@ -178,8 +146,6 @@ export class HarbourFerries {
   addLights(lights: SpriteBatch, cam: Vector3): void {
     for (let i = 0; i < this.fleet.length; i++) {
       const s = this.st[i];
-      const e = this.sim[i];
-      if (this.sunk[i] || (e && !e.alive)) continue; // a sunk ferry is dark
       const d2 = (s.x - cam.x) ** 2 + (s.z - cam.z) ** 2;
       if (d2 > LIGHTS_FAR * LIGHTS_FAR) continue;
       const cabins = d2 < CABIN_LIGHTS_FAR * CABIN_LIGHTS_FAR;

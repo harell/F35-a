@@ -95,7 +95,7 @@ describe('combat: SEAD depth', () => {
     const ttis: number[] = [];
     let backOn = 0;
     for (let s = 1; s <= 16; s++) {
-      const r = seadTrial(s, 'ace', 'sa6', false, 'aargm', 32_000);
+      const r = seadTrial(s, 'veteran', 'sa6', false, 'aargm', 32_000);
       if (r.shutdownTti > 0) ttis.push(r.shutdownTti);
       if (r.backOn) backOn++;
     }

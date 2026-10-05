@@ -45,7 +45,7 @@ for (const m of missions) {
   const t0 = Date.now();
   // a lesson flies at Pilot whatever the setting: start it on Ace and read what the session got
   const lesson = m.kind === 'training';
-  await page.goto(`${base}?mission=${m.id}&autostart=1&view=${view}&quality=low${lesson ? '&difficulty=ace' : ''}`, { waitUntil: 'load' });
+  await page.goto(`${base}?mission=${m.id}&autostart=1&view=${view}&quality=low${lesson ? '&difficulty=veteran' : ''}`, { waitUntil: 'load' });
   try {
     await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 60000 });
   } catch {

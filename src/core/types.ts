@@ -33,7 +33,7 @@ export function isHostile(a: Team, b: Team): boolean {
   return a !== b && a !== 'neutral' && b !== 'neutral';
 }
 
-export type Difficulty = 'recruit' | 'pilot' | 'veteran' | 'ace';
+export type Difficulty = 'recruit' | 'pilot' | 'veteran';
 export type QualityLevel = 'low' | 'medium' | 'high';
 /** The game's one theatre: Auckland CBD, Waitematā Harbour & Hauraki Gulf, NZ (campaign, training, Instant Action). */
 export type TheaterId = 'auckland';
@@ -80,8 +80,7 @@ export type GroundTargetType =
  * picks the model, hull size and callouts. Military ships (corvettes, landing ships) have none.
  * 'tanker' is a ~250 m crude carrier (the escort mission's protected ship).
  */
-/** 'ferry': a 34 m harbour catamaran on the ferry timetable (A Stroll in the Park: missions/runtime/shipping.ts). */
-export type VesselClass = 'container' | 'cruise' | 'tanker' | 'ferry';
+export type VesselClass = 'container' | 'cruise' | 'tanker';
 
 export type WeaponId =
   | 'gun' // GAU-22/A 25 mm, 180 rds
@@ -250,6 +249,12 @@ export interface DifficultyParams {
   playerMissileHitsToKill: number;
   /** Fuel burn multiplier. */
   fuelBurnScale: number;
+  /**
+   * Air-defence boats harass, 0 = off: with the bay open inside `SamTypeData.harass.cueRange` × this they
+   * cue on the jet and fire at it out to `harass.reach` × this, past the missile's real envelope (a
+   * nuisance shot a jet that turns away outruns; one that flies straight in meets).
+   */
+  adBoatHarass: number;
 }
 
 export interface QualitySettings {

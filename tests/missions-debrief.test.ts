@@ -267,14 +267,14 @@ describe('#64: training debrief', () => {
   });
 
   it('a crash tip names Auto-GCAS only on Recruit, the one difficulty that has it', () => {
-    const crashed = (d: 'recruit' | 'pilot' | 'ace') => {
+    const crashed = (d: 'recruit' | 'pilot' | 'veteran') => {
       const s = new MissionState(byId('g01'), { createAi: stubAi({ created: [], retasked: [] }), difficulty: DIFFICULTIES[d], events: new EventBus() });
       s.playerDied = true;
       s.stats.downReason = 'crash';
       return buildTips(s, { ...win('g01', 100), success: false, reason: 'Crashed', difficulty: d });
     };
     expect(crashed('recruit').some((t) => /let Auto-GCAS fly the pull-up/.test(t))).toBe(true);
-    for (const d of ['pilot', 'ace'] as const) {
+    for (const d of ['pilot', 'veteran'] as const) {
       const tips = crashed(d);
       expect(tips.some((t) => /no Auto-GCAS, so the pull-up is yours/.test(t))).toBe(true);
       expect(tips.some((t) => /let Auto-GCAS/.test(t))).toBe(false);

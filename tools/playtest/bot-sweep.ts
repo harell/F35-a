@@ -5,7 +5,7 @@
  * break it" before spending minutes per mission in Playwright.
  *
  *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=g01,g02|irgc|campaigns|training|all]
- *       [--diffs=recruit,pilot,veteran,ace] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
+ *       [--diffs=recruit,pilot,veteran] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
  *       [--loadout=sead_stealth] [--log] [--nojitter] [--park[=start|far] | --gunonly | --route=<name>]
  *
  * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run and a

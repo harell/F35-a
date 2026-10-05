@@ -115,7 +115,7 @@ export function newSortieStats(): SortieStats {
 }
 
 /** Difficulties, easiest first. */
-export const DIFF_ORDER: readonly Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+export const DIFF_ORDER: readonly Difficulty[] = ['recruit', 'pilot', 'veteran'];
 /** True if `current` is at least `min` (undefined min = always). */
 export function difficultyAtLeast(current: Difficulty, min: Difficulty | undefined): boolean {
   return !min || DIFF_ORDER.indexOf(current) >= DIFF_ORDER.indexOf(min);

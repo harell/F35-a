@@ -132,7 +132,7 @@ describe('the CBD skyscraper index', () => {
 });
 
 describe('g01: the Shaheds only ever hit the Sky Tower (#128)', () => {
-  const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+  const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
   for (const d of DIFFS) {
     it(`${d}: an untouched swarm collapses no CBD building and still hits the tower`, () => {
       const h = harness(G01, d);

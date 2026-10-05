@@ -254,6 +254,9 @@ export interface SamSiteDef {
    * SamTypeData.closeCue. A fixed site with one can't be slipped past by stealth alone.
    */
   closeCue?: { range: number; bayRange: number };
+  /** 'ad_boat' escort station: m behind its leader (negative = ahead of it, default 250) and m to its right (default 150). */
+  escortAft?: number;
+  escortRight?: number;
 }
 
 /**
