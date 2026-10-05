@@ -260,9 +260,9 @@
     },
     "by_kind": {
       "airfield": 29,
-      "heliport": 2,
+      "heliport": 6,
       "hospital": 3,
-      "other": 47,
+      "other": 43,
       "vineyard": 2
     },
     "roof_pads": {
