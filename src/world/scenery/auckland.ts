@@ -16,6 +16,8 @@ import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { towerSkin } from '../../core/cbdTowerSkins';
+import { CPO_ROW, GLASSHOUSE_ROW } from '../../core/britomart';
+import { buildCpoCrowns, buildGlasshouseCanopy, buildTakutaiCones } from './britomart';
 import { addTowerSigns, buildBraces, emptySigns, finishWin, paintedWalls, skinParts, type TowerSignData } from './towerSkins';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
 import { LightList, type HeightFn } from './builders';
@@ -762,6 +764,9 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       if (detail >= 0.5) buildBraces(B, skin, parts, g);
       addTowerSigns(towerSigns, bi, skin, parts, g);
     }
+    // Britomart station (core/britomart.ts): the CPO's domes and flagpole, the Glasshouse's canopy
+    if (b.tower?.n === CPO_ROW) buildCpoCrowns(B, g, detail);
+    if (b.tower?.n === GLASSHOUSE_ROW) buildGlasshouseCanopy(B, g);
     buildingVerts[bi * 2 + 1] = B.vertexCount;
     buildingGround[bi] = g;
     tallest = Math.max(tallest, top);
@@ -772,6 +777,7 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     }
   }
   if (bs.some((b) => b.hero === 'scene')) buildSceneFins(B, height);
+  if (bs.some((b) => b.tower?.n === GLASSHOUSE_ROW)) buildTakutaiCones(B, height, detail);
   // street lamps, not inside a building: a 20 m bucket grid of the footprints
   const grid = new Map<number, BuildingPrism[]>();
   const key = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);

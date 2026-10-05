@@ -20,6 +20,7 @@
  */
 import { type CbdTower, spirePrisms, type TowerPartKind } from '../../core/cbdTowers';
 import { CBD_TOWERS } from '../../core/cbdTowersData';
+import { GLASSHOUSE } from '../../core/britomart';
 import { SCENE_OUTLINES, SCENE_TERRACES, type SceneTerraceKind } from '../../core/sceneApartments';
 import buildingsUrl from '../terrain/data/auckland-buildings.bin?url';
 import { aucklandNeighbourhoods, aucklandNeighbourhoodsVersion, type Neighbourhood } from './aucklandNeighbourhoods';
@@ -247,11 +248,14 @@ export function decodeBuildings(bytes: Uint8Array): Building[] {
 /**
  * Hero buildings measured from the LiDAR replace the LINZ blocks under them, for the scenery and the sim alike:
  * the Scene apartments (core/sceneApartments.ts), whose outlines held a tower and its podium at one height, and the CBD
- * towers of the tower kit (core/cbdTowers.ts). A LINZ building goes when its footprint centre is inside a hero outline
+ * towers of the tower kit (core/cbdTowers.ts, with Britomart's Glasshouse: core/britomart.ts). A LINZ building goes when its footprint centre is inside a hero outline
  * or its footprint holds one of a tower's `replaces` points;
  * each hero building is appended with one prism per terrace (a spire as a few tapering prisms), its largest first.
  */
-export function applyHeroBuildings(list: Building[], towers: readonly CbdTower[] = CBD_TOWERS): Building[] {
+/** The kit's towers and landmarks: the generated rows and the hand-measured ones (Britomart's Glasshouse). */
+export const KIT_TOWERS: readonly CbdTower[] = [...CBD_TOWERS, GLASSHOUSE];
+
+export function applyHeroBuildings(list: Building[], towers: readonly CbdTower[] = KIT_TOWERS): Building[] {
   const outlines = [...Object.values(SCENE_OUTLINES), ...towers.map((t) => t.outline)];
   const inside = (x: number, z: number) => outlines.some((r) => pointInFlatRing(r, x, z));
   const points = towers.flatMap((t) => t.replaces);
