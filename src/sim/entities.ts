@@ -465,6 +465,11 @@ export class SamSiteEntity implements Entity {
   detectRange?: number;
   /** (sim-core) A moving SAM on a fast boat (the IRGC Navy AD boat, sim/boats.ts sails it); absent = a fixed site. */
   boat?: import('./boats').BoatState;
+  /**
+   * (combat) This site's close-in cue (an electro-optical tracker that stealth shaping doesn't beat), in place
+   * of its type's SamTypeData.closeCue: a mission can give a fixed site the AD boat's tracker (g03's island SAMs).
+   */
+  closeCue?: { range: number; bayRange: number } | null;
 
   constructor(
     readonly id: number,

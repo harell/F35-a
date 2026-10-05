@@ -393,17 +393,16 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     });
     expect(h.runner.result(h.world).medals!.some((m) => m.id === 'bridge_runner')).toBe(true);
 
-    // g02 is the IRGC campaign's finale: winning it completes the campaign
+    // the IRGC campaign is still being built (#197): no mission is its finale, so winning g02 doesn't end it
     const irgc = CAMPAIGNS.find((c) => c.id === 'irgc')!.missions;
-    expect(irgc[irgc.length - 1].id).toBe('g02');
-    expect(irgc.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual(['g02']);
+    expect(irgc.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual([]);
     const g02 = harness(byId('g02'));
     killGroup(g02, 'suicide_boats');
     g02.run(62, () => shieldPlayer(g02)); // the missile boats come in at 60 s
     killGroup(g02, 'missile_boats');
     g02.run(2, () => shieldPlayer(g02));
     expect(g02.runner.state).toBe('success');
-    expect(g02.runner.result(g02.world).campaignComplete).toBe(true);
+    expect(g02.runner.result(g02.world).campaignComplete).toBeUndefined();
     // non-final missions never claim the ending
     const g01 = harness(byId('g01'));
     killGroup(g01, 'shaheds');

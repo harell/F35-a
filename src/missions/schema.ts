@@ -248,6 +248,12 @@ export interface SamSiteDef {
   loop?: boolean;
   /** 'ad_boat': keep station on the first live member of this group (the boats it escorts; the next one when it dies). */
   escort?: string;
+  /**
+   * Close-in cue (m): an electro-optical tracker that detects a jet inside `range` whatever its shaping, and
+   * inside `bayRange` while its weapon bay is open (× samRangeScale), in place of the type's
+   * SamTypeData.closeCue. A fixed site with one can't be slipped past by stealth alone.
+   */
+  closeCue?: { range: number; bayRange: number };
 }
 
 /**

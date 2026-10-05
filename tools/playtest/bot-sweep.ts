@@ -58,7 +58,7 @@ const args = Object.fromEntries(
 
 /**
  * Ids and groups, comma-separated in any mix (e.g. campaigns,training,ia_defend_auckland): campaigns (every
- * playable campaign: today the IRGC campaign only), irgc (g01, g02), training, all (every playable campaign and
+ * playable campaign: today the IRGC campaign only), irgc (g01–g03), training, all (every playable campaign and
  * training; the default).
  */
 function missionIds(spec: string): string[] {

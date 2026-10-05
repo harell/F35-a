@@ -84,11 +84,10 @@ describe('g02 Straight Outta Hauraki: content', () => {
     expect(validateMission(G02)).toEqual([]);
   });
 
-  it('is the IRGC campaign finale: winning it plays the campaign ending (playtest 2026-10-02 bc94edd, 1.4-e)', () => {
+  it('is not the campaign finale: the IRGC campaign is still being built, so no mission plays its ending (#197)', () => {
     const irgc = CAMPAIGNS.find((c) => c.id === 'irgc')!;
-    expect(irgc.missions.at(-1)).toBe(G02);
-    expect(G02.script.campaignFinale).toBe(true);
-    for (const m of irgc.missions.slice(0, -1)) expect(m.script.campaignFinale, m.id).toBeFalsy();
+    expect(irgc.missions[1]).toBe(G02);
+    for (const m of irgc.missions) expect(m.script.campaignFinale, m.id).toBeFalsy();
   });
 
   it('offers only loadouts whose bombs can hit a moving boat (GBU-53/B), recommends all eight, and loads 360 rounds', () => {

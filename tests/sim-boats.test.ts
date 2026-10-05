@@ -448,6 +448,38 @@ describe('air-defence boat: close-in cue (#115)', { timeout: 60_000 }, () => {
   });
 });
 
+/**
+ * A fixed site with its own close-in cue (SamSiteEntity.closeCue, g03's island SAMs, #197): the mission
+ * gives a Tor the AD boat's kind of optical tracker. Its radar can't acquire a jet beaming it low over
+ * the water (the Doppler notch in the clutter); the tracker can, inside its range. Veteran
+ * (samRangeScale 1); a clean F-35 held 150 m up, flying across the line of sight.
+ */
+describe('fixed site with its own close-in cue (#197)', { timeout: 60_000 }, () => {
+  const ALT = 150;
+  function tracked(slant: number, closeCue?: { range: number; bayRange: number }): boolean {
+    const w = createSimWorld({ terrain: new SeaTerrain(-20), difficulty: DIFFICULTIES.veteran, events: new EventBus(), combat: createCombatSystemSeeded(3) });
+    const tor = w.spawnSam({ type: 'sa15', team: 'red', position: new Vector3(0, 0, 0), known: true, closeCue });
+    const at = new Vector3(0, ALT, Math.sqrt(slant * slant - ALT * ALT));
+    // heading east: square to the line of sight, so the radar sees it in its notch
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: at.clone(), heading: Math.PI / 2, speed: 250, loadout: 'a2a_stealth' });
+    let got = false;
+    run(w, 12, () => {
+      p.position.copy(at);
+      p.health = p.maxHealth;
+      if (tor.trackedTargetId === p.id && tor.trackProgress >= 1) got = true;
+    });
+    return got;
+  }
+
+  it("the site's cue holds a beaming jet its radar can't acquire in the notch; the type keeps no cue", () => {
+    expect(SAM_DATA.sa15.closeCue).toBeNull();
+    expect(tracked(5_000)).toBe(false);
+    expect(tracked(5_000, { range: 7_000, bayRange: 10_000 })).toBe(true);
+    // outside the cue's range, nothing changes
+    expect(tracked(8_000, { range: 7_000, bayRange: 10_000 })).toBe(false);
+  });
+});
+
 describe('GBU-53/B vs a weaving boat', { timeout: 60_000 }, () => {
   it('a designated StormBreaker follows a weaving suicide boat and sinks it', () => {
     const w = seaWorld(3);

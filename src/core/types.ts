@@ -109,6 +109,8 @@ export type LoadoutId =
   | 'sead_stealth'
   /** 8× GBU-53/B + 2× AARGM-ER, no air-to-air missile: the boat swarm's only loadout (#136). */
   | 'strike_maritime'
+  /** 2× AARGM-ER + 2× GBU-53/B, no air-to-air missile: open a gap, then one precise shot (g03, #197). */
+  | 'sead_precision'
   | 'a2a_beast'
   | 'strike_beast'
   /** Nothing in the bays or on the pylons: the gun only (free flight's default, #113). */

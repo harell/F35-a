@@ -221,6 +221,21 @@ The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies
 must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
 friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 
+## Waiheke air defences: no free route (g03)
+
+The IRGC campaign's g03 "Stoat of Emergency" (`src/missions/content/irgcWaiheke.ts`, epic #196) sends the jet from
+west Auckland through a layered air-defence network to one small target on the Onetangi dunes, on a 4:00 clock
+(`timeLimit`) with 2 AARGM-ER and 2 GBU-53/B (`sead_precision`). The layout is built so no single route is free: an
+SA-6 and a Tor on Motuihe (the Tor's point defence covers the SA-6), an SA-6 at the Waiheke airstrip and a ZSU-23-4 on
+the ridge (the nest is inside both, so every route ends in a fight), and three patrolling AD boats over the water north
+and south (`SamSiteDef.path` + `loop`). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
+`SamSiteEntity.closeCue`, which overrides the type's `SamTypeData.closeCue`): it holds a jet beaming them low in the
+notch, where the radar alone would lose it. The weather is overcast; the deck height is `OVERCAST_DECK` in
+`src/core/weather.ts` (shared with `world/clouds/Clouds.ts`), and the target spawns only once the player has been under
+it within 6 km of the nest (an `area` spawn condition with `below`), so neither a high transit nor a stand-off release
+finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast. No IRGC mission is
+the campaign's finale while the campaign is being built (no `campaignFinale`).
+
 ## Frame / sim order (Game.ts)
 
 ```

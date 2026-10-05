@@ -231,6 +231,8 @@ export interface SamSpawn {
   known?: boolean;
   /** A moving SAM on a fast boat ('ad_boat'): its route / escort (sim/boats.ts). Ignored for fixed sites. */
   boat?: BoatSpawn;
+  /** Close-in cue overriding the type's SamTypeData.closeCue (SamSiteEntity.closeCue). */
+  closeCue?: { range: number; bayRange: number } | null;
 }
 
 /**
