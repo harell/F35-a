@@ -54,9 +54,13 @@ export const G03_ISLAND_CUE = { range: 7_000, bayRange: 10_000 } as const;
 
 /** Fixed sites (m). */
 export const G03_SITES = {
-  /** The Motuihe pair: the Tor's point defence (3 km) covers the SA-6 0.7 km away. */
-  motuiheSa6: { x: 16_500, z: -4_000 } as XZ,
-  motuiheTor: { x: 16_200, z: -3_400 } as XZ,
+  /**
+   * The Motuihe pair: the Tor's point defence (3 km) covers the SA-6 1 km away. The Tor stands on the
+   * island's north-east end, 8 km from the Tāmaki Strait: the strait is a corridor its patrol boat
+   * guards, not the Tor (the SA-6 sees down it, but can't engage a jet under its 80 m floor).
+   */
+  motuiheSa6: { x: 16_200, z: -3_400 } as XZ,
+  motuiheTor: { x: 16_600, z: -4_300 } as XZ,
   /** The enemy airstrip between Oneroa and Onetangi: covers the end of every route. */
   airstripSa6: P.waiAirstrip,
   /** The ridge above Onetangi: covers the low drop pass. */
@@ -70,10 +74,13 @@ export const G03_BOATS = {
     { x: 11_000, z: -13_300 },
     { x: 18_500, z: -13_000 },
   ] as XZ[],
-  /** Off Onetangi: the north approach to the beach. */
+  /**
+   * Off Onetangi: the north approach to the beach. Far enough out (≥ 6 km from the nest) that a pop-up
+   * from behind the island's ridge to the south stays outside its reach.
+   */
   n2: [
-    { x: 24_000, z: -11_000 },
-    { x: 30_000, z: -11_000 },
+    { x: 24_000, z: -13_000 },
+    { x: 32_000, z: -13_000 },
   ] as XZ[],
   /** The Tāmaki Strait: the south detour. */
   s: [
@@ -131,7 +138,11 @@ export const G03: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. You are under the cloud. Target on the Onetangi dunes, east of the airstrip.', priority: 2 }],
       },
     ],
-    hints: [{ id: 'h_plan', text: 'No free route: pick a path, kill what blocks it, mask and notch the rest', when: { kind: 'time', t: 6 }, duration: 8 }],
+    hints: [
+      { id: 'h_plan', text: 'No free route: pick a path, kill what blocks it, mask and notch the rest', when: { kind: 'time', t: 6 }, duration: 8 },
+      // the sweep's lesson (#198): an AARGM fired from far out only silences a radar for a few seconds
+      { id: 'h_arm', text: 'An AARGM silences a radar for seconds: fire it close in, then attack straight after', when: { kind: 'player_weapon', weapon: 'aargm' }, duration: 8 },
+    ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Waiheke air defences are up. Target is on the Onetangi dunes, under the cloud.', priority: 2 }],
     successText: 'Target down. Good shooting, Viper. RTB.',
   },

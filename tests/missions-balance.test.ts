@@ -16,6 +16,7 @@ import type { Difficulty } from '../src/core/types';
 import type { TerrainQuery } from '../src/sim/api';
 import { runPlaythrough } from './missions-bot';
 import { G02_MISSILE_WAVE_AT } from '../src/missions/content/irgcHauraki';
+import type { ProbeSpec } from './missions-probes';
 
 const terrains = new Map<string, TerrainQuery>();
 function terrainFor(id: string): TerrainQuery {
@@ -152,7 +153,8 @@ describe('#58: a difficulty curve that only falls (6 seeds)', () => {
     return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6, ace ${won.ace}/6\n${log.join('\n')}` };
   }
 
-  for (const id of CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id)).filter((id) => id !== 'g02')) {
+  // g02 and g03 check their own curves below (g03's with the route probe: the plain bot flies straight at it)
+  for (const id of CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id)).filter((id) => id !== 'g02' && id !== 'g03')) {
     it(`${id}: the win rate doesn't rise from Pilot to Veteran or from Veteran to Ace`, { timeout: 600_000 }, async () => {
       const c = await curve(id);
       expect(c.won.veteran, `Veteran beats Pilot\n${c.table}`).toBeLessThanOrEqual(c.won.pilot);
@@ -207,6 +209,50 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
     expect(won.veteran, table).toBeGreaterThanOrEqual(2);
     expect(won.ace, table).toBeLessThanOrEqual(5);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
+    expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+    expect(won.ace, table).toBeLessThanOrEqual(won.veteran);
+  });
+});
+
+describe('g03 Stoat of Emergency: no free route (#198)', () => {
+  // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then
+  // the bot attacks. Measured, 8 seeds: the straight line, the north and south detours, the wide way,
+  // high above the SAMs and "kill every site" 0/8 on Pilot; the intended way through (low down the
+  // Tāmaki Strait, an AARGM at the strait's boat, a second one at the airstrip SA-6 from close in,
+  // then the attack in the gap) Recruit 7/8, Pilot 6/8, Veteran 4/8, Ace 0/8. The bands are the
+  // measured rates less a seed, over 6 seeds.
+  const run = (route: string, diff: Difficulty, seed: number) =>
+    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
+
+  it('the straight line and both detours fail on Pilot', { timeout: 600_000 }, async () => {
+    const log: string[] = [];
+    let won = 0;
+    for (const route of ['straight', 'north', 'south']) {
+      for (const seed of [0, 1, 2, 3]) {
+        await new Promise((r) => setTimeout(r, 0));
+        const r = run(route, 'pilot', seed);
+        if (r.state === 'success') won++;
+        log.push(`${route} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+      }
+    }
+    expect(won, log.join('\n')).toBeLessThanOrEqual(1);
+  });
+
+  it('the intended way through: Pilot ≥ 4/6, Veteran ≥ 2/6, never rising with difficulty', { timeout: 600_000 }, async () => {
+    const won: Record<string, number> = {};
+    const log: string[] = [];
+    for (const d of ['pilot', 'veteran', 'ace'] as const) {
+      won[d] = 0;
+      for (const seed of [0, 1, 2, 3, 4, 5]) {
+        await new Promise((r) => setTimeout(r, 0));
+        const r = run('golden', d, seed);
+        if (r.state === 'success') won[d]++;
+        log.push(`golden ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+      }
+    }
+    const table = log.join('\n');
+    expect(won.pilot, table).toBeGreaterThanOrEqual(4);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
     expect(won.ace, table).toBeLessThanOrEqual(won.veteran);
   });

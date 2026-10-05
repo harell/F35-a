@@ -11,7 +11,7 @@ import { hudShown, testConditions } from '../src/game/testParams';
 import { createHud, type HudTestHooks } from '../src/hud/Hud';
 import { buildMock, type Scenario } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
-import { parseProbe, probeLabel, type ProbeSpec } from './missions-probes';
+import { KILL_ALL, ROUTE_PROBES, parseProbe, probeLabel, routeNames, type ProbeSpec } from './missions-probes';
 import { runPlaythrough } from './missions-bot';
 import { flat } from './ai-helpers';
 
@@ -28,6 +28,18 @@ describe('bot-sweep --park / --gunonly (tests/missions-probes.ts)', () => {
     expect(() => parseProbe({ park: '', gunonly: '' })).toThrow(/pick one/);
     expect(() => parseProbe({ gunonly: '1' })).toThrow();
     expect([null, { kind: 'park', at: 'start' }, { kind: 'park', at: 'far' }, { kind: 'gunonly' }].map((p) => probeLabel(p as ProbeSpec | null))).toEqual(['bot', 'park:start', 'park:far', 'gunonly']);
+  });
+
+  it('--route=<name> (#198): a route probe of its own, named in rows and logs; a mission without that route says which it has', () => {
+    expect(parseProbe({ route: 'golden' })).toEqual({ kind: 'route', route: 'golden' });
+    expect(parseProbe({ route: KILL_ALL })).toEqual({ kind: 'route', route: 'killall' });
+    expect(() => parseProbe({ route: '' })).toThrow(/route=<name>/);
+    expect(() => parseProbe({ route: 'golden', park: '' })).toThrow(/probe of its own/);
+    expect(probeLabel({ kind: 'route', route: 'north' })).toBe('route:north');
+    // g03's routes, every one ending somewhere in the area of operations
+    expect(routeNames('g03')).toEqual(expect.arrayContaining(['straight', 'north', 'south', 'wide', 'high', 'golden', KILL_ALL]));
+    for (const legs of Object.values(ROUTE_PROBES.g03)) for (const l of legs) expect(Math.max(Math.abs(l.x), Math.abs(l.z))).toBeLessThan(38_000);
+    expect(() => runPlaythrough('g01', 'pilot', 0, flat(0), { maxT: 1, probe: { kind: 'route', route: 'golden' } })).toThrow(/no such route for g01 \(killall\)/);
   });
 
   it('park: the parked jet never flies, shoots or dies; the row and log say which park', { timeout: 60_000 }, () => {

@@ -233,8 +233,13 @@ and south (`SamSiteDef.path` + `loop`). The island radars carry a close-in cue o
 notch, where the radar alone would lose it. The weather is overcast; the deck height is `OVERCAST_DECK` in
 `src/core/weather.ts` (shared with `world/clouds/Clouds.ts`), and the target spawns only once the player has been under
 it within 6 km of the nest (an `area` spawn condition with `below`), so neither a high transit nor a stand-off release
-finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast. No IRGC mission is
-the campaign's finale while the campaign is being built (no `campaignFinale`).
+finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast, and the bot's route
+probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`) measure it in
+flight: every naive route (straight, either detour, the wide way, above the SAMs, killing every site) loses on Pilot,
+the intended path (low down the Tāmaki Strait, an AARGM at the strait's boat, a second at the airstrip SA-6 from close
+in, then the attack in the gap) wins about 3 in 4 (`tests/missions-balance.test.ts`). Under an overcast deck the bot
+attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the campaign's finale
+while the campaign is being built (no `campaignFinale`).
 
 ## Frame / sim order (Game.ts)
 

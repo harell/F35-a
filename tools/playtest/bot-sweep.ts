@@ -6,7 +6,7 @@
  *
  *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=g01,g02|irgc|campaigns|training|all]
  *       [--diffs=recruit,pilot,veteran,ace] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
- *       [--loadout=sead_stealth] [--log] [--nojitter] [--park[=start|far] | --gunonly]
+ *       [--loadout=sead_stealth] [--log] [--nojitter] [--park[=start|far] | --gunonly | --route=<name>]
  *
  * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run and a
  * win-rate table per mission × difficulty; --json writes every PlaythroughResult (minus the raw
@@ -25,7 +25,10 @@
  *               or an objective credited, by waiting?
  *   --gunonly   gun-only probe: the stores are emptied every step and the air-to-air bot presses on
  *               with the gun; rows count `gunRounds`, and a rounds table follows the win rates
- *   (tests/missions-probes.ts; every row's `probe` says which ran: bot, park:start, park:far, gunonly,
+ *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g03: straight, north,
+ *               south, wide, high, golden, golden_north), then the bot attacks; `killall` attacks every
+ *               SAM site first. "Is there a free way round?" and "does the intended way work?"
+ *   (tests/missions-probes.ts; every row's `probe` says which ran: bot, park:start, park:far, gunonly, route:<name>,
  *   and with --log the event log starts with a PROBE line)
  * Mission ids include Instant Action (`ia_<mode>_auckland`, e.g. ia_strike_auckland): the id seeds
  * the layout, so the same id is the same mission in every run (missionById()).
