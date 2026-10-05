@@ -20,24 +20,24 @@ export const PARAPET_BAND = 0.9;
 export const PARAPET_INSET = 1.0;
 
 /**
- * Building lighting (#141). Sky light: a wall sees half the sky, so it takes the sky's own radiance in the direction it
- * faces (tilted up, atmoSky) × this, on top of the hemisphere term every surface gets: shaded faces stay readable and
- * take the sky's tint (blue by day, violet at dusk) instead of going near-black.
+ * Building lighting (#141). Sky light: a wall sees half the sky, so it takes the sky's radiance half way up in the
+ * direction it faces (the dome's horizon colour, warmer towards the sun, blended with its zenith) × this, on top of the
+ * hemisphere term every surface gets: shaded faces stay readable and take the sky's tint (blue by day, violet at dusk).
  */
-export const SKY_WALL_FILL = 0.55;
+export const SKY_WALL_FILL = 0.45;
 /**
  * Glass reflects the sky (#141), from head-on to grazing (Schlick's Fresnel blends the pair): window panes in a punched
  * facade, and glass facades (curtain walls: the tower kit's, the LINZ blocks with glass).
  */
-export const GLASS_REFLECT = { window: [0.12, 0.65], glass: [0.22, 0.9] } as const;
+export const GLASS_REFLECT = { window: [0.06, 0.5], glass: [0.2, 0.85] } as const;
 /** Contact shading: the bottom CONTACT_HEIGHT m of a wall darken to CONTACT_DARK at the ground (aFacade buildings). */
 export const CONTACT_HEIGHT = 7;
 export const CONTACT_DARK = 0.6;
 /** Window grids by storey (#141): ranges a building's seed picks its window width (m) and margins from, per style. */
 export const STOREY_WINDOWS = {
-  office: { width: [1.5, 3.4], margin: [0.05, 0.16], sill: [0.16, 0.3] },
+  office: { width: [2.4, 4.0], margin: [0.06, 0.16], sill: [0.16, 0.3] },
   home: { width: [3.0, 4.8], margin: [0.22, 0.34], sill: [0.26, 0.36] },
-  glass: { width: [1.4, 2.0], margin: [0.03, 0.07], sill: [0.08, 0.14] },
+  glass: { width: [1.8, 2.6], margin: [0.03, 0.07], sill: [0.08, 0.14] },
 } as const;
 
 const commonVertex = /* glsl */ `
@@ -214,7 +214,8 @@ void main() {
       // width and mullion rhythm from its seed (STOREY_WINDOWS); a glass facade a curtain wall of narrow panes
       if (vFacade.y > 0.5 && vWin < 2.5) {
         float sd = vFacade.z;
-        glassy = mod(vFacade.w, 2.0) > 0.5;
+        // (flags rounded first: an interpolated 2 can read 1.99999, and mod() would then flip the glass bit pixel by pixel)
+        glassy = mod(floor(vFacade.w + 0.5), 2.0) > 0.5;
         float a = fract(sd * 7.13);
         float b = fract(sd * 13.7);
         if (glassy) {
@@ -238,9 +239,9 @@ void main() {
     float win = wv.x * wv.y;
     float detail = 1.0 - smoothstep(0.35, 0.9, mpp / spacing.y);
     #ifdef FACADES
-      // (a building's own grid goes to its average once the smaller side of a cell is under ~4 px: narrow panes and
+      // (a building's own grid goes to its average once the smaller side of a cell is under ~6 px: narrow panes and
       // their lit windows would sparkle)
-      if (vFacade.y > 0.5 && vWin < 2.5) detail = 1.0 - smoothstep(0.2, 0.45, mpp / min(spacing.x, spacing.y));
+      if (vFacade.y > 0.5 && vWin < 2.5) detail = 1.0 - smoothstep(0.12, 0.3, mpp / min(spacing.x, spacing.y));
     #endif
     vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
     // dark panes reflecting the sky, more of it towards grazing (Fresnel, #141): a glass facade reads as glass from afar
@@ -391,7 +392,14 @@ void main() {
   vec3 lit = atmoDiffuse(base, N, 1.0);
   // sky light on walls (#141): half the sky, in the direction the wall faces
   float wall = 1.0 - abs(N.y);
-  if (wall > 0.0) lit += base * atmoSky(normalize(vec3(N.x, 0.55, N.z))) * (${SKY_WALL_FILL.toFixed(3)} * 0.5 * wall);
+  // (the sky dome's own colours, cheaply: its horizon, warmer towards the sun, blended with the zenith, as atmoSky()
+  // gives them half way up; no per-pixel exp or pow)
+  if (wall > 0.0) {
+    vec2 sh = uSunDir.xz / max(length(uSunDir.xz), 1e-4);
+    float toSun = max(dot(N.xz, sh), 0.0) * smoothstep(-0.12, 0.08, uSunDir.y);
+    vec3 skyWall = mix(mix(uHorizon, uHorizonSun, toSun * toSun), uZenith, 0.5);
+    lit += base * skyWall * (${SKY_WALL_FILL.toFixed(3)} * 0.5 * wall);
+  }
   #ifdef FACADES
     // contact shading: a building's walls darken towards the ground it stands on (no SSAO: one smoothstep)
     if (vFacade.w > 1.5 && wall > 0.5) lit *= mix(${CONTACT_DARK.toFixed(2)}, 1.0, smoothstep(0.0, ${CONTACT_HEIGHT.toFixed(1)}, max(vFacade.x, 0.0)));
