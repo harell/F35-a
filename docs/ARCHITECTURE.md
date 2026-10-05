@@ -221,6 +221,16 @@ The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies
 must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
 friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 
+## Targeting pod view (#199)
+
+The target camera window (`src/render/TargetCam.ts`, laid out by `src/hud/hmd/pip.ts`) shows aircraft and ships in
+its cinematic shots near the target, but a ground target or SAM site through the targeting pod (`src/core/pod.ts`):
+the camera sits on the line of sight from the player's jet (`podCamPose` in `src/render/targetCam/pose.ts`) and frames
+one of three zoom steps (WIDE 150 m, NARROW 30 m, ZOOM 2 m top to bottom; a tap on the window cycles them), so a
+target a few tenths of a metre long is still a dozen pixels tall. With no line of sight (terrain, or the overcast
+deck between the jet and the target: `cloudBetween()` in `src/sim/sensors/los.ts`) nothing is rendered and the window
+reads MASKED. Small ground targets are framed size-aware in the orbit shot too (`groundMinFraming`).
+
 ## Waiheke air defences: no free route (g03)
 
 The IRGC campaign's g03 "Stoat of Emergency" (`src/missions/content/irgcWaiheke.ts`, epic #196) sends the jet from
