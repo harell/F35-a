@@ -174,15 +174,17 @@ neighbourhoods) keeps its own roof. A roof under 35 m that failed the correlatio
 lean predicts; a taller one keeps today's plain roof. Same mesh, same draw call, same triangles; low tier unchanged.
 
 **Building lighting and facades (#141).** Every wall of the building material takes sky light on top of the hemisphere
-term: the sky's radiance in the direction it faces, tilted up (`atmoSky`, × `SKY_WALL_FILL`), so shaded towers keep
-their form and take the sky's tint. The CBD mesh also carries an int16 `aFacade` attribute on every tier
+term: the sky dome's radiance half way up in the direction it faces (its horizon colour, warmer towards the sun,
+blended with the zenith; × `SKY_WALL_FILL`), so shaded towers keep their form and take the sky's tint. The CBD mesh also carries an int16 `aFacade` attribute on every tier
 (`GeometryBuilder.enableFacades` / `setFacade`, the `facades` variant of the material): each building's base (its walls
 darken over the bottom `CONTACT_HEIGHT` m, contact shading without SSAO), and for the LINZ blocks their storey height,
 a seed and a glass flag. `buildingFacade` (auckland.ts) picks colour, window style and storey from the building's
 OpenStreetMap tags where it has them (`Building.osm`, baked by `tools/linz/facades.py`: use, `building:levels`,
 material, colour) and from its height class as before where not; the shader draws one floor per storey from the base,
-window width and margins from the seed (`STOREY_WINDOWS`), and a glass facade as a curtain wall. Window panes reflect
-the sky by Schlick's Fresnel (more towards grazing), the tower kit's curtain walls too. The night facade lights
+window width and margins from the seed (`STOREY_WINDOWS`), and a glass facade as a curtain wall. Glass (window panes,
+glass facades, the tower kit's curtain walls) is a dark body colour plus the sky it reflects, added as radiance after the
+lighting and weighted by Schlick's Fresnel (`GLASS_REFLECT`, more towards grazing), so glass in shade still reads as
+glass. A building's own grid fades to its average once a cell is under ~6 px and keeps its style's mean night glow. The night facade lights
 (`buildFacadeLightPoints`) sit on the same storeys. Same mesh, draw calls and triangles.
 
 The terrain's night glow constants live in `src/world/terrain/nightGlow.ts`. In the CBD region (`cbdPattern`) the
