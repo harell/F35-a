@@ -353,6 +353,52 @@ describe('trains in missions', () => {
     m.runner.dispose?.();
   });
 
+  it('locked and bombed like a civil ship: a StormBreaker released on a designated moving train destroys it, a civilian loss', () => {
+    const def = missionById('ia_strike_auckland')!;
+    const events = new EventBus();
+    const world = createSimWorld({ terrain: new FlatTerrain(-20), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
+    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
+    runner.setup(world, 'sead_stealth');
+    const hud: string[] = [];
+    events.on('hud:message', (e) => hud.push(e.text));
+    const tick = (seconds: number, until?: () => boolean) => {
+      for (let i = 0; i < seconds * 60; i++) {
+        world.step(DT);
+        runner.update(world, DT);
+        if (until?.()) return;
+      }
+    };
+    const p = world.player!;
+    p.position.set(1480, 6_000, 2350);
+    tick(2);
+    // a moving train with every car above ground
+    const train = world.ground.find((g) => g.type === 'train' && g.alive && g.speed > 5 && g.train!.cars.every((c) => !c.hidden))!;
+    expect(train).toBeDefined();
+    // the jet 9 km south of it at 6 km, nose on
+    p.position.set(train.position.x, 6_000, train.position.z + 9_000);
+    p.velocity.set(0, 0, -250);
+    p.quaternion.identity();
+    p.input.throttle = 0.85;
+    tick(1);
+    expect(p.radar.contacts.some((c) => c.id === train.id && c.team === 'neutral')).toBe(true); // a sensor contact
+    world.combat.designate(p, train.id, world);
+    expect(p.radar.designatedId).toBe(train.id);
+    const launches: { alive: boolean; targetId: number | null }[] = [];
+    events.on('munition:launch', (e) => launches.push(e.missile));
+    world.combat.fire(p, world, 'gbu53', train.id);
+    tick(3, () => launches.length > 0);
+    expect(launches).toHaveLength(1);
+    expect(launches[0].targetId).toBe(train.id);
+    tick(120, () => !launches[0].alive);
+    tick(2);
+    expect(train.alive).toBe(false);
+    expect(hud).toContain('CIVILIAN TRAIN HIT');
+    expect(runner.state).toBe('running');
+    const r = runner.result(world) as MissionResultExt;
+    expect(r.civilianTrainKills).toBe(1);
+    runner.dispose?.();
+  }, 60_000);
+
   it('the gun wears one down: a few rounds on its cars destroy it', () => {
     const m = setup(missionById('g01')!);
     m.overNewmarket();

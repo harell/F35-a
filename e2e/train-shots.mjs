@@ -34,11 +34,11 @@ const VIEWS = {
   // a set at the CRL's south portal, Maungawhau station
   maungawhau_portal: { at: [-300, 2110], r: 140, cam: [-160, 70, 170], look: [20, 0, -40] },
   // a train crossing Newmarket (the junction and the station)
-  newmarket: { at: [1481, 2354], r: 220, cam: [-230, 130, 240], look: [0, 0, 0] },
+  newmarket: { at: [1481, 2354], r: 220, onTrain: true, cam: [170, 150, 150], look: [0, 0, 0] },
   // a freight train in the port's rail yard along The Strand
-  port_freight: { at: [1650, -150], r: 400, line: 3, cam: [-160, 120, -280], look: [80, 0, 30] },
+  port_freight: { at: [1650, -150], r: 400, line: 3, onTrain: true, cam: [160, 110, -170], look: [0, 0, 0] },
   // night: a set at Newmarket, lit windows and headlights
-  night_newmarket: { tod: 'night', at: [1481, 2354], r: 260, cam: [-230, 130, 240], look: [0, 0, 0] },
+  night_newmarket: { tod: 'night', at: [1481, 2354], r: 260, onTrain: true, cam: [170, 150, 150], look: [0, 0, 0] },
 };
 
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -61,8 +61,11 @@ for (const [name, v] of Object.entries(VIEWS)) {
     if (!hit) return { error: 'no train comes by' };
     w.time = hit.t;
     f.hud(false);
-    const cam = [v.at[0] + v.cam[0], v.cam[1], v.at[1] + v.cam[2]];
-    const look = [v.at[0] + v.look[0], v.look[1], v.at[1] + v.look[2]];
+    // centred on the train found (`onTrain`), else on the spot
+    const u = v.onTrain ? f.trains(v.at[0], v.at[1]).find((r) => r.unit === hit.unit) : null;
+    const c = u ? [u.x, u.z] : v.at;
+    const cam = [c[0] + v.cam[0], v.cam[1], c[1] + v.cam[2]];
+    const look = [c[0] + v.look[0], v.look[1], c[1] + v.look[2]];
     const ground = w.terrain.heightAt(look[0], look[2]);
     f.camera([cam[0], cam[1] + ground, cam[2]], [look[0], ground + 2, look[2]]);
     return { train: hit, near: f.trains(v.at[0], v.at[1]).slice(0, 3) };
