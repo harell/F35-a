@@ -22,6 +22,7 @@ import { GroundVisual, SamVisual } from './visuals/SiteVisuals';
 import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
 import { WakeBatch } from './effects/Wakes';
 import { HarbourFerries } from './traffic/HarbourFerries';
+import { TrainRenderer } from './traffic/Trains';
 import { shipDims } from './visuals/shipMotion';
 import { BOAT_DIMS, type BoatKind } from './models/boats';
 
@@ -78,6 +79,8 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   // visual-only harbour ferries (Auckland only; created on the first frame, once the mission is known)
   let ferries: HarbourFerries | null = null;
   let ferriesChecked = false;
+  // trains on the sortie's timetable (Auckland civil traffic, #146; created once world.trains is set)
+  let trains: TrainRenderer | null = null;
 
   let playerVisible = true;
   let frame = 0;
@@ -179,6 +182,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       if (env.isNight) {
         // the ferries first: a few dozen lights, which a harbour full of lit liners must not crowd out
         ferries?.addLights(lights, ctx.camera.position);
+        trains?.addLights(lights, ctx.camera.position);
         grounds.forEach(shipLightsFor);
       }
     }
@@ -283,6 +287,17 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       // harbour ferries (render-only, placed by their timetable at sim time)
       ferries?.setNight(env.isNight);
       ferries?.update(t, wakes);
+
+      // trains: the nearest on the timetable (sim time), the player's designated one whatever its range
+      if (!trains && world.trains && q.trains > 0) {
+        trains = new TrainRenderer(q.trains, q.level);
+        for (const m of Object.values(trains.meshes)) group.add(m);
+      }
+      if (trains && world.trains) {
+        const des = world.player ? world.getEntity(world.player.radar.designatedId) : null;
+        trains.setNight(env.isNight);
+        trains.update(world.trains, t, cam, des && des.kind === 'ground' && des.train ? des.train.unit : -1);
+      }
       wakes?.end();
 
       updateLights(ctx);
@@ -338,6 +353,8 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       wakes?.dispose();
       ferries?.dispose();
       ferries = null;
+      trains?.dispose();
+      trains = null;
       group.removeFromParent();
       // Free GPU copies of shared materials/textures; CPU-side prototypes stay cached so the next
       // mission starts fast (three.js re-uploads on next use).

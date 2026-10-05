@@ -50,6 +50,7 @@ export const GROUND_LABEL: Record<GroundTargetType, string> = {
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MSL BOAT',
   stoat: 'STOAT',
+  train: 'TRAIN',
 };
 
 /** HMD weapon names ("AMRAAM 4", "9X 2", "GUN 180", "JDAM 2"). */

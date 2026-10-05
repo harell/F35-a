@@ -158,19 +158,24 @@ export class Callouts {
     if (entity.team === 'neutral') {
       const ship = entity.kind === 'ground' && entity.type === 'ship';
       const heli = entity.kind === 'aircraft' && !!entity.heli;
+      const train = entity.kind === 'ground' && entity.type === 'train';
       const who = entity.kind === 'aircraft' ? entity.callsign : entity.name;
-      const down = ship ? 'CIVILIAN SHIP DESTROYED' : heli ? 'CIVILIAN HELICOPTER DOWN' : 'CIVILIAN AIRLINER DOWN';
+      const down = ship ? 'CIVILIAN SHIP DESTROYED' : train ? 'CIVILIAN TRAIN HIT' : heli ? 'CIVILIAN HELICOPTER DOWN' : 'CIVILIAN AIRLINER DOWN';
       if (byPlayer) {
         // free flight: nothing counts against the player
         if (running && !s.script.freeFlight) {
           s.civilianKills++;
           if (ship) s.civilianShipKills++;
           if (heli) s.civilianHeliKills++;
+          if (train) s.civilianTrainKills++;
         }
         if (s.script.freeFlight) {
           // free flight: no scolding, just a dry word from Darkstar
           s.hud(down, 'warn', 3);
           s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, Darkstar. ${who} won't be making it home. Let's keep the sightseeing friendly.`, priority: 2 });
+        } else if (train) {
+          s.hud('CIVILIAN TRAIN HIT', 'bad', 3.5);
+          s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit a civilian train, the ${who}!`, priority: 4 });
         } else if (ship) {
           s.hud('CIVILIAN SHIP DESTROYED', 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian vessel ${who}!`, priority: 4 });
@@ -180,7 +185,7 @@ export class Callouts {
         }
       } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {
         // (not 'CIVIL SHIP … DESTROYED': read as if the player had sunk her — playtest 1.4-i)
-        s.hud(ship ? `${who.toUpperCase()} SUNK` : `CIVIL ${who} DOWN`, 'bad', 2.5);
+        s.hud(ship ? `${who.toUpperCase()} SUNK` : train ? 'CIVIL TRAIN HIT' : `CIVIL ${who} DOWN`, 'bad', 2.5);
       }
       return;
     }

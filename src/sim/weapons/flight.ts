@@ -19,7 +19,7 @@ import { radio } from './context';
 import { pointDefensePk } from '../sam/SamSystem';
 import { SAM_INFO } from '../../core/data';
 import { STRUCTURAL_BLAST_FRACTION, destroyLandmark, firstLandmarkHit, landmarkDistance } from '../landmarks';
-import { vesselHullDistance, vesselSegmentHit } from '../civil/vessels';
+import { hasLongHull, vesselHullDistance, vesselSegmentHit } from '../civil/vessels';
 import { isHostile } from '../../core/types';
 
 type EndReason = 'hit' | 'proximity' | 'ground' | 'water' | 'selfdestruct' | 'decoyed';
@@ -232,7 +232,7 @@ function stepMissile(ctx: CombatCtx, m: CombatMissile, dt: number): void {
 
   // ── tri-mode bomb: impact fuze on the designated target only (the long hull of a civil ship) ──
   if (def.guidance === 'tri_mode' && target && target.alive && (target.kind === 'sam' || target.kind === 'ground')) {
-    if (target.kind === 'ground' && target.vessel) {
+    if (hasLongHull(target)) {
       const s = vesselSegmentHit(target, _p0, m.position);
       if (s >= 0) {
         _pt.lerpVectors(_p0, m.position, s);
@@ -416,8 +416,8 @@ function applyBlast(ctx: CombatCtx, m: CombatMissile, point: Vector3, primary: A
   let hitHostile = false;
   const hurt = (e: AnyEntity, radiusFactor: number): void => {
     if (!e.alive || e.id === m.shooterId) return;
-    // civil ships: distance to the long hull, not to a 140 m bounding sphere
-    const d = e.kind === 'ground' && e.vessel ? vesselHullDistance(e, point) : Math.max(0, point.distanceTo(e.position) - e.radius * radiusFactor);
+    // civil ships and trains: distance to the long hull / the cars, not to a 140 m bounding sphere
+    const d = hasLongHull(e) ? vesselHullDistance(e, point) : Math.max(0, point.distanceTo(e.position) - e.radius * radiusFactor);
     if (d >= def.blastRadius) return;
     const dmg = def.damage * (1 - d / def.blastRadius);
     if (dmg <= 0.5) return;

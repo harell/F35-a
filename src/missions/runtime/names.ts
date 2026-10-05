@@ -26,6 +26,7 @@ const GROUND_HUD: Record<GroundTargetType, string> = {
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MISSILE BOAT',
   stoat: 'STOAT',
+  train: 'TRAIN',
 };
 
 export function samHudName(type: SamType): string {

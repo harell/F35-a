@@ -278,6 +278,12 @@ export interface GroundSpawn {
   anchored?: boolean;
   /** Drawn by the world scenery (GroundTargetEntity.scenery): no entity model. */
   scenery?: boolean;
+  /**
+   * Take the id from the world's civil range (a civil train, #146): trains near the player come and go all
+   * sortie, and drawing their ids from the shared sequence shifted every later entity's id, and with it
+   * seeded behaviour keyed by id (a bot run changed outcome with nothing else different).
+   */
+  civilId?: boolean;
   /** IRGC Navy fast boat ('suicide_boat' / 'missile_boat'): chase / strike target (sim/boats.ts). `path` and `speed` above still apply. */
   boat?: BoatSpawn;
   /** The stoat ('stoat'): its route, bait stations and clock (sim/stoat.ts). */
@@ -316,6 +322,11 @@ export interface SimWorld {
    * 'player:down', so the mission can name the building in the end reason.
    */
   readonly structureStrike?: StructureStrike | null;
+  /**
+   * The sortie's train timetable (Auckland civil traffic, #146; null without it): set by the mission
+   * (missions/runtime/trains.ts), read by the entity renderer to draw every train near the camera.
+   */
+  trains?: import('./civil/rail').TrainService | null;
   /** Pooled projectiles (check `active`). */
   readonly projectiles: Projectile[];
   readonly player: AircraftEntity | null;
