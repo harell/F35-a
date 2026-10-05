@@ -26,8 +26,8 @@ const stroll = () => buildInstantMissionSeeded({ mode: 'stroll', theater: 'auckl
 function setup() {
   const def = stroll();
   const events = new EventBus();
-  const world = createSimWorld({ terrain: new FlatTerrain(0), difficulty: DIFFICULTIES.ace, events, combat: createCombatSystemSeeded(1) });
-  const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.ace, events });
+  const world = createSimWorld({ terrain: new FlatTerrain(0), difficulty: DIFFICULTIES.veteran, events, combat: createCombatSystemSeeded(1) });
+  const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty: DIFFICULTIES.veteran, events });
   runner.setup(world, def.recommendedLoadout);
   const radio: string[] = [];
   events.on('radio', (e) => radio.push(e.text));

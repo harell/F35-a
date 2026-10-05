@@ -29,33 +29,33 @@ const withGun = (gunAmmo: MissionDef['gunAmmo']): MissionDef => ({ ...byId('t02'
 
 describe('MissionDef.gunAmmo: resolving the rounds', () => {
   it('a number applies on every difficulty; no override → null (keep the loadout)', () => {
-    for (const d of ['recruit', 'pilot', 'veteran', 'ace'] as const) {
+    for (const d of ['recruit', 'pilot', 'veteran'] as const) {
       expect(gunAmmoOverride({ gunAmmo: 400 }, d)).toBe(400);
       expect(gunAmmoOverride({}, d)).toBeNull();
     }
   });
 
   it('per difficulty: a level left out takes the nearest easier level listed, else the easiest listed', () => {
-    const g = { gunAmmo: { recruit: 400, ace: 300 } };
+    const g = { gunAmmo: { recruit: 400, veteran: 300 } };
     expect(gunAmmoOverride(g, 'recruit')).toBe(400);
     expect(gunAmmoOverride(g, 'pilot')).toBe(400);
-    expect(gunAmmoOverride(g, 'veteran')).toBe(400);
-    expect(gunAmmoOverride(g, 'ace')).toBe(300);
+    expect(gunAmmoOverride(g, 'pilot')).toBe(400);
+    expect(gunAmmoOverride(g, 'veteran')).toBe(300);
     const hard = { gunAmmo: { veteran: 260 } };
     expect(gunAmmoOverride(hard, 'recruit')).toBe(260);
-    expect(gunAmmoOverride(hard, 'ace')).toBe(260);
+    expect(gunAmmoOverride(hard, 'veteran')).toBe(260);
   });
 
   it("missionGunAmmo falls back to the loadout's rounds (the briefing's hangar cards)", () => {
     expect(LOADOUTS.a2a_stealth.gunAmmo).toBe(180);
     expect(missionGunAmmo(byId('t02'), 'pilot', 'a2a_stealth')).toBe(180);
     expect(missionGunAmmo(withGun(400), 'pilot', 'a2a_stealth')).toBe(400);
-    expect(missionGunAmmo(withGun({ recruit: 400, ace: 300 }), 'ace', 'a2a_beast')).toBe(300);
+    expect(missionGunAmmo(withGun({ recruit: 400, veteran: 300 }), 'veteran', 'a2a_beast')).toBe(300);
   });
 
   it('the validator accepts whole rounds and flags bad values', () => {
     expect(validateMission(withGun(400))).toEqual([]);
-    expect(validateMission(withGun({ recruit: 400, ace: 300 }))).toEqual([]);
+    expect(validateMission(withGun({ recruit: 400, veteran: 300 }))).toEqual([]);
     expect(validateMission(withGun(-1)).some((e) => /gunAmmo must be a whole number/.test(e))).toBe(true);
     expect(validateMission(withGun(250.5)).some((e) => /gunAmmo must be a whole number/.test(e))).toBe(true);
     expect(validateMission(withGun({})).some((e) => /gunAmmo per difficulty is empty/.test(e))).toBe(true);
@@ -86,10 +86,10 @@ describe('MissionDef.gunAmmo: launch', () => {
     }
   });
 
-  it('per difficulty: { recruit: 400, ace: 300 } arms 400 on Recruit and 300 on Ace', () => {
-    const def = withGun({ recruit: 400, ace: 300 });
+  it('per difficulty: { recruit: 400, veteran: 300 } arms 400 on Recruit and 300 on Veteran', () => {
+    const def = withGun({ recruit: 400, veteran: 300 });
     expect(harness(def, 'recruit').world.player!.gunAmmo).toBe(400);
-    expect(harness(def, 'ace').world.player!.gunAmmo).toBe(300);
+    expect(harness(def, 'veteran').world.player!.gunAmmo).toBe(300);
   });
 });
 

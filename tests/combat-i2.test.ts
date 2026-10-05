@@ -88,8 +88,8 @@ function headOnPass(diff: Difficulty, seed: number): { killed: boolean; hits: nu
 }
 
 describe('combat i2: head-on gun snapshot is not a free kill', () => {
-  it('perfect-aim head-on pass vs Ace / Veteran MiG-29: first-pass Pk well below 30%', () => {
-    for (const diff of ['ace', 'veteran', 'pilot'] as const) {
+  it('perfect-aim head-on pass vs Veteran / Pilot MiG-29: first-pass Pk well below 30%', () => {
+    for (const diff of ['veteran', 'pilot'] as const) {
       let kills = 0;
       for (let k = 0; k < 6; k++) {
         if (headOnPass(diff, 300 + k).killed) kills++;
@@ -154,7 +154,7 @@ describe('combat i2: per-sortie variation', () => {
 
 describe('combat i2: radar missile defence before the active seeker locks', () => {
   it('beaming the launcher (notch) drags the datalinked midcourse track off; a clean track stays clean', () => {
-    const w = new FakeWorld({ difficulty: 'ace' });
+    const w = new FakeWorld({ difficulty: 'veteran' });
     const su = w.spawnAircraft({ type: 'su35', team: 'red', position: v3(0, 1500, -6000), heading: Math.PI, speed: 260 });
     const beamer = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 1500, 0), heading: Math.PI / 2, speed: 260, loadout: 'a2a_stealth' });
     let seed = 1;
@@ -173,8 +173,8 @@ describe('combat i2: radar missile defence before the active seeker locks', () =
     expect(err2).toBe(0);
   });
 
-  it('the "seeker not fooled" roll of an air-to-air seeker is capped at ~15% even on Ace', () => {
-    const w = new FakeWorld({ difficulty: 'ace' });
+  it('the "seeker not fooled" roll of an air-to-air seeker is capped at ~15% even on Veteran', () => {
+    const w = new FakeWorld({ difficulty: 'veteran' });
     let rng = 0;
     const ctx = { rng: () => ((rng = (rng * 9301 + 49297) % 233280) / 233280), world: w } as never;
     let immune = 0;
@@ -235,16 +235,18 @@ describe('combat i2: instant action & recruit forgiveness', () => {
     expect(n).toBeGreaterThan(60);
     expect(duds / n).toBeGreaterThan(0.3);
     expect(duds / n).toBeLessThan(0.6);
-    // never on Pilot / Veteran / Ace
-    for (let k = 0; k < 10; k++) expect(rearShot('ace', 200 + k).m?.dudAt ?? -1).toBe(-1);
+    // never on Pilot / Veteran
+    for (let k = 0; k < 10; k++) expect(rearShot('veteran', 200 + k).m?.dudAt ?? -1).toBe(-1);
     for (let k = 0; k < 10; k++) expect(rearShot('pilot', 300 + k).m?.dudAt ?? -1).toBe(-1);
   });
 });
 
-describe('combat i2: Ace high-AoA regime (Pilot and Ace handle differently)', () => {
-  const pull = (diff: Difficulty, speed: number, seconds = 6) => {
+describe('combat i2: high-AoA regime of the flight model without flight assist (Pilot holds 28°, carefree FBW opens up)', () => {
+  // the engine knobs survive the removal of the Ace preset: Veteran with flight assist off and G effects on
+  const NO_ASSIST = { ...DIFFICULTIES.veteran, id: 'veteran' as const, flightAssist: false, gEffects: true };
+  const pull = (diff: Difficulty | 'noAssist', speed: number, seconds = 6) => {
     const events = new EventBus();
-    const world = createSimWorld({ terrain: flatLand(0), difficulty: DIFFICULTIES[diff], events, combat: createCombatSystemSeeded(1) });
+    const world = createSimWorld({ terrain: flatLand(0), difficulty: diff === 'noAssist' ? NO_ASSIST : DIFFICULTIES[diff], events, combat: createCombatSystemSeeded(1) });
     const p = world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4000, 0), heading: 0, speed, loadout: 'a2a_stealth', fuel: 0.5 });
     let maxA = 0;
     let stalled = 0;
@@ -259,15 +261,15 @@ describe('combat i2: Ace high-AoA regime (Pilot and Ace handle differently)', ()
     return { maxA: maxA / DEG_, stalled, alive: p.alive };
   };
   const DEG_ = Math.PI / 180;
-  it('full aft stick at low speed: Pilot holds 28°, Ace opens to ~33° without departing', () => {
+  it('full aft stick at low speed: Pilot holds 28°, no-assist opens to ~33° without departing', () => {
     const pilot = pull('pilot', 140);
-    const ace = pull('ace', 140);
+    const ace = pull('noAssist', 140);
     expect(pilot.maxA).toBeLessThan(28.8);
     expect(ace.maxA).toBeGreaterThan(30.5);
     expect(ace.maxA).toBeLessThan(35);
     expect(ace.stalled).toBeLessThan(30); // at most a brief stall-warning flicker, no departure
     expect(ace.alive).toBe(true);
-    // fast (above ~250 KIAS, first second of the pull) the Ace limiter is the normal one
-    expect(pull('ace', 280, 1).maxA).toBeLessThan(29);
+    // fast (above ~250 KIAS, first second of the pull) the no-assist limiter is the normal one
+    expect(pull('noAssist', 280, 1).maxA).toBeLessThan(29);
   });
 });

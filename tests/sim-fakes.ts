@@ -4,7 +4,7 @@
 import { Vector3 } from 'three';
 import { EventBus, type GameEventMap, type GameEventName } from '../src/core/events';
 import { DIFFICULTIES, LOADOUTS } from '../src/core/data';
-import type { Difficulty } from '../src/core/types';
+import type { Difficulty, DifficultyParams } from '../src/core/types';
 import type { CombatSystemApi, SimWorld, TerrainQuery } from '../src/sim/api';
 import { createSimWorld } from '../src/sim/World';
 
@@ -108,10 +108,34 @@ export interface TestWorld {
   of<K extends GameEventName>(name: K): GameEventMap[K][];
 }
 
-export function makeWorld(difficulty: Difficulty = 'pilot', terrain: TerrainQuery = flatTerrain(0)): TestWorld {
+/** The retired Ace level's numbers (no level uses them now): keeps the no-flight-assist / G-LOC engine knobs covered. */
+export const NO_ASSIST_PARAMS: DifficultyParams = {
+  ...DIFFICULTIES.veteran,
+  label: 'No-assist (ex-Ace)',
+  playerDamageScale: 1.25,
+  aiSkill: 0.95,
+  aiReactionTime: 0.4,
+  aiMaxG: 9,
+  enemyMissileSkill: 1.2,
+  samRangeScale: 1.1,
+  samReactionTime: 1.5,
+  playerLockTime: 2,
+  countermeasureEffectiveness: 0.85,
+  flightAssist: false,
+  autoGcas: false,
+  gEffects: true,
+  generousShootCues: false,
+  enemyCountScale: 1.5,
+  scoreMultiplier: 2,
+  playerMissileHitsToKill: 1,
+  fuelBurnScale: 1,
+  adBoatHarass: 0,
+};
+
+export function makeWorld(difficulty: Difficulty | DifficultyParams = 'pilot', terrain: TerrainQuery = flatTerrain(0)): TestWorld {
   const events = new EventBus();
   const combat = fakeCombat();
-  const world = createSimWorld({ terrain, difficulty: DIFFICULTIES[difficulty], events, combat });
+  const world = createSimWorld({ terrain, difficulty: typeof difficulty === 'string' ? DIFFICULTIES[difficulty] : difficulty, events, combat });
   const log: LoggedEvent[] = [];
   for (const name of LOGGED) events.on(name, (payload) => log.push({ name, payload }));
   return {

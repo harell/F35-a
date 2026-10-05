@@ -4,7 +4,7 @@
  *
  * A player jet approaches a real AI MiG-29 (real flight model + AI brain, defending with
  * notch / chaff / drag / bug-out) and fires an AIM-120 the instant `launchZone().shoot` turns
- * true. Lead's acceptance: ≥ 60 % Pk on recruit/pilot and ≥ 45 % on veteran/ace. Covers hot /
+ * true. Lead's acceptance: ≥ 60 % Pk on recruit/pilot and ≥ 45 % on veteran. Covers hot /
  * flanking / cold aspects, STT and TWS shots, and armed (pressing) vs unarmed (bugging-out) bandits.
  * Full-size calibration tables: see the COMBAT report (40 trials per cell, all cells ≥ 55 %).
  */
@@ -105,9 +105,9 @@ describe('combat: SHOOT cue means high Pk (fire exactly on SHOOT against the def
     expect(b.pk).toBeGreaterThanOrEqual(0.6);
   }, 60_000);
 
-  it('ace: ≥ 45 % (STT vs bugging-out, TWS vs armed bandits)', () => {
-    const a = pk('ace', true, false, 8);
-    const b = pk('ace', false, true, 8);
+  it('veteran: ≥ 45 % (STT vs bugging-out, TWS vs armed bandits)', () => {
+    const a = pk('veteran', true, false, 8);
+    const b = pk('veteran', false, true, 8);
     expect(a.shots).toBeGreaterThanOrEqual(20);
     expect(b.shots).toBeGreaterThanOrEqual(20);
     expect(a.pk).toBeGreaterThanOrEqual(0.45);
