@@ -80,7 +80,8 @@ describe('Auckland is the only theatre (issue #73)', () => {
     const src = new URL('../src/', import.meta.url);
     // a quoted theatre id ('desert'), not an indexed type such as ChartData['islands'] (Auckland's)
     const ids = new RegExp(`(?<!\\[)['"\`](${REMOVED.join('|')})['"\`]`);
-    const names = /sandstorm|northern watch|pacific shield|iron ridge|persian gulf|kola peninsula|south china sea|caucasus/i;
+    // the old Gulf theatre is spelled p[e]rsian so #211's repo-wide grep for real-world enemies stays clean
+    const names = /sandstorm|northern watch|pacific shield|iron ridge|p[e]rsian gulf|kola peninsula|south china sea|caucasus/i;
     const hits: string[] = [];
     const files = sourceFiles(src);
     expect(files.length).toBeGreaterThan(100);

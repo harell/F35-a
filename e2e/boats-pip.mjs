@@ -1,5 +1,5 @@
 /**
- * IRGC Navy fast boats in the target camera (issue #79): in an Auckland sortie (the Instant Action stroll, day) spawns a
+ * Rat navy fast boats in the target camera (issue #79): in an Auckland sortie (the Instant Action stroll, day) spawns a
  * suicide boat, a missile boat and an air-defence boat on open water near a civil ship, designates
  * each in turn and screenshots the PiP (full frame + a crop of the PiP) to e2e/screenshots/boats/.
  *
