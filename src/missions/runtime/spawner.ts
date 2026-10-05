@@ -439,6 +439,16 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
             strike: def.strike ? { group: def.strike.group, range: def.strike.range, countdown: def.strike.countdown, missiles: def.strike.missiles } : null,
           }
         : undefined,
+    // the stoat's route starts where it is placed; its station indices shift by that start point
+    stoat: def.stoat
+      ? {
+          route: [new Vector3(def.x, 0, def.z), ...def.stoat.route.map((p) => new Vector3(p.x, 0, p.z))],
+          stations: def.stoat.stations.map((k) => k + 1),
+          speed: def.stoat.speed,
+          stopTime: def.stoat.stopTime,
+          clockStart: 0,
+        }
+      : undefined,
   });
   if (g) {
     if (g.spawnedAt < 0) g.spawnedAt = s.world.time;

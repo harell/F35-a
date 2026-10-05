@@ -73,7 +73,8 @@ export type GroundTargetType =
   | 'parked_jet' // parked enemy fighter
   | 'ship' // corvette / frigate (can move)
   | 'suicide_boat' // IRGC Navy unmanned explosive boat (Ya Mahdi type): chases a ship and rams it (sim/boats.ts)
-  | 'missile_boat'; // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
+  | 'missile_boat' // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
+  | 'stoat'; // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
 
 /**
  * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):

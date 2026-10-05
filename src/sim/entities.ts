@@ -537,6 +537,8 @@ export class GroundTargetEntity implements Entity {
    * route), not the ground-mover path above. Absent on every other ground target.
    */
   boat?: import('./boats').BoatState;
+  /** g03's stoat (#200): sim/stoat.ts runs it (route, stops, alert, bolting), not the ground-mover path. */
+  stoat?: import('./stoat').StoatState;
 
   constructor(
     readonly id: number,

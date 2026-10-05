@@ -309,6 +309,13 @@ export interface GroundTargetDef {
   chase?: string;
   /** 'missile_boat': its target, launch range and countdown. */
   strike?: BoatStrikeDef;
+  /**
+   * 'stoat' (g03, sim/stoat.ts): the route after its start point (bait stations, then the nest last),
+   * which of those points are bait stations (indices into `route`, 0 = the first point after the
+   * start), its dash speed (m/s) and the stop at each station (s). Its clock starts at mission
+   * start, whenever it spawns.
+   */
+  stoat?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number };
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */

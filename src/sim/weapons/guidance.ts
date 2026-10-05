@@ -18,6 +18,7 @@ import { G, clamp } from '../../core/math';
 import { airDensity } from '../../core/atmosphere';
 import type { AircraftEntity as AircraftEnt, AnyEntity, SamSiteEntity } from '../entities';
 import type { CombatCtx } from './context';
+import { STILL_SPEED, isSmallGround } from './small';
 import { acState, gaussian, SENSOR_DIV } from './context';
 import type { CombatMissile } from './missile';
 import { aircraftRcs, irIntensity, rcsRangeFactor } from '../sensors/signatures';
@@ -367,6 +368,7 @@ function triModeGuidance(ctx: CombatCtx, m: CombatMissile): void {
   const def = m.cdef;
   const world = ctx.world;
   const target = world.getEntity(m.targetId);
+  if (target && target.alive && isSmallGround(target)) return smallTargetGuidance(ctx, m, target);
   if (!target || !target.alive || (target.kind !== 'ground' && target.kind !== 'sam')) {
     // target gone: fly to the last predicted point, no more extrapolation
     if (m.hasEstimate && (m.estVel.lengthSq() > 0 || m.seekerLocked)) {
@@ -404,6 +406,33 @@ function triModeGuidance(ctx: CombatCtx, m: CombatMissile): void {
       }
     }
   }
+  m.targetPoint.copy(m.estPos);
+}
+
+
+/**
+ * Tri-mode guidance on a small target (the stoat): no extrapolation ever (its dashes have no steady
+ * velocity). Standing still, the datalink (a fresh fused track) or the terminal seeker (inside its
+ * range) puts the estimate on it; running, the estimate stays where it was last seen still, so a
+ * bomb released while it runs lands where it was, and one released at a stop hits unless it runs
+ * away before impact.
+ */
+function smallTargetGuidance(ctx: CombatCtx, m: CombatMissile, target: AnyEntity): void {
+  const def = m.cdef;
+  m.estVel.set(0, 0, 0);
+  m.estTime = ctx.time;
+  if (target.velocity.lengthSq() <= STILL_SPEED * STILL_SPEED) {
+    const launcher = ctx.world.getEntity(m.shooterId);
+    const c = def.datalink && launcher && launcher.kind === 'aircraft' && launcher.alive ? acState(launcher).contacts.get(target.id) : undefined;
+    const seen = !!c && c.lastSeen >= ctx.time - 0.6;
+    const seeker = m.position.distanceTo(target.position) < def.seekerRange && inGimbal(m, target.position, def.gimbalLimit);
+    if (seen || seeker) {
+      m.estPos.copy(target.position);
+      m.hasEstimate = true;
+      m.seekerLocked = seeker;
+      if (seeker) m.everLocked = true;
+    }
+  } else m.seekerLocked = false;
   m.targetPoint.copy(m.estPos);
 }
 

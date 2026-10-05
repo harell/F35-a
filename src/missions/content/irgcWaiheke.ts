@@ -29,6 +29,27 @@ export const G03_NEST: XZ = { x: 28_250, z: -6_700 };
 export const G03_CLOCK = 240;
 
 /**
+ * The stoat (#200, sim/stoat.ts): it runs east along the dune line from its start, stops at three
+ * bait stations the volunteers set close to the nest (the drop windows) and ends at the nest. Its
+ * first leg is the long one, so the windows fall when a jet that came the long way round can be
+ * there: about 1:26–1:56, 2:14–2:44 and 3:02–3:32, each long enough for the run-in and a
+ * StormBreaker's glide. Undisturbed it arrives at about 3:54, inside G03_CLOCK; a near miss makes
+ * it bolt and cuts its stop short.
+ */
+export const G03_STOAT = {
+  start: { x: 27_850, z: -6_745 } as XZ,
+  /** The bait stations, in order. */
+  stations: [
+    { x: 28_090, z: -6_735 },
+    { x: 28_140, z: -6_725 },
+    { x: 28_190, z: -6_715 },
+  ] as XZ[],
+  /** Average dash speed (m/s) and the stop at each station (s). */
+  speed: 3.5,
+  stopTime: 40,
+} as const;
+
+/**
  * The target is revealed (spawned) only once the jet has been below the overcast deck within this
  * radius of the nest: a jet above the cloud, or a stand-off release from far out, has nothing to aim at.
  */
@@ -126,22 +147,34 @@ export const G03: MissionDef = mission({
       site('ad_s', G.boats, 'ad_boat', G03_BOATS.s[0], { path: G03_BOATS.s, loop: true, speed: G03_BOATS.speed }),
     ],
     ground: [
-      // stand-in for the stoat (#200 replaces it): revealed only under the cloud near the nest
-      target('stoat', G.target, 'parked_jet', G03_NEST, { name: 'Target', spawn: reveal }),
+      // the stoat: revealed only under the cloud near the nest, its clock running from the start
+      target('stoat', G.target, 'stoat', G03_STOAT.start, {
+        name: 'Stoat',
+        spawn: reveal,
+        stoat: { route: [...G03_STOAT.stations, G03_NEST], stations: [0, 1, 2], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime },
+      }),
     ],
-    objectives: [{ id: 'o_target', kind: 'destroy', groups: [G.target], label: 'Kill the target before it reaches the nest', primary: true }],
+    objectives: [{ id: 'o_target', kind: 'destroy', groups: [G.target], label: 'Kill the stoat before it reaches the nest', primary: true }],
     waypoints: [{ id: 'wp_nest', label: 'Onetangi', kind: 'target', x: G03_NEST.x, z: G03_NEST.z, altitude: 600, radius: 1500, objective: 'o_target' }],
     triggers: [
       {
         id: 't_reveal',
         when: { kind: 'group_spawned', group: G.target },
-        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. You are under the cloud. Target on the Onetangi dunes, east of the airstrip.', priority: 2 }],
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Single contact, ground, Onetangi dunes. Type… stoat. Confirmed stoat.', priority: 2 }],
+      },
+      {
+        // the stoat at the nest: the sortie is lost (its clock and the mission's run together)
+        id: 't_nest',
+        when: { kind: 'area', who: { group: G.target }, x: G03_NEST.x, z: G03_NEST.z, radius: 3 },
+        actions: [{ kind: 'end', success: false, reason: 'The stoat reached the nest' }],
       },
     ],
     hints: [
       { id: 'h_plan', text: 'No free route: pick a path, kill what blocks it, mask and notch the rest', when: { kind: 'time', t: 6 }, duration: 8 },
       // the sweep's lesson (#198): an AARGM fired from far out only silences a radar for a few seconds
       { id: 'h_arm', text: 'An AARGM silences a radar for seconds: fire it close in, then attack straight after', when: { kind: 'player_weapon', weapon: 'aargm' }, duration: 8 },
+      // the stoat (#200): a bomb can't track it while it runs (sim/weapons/small.ts)
+      { id: 'h_stops', text: 'Release while the stoat stops at a bait station: running, a StormBreaker can\'t track it', when: { kind: 'group_spawned', group: G.target }, duration: 9 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Waiheke air defences are up. Target is on the Onetangi dunes, under the cloud.', priority: 2 }],
     successText: 'Target down. Good shooting, Viper. RTB.',

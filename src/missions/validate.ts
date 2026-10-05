@@ -181,6 +181,9 @@ export function validateMission(def: MissionDef): string[] {
     if (g.hitsToSink !== undefined && g.team !== 'neutral') err(`ground ${g.id}: hitsToSink needs team 'neutral' (only a civil ship takes several hits)`);
     if (g.chase !== undefined && g.type !== 'suicide_boat') err(`ground ${g.id}: only a suicide boat chases`);
     if (g.strike !== undefined && g.type !== 'missile_boat') err(`ground ${g.id}: only a missile boat has a strike`);
+    if (g.stoat !== undefined && g.type !== 'stoat') err(`ground ${g.id}: only a stoat has a stoat route`);
+    if (g.type === 'stoat' && (!g.stoat || g.stoat.route.length === 0)) err(`ground ${g.id}: a stoat needs its route (stations, then the nest)`);
+    if (g.stoat) for (const k of g.stoat.stations) if (!(k >= 0 && k < g.stoat.route.length - 1)) err(`ground ${g.id}: bait station ${k} is not a point before the nest`);
     if (g.chase) checkGroup(g.chase, `ground ${g.id} chase`);
     if (g.strike) checkGroup(g.strike.group, `ground ${g.id} strike`);
   }

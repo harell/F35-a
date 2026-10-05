@@ -573,6 +573,15 @@ export function podReadout(t: AnyEntity, locked: boolean): string {
 export const POD_MASKED = 'MASKED';
 
 /**
+ * The pod's classification line under the readout, for a target that has one: g03's stoat (#200)
+ * reads as the pod identifies it. Longest first: the window takes the first one that fits.
+ */
+export function podClass(t: AnyEntity): readonly string[] | null {
+  return t.kind === 'ground' && t.type === 'stoat' ? STOAT_CLASS : null;
+}
+export const STOAT_CLASS = ['HOSTILE · MUSTELA ERMINEA · 0.3 KG', 'MUSTELA ERMINEA · 0.3 KG', 'MUSTELA ERMINEA'] as const;
+
+/**
  * Pod view chrome: the crosshair, the TGT readout (top left), the zoom step (top right), and the slant
  * range with the status pill in the bottom strip. Masked: a dark frame reading MASKED and why.
  */
@@ -612,6 +621,11 @@ function drawPodPip(f: HudFrame, t: AnyEntity, locked: boolean): void {
   let name = podReadout(t, locked);
   while (name.length > 4 && pen.textWidth(name, 10) > room) name = name.slice(0, -1);
   pen.text(name, x + 6 * u, y + 9 * u, locked ? pal.bright : pal.white, 10, 'left');
+  const cls = podClass(t);
+  if (cls) {
+    const line = cls.find((c) => pen.textWidth(c, 8) <= w - 12 * u);
+    if (line) pen.text(line, x + 6 * u, y + 20 * u, pal.danger, 8, 'left');
+  }
   if (v.mask) return;
   // bottom strip: slant range (NM, as the rest of the HUD) and the status pill
   const sh = 16 * u;

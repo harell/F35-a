@@ -19,7 +19,9 @@ import type { TerrainQuery } from '../src/sim/api';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import { rcsRangeFactor } from '../src/sim/sensors/signatures';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, terrainPadsFor, validateMission } from '../src/missions';
-import { G03, G03_BOATS, G03_CLOCK, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_SITES } from '../src/missions/content/irgcWaiheke';
+import { G03, G03_BOATS, G03_CLOCK, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_SITES, G03_STOAT } from '../src/missions/content/irgcWaiheke';
+import { stoatArrival } from '../src/sim/stoat';
+import { Vector3 } from 'three';
 import type { XZ } from '../src/missions/schema';
 import { forceDestroy } from '../src/game/forceDestroy';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
@@ -237,10 +239,28 @@ describe('g03: the target, the cloud and the clock', () => {
     m.tick(2, { x: G03_NEST.x - 4_000, y: 1_200, z: G03_NEST.z });
     const t = m.targets();
     expect(t).toHaveLength(1);
-    expect(Math.hypot(t[0].position.x - G03_NEST.x, t[0].position.z - G03_NEST.z)).toBeLessThan(50);
+    expect(t[0].type).toBe('stoat');
+    // on its dune line, short of the nest
+    expect(Math.hypot(t[0].position.x - G03_NEST.x, t[0].position.z - G03_NEST.z)).toBeLessThan(600);
     forceDestroy(m.world, t[0], m.p.id);
     m.tick(2, { x: G03_NEST.x - 4_000, y: 1_200, z: G03_NEST.z });
     expect(m.runner.state).toBe('success');
+    m.runner.dispose?.();
+  });
+
+  it('undisturbed, the stoat reaches the nest just inside 4:00 and the sortie is lost', { timeout: 60_000 }, () => {
+    const m = setup();
+    // under the cloud near the nest from the start (revealed at once), unhurt
+    let at = -1;
+    for (let i = 0; i < 260 * 60 && m.runner.state === 'running'; i++) {
+      m.tick(1 / 60, { x: G03_NEST.x - 4_000, y: 1_200, z: G03_NEST.z });
+    }
+    at = m.world.time;
+    expect(m.runner.state).toBe('failed');
+    expect(m.runner.result(m.world).reason).toBe('The stoat reached the nest');
+    expect(at).toBeGreaterThan(G03_CLOCK - 20);
+    expect(at).toBeLessThan(G03_CLOCK);
+    expect(stoatArrival({ route: [G03_STOAT.start, ...G03_STOAT.stations, G03_NEST].map((p) => new Vector3(p.x, 0, p.z)), stations: [1, 2, 3], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime })).toBeLessThan(G03_CLOCK);
     m.runner.dispose?.();
   });
 

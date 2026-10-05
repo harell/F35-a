@@ -39,6 +39,7 @@ import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { spawnFloor } from '../src/missions/runtime/spawner';
 import { cloudBase } from '../src/core/weather';
+import { isSmallGround } from '../src/sim/weapons/small';
 
 const _h = new Vector3();
 const _q = new Vector3();
@@ -668,7 +669,9 @@ export class MissionBot {
       for (const s of this.world.sams) {
         if (!s.alive || s.team === this.p.team || s === t) continue;
         const d = Math.hypot(s.position.x - rx, s.position.z - rz);
-        const reach = s.type === 'sa6' ? 14_000 : s.type === 'sa15' ? 10_000 : 4_000;
+        // (an AD boat sees a jet at 9 km whatever its shaping: under a deck, where the run-in is short
+        // and close, its reach counts as the Tor's; elsewhere the bot keeps its old reading)
+        const reach = s.type === 'sa6' ? 14_000 : s.type === 'sa15' || (s.type === 'ad_boat' && this.deck !== null) ? 10_000 : 4_000;
         score -= Math.max(0, reach - d);
       }
       // prefer run-ins from our side of the target
@@ -745,6 +748,24 @@ export class MissionBot {
     _h.set(aim.x - p.position.x, 0, aim.z - p.position.z);
     let alt = Math.min(8_500, Math.max(ground + 7_000, t.position.y + 7_000));
     if (this.deck !== null) alt = Math.min(alt, this.deck - 300);
+    // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
+    // until it stops (a release now would land where it was), instead of overflying it into the defences
+    if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) {
+      const it3 = this.pilot.begin(p, 150);
+      const dIp = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
+      if (dIp > 1_500) _h.set(ip.x - p.position.x, 0, ip.z - p.position.z);
+      else _h.set(p.velocity.x - p.velocity.z * 0.6, 0, p.velocity.z + p.velocity.x * 0.6);
+      turnLimited(p, _h, 70);
+      dirWithElevation(_h, gammaForAltitude(p, alt, 0.15, 8), it3.dir);
+      it3.speed = 240;
+      it3.gMax = 4;
+      it3.gain = 1;
+      it3.allowInverted = false;
+      this.mode = 'WAIT';
+      this.runIn.delete(t.id);
+      this.pilot.fly(p, w, dt);
+      return;
+    }
     // energy first: no climbing while slow (a stalled climb at 30,000 ft is a sitting duck)
     const V = p.velocity.length();
     let gamma = gammaForAltitude(p, alt, 0.2, 8);
@@ -766,6 +787,8 @@ export class MissionBot {
       const b = c.bombImpactPoint(p, w);
       // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
       ok = !!b && b.inRange && (!isSdb(weapon) || R <= SDB_PRESS_RANGE);
+      // a target too small to track on the move (g03's stoat): released only while it stands still
+      if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) ok = false;
     }
     if (ok) {
       p.input.fireWeapon = true;

@@ -43,6 +43,8 @@ export interface RouteLeg {
   shoot?: string;
   /** Fire the leg's AARGM only inside this range of the site (m; default: on the launch-zone cue). */
   within?: number;
+  /** Attack this SAM site (mission id) as the bot attacks a target, with whatever it carries for it, until a weapon is off at it or it is dead. */
+  attack?: string;
 }
 
 /** The pseudo-route that attacks every SAM site instead of flying a path. */
@@ -58,7 +60,8 @@ export const KILL_ALL = 'killall';
  *  - golden: the intended way through: out of the harbour and down the Tāmaki Strait as low as the jet
  *    goes (the Motuihe SA-6 sees down it but can't engage under its 80 m floor; the Tor stands 8 km off),
  *    an AARGM at the strait's patrol boat, a second at the airstrip SA-6 from inside 7 km (fired from
- *    far out it only silences the radar for seconds), then the attack from under the cloud in the gap;
+ *    far out it only silences the radar for seconds), then the attack from under the cloud at one of the
+ *    stoat's stops (#200: the bot holds off while it runs);
  *  - golden_north: the same idea round the north (AARGMs at the two northern boats), slower and less sure.
  */
 export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
@@ -222,10 +225,22 @@ export class Probe {
     // a missile inbound is the bot's to defend, as low as the leg flies
     this.bot.defenceAgl = Math.max(40, Math.min(120, (leg.minAgl ?? 150) + 20));
     if (p.incoming.length > 0) return false;
+    if (leg.attack) {
+      const site = this.site(leg.attack);
+      const busy = !!site && this.world.missiles.some((m) => m.alive && m.shooterId === p.id && m.targetId === site.id && m.def.category === 'bomb');
+      if (!site || !site.alive || busy) {
+        this.leg++;
+        return this.route(dt);
+      }
+      this.bot.attack(site, dt);
+      this.bot.mode = `ROUTE${this.leg + 1}:ATTACK`;
+      return true;
+    }
     const d = Math.hypot(leg.x - p.position.x, leg.z - p.position.z);
     const site = leg.shoot ? this.site(leg.shoot) : null;
     const shooting = !!site && site.alive && !this.shotAt.has(site.id);
-    if (!shooting && d < 1_500) {
+    // a leg ends at its point, or (a shooting leg) as soon as its shot is away: no turning back for the point
+    if ((!shooting && d < 1_500) || (leg.shoot && !shooting)) {
       this.leg++;
       return this.route(dt);
     }

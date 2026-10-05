@@ -28,6 +28,7 @@ export const GROUND_PAD_RADIUS: Record<GroundTargetType, number> = {
   ship: 0,
   suicide_boat: 0,
   missile_boat: 0,
+  stoat: 0,
 };
 
 /** Pad radius for a SAM site. */

@@ -221,6 +221,19 @@ The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies
 must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
 friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 
+## The stoat (g03, #200)
+
+g03's target is a `'stoat'` ground target (`src/sim/stoat.ts`, one hit point, 0.2 m radius): it runs a route along
+the Onetangi dunes in dashes, stops at three bait stations (the drop windows) and reaching its last point is reaching
+the nest (a mission `area` trigger on its group ends the sortie). Its clock starts at mission start
+(`StoatSpawn.clockStart`), so when the mission spawns it late (under the cloud, near the nest) it catches up with where
+it would be. Designated, locked or with a weapon in flight at it, it rears up into the "periscope" stance at its next
+stop (`StoatState.alert`, posed by `src/render/visuals/stoatPose.ts` on the posable model in
+`src/render/models/stoat.ts`); a weapon that goes off within 30 m and misses makes it bolt to the next station. A
+ground target under 0.5 m (`src/sim/weapons/small.ts`) is too small for a GBU-53/B to track on the move: the seeker and
+the datalink only update its estimate while it stands still, and never lead it (`smallTargetGuidance`), so a release
+at a stop hits and one while it runs lands where it was. A killed stoat leaves no model (the crater is #201).
+
 ## Targeting pod view (#199)
 
 The target camera window (`src/render/TargetCam.ts`, laid out by `src/hud/hmd/pip.ts`) shows aircraft and ships in
@@ -247,7 +260,7 @@ finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on th
 probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`) measure it in
 flight: every naive route (straight, either detour, the wide way, above the SAMs, killing every site) loses on Pilot,
 the intended path (low down the Tāmaki Strait, an AARGM at the strait's boat, a second at the airstrip SA-6 from close
-in, then the attack in the gap) wins about 3 in 4 (`tests/missions-balance.test.ts`). Under an overcast deck the bot
+in, then the attack at one of the stoat's stops) wins about half the time on Pilot (`tests/missions-balance.test.ts`). Under an overcast deck the bot
 attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the campaign's finale
 while the campaign is being built (no `campaignFinale`).
 

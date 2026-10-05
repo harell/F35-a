@@ -197,6 +197,7 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     ship: 'Ships',
     suicide_boat: 'Suicide boats',
     missile_boat: 'Missile boats',
+    stoat: 'Stoat',
   };
   for (const e of groundGroups.values()) {
     const x = Math.round(e.xs / e.n);
