@@ -94,7 +94,7 @@ export function sanitizeProgress(raw: unknown, campaigns: CampaignChains, traini
   const best: CampaignProgress['best'] = {};
   if (r.best && typeof r.best === 'object') {
     for (const [id, b] of Object.entries(r.best)) {
-      if (b && typeof b.score === 'number' && typeof b.grade === 'string' && typeof b.difficulty === 'string') best[id] = { score: b.score, grade: b.grade, difficulty: b.difficulty };
+      if (b && typeof b.score === 'number' && typeof b.grade === 'string' && typeof b.difficulty === 'string') best[id] = { score: b.score, grade: b.grade, difficulty: (b.difficulty as string) === 'ace' ? 'veteran' : b.difficulty }; // Ace was removed
     }
   }
   const t = r.totals ?? base.totals;

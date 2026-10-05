@@ -21,7 +21,7 @@ export interface MedalDef {
 /** Every award the game hands out (ids are stable: the UI may key artwork / saves on them). */
 export const MEDALS = {
   air_medal: { id: 'air_medal', name: 'Air Medal', description: 'Completed a campaign mission with an A grade or better.' },
-  dfc: { id: 'dfc', name: 'Distinguished Flying Cross', description: 'S grade on a campaign mission on Veteran or Ace.' },
+  dfc: { id: 'dfc', name: 'Distinguished Flying Cross', description: 'S grade on a campaign mission on Veteran.' },
   ace_in_a_day: { id: 'ace_in_a_day', name: 'Ace in a Day', description: 'Five air-to-air kills in one sortie.' },
   iron_hand: { id: 'iron_hand', name: 'Iron Hand', description: 'Destroyed two or more SAM / AAA sites in one sortie.' },
   bridge_runner: { id: 'bridge_runner', name: 'Bridge Runner', description: 'Flew under the Auckland Harbour Bridge.' },
@@ -163,7 +163,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     if (!idle && s.flightKills > 0 && s.flightKills >= r.kills.air + r.kills.sam + r.kills.ground)
       add(`Your wingman scored ${s.flightKills} of the flight's kills: S and A grades need at least half of them to be yours — lead the fight.`);
     // not in a lesson: training flies at Pilot whatever the setting, so a harder one changes nothing there
-    if (r.grade === 'S' && r.difficulty !== 'ace' && !fixedDifficulty(s.def)) add('Perfect sortie — try it on a harder difficulty.');
+    if (r.grade === 'S' && r.difficulty !== 'veteran' && !fixedDifficulty(s.def)) add('Perfect sortie — try it on a harder difficulty.');
   }
   if (tips.length === 0) {
     if (!r.success) add('Fly Training first: T02 teaches the lock and SHOOT cue, T03 how to survive SAMs.');
@@ -185,7 +185,7 @@ export function awardMedals(s: MissionState, r: MissionResult): MedalDef[] {
   if (s.stats.gunKills > 0) give(MEDALS.gunslinger);
   if (r.success) {
     if (campaign && (r.grade === 'S' || r.grade === 'A')) give(MEDALS.air_medal);
-    if (campaign && r.grade === 'S' && (r.difficulty === 'veteran' || r.difficulty === 'ace')) give(MEDALS.dfc);
+    if (campaign && r.grade === 'S' && r.difficulty === 'veteran') give(MEDALS.dfc);
     // the whole flight came home untouched (i2 review: awarded while Viper 2 was lost), from a fight
     // the player took part in: hostiles, and a hit or a kill (playtest 2026-10-02, 2.3-b: a parked,
     // 0-shot Defend win got it; #64 review: so did one gun burst into the air)

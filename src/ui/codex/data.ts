@@ -413,7 +413,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     line: 'You\'re pulling more g than the airframe allows.',
     trigger: 'More than 0.3 g past the limit. The limit is lower with heavy JDAMs on the wings. Overstressing damages the jet ("OVERSTRESS").',
     how: ['Relax the pull.'],
-    notes: ['On Ace, holding about 9 g for around 11 s causes G-LOC (blackout).'],
+    notes: ['Holding about 9 g for around 11 s causes G-LOC (blackout) when flight assist is off.'],
   },
   {
     kind: 'warning', id: 'fuel', cat: 'fly', name: 'BINGO · FUEL LOW', chip: 'BINGO', level: 'amb', sound: 'none', voice: 'b_bingo', voiceText: 'Bingo',
@@ -439,7 +439,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
   {
     kind: 'warning', id: 'lock', cat: 'cue', name: 'LOCKING · LOCK', chip: 'LOCK', level: 'hud', sound: 'none',
     line: 'How your radar lock works, which the AMRAAM needs for a full-quality shot.',
-    trigger: 'Tap the target box or TGT. A ring fills while the target stays within ±30° of your nose: 0.6 s on Recruit, 1 s on Pilot, 1.5 s on Veteran, 2 s on Ace.',
+    trigger: 'Tap the target box or TGT. A ring fills while the target stays within ±30° of your nose: 0.6 s on Recruit, 1 s on Pilot, and 1.5 s on Veteran.',
     how: ['Point at the target until the ring closes.', 'Once locked, it holds anywhere within ±60°.', 'It drops after 2 s without radar contact, or when you go EMCON (radar off).'],
     notes: ['Your lock gives the enemy a SPIKE. A TWS shot without a lock doesn\'t.'],
   },

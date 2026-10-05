@@ -129,18 +129,18 @@ describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the play
 });
 
 /**
- * #58 (Balance 5/9): the win rate never rises from Pilot to Veteran or from Veteran to Ace, in every
+ * #58 (Balance 5/9): the win rate never rises from Pilot to Veteran in every
  * campaign mission. Seeds 0–5 are the ones `tools/playtest/bot-sweep.ts -- --seeds=6` flies, so a
  * failure here reproduces with
- *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran,ace --seeds=6 --log --json=<file>
+ *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran --seeds=6 --log --json=<file>
  * (g02 checks its own curve, with its bands, below.)
  */
 describe('#58: a difficulty curve that only falls (6 seeds)', () => {
   const SEEDS = [0, 1, 2, 3, 4, 5];
-  const DIFFS = ['pilot', 'veteran', 'ace'] as const;
+  const DIFFS = ['pilot', 'veteran'] as const;
   type Curve = { won: Record<(typeof DIFFS)[number], number>; table: string };
   async function curve(id: string): Promise<Curve> {
-    const won = { pilot: 0, veteran: 0, ace: 0 };
+    const won = { pilot: 0, veteran: 0 };
     const log: string[] = [];
     for (const d of DIFFS) {
       for (const seed of SEEDS) {
@@ -150,15 +150,14 @@ describe('#58: a difficulty curve that only falls (6 seeds)', () => {
         await breathe(); // yield: vitest's worker RPC times out on long blocks
       }
     }
-    return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6, ace ${won.ace}/6\n${log.join('\n')}` };
+    return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6\n${log.join('\n')}` };
   }
 
   // g02 and g03 check their own curves below (g03's with the route probe: the plain bot flies straight at it)
   for (const id of CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id)).filter((id) => id !== 'g02' && id !== 'g03')) {
-    it(`${id}: the win rate doesn't rise from Pilot to Veteran or from Veteran to Ace`, { timeout: 600_000 }, async () => {
+    it(`${id}: the win rate doesn't rise from Pilot to Veteran`, { timeout: 600_000 }, async () => {
       const c = await curve(id);
       expect(c.won.veteran, `Veteran beats Pilot\n${c.table}`).toBeLessThanOrEqual(c.won.pilot);
-      expect(c.won.ace, `Ace beats Veteran\n${c.table}`).toBeLessThanOrEqual(c.won.veteran);
     });
   }
 });
@@ -168,7 +167,7 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
   // overshot a 51 m/s drone on every pass and it was 0/6 on every difficulty. With the slow-target
   // chase (ai-playerbot.ts gunChaseFloor) it measured, 6 seeds with jitter: Recruit 3/6, Pilot 6/6
   // (no jitter: 2/6, 5/6). Recruit then flew nine drones (G01_SWARM.recruitCount): 5/6, Pilot 6/6,
-  // Veteran 6/6, Ace 4/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
+  // Veteran 6/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
   it('Recruit ≥ 4/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     await new Promise((r) => setTimeout(r, 0));
@@ -181,15 +180,17 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
 });
 
 describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
-  // The bot won 24/24 (Ace by rearming) by rippling all eight StormBreakers in the first 20–39 s, before
-  // any missile boat counted down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes
-  // a second pass against a ~3.9-minute launch, and Recruit flies a suicide boat fewer. Measured with
-  // no rearming (#63), 6 seeds: Recruit 6/6, Pilot 6/6, Veteran 6/6, Ace 0/6 (nine boats for eight
-  // bombs: Ace needs the gun, which the bot doesn't use on boats). The bands are the measured floors
-  // less one seed, and the campaign's: Recruit and Pilot ≥ 75 %, Veteran ≥ 25 %, Ace under 90 %.
-  it('Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 2/6, Ace ≤ 5/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+  // The bot won 24/24 by rippling all eight StormBreakers in the first 20–39 s, before any missile boat counted
+  // down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes a second pass against a ~3.9-minute
+  // launch, and Recruit flies a suicide boat fewer. Pilot and Veteran also meet the AD boats' harassment
+  // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws SAM shots, the bot breaks to
+  // defend and reaches the second wave late; Veteran adds a third boat ahead of the suicide wave, inside the real
+  // envelope of the opening release. Measured with no rearming (#63), 6 seeds: Recruit 6/6, Pilot 4/6, Veteran 3/6
+  // (24 seeds: Pilot 18, Veteran 9). The bands are the measured floors less one seed, and the campaign's:
+  // Recruit ≥ 75 %, Veteran ≥ 25 %.
+  it('Recruit ≥ 5/6, Pilot ≥ 3/6, Veteran ≥ 2/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
-    const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+    const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran'];
     const won: Record<string, number> = {};
     const log: string[] = [];
     for (const d of diffs) {
@@ -205,22 +206,20 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
     }
     const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
     expect(won.recruit, table).toBeGreaterThanOrEqual(5);
-    expect(won.pilot, table).toBeGreaterThanOrEqual(5);
+    expect(won.pilot, table).toBeGreaterThanOrEqual(3);
     expect(won.veteran, table).toBeGreaterThanOrEqual(2);
-    expect(won.ace, table).toBeLessThanOrEqual(5);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
-    expect(won.ace, table).toBeLessThanOrEqual(won.veteran);
   });
 });
 
 describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
   // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then
   // the bot attacks. With the stoat (#200: a running stoat can't be bombed, so the drop waits for one
-  // of its stops), measured over 16 seeds: the straight line and both detours 0/16 on Pilot, Veteran
-  // and Ace; the intended way through (low down the Tāmaki Strait, an AARGM at the strait's boat, a
+  // of its stops), measured over 16 seeds: the straight line and both detours 0/16 on Pilot and
+  // Veteran; the intended way through (low down the Tāmaki Strait, an AARGM at the strait's boat, a
   // second at the airstrip SA-6 from close in, then the attack at a stop) Recruit 14/16, Pilot 9/16,
-  // Veteran 1/16, Ace 1/16. (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
+  // Veteran 1/16. (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
   // stops are the extra puzzle, and the bot pays for waiting near a live SA-6.) Bands over 6 seeds.
   const run = (route: string, diff: Difficulty, seed: number) =>
     runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
@@ -242,7 +241,7 @@ describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
   it('the intended way through: Pilot ≥ 2/6, and no harder difficulty beats Pilot', { timeout: 600_000 }, async () => {
     const won: Record<string, number> = {};
     const log: string[] = [];
-    for (const d of ['pilot', 'veteran', 'ace'] as const) {
+    for (const d of ['pilot', 'veteran'] as const) {
       won[d] = 0;
       for (const seed of [0, 1, 2, 3, 4, 5]) {
         await new Promise((r) => setTimeout(r, 0));
@@ -254,6 +253,5 @@ describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
     const table = log.join('\n');
     expect(won.pilot, table).toBeGreaterThanOrEqual(2);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
-    expect(won.ace, table).toBeLessThanOrEqual(won.pilot);
   });
 });

@@ -245,12 +245,12 @@ describe('MissionRunner: setup', () => {
 
   it('scales enemy groups with difficulty and gates sites by minDifficulty', () => {
     const rec = harness(SEAD_FIXTURE, 'recruit');
-    const ace = harness(SEAD_FIXTURE, 'ace');
+    const vet = harness(SEAD_FIXTURE, 'veteran');
     // sa6, sa15, zsu1 always; zsu2 pilot+; sa15pop veteran+
     expect(rec.world.sams).toHaveLength(3);
-    expect(ace.world.sams).toHaveLength(5);
-    const capAce = harness(CAP_FIXTURE, 'ace');
-    expect(capAce.world.aircraft.filter((a) => a.team === 'red')).toHaveLength(3); // 2 × 1.5
+    expect(vet.world.sams).toHaveLength(5);
+    const capVet = harness(CAP_FIXTURE, 'veteran');
+    expect(capVet.world.aircraft.filter((a) => a.team === 'red')).toHaveLength(2); // 2 × 1
     const raidRec = harness(RAID_FIXTURE, 'recruit');
     expect(raidRec.world.aircraft.filter((a) => a.groupId === 'raid')).toHaveLength(2); // round(3 × 0.75)
   });

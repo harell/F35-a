@@ -230,7 +230,7 @@ describe('AI tasks & skill', () => {
 
   it('difficulty and spawn skill scale reaction, g, aim and discipline', () => {
     const rookie = deriveSkill(DIFFICULTIES.recruit, 0.2, 'red', 'mig29');
-    const ace = deriveSkill(DIFFICULTIES.ace, 1, 'red', 'su35');
+    const ace = deriveSkill(DIFFICULTIES.veteran, 1, 'red', 'su35');
     expect(ace.level).toBeGreaterThan(rookie.level);
     expect(ace.reaction).toBeLessThan(rookie.reaction);
     expect(ace.maxG).toBeGreaterThan(rookie.maxG);

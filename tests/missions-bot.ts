@@ -90,6 +90,9 @@ export function homeBase(_def: MissionDef): { x: number; z: number; name: string
 export const CRIPPLED_FRACTION = 0.25;
 /** Out of the fight (Winchester, bingo, crippled): a bandit inside this range is dealt with before the bot turns for home (m). */
 export const OUT_THREAT_RANGE = 25_000;
+/** A ripple in progress is finished (its last release this recent, s) unless a SAM shot is this close to impact (s). */
+const RIPPLE_WINDOW = 6;
+const SAM_BREAK_TTI = 10;
 /**
  * Out of missiles with a bandit inside this range and in front of the nose: take the gun shot (m).
  * (3 km in any aspect started gun fights with Su-27s that ended crippled and crashed: ia_defend Pilot 3/6.)
@@ -311,8 +314,8 @@ export class MissionBot {
 
     // 1. missile inbound: a SAM shot is defended against; everything else: the calibrated air-to-air bot
     if (p.incoming.length > 0) {
-      if (this.samShot()) return this.samDefence(dt);
-      return this.fight('DEFEND', dt);
+      if (!this.samShot()) return this.fight('DEFEND', dt);
+      if (!this.finishingRipple()) return this.samDefence(dt);
     }
 
     this.beamSide = 0;
@@ -465,6 +468,18 @@ export class MissionBot {
       p.input.fireWeapon = true;
       this.lastRelease = w.time;
     }
+  }
+
+  /**
+   * A long SAM shot (more than SAM_BREAK_TTI s from impact) doesn't pull a pilot off a ripple he has
+   * started: the next bomb goes first, then the break. (An AD boat's nuisance shot comes about 3 s into
+   * a stand-off ripple, #115.)
+   */
+  private finishingRipple(): boolean {
+    if (this.world.time - this.lastRelease > RIPPLE_WINDOW) return false;
+    let tti = Infinity;
+    for (const m of this.p.incoming) tti = Math.min(tti, m.timeToImpact);
+    return tti > SAM_BREAK_TTI;
   }
 
   /** The most urgent inbound missile was fired by a SAM site. */

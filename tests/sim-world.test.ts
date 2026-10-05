@@ -157,7 +157,7 @@ describe('SimWorld pools & cleanup', () => {
 
 describe('SimWorld collisions & wrecks', () => {
   it('detects a crash into the ground: explosion, destroyed, player:down', () => {
-    const tw = makeWorld('ace', flatTerrain(200));
+    const tw = makeWorld('veteran', flatTerrain(200));
     const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 700, 0), heading: 0, speed: 250 });
     run(tw.world, 30, () => {
       ac.input.pitch = -0.8;
@@ -177,7 +177,7 @@ describe('SimWorld collisions & wrecks', () => {
   });
 
   it('reports fuel exhaustion as the reason when a dead-stick jet hits the ground', () => {
-    const tw = makeWorld('ace');
+    const tw = makeWorld('veteran');
     const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 400, 0), heading: 0, speed: 200, fuel: 0 });
     run(tw.world, 120, () => {
       ac.input.pitch = -0.3;
@@ -187,7 +187,7 @@ describe('SimWorld collisions & wrecks', () => {
   });
 
   it('splashes into the sea', () => {
-    const tw = makeWorld('ace', flatTerrain(-50));
+    const tw = makeWorld('veteran', flatTerrain(-50));
     const ac = tw.world.spawnAircraft({ type: 'mig29', team: 'red', position: new Vector3(0, 300, 0), heading: 0, speed: 250 });
     run(tw.world, 30, () => {
       ac.input.pitch = -1;

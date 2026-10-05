@@ -11,7 +11,10 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const s: Settings = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    // Ace was removed: a saved Ace setting flies at the hardest level left
+    if ((s.difficulty as string) === 'ace') s.difficulty = 'veteran';
+    return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

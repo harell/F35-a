@@ -1,6 +1,6 @@
 /**
  * Issue #68, item 2 (repo owner's decision, 2026-10-02): training always flies at Pilot, whatever
- * the difficulty setting. On Ace, T03 dropped to 1/3 (SA-6 with both JDAMs still aboard).
+ * the difficulty setting. On Veteran (then Ace), T03 dropped to 1/3 (SA-6 with both JDAMs still aboard).
  * Review follow-up: nothing tells the player to change the difficulty of a lesson (the S-grade
  * "try it on a harder difficulty" tip, the pause-menu settings note and toast).
  */
@@ -20,7 +20,7 @@ import { difficultyChangeToast, midSortieDifficultyNote } from '../src/ui/career
 import { runPlaythrough } from './missions-bot';
 import { stubAi } from './missions-helpers';
 
-const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 
 describe('#68: training flies at Pilot whatever the setting', () => {
   it('every lesson flies at Pilot; campaign and Instant Action missions follow the setting', () => {
@@ -37,10 +37,10 @@ describe('#68: training flies at Pilot whatever the setting', () => {
     }
   });
 
-  it('T01–T03 run at Pilot on an Ace setting (the bot starts missions the way the game does)', { timeout: 240_000 }, () => {
+  it('T01–T03 run at Pilot on a Veteran setting (the bot starts missions the way the game does)', { timeout: 240_000 }, () => {
     for (const def of TRAINING) {
       const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
-      const r = runPlaythrough(def.id, 'ace', 0, terrain, { maxT: 900 });
+      const r = runPlaythrough(def.id, 'veteran', 0, terrain, { maxT: 900 });
       expect(r.state, `${def.id}: ${r.reason}`).not.toBe('running');
       expect(r.result?.difficulty, def.id).toBe('pilot');
     }
@@ -48,11 +48,11 @@ describe('#68: training flies at Pilot whatever the setting', () => {
 
   it('no "Retry on Recruit" after failed lessons (they would still fly at Pilot); the campaign keeps it', () => {
     const lost = (missionId: string) => ({ success: false, missionId });
-    for (const m of TRAINING) expect(offerRecruitRetry(lost(m.id), RECRUIT_OFFER_AFTER + 3, 'ace')).toBe(false);
-    expect(offerRecruitRetry(lost('g02'), RECRUIT_OFFER_AFTER, 'ace')).toBe(true);
-    expect(offerRecruitRetry(lost('g02'), RECRUIT_OFFER_AFTER - 1, 'ace')).toBe(false);
+    for (const m of TRAINING) expect(offerRecruitRetry(lost(m.id), RECRUIT_OFFER_AFTER + 3, 'veteran')).toBe(false);
+    expect(offerRecruitRetry(lost('g02'), RECRUIT_OFFER_AFTER, 'veteran')).toBe(true);
+    expect(offerRecruitRetry(lost('g02'), RECRUIT_OFFER_AFTER - 1, 'veteran')).toBe(false);
     expect(offerRecruitRetry(lost('g02'), RECRUIT_OFFER_AFTER, 'recruit')).toBe(false);
-    expect(offerRecruitRetry({ success: true, missionId: 'g02' }, RECRUIT_OFFER_AFTER, 'ace')).toBe(false);
+    expect(offerRecruitRetry({ success: true, missionId: 'g02' }, RECRUIT_OFFER_AFTER, 'veteran')).toBe(false);
   });
 
   it('an S-graded lesson is not told to try a harder difficulty; a campaign mission still is', () => {
@@ -89,8 +89,8 @@ describe('#68: training flies at Pilot whatever the setting', () => {
     expect(midSortieDifficultyNote(t01)).not.toMatch(/RESTART|next sortie/);
     expect(midSortieDifficultyNote(g01)).toMatch(/next sortie \(or RESTART\)/);
     expect(midSortieDifficultyNote(null)).toMatch(/next sortie \(or RESTART\)/);
-    expect(difficultyChangeToast('ace', t01)).toMatch(/^Difficulty: Ace — .*lessons always fly at Pilot$/);
-    expect(difficultyChangeToast('ace', t01)).not.toMatch(/restart/);
-    expect(difficultyChangeToast('ace', g01)).toBe('Difficulty: Ace — applies from the next sortie or a restart');
+    expect(difficultyChangeToast('veteran', t01)).toMatch(/^Difficulty: Veteran — .*lessons always fly at Pilot$/);
+    expect(difficultyChangeToast('veteran', t01)).not.toMatch(/restart/);
+    expect(difficultyChangeToast('veteran', g01)).toBe('Difficulty: Veteran — applies from the next sortie or a restart');
   });
 });

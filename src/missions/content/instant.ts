@@ -83,8 +83,8 @@ export function strollTour(): WaypointDef[] {
 /**
  * 'mixed' flights: MiG-29s and Su-27s on every difficulty. The Su-35 and Su-57 fly only when the
  * player picks them (issue #60): their IRST and R-77s find the stealth F-35 at 12-15 km, before its
- * SHOOT cue, and decided every Ace run (0/6 in each mode, also at Pilot's numbers), as they had
- * walled Veteran Dogfight, Gauntlet and Strike before they became Ace-only.
+ * SHOOT cue, and decided every hardest-level run (0/6 in each mode, also at Pilot's numbers), as they had
+ * walled Veteran Dogfight, Gauntlet and Strike before they became opt-in.
  */
 const MIXED: AircraftType[] = ['mig29', 'su27'];
 
@@ -129,13 +129,11 @@ const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
 
 /**
  * Instant Action's own enemy-count scale (MissionScript.enemyCountScale), in place of the
- * difficulty's: Ace flies Pilot's numbers (issue #60). At Ace's ×1.5 the bot was 0/6 in every mode:
- * six Flankers against four AIM-120s in Dogfight, a third MiG-29 inside R-73 range in Strike, a
- * third Su-35 on the Gauntlet's CAP, a third striker in Defend. Ace stays the hardest setting
- * through its pilots (sharper and GCI-vectored), its SAMs and one-hit kills; Dogfight adds Viper 3,
- * the Gauntlet a third CAP jet a minute behind the pair (both Ace only).
+ * difficulty's, for a level that needs one. None today: with Ace gone (its ×1.5 count made the bot 0/6 in every
+ * mode: six Flankers against four AIM-120s in Dogfight, a third MiG-29 inside R-73 range in Strike, a third
+ * Su-35 on the Gauntlet's CAP, a third striker in Defend) every level flies its own numbers.
  */
-export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = { ace: 1 };
+export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = {};
 
 const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa15', 'sa15', 'sa6', 'zsu23', 'sa15', 'sa15'];
 
@@ -183,15 +181,15 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'dogfight': {
       // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
-      // the player has fired. On Ace Viper 3 joins (issue #60: the bot was 1/6 there alone with Viper 2)
-      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS, countFor: { ace: 2 } }));
+      // the player has fired.
+      if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
       const flights = enemyFlights(opts, n, lay, rng);
       groups.push(...flights);
       objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
       briefing = [
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
-        n >= 3 ? 'Viper 2 is on your wing (Vipers 2 and 3 on Ace). It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
+        n >= 3 ? 'Viper 2 is on your wing It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
@@ -226,18 +224,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
             task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
           }),
         );
-        // Ace: a third fighter a minute behind them (issue #60: 3 at once made Ace 1/6, 2 made it 5/6)
-        groups.push(
-          flight('cap2', pickType(opts, rng), 1, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', {
-            spawn: { kind: 'time', t: 180 },
-            minDifficulty: 'ace',
-            task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
-          }),
-        );
       }
       briefing = [
         `A belt of ${count} SAM sites guards a depot. Some sites are silent until you are close.`,
-        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in (a third a minute later on Ace): keep your AMRAAMs for them.'] : []),
+        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
         'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.',
       ];
       script.parTime = 420;
@@ -405,7 +395,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     const at = { x: Math.round(from.x + uz * 3000), z: Math.round(from.z - ux * 3000) };
     groups.push(
       flight('escort', escortType, escorts, at, 4500, inbound, 245, 'escort', {
-        // capped at 2 on every difficulty (Ace's 1.5x count scaling made it 3)
+        // capped at 2 on every difficulty
         maxCount: 2,
         task: { kind: 'escort_group', group: 'strikers' },
       }),

@@ -113,7 +113,7 @@ describe('i2: player-centric grading', () => {
     const dogfight = missionById('ia_dogfight_auckland')!;
     const wing = dogfight.script.groups.find((g) => g.role === 'wingman')!;
     expect(groupSkill(wing, DIFFICULTIES.recruit.aiSkill)).toBeGreaterThan(groupSkill(wing, DIFFICULTIES.pilot.aiSkill));
-    expect(groupSkill(wing, DIFFICULTIES.ace.aiSkill)).toBeLessThanOrEqual(0.6);
+    expect(groupSkill(wing, DIFFICULTIES.veteran.aiSkill)).toBeLessThanOrEqual(0.6);
     // a strike-package friendly (no shipped mission has one now): a blue flight that is not the wingman
     const weasel = flight('weasel', 'f35a', 2, { x: 0, z: 0 }, 5000, 0, 230, 'fighter', { team: 'blue', callsign: 'Weasel' });
     expect(groupSkill(weasel, DIFFICULTIES.pilot.aiSkill)).toBeGreaterThanOrEqual(0.75);

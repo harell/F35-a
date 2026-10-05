@@ -37,7 +37,7 @@ describe('AI intercept & BVR', () => {
   });
 
   it('interceptor scrambles on GCI vectors, finds the bandit with its own sensors and shoots', () => {
-    const tw = makeAiWorld('ace', undefined, 11);
+    const tw = makeAiWorld('veteran', undefined, 11);
     const w = tw.world;
     const tgt = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(10_000, 4_000, 10_000), heading: 0, speed: 240, loadout: 'a2a_beast' });
     const ftr = w.spawnAircraft({ type: 'su35', team: 'red', position: v3(-20_000, 3_000, -35_000), heading: 2, speed: 240, ai: createAiBrain('interceptor', { skill: 0.9, seed: 5 }) });
@@ -101,7 +101,7 @@ describe('AI missile defence', () => {
   });
 
   it('reacts to an AIM-9X: flares + defensive manoeuvre (non-DAS jet sees it visually)', () => {
-    const tw = makeAiWorld('ace', undefined, 3);
+    const tw = makeAiWorld('veteran', undefined, 3);
     const w = tw.world;
     const def = w.spawnAircraft({ type: 'su27', team: 'red', position: v3(0, 4_000, 0), heading: 0, speed: 220, ai: createAiBrain('fighter', { skill: 0.9, seed: 2 }) });
     const sh = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(1_300, 4_000, 1_500), heading: -0.5, speed: 270, loadout: 'a2a_beast' });
