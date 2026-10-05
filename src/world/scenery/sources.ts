@@ -17,6 +17,8 @@ import { FRONT_HOUSE, type FrontageMap, type FrontHouse } from './frontage';
 import { canopyAt, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
 import { pointInRing } from './cbdStreets';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
+import { LU_COMMERCIAL, LU_INDUSTRIAL, LU_PITCH, LU_SCHOOL, landUseAt, luOpen, luSheds, type LandUse } from './aucklandLandUse';
+import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint, shedHeight, shedRoofOf } from './landUseLots';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
 export class ColorMapSampler {
@@ -85,6 +87,8 @@ export class TreeSource implements ScatterSource {
     private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
     private readonly cbd: CbdGrid | null = null,
     private readonly nbs: Neighbourhood[] | null = null,
+    /** The real land use (#122): no garden trees on pitches, few in car parks and yards. */
+    private readonly landUse: LandUse | null = null,
   ) {}
 
   /** Hero neighbourhoods' building footprints in 20 m buckets (trunks stay out of the houses). */
@@ -179,6 +183,10 @@ export class TreeSource implements ScatterSource {
         if (this.blocked && this.blocked(x, z, 3)) continue;
         // garden / street trees stay off the painted streets and arterials
         if (urban > 0.05 && onStreet(x, z, this.cbd, this.dist)) continue;
+        if (urban > 0.05 && this.landUse) {
+          const c = landUseAt(this.landUse, x, z);
+          if (c === LU_PITCH || c === LU_SCHOOL || ((c === LU_COMMERCIAL || c === LU_INDUSTRIAL) && h1 > 0.2)) continue;
+        }
         // CBD (real streets): the blocks are built up (auckland.ts buildCBD); trees only in the parks
         const st = this.cbd?.streets;
         if (st && st.regionSD(x, z) > -2 && (st.park(x, z) < 0.6 || st.streetSD(x, z) < 2)) continue;
@@ -202,6 +210,8 @@ export class TreeSource implements ScatterSource {
 
 export const HOUSE = 0;
 export const APARTMENT = 1;
+/** A flat-roofed shed on commercial, industrial, hospital or school land (landUseLots.ts). */
+export const SHED = 2;
 
 const f32 = Math.fround;
 const fract = (x: number) => x - Math.floor(x);
@@ -219,7 +229,6 @@ export function houseFootprint(lh: number, lz: number, apt: boolean): { cx: numb
 }
 
 export class HouseSource implements ScatterSource {
-  readonly kinds = 2;
   private readonly dist: District = {} as District;
   constructor(
     private readonly hf: Heightfield,
@@ -231,7 +240,12 @@ export class HouseSource implements ScatterSource {
     private readonly lotMask: Pick<LotMask, 'masked'> | null = null,
     /** The lots along the arterials, facing them (frontage.ts; the terrain shader paints the same). */
     private readonly frontage: FrontageMap | null = null,
-  ) {}
+    /** The real land use (#122): houses only off open ground, sheds on commercial / industrial / hospital land. */
+    private readonly landUse: LandUse | null = null,
+  ) {
+    this.kinds = landUse ? 3 : 2;
+  }
+  readonly kinds: number;
 
   private readonly front: FrontHouse[] = [];
 
@@ -250,6 +264,7 @@ export class HouseSource implements ScatterSource {
         const gh = this.groundAt(h.x, h.z);
         if (gh < 1) continue;
         if (this.blocked && this.blocked(h.x, h.z, 4)) continue;
+        if (this.landUse && luOpen(landUseAt(this.landUse, h.x, h.z))) continue;
         out.data[h.kind === FRONT_HOUSE ? HOUSE : APARTMENT].push(h.x, gh - 0.8, h.z, h.yaw, h.w, h.h + 0.8, h.d, 1, 1, 1, h.lh);
       }
     }
@@ -281,6 +296,30 @@ export class HouseSource implements ScatterSource {
           const bx = Math.floor(lx / LOTS_X);
           const bz = Math.floor(lz / LOTS_Z);
           if (blockHash(d, bx, bz) >= 0.975 - dens * 0.03) continue; // park block (same rule as the shader)
+          const lu = this.landUse;
+          if (lu) {
+            // the unit of UNIT_LOTS lots this one starts (landUseLots.ts): a shed / classroom block, or no houses
+            const ux = Math.floor(lx / UNIT_LOTS);
+            const [ucx, ucz] = toWorld(d, (ux + 0.5) * UNIT_LOTS * lotW, (lz + 0.5) * lotD);
+            const cu = landUseAt(lu, ucx, ucz);
+            if (luSheds(cu) || cu === LU_SCHOOL) {
+              if (lx !== ux * UNIT_LOTS) continue;
+              const uh = lotHash(d, lx, lz);
+              if (cu === LU_SCHOOL && uh >= SCHOOL_BUILT) continue;
+              if (this.lotMask?.masked(ucx, ucz)) continue;
+              const fp = shedFootprint(cu);
+              const gh = this.groundAt(ucx, ucz);
+              if (gh < 1) continue;
+              if (this.blocked && this.blocked(ucx, ucz, 20)) continue;
+              if (this.cbd?.streets && this.cbd.streets.regionSD(ucx, ucz) > -ROAD_HALF - 20) continue;
+              const own2 = districtAt(ucx, ucz, undefined, this.dist, this.cbd);
+              if (own2.real || own2.cx !== d.cx || own2.cz !== d.cz || own2.border < 20) continue;
+              const hgt = shedHeight(cu, uh);
+              out.data[SHED].push(ucx, gh - 0.8, ucz, -d.angle, fp.sx * UNIT_LOTS * lotW, hgt + 0.8, fp.sz * lotD, 1, 1, 1, uh);
+              continue;
+            }
+            if (luOpen(landUseAt(lu, cwx, cwz))) continue;
+          }
           const lh = lotHash(d, lx, lz);
           if (lh >= 0.8 + 0.2 * dens) continue;
           // the corridor along a road or railway ribbon (lotMask.ts; tested at the lot centre, as the shader does)
@@ -303,6 +342,16 @@ export class HouseSource implements ScatterSource {
       }
     }
   }
+}
+
+/** Roof colour for a shed record (matches the terrain shader's shedRoof(uh)). */
+export function shedColorFn(): (rec: number[], i: number, out: Color) => void {
+  const roofs = SHED_ROOFS.map((h) => new Color(h));
+  return (rec, _i, out) => {
+    const { index, k } = shedRoofOf(rec[10]);
+    const c = roofs[index];
+    out.setRGB(c.r * k, c.g * k, c.b * k);
+  };
 }
 
 /** Roof colour for a house record (matches the terrain shader's roofColor(lh)). */

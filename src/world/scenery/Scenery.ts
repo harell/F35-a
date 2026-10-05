@@ -41,8 +41,9 @@ import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
-import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, TreeSource } from './sources';
-import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry } from './archetypes';
+import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource } from './sources';
+import type { LandUse } from './aucklandLandUse';
+import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry, shedGeometry } from './archetypes';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { AIRBASE, airfieldOf } from '../terrain/features';
 import { AIRFIELDS, airfieldRotation, runwaysOf } from '../../core/airfields';
@@ -67,6 +68,8 @@ export interface SceneryOptions {
    * faces, and no houses or trees are scattered where it covers the ground (it shows the real ones).
    */
   aerial?: AerialPhotoInfo | null;
+  /** The real land use (#122, medium and high tiers): houses off open ground, sheds on commercial land. */
+  landUse?: LandUse | null;
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + Auckland's built-ins). */
@@ -438,7 +441,7 @@ export class Scenery {
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
@@ -450,17 +453,18 @@ export class Scenery {
     );
     for (const m of this.trees.meshes) this.group.add(m);
 
-    const houseGeoms = [houseGeometry(), apartmentGeometry()];
+    const houseGeoms = [houseGeometry(), apartmentGeometry(), ...(o.landUse ? [shedGeometry()] : [])];
     this.geometries.push(...houseGeoms);
     const houseMat = createBuildingMaterial(o.atmo, { houses: true });
     this.materials.push(houseMat);
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
         { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
+        ...(o.landUse ? [{ geometry: houseGeoms[2], material: houseMat, capacity: Math.round(hc / 6), kind: SHED, color: shedColorFn() }] : []),
       ],
       300,
       o.cfg.houseRadius,

@@ -129,6 +129,21 @@ taxiways, aprons, hangars, terminals and a levelled outline. `allFeatures('auckl
 (`Footprint.kind = 'poly'`), and the scenery builds `buildRealAirfield`. Without the file, the template airbase is
 laid on the same real runways. `tests/world-osm.test.ts` keeps the table and the bake in step.
 
+## Real land use (OpenStreetMap, #122)
+
+**`src/world/scenery/data/auckland-landuse.bin`** (baked by `tools/osm/landuse.py`, ODbL; 436 kB gzip, loaded by
+`aucklandLandUse.ts` on the medium and high tiers only, `worldConfig().landUse`) is a 16 m class grid over the ±40 km
+world: residential, commercial / retail, industrial, park, pitch, golf, school, hospital, cemetery, vineyard,
+farmland, or none. Three readers: `applyLandUse` (`src/world/terrain/landUse.ts`, on the base heightfield in
+`finishTerrain`, main thread only, `TerrainSpec.landUse`) sets the built-up density from the class shares of each
+86 m sample, so the colour map, the garden trees and the house scatter follow the real suburbs and parks; the
+terrain shader (`landUseAt()`, the grid as an RGBA8 texture of 4 × 2 nibbles) paints open ground (pitches, fairways,
+headstones, vine rows; no procedural streets across parks and campuses) and sheds round car parks; `HouseSource`
+places houses only off open ground and one flat-roofed shed (`SHED`, a third instanced draw) per unit of three lots
+on commercial, industrial and hospital land and on some school land (`landUseLots.ts` holds the shared rules, so
+the painted and the 3D sheds agree). A cell without a class keeps the hand-traced suburbs (`AKL_URBAN`, `AKL_PARKS`),
+which stay the low tier's and the offline fallback. Gameplay never reads it.
+
 ## Waterfront and strategic sites (OpenStreetMap)
 
 `src/world/scenery/aucklandSites.ts` builds from the same OSM file: the Ports of Auckland outline as a wharf deck (it

@@ -5,7 +5,7 @@
  * instance), buildings 1 × 1 × 1.
  */
 import { BufferGeometry, Color } from 'three';
-import { GeometryBuilder, WIN_HOME, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { GeometryBuilder, WIN_HOME, WIN_INDUSTRIAL, WIN_OFFICE, type Frame } from './GeometryBuilder';
 
 const F0: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
@@ -88,6 +88,30 @@ export function houseGeometry(): BufferGeometry {
   b.quad(F0, [0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 1, -0.5, 0.5, 1, 0.5], w, WIN_HOME);
   b.quad(F0, [-0.5, 0, -0.5, -0.5, 0, 0.5, -0.5, 1, 0.5, -0.5, 1, -0.5], w, WIN_HOME);
   b.gable(F0, 0, 1, 0, 1.1, 1.08, 0.45, w);
+  return b.build()!;
+}
+
+/**
+ * Shed (real land use, #122: warehouses, big-box retail, hospital blocks, classrooms): walls with sparse industrial
+ * windows over a darker band of loading doors / shopfronts at the foot, a flat roof (instance colour: metal greys, landUseLots.ts) and two
+ * rooftop units. 16 triangles.
+ */
+export function shedGeometry(): BufferGeometry {
+  const b = new GeometryBuilder();
+  const w = 0xffffff;
+  const band = 0x8c8c88;
+  for (const [ax, az, bx, bz] of [
+    [-0.5, 0.5, 0.5, 0.5],
+    [0.5, -0.5, -0.5, -0.5],
+    [0.5, 0.5, 0.5, -0.5],
+    [-0.5, -0.5, -0.5, 0.5],
+  ]) {
+    b.quad(F0, [ax, 0, az, bx, 0, bz, bx, 0.35, bz, ax, 0.35, az], band);
+    b.quad(F0, [ax, 0.35, az, bx, 0.35, bz, bx, 1, bz, ax, 1, az], w, WIN_INDUSTRIAL);
+  }
+  b.quad(F0, [-0.5, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, -0.5, -0.5, 1, -0.5], w);
+  b.box(F0, -0.2, 1, 0.1, 0.08, 0.04, 0.12, 0x9a9a98, 0x9a9a98);
+  b.box(F0, 0.25, 1, -0.15, 0.06, 0.03, 0.1, 0x9a9a98, 0x9a9a98);
   return b.build()!;
 }
 

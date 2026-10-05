@@ -16,6 +16,20 @@ import { FOOTPATH } from '../scenery/cbdStreets';
 import { FRONT_BAND, FRONT_DEPTH, FRONT_FOOTPATH, FRONT_MAX, FRONT_TEX_W, SIDE_STREET_COS, SIDE_STREET_GAP } from '../scenery/frontage';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
 import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX } from './theaters/aucklandAerial';
+import { LU_CEMETERY, LU_COMMERCIAL, LU_FARMLAND, LU_GOLF, LU_HOSPITAL, LU_INDUSTRIAL, LU_PARK, LU_PITCH, LU_SCHOOL, LU_VINEYARD } from '../scenery/aucklandLandUse';
+import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint } from '../scenery/landUseLots';
+
+const f1 = (v: number) => v.toFixed(1);
+const fp = (c: number) => shedFootprint(c);
+/** GLSL: the shed footprint (unit fractions) of land-use class c (landUseLots.ts shedFootprint). */
+const SHED_FP_GLSL = /* glsl */ `
+vec2 shedSize(float c) {
+  if (c == ${f1(LU_INDUSTRIAL)}) return vec2(${fp(LU_INDUSTRIAL).sx}, ${fp(LU_INDUSTRIAL).sz});
+  if (c == ${f1(LU_HOSPITAL)}) return vec2(${fp(LU_HOSPITAL).sx}, ${fp(LU_HOSPITAL).sz});
+  if (c == ${f1(LU_SCHOOL)}) return vec2(${fp(LU_SCHOOL).sx}, ${fp(LU_SCHOOL).sz});
+  return vec2(${fp(LU_COMMERCIAL).sx}, ${fp(LU_COMMERCIAL).sz});
+}
+`;
 
 export const MAX_TERRAIN_LODS = 16;
 /** Volcanic cones the fragment shader can shade (crater bowls, flank terraces). */
@@ -180,6 +194,10 @@ uniform float uFrontRows; // cells down
 uniform sampler2D uFrontList; // RGBA8 segment indices
 uniform sampler2D uFrontSegs; // RGBA32F, 4 texels per segment
 uniform sampler2D uFrontFlags; // R8, one per lot: 0 empty, 1 house, 2 apartment, 3 shop
+uniform sampler2D uLandUse; // real land use (aucklandLandUse.ts): 4-bit classes, 4 × 2 cells per RGBA8 texel
+uniform vec4 uLandUseRect; // x0, z0, 1/cell, texels across; across 0 = none
+uniform float uLandUseRows; // texels down
+uniform vec3 uShedRoofs[${SHED_ROOFS.length}]; // landUseLots.ts SHED_ROOFS
 varying vec3 vWorld;
 varying vec2 vUv;
 varying float vH;
@@ -277,6 +295,63 @@ float lotMasked(vec2 wp) { return maskBit(uLotMask, uLotMaskRect, uLotMaskRows, 
 // 1 on a landmark's site (aucklandSites.ts siteRings: a stadium's grounds, the oil terminal): the procedural grid
 // stops there, so a 3D landmark never stands on painted streets and houses; its real streets are ribbons around it.
 float siteMasked(vec2 wp) { return maskBit(uSiteMask, uSiteMaskRect, uSiteMaskRows, wp); }
+
+// Real land-use class at wp (aucklandLandUse.ts landUseAt() is the same lookup); -1 without the grid, 0 = none.
+float landUseAt(vec2 wp) {
+  if (uLandUseRect.w <= 0.0) return -1.0;
+  vec2 g = floor((wp - uLandUseRect.xy) * uLandUseRect.z);
+  vec2 t = floor(g / vec2(4.0, 2.0));
+  if (t.x < 0.0 || t.y < 0.0 || t.x >= uLandUseRect.w || t.y >= uLandUseRows) return 0.0;
+  vec4 v = floor(texelFetch(uLandUse, ivec2(t), 0) * 255.0 + 0.5);
+  vec2 f = g - t * vec2(4.0, 2.0);
+  float b = f.y < 0.5 ? (f.x < 1.5 ? v.r : v.g) : (f.x < 1.5 ? v.b : v.a);
+  return mod(f.x, 2.0) < 0.5 ? mod(b, 16.0) : floor(b / 16.0);
+}
+// Open ground (aucklandLandUse.ts luOpen): parks, pitches, golf, cemeteries, vineyards, farmland.
+float luOpen(float c) {
+  return (c == ${f1(LU_PARK)} || c == ${f1(LU_PITCH)} || c == ${f1(LU_GOLF)} || c == ${f1(LU_CEMETERY)} || c == ${f1(LU_VINEYARD)} || c == ${f1(LU_FARMLAND)}) ? 1.0 : 0.0;
+}
+// Sheds and car parks (luSheds): commercial / retail, industrial, hospital.
+float luSheds(float c) {
+  return (c == ${f1(LU_COMMERCIAL)} || c == ${f1(LU_INDUSTRIAL)} || c == ${f1(LU_HOSPITAL)}) ? 1.0 : 0.0;
+}
+${SHED_FP_GLSL}
+vec3 shedRoof(float lh) {
+  int k = int(floor(fract(lh * 5.1) * ${(SHED_ROOFS.length - 0.001).toFixed(3)}));
+  return uShedRoofs[k] * (0.88 + 0.24 * fract(lh * 7.3));
+}
+
+// Open ground's own look (grass under it is 'grass'): mown pitches with stripes, golf fairways and roughs with
+// bunkers, cemetery lawns with rows of headstones, vine rows. Parks and farmland keep 'grass'. a = pixel footprint.
+vec3 openGround(vec3 grass, vec2 wp, float c, float mpp) {
+  float aa = max(mpp, 0.05);
+  float fine = 1.0 - smoothstep(3.0, 10.0, mpp);
+  if (c == ${f1(LU_PITCH)} || c == ${f1(LU_SCHOOL)}) {
+    vec3 pitch = uGarden * vec3(1.02, 1.08, 0.92);
+    float stripe = step(0.5, fract(wp.x / 9.0));
+    return pitch * mix(1.0, 0.93 + 0.12 * stripe, fine);
+  }
+  if (c == ${f1(LU_GOLF)}) {
+    float fair = smoothstep(0.42, 0.5, texture2D(uDetail, wp * (1.0 / 460.0)).g);
+    vec3 col = mix(uGarden * vec3(0.78, 0.86, 0.72), uGarden * vec3(1.05, 1.12, 0.9), fair);
+    float bunker = smoothstep(0.83, 0.86, texture2D(uDetail, wp * (1.0 / 97.0) + 0.37).b) * fair;
+    return mix(col, uSand * 0.95, bunker * (1.0 - smoothstep(6.0, 20.0, mpp)));
+  }
+  if (c == ${f1(LU_CEMETERY)}) {
+    vec2 q = fract(wp / vec2(2.6, 1.8)) - 0.5;
+    float stone = (1.0 - smoothstep(0.18 - aa * 0.2, 0.18 + aa * 0.2, abs(q.x))) * (1.0 - smoothstep(0.1 - aa * 0.3, 0.1 + aa * 0.3, abs(q.y)));
+    vec3 lawn = grass * 0.95;
+    return mix(mix(lawn, vec3(0.5, 0.5, 0.48), stone * 0.8 * fine), mix(lawn, vec3(0.45), 0.08), 1.0 - fine);
+  }
+  if (c == ${f1(LU_VINEYARD)}) {
+    float rowsF = abs(fract((wp.x * 0.8 + wp.y * 0.6) / 2.8) - 0.5) * 2.0; // 0 on a vine row
+    float vine = 1.0 - smoothstep(0.35, 0.55, rowsF);
+    vec3 vineCol = vec3(0.07, 0.1, 0.035);
+    vec3 inter = mix(grass * vec3(1.05, 0.95, 0.7), vec3(0.2, 0.16, 0.1), 0.35);
+    return mix(mix(inter, vineCol, vine), mix(inter, vineCol, 0.45), smoothstep(0.7, 2.2, mpp));
+  }
+  return grass;
+}
 
 // Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts); ang = its
 // street grid angle.
@@ -486,6 +561,40 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
   // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
   if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
+  // Real land use (#122, landUseLots.ts; HouseSource does the same): the pixel's class decides the ground (open
+  // ground: its own look and no streets; school and hospital grounds: no through streets), the lot centre's class
+  // whether a house stands, and the class at the centre of a unit of ${UNIT_LOTS} lots whether it holds a shed round a car
+  // park (commercial, industrial, hospital) or, at a school, a classroom block or a playing field.
+  const vec2 UNIT = vec2(LOT.x * ${f1(UNIT_LOTS)}, LOT.y);
+  float luP = mpp < 60.0 ? landUseAt(wp) : -1.0;
+  float open = 0.0;
+  float campus = 0.0;
+  float shed = 0.0;
+  float field = 0.0;
+  float luU = -1.0;
+  float uh = 0.0;
+  vec2 uf = vec2(0.5);
+  if (luP >= 0.0) {
+    open = luOpen(luP);
+    campus = (luP == ${f1(LU_SCHOOL)} || luP == ${f1(LU_HOSPITAL)}) ? 1.0 : 0.0;
+    vec2 uid = floor(p / UNIT);
+    uf = fract(p / UNIT);
+    vec2 uc = dist.xy + (uid + 0.5) * UNIT * R;
+    luU = landUseAt(uc);
+    // the unit's hash is its first lot's
+    uh = hash12(vec2(uid.x * ${f1(UNIT_LOTS)}, uid.y) + 17.0 + dist.z * 13.0);
+    if (luSheds(luU) > 0.5 || luU == ${f1(LU_SCHOOL)}) {
+      built = 0.0;
+      shed = luU == ${f1(LU_SCHOOL)} ? step(uh, ${SCHOOL_BUILT.toFixed(3)}) : 1.0;
+      field = luU == ${f1(LU_SCHOOL)} ? 1.0 - shed : 0.0;
+      shed *= 1.0 - park;
+      if (shed > 0.0 && mpp < 40.0) shed *= 1.0 - lotMasked(uc);
+    } else if (built > 0.0) {
+      built *= 1.0 - luOpen(landUseAt(dist.xy + (lid + 0.5) * LOT * R));
+    }
+    park = max(park, max(open, field));
+  }
+  float luG = field > 0.5 ? ${f1(LU_SCHOOL)} : luP; // the open ground's look
   float aptFar = step(0.9, dens);
   float apt = aptFar;
   float roadD = edgeDist(p, BLOCK);
@@ -494,7 +603,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // District borders are ordinary streets where two grid orientations meet (no arterial width,
   // lane marks or extra lamps: painted on every jittered Voronoi border those read as cracked
   // paving from altitude). Real arterials are road ribbons (motorways.ts ARTERIALS).
-  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w)) * (1.0 - site);
+  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w)) * (1.0 - site) * (1.0 - max(open, campus));
   // Along an arterial: its frontage lots (frontage.ts) facing it across a footpath, instead of the grid. Only the
   // grid streets that meet it square enough carry on through the band to the kerb (side streets); the lot frame
   // replaces the grid's (x along the road, y back from the footpath: a row-0 lot, its street in front).
@@ -521,10 +630,12 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     lid = vec2(fLot.w, 0.0);
     lf = vec2(fLot.x / fLot.z, fLot.y / ${FRONT_DEPTH.toFixed(2)});
     lh = hash12(vec2(fLot.w + 17.0, fId.x + 101.0));
-    built = step(0.5, fId.y);
+    built = step(0.5, fId.y) * (1.0 - open);
     apt = step(1.5, fId.y);
     shop = step(2.5, fId.y);
-    park = site;
+    park = max(site, open);
+    shed = 0.0;
+    field = 0.0;
     row = 0.0;
   }
 
@@ -546,6 +657,15 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec3 cbdFar = flatAvg * 0.6 + uCanopy * treeFrac + mix(asphalt, paving, 0.5) * 0.25;
   far = mix(far, cbdFar, aptFar);
   far = mix(far, uGarden * 0.75 + uCanopy * 0.35, park);
+  // land use: open ground's own colours, sheds and car parks (faded out with the grid lookup by 60 m/px)
+  float luFar = 1.0 - smoothstep(40.0, 60.0, mpp);
+  vec3 openCol = openGround(uGarden * 0.84 + uCanopy * 0.12, wp, luG, mpp);
+  far = mix(far, openCol, max(open, field) * luFar);
+  vec2 ss = shedSize(luU);
+  vec3 shedRoofC = shedRoof(uh);
+  vec3 yard = mix(asphalt * 1.6, paving * 0.9, 0.35);
+  vec3 shedAvg = mix(yard, shedRoofC, ss.x * ss.y);
+  far = mix(far, shedAvg, max(shed, luSheds(luU) * (1.0 - park)) * luFar);
   // Mid range (≈ 8–40 m/px): one colour per lot on the real lot grid (roof share, lawn and garden
   // trees, random per lot) with the streets as coverage-weighted lines, so the suburbs read as rows
   // of houses along a street grid rather than as a mosaic of square colour cells.
@@ -554,8 +674,10 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec3 lotCol = mix(grass, uCanopy, lotTree);
   lotCol = mix(lotCol, mix(roofColor(lh), flatAvg * (0.75 + 0.5 * fract(lh * 3.7)), apt), lotRoof);
   lotCol = mix(lotCol, uGarden * 0.8 + uCanopy * 0.3, park);
+  lotCol = mix(lotCol, openCol, max(open, field));
+  lotCol = mix(lotCol, shedAvg, shed);
   float w = max(mpp, 1.0);
-  float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0) * (1.0 - site);
+  float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0) * (1.0 - site) * (1.0 - max(open, campus));
   vec3 mid = mix(lotCol, mix(asphalt, paving, 0.35), roadCov * 0.9);
   vec3 col = mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp));
   if (mpp < 8.0) {
@@ -602,6 +724,10 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     vec2 tp = (tc + 0.3 + 0.4 * vec2(th, fract(th * 7.9))) * 14.0;
     float tr = 2.8 + 1.4 * fract(th * 3.3);
     float hasTree = step(fract(th * 11.3), treeFrac * 1.6 + park * 0.3);
+    // few trees on pitches, school fields, vineyards and fairways, in the car parks and yards
+    if (luG == ${f1(LU_PITCH)} || luG == ${f1(LU_SCHOOL)} || luG == ${f1(LU_VINEYARD)}) hasTree = 0.0;
+    if (luG == ${f1(LU_GOLF)} || luG == ${f1(LU_CEMETERY)}) hasTree *= step(fract(th * 3.7), 0.35);
+    hasTree *= 1.0 - shed * step(0.15, fract(th * 5.9));
     vec2 tv = p - tp;
     float tree = hasTree * (1.0 - smoothstep(tr - aa * 0.6, tr + aa * 0.6, length(tv))) * (1.0 - inHouse) * (1.0 - road);
     float tshadow = hasTree * (1.0 - smoothstep(tr - aa, tr + aa, length(tv - shOff * 0.8))) * (1.0 - tree);
@@ -614,7 +740,25 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     near = mix(near, uCanopy * tlit, tree);
     // parks: grass with sports-field stripes
     vec3 parkCol = uGarden * (0.8 + 0.12 * step(0.5, fract(p.x / 9.0)));
+    parkCol = mix(parkCol, openGround(uGarden * 0.86, wp, luG, mpp), max(open, field));
     near = mix(near, mix(parkCol, uCanopy * tlit, tree), park);
+    if (shed > 0.0) {
+      // a shed: ribbed metal roof over the unit's middle, its shadow on an asphalt car park / yard with bays
+      vec2 q2 = (uf - 0.5) * UNIT;
+      vec2 hh2 = ss * UNIT * 0.5;
+      vec2 e2 = hh2 - abs(q2);
+      float inShed = smoothstep(-aa * 0.5, aa * 0.5, min(e2.x, e2.y));
+      float rib = mix(0.93 + 0.07 * step(0.5, fract(q2.x / 1.2)), 1.0, smoothstep(1.5, 4.0, mpp));
+      vec2 sh2 = clamp(-sunL / max(uSunDir.y, 0.18) * 8.0, -24.0, 24.0);
+      vec2 es2 = hh2 - abs(q2 - sh2);
+      float shadow2 = (1.0 - inShed) * smoothstep(-aa * 0.7, aa * 0.7, min(es2.x, es2.y));
+      float bay = (1.0 - smoothstep(0.07, 0.07 + aa * 0.5, abs(fract(q2.x / 2.6) - 0.5) * 2.6)) * step(abs(abs(q2.y) - hh2.y - 4.0), 2.5);
+      vec3 yardN = yard * (0.9 + 0.2 * hash12(floor(q2 / 6.0) + uh * 37.0));
+      yardN = mix(yardN, vec3(0.7, 0.7, 0.66), bay * 0.7 * (1.0 - smoothstep(1.0, 3.0, mpp)));
+      yardN *= 1.0 - 0.5 * shadow2;
+      vec3 shedNear = mix(mix(yardN, uCanopy * tlit, tree), shedRoofC * rib, inShed);
+      near = mix(near, shedNear, shed);
+    }
     // footpaths, kerbs and streets (lane marks on arterials)
     float foot = max((1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD)) * (1.0 - site), frontFoot);
     near = mix(near, paving * 1.15, foot * (1.0 - tree));
@@ -655,7 +799,7 @@ float fieldMask(vec2 wp) {
 }
 
 // Rural paddocks with darker hedgerows / shelter belts, oriented per farm district; vineyards
-// (rows of vines) on some fields inside uVineyard.
+// (rows of vines) on some fields inside uVineyard (only without the real land use, which has the vineyards).
 vec3 fieldPattern(vec3 base, vec2 wp, float mpp) {
   vec2 cell;
   vec4 dist = district(wp, 2600.0, cell);
@@ -666,7 +810,7 @@ vec3 fieldPattern(vec3 base, vec2 wp, float mpp) {
   vec3 tint = h < 0.1 ? vec3(1.12, 1.02, 0.78) : h < 0.2 ? vec3(0.86, 0.92, 0.82) : vec3(0.88 + 0.18 * h, 0.9 + 0.12 * fract(h * 3.7), 0.9);
   float hedge = 1.0 - smoothstep(2.5 - mpp * 0.5, 2.5 + mpp * 0.5, edgeDist(p, sz));
   vec3 col = base * tint;
-  if (uVineyard.z > 0.0) {
+  if (uVineyard.z > 0.0 && uLandUseRect.w <= 0.0) {
     vec2 ve = (wp - uVineyard.xy) / uVineyard.zw;
     if (dot(ve, ve) < 1.0 && fract(h * 7.7) < 0.45) {
       float rowsF = abs(fract(p.x / 2.8) - 0.5) * 2.0; // 0 on a vine row
@@ -766,11 +910,20 @@ void main() {
   albedo *= mix(1.0, (0.86 + 0.28 * dA.g) * mix(1.0, 0.86 + 0.28 * dB.r, nearB) * mix(1.0, 0.88 + 0.24 * dC.r, nearC), natural);
   albedo = mix(albedo, albedo * vec3(1.06, 1.0, 0.86), (dC.b - 0.5) * 0.5 * nearC * natural);
 
+  // the real land use under this pixel (−1: none loaded; far away the colour map carries it)
+  float luN = mpp < 60.0 ? landUseAt(wp) : -1.0;
+  // paddocks only on farmland and unclassified ground
+  float luFields = luN > 0.0 && luN != ${f1(LU_FARMLAND)} ? 0.0 : 1.0;
   if (uFields > 0.0) {
     float fw = uFields * natural * (1.0 - smoothstep(0.08, 0.22, forest)) * (1.0 - smoothstep(0.06, 0.16, slope)) * step(2.0, vH);
     // no paddock hedges inside the city (parks, volcanic cones): blurred (≈ 2 km) urban density
     if (fw > 0.01) fw *= fieldMask(wp) * (1.0 - smoothstep(0.5, 0.62, textureLod(uColor, vUv, 4.6).a));
-    if (fw > 0.01 && !photoFull) albedo = mix(albedo, fieldPattern(albedo, wp, mpp), fw);
+    if (fw > 0.01 && !photoFull) albedo = mix(albedo, fieldPattern(albedo, wp, mpp), fw * luFields);
+  }
+  // open ground outside the built-up area: pitches, golf courses, cemeteries, vineyards (the real land use)
+  if (luN > 0.0 && natural > 0.01 && !photoFull) {
+    float og = luOpen(luN) * (luN == ${f1(LU_FARMLAND)} || luN == ${f1(LU_PARK)} ? 0.0 : 1.0) + (luN == ${f1(LU_SCHOOL)} ? 1.0 : 0.0);
+    if (og > 0.0) albedo = mix(albedo, openGround(albedo, wp, luN, mpp), og * natural * (1.0 - smoothstep(40.0, 60.0, mpp)));
   }
   vec3 emissive = vec3(0.0);
   if (urban > 0.01 && !photoFull) albedo = urbanPattern(albedo, wp, urban, mpp, sm, emissive);

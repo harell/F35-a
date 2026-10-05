@@ -38,6 +38,8 @@ import type { AtmosphereUniforms } from '../sky/atmosphere';
 import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
 import { districtAngles, type CbdGrid } from '../scenery/urbanGrid';
+import type { LandUse } from '../scenery/aucklandLandUse';
+import { SHED_ROOFS } from '../scenery/landUseLots';
 import { FRONT_TEX_W, type FrontageMap } from '../scenery/frontage';
 import type { CbdStreets } from '../scenery/cbdStreets';
 import type { LotMask } from '../scenery/lotMask';
@@ -139,6 +141,7 @@ export class TerrainRenderer {
   readonly streetTexture: DataTexture | null;
   private lotMaskTexture: DataTexture | null = null;
   private siteMaskTexture: DataTexture | null = null;
+  private landUseTexture: DataTexture | null = null;
   private angleTexture: DataTexture | null = null;
   private frontTextures: DataTexture[] = [];
   private readonly geometry: InstancedBufferGeometry;
@@ -358,6 +361,11 @@ export class TerrainRenderer {
         uFrontList: { value: o.dummy },
         uFrontSegs: { value: o.dummy },
         uFrontFlags: { value: o.dummy },
+        // set by setLandUse() (the real land use, medium and high tiers)
+        uLandUse: { value: o.dummy },
+        uLandUseRect: { value: new Vector4(0, 0, 1, 0) },
+        uLandUseRows: { value: 1 },
+        uShedRoofs: { value: SHED_ROOFS.map((h) => new Color(h)) },
       },
     });
     const angles = districtAngles();
@@ -500,6 +508,21 @@ export class TerrainRenderer {
     this.siteMaskTexture = this.installMask(mask, 'uSiteMask');
   }
 
+  /** Paint the real land use (scenery/aucklandLandUse.ts: parks, pitches, sheds and car parks…); null = none. */
+  setLandUse(lu: LandUse | null): void {
+    this.landUseTexture?.dispose();
+    this.landUseTexture = null;
+    const u = this.material.uniforms;
+    if (!lu) {
+      u.uLandUseRect.value.set(0, 0, 1, 0);
+      return;
+    }
+    this.landUseTexture = dataTexture(lu.data, lu.texW, lu.texH, RGBAFormat, UnsignedByteType);
+    u.uLandUse.value = this.landUseTexture;
+    u.uLandUseRect.value.set(lu.x0, lu.z0, 1 / lu.cell, lu.texW);
+    u.uLandUseRows.value = lu.texH;
+  }
+
   /** Paint the lots along the arterials (frontage.ts, built with the scenery); null = none. */
   setFrontage(map: FrontageMap | null): void {
     for (const t of this.frontTextures) t.dispose();
@@ -548,6 +571,7 @@ export class TerrainRenderer {
     this.streetTexture?.dispose();
     this.lotMaskTexture?.dispose();
     this.siteMaskTexture?.dispose();
+    this.landUseTexture?.dispose();
     this.angleTexture?.dispose();
     for (const t of this.frontTextures) t.dispose();
   }
