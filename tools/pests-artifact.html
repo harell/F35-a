@@ -1,0 +1,217 @@
+<title>IRGC Specimen Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;800&family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+<style>
+  /* Layout: a specimen bench. The 3D stage takes the left; the pest's service record sits beside it
+     like a field-guide card; the species tabs run above both. One column on phones. */
+  :root {
+    --bg: #eef0ea;
+    --panel: #f8f9f5;
+    --ink: #1d231e;
+    --muted: #5c665d;
+    --line: #cfd5cb;
+    --accent: #2f6145; /* kawakawa green: the Predator Free side */
+    --tag: #a8551c; /* rust: the IRGC's own stamp */
+    --tag-ink: #fff7ee;
+    --stage: #e2e5dc;
+    --display: 'Big Shoulders Stencil Display', 'Arial Narrow', Impact, sans-serif;
+    --body: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #121512;
+      --panel: #1a1e1a;
+      --ink: #e5e9e1;
+      --muted: #9aa597;
+      --line: #2f362f;
+      --accent: #7fbf95;
+      --tag: #e08a4c;
+      --tag-ink: #1a1009;
+      --stage: #1b1f1b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #121512;
+    --panel: #1a1e1a;
+    --ink: #e5e9e1;
+    --muted: #9aa597;
+    --line: #2f362f;
+    --accent: #7fbf95;
+    --tag: #e08a4c;
+    --tag-ink: #1a1009;
+    --stage: #1b1f1b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--body); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 32px; display: grid; gap: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 24px; }
+  h1 { font: 800 clamp(30px, 5vw, 46px)/0.95 var(--display); letter-spacing: 0.01em; margin: 0; text-wrap: balance; text-transform: uppercase; }
+  h1 small { display: block; font: 600 12px/1.4 var(--body); letter-spacing: 0.14em; color: var(--tag); margin-bottom: 6px; }
+  .lede { margin: 0; max-width: 62ch; color: var(--muted); }
+  .lede b { color: var(--ink); }
+  .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .tabs button {
+    font: inherit; text-align: left; cursor: pointer; padding: 10px 12px; border-radius: 6px; min-width: 0;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line); display: grid; gap: 2px;
+  }
+  .tabs button b { font: 700 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+  .tabs button i { font: 400 12px/1.3 var(--mono); color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+  .tabs button[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .tabs button:focus-visible, .ctl button:focus-visible, .ctl input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .bench { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .stage { position: relative; border-radius: 8px; overflow: hidden; background: var(--stage); border: 1px solid var(--line); }
+  #stage { display: block; width: 100%; height: min(68vh, 640px); min-height: 340px; touch-action: none; cursor: grab; }
+  #stage:active { cursor: grabbing; }
+  #busy { position: absolute; inset: auto auto 12px 12px; font: 500 12px var(--mono); color: var(--muted); background: var(--panel); padding: 4px 8px; border-radius: 4px; }
+  .hint { position: absolute; right: 12px; top: 10px; font: 400 11px var(--mono); color: var(--muted); pointer-events: none; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+  .ctl label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
+  .ctl input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .ctl .views { display: inline-flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .ctl button { font: 500 12px var(--mono); padding: 5px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  #stats { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 400 12px var(--mono); color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--line); background: var(--panel); font-variant-numeric: tabular-nums; }
+  #stats b { color: var(--ink); font-weight: 500; }
+  .record { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+  .stamp { justify-self: start; font: 700 13px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--tag-ink); background: var(--tag); padding: 6px 9px 5px; border-radius: 3px; transform: rotate(-1.5deg); }
+  .record h2 { margin: 0; font: 800 30px/1 var(--display); text-transform: uppercase; letter-spacing: 0.01em; }
+  .record h2 + p { margin: 2px 0 0; font: italic 400 13px var(--mono); color: var(--muted); }
+  dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 14px; }
+  dt { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .record h3 { margin: 4px 0 0; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+  .record p, .record ul { margin: 0; }
+  .record ul { padding-left: 18px; display: grid; gap: 4px; }
+  .note { font-size: 13px; color: var(--muted); border-left: 2px solid var(--tag); padding-left: 10px; }
+  footer { font-size: 12px; color: var(--muted); max-width: 90ch; }
+  footer p { margin: 0 0 6px; }
+  @media (max-width: 860px) {
+    .bench { grid-template-columns: minmax(0, 1fr); }
+    .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #stage { height: 58vh; }
+    .ctl .views { margin-left: 0; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><small>F35-A Codex · model review</small>Interspecies Revolutionary Guard Corps</h1>
+    <p class="lede">
+      New Zealand's introduced pests, organised into an army against <b>Predator Free 2050</b>. Four specimens, sculpted in code
+      for the Codex. Drag to rotate, scroll or pinch to zoom, right-drag or two-finger drag to pan.
+    </p>
+  </header>
+
+  <nav class="tabs" aria-label="Specimens">
+    <button type="button" id="t-possum" data-pest="possum" aria-pressed="true"><b>Possum</b><i>Trichosurus vulpecula</i></button>
+    <button type="button" id="t-rat" data-pest="rat" aria-pressed="false"><b>Ship rat</b><i>Rattus rattus</i></button>
+    <button type="button" id="t-stoat" data-pest="stoat" aria-pressed="false"><b>Stoat</b><i>Mustela erminea</i></button>
+    <button type="button" id="t-wasp" data-pest="wasp" aria-pressed="false"><b>German wasp</b><i>Vespula germanica</i></button>
+  </nav>
+
+  <div class="bench">
+    <section class="stage" aria-label="3D model">
+      <canvas id="stage"></canvas>
+      <span class="hint">drag · zoom · pan</span>
+      <span id="busy">Sculpting…</span>
+      <div class="ctl">
+        <label><input type="checkbox" id="fur" checked /><span>Fur and hairs</span></label>
+        <label><input type="checkbox" id="spin" checked /><span>Turntable</span></label>
+        <label><input type="checkbox" id="wire" /><span>Wireframe</span></label>
+        <label id="buzzRow" hidden><input type="checkbox" id="buzz" /><span>Wing beat</span></label>
+        <span class="views">
+          <button type="button" data-view="35,15,1.25">¾ front</button>
+          <button type="button" data-view="90,4,1.1">Side</button>
+          <button type="button" data-view="0,8,0.75">Face</button>
+          <button type="button" data-view="180,70,1.05">Top</button>
+          <button type="button" id="reset">Reset</button>
+        </span>
+      </div>
+      <div id="stats" aria-live="polite"></div>
+    </section>
+
+    <div>
+      <article class="record" data-record="possum">
+        <span class="stamp">Canopy Division · Brigadier</span>
+        <div><h2>Brushtail possum</h2><p>Trichosurus vulpecula · 1.4–6.4 kg</p></div>
+        <dl>
+          <dt>Enlisted</dt><dd>1837, shipped from Australia to start a fur trade</dd>
+          <dt>Strength</dt><dd>Tens of millions, in most of the country's forests</dd>
+          <dt>Orders</dt><dd>Strip the canopy by night</dd>
+        </dl>
+        <h3>Field record</h3>
+        <ul>
+          <li>Browses rātā, kāmahi, tōtara and mistletoe until trees die back.</li>
+          <li>Takes eggs and chicks from nests, and the fruit and flowers native birds need.</li>
+          <li>Spreads bovine tuberculosis to cattle and deer.</li>
+        </ul>
+        <h3>On the model</h3>
+        <p>Grey morph: silver-tipped back, cream throat and belly, dark muzzle bridge, big oval ears, and the bushy black tail with its bare grasping strip underneath.</p>
+      </article>
+
+      <article class="record" data-record="rat" hidden>
+        <span class="stamp">Mast-Year Infantry · Sapper</span>
+        <div><h2>Ship rat</h2><p>Rattus rattus · 120–160 g</p></div>
+        <dl>
+          <dt>Enlisted</dt><dd>Mid-1800s, off European ships</dd>
+          <dt>Strength</dt><dd>Booms after beech and rimu mast years</dd>
+          <dt>Orders</dt><dd>Climb everything, raid every nest</dd>
+        </dl>
+        <h3>Field record</h3>
+        <ul>
+          <li>The most widespread rat in New Zealand forest, and an expert climber.</li>
+          <li>Eats eggs, chicks, wētā, snails and lizards, plus the seeds forests need to regrow.</li>
+          <li>A plague of rats feeds a plague of stoats the following year.</li>
+        </ul>
+        <h3>On the model</h3>
+        <p>Grey-brown agouti coat with ticked tips, pale belly, thin near-hairless ears, long whiskers, and a ringed, scaly tail longer than the body.</p>
+      </article>
+
+      <article class="record" data-record="stoat" hidden>
+        <span class="stamp">Special Operations · Commando</span>
+        <div><h2>Stoat</h2><p>Mustela erminea · 200–360 g</p></div>
+        <dl>
+          <dt>Enlisted</dt><dd>1880s, brought in to control rabbits</dd>
+          <dt>Range</dt><dd>Mainland-wide, from beach to alpine tops</dd>
+          <dt>Orders</dt><dd>Kiwi chicks. Then everything else.</dd>
+        </dl>
+        <h3>Field record</h3>
+        <ul>
+          <li>The leading killer of kiwi chicks in the wild.</li>
+          <li>Hunts hole-nesting birds such as mohua, kākā and kākāriki.</li>
+          <li>Can swim more than a kilometre to reach a predator-free island.</li>
+        </ul>
+        <h3>On the model</h3>
+        <p>Long, low body on short legs, chestnut back with a straight line to the cream belly, and the black tail tip that tells a stoat from a weasel. The in-game target in mission g03 is a low-poly cousin of this model.</p>
+      </article>
+
+      <article class="record" data-record="wasp" hidden>
+        <span class="stamp">Air Wing · Squadron Leader</span>
+        <div><h2>German wasp</h2><p>Vespula germanica · worker, about 14 mm</p></div>
+        <dl>
+          <dt>Enlisted</dt><dd>1940s; the common wasp followed in the 1970s</dd>
+          <dt>Strength</dt><dd>Among the densest wasp populations on Earth, in South Island beech forest</dd>
+          <dt>Orders</dt><dd>Hold the honeydew</dd>
+        </dl>
+        <h3>Field record</h3>
+        <ul>
+          <li>Takes the beech honeydew that kākā, tūī and korimako depend on.</li>
+          <li>Eats huge numbers of native insects and spiders.</li>
+          <li>Controlled with Vespex protein bait in late summer.</li>
+        </ul>
+        <p class="note">Predator Free 2050 targets possums, rats and mustelids. Wasps are not on its list, so in the Codex this unit fights on as an unofficial ally.</p>
+        <h3>On the model</h3>
+        <p>Banded gaster with the German wasp's central black points and paired dots, three black dots on the yellow clypeus, faceted eyes, elbowed antennae, and veined wings. Shown enlarged: turn on Wing beat to see them move.</p>
+      </article>
+    </div>
+  </div>
+
+  <footer>
+    <p>Models are procedural: signed-distance sculpts meshed in the browser, shell fur combed along the body, and generated textures for wing veins, eye facets and tail scales. No photos or scanned assets. Each model is true to scale in metres; the viewer frames each one to fill the stage.</p>
+    <p>Predator Free 2050 is the New Zealand goal, set in 2016, to eradicate possums, rats and mustelids (stoats, ferrets and weasels) by 2050.</p>
+  </footer>
+</div>
