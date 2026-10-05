@@ -120,7 +120,7 @@ export const G03: MissionDef = mission({
     ],
     ground: [
       // stand-in for the stoat (#200 replaces it): revealed only under the cloud near the nest
-      target('stoat', G.target, 'bunker', G03_NEST, { name: 'Target', spawn: reveal }),
+      target('stoat', G.target, 'parked_jet', G03_NEST, { name: 'Target', spawn: reveal }),
     ],
     objectives: [{ id: 'o_target', kind: 'destroy', groups: [G.target], label: 'Kill the target before it reaches the nest', primary: true }],
     waypoints: [{ id: 'wp_nest', label: 'Onetangi', kind: 'target', x: G03_NEST.x, z: G03_NEST.z, altitude: 600, radius: 1500, objective: 'o_target' }],
