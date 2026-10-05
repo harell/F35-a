@@ -318,7 +318,7 @@ float luSheds(float c) {
 ${SHED_FP_GLSL}
 vec3 shedRoof(float lh) {
   int k = int(floor(fract(lh * 5.1) * ${(SHED_ROOFS.length - 0.001).toFixed(3)}));
-  return uShedRoofs[k] * (0.88 + 0.24 * fract(lh * 7.3));
+  return uShedRoofs[k] * (0.94 + 0.12 * fract(lh * 7.3));
 }
 
 // Open ground's own look (grass under it is 'grass'): mown pitches with stripes, golf fairways and roughs with
@@ -346,9 +346,9 @@ vec3 openGround(vec3 grass, vec2 wp, float c, float mpp) {
   if (c == ${f1(LU_VINEYARD)}) {
     float rowsF = abs(fract((wp.x * 0.8 + wp.y * 0.6) / 2.8) - 0.5) * 2.0; // 0 on a vine row
     float vine = 1.0 - smoothstep(0.35, 0.55, rowsF);
-    vec3 vineCol = vec3(0.07, 0.1, 0.035);
-    vec3 inter = mix(grass * vec3(1.05, 0.95, 0.7), vec3(0.2, 0.16, 0.1), 0.35);
-    return mix(mix(inter, vineCol, vine), mix(inter, vineCol, 0.45), smoothstep(0.7, 2.2, mpp));
+    vec3 vineCol = grass * vec3(0.42, 0.5, 0.36);
+    vec3 inter = mix(grass * vec3(1.0, 0.95, 0.72), vec3(0.24, 0.2, 0.13), 0.25);
+    return mix(mix(inter, vineCol, vine), mix(inter, vineCol, 0.4), smoothstep(0.7, 2.2, mpp));
   }
   return grass;
 }

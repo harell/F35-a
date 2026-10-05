@@ -50,10 +50,11 @@ export function shedHeight(cls: number, lh: number): number {
   }
 }
 
-/** Shed roofs: zinc and steel greys, off-white, a weathered teal (sRGB). The shader gets them as uShedRoofs. */
-export const SHED_ROOFS = [0x9a9c9e, 0xb9bab7, 0x6f7376, 0xcdcac1, 0x6f8584];
+/** Shed roofs: zinc and steel greys, off-white, a weathered grey-teal (sRGB; the 2024 photo's light industrial roofs).
+ * The shader gets them as uShedRoofs. */
+export const SHED_ROOFS = [0xb7b9b8, 0xc9cac6, 0xa4a8aa, 0xd8d6cf, 0x9fa8a7];
 
 /** Index into SHED_ROOFS and brightness for a unit hash (the shader's shedRoof()). */
 export function shedRoofOf(lh: number): { index: number; k: number } {
-  return { index: Math.min(SHED_ROOFS.length - 1, Math.floor(lotFrac(lh, 5.1) * (SHED_ROOFS.length - 0.001))), k: 0.88 + 0.24 * lotFrac(lh, 7.3) };
+  return { index: Math.min(SHED_ROOFS.length - 1, Math.floor(lotFrac(lh, 5.1) * (SHED_ROOFS.length - 0.001))), k: 0.94 + 0.12 * lotFrac(lh, 7.3) };
 }
