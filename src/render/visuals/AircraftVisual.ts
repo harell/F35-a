@@ -47,6 +47,7 @@ export class AircraftVisual {
   private nozzleOpen = Number.NaN;
   private readonly nozzle: { mesh: Mesh; def: DriveDef } | null = null;
   private lodLevel = -1;
+  private readonly nightOnly: Object3D[] = [];
   /** World-space light anchors (updated by the renderer). */
   readonly lightLocal: { pos: Vector3; color: number; kind: 'nav' | 'strobe' | 'tail' }[];
 
@@ -92,6 +93,10 @@ export class AircraftVisual {
       this.fixed.push(m);
     }
     this.lightLocal = spec.lights.map((l) => ({ pos: new Vector3(...l.pos), color: l.color, kind: l.kind }));
+    // parts shown only at night (the police helicopter's searchlight beam)
+    this.root.traverse((o) => {
+      if (o.name.startsWith('night:')) this.nightOnly.push(o);
+    });
     if (shadows && isPlayer) {
       this.lod0.traverse((o) => {
         if ((o as Mesh).isMesh) o.castShadow = true;
@@ -189,7 +194,8 @@ export class AircraftVisual {
           a = ac.bayDoors * def.max;
           break;
         case 'radome':
-          a = time * def.max;
+          // a wreck's rotodome / propeller / rotors stop where they were
+          a = ac.alive ? time * def.max : obj.rotation.x;
           break;
         case 'canard':
           a = -s.elevator * def.max;
@@ -260,6 +266,7 @@ export class AircraftVisual {
       this.lod1.visible = level === 1;
     }
     this.setWreck(!ac.alive);
+    for (const o of this.nightOnly) o.visible = night && ac.alive;
     this.updateNozzle(ac, dt, level);
     if (level === 0) {
       this.applyDrives(ac, time);

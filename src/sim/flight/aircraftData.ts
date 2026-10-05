@@ -156,6 +156,71 @@ type PerfInput = Omit<
 /** Engine lapse presets. */
 const AB_TURBOFAN = { dryLapse: 0.85, dryRam: 0.2, dryCap: 1.05, abLapse: 0.75, abRam: 0.5, abCap: 1.12 };
 
+/**
+ * A civil helicopter (sim/civil/heli.ts): scripted kinematic flight while alive; these numbers only fly the falling
+ * wreck once it is shot down (a draggy, wingless body: no lift to speak of), and give its size, RCS and IR.
+ */
+function helicopter(type: AircraftType, name: string, mass: number, length: number, rotor: number, rcs: number, ir: number): PerfInput {
+  return {
+    type,
+    name,
+    emptyMass: mass,
+    internalFuel: mass * 0.15,
+    wingArea: 6,
+    span: rotor,
+    length,
+    radius: rotor / 2,
+    baseStoresMass: 0,
+    baseStoresCd: 0,
+    engines: 1,
+    thrustDry: 0,
+    thrustAB: 0,
+    hasAfterburner: false,
+    dryLapse: 0.8,
+    dryRam: 0,
+    dryCap: 1,
+    abLapse: 0.8,
+    abRam: 0,
+    abCap: 1,
+    spoolUpTime: 1,
+    abLightTime: 1,
+    tsfcDry: 2e-5,
+    tsfcAB: 2e-5,
+    clAlpha: 1.0,
+    alphaStall: 20 * DEG,
+    clMax: 0.3,
+    cd0: 0.25,
+    kInduced: 0.3,
+    kHigh: 0.3,
+    clHigh: 0.2,
+    mCrit: 0.5,
+    mWavePeak: 0.8,
+    cdWave: 0.05,
+    cyBeta: -1.0,
+    airbrakeCd: 0.05,
+    maxG: 2.5,
+    minG: -0.5,
+    aoaLimit: 20 * DEG,
+    rollRateMax: 30 * DEG,
+    pitchRateMax: 15 * DEG,
+    yawRateMax: 20 * DEG,
+    rollTau: 0.6,
+    pitchTau: 0.6,
+    yawTau: 0.8,
+    qFull: 2_000,
+    tvc: false,
+    departRoll: 0.6,
+    departYaw: 0.4,
+    maxMach: 0.3,
+    maxMachSL: 0.25,
+    ceiling: 6_000,
+    cornerSpeed: 60,
+    sustainedG: 1.5,
+    rcs,
+    ir,
+  };
+}
+
 const RAW: Record<AircraftType, PerfInput> = {
   f35a: {
     type: 'f35a',
@@ -546,6 +611,9 @@ const RAW: Record<AircraftType, PerfInput> = {
     rcs: 0.1,
     ir: 0.2,
   },
+  aw169: helicopter('aw169', 'Leonardo AW169', 3_000, 14.6, 12.1, 8, 0.35),
+  bell429: helicopter('bell429', 'Bell 429 GlobalRanger', 2_000, 13.1, 11.0, 5, 0.3),
+  h130: helicopter('h130', 'Airbus H130', 1_450, 12.6, 10.7, 3, 0.2),
 };
 
 /** Compute the derived lift-curve and fuel constants. */
@@ -587,4 +655,7 @@ export const AIRCRAFT_PERF: Readonly<Record<AircraftType, AircraftPerf>> = {
   su57: derive(RAW.su57),
   a320: derive(RAW.a320),
   shahed136: derive(RAW.shahed136),
+  aw169: derive(RAW.aw169),
+  bell429: derive(RAW.bell429),
+  h130: derive(RAW.h130),
 };

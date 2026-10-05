@@ -262,6 +262,11 @@ export class AircraftEntity implements Entity {
    */
   civil?: import('./civil/route').CivilFlight;
   /**
+   * (civil) Scripted civil helicopter flight (rescue, police, sightseeing; sim/civil/heli.ts). Like `civil`: flown
+   * kinematically while alive, a falling wreck once destroyed.
+   */
+  heli?: import('./civil/heli').HeliFlight;
+  /**
    * (drone) One-way attack drone route (Shahed-136, see sim/drone/oneWay.ts). While alive the drone
    * flies it kinematically (no flight model, no AI) and dives into its target; once destroyed it is
    * an ordinary falling wreck. `oneWay.impacted` tells a drone that reached its target from one

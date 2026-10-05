@@ -157,22 +157,25 @@ export class Callouts {
     // neutral civil traffic: never a kill — a player shoot-down is a civilian loss
     if (entity.team === 'neutral') {
       const ship = entity.kind === 'ground' && entity.type === 'ship';
+      const heli = entity.kind === 'aircraft' && !!entity.heli;
       const who = entity.kind === 'aircraft' ? entity.callsign : entity.name;
+      const down = ship ? 'CIVILIAN SHIP DESTROYED' : heli ? 'CIVILIAN HELICOPTER DOWN' : 'CIVILIAN AIRLINER DOWN';
       if (byPlayer) {
         // free flight: nothing counts against the player
         if (running && !s.script.freeFlight) {
           s.civilianKills++;
           if (ship) s.civilianShipKills++;
+          if (heli) s.civilianHeliKills++;
         }
         if (s.script.freeFlight) {
           // free flight: no scolding, just a dry word from Darkstar
-          s.hud(ship ? 'CIVILIAN SHIP DESTROYED' : 'CIVILIAN AIRLINER DOWN', 'warn', 3);
+          s.hud(down, 'warn', 3);
           s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, Darkstar. ${who} won't be making it home. Let's keep the sightseeing friendly.`, priority: 2 });
         } else if (ship) {
           s.hud('CIVILIAN SHIP DESTROYED', 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian vessel ${who}!`, priority: 4 });
         } else {
-          s.hud('CIVILIAN AIRLINER DOWN', 'bad', 3.5);
+          s.hud(down, 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${who}!`, priority: 4 });
         }
       } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {

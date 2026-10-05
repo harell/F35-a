@@ -18,6 +18,8 @@ export interface RunnerDeps {
   events: EventBus;
   /** Civil airliner and shipping traffic in the Auckland theatre (default on). */
   civilTraffic?: boolean;
+  /** Civil helicopters flying at once (QualitySettings.helicopters: 1 low, 3 medium, 4 high; default 3). */
+  helicopters?: number;
 }
 
 /** Runtime of a mission group (aircraft flight, SAM battery, target compound…). */
@@ -164,6 +166,8 @@ export class MissionState {
   civilianKills = 0;
   /** Of which civil ships (container ships, cruise liners). */
   civilianShipKills = 0;
+  /** Of which civil helicopters (rescue, police, sightseeing). */
+  civilianHeliKills = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */
   scriptedStrike = false;
 

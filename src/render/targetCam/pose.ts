@@ -43,6 +43,10 @@ const AIRCRAFT_SPAN: Record<AircraftType, number> = {
   su57: 14.1,
   a320: 35.8,
   shahed136: 2.5,
+  // main rotor diameters
+  aw169: 12.1,
+  bell429: 11.0,
+  h130: 10.7,
 };
 
 /**

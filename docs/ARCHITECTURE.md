@@ -204,6 +204,21 @@ driveway; shops in the town centres), fitted in blocks between the grid's side s
 runs through turns its street grid to the road (`urbanGrid.ts districtAngles`). The shader's `frontageLot()` and
 `HouseSource` read the same lots (textures from `TerrainRenderer.setFrontage`), so painted and 3D houses agree there too.
 
+## Civil helicopters (#144)
+
+Three code-built types (`aw169` Westpac Rescue, `bell429` police "Eagle", `h130` sightseeing; `src/render/models/aircraft/helicopters.ts`)
+are neutral sim entities like the airliners, spawned once per Auckland sortie by `src/missions/runtime/helicopters.ts`
+(`QualitySettings.helicopters`: 1 low, 3 medium, 4 high; seeded from the mission) and flown kinematically by
+`src/sim/civil/heli.ts` (`AircraftEntity.heli`; the world skips the flight model, the collisions skip them while alive):
+the rescue AW169 shuttles between Auckland City Hospital's rooftop pad and Waiheke's Onetangi pad (now and then North
+Shore or Middlemore), the police Bell 429 orbits a point drifting over the CBD and the motorways at 1,000–1,500 ft, and
+the sightseeing H130s shuttle between Mechanics Bay and a Waiheke vineyard. Their pads come from `HELIPADS`
+(`src/core/sites.ts`, #125). Being neutral they are off the datalink, boxed `CIV`, ranked last for designation and
+broadcast ADS-B in the stroll; shooting one down is a civilian loss ("CIVILIAN HELICOPTER DOWN", −500, −0.15 rating,
+a debrief row, `MissionResultExt.civilianHeliKills`), never a kill and never a failed sortie, and the wreck falls on
+the flight model. Rotors spin in LOD0 and are faint discs in LOD1; the Eagle's searchlight beam shows at night
+(`night:*` objects in `AircraftVisual`).
+
 ## Harbour ferries and wakes (render-only)
 
 The harbour ferries are not sim entities: no radar, no targeting, no sim cost. `src/render/traffic/ferryRoutes.ts`

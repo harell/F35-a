@@ -58,7 +58,10 @@ export type AircraftType =
   | 'su35' // Su-35 Flanker-E
   | 'su57' // Su-57 Felon (low observable)
   | 'a320' // Airbus A320neo airliner (neutral civilian traffic)
-  | 'shahed136'; // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
+  | 'shahed136' // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
+  | 'aw169' // Leonardo AW169 twin-engine helicopter: Westpac Rescue (neutral civil traffic, sim/civil/heli.ts)
+  | 'bell429' // Bell 429 GlobalRanger: NZ Police "Eagle" (neutral civil traffic)
+  | 'h130'; // Airbus H130 single-engine helicopter: harbour and Waiheke sightseeing (neutral civil traffic)
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles
@@ -291,6 +294,8 @@ export interface QualitySettings {
   wakes: boolean;
   /** Visual-only harbour ferries (Auckland), 0 = none; capped by the fleet size (render/traffic/ferryRoutes.ts). */
   ferries: number;
+  /** Civil helicopters (Auckland: rescue, police, sightseeing; missions/runtime/helicopters.ts) flying at once. */
+  helicopters: number;
   /** LINZ railway lines (Auckland) as ballast-and-track ribbons (one draw call); off = no tracks drawn. */
   railways: boolean;
   /**

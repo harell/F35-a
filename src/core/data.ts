@@ -139,6 +139,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 0.35,
     wakes: false,
     ferries: 10,
+    helicopters: 1,
     railways: true,
     targetCamRange: 8_000,
     targetCamScenery: false,
@@ -158,6 +159,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 0.7,
     wakes: true,
     ferries: 13,
+    helicopters: 3,
     railways: true,
     targetCamRange: 0,
     targetCamScenery: true,
@@ -177,6 +179,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualitySettings> = {
     sceneryDensity: 1,
     wakes: true,
     ferries: 16,
+    helicopters: 4,
     railways: true,
     targetCamRange: 0,
     targetCamScenery: true,
@@ -358,6 +361,9 @@ export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; r
   su57: { name: 'Su-57', nato: 'Felon', rwrSymbol: '57' },
   a320: { name: 'A320neo', nato: 'Airliner', rwrSymbol: 'CV' },
   shahed136: { name: 'Shahed-136', nato: 'Shahed', rwrSymbol: 'UA' },
+  aw169: { name: 'AW169', nato: 'Helicopter', rwrSymbol: 'CV' },
+  bell429: { name: 'Bell 429', nato: 'Helicopter', rwrSymbol: 'CV' },
+  h130: { name: 'H130', nato: 'Helicopter', rwrSymbol: 'CV' },
 };
 
 export const SAM_INFO: Record<SamType, { name: string; nato: string; rwrSymbol: string }> = {

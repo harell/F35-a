@@ -84,6 +84,10 @@ export const NATO_AIR: Record<AircraftType, string> = {
   su57: 'FELON',
   a320: '', // civil airliner: no reporting name (pipName shows its callsign)
   shahed136: 'DRONE', // no NATO reporting name: the PiP reads "SHAHED-136 DRONE"
+  // civil helicopters: no reporting name (pipName shows the callsign)
+  aw169: '',
+  bell429: '',
+  h130: '',
 };
 
 export const NATO_SAM: Record<SamType, string> = {
@@ -133,6 +137,17 @@ export function pipName(t: AnyEntity, short = false): string {
   return t.name.toUpperCase();
 }
 
+/** A civil helicopter's flight phase (sim/civil/heli.ts) on its status pill. */
+const HELI_PHASE: Record<import('../../sim/civil/heli').HeliPhase, string> = {
+  parked: 'ON PAD',
+  liftoff: 'LIFT-OFF',
+  transit: 'EN ROUTE',
+  approach: 'APPROACH',
+  hover: 'HOVER',
+  landing: 'LANDING',
+  orbit: 'PATROL',
+};
+
 /**
  * Status pill. SAM: what its radar is doing. Aircraft: aspect relative to the player (HOT = pointing at
  * us, FLANK = beaming, COLD = running). Civil airliner: its flight phase, or CHECK FIRE once the player
@@ -143,6 +158,7 @@ export function pipStatus(t: AnyEntity, playerPos: { x: number; y: number; z: nu
     if (!t.alive) return { text: t.kind === 'ground' ? 'SINKING' : 'DOWN', tone: 'danger' };
     if (locked) return { text: 'CHECK FIRE', tone: 'warn' };
     if (t.kind === 'ground') return { text: t.velocity.lengthSq() > 0.25 ? 'UNDERWAY' : t.anchored ? 'ANCHORED' : 'MOORED', tone: 'civil' };
+    if (t.kind === 'aircraft' && t.heli) return { text: HELI_PHASE[t.heli.phase], tone: 'civil' };
     const phase = t.kind === 'aircraft' ? t.civil?.phase : undefined;
     return { text: phase ? CIVIL_PHASE[phase] : 'CIVIL', tone: 'civil' };
   }

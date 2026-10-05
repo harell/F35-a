@@ -40,6 +40,7 @@ import { DamageSystem, type DamageWeapon } from './damage/Damage';
 import { AIRCRAFT_HEALTH, AIRCRAFT_WARHEAD, GROUND_TARGET_DATA, SAM_SITE_DATA, VESSEL_DATA } from './damage/tables';
 import { WarningSystem } from './Warnings';
 import { stepCivil } from './civil/route';
+import { stepHeli } from './civil/heli';
 import { stepOneWay } from './drone/oneWay';
 import { BuildingIndex, buildingGeometry } from './buildings';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
@@ -385,6 +386,7 @@ class SimWorldImpl implements SimWorld {
     for (let i = 0; i < aircraft.length; i++) {
       const ac = aircraft[i];
       if (ac.civil && ac.alive) stepCivil(ac, dt, this.terrain, this.player);
+      else if (ac.heli && ac.alive) stepHeli(ac, dt, this.terrain);
       else if (ac.oneWay && ac.alive) {
         if (stepOneWay(ac, dt, this.terrain, this.landmarks)) this.droneImpact(ac);
       } else stepFlight(ac, dt, this.env);

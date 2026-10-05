@@ -425,7 +425,7 @@ export class Game {
     this.simHeld = seed !== null;
     const combat = seed !== null ? createCombatSystemSeeded(seed) : createCombatSystem();
     const world = createSimWorld({ terrain: env.terrain, difficulty, events: this.events, combat });
-    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events });
+    const runner = createMissionRunner(def, { createAi: createAiBrain, difficulty, events: this.events, helicopters: this.quality.helicopters });
     runner.setup(world, loadout);
 
     this.ui.showLoading(0.9, 'Arming weapons');
