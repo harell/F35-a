@@ -186,9 +186,10 @@ function helicopter(type: AircraftType, name: string, mass: number, length: numb
     abLightTime: 1,
     tsfcDry: 2e-5,
     tsfcAB: 2e-5,
-    clAlpha: 1.0,
+    // the Shahed's lift curve (continuous through the stall) on a 6 m² 'wing': no real lift for its mass
+    clAlpha: 3.5,
     alphaStall: 20 * DEG,
-    clMax: 0.3,
+    clMax: 1.0,
     cd0: 0.25,
     kInduced: 0.3,
     kHigh: 0.3,

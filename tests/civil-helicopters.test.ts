@@ -75,7 +75,9 @@ describe('helicopter traffic', () => {
     expect(ach.roof).toBe(true);
     const one = padNear(HELI_SITES.onetangi.lat, HELI_SITES.onetangi.lon)!;
     expect(one.area).toBe('waiheke');
-    expect(helipad(HELI_SITES.mechanicsBay.id)!.heliport).toBe(true);
+    // one of Mechanics Bay heliport's own pads
+    expect(helipad(HELI_SITES.mechanicsBay.id)!.kind).toBe('heliport');
+    expect(helipad(HELI_SITES.mechanicsBay.id)!.site).toBe('Mechanics Bay Heliport');
     expect(helipad(HELI_SITES.vineyard.id)!.kind).toBe('vineyard');
   });
 
