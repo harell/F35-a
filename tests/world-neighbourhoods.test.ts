@@ -1,6 +1,7 @@
 /**
- * Hero neighbourhoods: Herne Bay and Westhaven measured from the 2024 LiDAR and aerial on OSM outlines
- * (aucklandNeighbourhoods.ts, tools/hero/sites/neighbourhoods_bake.py), drawn inside the real-streets region.
+ * Hero neighbourhoods: Herne Bay, Westhaven and Mission Bay measured from the 2024 LiDAR and aerial on OSM outlines
+ * (aucklandNeighbourhoods.ts, tools/hero/sites/neighbourhoods_bake.py). Herne Bay and Westhaven are drawn inside the
+ * real-streets region; Mission Bay outside it, on a site mask with its LINZ streets as ribbons.
  */
 import { describe, expect, it } from 'vitest';
 import { aucklandNeighbourhoods, canopyAt, decodeNeighbourhoods, neighbourhoodAt, setAucklandNeighbourhoods, type Neighbourhood } from '../src/world/scenery/aucklandNeighbourhoods';
@@ -11,7 +12,8 @@ import { GeometryBuilder } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
 import { buildCBD } from '../src/world/scenery/auckland';
 import { aucklandRoadPaths, RoadNetwork } from '../src/world/scenery/motorways';
-import { buildRealWaterside, siteLayout } from '../src/world/scenery/aucklandSites';
+import { buildRealWaterside, siteLayout, siteRings } from '../src/world/scenery/aucklandSites';
+import { maskFromRings } from '../src/world/scenery/lotMask';
 import { ColorMapSampler, TreeSource } from '../src/world/scenery/sources';
 import { aucklandCbd } from '../src/world/config';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -26,6 +28,7 @@ import { NEIGHBOURHOODS_BYTES, NEIGHBOURHOODS_GZ } from './linz-setup';
 const nbs = aucklandNeighbourhoods() as Neighbourhood[];
 const hb = nbs.find((n) => n.name === 'Herne Bay')!;
 const wh = nbs.find((n) => n.name === 'Westhaven')!;
+const mb = nbs.find((n) => n.name === 'Mission Bay')!;
 const st = aucklandStreets() as CbdStreets;
 
 describe('pitched roofs (pitchedRoof.ts)', () => {
@@ -80,9 +83,11 @@ describe('pitched roofs (pitchedRoof.ts)', () => {
 });
 
 describe('neighbourhood data (auckland-neighbourhoods.bin)', () => {
-  it('is small enough for phones (< 100 kB gzip) and holds Herne Bay and Westhaven', () => {
-    expect(NEIGHBOURHOODS_GZ.length).toBeLessThan(100_000);
-    expect(decodeNeighbourhoods(NEIGHBOURHOODS_BYTES).map((n) => n.name)).toEqual(['Herne Bay', 'Westhaven']);
+  it('is small enough for phones (the area budget: < 100 kB gzip an area, < 50 B a building) and holds all three', () => {
+    const areas = decodeNeighbourhoods(NEIGHBOURHOODS_BYTES);
+    expect(areas.map((n) => n.name)).toEqual(['Herne Bay', 'Westhaven', 'Mission Bay']);
+    expect(NEIGHBOURHOODS_GZ.length).toBeLessThan(100_000 * areas.length);
+    expect(NEIGHBOURHOODS_GZ.length / areas.reduce((s, n) => s + n.buildings.length, 0)).toBeLessThan(50);
     expect(() => decodeNeighbourhoods(NEIGHBOURHOODS_BYTES.subarray(0, NEIGHBOURHOODS_BYTES.length - 3))).toThrow();
   });
 
@@ -115,6 +120,42 @@ describe('neighbourhood data (auckland-neighbourhoods.bin)', () => {
     }
   });
 
+  it('Mission Bay: 1,400+ buildings on their measured roofs, outside the real-streets region, its grid stopped', () => {
+    expect(mb.buildings.length).toBeGreaterThan(1400);
+    let pitched = 0;
+    let tallest = 0;
+    for (const parts of mb.buildings)
+      for (const p of parts) {
+        expect(ringArea(p.ring)).toBeGreaterThan(0);
+        expect(p.eave).toBeGreaterThanOrEqual(2.4);
+        if (p.roof) pitched++;
+        tallest = Math.max(tallest, p.eave);
+      }
+    expect(pitched).toBeGreaterThan(600);
+    expect(tallest).toBeGreaterThan(12); // the apartments along Tāmaki Drive
+    expect(tallest).toBeLessThan(30);
+    // the LINZ suburb: up the valley from the beach to the Kepa Rd bush, not Ōrākei (Bastion Point) or Kohimarama
+    const at = (lat: number, lon: number) => {
+      const p = geoToWorld(lat, lon);
+      return neighbourhoodAt(p.x, p.z);
+    };
+    expect(at(-36.8545, 174.8318)).toBe(mb); // Patteson Ave
+    expect(at(-36.862, 174.83)).toBe(mb);
+    expect(at(-36.848, 174.8235)).toBe(null);
+    expect(at(-36.85, 174.842)).toBe(null);
+    for (const parts of mb.buildings) expect(st.inRegion(parts[0].ring[0], parts[0].ring[1])).toBe(false);
+    // no painted grid lots or procedural houses on it (Scenery.siteMask), and its own streets are ribbons
+    const mask = maskFromRings(siteRings(), 8)!;
+    const p = geoToWorld(-36.8545, 174.8318);
+    expect(mask.masked(p.x, p.z)).toBe(true);
+    const inMb = aucklandRoadPaths().filter((r) => {
+      for (let i = 0; i < r.x.length; i++) if (neighbourhoodAt(r.x[i], r.z[i]) === mb) return true;
+      return false;
+    });
+    expect(inMb.length).toBeGreaterThan(40);
+    expect(inMb.some((r) => r.name === 'Patteson Avenue')).toBe(true);
+  });
+
   it('Westhaven: every boat and pontoon of the marina, on the water', () => {
     expect(wh.boats.length).toBeGreaterThan(1500);
     expect(wh.pontoons.length).toBeGreaterThan(300);
@@ -128,20 +169,22 @@ describe('neighbourhood data (auckland-neighbourhoods.bin)', () => {
     expect(sail).toBeGreaterThan(300);
   });
 
-  it('a canopy grid per area: Herne Bay about a third under trees', () => {
-    let cov = 0;
-    let n = 0;
-    const g = hb.canopy;
-    for (let j = 0; j < g.nz; j++)
-      for (let i = 0; i < g.nx; i++) {
-        const x = g.x0 + (i + 0.5) * g.cell;
-        const z = g.z0 + (j + 0.5) * g.cell;
-        if (!pointInRing(hb.footprint, x, z)) continue;
-        cov += canopyAt(g, x, z)!.cover;
-        n++;
-      }
-    expect(cov / n).toBeGreaterThan(0.2);
-    expect(cov / n).toBeLessThan(0.45);
+  it('a canopy grid per area: Herne Bay and Mission Bay about a third under trees', () => {
+    for (const a of [hb, mb]) {
+      let cov = 0;
+      let n = 0;
+      const g = a.canopy;
+      for (let j = 0; j < g.nz; j++)
+        for (let i = 0; i < g.nx; i++) {
+          const x = g.x0 + (i + 0.5) * g.cell;
+          const z = g.z0 + (j + 0.5) * g.cell;
+          if (!pointInRing(a.footprint, x, z)) continue;
+          cov += canopyAt(g, x, z)!.cover;
+          n++;
+        }
+      expect(cov / n).toBeGreaterThan(0.2);
+      expect(cov / n).toBeLessThan(0.45);
+    }
   });
 });
 
@@ -150,7 +193,7 @@ describe('the neighbourhoods in the building list (applyNeighbourhoods)', () => 
   const houses = bs.filter((b) => b.hero === 'house');
 
   it('replace the LINZ buildings inside their footprints and join with roofs, colours and collision heights', () => {
-    expect(houses.length).toBe(hb.buildings.length + wh.buildings.length);
+    expect(houses.length).toBe(hb.buildings.length + wh.buildings.length + mb.buildings.length);
     for (const b of bs) if (b.hero !== 'house') expect(neighbourhoodAt(b.prisms[0].cx, b.prisms[0].cz)).toBe(null);
     const pitched = houses.flatMap((b) => b.prisms).filter((p) => p.pitch);
     expect(pitched.length).toBeGreaterThan(400);
@@ -172,8 +215,8 @@ describe('the neighbourhoods in the building list (applyNeighbourhoods)', () => 
     const linz = bs.filter((b) => b.hero !== 'house');
     const medium = count(0.7, bs) - count(0.7, linz);
     const low = count(0.35, bs) - count(0.35, linz);
-    // ≈ 1,200 houses: ~40 triangles each on medium; the low tier drops garages and sheds (< 60 m²)
-    expect(medium).toBeLessThan(60_000);
+    // ≈ 2,800 houses: under 45 triangles each on medium; the low tier drops garages and sheds (< 60 m²)
+    expect(medium).toBeLessThan(45 * houses.length);
     expect(low).toBeLessThan(medium * 0.8);
   });
 });

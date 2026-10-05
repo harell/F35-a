@@ -129,11 +129,22 @@ export function maskFromRings(rings: readonly ArrayLike<number>[], margin: numbe
   const segs: number[] = [];
   for (const r of rings) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) segs.push(r[j], r[j + 1], r[i], r[i + 1], 0);
   const m = LotMask.fromSegments(segs, { x0, z0, x1, z1 }, margin, cell);
-  for (let j = 0; j < m.texH * 4; j++) {
-    const cz = m.z0 + (j + 0.5) * cell;
-    for (let i = 0; i < m.texW * 8; i++) {
-      const cx = m.x0 + (i + 0.5) * cell;
-      if (rings.some((r) => ringHas(r, cx, cz))) m.mark(i, j);
+  // each ring over its own bounding box only (the box of all rings spans the theatre)
+  for (const r of rings) {
+    let rx0 = Infinity, rz0 = Infinity, rx1 = -Infinity, rz1 = -Infinity;
+    for (let i = 0; i < r.length; i += 2) {
+      rx0 = Math.min(rx0, r[i]);
+      rx1 = Math.max(rx1, r[i]);
+      rz0 = Math.min(rz0, r[i + 1]);
+      rz1 = Math.max(rz1, r[i + 1]);
+    }
+    const i0 = Math.max(0, Math.floor((rx0 - m.x0) / cell));
+    const i1 = Math.min(m.texW * 8 - 1, Math.ceil((rx1 - m.x0) / cell));
+    const j0 = Math.max(0, Math.floor((rz0 - m.z0) / cell));
+    const j1 = Math.min(m.texH * 4 - 1, Math.ceil((rz1 - m.z0) / cell));
+    for (let j = j0; j <= j1; j++) {
+      const cz = m.z0 + (j + 0.5) * cell;
+      for (let i = i0; i <= i1; i++) if (ringHas(r, m.x0 + (i + 0.5) * cell, cz)) m.mark(i, j);
     }
   }
   return m;

@@ -367,8 +367,9 @@ export class Scenery {
       // the real CBD buildings: lit windows on their facades instead of the carpet inside the CBD region
       const real = this.cbdStats?.prisms.length ? this.cbdStats.prisms : null;
       const region = real ? o.style.cbd?.streets ?? null : null;
-      // (none inside the CBD region, which has its facade lights, nor under Spark Arena's roof)
-      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z) || westfieldCovers(x, z));
+      // (none inside the CBD region or a hero neighbourhood, which have their facade lights, nor under Spark Arena's roof)
+      const nbs = real ? aucklandNeighbourhoods() : null;
+      buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z) || westfieldCovers(x, z) || neighbourhoodAt(x, z, nbs) !== null);
       if (real) buildFacadeLightPoints(real, o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
       const cityMat = createLightsMaterial(o.atmo);
       cityMat.uniforms.uIntensity.value = o.lights;
