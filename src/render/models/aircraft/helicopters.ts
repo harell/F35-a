@@ -174,7 +174,7 @@ function buildHelicopter(type: 'aw169' | 'bell429' | 'h130'): AircraftPrototype 
   const built = b.build();
   addRotorDiscs(built.lod1, D);
   if (type === 'bell429') addSearchlight(built.lod0, built.lod1, zc);
-  return { type, lod0: built.lod0, lod1: built.lod1, drives, slots: [], fixedStores: [], triangles: built.triangles };
+  return { type, lod0: built.lod0, lod1: built.lod1, drives, slots: [], fixedStores: [], triangles: built.triangles, instanced: true };
 }
 
 let discMat: MeshBasicMaterial | null = null;
