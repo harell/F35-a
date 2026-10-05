@@ -1,8 +1,8 @@
 {
   "output": "../../src/world/scenery/data/auckland-osm.bin",
-  "bytes": 76899,
-  "gzip_bytes": 52932,
-  "sha256": "8d62795a03d35d367ba53584f5c4c82a69937f3db93dd88be7991fc98defdacc",
+  "bytes": 91107,
+  "gzip_bytes": 61959,
+  "sha256": "84367c9d38a78003b5125c17ddd53260fbb1eb873dbd2b5f0ef42a790b9f9750",
   "bbox": [
     174.31,
     -37.21,
@@ -14,35 +14,231 @@
   "inputs": [
     {
       "file": "Auckland.osm.pbf",
-      "timestamp": "2026-09-25T23:00:00Z",
-      "sha256": "088d9daadc6bfb7c8050a1bca87ca24fc60484eb3d420ec0155741807f2627d4"
+      "timestamp": "2026-10-02T23:00:00Z",
+      "sha256": "c3fb6555c9a5ad8844b99200d8e6926a19014960d82957f7f19a42991a7301f6"
     },
     {
-      "file": "nzne-dairy-flat.osm",
-      "timestamp": "downloaded 2026-10-01T23:15Z",
-      "sha256": "3975ce585b1e83c033faef6cc275085d051a9b829ee7befc9ad1a8b40c712073"
+      "file": "akl-strips.osm.pbf",
+      "timestamp": "downloaded 2026-10-05T19:58Z",
+      "sha256": "b018ddf23a1b2f4f2a0fb16d97707b90db4a8233f5ca560a1556909630384f36"
     }
   ],
   "layers": {
-    "aerodrome": 7,
+    "aerodrome": 12,
     "apron": 73,
-    "breakwater": 186,
-    "building": 471,
-    "core": 6,
+    "breakwater": 196,
+    "building": 574,
+    "core": 11,
     "depot": 1,
     "dock": 1,
-    "grandstand": 26,
-    "hangar": 127,
-    "helipad": 9,
-    "marina": 17,
-    "military": 24,
+    "grandstand": 27,
+    "hangar": 135,
+    "helipad": 10,
+    "marina": 23,
+    "military": 31,
     "naval": 1,
-    "pier": 1487,
-    "port": 3,
-    "runway": 25,
-    "stadium": 15,
-    "tank": 115,
-    "taxiway": 259,
+    "pier": 2067,
+    "port": 4,
+    "runway": 65,
+    "stadium": 16,
+    "tank": 136,
+    "taxiway": 267,
     "terminal": 7
+  },
+  "landuse": {
+    "output": "../../src/world/scenery/data/auckland-landuse.bin",
+    "cell_m": 16.0,
+    "cols": 5000,
+    "rows": 5000,
+    "bytes": 622777,
+    "gzip_bytes": 435716,
+    "sha256": "75d29a8f95d95af1afdadb709eb7cf29005d0f1e5941cf4eac736f91d2abe93a",
+    "inputs": [
+      {
+        "file": "Auckland.osm.pbf",
+        "timestamp": "2026-10-02T23:00:00Z",
+        "sha256": "c3fb6555c9a5ad8844b99200d8e6926a19014960d82957f7f19a42991a7301f6"
+      },
+      {
+        "file": "akl-strips.osm.pbf",
+        "timestamp": "downloaded 2026-10-05T19:58Z",
+        "sha256": "b018ddf23a1b2f4f2a0fb16d97707b90db4a8233f5ca560a1556909630384f36"
+      },
+      {
+        "file": "topo-50281.json",
+        "sha256": "44cbcc069ae43afb2a7158e420e31191d06a44d0cad928e22170a94ab378064c"
+      },
+      {
+        "file": "topo-50255.json",
+        "sha256": "d8c201c042c683f409bc6554ccd41e4c4659c4d5e60aab024d0a110b379a06a6"
+      }
+    ],
+    "polygons": {
+      "osm": 49487,
+      "topo50": 3
+    },
+    "km2": {
+      "residential": 369.62,
+      "commercial": 31.18,
+      "industrial": 53.26,
+      "park": 125.87,
+      "pitch": 13.01,
+      "golf": 15.59,
+      "school": 16.15,
+      "hospital": 1.12,
+      "cemetery": 2.72,
+      "vineyard": 11.38,
+      "farmland": 1350.81
+    },
+    "suburbs": {
+      "mt_roskill": {
+        "rect": [
+          -3601.2,
+          6156.3,
+          -1601.2,
+          8156.3
+        ],
+        "shares": {
+          "residential": 0.5363,
+          "commercial": 0.0239,
+          "industrial": 0.0834,
+          "park": 0.0877,
+          "pitch": 0.0316,
+          "golf": 0.1159,
+          "school": 0.0128,
+          "none": 0.1083
+        }
+      },
+      "avondale": {
+        "rect": [
+          -7164.4,
+          4381.1,
+          -5164.4,
+          6381.1
+        ],
+        "shares": {
+          "residential": 0.5909,
+          "commercial": 0.0528,
+          "industrial": 0.0687,
+          "park": 0.0497,
+          "pitch": 0.0617,
+          "school": 0.0355,
+          "cemetery": 0.0012,
+          "none": 0.1394
+        }
+      },
+      "henderson": {
+        "rect": [
+          -12687.4,
+          2384.0,
+          -10687.4,
+          4384.0
+        ],
+        "shares": {
+          "residential": 0.4729,
+          "commercial": 0.0995,
+          "industrial": 0.1074,
+          "park": 0.181,
+          "pitch": 0.0145,
+          "school": 0.022,
+          "hospital": 0.0106,
+          "none": 0.092
+        }
+      },
+      "mangere": {
+        "rect": [
+          2278.2,
+          12258.5,
+          4278.2,
+          14258.5
+        ],
+        "shares": {
+          "residential": 0.5183,
+          "commercial": 0.0678,
+          "industrial": 0.0014,
+          "park": 0.1678,
+          "pitch": 0.0426,
+          "school": 0.0736,
+          "hospital": 0.003,
+          "cemetery": 0.0005,
+          "farmland": 0.0045,
+          "none": 0.1205
+        }
+      },
+      "onetangi": {
+        "rect": [
+          27042.7,
+          -7823.4,
+          29042.7,
+          -5823.4
+        ],
+        "shares": {
+          "residential": 0.2137,
+          "commercial": 0.0045,
+          "industrial": 0.0027,
+          "park": 0.0279,
+          "pitch": 0.0003,
+          "vineyard": 0.0449,
+          "farmland": 0.0194,
+          "none": 0.6867
+        }
+      },
+      "oneroa": {
+        "rect": [
+          20896.1,
+          -8156.3,
+          22896.1,
+          -6156.3
+        ],
+        "shares": {
+          "residential": 0.258,
+          "commercial": 0.0134,
+          "park": 0.0446,
+          "pitch": 0.001,
+          "cemetery": 0.0011,
+          "vineyard": 0.0376,
+          "farmland": 0.057,
+          "none": 0.5874
+        }
+      },
+      "devonport": {
+        "rect": [
+          2010.9,
+          -2941.6,
+          4010.9,
+          -941.6
+        ],
+        "shares": {
+          "residential": 0.3134,
+          "commercial": 0.0189,
+          "industrial": 0.0024,
+          "park": 0.0624,
+          "pitch": 0.0047,
+          "school": 0.0047,
+          "hospital": 0.0002,
+          "cemetery": 0.0018,
+          "none": 0.5916
+        }
+      },
+      "takapuna": {
+        "rect": [
+          -305.2,
+          -7712.5,
+          1694.8,
+          -5712.5
+        ],
+        "shares": {
+          "residential": 0.3246,
+          "commercial": 0.1132,
+          "industrial": 0.0013,
+          "park": 0.0635,
+          "pitch": 0.0151,
+          "golf": 0.007,
+          "school": 0.0284,
+          "hospital": 0.0019,
+          "none": 0.445
+        }
+      }
+    }
   }
 }

@@ -1,8 +1,11 @@
 # OpenStreetMap pipeline (Auckland theatre)
 
-Bakes OpenStreetMap layers into `src/world/scenery/data/auckland-osm.bin` (≈ 44 kB gzip), which the game fetches once per
+Bakes OpenStreetMap layers into `src/world/scenery/data/auckland-osm.bin` (≈ 62 kB gzip), which the game fetches once per
 page load next to the LINZ data (`src/world/scenery/aucklandOsm.ts`). It gives the theatre its **real airfield layouts**
 (Open data 1, issue #32) and holds the waterside and strategic-site layers that Open data 2 (#33) builds on.
+
+`landuse.py` bakes the **land-use grid** (issue #122) from the same inputs into `src/world/scenery/data/auckland-landuse.bin`
+(436 kB gzip; medium and high tiers only, `src/world/scenery/aucklandLandUse.ts`): below.
 
 Data © OpenStreetMap contributors, licensed under the [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 `auckland-osm.bin` is a derivative database: it is also available under the ODbL, and this directory (the scripts, the
@@ -36,20 +39,48 @@ Geometry is projected with the game's equirectangular formula (`geoToWorld` in `
 are simplified with Douglas–Peucker at 1 m and quantised to 0.5 m, then written as zig-zag varint deltas. The format is
 described in `aucklandOsm.ts`. The world box is lon 174.31…175.21, lat −37.21…−36.49.
 
+## Land use (`landuse.py`, #122)
+
+A class per 16 m cell over the ±40 km world (5000², 4-bit classes; format in `landuse.py` and `aucklandLandUse.ts`):
+
+| Class | OSM tags (areas) |
+|---|---|
+| residential | `landuse=residential` |
+| commercial / retail | `landuse=retail` / `commercial`, `shop=mall`, `amenity=marketplace`, `amenity=parking` of at least 1,500 m² |
+| industrial | `landuse=industrial` / `port` / `railway` / `depot` |
+| park | `leisure=park` / `garden` / `recreation_ground` / `playground` / `dog_park` / `common`, `landuse=recreation_ground` / `grass` / `village_green` |
+| pitch | `leisure=pitch` / `track` |
+| golf course | `leisure=golf_course`; LINZ NZ Golf Course Polygons (Topo50, layer 50281) where OSM has none |
+| school | `amenity=school` / `college` / `university` / `kindergarten`, `landuse=education` |
+| hospital | `amenity=hospital`, `landuse=healthcare`, `healthcare=hospital` |
+| cemetery | `landuse=cemetery`, `amenity=grave_yard`; LINZ NZ Cemetery Polygons (Topo50, layer 50255) where OSM has none |
+| vineyard | `landuse=vineyard` |
+| farmland | `landuse=farmland` / `orchard` / `meadow` / `farmyard` / `greenhouse_horticulture` / `plant_nursery` / `animal_keeping` |
+
+Polygons are painted largest first, so a smaller one (a pitch in a park, a school in a residential zone) wins; then
+unclassified gaps up to 32 m between two cells of one class (the streets between residential polygons) take that
+class, which cuts the file by a third. A cell without a class keeps the game's hand-traced suburbs. Measured:
+16 m cells 436 kB gzip (chosen), 8 m cells 998 kB; without the gap filling 603 kB at 16 m. `manifest.json`'s `landuse`
+entry has the per-class areas and, for eight spot-check suburbs, the class shares computed exactly from the polygons,
+which `tests/world-landuse.test.ts` checks the grid against.
+
 ## Rebuild
 
 ```sh
-pip install osmium shapely
+pip install osmium shapely numpy pillow pyproj
 # canonical input: the Geofabrik New Zealand extract pinned by date (a dated new-zealand-YYMMDD.osm.pbf from
 # https://download.geofabrik.de/australia-oceania/; record the date you used in the commit)
 python3 fetch.py geofabrik 260925 <work>
 # optional: clip to the world box first (osmium-tool) — the bake also clips, this only makes it faster
 osmium extract -b 174.31,-37.21,175.21,-36.49 <work>/new-zealand-260925.osm.pbf -o <work>/auckland.osm.pbf
 python3 bake.py ../../src/world/scenery/data/auckland-osm.bin <work>/auckland.osm.pbf
+LINZ_API_KEY=… python3 topo50.py <work>     # Topo50 golf courses and cemeteries (cached)
+python3 landuse.py ../../src/world/scenery/data/auckland-landuse.bin <work> <work>/auckland.osm.pbf
 ```
 
-`bake.py` takes one or more extracts. A later file only adds objects the earlier ones lack (keyed by OSM id), so a
-small supplement can fill a gap in a regional extract. It writes `manifest.json` with every input's timestamp and
+`bake.py` and `landuse.py` take one or more extracts. Several are merged first (osmium's merge: each object once, at
+its newest version), so a supplement can fill a gap in a regional extract and an area cut at one extract's edge is
+assembled from both. They write `manifest.json` (each keeps the other's entry) with every input's timestamp and
 SHA-256, the output's hash and per-layer counts. For the same inputs the output is byte-identical.
 
 After a re-bake:
@@ -61,22 +92,27 @@ After a re-bake:
    (`npx vite --port <port>`). It renders the same world-lab camera positions before and after. The comparison for
    #32 (master vs. the first bake) is in `docs/screenshots/airfields/`.
 
-### The committed file
+### The committed files
 
-The sandbox that produced this bake could not reach download.geofabrik.de or Overpass, so the committed
-`auckland-osm.bin` was built from two equivalent sources (see `manifest.json`):
+The sandbox that produced these bakes could not reach download.geofabrik.de (connection reset) or Overpass, and no other
+mirror had a New Zealand extract, so the committed `auckland-osm.bin` and `auckland-landuse.bin` (#122, 2026-10-05) were
+built from BBBike's Auckland extract plus the rest of the world box from the OSM API (see `manifest.json`):
 
 ```sh
-python3 fetch.py bbbike <work>     # BBBike's Auckland extract, replication timestamp 2026-09-25T23:00:00Z
-# North Shore Aerodrome (Dairy Flat) lies just north of BBBike's box (−36.66): add it from the OSM API
-python3 fetch.py api 174.635,-36.672,174.680,-36.640 <work>/nzne-dairy-flat.osm   # downloaded 2026-10-01T23:15Z
-python3 bake.py ../../src/world/scenery/data/auckland-osm.bin <work>/Auckland.osm.pbf <work>/nzne-dairy-flat.osm
+python3 fetch.py bbbike <work>     # BBBike's Auckland extract, replication timestamp 2026-10-02T23:00:00Z
+# the world box outside BBBike's (lon 174.45…175.05, lat −37.15…−36.66): eastern Waiheke, Whangaparāoa and the
+# northern edge, the west coast, the southern edge. 0.05° tiles from the OSM API, split while too big (201 tiles,
+# ≈ 9 minutes), merged into one file; downloaded 2026-10-05T19:58Z
+python3 fetch.py strips <work>     # → <work>/akl-strips.osm.pbf
+python3 bake.py ../../src/world/scenery/data/auckland-osm.bin <work>/Auckland.osm.pbf <work>/akl-strips.osm.pbf
+LINZ_API_KEY=… python3 topo50.py <work>
+python3 landuse.py ../../src/world/scenery/data/auckland-landuse.bin <work> <work>/Auckland.osm.pbf <work>/akl-strips.osm.pbf
 ```
 
-The BBBike box (lon 174.45…175.05, lat −37.15…−36.66) covers every layer #32 and #33 use. Switching to the pinned
-Geofabrik file changes only the data's date. The #33 re-bake (port, dock, depot, stadium and site-building layers) used
-the same BBBike file (same SHA-256) and a fresh Dairy Flat download; with the old script it reproduces the #32 bake
-byte for byte apart from that download's timestamp.
+The strips overlap BBBike's box by 0.01°, so ways and areas BBBike cuts at its edge come in whole. Before #122 the bake
+used BBBike alone plus an OSM API box for North Shore Aerodrome (Dairy Flat), which lost everything east of lon 175.05
+(eastern Waiheke: Kennedy Point and Orapiu wharves, 11 of its 17 helipads) and north of −36.66; the strips cover Dairy
+Flat too. Switching to the pinned Geofabrik file changes only the data's date.
 
 ## Fallback
 

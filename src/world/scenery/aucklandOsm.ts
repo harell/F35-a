@@ -6,7 +6,7 @@
  * src/world/scenery/data/auckland-osm.bin is baked offline by tools/osm/bake.py from a pinned OSM extract
  * (see tools/osm/README.md), reprojected to game XZ with the same equirectangular formula as geoToWorld
  * (src/core/auckland.ts). The data is © OpenStreetMap contributors, ODbL 1.0, and so is this derived file
- * (docs/CREDITS.md). One small gzip file (≈ 45 kB), fetched once per page load next to the LINZ data. When
+ * (docs/CREDITS.md). One small gzip file (≈ 62 kB), fetched once per page load next to the LINZ data. When
  * it is missing the airfields fall back to the template layout (airbase.ts) on the real runways
  * (src/core/airfields.ts), so offline play and the tests keep working.
  *
