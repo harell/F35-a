@@ -44,6 +44,7 @@ const CORRIDOR: { name: string; min: number; inside: [number, number]; outside: 
   { name: 'Waterview', min: 1193, inside: [-36.8811, 174.69851], outside: [-36.87481, 174.7041], streets: 28 },
   { name: 'Mount Albert', min: 1058, inside: [-36.89477, 174.70853], outside: [-36.88291, 174.72197], streets: 30 },
   { name: 'Avondale', min: 485, inside: [-36.88859, 174.704], outside: [-36.88809, 174.68389], streets: 6 },
+  { name: 'New Windsor', min: 1465, inside: [-36.90534, 174.71627], outside: [-36.9104, 174.70899], streets: 47 },
 ];
 
 describe('pitched roofs (pitchedRoof.ts)', () => {
