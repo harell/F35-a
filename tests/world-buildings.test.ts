@@ -4,11 +4,11 @@
 import { describe, expect, it } from 'vitest';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
-import { GeometryBuilder, WIN_OFFICE } from '../src/world/scenery/GeometryBuilder';
+import { GeometryBuilder, ROOF_PHOTO, ROOF_Q, ROOF_WALL, WIN_OFFICE } from '../src/world/scenery/GeometryBuilder';
 import { LightList } from '../src/world/scenery/builders';
 import { buildCBD, simplifyRing } from '../src/world/scenery/auckland';
 import { aucklandRoadPaths, RoadNetwork } from '../src/world/scenery/motorways';
-import { aucklandBuildings, decodeBuildings, encodeBuildings, ringArea, ringCentroid, roofHeight, setAucklandBuildings, type BuildingPrism } from '../src/world/scenery/aucklandBuildings';
+import { aucklandBuildings, decodeBuildings, encodeBuildings, ringArea, ringCentroid, roofHeight, roofPhotoOffset, setAucklandBuildings, type BuildingPrism } from '../src/world/scenery/aucklandBuildings';
 import { aucklandStreets, pointInRing, type CbdStreets } from '../src/world/scenery/cbdStreets';
 import { buildCityLightPoints, buildFacadeLightPoints } from '../src/world/scenery/nightLights';
 import { aucklandCbd } from '../src/world/config';
@@ -16,6 +16,7 @@ import { AKL } from '../src/core/auckland';
 import { airfieldFeature } from '../src/core/airfields';
 import { BUILDINGS_BYTES, BUILDINGS_GZ } from './linz-setup';
 import SPOT from './fixtures/linz-buildings-spotchecks.json';
+import ROOF_SPOT from './fixtures/linz-roof-spotchecks.json';
 
 // the LINZ file's buildings (the hero neighbourhoods' houses joined to the list are tested in world-neighbourhoods)
 const bs = aucklandBuildings()!.filter((b) => b.hero !== 'house');
@@ -69,6 +70,60 @@ describe('LINZ building data (auckland-buildings.bin)', () => {
     expect(back[0].prisms[1]).toMatchObject({ h: 47, sx: 0, sz: 0 });
     expect(Array.from(back[0].prisms[0].ring)).toEqual(Array.from(ring));
     expect(roofHeight(back[0].prisms[0], cx + 4, cz)).toBeCloseTo(13.3, 5);
+  });
+
+  it('encodes photo-roof offsets (#140) to 0.25 m, and reads version-1 files (no photo roofs)', () => {
+    const ring = Float32Array.from([0, 0, 0, -20, 30, -20, 30, 0]);
+    const [cx, cz] = ringCentroid(ring);
+    const src = [
+      { lidar: false, prisms: [{ h: 20, ring, sx: 0, sz: 0, cx, cz }, { h: 40, ring, sx: 0, sz: 0, cx, cz }], roof: { dx: -3.3, dz: 5.1, measured: true } },
+      { lidar: true, prisms: [{ h: 10, ring, sx: 0, sz: 0, cx, cz }], roof: { dx: 0.5, dz: 0, measured: false } },
+      { lidar: false, prisms: [{ h: 10, ring, sx: 0, sz: 0, cx, cz }] },
+    ];
+    const back = decodeBuildings(encodeBuildings(src));
+    expect(back[0].roof).toEqual({ dx: -3.25, dz: 5, measured: true });
+    expect(back[1]).toMatchObject({ lidar: true, roof: { dx: 0.5, dz: 0, measured: false } });
+    expect(back[2].roof).toBeUndefined();
+    // a lower prism (the podium) leans in proportion to its height
+    expect(roofPhotoOffset(back[0], back[0].prisms[0])).toEqual([-1.625, 2.5]);
+    expect(roofPhotoOffset(back[0], back[0].prisms[1])).toEqual([-3.25, 5]);
+    expect(roofPhotoOffset(back[2], back[2].prisms[0])).toEqual([0, 0]);
+    const v1 = encodeBuildings([src[2]]);
+    v1[4] = 1;
+    expect(decodeBuildings(v1)[0].roof).toBeUndefined();
+  });
+
+  // #140: tools/linz/roofs.py registers each LINZ roof on the aerial photo (0.3 m source tiles); the tower kit, the
+  // Scene apartments and the hero neighbourhoods keep their own roofs
+  it('photo roofs on most CBD buildings, registered by correlation, few fallbacks; heroes keep their own', () => {
+    const linz = bs.filter((b) => !b.hero);
+    const photo = linz.filter((b) => b.roof);
+    const registered = photo.filter((b) => b.roof!.measured);
+    expect(photo.length).toBeGreaterThan(linz.length * 0.9);
+    expect(registered.length).toBeGreaterThan(linz.length * 0.75);
+    const top = (b: (typeof bs)[number]) => Math.max(...b.prisms.map((p) => p.h));
+    // a tall roof (≥ 35 m) takes the photo only when registered; the rest keep today's plain roof
+    const tall = linz.filter((b) => top(b) >= 35);
+    expect(tall.filter((b) => b.roof && !b.roof.measured)).toEqual([]);
+    expect(tall.filter((b) => b.roof).length).toBeGreaterThan(tall.length * 0.5);
+    for (const b of bs.filter((b) => b.hero)) expect(b.roof).toBeUndefined();
+    // physically plausible leans: at most 0.2 m per metre of height (+ 1.5 m)
+    for (const b of photo) expect(Math.hypot(b.roof!.dx, b.roof!.dz)).toBeLessThanOrEqual(0.2 * top(b) + 1.5 + 0.5); // (+ the 0.25 m quantum and the NZTM frame's turn)
+  });
+
+  it('registered roofs agree with an independent 0.15 m measurement (spot check: the ten tallest)', () => {
+    expect(ROOF_SPOT.length).toBe(10);
+    const near = (x: number, z: number) => bs.filter((b) => b.roof && !b.hero).sort((a, b) => Math.hypot(a.prisms[0].cx - x, a.prisms[0].cz - z) - Math.hypot(b.prisms[0].cx - x, b.prisms[0].cz - z))[0];
+    let within = 0;
+    for (const c of ROOF_SPOT) {
+      const b = near(c.x, c.z);
+      expect(b.roof!.measured).toBe(true);
+      const miss = Math.hypot(b.roof!.dx - c.dx, b.roof!.dz - c.dz);
+      if (miss < 3) within++;
+    }
+    // one (#1024, an oval roof between two others) the 0.15 m search puts on a neighbour's edge, 6 m off: the 0.3 m
+    // overlay shows the baked offset on the roof (tools/linz/README.md)
+    expect(within).toBeGreaterThanOrEqual(9);
   });
 
   it('holds the CBD region: ≈ 1000 buildings (some traced from the 2024 LiDAR), all inside it, on land', () => {
@@ -253,6 +308,35 @@ describe('the CBD built from the LINZ buildings', () => {
     });
     expect(lamps).toBeGreaterThan(600);
     expect(beacons).toBeGreaterThanOrEqual(12);
+  });
+
+  it('photo roofs (#140): the roof faces carry their offset, the walls a parapet band; no attribute unless enabled', { timeout: 60_000 }, () => {
+    expect(medium.B.build()!.getAttribute('aRoof')).toBeUndefined();
+    const B = new GeometryBuilder();
+    B.enablePhotoRoofs();
+    const t = buildCBD(B, new LightList(), height, 0.7, cbd, roads, bs).triangles;
+    expect(t).toBe(medium.stats.triangles); // same triangles: the photo is a shader input
+    const g = B.build()!;
+    const a = g.getAttribute('aRoof');
+    const n = g.getAttribute('normal');
+    expect(a.count).toBe(g.getAttribute('position').count);
+    let roofs = 0;
+    let walls = 0;
+    let shifted = 0;
+    for (let v = 0; v < a.count; v++) {
+      const k = a.getW(v);
+      if (k === ROOF_PHOTO) {
+        roofs++;
+        expect(n.getY(v)).toBeGreaterThan(0.5); // (the shader drapes faces over 0.7: a steep monopitch keeps its colour)
+        if (Math.hypot(a.getX(v), a.getY(v)) * ROOF_Q > 1) shifted++;
+      } else if (k === ROOF_WALL) {
+        walls++;
+        expect(Math.abs(n.getY(v))).toBeLessThan(0.5);
+      }
+    }
+    expect(roofs).toBeGreaterThan(5000);
+    expect(walls).toBeGreaterThan(roofs);
+    expect(shifted).toBeGreaterThan(roofs * 0.3);
   });
 
   it('falls back to the procedural towers on the real streets without the building data', () => {
