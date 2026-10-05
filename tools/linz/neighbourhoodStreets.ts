@@ -50,8 +50,12 @@ export function outsideFootprints(region: Pt[]): { name: string; ring: Pt[] }[] 
     .filter((n) => !n.ring.some(([x, z]) => inRing(region, x, z)));
 }
 
-/** Street ribbons of every neighbourhood outside `region`, skipping runs along the `existing` ribbons. */
-export function neighbourhoodStreets(work: string, region: Pt[], existing: RoadLine[], log = console.log): RoadLine[] {
+/**
+ * Street ribbons of every neighbourhood outside `region`, skipping runs along the `existing` ribbons. `wet(x, z)`: where
+ * the game's terrain is water; those stretches are left out (a marina road on reclaimed land the 86 m terrain sees as
+ * sea would run across the water: Westpark Marina, West Harbour).
+ */
+export function neighbourhoodStreets(work: string, region: Pt[], existing: RoadLine[], log = console.log, wet: (x: number, z: number) => boolean = () => false): RoadLine[] {
   const out: RoadLine[] = [];
   for (const nb of outsideFootprints(region)) {
     const xs = nb.ring.map((p) => p[0]);
@@ -76,7 +80,7 @@ export function neighbourhoodStreets(work: string, region: Pt[], existing: RoadL
       const w = width(sec.properties);
       if (w === null) continue;
       for (const pl of lines(sec))
-        for (const r of runs(densify(pl, 4), (p) => (near(p) ? 0 : -1))) {
+        for (const r of runs(densify(pl, 4), (p) => (near(p) && !wet(p[0], p[1]) ? 0 : -1))) {
           if (r.flag !== 0 || r.pts.filter(onRibbon).length > r.pts.length / 2) continue;
           if (Math.hypot(r.pts[r.pts.length - 1][0] - r.pts[0][0], r.pts[r.pts.length - 1][1] - r.pts[0][1]) < 15) continue; // stubs
           const pts = simplify(r.pts, 0.8);
