@@ -216,8 +216,10 @@ the sightseeing H130s shuttle between Mechanics Bay and a Waiheke vineyard. Thei
 (`src/core/sites.ts`, #125). Being neutral they are off the datalink, boxed `CIV`, ranked last for designation and
 broadcast ADS-B in the stroll; shooting one down is a civilian loss ("CIVILIAN HELICOPTER DOWN", −500, −0.15 rating,
 a debrief row, `MissionResultExt.civilianHeliKills`), never a kill and never a failed sortie, and the wreck falls on
-the flight model. Rotors spin in LOD0 and are faint discs in LOD1; the Eagle's searchlight beam shows at night
-(`night:*` objects in `AircraftVisual`).
+the flight model. They are drawn instanced, one draw call per type (`src/render/visuals/HeliBatch.ts`: the airframe
+and both rotors merged, the rotors turned in the vertex shader); their `AircraftVisual` keeps no meshes
+(`AircraftPrototype.instanced`), only the pose, LOD distance and nav-light anchors, which join the shared sprite batch.
+The Eagle's searchlight is one more instanced draw, at night only.
 
 ## Harbour ferries and wakes (render-only)
 

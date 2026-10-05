@@ -117,7 +117,7 @@ function addAircraft(type: AircraftType, pos = new Vector3()): AircraftVisual {
   const lo = (q.get('loadout') ?? 'a2a_stealth') as LoadoutId;
   if (type === 'f35a') ac.stores = LOADOUTS[lo].stores.map((s) => ({ ...s }));
   flightFromParams(ac);
-  const vis = new AircraftVisual(getAircraftPrototype(type), AIRCRAFT_SPECS[type], true, true);
+  const vis = new AircraftVisual(getAircraftPrototype(type), AIRCRAFT_SPECS[type], true, true, true);
   ac.position.copy(pos);
   holder.add(vis.root);
   if (q.get('debug') === 'ao') {
