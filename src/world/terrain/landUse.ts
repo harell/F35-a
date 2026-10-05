@@ -20,7 +20,6 @@ import {
   LU_NONE,
   LU_RESIDENTIAL,
   LU_SCHOOL,
-  landUseCell,
   type LandUse,
 } from '../scenery/aucklandLandUse';
 
@@ -36,13 +35,36 @@ const MIN_KNOWN = 0.1;
  * same noise as the hand map's, auckland.ts). Returns the number of samples changed.
  */
 export function applyLandUse(hf: Heightfield, lu: LandUse, seed: number): number {
+  const g = applyLandUseSteps(hf, lu, seed);
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** applyLandUse as a generator yielding its progress (0..1) every 32 rows (generate.ts runs it time-sliced). */
+export function* applyLandUseSteps(hf: Heightfield, lu: LandUse, seed: number): Generator<number, number, void> {
   const n = hf.n;
   const noise = new Noise2D(seed * 29 + 2);
   const counts = new Uint16Array(n * LU_CLASSES);
+  // the heightfield column each fine column's centre is nearest to (its first counter; −1 outside)
+  const colToI = new Int32Array(lu.cols);
+  let fi0 = lu.cols;
+  let fi1 = -1;
+  for (let fi = 0; fi < lu.cols; fi++) {
+    const i = Math.round((lu.x0 + (fi + 0.5) * lu.cell - hf.origin) / hf.cell);
+    colToI[fi] = i >= 0 && i < n ? i * LU_CLASSES : -1;
+    if (colToI[fi] >= 0) {
+      fi0 = Math.min(fi0, fi);
+      fi1 = fi;
+    }
+  }
+  const data = lu.data;
+  const rowBytes = lu.texW * 4;
   let changed = 0;
   // fine cells per base row: those whose centre is nearest to the row's sample
-  const fineOf = (pos: number, origin: number) => Math.floor((pos - origin) / lu.cell);
   for (let j = 0; j < n; j++) {
+    if ((j & 31) === 31) yield j / n;
     const z = hf.pos(j);
     const zA = z - hf.cell / 2;
     const zB = z + hf.cell / 2;
@@ -51,15 +73,11 @@ export function applyLandUse(hf: Heightfield, lu: LandUse, seed: number): number
     const fj1 = Math.min(lu.rows - 1, Math.ceil((zB - lu.z0) / lu.cell - 0.5) - 1);
     if (fj1 < fj0) continue;
     counts.fill(0);
-    const fi0 = Math.max(0, fineOf(hf.origin - hf.cell / 2, lu.x0));
-    const fi1 = Math.min(lu.cols - 1, fineOf(hf.origin + (n - 0.5) * hf.cell, lu.x0));
-    for (let fj = fj0; fj <= fj1; fj++)
-      for (let fi = fi0; fi <= fi1; fi++) {
-        const x = lu.x0 + (fi + 0.5) * lu.cell;
-        const i = Math.round((x - hf.origin) / hf.cell);
-        if (i < 0 || i >= n) continue;
-        counts[i * LU_CLASSES + landUseCell(lu, fi, fj)]++;
-      }
+    for (let fj = fj0; fj <= fj1; fj++) {
+      const base = (fj >> 1) * rowBytes + (fj & 1) * 2;
+      // (landUseCell() inlined)
+      for (let fi = fi0; fi <= fi1; fi++) counts[colToI[fi] + ((data[base + (fi >> 2) * 4 + ((fi & 3) >> 1)] >> ((fi & 1) * 4)) & 15)]++;
+    }
     for (let i = 0; i < n; i++) {
       const c = i * LU_CLASSES;
       let tot = 0;

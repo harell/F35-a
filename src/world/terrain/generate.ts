@@ -19,7 +19,7 @@ import { runwaysOf } from '../../core/airfields';
 import { aucklandLinz } from './theaters/aucklandLinz';
 import { aucklandLinzHd, linzHdHeights, linzHdMatches } from './theaters/aucklandLinzHd';
 import { aucklandLandUse } from '../scenery/aucklandLandUse';
-import { applyLandUse } from './landUse';
+import { applyLandUseSteps } from './landUse';
 import {
   EDGE_FADE_END,
   EDGE_FADE_START,
@@ -118,7 +118,10 @@ export function* generateTerrain(spec: TerrainSpec): Generator<number, Heightfie
 export function* finishTerrain(base: Heightfield, spec: TerrainSpec, p0: number): Generator<number, Heightfield, void> {
   // the real land use's built-up density (#122), on the base samples (the upsample copies their materials)
   const lu = spec.landUse ? aucklandLandUse() : null;
-  if (lu) applyLandUse(base, lu, spec.seed);
+  if (lu) {
+    const g = applyLandUseSteps(base, lu, spec.seed);
+    for (let r = g.next(); !r.done; r = g.next()) yield p0 + r.value * 0.02;
+  }
   let hf = base;
   if (spec.resolution > base.n) {
     hf = new Heightfield(base.n * 2, HF_EXTENT);
