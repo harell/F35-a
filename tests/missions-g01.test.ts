@@ -34,7 +34,7 @@ import { allFeatures } from '../src/world/scenery/Scenery';
 import { harness, type Harness } from './missions-helpers';
 import { MissionBot, type MissionBotOptions } from './missions-bot';
 
-const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 const AAMS = ['aim120', 'aim9x'] as const;
 
 /**

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { atmosphere } from '../src/core/atmosphere';
-import { AB_DETENT, type AircraftType, type Difficulty } from '../src/core/types';
+import { AB_DETENT, type AircraftType, type Difficulty, type DifficultyParams } from '../src/core/types';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { liftCoefficient, alphaForLift, dragCoefficient, thrustMil } from '../src/sim/flight/aero';
 import { rollRateLimit } from '../src/sim/flight/controlLaws';
 import { GLOC } from '../src/sim/flight/gloc';
-import { DEG, KT, makeWorld, run, type TestWorld } from './sim-fakes';
+import { DEG, KT, NO_ASSIST_PARAMS, makeWorld, run, type TestWorld } from './sim-fakes';
 
 function spawnF35(tw: TestWorld, alt: number, tas: number, extra: { heading?: number; fuel?: number } = {}) {
   return tw.world.spawnAircraft({
@@ -169,12 +169,12 @@ describe('flight model — F-35A (assisted)', () => {
   });
 });
 
-describe('flight model — Ace keeps the F-35 carefree handling (regression i1)', () => {
+describe('flight model — no-assist params (ex-Ace) keep the F-35 carefree handling (regression i1)', () => {
   // Reviewer: Ace multiplied the g limit by 1.35 and let the AoA reach 50°, so a full-stick
   // "thumb flick" over-G'd (12.2 g, health 70 in 6 s) or departed the jet.
   for (const spd of [250, 300, 350]) {
-    it(`full aft stick at ${spd} m/s on Ace: ≤ 9.3 g, no overstress, no damage`, () => {
-      const tw = makeWorld('ace');
+    it(`full aft stick at ${spd} m/s with no flight assist: ≤ 9.3 g, no overstress, no damage`, () => {
+      const tw = makeWorld(NO_ASSIST_PARAMS);
       const ac = spawnF35(tw, 3000, spd);
       let gMax = 0;
       run(tw.world, 6, () => {
@@ -192,8 +192,8 @@ describe('flight model — Ace keeps the F-35 carefree handling (regression i1)'
     });
   }
 
-  it('full aft stick + roll at low speed on Ace never departs (AoA limiter below the stall)', () => {
-    const tw = makeWorld('ace');
+  it('full aft stick + roll at low speed with no flight assist never departs (AoA limiter below the stall)', () => {
+    const tw = makeWorld(NO_ASSIST_PARAMS);
     const ac = spawnF35(tw, 6000, 140);
     let aMax = 0;
     let stalled = false;
@@ -206,14 +206,14 @@ describe('flight model — Ace keeps the F-35 carefree handling (regression i1)'
       stalled ||= ac.flight.stalled;
       depMax = Math.max(depMax, ac.sim!.departure);
     });
-    // i2: Ace opens the high-AoA regime at low speed (up to 1.5° under the 35° stall), still carefree
+    // i2: no-assist opens the high-AoA regime at low speed (up to 1.5° under the 35° stall), still carefree
     expect(aMax / DEG).toBeLessThan(34);
     expect(stalled).toBe(false);
     expect(depMax).toBeLessThan(0.01);
   });
 
   it('the departure model still exists past the stall AoA (forced state) and recovers unloaded', () => {
-    const tw = makeWorld('ace');
+    const tw = makeWorld(NO_ASSIST_PARAMS);
     const ac = spawnF35(tw, 6000, 120);
     // force a post-stall attitude (e.g. a tail slide the limiter could not prevent)
     ac.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), 45 * DEG);
@@ -232,8 +232,8 @@ describe('flight model — Ace keeps the F-35 carefree handling (regression i1)'
     expect(ac.alive).toBe(true);
   });
 
-  it('Ace drops only the neutral-stick flight-path latch (the assisted law holds it)', () => {
-    const drift = (diff: Difficulty) => {
+  it('no-assist drops only the neutral-stick flight-path latch (the assisted law holds it)', () => {
+    const drift = (diff: Difficulty | DifficultyParams) => {
       const tw = makeWorld(diff);
       const ac = spawnF35(tw, 5000, 230);
       run(tw.world, 1.5, () => {
@@ -250,13 +250,13 @@ describe('flight model — Ace keeps the F-35 carefree handling (regression i1)'
       return Math.abs(Math.asin(ac.velocity.y / ac.velocity.length()) - g1);
     };
     expect(drift('pilot')).toBeLessThan(2 * DEG);
-    expect(drift('ace')).toBeLessThan(12 * DEG); // still bank/γ-compensated 1 g, just no latch
+    expect(drift(NO_ASSIST_PARAMS)).toBeLessThan(12 * DEG); // still bank/γ-compensated 1 g, just no latch
   });
 });
 
-describe('G-LOC (Ace only)', () => {
+describe('G-LOC (no-assist params)', () => {
   /** Hold ~9 g in a level-ish turn by pinning the speed (isolates the physiology model). */
-  function sustainedPull(diff: Difficulty, seconds: number) {
+  function sustainedPull(diff: Difficulty | DifficultyParams, seconds: number) {
     const tw = makeWorld(diff);
     const ac = spawnF35(tw, 5000, 300);
     const gTrace: { t: number; g: number; gloc: number; auth: number }[] = [];
@@ -270,8 +270,8 @@ describe('G-LOC (Ace only)', () => {
     return { tw, ac, gTrace };
   }
 
-  it('sustained 9 g knocks the Ace pilot out after ~8-16 s; the stick is ignored, then control returns', () => {
-    const { tw, ac, gTrace } = sustainedPull('ace', 30);
+  it('sustained 9 g knocks the pilot out after ~8-16 s; the stick is ignored, then control returns', () => {
+    const { tw, ac, gTrace } = sustainedPull(NO_ASSIST_PARAMS, 30);
     const msg = tw.of('hud:message').find((m) => m.text === 'G-LOC');
     expect(msg).toBeTruthy();
     const out = gTrace.find((s) => s.gloc >= 1)!;
@@ -294,7 +294,7 @@ describe('G-LOC (Ace only)', () => {
   });
 
   it('short 9 g pulls (a break turn) do not G-LOC', () => {
-    const { tw } = sustainedPull('ace', 6);
+    const { tw } = sustainedPull(NO_ASSIST_PARAMS, 6);
     expect(tw.of('hud:message').some((m) => m.text === 'G-LOC')).toBe(false);
   });
 });
@@ -468,8 +468,8 @@ describe('engine', () => {
 
 describe('stability', () => {
   const types: AircraftType[] = ['f35a', 'mig29', 'su27', 'su35', 'su57'];
-  for (const diff of ['pilot', 'ace'] as Difficulty[]) {
-    it(`every type survives random stick abuse without NaNs (${diff})`, () => {
+  for (const diff of ['pilot', NO_ASSIST_PARAMS] as (Difficulty | DifficultyParams)[]) {
+    it(`every type survives random stick abuse without NaNs (${typeof diff === 'string' ? diff : 'no-assist'})`, () => {
       const tw = makeWorld(diff);
       const list = types.map((type, i) =>
         tw.world.spawnAircraft({
@@ -530,7 +530,7 @@ describe('Auto-GCAS', () => {
     expect(tw.of('player:down')).toHaveLength(0);
     expect(ac.gcasActive).toBe(false); // hands control back after the recovery
   });
-  for (const d of ['pilot', 'veteran', 'ace'] as const) {
+  for (const d of ['pilot', 'veteran'] as const) {
     it(`lets the ${d} player fly into the ground: Auto-GCAS is a Recruit assist (owner, 2026-10-04)`, () => {
       let gcasSeen = false;
       const { tw, ac } = diveAtGround(d, (a) => {
@@ -543,7 +543,7 @@ describe('Auto-GCAS', () => {
     });
   }
   it('still saves a friendly AI F-35 whatever the difficulty', () => {
-    const tw = makeWorld('ace');
+    const tw = makeWorld(NO_ASSIST_PARAMS);
     const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', position: new Vector3(0, 1800, 0), heading: 0, speed: 230 });
     let gcasSeen = false;
     run(tw.world, 25, (t) => {

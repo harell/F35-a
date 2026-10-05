@@ -12,7 +12,7 @@
  *
  *   miss ~ Rayleigh(σ),   σ = reach · s_diff · F_man · F_track · e^(0.3·z)
  *   reach   = fuseRadius · fuzeScale(difficulty) + target.radius / 2       (same as flight.ts)
- *   s_diff  from the no-defence Pk table (Pk₀ = 1 − e^(−1/(2 s²)))  recruit … ace
+ *   s_diff  from the no-defence Pk table (Pk₀ = 1 − e^(−1/(2 s²)))  recruit … veteran
  *   F_man   = 1 + 0.16 · max(0, a_T/g − 1) · (0.35 + 0.65 · sin aspect) · 25 / missile maxG
  *             (target lateral acceleration, smoothed over the last ~0.8 s, as seen across the LOS)
  *   F_track = 1 + 0.9 · notch (radar sites: smoothed Doppler-notch depth of the target as seen
@@ -32,7 +32,7 @@ import { cmFactor, notchDepth, radialSpeed } from '../weapons/ew';
 import { isCombatMissile, type CombatMissile } from '../weapons/missile';
 
 /** Probability that an undefended, non-manoeuvring jet is hit (fuzed on), per difficulty. */
-export const ENDGAME_PK: Record<string, number> = { recruit: 0.66, pilot: 0.8, veteran: 0.87, ace: 0.93 };
+export const ENDGAME_PK: Record<string, number> = { recruit: 0.66, pilot: 0.8, veteran: 0.87 };
 /** Salvo correlation of the end-game error (0 = independent rounds, 1 = identical). */
 export const SALVO_RHO = 0.45;
 /** Log-sigma of the per-round miss-distance multiplier. */

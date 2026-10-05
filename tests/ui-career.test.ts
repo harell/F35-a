@@ -80,13 +80,17 @@ describe('difficulty text comes from the live numbers', () => {
 describe('briefing difficulty picker', () => {
   it('updates the live settings object and persists only the difficulty', () => {
     const live: Settings = { ...loadSettings(), difficulty: 'pilot', quality: 'low' };
-    setDifficulty(live, 'ace');
-    expect(live.difficulty).toBe('ace');
+    setDifficulty(live, 'veteran');
+    expect(live.difficulty).toBe('veteran');
     const saved = loadSettings();
-    expect(saved.difficulty).toBe('ace');
+    expect(saved.difficulty).toBe('veteran');
     // URL-only overrides on the live object (e.g. ?quality=low) are not written to storage
     expect(saved.quality).toBe(loadSettings().quality);
     expect(JSON.parse(g.localStorage!.getItem('f35a.settings.v1')!).quality).not.toBe('low');
+  });
+  it("a saved difficulty 'ace' (the removed fourth level) loads as 'veteran'", () => {
+    g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ difficulty: 'ace' }));
+    expect(loadSettings().difficulty).toBe('veteran');
   });
   it('ignores unknown ids', () => {
     const live: Settings = { ...loadSettings(), difficulty: 'pilot' };
@@ -168,11 +172,9 @@ describe('instant action enemy-count label', () => {
   it('states the real scaling instead of "More bandits on harder difficulties"', () => {
     const t = countNote();
     expect(t).not.toMatch(/More bandits on harder/);
-    // Instant Action's own Ace scale (Pilot's numbers, issue #60), not the difficulty's x1.5
     const r = IA_ENEMY_COUNT_SCALE.recruit ?? DIFFICULTIES.recruit.enemyCountScale;
-    const a = IA_ENEMY_COUNT_SCALE.ace ?? DIFFICULTIES.ace.enemyCountScale;
+    const a = IA_ENEMY_COUNT_SCALE.veteran ?? DIFFICULTIES.veteran.enemyCountScale;
     expect(a).toBe(1);
-    expect(t).not.toContain(`×${DIFFICULTIES.ace.enemyCountScale}`);
     if (r !== 1 || a !== 1) {
       expect(t).toContain(`×${r}`);
       expect(t).toContain(`×${a}`);

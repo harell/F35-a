@@ -68,6 +68,13 @@ export interface SamTypeData {
    * samRangeScale, like the engagement range. Null = the radar equation alone.
    */
   closeCue: { range: number; bayRange: number } | null;
+  /**
+   * The AD boat's nuisance fire (DifficultyParams.adBoatHarass): a jet with its bay open inside
+   * `cueRange` m (the release it is about to make, seen by the boat's ESM and the mother ship's picture)
+   * is detected and held out to there, and the boat fires at anything inside `reach` m with the radar SAM
+   * whatever its missile's real envelope. Both scale with the difficulty's samRangeScale. Null = none.
+   */
+  harass: { cueRange: number; reach: number } | null;
 }
 
 const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageMin' | 'engageMax' | 'altMin' | 'altMax'> = {
@@ -91,6 +98,7 @@ const D: Omit<SamTypeData, 'type' | 'missile' | 'gun' | 'detectRange' | 'engageM
   manpads: null,
   pointDefense: null,
   closeCue: null,
+  harass: null,
 };
 
 export const SAM_DATA: Record<SamType, SamTypeData> = {
@@ -201,6 +209,8 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     // a stand-off release (13 km and out) stays safe; a closer pass costs something (#115): the crew
     // picks the jet up inside 9 km whatever its shaping, and inside 12 km the moment its bay opens
     closeCue: { range: 9_000, bayRange: 12_000 },
+    // a stand-off release is not free for the player: the boat fires at it from 24 km out, past its missile's 12 km
+    harass: { cueRange: 24_000, reach: 20_000 },
   },
 };
 

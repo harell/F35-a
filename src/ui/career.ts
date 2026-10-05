@@ -9,7 +9,7 @@ import { loadSettings, saveSettings } from '../core/settings';
 import type { Difficulty, DifficultyParams, Settings } from '../core/types';
 import { fixedDifficulty } from '../missions/difficulty';
 
-export const DIFFICULTY_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+export const DIFFICULTY_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 
 /** Short fact list derived from the live DIFFICULTIES numbers (never hand-written, so it can't go stale). */
 export function difficultyFacts(d: DifficultyParams): string[] {

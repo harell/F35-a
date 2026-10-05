@@ -107,7 +107,7 @@ function siteLos(ctx: CombatCtx, m: CombatMissile, site: SamSiteEntity, target: 
  * difficulties, and a large memory error puts the site outside the seeker footprint.
  */
 export function armTerminalChance(ctx: CombatCtx, errorM: number): number {
-  const base = 0.82 - 0.5 * ctx.world.difficulty.aiSkill; // recruit ≈ 0.7 … ace ≈ 0.35
+  const base = 0.82 - 0.5 * ctx.world.difficulty.aiSkill; // recruit ≈ 0.7 … veteran ≈ 0.45
   return base * clamp(1.25 - errorM / 320, 0.15, 1);
 }
 
