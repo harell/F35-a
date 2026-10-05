@@ -1,5 +1,5 @@
 /**
- * F35-A — IRGC Navy fast boats (SIM-CORE, issue #79): how they sail, chase and fire.
+ * F35-A — Rat navy fast boats (SIM-CORE, issue #79): how they sail, chase and fire.
  *
  *  - Suicide boat (`'suicide_boat'` ground target): CHASES a ship (BoatState.chaseId), aiming at
  *    the intercept point and weaving a little, so a bomb needs the GBU-53/B's moving-target
@@ -29,7 +29,7 @@ import { isCivilVessel, vesselHullDistance } from './civil/vessels';
 
 const DEG = Math.PI / 180;
 
-/** Cruise speed of every IRGC fast boat (m/s): ≈ 45 kt. */
+/** Cruise speed of every Rat navy fast boat (m/s): ≈ 45 kt. */
 export const BOAT_SPEED = 23;
 /** Missile boat: default launch range from its target (m) and countdown at the launch point (s). */
 export const BOAT_LAUNCH_RANGE = 6_000;

@@ -60,7 +60,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
       `<div class="mm-theatre ui-panel brk">` +
       `<div class="mm-th-k">${icon('pin')} THEATRE</div>` +
       `<div class="mm-th-t">Auckland, New Zealand</div>` +
-      `<div class="mm-th-s">IRGC drones over the city and fast boats in the Hauraki Gulf. Fly from RNZAF Base Auckland (Whenuapai) and defend the city.</div>` +
+      `<div class="mm-th-s">New Zealand's pests have formed an army, the Interspecies Revolutionary Guard Corps: drones over the city, fast boats in the Hauraki Gulf. Fly from RNZAF Base Auckland (Whenuapai) and defend the city.</div>` +
       `</div>` +
       `<div class="mm-ver mono">Build ${build}</div>`;
 

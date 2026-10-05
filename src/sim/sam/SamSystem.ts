@@ -579,7 +579,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
 }
 
 /**
- * Shoulder-launched SA-18s besides the site's main weapon (the IRGC Navy AD boat): a MANPADS team
+ * Shoulder-launched SA-18s besides the site's main weapon (the Rat navy AD boat): a MANPADS team
  * that, independently of the radar, fires at the closest hostile aircraft its IR seeker can see
  * inside reach, after the difficulty's reaction time, one round every `refire` s. Passive: no RWR
  * warning, no AWACS call (the DAS/MAWS warns). Its rounds get the same end-game model as any SAM.

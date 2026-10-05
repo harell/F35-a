@@ -538,7 +538,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     armTime: 0.5,
     minKillSpeed: 250,
   },
-  // Kowsar (C-704 family) short-range anti-ship missile of the IRGC Navy missile boat. VISUAL ONLY:
+  // Kowsar (C-704 family) short-range anti-ship missile of the Rat navy missile boat. VISUAL ONLY:
   // sim/boats.ts flies it (a sea-skimming pursuit that always reaches its ship and scores one hit);
   // the CombatSystem never steps it, and missiles are never sensor contacts, so it can't be shot down.
   kowsar: {
