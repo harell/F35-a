@@ -11,7 +11,8 @@ import type { MissionResult } from '../../core/contracts';
 import type { Difficulty, Settings } from '../../core/types';
 import { findMission, fixedDifficulty } from '../../missions';
 import { recordMedals, setDifficulty } from '../career';
-import { DIFFICULTIES } from '../../core/data';
+import { DIFFICULTIES, WEAPON_INFO } from '../../core/data';
+import { formatNzd } from '../../missions/runtime/costs';
 import { icon } from '../art/icons';
 import { escapeHtml, h } from '../dom';
 import { formatPercent, formatScore, formatTime, gradeTone } from '../format';
@@ -74,6 +75,21 @@ function heightCell(m: number | null): string {
  * stops visited, flight time, distance flown and the highest and lowest pass above the ground —
  * instead of accuracy, damage and kills.
  */
+/**
+ * The cost summary rows (#201: MissionResultExt.costSummary): flight time, each weapon fired, the
+ * total, then the mission's comparison and what was removed. Empty when the mission has none.
+ */
+export function costRows(r: MissionResultExt): [string, string, string][] {
+  const c = r.costSummary;
+  if (!c) return [];
+  const rows: [string, string, string][] = [['clock', `F-35A, ${c.hours.toFixed(2)} flight hours`, formatNzd(c.flightNzd)]];
+  for (const w of c.weapons) rows.push(['target', `${w.count} × ${WEAPON_INFO[w.weapon].name}`, formatNzd(w.nzd)]);
+  rows.push(['star', 'Total', formatNzd(c.totalNzd)]);
+  rows.push(['shield', escapeHtml(c.comparison.label), formatNzd(c.comparison.nzd)]);
+  rows.push(['check', escapeHtml(c.removed.label), String(c.removed.count)]);
+  return rows;
+}
+
 export function sightseeingRows(r: MissionResultExt): [string, string, string][] {
   const t = r.sightseeing;
   const rows: [string, string, string][] = [];
@@ -178,6 +194,18 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
     });
     right.appendChild(h('div', { class: 'db-h', text: r.freeFlight ? 'Your flight' : 'Performance' }));
     right.appendChild(grid);
+    // the sortie's cost against the job done another way (#201, g03)
+    const bill = costRows(ext);
+    if (bill.length) {
+      const g2 = h('div', { class: 'db-stats is-flight' });
+      bill.forEach(([ic, k, v], i) => {
+        const cell = h('div', { class: 'db-stat', html: `<span class="db-si">${icon(ic)}</span><span class="db-sk">${k}</span><span class="db-sv mono">${v}</span>` });
+        cell.style.setProperty('--i', String(stats.length + i));
+        g2.appendChild(cell);
+      });
+      right.appendChild(h('div', { class: 'db-h', text: 'Cost of the sortie' }));
+      right.appendChild(g2);
+    }
     if (r.objectives.length) {
       right.appendChild(h('div', { class: 'db-h', text: 'Objectives' }));
       const ul = h('ul', { class: 'db-obj' });

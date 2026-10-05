@@ -18,7 +18,7 @@
 import { Vector3 } from 'three';
 import type { CreateMissionRunner, MissionDef, MissionResult, MissionRunnerApi, ObjectiveStatus, Waypoint } from '../core/contracts';
 import { AKL, BRIDGE_SPAN_T } from '../core/auckland';
-import type { LoadoutId } from '../core/types';
+import type { LoadoutId, WeaponId } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import type { Action } from './schema';
 import { AwacsController } from './runtime/awacs';
@@ -32,6 +32,7 @@ import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
 import { awardMedals, buildTips, codexTopic, deathReason } from './runtime/debrief';
 import { WinchesterWatch } from './runtime/winchester';
+import { costSummary } from './runtime/costs';
 import { WithdrawalMonitor } from './runtime/withdrawal';
 import { attemptSeed, nextAttempt } from './runtime/variation';
 import { assignGroundAttack, buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
@@ -82,6 +83,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   /** Free flight: tour stops, distance and passes for the debrief. */
   private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
+  /** The player's stores at the start, by weapon (the cost summary counts what was fired). */
+  private readonly storesAtStart = new Map<WeaponId, number>();
   private evalAcc = 0;
   private outsideAo = 0;
   private aoWarnAt = 0;
@@ -165,6 +168,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.world = world;
     buildGroups(s);
     const p = spawnPlayer(s, loadout);
+    for (const st of p.stores) this.storesAtStart.set(st.weapon, (this.storesAtStart.get(st.weapon) ?? 0) + st.count);
     // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
     // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
     if (s.script.freeFlight) {
@@ -296,6 +300,18 @@ class MissionRunnerImpl implements MissionRunnerApi {
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
     if (s.script.freeFlight) r.freeFlight = true;
     if (this.sightseeing) (r as MissionResultExt).sightseeing = this.sightseeing.result();
+    const cs = s.script.costSummary;
+    if (cs) {
+      // what the sortie cost (#201): flight time, and the stores fired since the start
+      const fired: Partial<Record<WeaponId, number>> = {};
+      for (const [w, n] of this.storesAtStart) {
+        let left = 0;
+        for (const st of p?.stores ?? []) if (st.weapon === w) left += st.count;
+        if (n - left > 0) fired[w] = n - left;
+      }
+      const removed = s.groups.get(cs.removed.group)?.members.filter((m) => !m.alive).length ?? 0;
+      (r as MissionResultExt).costSummary = costSummary(time, fired, cs.comparison, { label: cs.removed.label, count: removed });
+    }
     r.tips = r.freeFlight ? [] : buildTips(s, r);
     r.medals = r.freeFlight ? [] : awardMedals(s, r);
     const learn = codexTopic(s, r);

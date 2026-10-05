@@ -232,7 +232,12 @@ stop (`StoatState.alert`, posed by `src/render/visuals/stoatPose.ts` on the posa
 `src/render/models/stoat.ts`); a weapon that goes off within 30 m and misses makes it bolt to the next station. A
 ground target under 0.5 m (`src/sim/weapons/small.ts`) is too small for a GBU-53/B to track on the move: the seeker and
 the datalink only update its estimate while it stands still, and never lead it (`smallTargetGuidance`), so a release
-at a stop hits and one while it runs lands where it was. A killed stoat leaves no model (the crater is #201).
+at a stop hits and one while it runs lands where it was. A killed stoat leaves no model, only a crater
+(`src/render/effects/Craters.ts`: a shallow dark bowl with a raised sand rim, conformed to the terrain, kept for the
+sortie; `Effects` adds one on the stoat's `destroyed` instead of the fire and smoke column a site gets). The
+volunteers' radio channel (`G03_VOLUNTEERS`, fictional like every local name in the mission) calls the bait stations
+and the moment the stoat stands up (the `stoat_alert` condition). The debrief prices the sortie against one volunteer's
+trap (`MissionScript.costSummary`, unit costs and their sources in `src/missions/runtime/costs.ts`).
 
 ## Targeting pod view (#199)
 

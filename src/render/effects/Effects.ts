@@ -23,6 +23,7 @@ import { SpriteBatch, pixelScale } from './SpriteBatch';
 import { Debris, Pulses, VaporCones } from './Props';
 import { COLLAPSE } from '../../core/skyTower';
 import { fireTexture, glowTexture, smokeTexture } from './textures';
+import { Craters } from './Craters';
 
 /* ───────────────────────── colours & styles ───────────────────────── */
 
@@ -160,6 +161,9 @@ const FUNNEL_SMOKE_FAR = 8000;
 const _w = new Vector3();
 const _f = new Vector3();
 
+/** Radius of the crater a StormBreaker leaves where it killed the stoat (m): about 6 m across. */
+export const STOAT_CRATER_RADIUS = 3;
+
 export const createEffects: CreateEffects = (scene, world, events, env, quality) => {
   const ps = Math.min(1.5, Math.max(0.2, quality.particleScale));
   const root = new Group();
@@ -173,7 +177,9 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const debris = new Debris(Math.round(80 * ps));
   const pulses = new Pulses(8, 4);
   const cones = new VaporCones(3);
-  root.add(ribbons.mesh, smoke.mesh, fire.mesh, sprites.mesh, debris.mesh, pulses.group, cones.group);
+  // impact craters (#201): g03's stoat leaves nothing but the hole the bomb dug
+  const craters = new Craters();
+  root.add(ribbons.mesh, smoke.mesh, fire.mesh, sprites.mesh, debris.mesh, pulses.group, cones.group, craters.group);
 
   const wind = new Vector3(4.5, 0, 1.8);
   const cam = new Vector3(0, 1000, 0);
@@ -1036,6 +1042,10 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         airKill(p, entity.velocity, spec ? spec.length : 17);
       } else if (entity.kind === 'ground' && entity.type === 'ship') {
         shipKill(entity);
+      } else if (entity.kind === 'ground' && entity.type === 'stoat') {
+        // the stoat (#201): no fire, no smoke column, no model; the bomb's own blast throws the sand,
+        // and the crater it dug stays
+        craters.add(p.x, p.z, STOAT_CRATER_RADIUS, groundAt);
       } else if (entity.kind === 'sam' || entity.kind === 'ground') {
         const type = (entity as { type: string }).type;
         const bigFire = type === 'fuel';
@@ -1674,6 +1684,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       debris.dispose();
       pulses.dispose();
       cones.dispose();
+      craters.dispose();
       root.removeFromParent();
     },
   };

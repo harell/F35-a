@@ -62,6 +62,8 @@ export type Condition =
   | { kind: 'group_defeated'; group: string; count?: number }
   /** The group has spawned. */
   | { kind: 'group_spawned'; group: string }
+  /** A live stoat of the group stands in the periscope stance: targeted at a stop (g03, sim/stoat.ts StoatState.alert). */
+  | { kind: 'stoat_alert'; group: string }
   /** The player has reached (captured) a waypoint. */
   | { kind: 'waypoint'; id: string }
   /** The player has destroyed at least `count` targets of a category. */
@@ -488,6 +490,12 @@ export interface MissionScript {
   successText?: string;
   /** Last mission of the campaign: success sets MissionResult.campaignComplete (campaign ending). */
   campaignFinale?: boolean;
+  /**
+   * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
+   * player killed, under `removed.label`.
+   */
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower

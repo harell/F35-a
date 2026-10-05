@@ -21,6 +21,12 @@ import type { XZ } from '../schema';
 import { P, mission, site, target } from './common';
 
 const DS = 'DARKSTAR';
+/**
+ * The volunteers' radio callsign. The group is fictional, like every local name in this mission
+ * (tests/missions-g03.test.ts checks the senders).
+ */
+export const G03_VOLUNTEERS = 'TRAP LINE';
+const TL = G03_VOLUNTEERS;
 
 /** The nest on the Onetangi dunes, east of the enemy airstrip (m). */
 export const G03_NEST: XZ = { x: 28_250, z: -6_700 };
@@ -126,10 +132,10 @@ export const G03: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'overcast',
   briefing: [
-    'The IRGC holds Waiheke Island. A local trap-line volunteer group has asked for air support: one stoat has evaded their traps and is moving along the dunes at Onetangi towards a nest of NZ dotterel chicks. It will reach the nest in four minutes.',
-    'The island is defended. An SA-6 and a Tor stand on Motuihe, the Tor covering the SA-6 against anti-radiation missiles. Another SA-6 guards the airstrip next to the beach, with a ZSU-23-4 on the ridge above it, and air-defence boats patrol the water north and south. Their optical trackers see you inside about 7 to 9 km whatever your shaping.',
-    'You carry two AARGM-ERs and two GBU-53/B StormBreakers. You will not destroy them all, and you will not need to: pick your way in, kill what blocks it, and use the terrain, the notch and chaff for the rest.',
-    'The cloud base is about 6,000 ft. The target only shows up once you are under the cloud within 6 km of the nest.',
+    'Tasking from the Waiheke Trap Line volunteers. Their trail camera has one adult stoat on the dunes at Onetangi, moving east towards a nest of NZ dotterel chicks. It will reach the nest in four minutes. The volunteers have baited three stations on its path, close to the nest; it stops at each one. Those stops are your drop windows: a StormBreaker cannot track it while it runs.',
+    'The IRGC holds the island. An SA-6 and a Tor stand on Motuihe, the Tor covering the SA-6 against anti-radiation missiles. A second SA-6 guards the airstrip beside the beach, with a ZSU-23-4 on the ridge above it. Air-defence boats patrol north of Rangitoto, off Onetangi and in the Tāmaki Strait. Every one of them carries an optical tracker that sees you inside 7 to 9 km whatever your shaping.',
+    'You carry two AARGM-ERs and two GBU-53/B StormBreakers. You will not destroy them all, and you will not need to. Pick your way in, kill what blocks it, and use the terrain, the notch and chaff for the rest. An AARGM fired from far out only silences a radar for a few seconds: fire it close in and go straight in behind it.',
+    'The cloud base is about 6,000 ft. You will only find the target from under the cloud, within 6 km of the nest. Rules of engagement: the stoat is the only authorised target on the island.',
   ],
   recommendedLoadout: 'sead_precision',
   allowedLoadouts: ['sead_precision'],
@@ -163,6 +169,27 @@ export const G03: MissionDef = mission({
         actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Single contact, ground, Onetangi dunes. Type… stoat. Confirmed stoat.', priority: 2 }],
       },
       {
+        id: 't_volunteers',
+        when: { kind: 'time', t: 14 },
+        actions: [{ kind: 'radio', from: TL, text: 'Viper, Waiheke Trap Line. Camera seven still has it on the dunes, heading east. We have three stations baited for you.' }],
+      },
+      // the volunteers call each bait station as the stoat reaches it: the drop windows
+      ...G03_STOAT.stations.map((st, i) => ({
+        id: `t_station${i + 1}`,
+        when: { kind: 'area' as const, who: { group: G.target }, x: st.x, z: st.z, radius: 2 },
+        actions: [{ kind: 'radio' as const, from: TL, text: ['It is at the first station. It will sit there a while.', 'Second station. It has stopped again.', 'Third station, the last one before the nest.'][i], priority: 2 }],
+      })),
+      {
+        id: 't_alert',
+        when: { kind: 'stoat_alert', group: G.target },
+        actions: [{ kind: 'radio', from: TL, text: 'It has stood up. It is looking straight at you.' }],
+      },
+      {
+        id: 't_caught',
+        when: { kind: 'group_destroyed', group: G.target },
+        actions: [{ kind: 'radio', from: TL, text: 'Trap 114, catch logged. Cheers, Viper.' }],
+      },
+      {
         // the stoat at the nest: the sortie is lost (its clock and the mission's run together)
         id: 't_nest',
         when: { kind: 'area', who: { group: G.target }, x: G03_NEST.x, z: G03_NEST.z, radius: 3 },
@@ -176,7 +203,9 @@ export const G03: MissionDef = mission({
       // the stoat (#200): a bomb can't track it while it runs (sim/weapons/small.ts)
       { id: 'h_stops', text: 'Release while the stoat stops at a bait station: running, a StormBreaker can\'t track it', when: { kind: 'group_spawned', group: G.target }, duration: 9 },
     ],
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Waiheke air defences are up. Target is on the Onetangi dunes, under the cloud.', priority: 2 }],
-    successText: 'Target down. Good shooting, Viper. RTB.',
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Waiheke air defences are up. Your target is on the Onetangi dunes, under the cloud.', priority: 2 }],
+    successText: 'Stoat down, nest intact. Good shooting, Viper. RTB.',
+    // the debrief's cost summary (#201, runtime/costs.ts): the sortie against one volunteer's trap
+    costSummary: { comparison: { label: "Volunteer's trap, for comparison", nzd: 40 }, removed: { label: 'Stoats removed', group: G.target } },
   },
 });
