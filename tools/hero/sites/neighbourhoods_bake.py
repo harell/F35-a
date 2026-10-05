@@ -4,7 +4,11 @@ F35-A — hero neighbourhoods: bake Herne Bay and Westhaven into src/world/scene
 
   python3 tools/hero/sites/herne_bay.py --site /tmp/hero/herne_bay --osm /tmp/hero/osm/herne_bay.osm
   python3 tools/hero/sites/westhaven.py --site /tmp/hero/westhaven --osm /tmp/hero/osm/westhaven.osm
-  python3 tools/hero/sites/neighbourhoods_bake.py /tmp/hero/herne_bay /tmp/hero/westhaven
+  python3 tools/hero/sites/mission_bay.py --site /tmp/hero/mission_bay --osm /tmp/hero/osm/mission_bay.osm
+  python3 tools/hero/sites/neighbourhoods_bake.py /tmp/hero/herne_bay /tmp/hero/westhaven /tmp/hero/mission_bay
+
+  # or keep the areas already in the file (byte for byte) and bake only the sites given, replacing any of the same name:
+  python3 tools/hero/sites/neighbourhoods_bake.py --keep /tmp/hero/mission_bay
 
 What goes in (the review page's option C: buildings as parameters, trees as a canopy grid; see the skill):
   buildings  one record per building, its parts as prisms (a terraced roof is several), each the OSM / LiDAR-traced
@@ -15,7 +19,7 @@ What goes in (the review page's option C: buildings as parameters, trees as a ca
   boats      Westhaven: centre, heading, length, beam, deck / cabin / mast heights above the water, hull colour
   pontoons   Westhaven: every walkway and finger, traced from the aerial
 All positions in game XZ (m, origin the Sky Tower, +x east, +z south), from NZTM through WGS84 with the game's own
-equirectangular geoToWorld (src/core/auckland.ts), fitted as one affine map per site (residual < 0.15 m).
+equirectangular geoToWorld (src/core/auckland.ts), fitted as one affine map per site (residual < 0.2 m).
 
 Format (little-endian): 'AKLN' | u32 version | f32 quantum (m) | u32 areas | per area: u8 name length + UTF-8 |
 footprint (varint n + vertices) | varint buildings | per building: varint parts | per part: u8 roof kind (0 flat,
@@ -61,7 +65,7 @@ def site_to_game(S):
     A = np.stack([xx.ravel(), zz.ravel(), np.ones(xx.size)], 1)
     M, res, *_ = np.linalg.lstsq(A, np.stack([gx, gz], 1), rcond=None)
     err = np.abs(A @ M - np.stack([gx, gz], 1)).max()
-    assert err < 0.15, err  # 9.5 cm over Herne Bay's 1.8 km box
+    assert err < 0.2, err  # 9.5 cm over Herne Bay's 1.8 km box, 17 cm over Mission Bay's 2.4 km (the quantum is 25 cm)
     return M.T  # 2 × 3
 
 
@@ -227,13 +231,105 @@ def bake_area(w, site):
             'canopy_cells': int((cover > 0).sum()), 'boats': len(boats), 'pontoons': len(pons)}
 
 
+class R:
+    """Walks an existing file area by area (the decoder's order), to keep areas' bytes and the running vertex."""
+
+    def __init__(self, b):
+        self.b, self.o, self.px, self.pz = b, 16, 0, 0
+
+    def u8(self):
+        self.o += 1
+        return self.b[self.o - 1]
+
+    def varint(self):
+        v, mul = 0, 1
+        while True:
+            c = self.u8()
+            v += (c & 127) * mul
+            if c < 128:
+                return v
+            mul *= 128
+
+    def zig(self):
+        z = self.varint()
+        return -(z + 1) // 2 if z % 2 else z // 2
+
+    def vertex(self):
+        self.px += self.zig()
+        self.pz += self.zig()
+
+    def ring(self):
+        for _ in range(self.varint()):
+            self.vertex()
+
+    def area(self):
+        """Skip one area: (name, start, end, vertex before, vertex after)."""
+        o0, v0 = self.o, (self.px, self.pz)
+        n = self.u8()
+        name = self.b[self.o:self.o + n].decode()
+        self.o += n
+        self.ring()
+        for _ in range(self.varint()):
+            for _ in range(self.varint()):
+                kind = self.u8()
+                self.varint()
+                if kind:
+                    self.o += 3
+                    self.varint(), self.varint(), self.zig(), self.zig()
+                self.o += 6
+                self.ring()
+        self.o += 9
+        nx, nz = struct.unpack_from('<HH', self.b, self.o)
+        self.o += 4 + 2 * nx * nz
+        for _ in range(self.varint()):
+            self.vertex()
+            self.o += 9
+        for _ in range(self.varint()):
+            self.ring()
+        return name, o0, self.o, v0, (self.px, self.pz)
+
+
+def kept_areas(skip):
+    """The areas of the current file not named in `skip`, as raw bytes with their vertex deltas re-based: the first
+    vertex of each kept area is written against whatever comes before it in the new file."""
+    raw = gzip.decompress(open(OUT, 'rb').read())
+    assert raw[:4] == b'AKLN' and struct.unpack_from('<I', raw, 4)[0] == 1 and struct.unpack_from('<f', raw, 8)[0] == Q
+    r = R(raw)
+    return [a for a in (r.area() for _ in range(struct.unpack_from('<I', raw, 12)[0])) if a[0] not in skip], raw
+
+
+def copy_area(w, raw, area):
+    """Append a kept area. Only its footprint's first vertex is relative to the area before it: rewrite that one."""
+    name, o0, o1, v0, v1 = area
+    r = R(raw)
+    r.px, r.pz = v0
+    r.o = o0 + 1 + raw[o0]  # past the name
+    n = r.varint()
+    start = r.o
+    r.vertex()
+    first = (r.px, r.pz)
+    w.b += raw[o0:start]
+    w.zig(first[0] - w.px)
+    w.zig(first[1] - w.pz)
+    w.b += raw[r.o:o1]
+    w.px, w.pz = v1
+    assert n > 2
+
+
 def main():
-    sites = sys.argv[1:]
+    args = sys.argv[1:]
+    keep = args[:1] == ['--keep']
+    sites = args[1:] if keep else args
+    names = {json.load(open(os.path.join(s, 'model.json')))['name'] for s in sites}
+    old, raw = kept_areas(names) if keep else ([], b'')
     w = W()
     w.b += b'AKLN'
     w.u32(1)
     w.f32(Q)
-    w.u32(len(sites))
+    w.u32(len(old) + len(sites))
+    for a in old:
+        copy_area(w, raw, a)
+        print(json.dumps({'name': a[0], 'kept': f'{a[2] - a[1]} bytes'}))
     stats = [bake_area(w, s) for s in sites]
     raw = bytes(w.b)
     gz = gzip.compress(raw, 9, mtime=0)

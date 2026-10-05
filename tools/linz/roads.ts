@@ -26,6 +26,7 @@ import { decodeOsm, OSM_STADIUM } from '../../src/world/scenery/aucklandOsm';
 import { worldToGeo } from '../../src/core/auckland';
 import { WESTFIELD_PRISMS } from '../../src/core/westfieldNewmarket';
 import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, runs, segDist, simplify, type Feature, type Pt } from './polyline';
+import { neighbourhoodStreets } from './neighbourhoodStreets';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const WORK = process.argv[2] ?? path.join(os.tmpdir(), 'f35-linz-roads');
@@ -514,6 +515,9 @@ for (const rings of landmarks) {
   }
 }
 out.push(...landmarkStreets);
+
+// ── Streets of the hero neighbourhoods outside the region (Mission Bay: neighbourhoodStreets.ts) ──
+out.push(...neighbourhoodStreets(WORK, regionPts, out));
 
 // ── Write ──
 // the railways (tools/linz/railways.ts) share the file: keep the ones already baked

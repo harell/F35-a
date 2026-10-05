@@ -244,7 +244,10 @@ def skel_facets(P, step=0.6):
             cells.setdefault(own[idx[0]], []).append(cell)
     out = []
     for e, cs in cells.items():
-        f = unary_union(cs).intersection(P)
+        try:
+            f = unary_union(cs).intersection(P)
+        except shapely.errors.GEOSException:  # an invalid Voronoi cell (one Mission Bay house): repair the cells first
+            f = unary_union([shapely.make_valid(c).buffer(0) for c in cs]).intersection(P)
         if not f.is_empty and f.area > 0.01:
             out.append((f, edges[e][0], edges[e][1]))
     return out

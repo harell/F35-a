@@ -179,12 +179,19 @@ export function siteBlocker(): (x: number, z: number, margin: number) => boolean
 /**
  * The landmark sites the procedural street grid must not run through (Scenery.siteMask → the terrain shader's
  * siteMasked()): every stadium's grounds, the oil terminal's hardstand and Westfield Newmarket's buildings, where a 3D
- * landmark stands. The port and the
+ * landmark stands, and the hero neighbourhoods' footprints: Mission Bay lies outside the real-streets region, so its
+ * measured houses would otherwise stand on painted grid lots (its LINZ streets are ribbons: tools/linz/neighbourhoodStreets.ts;
+ * inside the region, Herne Bay's and Westhaven's change nothing). The port and the
  * naval base are not here: they lie in the real-streets region or under the aerial photo, which never paint the grid.
  */
 export function siteRings(): Float32Array[] {
   const s = siteLayout();
-  return [Float32Array.from(wiriHardstand(s)), ...(s ? s.stadiums.map((st) => st.outline.pts) : []), ...WESTFIELD_PRISMS.map((p) => Float32Array.from(p.ring))];
+  return [
+    Float32Array.from(wiriHardstand(s)),
+    ...(s ? s.stadiums.map((st) => st.outline.pts) : []),
+    ...WESTFIELD_PRISMS.map((p) => Float32Array.from(p.ring)),
+    ...(aucklandNeighbourhoods() ?? []).map((n) => n.footprint),
+  ];
 }
 
 /**
