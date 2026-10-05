@@ -218,8 +218,8 @@ describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
   // the bot attacks. With the stoat (#200: a running stoat can't be bombed, so the drop waits for one
   // of its stops), measured over 16 seeds: the straight line and both detours 0/16 on Pilot and
   // Veteran; the intended way through (low down the Tāmaki Strait, an AARGM at the strait's boat, a
-  // second at the airstrip SA-6 from close in, then the attack at a stop) Recruit 14/16, Pilot 9/16,
-  // Veteran 1/16. (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
+  // second at the airstrip SA-6 from close in, then the attack at a stop) Recruit 14/16, Pilot 8/16,
+  // Veteran 4/16 (with master's AD-boat harassment on Pilot and Veteran). (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
   // stops are the extra puzzle, and the bot pays for waiting near a live SA-6.) Bands over 6 seeds.
   const run = (route: string, diff: Difficulty, seed: number) =>
     runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
