@@ -17,6 +17,7 @@ import { munitionGeometry } from './models/munitions';
 import { getGroundPrototype } from './models/ground';
 import type { PaletteId } from './models/vehicles';
 import { AircraftVisual } from './visuals/AircraftVisual';
+import { HeliBatch } from './visuals/HeliBatch';
 import { MissileVisual } from './visuals/MissileVisual';
 import { GroundVisual, SamVisual } from './visuals/SiteVisuals';
 import { SpriteBatch, pixelScale } from './effects/SpriteBatch';
@@ -72,6 +73,9 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
   // aircraft nav lights / strobes + civil ships' night lights (a cruise liner has ~100 cabin lights)
   const lights = new SpriteBatch(1024);
   group.add(lights.mesh);
+  // the civil helicopters: one instanced draw call per type (#144)
+  const helis = new HeliBatch(getAircraftPrototype);
+  group.add(helis.group);
   // foam wakes of every moving ship and ferry: one draw call ('low' quality: none)
   const wakes = quality.wakes ? new WakeBatch(64) : null;
   if (wakes) group.add(wakes.mesh);
@@ -207,6 +211,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       }
 
       // aircraft
+      helis.begin(t, env.isNight);
       for (const ac of world.aircraft) {
         let tr = aircraft.get(ac.id);
         if (!tr) {
@@ -220,7 +225,9 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         tr.seen = frame;
         const vis = tr.v.update(ac, t, dt, cam, lodCfg, env.isNight);
         tr.v.root.visible = vis && (!ac.isPlayer || playerVisible || !ac.alive);
+        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive);
       }
+      helis.end();
       aircraft.forEach(sweepAircraft);
 
       // missiles & bombs (pooled)
@@ -325,6 +332,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
 
     dispose() {
       aircraft.forEach((tr) => tr.v.dispose());
+      helis.dispose();
       missiles.forEach((tr) => tr.v.dispose());
       missilePool.forEach((p) => p.forEach((v) => v.dispose()));
       sams.forEach((tr) => tr.v.dispose());

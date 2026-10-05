@@ -20,6 +20,8 @@ import { civilLossRows } from '../src/ui/screens/debrief';
 import { AIRCRAFT_SPECS } from '../src/render/models/specs';
 import { getAircraftPrototype } from '../src/render/models/aircraft';
 import { FlatTerrain } from './combat-helpers';
+import { Matrix4, type InstancedMesh } from 'three';
+import { HeliBatch, mergedHelicopter } from '../src/render/visuals/HeliBatch';
 
 const DT = 1 / 60;
 const ELEV = 7;
@@ -178,5 +180,53 @@ describe('helicopter models', () => {
       expect(AIRCRAFT_SPECS[t].lights.length).toBe(4);
       expect(!!proto.lod0.getObjectByName('night:searchlight')).toBe(t === 'bell429');
     }
+  });
+});
+
+describe('instanced helicopters (one draw call per type)', () => {
+  it('merges each airframe and its rotors into one geometry, the rotors tagged to spin about their hubs', () => {
+    for (const t of ['aw169', 'bell429', 'h130'] as const) {
+      const proto = getAircraftPrototype(t);
+      expect(proto.instanced).toBe(true);
+      const g = mergedHelicopter(proto);
+      const spin = g.getAttribute('aSpin');
+      const pivot = g.getAttribute('aPivot');
+      const pos = g.getAttribute('position');
+      expect(spin.count).toBe(pos.count);
+      let main = 0;
+      let tail = 0;
+      for (let i = 0; i < spin.count; i++) {
+        if (spin.getW(i) === 0) continue;
+        // main rotor: vertical axis through the hub; tail rotor: the lateral axis
+        if (Math.abs(spin.getY(i)) > 0.99) main++;
+        else if (Math.abs(spin.getX(i)) > 0.99) tail++;
+        const r = Math.hypot(pos.getX(i) - pivot.getX(i), pos.getZ(i) - pivot.getZ(i));
+        expect(r).toBeLessThan(AIRCRAFT_SPECS[t].span / 2 + 0.5);
+      }
+      expect(main).toBeGreaterThan(0);
+      expect(tail).toBeGreaterThan(0);
+    }
+  });
+
+  it('draws every helicopter of a type with one InstancedMesh; the Eagle’s searchlight is one more, at night only', () => {
+    const batch = new HeliBatch(getAircraftPrototype);
+    const m = new Matrix4();
+    batch.begin(1, false);
+    for (let i = 0; i < 3; i++) batch.add('h130', m.makeTranslation(i * 50, 300, 0), true);
+    batch.add('aw169', m, true);
+    batch.add('bell429', m, true);
+    batch.end();
+    expect(batch.drawCalls).toBe(3);
+    const meshes = batch.group.children.filter((o) => (o as InstancedMesh).isInstancedMesh && o.visible) as InstancedMesh[];
+    expect(meshes.find((o) => o.name === 'heli:h130')!.count).toBe(3);
+    batch.begin(2, true);
+    batch.add('bell429', m, true);
+    batch.add('aw169', m, false); // a wreck: drawn, rotors stopped
+    batch.end();
+    expect(batch.drawCalls).toBe(3); // AW169 + Bell 429 + the Bell's searchlight
+    batch.begin(3, false);
+    batch.end();
+    expect(batch.drawCalls).toBe(0);
+    batch.dispose();
   });
 });
