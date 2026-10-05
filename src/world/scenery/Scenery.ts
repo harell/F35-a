@@ -123,8 +123,11 @@ export class Scenery {
     // the CBD mesh: the photo is not a true orthophoto (a roof is drawn displaced from its footprint by its height ×
     // the camera's lean), so only the LINZ buildings' roofs take it, each at its registered offset (#140,
     // aucklandBuildings.ts roofPhotoOffset); the tower kit and the other heroes keep their own roofs
-    const roofMat = o.aerial ? createBuildingMaterial(o.atmo, { aerial: aerialUniforms(o.aerial, o.aerial.texture), roofs: true }) : null;
-    if (roofMat) this.materials.push(roofMat);
+    // (and its buildings' facades: storeys, window rhythm, glass, contact shading, #141; on every tier)
+    const cbdMat = o.aerial
+      ? createBuildingMaterial(o.atmo, { aerial: aerialUniforms(o.aerial, o.aerial.texture), roofs: true, facades: true })
+      : createBuildingMaterial(o.atmo, { facades: true });
+    this.materials.push(cbdMat);
     const lights = new LightList();
     const addMesh = (b: GeometryBuilder, name: string, mat: ShaderMaterial = buildingMat) => {
       const g = b.build();
@@ -211,7 +214,8 @@ export class Scenery {
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
       const city = new GeometryBuilder();
-      if (roofMat) city.enablePhotoRoofs();
+      if (o.aerial) city.enablePhotoRoofs();
+      city.enableFacades();
       if (!buildings) buildSkyCityPodium(city, height);
       this.skyTower = new SkyTowerVisual(buildingMat, o.lights > 0.01 ? this.lightsMat : null, height);
       this.group.add(this.skyTower.group);
@@ -239,7 +243,7 @@ export class Scenery {
       buildWestfieldNewmarket(city, lights, height);
       // Spark Arena (hand-built from the LiDAR, sparkArena.ts) rides in the CBD mesh; its three signs are one small mesh
       const arena = hero(SPARK_ARENA_ID, sparkArenaGround(height), () => buildSparkArena(city, lights, height, detail));
-      const cityGeo = addMesh(city, 'akl-cbd', roofMat ?? buildingMat);
+      const cityGeo = addMesh(city, 'akl-cbd', cbdMat);
       {
         const tex = createSparkArenaSignTexture(o.cfg.anisotropy);
         this.textures.push(tex);

@@ -54,9 +54,24 @@ export interface PhotoRoof {
   dz: number;
 }
 
+/**
+ * Building facades (#141, the `aFacade` attribute: createBuildingMaterial's `facades`): per vertex, int16, the
+ * building's base (FACADE_BASE_Q m, world height: contact shading over its bottom metres), its storey height
+ * (FACADE_STOREY_Q m; 0 = the window style's own grid), a per-building seed (window width and rhythm) and flags
+ * (FACADE_GLASS: a glass facade, sky reflections by view angle; FACADE_BASE, always set: the base is known).
+ */
+export const FACADE_BASE_Q = 0.1;
+export const FACADE_STOREY_Q = 0.01;
+export const FACADE_GLASS = 1;
+/** Set on every vertex with a facade: its base is known (contact shading). */
+export const FACADE_BASE = 2;
+
 export class GeometryBuilder {
   /** The `aRoof` channel (photo roofs), when enabled; null = none (the geometry gets no attribute). */
   private roof: number[] | null = null;
+  /** The `aFacade` channel, when enabled, and the value new vertices take (setFacade). */
+  private fac: number[] | null = null;
+  private curFac: [number, number, number, number] = [0, 0, 0, 0];
   private pos: number[] = [];
   private nrm: number[] = [];
   private col: number[] = [];
@@ -81,10 +96,36 @@ export class GeometryBuilder {
     return this.roof !== null;
   }
 
-  /** `aRoof` for the `n` vertices just added: none unless set later (setRoof). */
+  /** Carry building facades (`aFacade`) from now on; vertices already added get none. */
+  enableFacades(): void {
+    if (!this.fac) this.fac = new Array(this.vertexCount * 4).fill(0);
+  }
+
+  get facades(): boolean {
+    return this.fac !== null;
+  }
+
+  /**
+   * The facade the next vertices take (when enabled): the building's base (m, world height), storey height (m, 0 = the
+   * style's own), a seed 0…1 and FACADE_* flags. `clearFacade()` goes back to none.
+   */
+  setFacade(base: number, storey: number, seed: number, flags = 0): void {
+    this.curFac = [Math.max(-32768, Math.min(32767, Math.round(base / FACADE_BASE_Q))), Math.round(storey / FACADE_STOREY_Q), Math.floor(seed * 32767), flags | FACADE_BASE];
+  }
+
+  clearFacade(): void {
+    this.curFac = [0, 0, 0, 0];
+  }
+
+  /** `aRoof` (none unless set later) and `aFacade` (the current facade) for the `n` vertices just added. */
   private padRoof(n: number): void {
     const r = this.roof;
     if (r) for (let i = 0; i < n; i++) r.push(0, 0, 0, 0);
+    const f = this.fac;
+    if (f) {
+      const [a, b, c, d] = this.curFac;
+      for (let i = 0; i < n; i++) f.push(a, b, c, d);
+    }
   }
 
   /** Set `aRoof` of vertex `v`. */
@@ -335,6 +376,7 @@ export class GeometryBuilder {
     g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3));
     g.setAttribute('aWin', new BufferAttribute(new Float32Array(this.win), 1));
     if (this.roof) g.setAttribute('aRoof', new Int16BufferAttribute(this.roof, 4));
+    if (this.fac) g.setAttribute('aFacade', new Int16BufferAttribute(this.fac, 4));
     const n = this.vertexCount;
     g.setIndex(n > 65535 ? new BufferAttribute(new Uint32Array(this.idx), 1) : new BufferAttribute(new Uint16Array(this.idx), 1));
     g.computeBoundingSphere();

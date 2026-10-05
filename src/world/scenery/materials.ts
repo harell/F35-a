@@ -12,12 +12,33 @@ import { AdditiveBlending, ShaderMaterial, type Color, type Texture, type Vector
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { AERIAL_LIGHT_GLSL } from '../terrain/terrainShader';
 import { AERIAL_NIGHT_MIX } from '../terrain/theaters/aucklandAerial';
-import { ROOF_PHOTO, ROOF_Q, ROOF_TOP_Q, ROOF_WALL } from './GeometryBuilder';
+import { FACADE_BASE_Q, FACADE_STOREY_Q, ROOF_PHOTO, ROOF_Q, ROOF_TOP_Q, ROOF_WALL } from './GeometryBuilder';
 
 /** Height (m) of the parapet band a photo roof's walls take from the photo's roof border (#140). */
 export const PARAPET_BAND = 0.9;
 /** How far in from the wall (m) the parapet band samples the photo: on the roof's border, not the street. */
 export const PARAPET_INSET = 1.0;
+
+/**
+ * Building lighting (#141). Sky light: a wall sees half the sky, so it takes the sky's radiance half way up in the
+ * direction it faces (the dome's horizon colour, warmer towards the sun, blended with its zenith) × this, on top of the
+ * hemisphere term every surface gets: shaded faces stay readable and take the sky's tint (blue by day, violet at dusk).
+ */
+export const SKY_WALL_FILL = 0.45;
+/**
+ * Glass reflects the sky (#141), from head-on to grazing (Schlick's Fresnel blends the pair): window panes in a punched
+ * facade, and glass facades (curtain walls: the tower kit's, the LINZ blocks with glass).
+ */
+export const GLASS_REFLECT = { window: [0.06, 0.5], glass: [0.2, 0.85] } as const;
+/** Contact shading: the bottom CONTACT_HEIGHT m of a wall darken to CONTACT_DARK at the ground (aFacade buildings). */
+export const CONTACT_HEIGHT = 7;
+export const CONTACT_DARK = 0.6;
+/** Window grids by storey (#141): ranges a building's seed picks its window width (m) and margins from, per style. */
+export const STOREY_WINDOWS = {
+  office: { width: [2.4, 4.0], margin: [0.06, 0.16], sill: [0.16, 0.3] },
+  home: { width: [3.0, 4.8], margin: [0.22, 0.34], sill: [0.26, 0.36] },
+  glass: { width: [1.8, 2.6], margin: [0.03, 0.07], sill: [0.08, 0.14] },
+} as const;
 
 const commonVertex = /* glsl */ `
 varying vec3 vWorld;
@@ -77,6 +98,11 @@ varying float vWin;
 attribute vec4 aRoof;
 varying vec4 vRoof;
 #endif
+#ifdef FACADES
+// building facades (GeometryBuilder aFacade): height above the building's base (m), storey (m), seed 0…1, flags
+attribute vec4 aFacade;
+varying vec4 vFacade;
+#endif
 ${commonVertex}
 void main() {
   mat4 m = worldMatrix();
@@ -84,6 +110,9 @@ void main() {
   vWorld = w.xyz;
   #ifdef ROOFS
     vRoof = vec4(aRoof.xy * ${ROOF_Q.toFixed(4)}, aRoof.z * ${ROOF_TOP_Q.toFixed(4)} - w.y, aRoof.w);
+  #endif
+  #ifdef FACADES
+    vFacade = vec4(w.y - aFacade.x * ${FACADE_BASE_Q.toFixed(4)}, aFacade.y * ${FACADE_STOREY_Q.toFixed(4)}, aFacade.z / 32767.0, aFacade.w);
   #endif
   vNormal = normalize(mat3(m) * normal);
   vColor = vertexColor();
@@ -114,6 +143,9 @@ varying float vWin;
 #ifdef ROOFS
 varying vec4 vRoof;
 #endif
+#ifdef FACADES
+varying vec4 vFacade;
+#endif
 
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -121,10 +153,19 @@ float hash12(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
+// Schlick's Fresnel for glass (F0 0.04) seen at this pixel: the share of the sky it reflects grows towards grazing
+float glassFresnel(vec3 N) {
+  float c = clamp(dot(normalize(uCamPos - vWorld), N), 0.0, 1.0);
+  float k = 1.0 - c;
+  return 0.04 + 0.96 * k * k * k * k * k;
+}
+
 void main() {
   vec3 N = normalize(vNormal);
   vec3 base = vColor;
   vec3 emissive = vec3(0.0);
+  // the sky a facade's glass reflects (#141): radiance, added after the lighting (a reflection is not lit by the sun)
+  vec3 spec = vec3(0.0);
   float mpp = max(length(dFdx(vWorld)), length(dFdy(vWorld)));
   float photoW = 0.0;
   #ifdef AERIAL
@@ -164,19 +205,56 @@ void main() {
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
     float u = dot(vWorld.xz, t);
     vec2 spacing = vWin < 1.5 ? ${v2(WINDOW_STYLES.office.spacing)} : vWin < 2.5 ? ${v2(WINDOW_STYLES.home.spacing)} : ${v2(WINDOW_STYLES.industrial.spacing)};
-    vec2 g = vec2(u, vWorld.y) / spacing;
+    vec2 lo = vWin < 1.5 ? ${v2(WINDOW_STYLES.office.margin)} : ${v2(WINDOW_STYLES.home.margin)};
+    float y = vWorld.y;
+    bool glassy = false;
+    vec2 lo0 = lo;
+    #ifdef FACADES
+      // a LINZ building's own storeys (#141): floors of its storey height counted from its base, and its own window
+      // width and mullion rhythm from its seed (STOREY_WINDOWS); a glass facade a curtain wall of narrow panes
+      if (vFacade.y > 0.5 && vWin < 2.5) {
+        float sd = vFacade.z;
+        // (flags rounded first: an interpolated 2 can read 1.99999, and mod() would then flip the glass bit pixel by pixel)
+        glassy = mod(floor(vFacade.w + 0.5), 2.0) > 0.5;
+        float a = fract(sd * 7.13);
+        float b = fract(sd * 13.7);
+        if (glassy) {
+          spacing = vec2(mix(${STOREY_WINDOWS.glass.width[0].toFixed(2)}, ${STOREY_WINDOWS.glass.width[1].toFixed(2)}, sd), vFacade.y);
+          lo = vec2(mix(${STOREY_WINDOWS.glass.margin[0].toFixed(2)}, ${STOREY_WINDOWS.glass.margin[1].toFixed(2)}, a), mix(${STOREY_WINDOWS.glass.sill[0].toFixed(2)}, ${STOREY_WINDOWS.glass.sill[1].toFixed(2)}, b));
+        } else if (vWin < 1.5) {
+          spacing = vec2(mix(${STOREY_WINDOWS.office.width[0].toFixed(2)}, ${STOREY_WINDOWS.office.width[1].toFixed(2)}, sd), vFacade.y);
+          lo = vec2(mix(${STOREY_WINDOWS.office.margin[0].toFixed(2)}, ${STOREY_WINDOWS.office.margin[1].toFixed(2)}, a), mix(${STOREY_WINDOWS.office.sill[0].toFixed(2)}, ${STOREY_WINDOWS.office.sill[1].toFixed(2)}, b));
+        } else {
+          spacing = vec2(mix(${STOREY_WINDOWS.home.width[0].toFixed(2)}, ${STOREY_WINDOWS.home.width[1].toFixed(2)}, sd), vFacade.y);
+          lo = vec2(mix(${STOREY_WINDOWS.home.margin[0].toFixed(2)}, ${STOREY_WINDOWS.home.margin[1].toFixed(2)}, a), mix(${STOREY_WINDOWS.home.sill[0].toFixed(2)}, ${STOREY_WINDOWS.home.sill[1].toFixed(2)}, b));
+        }
+        y = vFacade.x;
+      }
+    #endif
+    vec2 g = vec2(u, y) / spacing;
     vec2 id = floor(g);
     vec2 f = fract(g);
-    vec2 lo = vWin < 1.5 ? ${v2(WINDOW_STYLES.office.margin)} : ${v2(WINDOW_STYLES.home.margin)};
     vec2 aa = vec2(mpp) / spacing;
     vec2 wv = smoothstep(lo - aa, lo + aa, f) * smoothstep(lo - aa, lo + aa, 1.0 - f);
     float win = wv.x * wv.y;
     float detail = 1.0 - smoothstep(0.35, 0.9, mpp / spacing.y);
+    #ifdef FACADES
+      // (a building's own grid goes to its average once the smaller side of a cell is under ~6 px: narrow panes and
+      // their lit windows would sparkle)
+      if (vFacade.y > 0.5 && vWin < 2.5) detail = 1.0 - smoothstep(0.12, 0.3, mpp / min(spacing.x, spacing.y));
+    #endif
     vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
-    vec3 glass = mix(base * 0.25, sky * 0.55, 0.55);
-    float cover = vWin < 1.5 ? 0.62 : 0.3;
+    // dark panes reflecting the sky, more of it towards grazing (Fresnel, #141): a glass facade reads as glass from afar
+    float fr = glassFresnel(N);
+    float refl = glassy ? mix(${GLASS_REFLECT.glass[0].toFixed(2)}, ${GLASS_REFLECT.glass[1].toFixed(2)}, fr) : mix(${GLASS_REFLECT.window[0].toFixed(2)}, ${GLASS_REFLECT.window[1].toFixed(2)}, fr);
+    float paneArea = (1.0 - 2.0 * lo.x) * (1.0 - 2.0 * lo.y);
+    // a building's own grid keeps its style's mean night glow (windowGlowAverage): bigger panes, dimmer each
+    float glowK = (1.0 - 2.0 * lo0.x) * (1.0 - 2.0 * lo0.y) / paneArea;
+    float cover = glassy ? paneArea : vWin < 1.5 ? 0.62 : 0.3;
     // (no windows on a photo roof's parapet band)
-    base = mix(base, glass, mix(cover * 0.8, win, detail) * (1.0 - photoW));
+    float pane = mix(cover * 0.8, win, detail) * (1.0 - photoW);
+    base = mix(base, base * (glassy ? 0.35 : 0.25), pane);
+    spec += sky * refl * pane;
     if (uNight > 0.0) {
       float hsh = hash12(id + floor(vWorld.xz / 37.0) * 7.0);
       float litFrac = vWin < 1.5 ? ${WINDOW_STYLES.office.lit.toFixed(3)} : ${WINDOW_STYLES.home.lit.toFixed(3)};
@@ -186,14 +264,15 @@ void main() {
       //  near: individual lit windows; mid: 4 × 3-window blocks lit at a random fraction (floors /
       //  offices with the lights on); far: the spatial average (windowGlowAverage). Averages match,
       //  so the CBD does not dim with distance.
-      vec3 avg = vWin < 1.5 ? ${v3(windowGlowAverage('office'))} : ${v3(windowGlowAverage('home'))};
+      // (the lit fraction × the panes' share of the wall × the mean lit colour: windowGlowAverage, for this grid)
+      vec3 avg = ${v3(LIT_WINDOW_MEAN)} * litFrac * paneArea * glowK;
       vec2 bid = floor(g / vec2(4.0, 3.0));
       float bh = hash12(bid + floor(vWorld.xz / 41.0) * 3.0);
       float blockLit = clamp(bh * bh * 2.2, 0.0, 1.0) / 0.5508; // mean 1 over blocks
       vec3 blockCol = mix(vec3(1.0, 0.7, 0.38), vec3(0.75, 0.85, 1.0), step(0.8, fract(bh * 5.0))) * 1.5;
       float detail2 = 1.0 - smoothstep(0.35, 0.9, mpp / (spacing.y * 3.0));
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
-      emissive += uNight * mix(mid, warm * win * lit, detail) * (1.0 - photoW);
+      emissive += uNight * mix(mid, warm * win * lit * glowK, detail) * (1.0 - photoW);
     }
   } else if (vWin > 10.5) {
     // dressed stone with punched windows (aWin 11, the Chief Post Office): a 1.5 m × 2.3 m window with a round head in
@@ -241,18 +320,21 @@ void main() {
     if (curtain) {
       band = 1.0 - smoothstep(0.2 - aa.y, 0.2 + aa.y, f.y);
       mull = smoothstep(0.93 - aa.x, 0.93 + aa.x, abs(f.x - 0.5) * 2.0);
-      glass = mix(base * 0.7, sky * 0.75, 0.5);
+      // (the glass: a tinted body, and the sky by Fresnel added after the lighting, #141)
+      glass = base * 0.6;
       vec3 spandrel = base * 0.55;
       vec3 face = mix(mix(glass, base * 0.9, mull * 0.6), spandrel, band);
       vec3 avg = mix(glass, spandrel, 0.2);
       base = mix(avg, face, detail);
+      spec += sky * mix(${GLASS_REFLECT.glass[0].toFixed(2)}, ${GLASS_REFLECT.glass[1].toFixed(2)}, glassFresnel(N)) * mix(0.78, (1.0 - mull * 0.6) * (1.0 - band), detail);
     } else {
       band = 1.0 - smoothstep(0.42 - aa.y, 0.42 + aa.y, f.y);
       mull = smoothstep(0.92 - aa.x, 0.92 + aa.x, abs(f.x - 0.5) * 2.0);
-      glass = mix(vec3(0.12, 0.15, 0.18), sky * 0.5, 0.45);
+      glass = vec3(0.12, 0.15, 0.18);
       vec3 face = mix(mix(glass, base * 0.8, mull), base, band);
       vec3 avg = mix(glass, base, 0.5);
       base = mix(avg, face, detail);
+      spec += sky * mix(${GLASS_REFLECT.window[0].toFixed(2)}, ${GLASS_REFLECT.window[1].toFixed(2)}, glassFresnel(N)) * mix(0.5, (1.0 - mull) * (1.0 - band), detail);
     }
     if (uNight > 0.0) {
       vec2 id = floor(g);
@@ -308,6 +390,21 @@ void main() {
     emissive += base * uNight * 1.6;
   }
   vec3 lit = atmoDiffuse(base, N, 1.0);
+  // sky light on walls (#141): half the sky, in the direction the wall faces
+  float wall = 1.0 - abs(N.y);
+  // (the sky dome's own colours, cheaply: its horizon, warmer towards the sun, blended with the zenith, as atmoSky()
+  // gives them half way up; no per-pixel exp or pow)
+  if (wall > 0.0) {
+    vec2 sh = uSunDir.xz / max(length(uSunDir.xz), 1e-4);
+    float toSun = max(dot(N.xz, sh), 0.0) * smoothstep(-0.12, 0.08, uSunDir.y);
+    vec3 skyWall = mix(mix(uHorizon, uHorizonSun, toSun * toSun), uZenith, 0.5);
+    lit += base * skyWall * (${SKY_WALL_FILL.toFixed(3)} * 0.5 * wall);
+  }
+  #ifdef FACADES
+    // contact shading: a building's walls darken towards the ground it stands on (no SSAO: one smoothstep)
+    if (vFacade.w > 1.5 && wall > 0.5) lit *= mix(${CONTACT_DARK.toFixed(2)}, 1.0, smoothstep(0.0, ${CONTACT_HEIGHT.toFixed(1)}, max(vFacade.x, 0.0)));
+  #endif
+  lit += spec;
   #ifdef AERIAL
     // the photo's low-sun light, as on the terrain photo round these tops (#61 item 5)
     lit += base * uSunColor * (aerialLowSun() * aerialHouseShare(distance(vWorld, uCamPos)) * photoW * 0.3183099);
@@ -336,14 +433,17 @@ export function createBuildingMaterial(
     aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 }; uAerialHouseR: { value: number } };
     /** With `aerial`: the photo only on photo roofs (GeometryBuilder enablePhotoRoofs, the CBD mesh), at their lean. */
     roofs?: boolean;
+    /** Building facades (GeometryBuilder enableFacades, the CBD mesh): storeys, window rhythm, glass, contact shading. */
+    facades?: boolean;
   } = {},
 ): ShaderMaterial {
   const defines: Record<string, number> = {};
   if (opts.houses) defines.HOUSES = 1;
   if (opts.aerial) defines.AERIAL = 1;
   if (opts.aerial && opts.roofs) defines.ROOFS = 1;
+  if (opts.facades) defines.FACADES = 1;
   return new ShaderMaterial({
-    name: opts.houses ? 'WorldHouses' : opts.aerial ? (opts.roofs ? 'WorldBuildingRoofs' : 'WorldBuildingAerial') : 'WorldBuilding',
+    name: opts.houses ? 'WorldHouses' : opts.aerial ? (opts.roofs ? 'WorldBuildingRoofs' : 'WorldBuildingAerial') : opts.facades ? 'WorldBuildingFacades' : 'WorldBuilding',
     vertexShader: buildingVertex,
     fragmentShader: buildingFragment,
     uniforms: { ...atmo, ...(opts.aerial ?? {}) },
