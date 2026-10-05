@@ -47,7 +47,7 @@ import { stepLandmarks, type LandmarkEntity } from './landmarks';
 import { BOAT_SPEED, makeBoat, stepBoats } from './boats';
 import { makeStoat, stepStoats } from './stoat';
 
-/** Ground target types that are IRGC Navy fast boats (sailed by sim/boats.ts). */
+/** Ground target types that are Rat navy fast boats (sailed by sim/boats.ts). */
 const BOAT_TYPES = new Set<GroundTargetType>(['suicide_boat', 'missile_boat']);
 
 /** Size of the pooled bullet / shell array. */
@@ -399,7 +399,7 @@ class SimWorldImpl implements SimWorld {
       this.reportError('combat', err);
     }
 
-    // 4. Ground movers, then the IRGC Navy fast boats (chase, strike countdown, moving SAMs, Kowsars)
+    // 4. Ground movers, then the Rat navy fast boats (chase, strike countdown, moving SAMs, Kowsars)
     this.updateMovers(dt);
     stepBoats(this, dt);
     stepStoats(this, dt);
