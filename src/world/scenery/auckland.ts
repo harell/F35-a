@@ -171,8 +171,8 @@ export interface CbdStats {
  * when the LINZ street map is installed (buildRealCBD), else on the fixed CBD grid (AKL_CBD_GRID,
  * painted by the terrain shader).
  */
-export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null, buildings: Building[] | null = null): CbdStats {
-  if (cbd.streets && buildings && buildings.length) return buildLinzCBD(B, lights, height, detail, cbd.streets, buildings);
+export function buildCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, cbd: CbdGrid, roads: RoadNetwork | null, buildings: Building[] | null = null, houseBuilder?: (b: Building) => GeometryBuilder | null): CbdStats {
+  if (cbd.streets && buildings && buildings.length) return buildLinzCBD(B, lights, height, detail, cbd.streets, buildings, houseBuilder);
   if (cbd.streets) return buildRealCBD(B, lights, height, detail, cbd.streets, roads);
   const t0 = B.triangleCount;
   const rnd = mulberry32(2024);
@@ -655,7 +655,11 @@ function towerPartFacade(t: CbdTower, kind: string | undefined, tmp: Color): [nu
   return [t.wall, tmp.setHex(t.wall).multiplyScalar(0.55).getHex(), TOWER_WIN[t.facade]];
 }
 
-function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, bs: Building[]): CbdStats {
+/**
+ * `houseBuilder`: where a hero neighbourhood's house goes instead of `B` (a far-off area's own mesh, so it is
+ * frustum-culled); null keeps it in `B`. A house built elsewhere has an empty vertex range in `buildingVerts`.
+ */
+function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, detail: number, st: CbdStreets, bs: Building[], houseBuilder?: (b: Building) => GeometryBuilder | null): CbdStats {
   const tol = detail >= 0.9 ? 0 : detail >= 0.5 ? 0.5 : 1.5;
   const minArea = detail >= 0.5 ? 0 : 60;
   const t0 = B.triangleCount;
@@ -705,8 +709,9 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       if (b.hero === 'house' && b.colors) {
         // hero neighbourhood houses (aucklandNeighbourhoods.ts): measured roof shape and colours, homes' windows
         const w = top >= 12 ? WIN_OFFICE : WIN_HOME;
-        if (p.pitch) B.pitchedPrism(ring, y0, g, p.pitch, b.colors.wall, b.colors.roof, w);
-        else B.prism(ring, y0, roof, b.colors.wall, b.colors.roof, w);
+        const H = houseBuilder?.(b) ?? B;
+        if (p.pitch) H.pitchedPrism(ring, y0, g, p.pitch, b.colors.wall, b.colors.roof, w);
+        else H.prism(ring, y0, roof, b.colors.wall, b.colors.roof, w);
         prisms.push({ ...p, y0, y1: g + p.h });
         heights.push(p.h);
         continue;

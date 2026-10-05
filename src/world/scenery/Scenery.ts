@@ -208,7 +208,13 @@ export class Scenery {
       this.skyTower = new SkyTowerVisual(buildingMat, o.lights > 0.01 ? this.lightsMat : null, height);
       this.group.add(this.skyTower.group);
       this.stats.meshes++;
-      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings);
+      // a hero neighbourhood outside the real-streets region (Mission Bay, the flight corridor's suburbs) gets its own
+      // mesh, so it is frustum-culled instead of widening the CBD mesh's bounds across the city
+      const apart = new Map<string, GeometryBuilder>();
+      for (const n of buildings && cbd.streets ? aucklandNeighbourhoods() ?? [] : [])
+        if (!cbd.streets!.inRegion(n.footprint[0], n.footprint[1])) apart.set(n.name, new GeometryBuilder());
+      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings, (b) => (b.area !== undefined ? apart.get(b.area) ?? null : null));
+      for (const [name, b] of apart) addMesh(b, `akl-nb-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
       // the hero landmarks in the CBD mesh collapse when the player's jet flies into one (sim/buildings.ts):
       // their vertex and night-light ranges
       const heroes: HeroCollapseRange[] = [];

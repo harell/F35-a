@@ -127,7 +127,8 @@ const cellKey = (ix: number, iz: number) => (ix + 2048) * 4096 + (iz + 2048);
 
 /**
  * The name of a LINZ building the sim knows: a tower of the tower kit or a Scene apartment carries its own, the rest
- * come from core/cbdBuildingNames.ts (OpenStreetMap names and addresses, a point inside each footprint).
+ * come from core/cbdBuildingNames.ts (OpenStreetMap names and addresses, a point inside each footprint); a hero
+ * neighbourhood's building outside that list is named after its area.
  */
 export function buildingName(b: Building): { name: string; label?: string } | undefined {
   if (b.tower) return { name: b.tower.name };
@@ -136,6 +137,8 @@ export function buildingName(b: Building): { name: string; label?: string } | un
   for (const n of CBD_BUILDING_NAMES) {
     if (Math.hypot(n.x - p.cx, n.z - p.cz) < 1.5 || pointInRing(p.ring, n.x, n.z)) return n;
   }
+  // a hero neighbourhood's building outside the CBD's name list (the airport's transport hub): its area
+  if (b.area) return { name: `a building in ${b.area}`, label: `${b.area.toUpperCase()} BUILDING` };
   return undefined;
 }
 

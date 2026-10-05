@@ -89,6 +89,8 @@ export interface Building {
   name?: string;
   /** Measured colours (sRGB 0xRRGGBB) of a hero neighbourhood building: walls and roof. */
   colors?: { wall: number; roof: number };
+  /** A hero neighbourhood building's area name (aucklandNeighbourhoods.ts), so the scenery can mesh an area apart. */
+  area?: string;
 }
 
 const MAGIC = 'AKLB';
@@ -315,7 +317,7 @@ export function applyNeighbourhoods(list: Building[], areas: Neighbourhood[] | n
         const pitch: PitchedRoof | undefined = p.roof ? { ...p.roof, eave: p.eave } : undefined;
         return { h: pitch ? ridgeHeight(pitch) : p.eave, ring: p.ring, sx: 0, sz: 0, cx, cz, pitch };
       });
-      out.push({ lidar: true, hero: 'house', colors: { wall: parts[0].wallColor, roof: parts[0].roofColor }, prisms });
+      out.push({ lidar: true, hero: 'house', area: a.name, colors: { wall: parts[0].wallColor, roof: parts[0].roofColor }, prisms });
     }
   return out;
 }

@@ -9,6 +9,8 @@ F35-A — hero neighbourhoods: bake Herne Bay and Westhaven into src/world/scene
 
   # or keep the areas already in the file (byte for byte) and bake only the sites given, replacing any of the same name:
   python3 tools/hero/sites/neighbourhoods_bake.py --keep /tmp/hero/mission_bay
+  # the flight corridor's suburbs, one at a time in flight order (flight_corridor.py), each appended after the others:
+  python3 tools/hero/sites/neighbourhoods_bake.py --keep /tmp/hero/whenuapai
 
 What goes in (the review page's option C: buildings as parameters, trees as a canopy grid; see the skill):
   buildings  one record per building, its parts as prisms (a terraced roof is several), each the OSM / LiDAR-traced
@@ -65,8 +67,25 @@ def site_to_game(S):
     A = np.stack([xx.ravel(), zz.ravel(), np.ones(xx.size)], 1)
     M, res, *_ = np.linalg.lstsq(A, np.stack([gx, gz], 1), rcond=None)
     err = np.abs(A @ M - np.stack([gx, gz], 1)).max()
-    assert err < 0.2, err  # 9.5 cm over Herne Bay's 1.8 km box, 17 cm over Mission Bay's 2.4 km (the quantum is 25 cm)
-    return M.T  # 2 × 3
+    # 9.5 cm over Herne Bay's 1.8 km box, 17 cm over Mission Bay's 2.4 km (the quantum is 25 cm); a bigger box (the
+    # flight corridor's: Mount Roskill 2.9 km, Māngere 4.6 km) bends more than an affine map holds: add the
+    # quadratic terms for positions (directions and the canopy grid keep the affine part)
+    Q2 = np.stack([xx.ravel(), zz.ravel(), np.ones(xx.size), xx.ravel() ** 2, xx.ravel() * zz.ravel(), zz.ravel() ** 2], 1)
+    P, *_ = np.linalg.lstsq(Q2, np.stack([gx, gz], 1), rcond=None)
+    err2 = np.abs(Q2 @ P - np.stack([gx, gz], 1)).max()
+    assert min(err, err2) < 0.2, (err, err2)
+    if err < 0.2:
+        return M.T, None  # 2 × 3
+    return M.T, P
+
+
+def map_points(T, P, pts):
+    """Site frame → game XZ: the affine map T, or the quadratic fit P where the box needs it."""
+    a = np.asarray(pts, float).reshape(-1, 2)
+    if P is None:
+        return a @ T[:, :2].T + T[:, 2]
+    x, z = a[:, 0], a[:, 1]
+    return np.stack([x, z, np.ones_like(x), x * x, x * z, z * z], 1) @ P
 
 
 class W:
@@ -124,8 +143,8 @@ class W:
 def bake_area(w, site):
     S = json.load(open(os.path.join(site, 'site.json')))
     M = json.load(open(os.path.join(site, 'model.json')))
-    T = site_to_game(S)
-    to_g = lambda pts: (np.asarray(pts, float) @ T[:, :2].T + T[:, 2])
+    T, quad = site_to_game(S)
+    to_g = lambda pts: map_points(T, quad, pts)
     lin = T[:, :2]
     dsm, dem = load_lidar(site)
     nd = np.clip(dsm - dem, 0, None)
