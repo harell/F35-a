@@ -262,11 +262,26 @@ describe('campaigns', () => {
     expect(campaignStatus({ ...OTHER, missions: [] }, p)).toEqual({ done: 0, total: 0, soon: true });
   });
 
+  it('tells the Interspecies Revolutionary Guard Corps story (#211): the full name next to the letters, a branch per mission', () => {
+    expect(IRGC_CAMPAIGN_NAME).toBe('IRGC · Interspecies Revolutionary Guard Corps');
+    expect(IRGC().description).toMatch(/Predator Free 2050/);
+    const text = (id: string) => {
+      const m = IRGC().missions.find((x) => x.id === id)!;
+      return [...m.briefing, ...(m.script.opening ?? []).map((a) => ('text' in a ? String(a.text) : ''))].join(' ');
+    };
+    expect(text('g01')).toMatch(/Wasp air wing/);
+    expect(text('g02')).toMatch(/Rat navy/);
+    expect(text('g03')).toMatch(/Stoat Command holds the island/);
+    for (const id of ['g01', 'g02', 'g03']) expect(text(id), id).not.toMatch(/\bIRGC\b/);
+  });
+
   it('the IRGC campaign has its own ending, a placeholder without a campaign medal', () => {
     const irgc = campaignEnding('irgc');
     expect(irgc.tag).toBe(IRGC().name.toUpperCase());
     expect(irgc.medal).toBeNull();
-    expect(irgc.epilogue.join(' ')).toContain(`${IRGC().name} is complete`);
+    expect(irgc.epilogue.join(' ')).toContain(`${IRGC().name}: the campaign is complete`);
+    // the Interspecies Revolutionary Guard Corps story (#211): every branch the campaign met is beaten
+    for (const s of ['Wasp air wing', 'Rat navy', 'Stoat Command', '2050']) expect(irgc.epilogue.join(' ')).toContain(s);
     expect(irgc.epilogue.join(' ')).not.toContain('Southern Cross');
     expect(irgc.roll[0]).toEqual(['Campaign', IRGC().name]);
     // an unknown campaign gets the same ending

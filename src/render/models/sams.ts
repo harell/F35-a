@@ -1,6 +1,6 @@
 /**
  * SAM site prototypes: SA-6 (Straight Flush + 3 TELs), SA-15 (Tor), ZSU-23-4 (Shilka), and the
- * IRGC Navy air-defence fast boat (a moving SAM: hull from models/boats.ts, radar, SAM turret).
+ * Rat navy air-defence fast boat (a moving SAM: hull from models/boats.ts, radar, SAM turret).
  *
  * Every animated node is a DIRECT child of the site root (so yaw angles are site-relative):
  *  - 'yaw:i'   launcher turret, rotates with launcherAzimuth; its children 'pitch:i:j' elevate
@@ -106,7 +106,7 @@ function build(type: SamType, pal: Palette): SamPrototype {
       break;
     }
     case 'ad_boat': {
-      // IRGC Navy air-defence fast boat: hull + cabin, a rotating search radar on the cabin roof, an
+      // Rat navy air-defence fast boat: hull + cabin, a rotating search radar on the cabin roof, an
       // aft turret of four SAM canisters and a MANPADS gunner on the foredeck
       statics.push(...adBoat());
       const t = addTurret(0, 0, 1.1, 5.2, [place(cylinder(0.9, 1.0, 0.5, 10, pal.dark), [0, 0.25, 0])]);
