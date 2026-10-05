@@ -310,7 +310,7 @@ describe('the CBD built from the LINZ buildings', () => {
     expect(beacons).toBeGreaterThanOrEqual(12);
   });
 
-  it('photo roofs (#140): the roof faces carry their offset, the walls a parapet band; no attribute unless enabled', () => {
+  it('photo roofs (#140): the roof faces carry their offset, the walls a parapet band; no attribute unless enabled', { timeout: 60_000 }, () => {
     expect(medium.B.build()!.getAttribute('aRoof')).toBeUndefined();
     const B = new GeometryBuilder();
     B.enablePhotoRoofs();

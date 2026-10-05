@@ -81,9 +81,10 @@ export class GeometryBuilder {
     return this.roof !== null;
   }
 
-  /** Keep `aRoof` in step with the vertices pushed since `from` (none unless set later). */
-  private padRoof(): void {
-    if (this.roof) while (this.roof.length < this.vertexCount * 4) this.roof.push(0, 0, 0, 0);
+  /** `aRoof` for the `n` vertices just added: none unless set later (setRoof). */
+  private padRoof(n: number): void {
+    const r = this.roof;
+    if (r) for (let i = 0; i < n; i++) r.push(0, 0, 0, 0);
   }
 
   /** Set `aRoof` of vertex `v`. */
@@ -128,7 +129,7 @@ export class GeometryBuilder {
       this.win.push(win);
     }
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-    this.padRoof();
+    this.padRoof(4);
   }
 
   /** Triangle from 3 local points (counter-clockwise from the front). */
@@ -153,7 +154,7 @@ export class GeometryBuilder {
       this.win.push(win);
     }
     this.idx.push(base, base + 1, base + 2);
-    this.padRoof();
+    this.padRoof(3);
   }
 
   /**
