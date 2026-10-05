@@ -13,6 +13,7 @@
 import { ATMOSPHERE_GLSL } from '../sky/atmosphere';
 import { COAST_MASK_RANGE } from './coastline';
 import { FOOTPATH } from '../scenery/cbdStreets';
+import { FRONT_BAND, FRONT_DEPTH, FRONT_FOOTPATH, FRONT_MAX, FRONT_TEX_W, SIDE_STREET_COS, SIDE_STREET_GAP } from '../scenery/frontage';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
 import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX } from './theaters/aucklandAerial';
 
@@ -171,6 +172,14 @@ uniform float uLotMaskRows; // texels down
 uniform sampler2D uSiteMask; // landmark sites (stadium grounds, the oil terminal…): no procedural streets or lots; same layout
 uniform vec4 uSiteMaskRect;
 uniform float uSiteMaskRows;
+uniform sampler2D uDistAngles; // street grid angle of the districts an arterial runs through (urbanGrid.ts DistrictAngles)
+uniform vec4 uDistAngleRect; // cell index of texel (0, 0), texels across, down; across 0 = none
+uniform sampler2D uFrontCells; // road frontage (frontage.ts): candidate segments per cell (RGBA8 start, count)
+uniform vec4 uFrontRect; // x0, z0, cell (m), cells across; across 0 = none
+uniform float uFrontRows; // cells down
+uniform sampler2D uFrontList; // RGBA8 segment indices
+uniform sampler2D uFrontSegs; // RGBA32F, 4 texels per segment
+uniform sampler2D uFrontFlags; // R8, one per lot: 0 empty, 1 house, 2 apartment, 3 shop
 varying vec3 vWorld;
 varying vec2 vUv;
 varying float vH;
@@ -194,12 +203,13 @@ float edgeDist(vec2 p, vec2 sz) {
   return min(e.x, e.y);
 }
 
-// Jittered-grid Voronoi "district": xy = centre, z = hash, w = distance to the district border (m).
-vec4 district(vec2 wp, float size) {
+// Jittered-grid Voronoi "district": xy = centre, z = hash, w = distance to the district border (m); cell = its grid cell.
+vec4 district(vec2 wp, float size, out vec2 cell) {
   vec2 g = floor(wp / size);
   float b1 = 1e12;
   float b2 = 1e12;
   vec3 res = vec3(0.0);
+  cell = g;
   for (int j = -1; j <= 1; j++) {
     for (int i = -1; i <= 1; i++) {
       vec2 cc = g + vec2(float(i), float(j));
@@ -210,12 +220,24 @@ vec4 district(vec2 wp, float size) {
         b2 = b1;
         b1 = d;
         res = vec3(cp, hash12(cc + 7.3));
+        cell = cc;
       } else if (d < b2) {
         b2 = d;
       }
     }
   }
   return vec4(res, 0.5 * (sqrt(b2) - sqrt(b1)));
+}
+
+// Street grid angle (rad) of an urban district: turned to the arterial that runs through it (urbanGrid.ts
+// districtAngles), else its hash's.
+float districtAngle(vec2 cell, float hash) {
+  vec2 t = cell - uDistAngleRect.xy;
+  if (uDistAngleRect.z > 0.0 && t.x >= 0.0 && t.y >= 0.0 && t.x < uDistAngleRect.z && t.y < uDistAngleRect.w) {
+    vec4 v = floor(texelFetch(uDistAngles, ivec2(t), 0) * 255.0 + 0.5);
+    if (v.a > 127.0) return (v.r + v.g * 256.0) / 65536.0 * 6.2831853;
+  }
+  return hash * 6.2831;
 }
 
 // CBD street map (cbdStreets.ts): x = distance to the nearest kerb (m, + off the street), y = signed
@@ -256,16 +278,92 @@ float lotMasked(vec2 wp) { return maskBit(uLotMask, uLotMaskRect, uLotMaskRows, 
 // stops there, so a 3D landmark never stands on painted streets and houses; its real streets are ribbons around it.
 float siteMasked(vec2 wp) { return maskBit(uSiteMask, uSiteMaskRect, uSiteMaskRows, wp); }
 
-// Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts).
-vec4 urbanDistrict(vec2 wp) {
+// Urban district: the CBD's own fixed grid inside uCbd, Voronoi districts elsewhere (urbanGrid.ts); ang = its
+// street grid angle.
+vec4 urbanDistrict(vec2 wp, out float ang) {
+  vec2 cell;
   if (uCbd.z > 0.0) {
     float r = length(wp - uCbd.xy);
-    if (r < uCbd.z) return vec4(uCbd.xy, uCbd.w, uCbd.z - r);
-    vec4 d = district(wp, 1300.0);
+    if (r < uCbd.z) {
+      ang = uCbd.w * 6.2831;
+      return vec4(uCbd.xy, uCbd.w, uCbd.z - r);
+    }
+    vec4 d = district(wp, 1300.0, cell);
     d.w = min(d.w, r - uCbd.z);
+    ang = districtAngle(cell, d.z);
     return d;
   }
-  return district(wp, 1300.0);
+  vec4 d = district(wp, 1300.0, cell);
+  ang = districtAngle(cell, d.z);
+  return d;
+}
+
+ivec2 frontTexel(float i) {
+  return ivec2(int(mod(i, ${FRONT_TEX_W.toFixed(1)})), int(floor(i / ${FRONT_TEX_W.toFixed(1)})));
+}
+
+// Road frontage (frontage.ts, FrontageMap.at() is the same lookup): the lots lining an arterial, facing it. The
+// nearest segment among the cell's candidates within the band wins. Out: lot = (along the lot, back from the
+// footpath, lot width, lot index or −1), road = (segment direction, side sign: +1 left, distance from the kerb),
+// id = (segment · 2 + side, lot kind, along the segment).
+bool frontageLot(vec2 wp, out vec4 lot, out vec4 road, out vec3 id) {
+  if (uFrontRect.w <= 0.0) return false;
+  vec2 c = floor((wp - uFrontRect.xy) / uFrontRect.z);
+  if (c.x < 0.0 || c.y < 0.0 || c.x >= uFrontRect.w || c.y >= uFrontRows) return false;
+  vec4 cv = floor(texelFetch(uFrontCells, ivec2(c), 0) * 255.0 + 0.5);
+  if (cv.a < 0.5) return false;
+  float start = cv.r + cv.g * 256.0 + cv.b * 65536.0;
+  float best = -1.0;
+  float bd = ${FRONT_BAND.toFixed(2)};
+  vec2 bst = vec2(0.0);
+  vec4 bA = vec4(0.0);
+  vec4 bB = vec4(0.0);
+  for (int i = 0; i < ${FRONT_MAX}; i++) {
+    if (float(i) >= cv.a) break;
+    vec4 lv = floor(texelFetch(uFrontList, frontTexel(start + float(i)), 0) * 255.0 + 0.5);
+    float k = lv.r + lv.g * 256.0 + lv.b * 65536.0;
+    vec4 A = texelFetch(uFrontSegs, frontTexel(k * 4.0), 0);
+    vec4 B = texelFetch(uFrontSegs, frontTexel(k * 4.0 + 1.0), 0);
+    vec2 v = wp - A.xy;
+    float s = dot(v, A.zw);
+    float t = -v.x * A.w + v.y * A.z;
+    float d = length(vec2(s - clamp(s, 0.0, B.x), t)) - B.y;
+    if (d < bd) {
+      bd = d;
+      best = k;
+      bst = vec2(s, t);
+      bA = A;
+      bB = B;
+    }
+  }
+  if (best < 0.0) return false;
+  float side = bst.y >= 0.0 ? 0.0 : 1.0;
+  vec4 L = texelFetch(uFrontSegs, frontTexel(best * 4.0 + 2.0 + side), 0); // s0, lot width, lots
+  float kerb = abs(bst.y) - bB.y;
+  float ly = kerb - ${FRONT_FOOTPATH.toFixed(2)};
+  // lot index (frontage.ts lotAlong): uniform, or in blocks between the side streets (L.w = their period)
+  float u = bst.x - L.x;
+  float w = max(L.y, 1e-3);
+  float n = floor(u / w);
+  float x = u - n * w;
+  if (L.w > 0.0) {
+    float m = floor((L.w - ${SIDE_STREET_GAP.toFixed(1)}) / w + 0.5);
+    float b = floor(u / L.w);
+    float v = u - b * L.w - ${(SIDE_STREET_GAP / 2).toFixed(2)};
+    float j = floor(v / w);
+    n = v < 0.0 || j >= m ? -1.0 : b * m + j;
+    x = v - j * w;
+  }
+  float kind = 0.0;
+  if (L.z > 0.0 && ly >= 0.0 && ly < ${FRONT_DEPTH.toFixed(2)} && n >= 0.0 && n < L.z) {
+    kind = floor(texelFetch(uFrontFlags, frontTexel((side < 0.5 ? bB.z : bB.w) + n), 0).r * 255.0 + 0.5);
+  } else {
+    n = -1.0;
+  }
+  lot = vec4(n >= 0.0 ? x : 0.0, ly, L.y, n);
+  road = vec4(bA.zw, side < 0.5 ? 1.0 : -1.0, kerb);
+  id = vec3(best * 2.0 + side, kind, bst.x);
+  return true;
 }
 
 vec3 roofColor(float lh) {
@@ -370,10 +468,10 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   const vec2 LOT = vec2(17.5, 38.0);
   // CBD region: Auckland's real streets (the whole region is built up, whatever the colour map says)
   if (sm.y > 0.0) return cbdPattern(wp, mpp, sm, emissive);
-  vec4 dist = urbanDistrict(wp);
+  float ang;
+  vec4 dist = urbanDistrict(wp, ang);
   // the CBD region border is a district border (a street under the motorway that runs along it)
   dist.w = min(dist.w, -sm.y);
-  float ang = dist.z * 6.2831;
   mat2 R = rot2(ang);
   vec2 p = R * (wp - dist.xy);
   vec2 sunL = R * uSunDir.xz;
@@ -388,7 +486,8 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
   // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
   if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
-  float apt = step(0.9, dens);
+  float aptFar = step(0.9, dens);
+  float apt = aptFar;
   float roadD = edgeDist(p, BLOCK);
   float aa = max(mpp, 0.05);
   float road = 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, roadD);
@@ -396,6 +495,38 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // lane marks or extra lamps: painted on every jittered Voronoi border those read as cracked
   // paving from altitude). Real arterials are road ribbons (motorways.ts ARTERIALS).
   road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w)) * (1.0 - site);
+  // Along an arterial: its frontage lots (frontage.ts) facing it across a footpath, instead of the grid. Only the
+  // grid streets that meet it square enough carry on through the band to the kerb (side streets); the lot frame
+  // replaces the grid's (x along the road, y back from the footpath: a row-0 lot, its street in front).
+  vec2 lotSz = LOT;
+  float row = mod(lid.y, 2.0);
+  float front = 0.0;
+  float shop = 0.0;
+  float frontFoot = 0.0;
+  vec4 fLot;
+  vec4 fRoad;
+  vec3 fId;
+  if (mpp < 40.0 && frontageLot(wp, fLot, fRoad, fId)) {
+    front = 1.0;
+    vec2 uL = R * fRoad.xy;
+    roadD = min(abs(uL.y) < ${SIDE_STREET_COS.toFixed(2)} ? edgeDist(vec2(p.x, 0.5 * BLOCK.y), BLOCK) : 1e3, abs(uL.x) < ${SIDE_STREET_COS.toFixed(2)} ? edgeDist(vec2(0.5 * BLOCK.x, p.y), BLOCK) : 1e3);
+    road = (1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, roadD)) * (1.0 - site);
+    // the carriageway (under the ribbon) and the footpath along the kerb
+    road = max(road, 1.0 - smoothstep(-aa * 0.5, aa * 0.5, fRoad.w));
+    frontFoot = 1.0 - smoothstep(${FRONT_FOOTPATH.toFixed(2)} - aa * 0.5, ${FRONT_FOOTPATH.toFixed(2)} + aa * 0.5, fRoad.w);
+    vec2 ay = vec2(-fRoad.y, fRoad.x) * fRoad.z;
+    sunL = vec2(dot(uSunDir.xz, fRoad.xy), dot(uSunDir.xz, ay));
+    p = vec2(fId.z, fLot.y);
+    lotSz = vec2(fLot.z, ${FRONT_DEPTH.toFixed(2)});
+    lid = vec2(fLot.w, 0.0);
+    lf = vec2(fLot.x / fLot.z, fLot.y / ${FRONT_DEPTH.toFixed(2)});
+    lh = hash12(vec2(fLot.w + 17.0, fId.x + 101.0));
+    built = step(0.5, fId.y);
+    apt = step(1.5, fId.y);
+    shop = step(2.5, fId.y);
+    park = site;
+    row = 0.0;
+  }
 
   vec3 asphalt = vec3(0.085, 0.086, 0.09);
   vec3 paving = vec3(0.28, 0.275, 0.26);
@@ -405,7 +536,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // leafy and bare neighbourhoods (≈ 500 m scale)
   float leafy = smoothstep(0.2, 0.8, texture2D(uDetail, wp * (1.0 / 1730.0)).a);
   // Auckland canopy cover ≈ 30-45 % (leafy isthmus suburbs at the top end), less in the densest parts
-  float treeFrac = mix(0.3, 0.46, leafy) * (1.0 - 0.3 * dens) * (1.0 - apt * 0.6);
+  float treeFrac = mix(0.3, 0.46, leafy) * (1.0 - 0.3 * dens) * (1.0 - aptFar * 0.6);
   vec3 flatAvg = vec3(0.3, 0.29, 0.27);
   // Far: grey-green area average (canopy, NZ roofs, lawns, streets; precomputed on the CPU from the
   // palette), leafier / barer by neighbourhood, plus a per-block canopy / roof mottle (≈ 100 m) that
@@ -413,7 +544,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec3 far = mix(uSuburbBare, uSuburbLeafy, leafy);
   far = mix(far, uCanopy * 1.25, (bh - 0.5) * 0.45 * (1.0 - smoothstep(40.0, 160.0, mpp)));
   vec3 cbdFar = flatAvg * 0.6 + uCanopy * treeFrac + mix(asphalt, paving, 0.5) * 0.25;
-  far = mix(far, cbdFar, apt);
+  far = mix(far, cbdFar, aptFar);
   far = mix(far, uGarden * 0.75 + uCanopy * 0.35, park);
   // Mid range (≈ 8–40 m/px): one colour per lot on the real lot grid (roof share, lawn and garden
   // trees, random per lot) with the streets as coverage-weighted lines, so the suburbs read as rows
@@ -428,14 +559,18 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec3 mid = mix(lotCol, mix(asphalt, paving, 0.35), roadCov * 0.9);
   vec3 col = mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp));
   if (mpp < 8.0) {
-    float row = mod(lid.y, 2.0);
     float h2 = fract(lh * 37.1);
     float h3 = fract(lh * 71.7);
     float h4 = fract(lh * 13.9);
     vec2 hc = apt > 0.5 ? vec2(0.5, 0.5) : vec2(0.5 + (h2 - 0.5) * 0.14, mix(0.34, 0.66, row));
     vec2 hs = apt > 0.5 ? vec2(0.78, 0.6 + 0.2 * h4) : vec2(0.5 + 0.24 * h3, 0.28 + 0.14 * h4);
-    vec2 q = (lf - hc) * LOT;
-    vec2 hh = hs * LOT * 0.5;
+    // a frontage lot (frontage.ts frontFootprint): set back behind its front lawn, or a shop out to the footpath
+    if (front > 0.5) {
+      hc = shop > 0.5 ? vec2(0.5, 0.3) : apt > 0.5 ? vec2(0.5, 0.45) : vec2(0.5 + (h2 - 0.5) * 0.14, 0.4);
+      hs = shop > 0.5 ? vec2(0.96, 0.56) : apt > 0.5 ? vec2(0.8, 0.55 + 0.2 * h4) : vec2(0.5 + 0.24 * h3, 0.3 + 0.14 * h4);
+    }
+    vec2 q = (lf - hc) * lotSz;
+    vec2 hh = hs * lotSz * 0.5;
     vec2 e = hh - abs(q);
     float inHouse = built * smoothstep(-aa * 0.5, aa * 0.5, min(e.x, e.y));
     // gable roof shading (ridge along the long side); flat roofs with plant rooms on apartments
@@ -481,7 +616,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     vec3 parkCol = uGarden * (0.8 + 0.12 * step(0.5, fract(p.x / 9.0)));
     near = mix(near, mix(parkCol, uCanopy * tlit, tree), park);
     // footpaths, kerbs and streets (lane marks on arterials)
-    float foot = (1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD)) * (1.0 - site);
+    float foot = max((1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD)) * (1.0 - site), frontFoot);
     near = mix(near, paving * 1.15, foot * (1.0 - tree));
     near = mix(near, asphalt, road);
     col = mix(near, col, smoothstep(4.5, 8.0, mpp));
@@ -522,7 +657,8 @@ float fieldMask(vec2 wp) {
 // Rural paddocks with darker hedgerows / shelter belts, oriented per farm district; vineyards
 // (rows of vines) on some fields inside uVineyard.
 vec3 fieldPattern(vec3 base, vec2 wp, float mpp) {
-  vec4 dist = district(wp, 2600.0);
+  vec2 cell;
+  vec4 dist = district(wp, 2600.0, cell);
   vec2 p = rot2(dist.z * 6.2831) * (wp - dist.xy);
   vec2 sz = vec2(230.0, 165.0) * (0.8 + 0.4 * fract(dist.z * 5.1));
   vec2 id = floor(p / sz);

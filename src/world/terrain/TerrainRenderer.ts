@@ -37,7 +37,8 @@ import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
-import type { CbdGrid } from '../scenery/urbanGrid';
+import { districtAngles, type CbdGrid } from '../scenery/urbanGrid';
+import { FRONT_TEX_W, type FrontageMap } from '../scenery/frontage';
 import type { CbdStreets } from '../scenery/cbdStreets';
 import type { LotMask } from '../scenery/lotMask';
 
@@ -138,6 +139,8 @@ export class TerrainRenderer {
   readonly streetTexture: DataTexture | null;
   private lotMaskTexture: DataTexture | null = null;
   private siteMaskTexture: DataTexture | null = null;
+  private angleTexture: DataTexture | null = null;
+  private frontTextures: DataTexture[] = [];
   private readonly geometry: InstancedBufferGeometry;
   private readonly material: ShaderMaterial;
   private readonly patchAttr: InstancedBufferAttribute;
@@ -345,8 +348,24 @@ export class TerrainRenderer {
         uSiteMask: { value: o.dummy },
         uSiteMaskRect: { value: new Vector4(0, 0, 1, 0) },
         uSiteMaskRows: { value: 1 },
+        // the districts an arterial runs through turn their grid to it (urbanGrid.ts districtAngles)
+        uDistAngles: { value: o.dummy },
+        uDistAngleRect: { value: new Vector4(0, 0, 0, 0) },
+        // set by setFrontage() with the scenery (the lots along the arterials)
+        uFrontCells: { value: o.dummy },
+        uFrontRect: { value: new Vector4(0, 0, 1, 0) },
+        uFrontRows: { value: 1 },
+        uFrontList: { value: o.dummy },
+        uFrontSegs: { value: o.dummy },
+        uFrontFlags: { value: o.dummy },
       },
     });
+    const angles = districtAngles();
+    if (angles) {
+      this.angleTexture = dataTexture(angles.data, angles.cols, angles.rows, RGBAFormat, UnsignedByteType);
+      this.material.uniforms.uDistAngles.value = this.angleTexture;
+      this.material.uniforms.uDistAngleRect.value.set(angles.i0, angles.j0, angles.cols, angles.rows);
+    }
     this.mesh = new Mesh(this.geometry, this.material);
     this.mesh.name = 'terrain';
     this.mesh.frustumCulled = false;
@@ -481,6 +500,28 @@ export class TerrainRenderer {
     this.siteMaskTexture = this.installMask(mask, 'uSiteMask');
   }
 
+  /** Paint the lots along the arterials (frontage.ts, built with the scenery); null = none. */
+  setFrontage(map: FrontageMap | null): void {
+    for (const t of this.frontTextures) t.dispose();
+    this.frontTextures = [];
+    const u = this.material.uniforms;
+    if (!map || !map.segments.length) {
+      u.uFrontRect.value.set(0, 0, 1, 0);
+      return;
+    }
+    const cells = dataTexture(map.cellData, map.cols, map.rows, RGBAFormat, UnsignedByteType);
+    const list = dataTexture(map.listData, FRONT_TEX_W, map.listRows, RGBAFormat, UnsignedByteType);
+    const segs = dataTexture(map.segData, FRONT_TEX_W, map.segRows, RGBAFormat, FloatType);
+    const flags = dataTexture(map.flagData, FRONT_TEX_W, map.flagRows, RedFormat, UnsignedByteType);
+    this.frontTextures = [cells, list, segs, flags];
+    u.uFrontCells.value = cells;
+    u.uFrontList.value = list;
+    u.uFrontSegs.value = segs;
+    u.uFrontFlags.value = flags;
+    u.uFrontRect.value.set(map.x0, map.z0, map.cell, map.cols);
+    u.uFrontRows.value = map.rows;
+  }
+
   private installMask(mask: LotMask | null, name: 'uLotMask' | 'uSiteMask'): DataTexture | null {
     const u = this.material.uniforms;
     if (!mask) {
@@ -507,7 +548,20 @@ export class TerrainRenderer {
     this.streetTexture?.dispose();
     this.lotMaskTexture?.dispose();
     this.siteMaskTexture?.dispose();
+    this.angleTexture?.dispose();
+    for (const t of this.frontTextures) t.dispose();
   }
+}
+
+/** A data texture read with texelFetch (nearest, no mipmaps). */
+function dataTexture(data: Uint8Array | Float32Array, w: number, h: number, format: typeof RGBAFormat | typeof RedFormat, type: typeof UnsignedByteType | typeof FloatType): DataTexture {
+  const t = new DataTexture(data, w, h, format, type);
+  t.wrapS = t.wrapT = ClampToEdgeWrapping;
+  t.magFilter = NearestFilter;
+  t.minFilter = NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
 }
 
 function noFieldUniforms(list: { x: number; z: number; heading: number; halfW: number; halfL: number }[]): { uNoFieldA: { value: Vector4[] }; uNoFieldB: { value: Vector4[] } } {

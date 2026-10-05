@@ -107,7 +107,7 @@ Coordinates: game origin = Sky Tower, +X east, +Z south, the equirectangular pro
 
 # Phase 2a: roads (CBD streets, motorways, arterials)
 
-`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 19 kB gzip), fetched next to
+`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 38 kB gzip with the railways), fetched next to
 the terrain data (`src/world/scenery/aucklandRoads.ts`). Same licence and attribution as above.
 
 | Product | LDS layer | Used for |
@@ -143,13 +143,24 @@ What comes out:
   (its abutments are on the shore at the ends of the LINZ bridge section). Runs along a vehicle tunnel are flagged: within 22 m of short
   tunnels (Victoria Park, where the address data has only the viaduct), anywhere between the portals of tunnels over
   1 km (Waterview, where the address centreline is schematic). Runs under 150 m are dropped.
-- **Arterials**: Dominion Rd, Mt Eden Rd, Manukau Rd, Remuera Rd, Sandringham Rd, New North Rd, Lake Rd, Onewa Rd and East
-  Coast Rd along their hand-traced corridors (± 700 m), Great North Rd by suburb from Grey Lynn over the Whau to New Lynn;
-  the parts inside the CBD region are left to the street map.
+- **Arterials and main streets**: ≈ 140 named roads (`ARTERIALS` in `roads.ts`: the radial roads out of the CBD such as
+  Great North, New North, Dominion, Mt Eden, Manukau and Great South Rd, Symonds St, Khyber Pass, Park Rd, Domain Dr,
+  Broadway, Remuera Rd, Tamaki Dr, and the main roads of the south, east, west and North Shore), ≈ 485 km, each with a
+  kerb-to-kerb width (12–16 m). The LINZ layer covers the whole Auckland region, so a name that is used in
+  several places (Park Road in Grafton, Titirangi and Waiuku) is taken only from the listed suburbs, and everything outside
+  the world box is dropped. There is no "Domain Road" near the CBD: the Domain's roads are Domain Dr and Park Rd. The parts
+  inside the CBD region (Queen St, most of Symonds St) are left to the street map.
 - **Streets round the landmarks**: for every OSM stadium outside the region (`auckland-osm.bin`), the LINZ sections
   within 90 m of its outline, clipped there and off the grounds, as arterial-kind ribbons (widths of the street classes,
   at most 12 m); runs along an existing motorway or arterial are left out. With the terrain shader's site mask
   (`Scenery.siteMask`: no procedural grid on a stadium's grounds), a 3D stadium stands among its own streets.
+
+Outside the region every arterial is lined with frontage lots that face it (`src/world/scenery/frontage.ts`): its
+straight pieces (DP 2 m) carry a 3.5 m footpath and lots 34 m deep, trimmed on the inside of each bend and fitted in blocks
+between the side streets. The suburbs' grid turns to the arterial in every district it runs through
+(`urbanGrid.ts districtAngles`), so the side streets meet it square. The terrain shader paints the same lots
+(`frontageLot()`) and `HouseSource` stands the 3D houses, apartment blocks and town-centre shops on them; the grid's own
+lots are cleared from the back of the band (`lotMask.ts`).
 
 At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over the region (kerb distance, region
 distance, parks and the hero neighbourhoods' gardens, motorway verges); the shader and the JS placement code read the same

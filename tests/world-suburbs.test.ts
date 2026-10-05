@@ -116,7 +116,8 @@ describe('real arterial roads and softer volcanic cones', () => {
         const k = Math.round((p.z[i] - hf.origin) / hf.cell) * hf.n + Math.round((p.x[i] - hf.origin) / hf.cell);
         if (hf.mat[k] === MAT_URBAN) urban++;
       }
-      expect(longest, `${p.name} runs over water`).toBeLessThan(300); // Whau bridge incl. shore ramps ≈ 270 m
+      // Whau bridge incl. shore ramps ≈ 270 m; Tamaki Dr crosses the mouth of Hobson Bay on its seawall causeway
+      expect(longest, `${p.name} runs over water`).toBeLessThan(p.name === 'Tamaki Dr' ? 500 : 300);
       // the main arterials cross the suburbs (the streets round a stadium may run along its park)
       if (HAND_NAMES.has(p.name)) expect(urban / p.x.length, `${p.name} runs through the suburbs`).toBeGreaterThan(0.6);
     }

@@ -13,6 +13,7 @@ import { TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
+import { FRONT_HOUSE, type FrontageMap, type FrontHouse } from './frontage';
 import { canopyAt, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
 import { pointInRing } from './cbdStreets';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
@@ -228,7 +229,11 @@ export class HouseSource implements ScatterSource {
     private readonly blocked: ((x: number, z: number, margin: number) => boolean) | null = null,
     /** Lots cleared along the road and railway ribbons (the terrain shader leaves them unbuilt too). */
     private readonly lotMask: Pick<LotMask, 'masked'> | null = null,
+    /** The lots along the arterials, facing them (frontage.ts; the terrain shader paints the same). */
+    private readonly frontage: FrontageMap | null = null,
   ) {}
+
+  private readonly front: FrontHouse[] = [];
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
     // Districts overlapping the tile (sampled on a 3×3 grid)
@@ -239,6 +244,15 @@ export class HouseSource implements ScatterSource {
         // the CBD region has no procedural lots (its buildings follow the real streets: buildCBD)
         if (!d.real && !seen.some((s) => s.cx === d.cx && s.cz === d.cz)) seen.push(d);
       }
+    if (this.frontage) {
+      this.front.length = 0;
+      for (const h of this.frontage.housesIn(x0, z0, size, this.front)) {
+        const gh = this.groundAt(h.x, h.z);
+        if (gh < 1) continue;
+        if (this.blocked && this.blocked(h.x, h.z, 4)) continue;
+        out.data[h.kind === FRONT_HOUSE ? HOUSE : APARTMENT].push(h.x, gh - 0.8, h.z, h.yaw, h.w, h.h + 0.8, h.d, 1, 1, 1, h.lh);
+      }
+    }
     const lotW = BLOCK_W / LOTS_X;
     const lotD = BLOCK_D / LOTS_Z;
     for (const d of seen) {

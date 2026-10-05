@@ -18,7 +18,7 @@ import { buildAirbase, buildExtraRunway, buildRealAirfield } from './airbase';
 import { airfieldLayout } from './aucklandOsm';
 import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayout, siteRings } from './aucklandSites';
 import { buildSettlement } from './settlements';
-import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, buildMarinas, buildObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
+import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, inTownCentre, buildMarinas, buildObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { buildMuseum } from './museum';
 import { SkyTowerVisual } from './skyTower';
 import { buildHarbourBridge } from './harbourBridge';
@@ -32,6 +32,7 @@ import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
 import { aucklandBuildings } from './aucklandBuildings';
 import { LotMask, maskFromRings, urbanBounds } from './lotMask';
+import { FRONT_BAND, FrontageMap } from './frontage';
 import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
@@ -88,6 +89,8 @@ export class Scenery {
   lotMask: LotMask | null = null;
   /** Landmark sites (stadium grounds, the oil terminal) where the procedural street grid stops (terrain shader, houses). */
   siteMask: LotMask | null = null;
+  /** The lots lining the arterials, facing them (frontage.ts): the 3D houses here, the terrain paints them. */
+  frontage: FrontageMap | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
   skyTower: SkyTowerVisual | null = null;
   /** Collapsed CBD skyscrapers flattened in the merged CBD mesh (#128); null for the procedural CBD. */
@@ -178,11 +181,24 @@ export class Scenery {
       const rails = o.quality.railways ? clipRailToLand(aucklandRailPaths(), height) : [];
       const roads = new RoadNetwork([...aucklandRoadPaths(), ...rails]);
       this.roads = roads;
-      // the suburbs' lots cleared along the ribbons (the houses here and the terrain's painted ones)
-      const urban = urbanBounds(o.colorData, o.colorSize, hf.origin, hf.extent);
-      this.lotMask = urban ? LotMask.fromSegments(roads.segments, urban) : null;
       // no painted streets or houses through a stadium (its stands are 3D): its site plus a street's width
       this.siteMask = maskFromRings(siteRings(), 8);
+      // the arterials' frontage: a row of lots facing the road along both sides (frontage.ts)
+      const site = this.siteMask;
+      const region = o.style.cbd?.streets ?? null;
+      const urbanAt = new ColorMapSampler(o.colorData, o.colorSize, hf.origin, hf.extent);
+      const urban = urbanBounds(o.colorData, o.colorSize, hf.origin, hf.extent);
+      this.frontage = new FrontageMap(roads.paths, {
+        ribbonEdge: (x, z) => roads.edgeDistance(x, z),
+        urban: (x, z) => urbanAt.urban(x, z),
+        ground: height,
+        excluded: (x, z) => (site?.masked(x, z) ?? false) || (region !== null && region.regionSD(x, z) > -4),
+        centre: inTownCentre,
+        cbd: o.style.cbd,
+      }, urban);
+      // the suburbs' grid lots cleared along the ribbons (the houses here and the terrain's painted ones); along an
+      // arterial from the back of its frontage band
+      this.lotMask = urban ? LotMask.fromSegments(roads.segmentsWith((p) => (p.kind === 'arterial' ? FRONT_BAND : 0)), urban) : null;
       const cbd = o.style.cbd ?? AKL_CBD_GRID;
       // the real buildings (LINZ outlines + LiDAR heights) need the real street map they stand along
       const buildings = cbd.streets ? aucklandBuildings() : null;
@@ -227,7 +243,9 @@ export class Scenery {
       if (cityGeo) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts ?? new Int32Array(0), cs.buildingGround ?? new Float32Array(0), heroes);
       const centres = new GeometryBuilder();
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20));
+      // (nor on an arterial's frontage, whose shops and houses are the lots')
+      const front = this.frontage;
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z));
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
       const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail');
       // railway ribbons (+ bridges over the water): one more draw call
@@ -415,7 +433,7 @@ export class Scenery {
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask)),
+      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
         { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },

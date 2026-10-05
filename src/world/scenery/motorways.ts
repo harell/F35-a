@@ -331,6 +331,19 @@ export class RoadNetwork {
     return this.segs;
   }
 
+  /**
+   * The ribbon segments outside tunnels with `extra(path)` m added to each half width, flat [ax, az, bx, bz,
+   * halfWidth] records: the lot mask (lotMask.ts) clears the grid behind an arterial's frontage band.
+   */
+  segmentsWith(extra: (p: RoadPath) => number): number[] {
+    const out: number[] = [];
+    for (const p of this.paths) {
+      const e = extra(p);
+      for (let i = 0; i + 1 < p.x.length; i++) if (!p.tunnel[i]) out.push(p.x[i], p.z[i], p.x[i + 1], p.z[i + 1], p.width / 2 + e);
+    }
+    return out;
+  }
+
   /** Distance (m) from (x, z) to the nearest carriageway edge (negative on the road); ≤ 60 m range. */
   edgeDistance(x: number, z: number): number {
     const key = (Math.floor(x / this.cell) + 2048) * 4096 + (Math.floor(z / this.cell) + 2048);
