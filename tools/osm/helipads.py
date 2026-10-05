@@ -5,7 +5,7 @@ parent site (hospital, airfield, naval base, vineyard) and height; rooftop pads 
 
   pads      a node is a pad of DEFAULT_SIZE m (or its `diameter` / `width` tag) facing north; a polygon is its
             minimum rotated rectangle: centre, long side (size), short side, the long side's heading
-  parent    the hospital (`amenity=hospital`), aerodrome, naval base or vineyard area containing the pad
+  parent    the hospital (`amenity=hospital`), aerodrome, naval base, vineyard or heliport area containing the pad
   roof      a pad tagged `location=roof|rooftop` (or `roof`), or one inside a building outline, or inside a
             hospital's grounds with the LiDAR surface ROOF_MIN m above the ground at its centre
   height    rooftop pads: the median 2024 LiDAR 1 m DSM over the pad's central RING m square (Part 1 mainland,
@@ -122,6 +122,8 @@ class Collect(osmium.SimpleHandler):
             # heading of the long side: 0 = north (−Z), clockwise; folded to [0, π)
             hd = math.atan2(long_e[0], -long_e[1]) % math.pi
             self._pad(a, dict(t), c.x, c.y, max(l1, l2), min(l1, l2), hd, ('w' if ar.from_way() else 'r') + str(ar.orig_id()), g)
+            if a == 'heliport':  # the pads mapped inside it take it as their parent site
+                self.sites.append(('heliport', t.get('name', ''), g))
         elif kind == 'building':
             b = g.bounds
             if b[2] - b[0] < 400 and b[3] - b[1] < 400:
