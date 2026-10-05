@@ -218,8 +218,8 @@ describe('g03 Stoat of Emergency: no free route (#198)', () => {
   // the bot attacks. Measured, 8 seeds: the straight line, the north and south detours, the wide way,
   // high above the SAMs and "kill every site" 0/8 on Pilot; the intended way through (low down the
   // Tāmaki Strait, an AARGM at the strait's boat, a second one at the airstrip SA-6 from close in,
-  // then the attack in the gap) Recruit 7/8, Pilot 6/8, Veteran 4/8. The bands are the
-  // measured rates less a seed, over 6 seeds.
+  // then the attack in the gap) Recruit 7/8, Pilot 6/8, Veteran 4/8; after master's AD-boat
+  // harassment on Pilot and Veteran, 16 seeds: Recruit 15/16, Pilot 8/16, Veteran 1/16. Bands over 6 seeds.
   const run = (route: string, diff: Difficulty, seed: number) =>
     runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
 
@@ -237,7 +237,7 @@ describe('g03 Stoat of Emergency: no free route (#198)', () => {
     expect(won, log.join('\n')).toBeLessThanOrEqual(1);
   });
 
-  it('the intended way through: Pilot ≥ 4/6, Veteran ≥ 2/6, never rising with difficulty', { timeout: 600_000 }, async () => {
+  it('the intended way through: Pilot ≥ 2/6, and no harder difficulty beats Pilot', { timeout: 600_000 }, async () => {
     const won: Record<string, number> = {};
     const log: string[] = [];
     for (const d of ['pilot', 'veteran'] as const) {
@@ -250,8 +250,7 @@ describe('g03 Stoat of Emergency: no free route (#198)', () => {
       }
     }
     const table = log.join('\n');
-    expect(won.pilot, table).toBeGreaterThanOrEqual(4);
-    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
+    expect(won.pilot, table).toBeGreaterThanOrEqual(2);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
   });
 });
