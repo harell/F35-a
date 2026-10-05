@@ -39,6 +39,7 @@ const st = aucklandStreets() as CbdStreets;
  */
 const CORRIDOR: { name: string; min: number; inside: [number, number]; outside: [number, number]; streets: number }[] = [
   { name: 'Whenuapai', min: 100, inside: [-36.79246, 174.63369], outside: [-36.79515, 174.61439], streets: 5 },
+  { name: 'Hobsonville', min: 165, inside: [-36.80008, 174.63927], outside: [-36.79675, 174.65634], streets: 12 },
 ];
 
 describe('pitched roofs (pitchedRoof.ts)', () => {
