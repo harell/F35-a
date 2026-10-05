@@ -38,3 +38,12 @@ export function lineOfSight(terrain: TerrainQuery, a: Vector3, b: Vector3): bool
   if (a.y > top && b.y > top) return true;
   return terrain.lineOfSight(a, b);
 }
+
+/**
+ * A solid cloud deck with its base at `base` (m, core/weather.ts cloudBase; null = none) lies between
+ * heights `aY` and `bY`: one end above it, the other below. An electro-optical sensor (EOTS) sees
+ * nothing through it.
+ */
+export function cloudBetween(aY: number, bY: number, base: number | null): boolean {
+  return base !== null && (aY > base) !== (bY > base);
+}
