@@ -50,6 +50,8 @@ interface Applied {
   hero: HeroCollapseRange | null;
   /** Hero light colours before they went out. */
   lightColors: Float32Array | null;
+  /** Its crown signs in the signs mesh (a skinned kit tower): their first vertex and original Y. */
+  sign: { v0: number; ys: Float32Array } | null;
 }
 
 export class CbdCollapseVisual {
@@ -68,9 +70,14 @@ export class CbdCollapseVisual {
     heroes: readonly HeroCollapseRange[] = [],
     /** The fixture lights (LightList Points), where the heroes' night lights are (built after the mesh). */
     public lights: BufferGeometry | null = null,
+    /** The skinned kit towers' crown signs (towerSkins.ts): their mesh and [building, v0, v1) per tower; they fall with it. */
+    private readonly signs: { geo: BufferGeometry; ranges: readonly (readonly [number, number, number])[] } | null = null,
   ) {
     for (const h of heroes) this.heroes.set(h.id, h);
+    for (const [b, v0, v1] of signs?.ranges ?? []) this.signRange.set(b, [v0, v1]);
   }
+
+  private readonly signRange = new Map<number, [number, number]>();
 
   /** Building ids shown collapsed (or collapsing) now. */
   get collapsed(): number[] {
@@ -99,12 +106,18 @@ export class CbdCollapseVisual {
     }
     const pos = this.geo.getAttribute('position') as BufferAttribute;
     const arr = pos.array as Float32Array;
+    const spos = this.signs ? (this.signs.geo.getAttribute('position') as BufferAttribute) : null;
     let dirty = false;
+    let signsDirty = false;
     // a new world: stand the fallen ones up again
     for (const [id, a] of this.applied) {
       if (want.has(id)) continue;
       for (let i = 0; i < a.ys.length; i++) arr[(a.v0 + i) * 3 + 1] = a.ys[i];
       pos.addUpdateRange(a.v0 * 3, a.ys.length * 3);
+      if (a.sign && spos) {
+        for (let i = 0; i < a.sign.ys.length; i++) spos.array[(a.sign.v0 + i) * 3 + 1] = a.sign.ys[i];
+        signsDirty = true;
+      }
       this.setHeroShown(a, true);
       this.applied.delete(id);
       dirty = true;
@@ -122,10 +135,15 @@ export class CbdCollapseVisual {
       const t = now - c.start;
       for (let i = 0; i < a.ys.length; i++) arr[(a.v0 + i) * 3 + 1] = collapsedY(a.ys[i], a.ground, t);
       pos.addUpdateRange(a.v0 * 3, a.ys.length * 3);
+      if (a.sign && spos) {
+        for (let i = 0; i < a.sign.ys.length; i++) spos.array[(a.sign.v0 + i) * 3 + 1] = collapsedY(a.sign.ys[i], a.ground, t);
+        signsDirty = true;
+      }
       a.done = t >= buildingCollapseTime(a.height);
       dirty = true;
     }
     if (dirty) pos.needsUpdate = true;
+    if (signsDirty && spos) spos.needsUpdate = true;
   }
 
   /** Snapshot a building's vertices before its fall (null: it isn't in this mesh). */
@@ -146,7 +164,15 @@ export class CbdCollapseVisual {
     }
     const ys = new Float32Array(Math.max(0, v1 - v0));
     for (let v = v0; v < v1; v++) ys[v - v0] = arr[v * 3 + 1];
-    return { v0, ground, ys, height, done: false, hero, lightColors: null };
+    let sign: Applied['sign'] = null;
+    const sr = hero ? undefined : this.signRange.get(id);
+    if (sr && this.signs) {
+      const sa = this.signs.geo.getAttribute('position').array;
+      const sys = new Float32Array(sr[1] - sr[0]);
+      for (let v = sr[0]; v < sr[1]; v++) sys[v - sr[0]] = sa[v * 3 + 1];
+      sign = { v0: sr[0], ys: sys };
+    }
+    return { v0, ground, ys, height, done: false, hero, lightColors: null, sign };
   }
 
   /** A hero's night lights (blacked out: they draw additively) and its separate meshes, on or off. */

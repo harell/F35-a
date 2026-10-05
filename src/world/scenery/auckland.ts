@@ -15,6 +15,8 @@ import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
+import { towerSkin } from '../../core/cbdTowerSkins';
+import { addTowerSigns, buildBraces, emptySigns, finishWin, paintedWalls, skinParts, type TowerSignData } from './towerSkins';
 import { SCENE_FINS, type SceneTerraceKind } from '../../core/sceneApartments';
 import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
@@ -155,6 +157,8 @@ export interface CbdStats {
    */
   buildingVerts?: Int32Array;
   buildingGround?: Float32Array;
+  /** The skinned kit towers' crown signs (towerSkins.ts): one small mesh with the logo atlas, built by the caller. */
+  towerSigns?: TowerSignData;
 }
 
 /**
@@ -660,6 +664,7 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
   const tmp = new Color();
   const buildingVerts = new Int32Array(bs.length * 2);
   const buildingGround = new Float32Array(bs.length);
+  const towerSigns = emptySigns();
   for (let bi = 0; bi < bs.length; bi++) {
     const b = bs[bi];
     const base = b.prisms[0];
@@ -717,6 +722,19 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
         // Every part stands from the ground, and a crown terrace is beside the shaft's roof, not on it: up to the shaft's
         // roof its walls are the shaft's facade, the crown's colour (and its light) only above
         const [c, rc, w] = towerPartFacade(b.tower, p.kind, tmp);
+        const skin = towerSkin(b.tower.n);
+        if (skin && (p.kind === 'shaft' || p.kind === 'crown')) {
+          // a skinned tower (core/cbdTowerSkins.ts): its walls painted zone by zone, face by face; a crown terrace's
+          // walls above the shaft its crown's own
+          const shaftTop = Math.max(0, ...b.prisms.filter((q) => q.kind === 'shaft' || q.kind === 'podium').map((q) => q.h));
+          const [sc, , sw] = towerPartFacade(b.tower, 'shaft', tmp);
+          const crown = p.kind === 'crown' && shaftTop > 0 && shaftTop < p.h ? { from: g + shaftTop, colour: skin.crown?.colour ?? c, win: skin.crown ? finishWin(skin.crown.finish) : w } : null;
+          paintedWalls(B, skin, ring, y0, roof, g, { colour: sc, win: sw }, crown);
+          B.prism(ring, y0, roof, c, p.sx || p.sz ? c : crown && skin.crown ? tmp.setHex(skin.crown.colour).multiplyScalar(0.8).getHex() : rc, w, false);
+          prisms.push({ ...p, y0, y1: g + p.h });
+          heights.push(p.h);
+          continue;
+        }
         let from = y0;
         if (p.kind === 'crown') {
           const shaftTop = Math.max(0, ...b.prisms.filter((q) => q.kind === 'shaft' || q.kind === 'podium').map((q) => q.h));
@@ -736,6 +754,13 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
       B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win);
       prisms.push({ ...p, y0, y1: g + p.h });
       heights.push(p.h);
+    }
+    const skin = b.hero === 'tower' && b.tower ? towerSkin(b.tower.n) : undefined;
+    if (skin) {
+      // its bracing (in its own vertex range, so it falls with it) and its crown signs
+      const parts = skinParts(b.prisms, g);
+      if (detail >= 0.5) buildBraces(B, skin, parts, g);
+      addTowerSigns(towerSigns, bi, skin, parts, g);
     }
     buildingVerts[bi * 2 + 1] = B.vertexCount;
     buildingGround[bi] = g;
@@ -772,7 +797,7 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
   }
   const inside = (x: number, z: number) => (grid.get(key(Math.floor(x / 20), Math.floor(z / 20))) ?? []).some((p) => pointInRing(p.ring, x, z));
   streetLamps(st, lights, height, inside);
-  return { towers, tallest, heights, footprints: [], prisms, triangles: B.triangleCount - t0, buildingVerts, buildingGround };
+  return { towers, tallest, heights, footprints: [], prisms, triangles: B.triangleCount - t0, buildingVerts, buildingGround, towerSigns };
 }
 
 interface Centre {

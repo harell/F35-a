@@ -435,6 +435,36 @@ export function createSignMaterial(atmo: AtmosphereUniforms, map: Texture, dayIn
   });
 }
 
+const logoFragment = /* glsl */ `
+${ATMOSPHERE_GLSL}
+uniform sampler2D uMap;
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec2 vUv;
+void main() {
+  vec4 t = texture2D(uMap, vUv);
+  if (t.a < 0.5) discard;
+  // the logo's own colours, lit by day and glowing at night (backlit letters)
+  vec3 base = t.rgb;
+  vec3 col = atmoNight(atmoDiffuse(base, normalize(vNormal), 1.0));
+  col = atmoApplyFog(col, vWorld);
+  col += base * (0.1 + 1.3 * uNight) * (1.0 - atmoFogFactor(distance(vWorld, uCamPos) * 0.45, uCamPos.y, vWorld.y));
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+/** The CBD towers' crown signs (towerSkins.ts): a full-colour logo atlas, alpha-tested, lit by day and glowing at night. */
+export function createLogoMaterial(atmo: AtmosphereUniforms, map: Texture): ShaderMaterial {
+  return new ShaderMaterial({
+    name: 'WorldLogo',
+    vertexShader: signVertex,
+    fragmentShader: logoFragment,
+    uniforms: { ...atmo, uMap: { value: map } },
+  });
+}
+
 const foliageVertex = /* glsl */ `
 ${commonVertex}
 void main() {
