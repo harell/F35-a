@@ -251,11 +251,10 @@ describe('g03: the target, the cloud and the clock', () => {
   it('undisturbed, the stoat reaches the nest just inside 4:00 and the sortie is lost', { timeout: 60_000 }, () => {
     const m = setup();
     // under the cloud near the nest from the start (revealed at once), unhurt
-    let at = -1;
     for (let i = 0; i < 260 * 60 && m.runner.state === 'running'; i++) {
       m.tick(1 / 60, { x: G03_NEST.x - 4_000, y: 1_200, z: G03_NEST.z });
     }
-    at = m.world.time;
+    const at = m.world.time;
     expect(m.runner.state).toBe('failed');
     expect(m.runner.result(m.world).reason).toBe('The stoat reached the nest');
     expect(at).toBeGreaterThan(G03_CLOCK - 20);
