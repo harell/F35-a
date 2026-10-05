@@ -3,7 +3,7 @@
  *  - reviewers: "enemies are unfairly lethal on the default 'pilot' difficulty, stealth buys almost
  *    nothing, enemy counts outgrow the player's weapons, recruit/pilot/veteran all play the same"
  *  - lead: a player who defends reasonably survives the two-wave MiG CAP (sweepFixture(), once c01) on recruit almost always, on pilot most of
- *    the time, on veteran sometimes, on ace rarely; enemies never shoot beyond their own sensor
+ *    the time, on veteran sometimes; enemies never shoot beyond their own sensor
  *    track, prefer shots inside a sensible fraction of rMax on lower difficulties and react slower
  *    there; a clean F-35 typically gets the first shot, beast mode is seen much earlier; wingmen
  *    contribute.
@@ -22,7 +22,7 @@ import { flat, makeAiWorld, runFor, v3 } from './ai-helpers';
 import { runBalanceMission, runDuel, type BalanceResult } from './ai-playerbot';
 import { sweepFixture } from './missions-helpers';
 
-const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 const SEEDS = [11, 18, 25, 32, 39, 46, 53, 60];
 /** The two-wave MiG-29 sweep (c01-shaped, tests/missions-helpers.ts). */
 const SWEEP = sweepFixture();
@@ -48,19 +48,17 @@ describe('AI shot doctrine & reactions per difficulty', () => {
     expect(ceiling(0.9)).toBeGreaterThan(ceiling(0.4));
   });
 
-  it('enemy pilots react slower on recruit / pilot than on veteran / ace', () => {
+  it('enemy pilots react slower on recruit / pilot than on veteran', () => {
     // sweepFixture()'s first MiG pair flies at difficulty.aiSkill − 0.2
     const r = DIFFS.map((d) => deriveSkill(DIFFICULTIES[d], DIFFICULTIES[d].aiSkill - 0.2, 'red', 'mig29').reaction);
     expect(r[0]).toBeGreaterThan(r[1]);
     expect(r[1]).toBeGreaterThan(r[2]);
-    expect(r[2]).toBeGreaterThan(r[3]);
     expect(r[0]).toBeGreaterThan(3);
     expect(r[1]).toBeGreaterThan(1.9);
   });
 
-  it('veteran no longer multiplies the enemy count (two MiG pairs = 4 MiGs), ace = 6', () => {
+  it('veteran no longer multiplies the enemy count (two MiG pairs = 4 MiGs)', () => {
     expect(Math.round(2 * DIFFICULTIES.veteran.enemyCountScale)).toBe(2);
-    expect(Math.round(2 * DIFFICULTIES.ace.enemyCountScale)).toBe(3);
     expect(DIFFICULTIES.pilot.enemyCountScale).toBe(1);
   });
 });
@@ -94,7 +92,7 @@ describe('stealth matters (1v1 head-on vs a MiG-29, competent player)', () => {
       });
       return found;
     };
-    for (const d of ['pilot', 'ace'] as Difficulty[]) {
+    for (const d of ['pilot', 'veteran'] as Difficulty[]) {
       const clean = detectRange('a2a_stealth', d);
       const beast = detectRange('a2a_beast', d);
       expect(clean, d).toBeGreaterThan(5_000);
@@ -113,7 +111,7 @@ describe('stealth matters (1v1 head-on vs a MiG-29, competent player)', () => {
     let checked = 0;
     // every red radar-missile launch is checked at the moment it happens (a wingman's track may
     // reach the other jet over the datalink — each shooter still has to find the F-35 itself)
-    const tw = makeAiWorld('ace', undefined, 7);
+    const tw = makeAiWorld('veteran', undefined, 7);
     const w = tw.world;
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 5_000, 0), heading: 0, speed: 250, loadout: 'a2a_beast' });
     for (let i = 0; i < 2; i++) w.spawnAircraft({ type: i ? 'su35' : 'mig29', team: 'red', position: v3(i * 3_000, 5_500, -30_000), heading: Math.PI, speed: 250, ai: createAiBrain('fighter', { skill: 0.9, seed: 4 + i }) });
@@ -137,29 +135,23 @@ describe('two-wave MiG CAP lethality ladder (sweepFixture(), competent scripted 
   const runs = (d: Difficulty, strategy: 'bot' | 'committed'): BalanceResult[] => SEEDS.map((s) => runBalanceMission(SWEEP, d, s, flat(0), { strategy }));
   const surv = (rs: BalanceResult[]) => rs.filter((r) => r.survived).length;
 
-  it('recruit almost always, pilot most of the time, ace rarely — a clean F-35 shoots first', { timeout: 180_000 }, () => {
+  it('recruit almost always, pilot most of the time, veteran sometimes — a clean F-35 shoots first', { timeout: 180_000 }, () => {
     const rec = runs('recruit', 'bot');
     const pil = runs('pilot', 'bot');
     const vet = runs('veteran', 'committed');
-    const aceRtb = runs('ace', 'bot');
-    const aceCommitted = runs('ace', 'committed');
     expect(surv(rec)).toBeGreaterThanOrEqual(7);
     expect(surv(pil)).toBeGreaterThanOrEqual(6);
     // veteran: sometimes (the committed pilot fights the whole mission)
     expect(surv(vet)).toBeGreaterThanOrEqual(2);
-    // ace: rarely for a pilot who stays to finish the job, and clearly harder than pilot even for
-    // one who goes home when Winchester
-    expect(surv(aceCommitted)).toBeLessThanOrEqual(3);
-    expect(surv(aceRtb)).toBeLessThan(surv(pil));
     // stealth: the player's first AMRAAM leaves before any enemy missile in (nearly) every run
-    for (const rs of [rec, pil, vet, aceRtb]) {
+    for (const rs of [rec, pil, vet]) {
       const first = rs.filter((r) => r.playerFirstShot >= 0 && (r.redFirstShotAtPlayer < 0 || r.playerFirstShot < r.redFirstShotAtPlayer)).length;
       expect(first).toBeGreaterThanOrEqual(7);
     }
     // wingmen contribute (Viper 2 scores kills of its own)
     const wing = [...rec, ...pil].reduce((s, r) => s + r.wingKills, 0) / 16;
     expect(wing).toBeGreaterThanOrEqual(1);
-    // no more than 4 MiGs on pilot / veteran (reviewer: veteran/ace turned the CAP into 6)
+    // no more than 4 MiGs on pilot / veteran (reviewer: a harder level turned the CAP into 6)
     expect(Math.max(...vet.map((r) => r.redTotal))).toBeLessThanOrEqual(4);
   });
 });
@@ -225,7 +217,7 @@ describe('AI behaviour fixes', () => {
     expect(gaveUp).toBe(true);
   });
 
-  it('Ace-level enemies get GCI vectors onto an unseen stealth jet; pilot-level ones do not', () => {
+  it('Veteran-level enemies get GCI vectors onto an unseen stealth jet; pilot-level ones do not', () => {
     const commits = (d: Difficulty) => {
       const { world } = makeAiWorld(d, undefined, 9);
       const mig = world.spawnAircraft({ type: 'mig29', team: 'red', position: v3(0, 5_000, -30_000), heading: Math.PI / 2, speed: 230, ai: createAiBrain('fighter', { skill: DIFFICULTIES[d].aiSkill, seed: 2 }) });
@@ -238,7 +230,7 @@ describe('AI behaviour fixes', () => {
       return intercept;
     };
     expect(commits('pilot')).toBe(false);
-    expect(commits('ace')).toBe(true);
+    expect(commits('veteran')).toBe(true);
   });
 
   it("exposes the pilot's derived skill publicly (combat reads skill.defense for countermeasures)", () => {

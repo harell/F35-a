@@ -247,8 +247,8 @@ function detects(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircraf
   if (cue && agl >= data.altMin * 0.5) {
     const scale = ctx.world.difficulty.samRangeScale;
     const bay = tracking || t.bayDoors > 0.05;
-    const harass = ctx.world.difficulty.adBoatHarass ? data.harass : null;
-    const r = bay ? (harass ? Math.max(cue.bayRange, harass.cueRange) : cue.bayRange) : cue.range;
+    const k = ctx.world.difficulty.adBoatHarass;
+    const r = bay ? (data.harass && k > 0 ? Math.max(cue.bayRange, data.harass.cueRange * k) : cue.bayRange) : cue.range;
     if (d <= r * scale && lineOfSight(world.terrain, _eye, t.position)) return true;
   }
   if (!data.radar) {
@@ -266,8 +266,9 @@ function canEngage(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircr
   const scale = ctx.world.difficulty.samRangeScale;
   const d = t.position.distanceTo(s.position);
   const agl = t.position.y - ctx.world.terrain.surfaceHeightAt(t.position.x, t.position.z);
-  const harass = ctx.world.difficulty.adBoatHarass ? data.harass : null;
-  if (d < data.engageMin || d > Math.max(data.engageMax, harass?.reach ?? 0) * scale) return false;
+  const k = ctx.world.difficulty.adBoatHarass;
+  const harassReach = data.harass && k > 0 ? data.harass.reach * k : 0;
+  if (d < data.engageMin || d > Math.max(data.engageMax, harassReach) * scale) return false;
   if (agl < data.altMin) return false;
   if (data.gun) return t.position.y - s.position.y <= data.altMax;
   if (t.position.y > data.altMax) return false;
@@ -275,7 +276,7 @@ function canEngage(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircr
   const def = ctx.defs[data.missile];
   if (def.guidance === 'ir') return d <= def.seekerRange * Math.sqrt(irIntensity(t, s.position));
   // the harassing boat fires outside its envelope: a long shot to make the jet turn, or to catch one that doesn't
-  if (harass && d > data.engageMax * scale) return true;
+  if (harassReach > 0 && d > data.engageMax * scale) return true;
   _geom.shooterPos.copy(s.position);
   _geom.shooterPos.y += 4;
   _geom.shooterVel.set(0, 0, 0);

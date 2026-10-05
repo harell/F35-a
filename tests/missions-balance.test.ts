@@ -128,18 +128,18 @@ describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the play
 });
 
 /**
- * #58 (Balance 5/9): the win rate never rises from Pilot to Veteran or from Veteran to Ace, in every
+ * #58 (Balance 5/9): the win rate never rises from Pilot to Veteran in every
  * campaign mission. Seeds 0–5 are the ones `tools/playtest/bot-sweep.ts -- --seeds=6` flies, so a
  * failure here reproduces with
- *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran,ace --seeds=6 --log --json=<file>
+ *   npx vite-node tools/playtest/bot-sweep.ts -- --missions=<id> --diffs=pilot,veteran --seeds=6 --log --json=<file>
  * (g02 checks its own curve, with its bands, below.)
  */
 describe('#58: a difficulty curve that only falls (6 seeds)', () => {
   const SEEDS = [0, 1, 2, 3, 4, 5];
-  const DIFFS = ['pilot', 'veteran', 'ace'] as const;
+  const DIFFS = ['pilot', 'veteran'] as const;
   type Curve = { won: Record<(typeof DIFFS)[number], number>; table: string };
   async function curve(id: string): Promise<Curve> {
-    const won = { pilot: 0, veteran: 0, ace: 0 };
+    const won = { pilot: 0, veteran: 0 };
     const log: string[] = [];
     for (const d of DIFFS) {
       for (const seed of SEEDS) {
@@ -149,14 +149,13 @@ describe('#58: a difficulty curve that only falls (6 seeds)', () => {
         await breathe(); // yield: vitest's worker RPC times out on long blocks
       }
     }
-    return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6, ace ${won.ace}/6\n${log.join('\n')}` };
+    return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6\n${log.join('\n')}` };
   }
 
   for (const id of CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id)).filter((id) => id !== 'g02')) {
-    it(`${id}: the win rate doesn't rise from Pilot to Veteran or from Veteran to Ace`, { timeout: 600_000 }, async () => {
+    it(`${id}: the win rate doesn't rise from Pilot to Veteran`, { timeout: 600_000 }, async () => {
       const c = await curve(id);
       expect(c.won.veteran, `Veteran beats Pilot\n${c.table}`).toBeLessThanOrEqual(c.won.pilot);
-      expect(c.won.ace, `Ace beats Veteran\n${c.table}`).toBeLessThanOrEqual(c.won.veteran);
     });
   }
 });
@@ -166,7 +165,7 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
   // overshot a 51 m/s drone on every pass and it was 0/6 on every difficulty. With the slow-target
   // chase (ai-playerbot.ts gunChaseFloor) it measured, 6 seeds with jitter: Recruit 3/6, Pilot 6/6
   // (no jitter: 2/6, 5/6). Recruit then flew nine drones (G01_SWARM.recruitCount): 5/6, Pilot 6/6,
-  // Veteran 6/6, Ace 4/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
+  // Veteran 6/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
   it('Recruit ≥ 4/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     await new Promise((r) => setTimeout(r, 0));
@@ -179,19 +178,17 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
 });
 
 describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
-  // The bot won 24/24 (Ace by rearming) by rippling all eight StormBreakers in the first 20–39 s, before
-  // any missile boat counted down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes
-  // a second pass against a ~3.9-minute launch, and Recruit flies a suicide boat fewer. Measured with
-  // no rearming (#63), 6 seeds: Recruit 6/6, Pilot 6/6, Veteran 6/6, Ace 0/6 (nine boats for eight
-  // bombs: Ace needs the gun, which the bot doesn't use on boats). The bands are the measured floors
-  // less one seed, and the campaign's: Recruit ≥ 75 %, Veteran ≥ 25 %, Ace under 90 %.
-  // Pilot alone has the AD boats' harassment (DifficultyParams.adBoatHarass): the bay opening for a stand-off
-  // release draws a SAM shot from 16 km, the bot breaks to defend and arrives late at the second wave. Measured
-  // 4/6 (4/8 over eight seeds), so Pilot ≥ 3/6 and Pilot is for now HARDER than Veteran for the bot: the
-  // "never rising" check skips that pair until Veteran and Ace get their own harassment.
-  it('Recruit ≥ 5/6, Pilot ≥ 3/6, Veteran ≥ 2/6, Ace ≤ 5/6, never rising with difficulty (bar Pilot → Veteran); no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+  // The bot won 24/24 by rippling all eight StormBreakers in the first 20–39 s, before any missile boat counted
+  // down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes a second pass against a ~3.9-minute
+  // launch, and Recruit flies a suicide boat fewer. Pilot and Veteran also meet the AD boats' harassment
+  // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws SAM shots, the bot breaks to
+  // defend and reaches the second wave late; Veteran adds a third boat ahead of the suicide wave, inside the real
+  // envelope of the opening release. Measured with no rearming (#63), 6 seeds: Recruit 6/6, Pilot 4/6, Veteran 3/6
+  // (24 seeds: Pilot 18, Veteran 9). The bands are the measured floors less one seed, and the campaign's:
+  // Recruit ≥ 75 %, Veteran ≥ 25 %.
+  it('Recruit ≥ 5/6, Pilot ≥ 3/6, Veteran ≥ 2/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
-    const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+    const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran'];
     const won: Record<string, number> = {};
     const log: string[] = [];
     for (const d of diffs) {
@@ -209,8 +206,7 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
     expect(won.recruit, table).toBeGreaterThanOrEqual(5);
     expect(won.pilot, table).toBeGreaterThanOrEqual(3);
     expect(won.veteran, table).toBeGreaterThanOrEqual(2);
-    expect(won.ace, table).toBeLessThanOrEqual(5);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
-    expect(won.ace, table).toBeLessThanOrEqual(won.veteran);
+    expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
   });
 });

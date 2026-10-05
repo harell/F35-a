@@ -2,7 +2,7 @@
  * Regression tests for defending against SAMs (i1 critiques):
  *  - "chaff while beaming defeats every SAM and difficulty barely matters": chaff now rolls once
  *    per salvo per fire-control radar with timing / geometry and diminishing returns, scaled by
- *    difficulty — beam + chaff hit rates spread across recruit … ace, chaff alone is weak, a beam
+ *    difficulty — beam + chaff hit rates spread across recruit … veteran, chaff alone is weak, a beam
  *    alone at medium altitude does nothing (no clutter to hide in)
  *  - "the notch switches on and off at exactly 1,000 m AGL": one continuous clutter function, so
  *    950 m and 1,050 m behave alike, and low flying is a real tactic
@@ -10,7 +10,7 @@
  *  - "SAM hits are all-or-nothing: 100 % of missiles hit a non-defending jet (SA-6 36/36, SA-15
  *    48/48, SA-10 19/19 at Pilot; the SA-10 has since been removed) and one chaff roll decides the whole salvo": every round now
  *    rolls its own end-game miss distance (target g, aspect, notch, chaff in the gate, correlated
- *    salvo term) against the fuze reach; a per-difficulty target table, monotonic Recruit → Ace
+ *    salvo term) against the fuze reach; a per-difficulty target table, monotonic Recruit → Veteran
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -124,12 +124,10 @@ describe('combat: defending against SAMs', () => {
   it('SA-6 at 3,000 m: beam + chaff is a skill that difficulty scales; chaff alone or a beam alone is not enough', { timeout: 60_000 }, () => {
     const rec = rate(engagement('sa6', 'recruit', 'beamchaff', 3000, 6));
     const vet = rate(engagement('sa6', 'veteran', 'beamchaff', 3000, 6));
-    const ace = rate(engagement('sa6', 'ace', 'beamchaff', 3000, 6));
     expect(rec).toBeLessThan(0.2);
     expect(vet).toBeGreaterThan(rec);
-    expect(ace).toBeGreaterThan(vet);
-    expect(ace).toBeGreaterThan(0.3);
-    expect(ace).toBeLessThan(0.8);
+    expect(vet).toBeGreaterThan(0.1);
+    expect(vet).toBeLessThan(0.8);
     // one trick alone at medium altitude (i2: the end-game Pk means even no defence is < 100 %)
     const chaffOnly = rate(engagement('sa6', 'veteran', 'chaff', 3000, 6));
     expect(chaffOnly).toBeGreaterThan(0.5);
@@ -151,17 +149,14 @@ describe('combat: defending against SAMs', () => {
   it('i2: an undefended jet is no longer hit by 100 % of SAM rounds; Pk follows the difficulty table, monotonic', { timeout: 60_000 }, () => {
     const pilot = pooled(engagement('sa6', 'pilot', 'none', 3000, 6), engagement('sa15', 'pilot', 'none', 3000, 6), engagement('sa6', 'pilot', 'none', 6000, 6, 30_000));
     const vet = pooled(engagement('sa6', 'veteran', 'none', 3000, 6), engagement('sa15', 'veteran', 'none', 3000, 6), engagement('sa6', 'veteran', 'none', 6000, 6, 30_000));
-    const ace = pooled(engagement('sa6', 'ace', 'none', 3000, 6), engagement('sa15', 'ace', 'none', 3000, 6), engagement('sa6', 'ace', 'none', 6000, 6, 30_000));
-    // reviewer: Pilot 36/36, 48/48, 19/19 — target ≈ 0.75 at Pilot, ≈ 0.9 at Ace
+    // reviewer: Pilot 36/36, 48/48, 19/19 — target ≈ 0.75 at Pilot, ≈ 0.87 at Veteran
     expect(pilot).toBeGreaterThan(0.55);
     expect(pilot).toBeLessThan(0.85);
     expect(vet).toBeGreaterThan(pilot);
-    expect(ace).toBeGreaterThan(vet);
-    expect(ace).toBeGreaterThan(0.8);
-    expect(ace).toBeLessThan(0.97);
+    expect(vet).toBeGreaterThan(0.75);
+    expect(vet).toBeLessThan(0.97);
     expect(ENDGAME_PK.recruit).toBeLessThan(ENDGAME_PK.pilot);
     expect(ENDGAME_PK.pilot).toBeLessThan(ENDGAME_PK.veteran);
-    expect(ENDGAME_PK.veteran).toBeLessThan(ENDGAME_PK.ace);
   });
 
   it('i2: defence ladder at Pilot — none > chaff only > beam + chaff (≈ 20 %); a break turn lowers the Pk', { timeout: 60_000 }, () => {

@@ -248,11 +248,11 @@ export interface DifficultyParams {
   /** Fuel burn multiplier. */
   fuelBurnScale: number;
   /**
-   * Air-defence boats harass: with the bay open inside `SamTypeData.harass.cueRange` they cue on the jet
-   * and fire at it out to `harass.reach`, past the missile's real envelope (a nuisance shot a jet that
-   * turns away outruns; one that flies straight in meets). Off on every level but the baseline one.
+   * Air-defence boats harass, 0 = off: with the bay open inside `SamTypeData.harass.cueRange` × this they
+   * cue on the jet and fire at it out to `harass.reach` × this, past the missile's real envelope (a
+   * nuisance shot a jet that turns away outruns; one that flies straight in meets).
    */
-  adBoatHarass: boolean;
+  adBoatHarass: number;
 }
 
 export interface QualitySettings {

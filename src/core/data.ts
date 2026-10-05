@@ -73,7 +73,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     scoreMultiplier: 0.75,
     playerMissileHitsToKill: 3,
     fuelBurnScale: 0.5,
-    adBoatHarass: false,
+    adBoatHarass: 0,
   },
   pilot: {
     id: 'pilot',
@@ -96,7 +96,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     scoreMultiplier: 1,
     playerMissileHitsToKill: 2,
     fuelBurnScale: 0.8,
-    adBoatHarass: true,
+    adBoatHarass: 1,
   },
   veteran: {
     id: 'veteran',
@@ -119,7 +119,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     scoreMultiplier: 1.5,
     playerMissileHitsToKill: 1,
     fuelBurnScale: 1,
-    adBoatHarass: false,
+    adBoatHarass: 1,
   },
 };
 

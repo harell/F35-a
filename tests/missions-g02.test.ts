@@ -31,7 +31,7 @@ import { allFeatures } from '../src/world/scenery/Scenery';
 import { runPlaythrough } from './missions-bot';
 
 const DT = 1 / 60;
-const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran', 'ace'];
+const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 
 let terrain: TerrainQuery | null = null;
 /** The real Auckland terrain (LINZ coast) the mission is flown on. */
@@ -113,8 +113,8 @@ describe('g02 Straight Outta Hauraki: content', () => {
     for (const id of G02.allowedLoadouts) {
       for (const s of LOADOUTS[id].stores) expect(WEAPON_INFO[s.weapon].kind, `${id} ${s.weapon}`).not.toBe('aam');
     }
-    // one anti-radiation missile for each air-defence boat (on every difficulty)
-    expect(l.stores.find((s) => s.weapon === 'aargm')!.count).toBeGreaterThanOrEqual(G02.script.sams.filter((s) => s.type === 'ad_boat').length);
+    // one anti-radiation missile for each air-defence boat on Recruit and Pilot; Veteran's third boat is a gun target
+    expect(l.stores.find((s) => s.weapon === 'aargm')!.count).toBeGreaterThanOrEqual(G02.script.sams.filter((s) => s.type === 'ad_boat' && !s.minDifficulty).length);
     const text = G02.briefing.join(' ');
     expect(text).toMatch(/AARGM-ER/);
     expect(text).toMatch(/no air-to-air missiles/i);
@@ -182,18 +182,18 @@ describe('g02 Straight Outta Hauraki: content', () => {
     }
   });
 
-  it('the boat mix: 2 air-defence, 3 missile, 3 suicide; Recruit one suicide boat fewer (#115); Veteran adds one; Ace one more, and a two-Kowsar missile boat', { timeout: 60_000 }, () => {
-    const want: Record<Difficulty, [number, number, number]> = { recruit: [2, 3, 2], pilot: [3, 3, 2], veteran: [4, 3, 2], ace: [5, 4, 2] };
+  it('the boat mix: 2 air-defence, 3 missile, 3 suicide; Recruit one suicide boat fewer (#115); Veteran adds a suicide boat and a third air-defence boat', { timeout: 60_000 }, () => {
+    const want: Record<Difficulty, [number, number, number]> = { recruit: [2, 3, 2], pilot: [3, 3, 2], veteran: [4, 3, 3] };
     const bombs = LOADOUTS[G02.recommendedLoadout].stores.filter((s) => s.weapon === 'gbu53').reduce((n, s) => n + s.count, 0);
     for (const d of DIFFS) {
       const m = setup(d);
       m.tick(G02_MISSILE_WAVE_AT + 1); // the missile wave is in the water
       const n = [m.group(G02_GROUPS.suicide).length, m.group(G02_GROUPS.missile).length, m.group(G02_GROUPS.ad).length];
       expect(n, d).toEqual(want[d]);
-      // the boats the mission needs sunk against the eight bombs: three spare on Recruit, two at Pilot, one at Veteran, the gun on Ace
-      expect(bombs - n[0] - n[1], d).toBe({ recruit: 3, pilot: 2, veteran: 1, ace: -1 }[d]);
+      // the boats the mission needs sunk against the eight bombs: three spare on Recruit, two at Pilot, one at Veteran
+      expect(bombs - n[0] - n[1], d).toBe({ recruit: 3, pilot: 2, veteran: 1 }[d]);
       const kowsars = m.group(G02_GROUPS.missile).map((b) => (b.kind === 'ground' ? (b.boat?.strike?.missiles ?? 0) : 0));
-      expect(kowsars.filter((k) => k === 2).length, d).toBe(d === 'ace' ? 1 : 0);
+      expect(kowsars.filter((k) => k === 2).length, d).toBe(0); // no two-Kowsar boat any more
       expect(m.tanker.team).toBe('neutral');
       expect(m.tanker.hitsToSink).toBe(2);
       expect(m.tanker.name).toBe(G02_TANKER.name);
@@ -373,12 +373,21 @@ describe('g02: the competent bot (tests/missions-bot.ts)', () => {
     }
   });
 
-  it('only Pilot harasses: no AD boat fires at a stand-off ripple on Recruit, Veteran or Ace', { timeout: 120_000 }, () => {
-    expect(DIFFS.filter((d) => DIFFICULTIES[d].adBoatHarass)).toEqual(['pilot']);
-    for (const diff of ['recruit', 'veteran', 'ace'] as const) {
+  it('Pilot and Veteran harass, Recruit does not: only they get a SAM launch in the opening ripple', { timeout: 120_000 }, () => {
+    expect(DIFFS.filter((d) => DIFFICULTIES[d].adBoatHarass > 0)).toEqual(['pilot', 'veteran']);
+    for (const diff of DIFFS) {
       const r = runPlaythrough('g02', diff, 0, realTerrain(), { maxT: 400, log: true });
       const early = r.events.filter((e) => /LAUNCH m_9m330 sam/.test(e)).map((e) => Number(e.trim().split(/\s+/)[0])).filter((t) => t < 45);
-      expect(early, `${diff}: no SAM launch in the opening ripple`).toEqual([]);
+      if (diff === 'recruit') expect(early, 'recruit: no SAM launch in the opening ripple').toEqual([]);
+      else expect(early.length, `${diff}: the stand-off ripple draws SAM launches`).toBeGreaterThan(0);
     }
+  });
+
+  it('Veteran: the third air-defence boat rides ahead of the suicide wave, on the jet side of the channel', () => {
+    const ad3 = G02.script.sams.find((s) => s.id === 'ad3')!;
+    expect(ad3.minDifficulty).toBe('veteran');
+    expect(ad3.escort).toBe(G02_GROUPS.suicide);
+    expect(ad3.escortAft).toBeLessThan(0); // ahead of its leader
+    expect(ad3.escortRight).toBeGreaterThan(0); // the leader's right: west, toward the player
   });
 });

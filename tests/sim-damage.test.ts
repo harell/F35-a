@@ -32,8 +32,8 @@ describe('applyDamage — difficulty scaling', () => {
     expect(player.alive).toBe(false);
   });
 
-  it('ace: a direct SA-6 hit is fatal', () => {
-    const { tw, player } = setup('ace');
+  it('veteran: a direct SA-6 hit is fatal', () => {
+    const { tw, player } = setup('veteran');
     const sam = tw.world.spawnSam({ type: 'sa6', team: 'red', position: new Vector3(0, 0, -20000) });
     tw.world.applyDamage(player, 120, sam.id, 'm_3m9');
     expect(player.alive).toBe(false);
