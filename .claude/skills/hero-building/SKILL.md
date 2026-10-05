@@ -1,6 +1,6 @@
 ---
 name: hero-building
-description: How to build 3D models of real Auckland places for F35-A from public data, by one of two procedures. HERO — one landmark or named building (a tower, stadium, mall, bridge, monument) at mid-to-high detail, the full stack: OSM, LINZ LiDAR rasters and point cloud, the 7.5 cm aerial, Auckland Council's 2023 textured 3D mesh, Mapillary street imagery and an online photo search, so its shape, every facade, ground floor, signs and night look are measured; prototype, review, port. AREA — a neighbourhood, suburb or district of many buildings at low detail and small size: a fitted roof per outline, two colours, LiDAR trees as a canopy grid, shipped as a compact baked binary. Tables of sources, size budgets, a routing table from "I want to…" to the tool, and dated lessons. Use when asked to model, build, add, improve or check a landmark, tower, stadium, mall, bridge or any specific real building ("a hero 3D model of X"), a neighbourhood, suburb, street or area ("a 3D model of Herne Bay"), or when something in the game "doesn't look like" the real place.
+description: How to build 3D models of real Auckland places for F35-A from public data, by one of two procedures. HERO — one landmark or named building (a tower, stadium, mall, bridge, monument) at mid-to-high detail, the full stack: OSM, LINZ LiDAR rasters and point cloud, the 7.5 cm aerial, Auckland Council's 2023 textured 3D mesh, Mapillary street imagery and an online photo search, so its shape, every facade, signs and night look are measured; prototype, review, port. AREA — a neighbourhood, suburb or district of many buildings at low detail and small size: a fitted roof per outline, two colours, LiDAR trees as a canopy grid, shipped as a compact baked binary. Tables of sources, size budgets, a routing table from "I want to…" to the tool, and dated lessons. Use when asked to model, build, add, improve or check a landmark, tower, stadium, mall, bridge or any specific real building ("a hero 3D model of X"), a neighbourhood, suburb, street or area ("a 3D model of Herne Bay"), or when something in the game "doesn't look like" the real place.
 ---
 
 # Real Auckland places in 3D: heroes and areas
@@ -11,7 +11,7 @@ Ordinary buildings in the game are LINZ outlines extruded to one LiDAR height (`
 
 | The ask sounds like | Procedure | Detail | Size budget (shipped) |
 |---|---|---|---|
-| "a hero 3D model of X", a landmark, a named building, a tower, a stadium, a mall, a bridge, a monument; "X doesn't look like the real one" | **A. Hero** (below) | Mid to high: shape to ±2 m, every face's facade, ground floor, signs, night look | ≤ ~15 kB of data per hero (measured numbers, never meshes); geometry in the existing merged mesh (no new draw call); at most one shared sign mesh with a ≤ 1024² canvas-drawn atlas; aim under ~10 k triangles a hero on high, less on low |
+| "a hero 3D model of X", a landmark, a named building, a tower, a stadium, a mall, a bridge, a monument; "X doesn't look like the real one" | **A. Hero** (below) | Mid to high: shape to ±2 m, every face's facade, signs, night look | ≤ ~15 kB of data per hero (measured numbers, never meshes); geometry in the existing merged mesh (no new draw call); at most one shared sign mesh with a ≤ 1024² canvas-drawn atlas; aim under ~10 k triangles a hero on high, less on low |
 | "a 3D model of <neighbourhood / suburb / street / district / area>", "fill <area> with real buildings" | **B. Area** (below) | Low: footprint, a fitted roof, wall and roof colour, trees; no per-building facade work | ≤ ~50 B gzip a building (Herne Bay: 1,276 buildings in 43 kB), ≤ ~100 kB gzip per area; parameters in a baked `.bin`, rebuilt into triangles at load; no new draw call |
 | An area with a few landmarks in it | **B** for the area, **A** for each landmark, as layers (section "Layered sites") | | both budgets |
 
@@ -46,7 +46,7 @@ Read the row before reaching for a source. A hero (Procedure A) uses all of them
 
 ## Procedure A: Hero (one landmark, full stack)
 
-The goal is a model a player recognises at once from the air and at low level: distinct and true on every side, by day and by night, at mid-to-high quality, inside the hero budget above. Every source below is **required** for a hero unless its line says when to skip it; "the mesh covers it" is not a reason to skip the street and the photos, because they show the ground floor, the signs and the night look the mesh doesn't.
+The goal is a model a player recognises at once from the air and at low level: distinct and true on every side, by day and by night, at mid-to-high quality, inside the hero budget above. Every source below is **required** for a hero unless its line says when to skip it; "the mesh covers it" is not a reason to skip the street and the photos, because they show the true colours and materials, the signs and the night look the mesh doesn't.
 
 **0. Identify the site.** Name, address, approximate lat/lon (Wikipedia, OSM). Pick a box that holds the whole building with ~30 m margin (`--size`): one fetch, then re-centre once you've seen the height map (Westfield needed a second, shifted box).
 
@@ -60,7 +60,7 @@ The goal is a model a player recognises at once from the air and at low level: d
 
 **3. Every face from the 3D mesh** (inside its coverage: the CBD, the waterfront, the corridor to the airport). `mesh3d.py --match <name>` for all four sides and the top; for a tower or any box-like shaft, face-aligned elevations in metres with `sites/cbd_tower_elevations.py` (any other building works if you give it the same JSON: `n`, `name`, `outline`, and `parts` with `kind` shaft/crown, `h`, `ring` in game metres). Read off each face: crown and base bands, glass strips, pilasters, fins, bracing, panels, which face has which facade, where the signs are. Take colours as zone medians (`--colour`), white-balanced. Match the mesh's heights to the LiDAR at the main roof (they differ by up to 12 m).
 
-**4. Street level and ground floor: Mapillary** (`mapillary.py`, token in `MAPILLARY_STREET_API`, set in the cloud environment as of 2026-10-05; if it is missing, ask the owner rather than skipping the step). Probes on every street the building fronts (rerun with a smaller `--radius` until they stand on the street). Read the ground floor: entrances, shopfronts, colonnades, canopies, podium materials, street-level signs. Outside the mesh's coverage this is also the source for every upper facade it reaches.
+**4. Street level: Mapillary** (`mapillary.py`, token in `MAPILLARY_STREET_API`, set in the cloud environment as of 2026-10-05; if it is missing, ask the owner rather than skipping the step). Probes on every street the building fronts (rerun with a smaller `--radius` until they stand on the street). Read each side's materials and colours as seen from the street (a check on the mesh's hazy texture) and the signs a street reaches. Outside the mesh's coverage this is the source for every facade it reaches.
 
 **5. Online photo search** (section "Photos": WebSearch → the venue's or owner's site, Wikipedia/Commons, architect and contractor pages, news → image URLs → look at each). Required for: the main frontage, **signs and logos** (shape, colour, which faces, day and **night** colours), the crown at night, and anything neither the mesh nor the street shows (roof edges, undersides). Use as-built photos only; renders lie.
 
@@ -71,7 +71,6 @@ The goal is a model a player recognises at once from the air and at low level: d
 **8. Make it distinct, within budget.** Turn what you read into the game's cheap primitives, in this order of value per byte:
    - **Facade zones by face and height** (colour + window style, `paintedWalls` in `towerSkins.ts`): crown bands, strips, pilasters, the harbour face vs the rest. Painting costs a few quads.
    - **Signs and logos**: text with a similar font and a simple stand-in mark in a shared canvas atlas (`drawTowerLogos`), never logo files or photos; day and night colours. Brand names in the game are the owner's call.
-   - **Ground floor**: a podium band, entrance glazing, a canopy box where it reads from 300 m up.
    - **Bespoke geometry** only for what defines the silhouette (Spark Arena's roof lenses, PwC's bracing, a mast, a dome).
    - **Night**: lit crown (`WIN_GLOW`), floodlit stone (`WIN_FLOOD`), glowing signs, obstruction lights.
    No photo textures, no shipped glTF, no per-hero texture except the shared sign atlas. Measure the cost (draw calls and triangles from `window.__f35.state().renderer`, before and after on the same camera) and report it.
@@ -159,8 +158,8 @@ Follow the Sky Tower / Spark Arena pattern (read their files first):
 
 ## Lessons (add dated one-liners; delete ones that stop being true)
 
-- 2026-10-05: The owner wants two procedures and expects the right one from the wording: "a hero 3D model of X" gets the full stack (point cloud, mesh, Mapillary, photo search, signs, ground floor, night) at mid-to-high quality; "a 3D model of <area>" gets the cheap area kit. Both must stay small in kB: ship measured parameters, not meshes or photo textures.
-- 2026-10-05: The CBD tower skins skipped Mapillary and the photo search (the mesh showed every upper face), and it showed: the signs' night colours and the ground floors are guesses. For a hero, run steps 4 and 5 even when the mesh covers it.
+- 2026-10-05: The owner wants two procedures and expects the right one from the wording: "a hero 3D model of X" gets the full stack (point cloud, mesh, Mapillary, photo search, signs, night) at mid-to-high quality; "a 3D model of <area>" gets the cheap area kit. Both must stay small in kB: ship measured parameters, not meshes or photo textures.
+- 2026-10-05: The CBD tower skins skipped Mapillary and the photo search (the mesh showed every upper face), and it showed: the signs' night colours are guesses and the colours rest on the mesh's hazy texture alone. For a hero, run steps 4 and 5 even when the mesh covers it.
 
 - 2026-10-05: What makes a tower recognisable from the air is mostly not its shape but its crown, its signs and a face or two of real facade (a dark glass strip, white pilasters, X bracing). The kit got shapes and one measured wall colour right but gave every tower one window shader on all sides; the owner read that as "generic windows". Check a kit or kit-like hero against the mesh's elevations, not only the LiDAR.
 - 2026-10-05: Read a facade in metres, not by eye on a perspective photo: elevations in the shaft's own box frame (`cbd_tower_elevations.py`) let you write `t: [-5, 3.5], h: [0, 87]` straight off the grid. Orient the box by the length²-weighted mode of the edge directions: shapely's `minimum_rotated_rectangle` turned the HSBC Tower's box 45°.
