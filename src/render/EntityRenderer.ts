@@ -28,7 +28,7 @@ import { BOAT_DIMS, type BoatKind } from './models/boats';
 const _p = new Vector3();
 const _fwd = new Vector3();
 
-/** Foam wake of a moving IRGC fast boat (suicide, missile or air-defence boat). */
+/** Foam wake of a moving Rat navy fast boat (suicide, missile or air-defence boat). */
 function boatWake(wakes: WakeBatch, kind: BoatKind, pos: Vector3, vel: Vector3): void {
   const speed = Math.hypot(vel.x, vel.z);
   if (speed <= 0.5) return;

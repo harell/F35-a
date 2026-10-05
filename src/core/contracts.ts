@@ -323,7 +323,7 @@ export type CampaignId = 'irgc';
  */
 export interface CampaignDef {
   id: CampaignId;
-  /** "IRGC Campaign" */
+  /** "IRGC · Interspecies Revolutionary Guard Corps" */
   name: string;
   /** One line for the campaign picker. */
   description: string;
