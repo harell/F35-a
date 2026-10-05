@@ -56,10 +56,13 @@ export class AircraftVisual {
     readonly spec: AircraftSpec,
     private readonly isPlayer: boolean,
     shadows: boolean,
+    /** Keep an instanced type's own meshes (the models lab draws one helicopter alone, without its batch). */
+    ownMeshes = false,
   ) {
     this.lod0 = proto.lod0.clone(true);
     this.lod1 = proto.lod1.clone(true);
-    this.root.add(this.lod0, this.lod1);
+    // an instanced type (the civil helicopters) is drawn by its batch (HeliBatch) from this root's matrix
+    if (!proto.instanced || ownMeshes) this.root.add(this.lod0, this.lod1);
     this.root.add(this.flameGroup);
     for (const def of proto.drives) {
       const pivot = this.lod0.getObjectByName(`pivot:${def.part}`);
