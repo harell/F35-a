@@ -36,7 +36,8 @@ import { FRONT_BAND, FrontageMap } from './frontage';
 import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
-import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createRoadMaterial, createSignMaterial } from './materials';
+import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createLogoMaterial, createRoadMaterial, createSignMaterial } from './materials';
+import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
@@ -240,7 +241,23 @@ export class Scenery {
         this.stats.meshes++;
       }
       const cs = this.cbdStats;
-      if (cityGeo) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts ?? new Int32Array(0), cs.buildingGround ?? new Float32Array(0), heroes);
+      // the skinned CBD towers' crown signs (towerSkins.ts): one small mesh with the logo atlas
+      let signs: { geo: BufferGeometry; ranges: readonly [number, number, number][] } | undefined;
+      const signGeo = cs.towerSigns ? towerSignGeometry(cs.towerSigns) : null;
+      if (signGeo && cs.towerSigns) {
+        const tex = createTowerLogoTexture(o.cfg.anisotropy);
+        this.textures.push(tex);
+        const mat = createLogoMaterial(o.atmo, tex);
+        this.materials.push(mat);
+        this.geometries.push(signGeo);
+        const mesh = new Mesh(signGeo, mat);
+        mesh.name = 'akl-tower-signs';
+        mesh.matrixAutoUpdate = false;
+        this.group.add(mesh);
+        this.stats.meshes++;
+        signs = { geo: signGeo, ranges: cs.towerSigns.ranges };
+      }
+      if (cityGeo) this.cbdCollapse = new CbdCollapseVisual(cityGeo, cs.buildingVerts ?? new Int32Array(0), cs.buildingGround ?? new Float32Array(0), heroes, null, signs);
       const centres = new GeometryBuilder();
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
       // (nor on an arterial's frontage, whose shops and houses are the lots')

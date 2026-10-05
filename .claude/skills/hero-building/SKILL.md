@@ -1,26 +1,37 @@
 ---
 name: hero-building
-description: How to build a recognisable 3D model of a real Auckland building ("hero building" or landmark) for F35-A from public data — OpenStreetMap outlines and parts, LINZ LiDAR rasters and point cloud for heights and shape, the LINZ 7.5 cm aerial and Auckland Council's textured 3D mesh for roofs and facades, street photos for what is left — prototype it as a reviewable three.js page, then port it into the game. A table of what each source gives, the order to go through them (and which to skip), a routing table from "I want to…" to the tool, and dated lessons. Use when asked to model, build, add, improve or check a landmark, tower, stadium, mall or any specific real building, or when a building in the game "doesn't look like" the real one.
+description: How to build 3D models of real Auckland places for F35-A from public data, by one of two procedures. HERO — one landmark or named building (a tower, stadium, mall, bridge, monument) at mid-to-high detail, the full stack: OSM, LINZ LiDAR rasters and point cloud, the 7.5 cm aerial, Auckland Council's 2023 textured 3D mesh, Mapillary street imagery and an online photo search, so its shape, every facade, signs and night look are measured; prototype, review, port. AREA — a neighbourhood, suburb or district of many buildings at low detail and small size: a fitted roof per outline, two colours, LiDAR trees as a canopy grid, shipped as a compact baked binary. Tables of sources, size budgets, a routing table from "I want to…" to the tool, and dated lessons. Use when asked to model, build, add, improve or check a landmark, tower, stadium, mall, bridge or any specific real building ("a hero 3D model of X"), a neighbourhood, suburb, street or area ("a 3D model of Herne Bay"), or when something in the game "doesn't look like" the real place.
 ---
 
-# Hero buildings: real Auckland buildings in 3D
+# Real Auckland places in 3D: heroes and areas
 
-Ordinary buildings in the game are LINZ outlines extruded to one LiDAR height (`tools/linz/buildings.py`). A **hero building** gets its own model, so players recognise it from the air: the Sky Tower (`src/core/skyTower.ts`), Spark Arena (`src/core/sparkArena.ts`). "Hand-made" here means **built in code from measured public data**, not sculpted in a 3D tool and not generated from photos.
+Ordinary buildings in the game are LINZ outlines extruded to one LiDAR height (`tools/linz/buildings.py`). This skill replaces them with models **built in code from measured public data**, never sculpted in a 3D tool or generated from photos, by one of two procedures:
 
-Worked examples, both with prototypes reviewed by the owner:
-- **Spark Arena**: bespoke geometry (two tilted lens-shaped roof planes fitted to the LiDAR). Prototype source `tools/hero/examples/spark-arena.html`; in game: `src/core/sparkArena.ts`, `src/world/scenery/sparkArena.ts`, `tests/world-sparkarena.test.ts`. Private prototype: https://claude.ai/artifact/KcbdyPLaEjkGRzhHhECVRu
-- **Auckland Harbour Bridge** (a bridge, so bespoke): measurements `tools/hero/sites/harbour_bridge.py`, prototype source `tools/hero/examples/harbour-bridge.html` (stage 1 is the game's own mesh exported from `buildHarbourBridge`, stage 4 overlays it). Private prototype: https://claude.ai/artifact/HPXWhDrXJj8z4oSnYTZ4MM. In game: `src/core/harbourBridge.ts`, `src/world/scenery/harbourBridge.ts`, `tests/world-heroes.test.ts`.
-- **Ports of Auckland** (a whole site, LiDAR-driven): recipe `tools/hero/sites/ports_of_auckland.py` (decks, sheds, cranes, masts, container stacks → `port_model.json`), prototype source `tools/hero/examples/ports-of-auckland.html` (the game's own waterfront and CBD meshes in stages 1 and 3). Private prototype: https://claude.ai/artifact/ETBZ3YvvDDqSSFM1gZKFa2. In game: `src/core/portOfAuckland.ts` (cranes, masts), `src/world/scenery/aucklandPort.ts` + `data/auckland-port.bin` (stacks, 55 kB), `aucklandSites.ts` buildRealPort, crane solids in `src/sim/buildings.ts`.
-- **Scene One, Two and Three** (Beach Road apartments: towers on a shared podium): recipe `tools/hero/sites/scene_beach_road.py` (LiDAR terraces inside each OSM outline), prototype source `tools/hero/examples/scene-beach-road.html`. Private prototype: https://claude.ai/artifact/HqiQtMc7dWf9No9cNTT1P4. In game: `src/core/sceneApartments.ts`, swapped into the LINZ building list by `applyHeroBuildings` (`aucklandBuildings.ts`), facade style `WIN_BALCONY`.
-- **The CBD tower kit** (every CBD building taller than Scene 3, #156): one recipe for all of them, `tools/hero/sites/cbd_towers.py` (list in `cbd_towers.tsv`, colours from the 3D mesh by `cbd_towers_colours.py` into `cbd_towers_style.json`) → generated `src/core/cbdTowersData.ts`; types and spires `src/core/cbdTowers.ts`; swapped into the LINZ list by `applyHeroBuildings`, facades `WIN_CURTAIN` / `WIN_BANDS` / `WIN_BALCONY` / `WIN_OFFICE` in `auckland.ts`; test `tests/world-towers.test.ts`; before/after shots and draw calls `tools/hero/cbd-shots.mjs`.
-- **Auckland Domain** (a park, the base layer; LiDAR trees): recipe `tools/hero/sites/auckland_domain.py` (ground, one crown per tree by watershed, park buildings, glasshouse vaults, ponds → `domain_model.json`), page builder `tools/hero/sites/auckland_domain_page.py`, prototype source `tools/hero/examples/auckland-domain.html` (stage 4 maps game terrain − LiDAR ground). Private prototype: https://claude.ai/artifact/4kscNUVkQ6UfsqiKsaNrMc. Not in the game yet.
-- **Auckland War Memorial Museum** (the top layer on the Domain; terraces + a LiDAR dome surface + mesh-projected facades): recipe `tools/hero/sites/auckland_museum.py` → `museum_model.json` + `tex_{north,south,east,west,top}.jpg`; both layers together, on the LiDAR and on the game's terrain, with a 300 kt pilot pass: `tools/hero/sites/auckland_domain_museum_page.py`, source `tools/hero/examples/auckland-domain-museum.html`. Private prototype: https://claude.ai/artifact/GrLJuxMEex8jeyyV9uvbxm. Not in the game yet.
-- **Herne Bay and Westhaven** (whole neighbourhoods, two separate models): kit `tools/hero/sites/neighbourhood.py` (a fitted roof per OSM outline, LiDAR trees, buildings OSM misses, the roads check), recipes `tools/hero/sites/herne_bay.py` and `westhaven.py` (+ boats and pontoons) → `model.json`, `mesh.npz`, `<id>.glb`; page `tools/hero/sites/neighbourhoods_page.py` + `tools/hero/examples/neighbourhoods.html` (game frames beside the model from the same camera). Private prototype: https://claude.ai/artifact/KPRFH2Fyj1ZqXobveVaWHf. In game: bake `tools/hero/sites/neighbourhoods_bake.py` → `src/world/scenery/data/auckland-neighbourhoods.bin` (68 kB gzip), `src/world/scenery/aucklandNeighbourhoods.ts` (decoder), `pitchedRoof.ts` + `GeometryBuilder.pitchedPrism` (gable / hip roofs), swapped into the LINZ list by `applyNeighbourhoods` (`aucklandBuildings.ts`), trees by `TreeSource.nbTree`, boats by `buildMeasuredMarina` (`aucklandSites.ts`); both areas inside the real-streets region (`tools/linz/roads.ts`); tests `tests/world-neighbourhoods.test.ts`.
-- **Westfield Newmarket**: the data-driven kit (OSM parts → LiDAR heights → aerial roofs → facades/signs). Recipe `tools/hero/sites/westfield_newmarket.py`. Private prototype: https://claude.ai/artifact/RKaS3WF7Zz1JmK95LXHRgJ
+## Pick the procedure first
+
+| The ask sounds like | Procedure | Detail | Size budget (shipped) |
+|---|---|---|---|
+| "a hero 3D model of X", a landmark, a named building, a tower, a stadium, a mall, a bridge, a monument; "X doesn't look like the real one" | **A. Hero** (below) | Mid to high: shape to ±2 m, every face's facade, signs, night look | ≤ ~15 kB of data per hero (measured numbers, never meshes); geometry in the existing merged mesh (no new draw call); at most one shared sign mesh with a ≤ 1024² canvas-drawn atlas; aim under ~10 k triangles a hero on high, less on low |
+| "a 3D model of <neighbourhood / suburb / street / district / area>", "fill <area> with real buildings" | **B. Area** (below) | Low: footprint, a fitted roof, wall and roof colour, trees; no per-building facade work | ≤ ~50 B gzip a building (Herne Bay: 1,276 buildings in 43 kB), ≤ ~100 kB gzip per area; parameters in a baked `.bin`, rebuilt into triangles at load; no new draw call |
+| An area with a few landmarks in it | **B** for the area, **A** for each landmark, as layers (section "Layered sites") | | both budgets |
+
+When unsure: one named building is a hero; more than ~20 buildings is an area. Say which procedure you picked in your first reply.
+
+Worked examples (A: hero, B: area), most with prototypes reviewed by the owner:
+- **(A) Spark Arena**: bespoke geometry (two tilted lens-shaped roof planes fitted to the LiDAR). Prototype source `tools/hero/examples/spark-arena.html`; in game: `src/core/sparkArena.ts`, `src/world/scenery/sparkArena.ts`, `tests/world-sparkarena.test.ts`. Private prototype: https://claude.ai/artifact/KcbdyPLaEjkGRzhHhECVRu
+- **(A) Auckland Harbour Bridge** (a bridge, so bespoke): measurements `tools/hero/sites/harbour_bridge.py`, prototype source `tools/hero/examples/harbour-bridge.html` (stage 1 is the game's own mesh exported from `buildHarbourBridge`, stage 4 overlays it). Private prototype: https://claude.ai/artifact/HPXWhDrXJj8z4oSnYTZ4MM. In game: `src/core/harbourBridge.ts`, `src/world/scenery/harbourBridge.ts`, `tests/world-heroes.test.ts`.
+- **(A, a site) Ports of Auckland** (a whole site, LiDAR-driven): recipe `tools/hero/sites/ports_of_auckland.py` (decks, sheds, cranes, masts, container stacks → `port_model.json`), prototype source `tools/hero/examples/ports-of-auckland.html` (the game's own waterfront and CBD meshes in stages 1 and 3). Private prototype: https://claude.ai/artifact/ETBZ3YvvDDqSSFM1gZKFa2. In game: `src/core/portOfAuckland.ts` (cranes, masts), `src/world/scenery/aucklandPort.ts` + `data/auckland-port.bin` (stacks, 55 kB), `aucklandSites.ts` buildRealPort, crane solids in `src/sim/buildings.ts`.
+- **(A) Scene One, Two and Three** (Beach Road apartments: towers on a shared podium): recipe `tools/hero/sites/scene_beach_road.py` (LiDAR terraces inside each OSM outline), prototype source `tools/hero/examples/scene-beach-road.html`. Private prototype: https://claude.ai/artifact/HqiQtMc7dWf9No9cNTT1P4. In game: `src/core/sceneApartments.ts`, swapped into the LINZ building list by `applyHeroBuildings` (`aucklandBuildings.ts`), facade style `WIN_BALCONY`.
+- **(A, a kit) The CBD tower kit** (every CBD building taller than Scene 3, #156): one recipe for all of them, `tools/hero/sites/cbd_towers.py` (list in `cbd_towers.tsv`, colours from the 3D mesh by `cbd_towers_colours.py` into `cbd_towers_style.json`) → generated `src/core/cbdTowersData.ts`; types and spires `src/core/cbdTowers.ts`; swapped into the LINZ list by `applyHeroBuildings`, facades `WIN_CURTAIN` / `WIN_BANDS` / `WIN_BALCONY` / `WIN_OFFICE` in `auckland.ts`; test `tests/world-towers.test.ts`; before/after shots and draw calls `tools/hero/cbd-shots.mjs`.
+- **(A) CBD tower skins** (the kit's best-known towers dressed the way Spark Arena is, #156 follow-up): per tower, wall zones by face and height (crown bands, full-height glass strips, pilasters, one facade on the harbour face and another on the rest), bracing beams and crown signs, all read off the 2023 mesh. Data `src/core/cbdTowerSkins.ts` (HSBC, ANZ, Vero, PwC, BNZ/QBE); scenery `src/world/scenery/towerSkins.ts` (painted walls, braces, the logo atlas and its one sign mesh, `createLogoMaterial`); measuring tool `tools/hero/sites/cbd_tower_elevations.py`; test `tests/world-towerskins.test.ts`.
+- **(B, a park) Auckland Domain** (a park, the base layer; LiDAR trees): recipe `tools/hero/sites/auckland_domain.py` (ground, one crown per tree by watershed, park buildings, glasshouse vaults, ponds → `domain_model.json`), page builder `tools/hero/sites/auckland_domain_page.py`, prototype source `tools/hero/examples/auckland-domain.html` (stage 4 maps game terrain − LiDAR ground). Private prototype: https://claude.ai/artifact/4kscNUVkQ6UfsqiKsaNrMc. Not in the game yet.
+- **(A) Auckland War Memorial Museum** (the top layer on the Domain; terraces + a LiDAR dome surface + mesh-projected facades): recipe `tools/hero/sites/auckland_museum.py` → `museum_model.json` + `tex_{north,south,east,west,top}.jpg`; both layers together, on the LiDAR and on the game's terrain, with a 300 kt pilot pass: `tools/hero/sites/auckland_domain_museum_page.py`, source `tools/hero/examples/auckland-domain-museum.html`. Private prototype: https://claude.ai/artifact/GrLJuxMEex8jeyyV9uvbxm. Not in the game yet.
+- **(B) Herne Bay and Westhaven** (whole neighbourhoods, two separate models): kit `tools/hero/sites/neighbourhood.py` (a fitted roof per OSM outline, LiDAR trees, buildings OSM misses, the roads check), recipes `tools/hero/sites/herne_bay.py` and `westhaven.py` (+ boats and pontoons) → `model.json`, `mesh.npz`, `<id>.glb`; page `tools/hero/sites/neighbourhoods_page.py` + `tools/hero/examples/neighbourhoods.html` (game frames beside the model from the same camera). Private prototype: https://claude.ai/artifact/KPRFH2Fyj1ZqXobveVaWHf. In game: bake `tools/hero/sites/neighbourhoods_bake.py` → `src/world/scenery/data/auckland-neighbourhoods.bin` (68 kB gzip), `src/world/scenery/aucklandNeighbourhoods.ts` (decoder), `pitchedRoof.ts` + `GeometryBuilder.pitchedPrism` (gable / hip roofs), swapped into the LINZ list by `applyNeighbourhoods` (`aucklandBuildings.ts`), trees by `TreeSource.nbTree`, boats by `buildMeasuredMarina` (`aucklandSites.ts`); both areas inside the real-streets region (`tools/linz/roads.ts`); tests `tests/world-neighbourhoods.test.ts`.
+- **(A) Westfield Newmarket**: the data-driven kit (OSM parts → LiDAR heights → aerial roofs → facades/signs). Recipe `tools/hero/sites/westfield_newmarket.py`. Private prototype: https://claude.ai/artifact/RKaS3WF7Zz1JmK95LXHRgJ
 
 ## Sources: what each one gives
 
-Read the row before reaching for a source: most buildings need only some of them (next section).
+Read the row before reaching for a source. A hero (Procedure A) uses all of them; an area (Procedure B) uses OSM, the LiDAR rasters and the aerial or the mesh's top view.
 
 | Source (tool) | Footprint & shape | Heights & volume | Roof | Outside colour & materials | Detail (storeys, windows, fins, signs) | Blind spots | Licence |
 |---|---|---|---|---|---|---|---|
@@ -33,24 +44,53 @@ Read the row before reaching for a source: most buildings need only some of them
 | **Photos** (venue, news, architect, Commons; "Photos" below) | — | — | Undersides, roof edges | Materials close up | **Signs (also at night)**, under-structure (bridge decks), interiors you need | Renders that aren't as-built; other buildings | Per photo: reference only, never embedded |
 | **Records & specs** (news, Wikidata, Structurae, manufacturers, listings) | — | Published heights, spans, levels | — | — | Architect, year, units, uses of each level | Marketing numbers | Facts only |
 
-## Which sources to use, and when to stop
+## Procedure A: Hero (one landmark, full stack)
 
-Go down the list; each step says when to skip it. Stop when everything a player sees from the air is measured or backed by an image: don't chase detail no one sees at 300 kt.
+The goal is a model a player recognises at once from the air and at low level: distinct and true on every side, by day and by night, at mid-to-high quality, inside the hero budget above. Every source below is **required** for a hero unless its line says when to skip it; "the mesh covers it" is not a reason to skip the street and the photos, because they show the true colours and materials, the signs and the night look the mesh doesn't.
 
-1. **Always:** `site.py` (box with ~30 m margin) and `osm.py`. You now have the footprint and every height.
-2. **Massing.** `heights.py --match <name>` per outline:
-   - OSM `building:part`s whose heights agree with the LiDAR within ~2 m → they are the skeleton (Westfield). Skip 3.
-   - p10–p90 spread under ~3 m → one flat prism at the median. Skip 3.
-   - Otherwise go to 3.
-3. **Shape from the LiDAR:** terraces inside the outline (`sites/scene_beach_road.py`) for towers on podiums; least-squares planes for tilted roofs (Spark Arena); profiles along an axis for bridges and long structures (`sites/harbour_bridge.py`); masks and seeds for repeated objects (`sites/ports_of_auckland.py`).
-4. **Storeys and thin structure** — only if the building has visible floor bands, balconies, setbacks you can't see in the raster, or thin parts (trusses, masts, cranes): `pointcloud.py`. It gives the storey height the facade texture needs. Skip it for sheds, malls and anything under ~15 m.
-5. **Colours and facades:**
-   - Inside the mesh's coverage (the CBD, the waterfront, the corridor to the airport): `mesh3d.py --match <name>` and read all four sides and the top. That usually covers every side; take only signs, night colours and ground-floor details from 6.
-   - Outside it: go to 6 for every side.
-6. **Street level:** `mapillary.py` (probes on the street itself), then photos for signs and anything the street can't reach. Skip what 5 already showed.
-7. **Roofs:** under ~35 m drape the aerial; above, take the colour from the mesh's top view (or model the roof) and the plant from the point cloud.
-8. **What nothing measures** (under a deck, inside a podium): photos and published specs, and mark it *guessed* on the review page.
-9. **Facts** (levels, year, uses): records. They check the LiDAR count; they never replace it.
+**0. Identify the site.** Name, address, approximate lat/lon (Wikipedia, OSM). Pick a box that holds the whole building with ~30 m margin (`--size`): one fetch, then re-centre once you've seen the height map (Westfield needed a second, shifted box).
+
+**1. Footprint and massing.** `site.py` and `osm.py`, then `heights.py --match <name>` per outline:
+   - OSM `building:part`s whose heights agree with the LiDAR within ~2 m → they are the skeleton (Westfield);
+   - p10–p90 spread under ~3 m → one flat prism at the median;
+   - otherwise shape from the LiDAR: terraces inside the outline (`sites/scene_beach_road.py`, the tower kit) for towers on podiums; least-squares planes for tilted roofs (Spark Arena, report the RMS: 0.25 and 0.32 m); profiles along an axis for bridges (`sites/harbour_bridge.py`); cylinders, domes, spires: centre from the aerial, radius from the outline, height from the LiDAR max.
+   Sloping ground matters (Newmarket drops ~8 m across the site): walls start at the **lowest DEM** inside each ring, roofs at absolute DSM heights. Treat OSM heights and levels as hints.
+
+**2. Storeys and thin structure.** `pointcloud.py`: storey height and count (the facade's rhythm), slab levels, setbacks, balconies, roof plant, masts and trusses. Skip only for sheds and anything under ~15 m.
+
+**3. Every face from the 3D mesh** (inside its coverage: the CBD, the waterfront, the corridor to the airport). `mesh3d.py --match <name>` for all four sides and the top; for a tower or any box-like shaft, face-aligned elevations in metres with `sites/cbd_tower_elevations.py` (any other building works if you give it the same JSON: `n`, `name`, `outline`, and `parts` with `kind` shaft/crown, `h`, `ring` in game metres). Read off each face: crown and base bands, glass strips, pilasters, fins, bracing, panels, which face has which facade, where the signs are. Take colours as zone medians (`--colour`), white-balanced. Match the mesh's heights to the LiDAR at the main roof (they differ by up to 12 m).
+
+**4. Street level: Mapillary** (`mapillary.py`, token in `MAPILLARY_STREET_API`, set in the cloud environment as of 2026-10-05; if it is missing, ask the owner rather than skipping the step). Probes on every street the building fronts (rerun with a smaller `--radius` until they stand on the street). Read each side's materials and colours as seen from the street (a check on the mesh's hazy texture) and the signs a street reaches. Outside the mesh's coverage this is the source for every facade it reaches.
+
+**5. Online photo search** (section "Photos": WebSearch → the venue's or owner's site, Wikipedia/Commons, architect and contractor pages, news → image URLs → look at each). Required for: the main frontage, **signs and logos** (shape, colour, which faces, day and **night** colours), the crown at night, and anything neither the mesh nor the street shows (roof edges, undersides). Use as-built photos only; renders lie.
+
+**6. Roofs.** Under ~35 m drape the aerial (`u = x/W, v = 1 − z/H`); above, the aerial leans up to ~25 m, so take the colour from the mesh's top view or model the roof, and plant from the point cloud.
+
+**7. What nothing measures** (under a deck, inside a podium): photos and published specs, marked *guessed*. Facts (levels, year, uses) from records check the LiDAR count; they never replace it.
+
+**8. Make it distinct, within budget.** Turn what you read into the game's cheap primitives, in this order of value per byte:
+   - **Facade zones by face and height** (colour + window style, `paintedWalls` in `towerSkins.ts`): crown bands, strips, pilasters, the harbour face vs the rest. Painting costs a few quads.
+   - **Signs and logos**: text with a similar font and a simple stand-in mark in a shared canvas atlas (`drawTowerLogos`), never logo files or photos; day and night colours. Brand names in the game are the owner's call.
+   - **Bespoke geometry** only for what defines the silhouette (Spark Arena's roof lenses, PwC's bracing, a mast, a dome).
+   - **Night**: lit crown (`WIN_GLOW`), floodlit stone (`WIN_FLOOD`), glowing signs, obstruction lights.
+   No photo textures, no shipped glTF, no per-hero texture except the shared sign atlas. Measure the cost (draw calls and triangles from `window.__f35.state().renderer`, before and after on the same camera) and report it.
+
+**9. Prototype and review gate.** Kit: write the recipe and run `build_prototype.py`. Bespoke: edit a copy of the Spark Arena page. A tower kit skin can skip the page: its review is the in-game before/after shots beside the mesh elevations. Take one look yourself (headless, see "Lessons"), fix what's obviously wrong, then **publish a private Artifact and get the owner's approval before porting**: the stages (the game today, the LiDAR, the model, an overlay), the reference images per face, and a "measured / from images / guessed" ledger. Be honest in the ledger.
+
+**10. Port into the game** (section "Port into the game"), then update this skill's "Lessons".
+
+## Procedure B: Area (a neighbourhood, many buildings, small size)
+
+The goal is a whole area that reads as the real place from the air (the right houses on the right lots, roof shapes and colours, trees, streets) for a few bytes a building. Skip everything per-building that a hero gets: no point cloud, no mesh elevations, no Mapillary or photo search per building, no signs, no hand-read facades. Worked examples: Herne Bay and Westhaven.
+
+1. **One fetch for the whole area.** `site.py --size <m>` over the area (the CBD at 3200 m took ~1 min); `osm.py` for the outlines.
+2. **One roof per outline** (`sites/neighbourhood.py`): flat, gable or hip fitted to the 1 m DSM inside the outline shrunk 0.7 m; take pitched only when clearly better. Add the buildings OSM misses from the LiDAR.
+3. **Two colours per building**: wall and roof from the aerial (low roofs, no lean problem) or the mesh's top view inside its coverage, white-balanced; one window style by use and height (`WIN_HOME`, `WIN_OFFICE`).
+4. **Trees** as a 20 m canopy grid (share and p75 height) grown by the game's TreeSource, not a list of trees (4 kB vs 33 kB for Herne Bay). Boats and pontoons from the aerial where there is a marina.
+5. **Streets and ground**: the area must be inside the real-streets region (`tools/linz/roads.ts`), or the procedural grid draws streets through it; route the region's border along the bounding roads.
+6. **Ship parameters, not triangles**: bake outline + roof kind, eave, pitch, frame and two colours into a `.bin` (`sites/neighbourhoods_bake.py`), rebuilt at load (`aucklandNeighbourhoods.ts`, `pitchedRoof.ts`). Check the size against the budget table before porting.
+7. **Review**: the game today beside the model from the same cameras (`sites/neighbourhoods_page.py`), a private Artifact, the owner's approval. Then port (`applyNeighbourhoods`) and test.
+8. A landmark inside the area that players should recognise gets Procedure A as a layer on top (section "Layered sites").
 
 ## Routing table
 
@@ -70,28 +110,9 @@ Go down the list; each step says when to skip it. Stop when everything a player 
 | See every side a street reaches (entrances, signs) | `MAPILLARY_STREET_API=MLY|… python3 tools/hero/mapillary.py --site /tmp/hero/<id> --radius <m>` → `mly/sheet.jpg` | ~30 s |
 | Find facade and sign photos | Section "Photos" below (WebSearch → venue/news/architect pages → `curl` + `grep` for image URLs → look at each) | 10–20 min |
 | Turn `model.json` into a review page | `python3 tools/hero/build_prototype.py --site /tmp/hero/<id>` → `prototype.html`, publish it as a private Artifact | ~1 s + publish |
+| Dress a kit tower (CBD) like its real facade: zones, strips, bracing, signs | `python3 tools/hero/sites/cbd_tower_elevations.py <rows>` → `<n>_faces.jpg` (face-aligned elevations with a metre grid), `--colour` for zone colours; then a row in `src/core/cbdTowerSkins.ts` | ~25 s a tower for the mesh, ~20 min of reading a tower's faces |
 | A "before" shot of the site in the game | dev server, then `node tools/hero/today-shot.mjs --x=<game_x> --z=<game_z> --out=/tmp/hero/<id>/today.jpg [--from=se]` | ~1–2 min (SwiftShader) |
 | Put the approved model in the game | Section "Port into the game" | half a day |
-
-## Procedure
-
-**0. Identify the site.** Name, address, approximate lat/lon (Wikipedia, OSM). Pick a box that holds the whole building with ~30 m margin (`--size`): one fetch, then re-centre once you've seen the height map (Westfield needed a second, shifted box).
-
-**1. Go through the sources** in the order of "Which sources to use, and when to stop" above. Treat OSM heights and levels as hints: the LiDAR decides heights, the mesh and photos decide colours.
-
-**2. Measure.** Read `ndsm.png` (height above ground) next to `aerial.jpg` and the mesh views. Decide the primitive per part:
-- one flat roof: median DSM inside the ring; a wide p10–p90 spread means several levels → split the ring or use OSM parts;
-- tilted planes: fit `h = a·x + b·z + c` with least squares in a mask and report the RMS (Spark Arena: 0.25 m and 0.32 m);
-- cylinders, domes, spires: centre from the aerial, radius from the outline, height from the LiDAR max.
-Sloping ground matters (Newmarket drops ~8 m across the site): walls start at the **lowest DEM** inside each ring, roofs at absolute DSM heights.
-
-**3. Roofs.** Drape `aerial.jpg` on flat roofs (same local frame: `u = x/W, v = 1 − z/H`). It is a standard orthophoto, not a true ortho: **roofs lean away from the photo centre by about height × offset / flying height** — negligible under ~35 m (Westfield), up to ~25 m on the CBD towers. Above that, take the roof's colour from `mesh_top.jpg` (same frame, no lean) or model it.
-
-**4. Facades and signs.** The mesh views first where they exist, then street imagery and photos (see "Photos"). Write down what each image shows and use only as-built images for geometry and materials.
-
-**5. Prototype and review gate.** Kit: write the recipe and run `build_prototype.py`. Bespoke: edit a copy of the Spark Arena page. Take one look yourself (render it headless, see "Lessons"), fix what's obviously wrong, then **publish it as a private Artifact and get the owner's approval before porting**. The page shows the stages (the game today, the raw LiDAR, the hero model, an overlay) and a "measured / from images / guessed" ledger. Be honest in the ledger.
-
-**6. Port into the game** (below), then update this skill's "Lessons".
 
 ## Layered sites (a hero standing on a hero)
 
@@ -136,6 +157,17 @@ Follow the Sky Tower / Spark Arena pattern (read their files first):
 - `npx tsc --noEmit && npx vitest run && npx vite build`.
 
 ## Lessons (add dated one-liners; delete ones that stop being true)
+
+- 2026-10-05: The owner wants two procedures and expects the right one from the wording: "a hero 3D model of X" gets the full stack (point cloud, mesh, Mapillary, photo search, signs, night) at mid-to-high quality; "a 3D model of <area>" gets the cheap area kit. Both must stay small in kB: ship measured parameters, not meshes or photo textures.
+- 2026-10-05: The CBD tower skins skipped Mapillary and the photo search (the mesh showed every upper face), and it showed: the signs' night colours are guesses and the colours rest on the mesh's hazy texture alone. For a hero, run steps 4 and 5 even when the mesh covers it.
+
+- 2026-10-05: What makes a tower recognisable from the air is mostly not its shape but its crown, its signs and a face or two of real facade (a dark glass strip, white pilasters, X bracing). The kit got shapes and one measured wall colour right but gave every tower one window shader on all sides; the owner read that as "generic windows". Check a kit or kit-like hero against the mesh's elevations, not only the LiDAR.
+- 2026-10-05: Read a facade in metres, not by eye on a perspective photo: elevations in the shaft's own box frame (`cbd_tower_elevations.py`) let you write `t: [-5, 3.5], h: [0, 87]` straight off the grid. Orient the box by the length²-weighted mode of the edge directions: shapely's `minimum_rotated_rectangle` turned the HSBC Tower's box 45°.
+- 2026-10-05: The 2023 mesh's heights are its own: its ground (1st percentile in the outline) sat up to 12 m off the kit's on HSBC and Vero, and towers built since (The Pacifica, Seascape) are short in it. Match each tower at its main roof (`dy`), and let a zone that starts at 0 reach down past dy, or the bottom storeys stay unpainted.
+- 2026-10-05: Kit towers are stacks of LiDAR terraces, not boxes, so anything placed on a "face" (signs, bracing) goes on the outermost wall at that point (`outerWall`), a sign in front of the wall across its whole width, and bracing broken where the wall steps: joining pieces across a step drew white lines across the PwC Tower's north face.
+- 2026-10-05: Painting is cheaper than modelling: split each wall quad where a zone starts or ends and give the piece the zone's colour and window style. The shaders' patterns are world-anchored, so they run on across the splits; five skinned towers cost +1 draw call (the signs) and ~+3 k triangles.
+- 2026-10-05: WIN_OFFICE covers 62 % of a wall with dark glass, so a white grid over glass (Vero's south face) reads dark unless the wall colour is near white.
+- 2026-10-05: Before/after from the same cameras at any time: `git worktree add /tmp/before HEAD`, symlink `node_modules`, run its dev server on another port. Two SwiftShader shot runs in parallel take as long as one after the other. Never `pkill -f "port 5190"` from the shell tool: it matches the tool's own command line and kills it; kill by PID.
 
 - 2026-10-03: OSM before modelling: Westfield Newmarket already had 7 tagged `building:part`s; they became the whole skeleton. The Sky Tower also started from OSM parts.
 - 2026-10-03: Overpass (overpass-api.de, kumi) is unreachable from the cloud container; the main API's `/api/0.6/map?bbox=` works (0.25 deg² / 50k nodes max).
