@@ -6,13 +6,13 @@
 import { describe, expect, it } from 'vitest';
 import { BufferAttribute, BufferGeometry } from 'three';
 import { CBD_TOWER_SKINS } from '../src/core/cbdTowerSkins';
-import { CBD_TOWERS } from '../src/core/cbdTowersData';
+import { KIT_TOWERS } from '../src/world/scenery/aucklandBuildings';
 import { GeometryBuilder, WIN_BANDS, WIN_CURTAIN } from '../src/world/scenery/GeometryBuilder';
 import { addTowerSigns, emptySigns, outerWall, paintedWalls, skinParts, towerSignGeometry } from '../src/world/scenery/towerSkins';
 import { CbdCollapseVisual, RUBBLE_HEIGHT } from '../src/world/scenery/cbdCollapse';
 import { buildingCollapseTime } from '../src/sim/buildings';
 
-const tower = (n: number) => CBD_TOWERS.find((t) => t.n === n)!;
+const tower = (n: number) => KIT_TOWERS.find((t) => t.n === n)!;
 
 describe('CBD tower skins', () => {
   it('each skin names a kit tower once, its box centre inside the tower outline', () => {

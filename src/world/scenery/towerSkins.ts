@@ -6,9 +6,9 @@
  */
 import { BufferAttribute, BufferGeometry, CanvasTexture, SRGBColorSpace } from 'three';
 import type { SkinFinish, SkinLogo, SkinZone, TowerSkin } from '../../core/cbdTowerSkins';
-import { GeometryBuilder, IDENT_FRAME, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_NONE, WIN_OFFICE } from './GeometryBuilder';
+import { GeometryBuilder, IDENT_FRAME, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HERITAGE, WIN_NONE, WIN_OFFICE } from './GeometryBuilder';
 
-const FINISH_WIN: Record<SkinFinish, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, plain: WIN_FLOOD, glow: WIN_GLOW, none: WIN_NONE };
+const FINISH_WIN: Record<SkinFinish, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, plain: WIN_FLOOD, glow: WIN_GLOW, none: WIN_NONE, stone: WIN_HERITAGE };
 
 export function finishWin(f: SkinFinish): number {
   return FINISH_WIN[f];
@@ -231,7 +231,7 @@ interface AtlasSlot {
 
 const ATLAS = 1024;
 const ROW = 160;
-const LOGO_ASPECT: Record<SkinLogo, number> = { hsbc: 3.3, anz: 2.8, vero: 3.2, pwc: 1.6, qbe: 3.4 };
+const LOGO_ASPECT: Record<SkinLogo, number> = { hsbc: 3.3, anz: 2.8, vero: 3.2, pwc: 1.6, qbe: 3.4, waitemata: 5 };
 const LOGOS = Object.keys(LOGO_ASPECT) as SkinLogo[];
 
 function slot(logo: SkinLogo): AtlasSlot {
@@ -398,6 +398,24 @@ export function drawTowerLogos(canvas: HTMLCanvasElement): void {
         c.fill();
         text('QBE', H * 1.0, mid + H * 0.03, H * 0.75, w - H * 1.05, '#ffffff', '900');
         break;
+      case 'waitemata': {
+        // the station's name in white beside a yellow roundel with a dark train front (a stand-in for the transport
+        // mark), over the Glasshouse's canopy
+        const r = H * 0.36;
+        const cx = H * 0.45;
+        c.fillStyle = '#ffd200';
+        c.beginPath();
+        c.arc(cx, mid, r, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#1d1d1b';
+        c.fillRect(cx - r * 0.42, mid - r * 0.55, r * 0.84, r * 0.85);
+        c.fillRect(cx - r * 0.5, mid + r * 0.42, r * 0.22, r * 0.2);
+        c.fillRect(cx + r * 0.28, mid + r * 0.42, r * 0.22, r * 0.2);
+        c.fillStyle = '#ffd200';
+        c.fillRect(cx - r * 0.3, mid - r * 0.42, r * 0.6, r * 0.32);
+        text('Waitematā', H * 1.0, mid + H * 0.03, H * 0.62, w - H * 1.05, '#ffffff', '600');
+        break;
+      }
     }
     c.restore();
   }

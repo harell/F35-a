@@ -160,6 +160,31 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit, detail);
     }
+  } else if (vWin > 10.5) {
+    // dressed stone with punched windows (aWin 11, the Chief Post Office): a 1.5 m × 2.3 m window with a round head in
+    // each 3.7 m bay of a 3.9 m storey, the average once a storey is a few pixels; at night the stone floodlit as aWin
+    // 10 and two windows in three lit warm
+    if (abs(N.y) < 0.5) {
+      vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
+      vec2 cell = vec2(3.7, 3.9);
+      vec2 g = vec2(dot(vWorld.xz, t), vWorld.y) / cell;
+      vec2 f = fract(g);
+      vec2 p = vec2((f.x - 0.5) * cell.x, f.y * cell.y - 0.9);
+      float aa = mpp;
+      // a 0.75 m half-width shaft from 0.9 m to 2.45 m, its head a 0.75 m half-disc
+      float shaft = (1.0 - smoothstep(0.75 - aa, 0.75 + aa, abs(p.x))) * smoothstep(-aa, aa, p.y) * (1.0 - smoothstep(1.55 - aa, 1.55 + aa, p.y));
+      float head = 1.0 - smoothstep(0.75 - aa, 0.75 + aa, length(p - vec2(0.0, 1.55)));
+      float win = max(shaft, head * step(1.55, p.y));
+      float detail = 1.0 - smoothstep(0.35, 0.9, mpp / cell.y);
+      vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
+      vec3 glass = mix(vec3(0.1, 0.11, 0.12), sky * 0.45, 0.35);
+      base = mix(base, glass, mix(0.2, win, detail));
+      if (uNight > 0.0) {
+        float lit = step(hash12(floor(g) + floor(vWorld.xz / 37.0) * 7.0), 0.66);
+        emissive += uNight * base * vec3(1.0, 0.92, 0.78) * 0.5 * (1.0 - win * detail);
+        emissive += uNight * vec3(1.0, 0.72, 0.4) * 1.4 * mix(0.2 * 0.66, win * lit, detail);
+      }
+    }
   } else if (vWin > 9.5) {
     // floodlit stone (aWin 10, the War Memorial Museum): plain walls by day, washed warm white by floodlights at night
     if (uNight > 0.0 && abs(N.y) < 0.5) emissive += uNight * base * vec3(1.0, 0.92, 0.78) * 0.55;

@@ -11,11 +11,12 @@
  * matched at the main roof. Signs are drawn as text with a simple stand-in mark (towerSkins.ts), not the logo files.
  */
 
-/** Wall finish of a zone: the kit's facades (cbdTowers.ts) plus `glow` (a lit panel at night) and `none` (plain). */
-export type SkinFinish = 'glass' | 'bands' | 'punched' | 'plain' | 'glow' | 'none';
+/** Wall finish of a zone: the kit's facades (cbdTowers.ts) plus `glow` (a lit panel at night), `none` (plain) and
+ * `stone` (dressed stone with punched windows, floodlit at night: the Chief Post Office). */
+export type SkinFinish = 'glass' | 'bands' | 'punched' | 'plain' | 'glow' | 'none' | 'stone';
 
 /** The signs drawn in the logo atlas (world/scenery/towerSkins.ts). */
-export type SkinLogo = 'hsbc' | 'anz' | 'vero' | 'pwc' | 'qbe';
+export type SkinLogo = 'hsbc' | 'anz' | 'vero' | 'pwc' | 'qbe' | 'waitemata';
 
 /** A painted zone of the walls. Later zones win. */
 export interface SkinZone {
@@ -170,6 +171,32 @@ export const CBD_TOWER_SKINS: readonly TowerSkin[] = [
       { face: 107, t: -1, h: 100, w: 9, logo: 'qbe' },
       { face: 287, t: -0.9, h: 100, w: 9, logo: 'qbe' },
     ],
+  },
+  {
+    // the Chief Post Office (Britomart station's main entrance): a rusticated Coromandel granite ground storey with its
+    // arched windows, Oamaru stone above, the main cornice at 18 m, lead-grey domes on the west corner pavilions
+    // (britomart.ts adds the domes themselves over the kit's stepped crown terraces). Heights from the LiDAR point
+    // cloud (slabs at 7.3, 12.4, 17.0, 20.2 and 23.3 m; 3.9 m storeys); colours from a daylight photo of the Queen St
+    // front, since the 2023 mesh has that face in shade
+    n: 202,
+    box: { x: 463.46, z: -489.56, face: 17 },
+    dy: 0,
+    zones: [
+      { h: [0, 7.2], colour: 0x86827b, finish: 'stone' },
+      { h: [7.2, 18], colour: 0xd6d0c2, finish: 'stone' },
+      { h: [18, 19], colour: 0xe6e1d5, finish: 'plain' },
+      { h: [19, Infinity], colour: 0xd6d0c2, finish: 'stone' },
+    ],
+    crown: { colour: 0xc6c2b8, finish: 'plain' },
+  },
+  {
+    // the Glasshouse (Britomart station's east entrance): blue-grey glass behind silver vertical fins on every face,
+    // the "Waitematā" sign over the canopy on the Commerce St plaza (the east face); Mapillary and a 2025 photo
+    n: 206,
+    box: { x: 493.68, z: -479.15, face: 17 },
+    dy: 0,
+    zones: [{ h: ALL, colour: 0xbac6cc, finish: 'glass' }],
+    signs: [{ face: 107, t: 0, h: 6, w: 8, logo: 'waitemata' }],
   },
 ];
 
