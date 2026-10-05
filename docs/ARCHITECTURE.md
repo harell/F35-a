@@ -212,7 +212,7 @@ end of `irgc.ts`) puts all three round the two-hit tanker leaving the Rangitoto 
 clock, missile boats in launch range 3–4 minutes in, AD boats escorting each wave (a bonus objective, not the job).
 The missile boats and their escort spawn at `G02_MISSILE_WAVE_AT` (60 s, #115), so one opening ripple can't cover both
 waves; the tanker's protect objective completes only once no Kowsar is still in the air.
-The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies a suicide boat fewer; on Ace nine boats
+The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies a suicide boat fewer; on Veteran seven boats
 must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
 friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 

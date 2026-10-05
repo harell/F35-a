@@ -6,7 +6,7 @@
  * URL parameters (handy for testing on a phone or from Playwright):
  *   ?mission=<id>&loadout=<id>&autostart=1   skip menus and fly a mission immediately
  *                                            (test hooks only: dev server / VITE_TEST_HOOKS=1, see TEST_HOOKS)
- *   ?difficulty=recruit|pilot|veteran|ace    override difficulty
+ *   ?difficulty=recruit|pilot|veteran        override difficulty
  *   ?quality=low|medium|high                 override quality
  *   ?view=cockpit|hud|chase|orbit|...        initial camera
  *   ?fps=1                                   FPS counter

@@ -267,7 +267,7 @@ function cityPicker(value: TheaterId, onChange: (v: TheaterId) => void): HTMLEle
  * number is its SAM sites.
  */
 export function countNote(): string {
-  // Instant Action's own scale where it has one (Ace keeps Pilot's numbers, issue #60)
+  // Instant Action's own scale where it has one (none today, issue #60)
   const scales = DIFFICULTY_ORDER.map((id) => DIFFICULTIES[id] && { ...DIFFICULTIES[id], enemyCountScale: IA_ENEMY_COUNT_SCALE[id] ?? DIFFICULTIES[id].enemyCountScale }).filter(Boolean);
   const lo = scales[0];
   const hi = scales[scales.length - 1];

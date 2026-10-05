@@ -17,7 +17,7 @@ import { DIFF_ORDER } from './state';
 /**
  * The mission's gun rounds on a difficulty, or null when the mission doesn't set any (keep the
  * loadout's). Per difficulty, a level left out takes the nearest easier level listed, else the
- * easiest level listed (`{ recruit: 400, ace: 300 }` → 400, 400, 400, 300).
+ * easiest level listed (`{ recruit: 400, veteran: 300 }` → 400, 400, 300).
  */
 export function gunAmmoOverride(def: Pick<MissionDef, 'gunAmmo'>, difficulty: Difficulty): number | null {
   const g = def.gunAmmo;

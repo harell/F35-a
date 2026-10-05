@@ -448,11 +448,11 @@ async function menus() {
   check(st > 20, 'settings list scrolls with a vertical swipe', `scrollTop=${Math.round(st)}`);
   await page.tap('.set-tab:nth-child(1)');
   await page.waitForTimeout(200);
-  await page.tap('.diff-card[data-id="ace"]');
+  await page.tap('.diff-card[data-id="veteran"]');
   await page.tap('.scr-settings .scr-head .ui-btn.primary');
   await page.waitForSelector('.scr-main:not(.is-leaving)');
   const diff = await page.evaluate(() => window.__f35.game.settings.difficulty);
-  check(diff === 'ace', 'settings resolve with the edited object and the game applies it', diff);
+  check(diff === 'veteran', 'settings resolve with the edited object and the game applies it', diff);
 
   // campaign → the IRGC campaign's mission list (the only playable campaign, so there is no picker) → briefing
   await page.tap('.mm-item[data-id="campaign"]');

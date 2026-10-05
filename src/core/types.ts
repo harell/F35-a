@@ -33,7 +33,7 @@ export function isHostile(a: Team, b: Team): boolean {
   return a !== b && a !== 'neutral' && b !== 'neutral';
 }
 
-export type Difficulty = 'recruit' | 'pilot' | 'veteran' | 'ace';
+export type Difficulty = 'recruit' | 'pilot' | 'veteran';
 export type QualityLevel = 'low' | 'medium' | 'high';
 /** The game's one theatre: Auckland CBD, Waitematā Harbour & Hauraki Gulf, NZ (campaign, training, Instant Action). */
 export type TheaterId = 'auckland';
