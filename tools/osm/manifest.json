@@ -1,8 +1,8 @@
 {
   "output": "../../src/world/scenery/data/auckland-osm.bin",
-  "bytes": 91107,
-  "gzip_bytes": 61959,
-  "sha256": "84367c9d38a78003b5125c17ddd53260fbb1eb873dbd2b5f0ef42a790b9f9750",
+  "bytes": 91979,
+  "gzip_bytes": 62518,
+  "sha256": "731885c8615ca973d39d242e6d51b4a4fc211eb2d5a8064e35b5bb6461d03745",
   "bbox": [
     174.31,
     -37.21,
@@ -33,7 +33,7 @@
     "dock": 1,
     "grandstand": 27,
     "hangar": 135,
-    "helipad": 10,
+    "helipad": 87,
     "marina": 23,
     "military": 31,
     "naval": 1,
@@ -240,5 +240,64 @@
         }
       }
     }
+  },
+  "helipads": {
+    "output": "../../src/core/helipadsData.ts",
+    "osm_objects": 87,
+    "total": 83,
+    "helipads": 81,
+    "heliports": 2,
+    "roof": 4,
+    "mapped_as": {
+      "node": 6,
+      "polygon": 77
+    },
+    "by_area": {
+      "isthmus": 17,
+      "north_shore": 10,
+      "other": 42,
+      "waiheke": 14
+    },
+    "by_kind": {
+      "airfield": 29,
+      "heliport": 2,
+      "hospital": 3,
+      "other": 47,
+      "vineyard": 2
+    },
+    "roof_pads": {
+      "isthmus_4": {
+        "dsm": 2.44,
+        "dem": -1.14,
+        "height": 2.4
+      },
+      "auckland_city_hospital": {
+        "dsm": 63.63,
+        "dem": 47.46,
+        "height": 63.6
+      },
+      "north_shore_6": {
+        "dsm": 32.6,
+        "dem": 12.93,
+        "height": 32.6
+      },
+      "north_shore_7": {
+        "dsm": 19.64,
+        "dem": 7.99,
+        "height": 19.6
+      }
+    },
+    "inputs": [
+      {
+        "file": "Auckland.osm.pbf",
+        "timestamp": "2026-10-02T23:00:00Z",
+        "sha256": "c3fb6555c9a5ad8844b99200d8e6926a19014960d82957f7f19a42991a7301f6"
+      },
+      {
+        "file": "akl-strips.osm.pbf",
+        "timestamp": "downloaded 2026-10-05T19:58Z",
+        "sha256": "b018ddf23a1b2f4f2a0fb16d97707b90db4a8233f5ca560a1556909630384f36"
+      }
+    ]
   }
 }

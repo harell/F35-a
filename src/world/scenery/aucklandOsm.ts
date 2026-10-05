@@ -12,7 +12,7 @@
  *
  * Format (little-endian): 'AKLO' | u32 version | f32 quantum (m) | u32 strings | u32 features | varint
  * attribution string | strings (u8 length + UTF-8; string 0 is empty) | features: u8 layer, u8 flags
- * (bit 0 area, bit 1 paved, bit 2 fuel tank), varint name, varint ref (runway designators / ICAO),
+ * (bit 0 area, bit 1 paved, bit 2 fuel tank, bit 3 heliport), varint name, varint ref (runway designators / ICAO),
  * varint width (0.5 m; a site building's height), varint vertex count, vertices. Vertices are zig-zag varint deltas (in quanta)
  * from the previous vertex written (the first from the origin). Areas are outer rings, closed implicitly.
  */
@@ -31,6 +31,7 @@ export const OSM_APRON = 3;
 export const OSM_HANGAR = 4;
 export const OSM_TERMINAL = 5;
 export const OSM_TOWER = 6;
+/** Helipads and heliports (#125): a point with the pad size as `width` (polygons are baked as their centre). */
 export const OSM_HELIPAD = 7;
 export const OSM_PIER = 8;
 export const OSM_BREAKWATER = 9;
@@ -62,6 +63,8 @@ export interface OsmFeature {
   paved: boolean;
   /** Storage tank holding fuel / oil / gas. */
   fuel: boolean;
+  /** OSM_HELIPAD: an `aeroway=heliport` rather than a single pad. */
+  heliport: boolean;
   name: string;
   /** Runway designators ("03/21"), or the ICAO code of an airfield core. */
   ref: string;
@@ -163,7 +166,7 @@ export function decodeOsm(bytes: Uint8Array): OsmData {
       pts[i * 2] = px * q;
       pts[i * 2 + 1] = pz * q;
     }
-    features.push({ layer, area: (flags & 1) !== 0, paved: (flags & 2) !== 0, fuel: (flags & 4) !== 0, name, ref, width, pts });
+    features.push({ layer, area: (flags & 1) !== 0, paved: (flags & 2) !== 0, fuel: (flags & 4) !== 0, heliport: (flags & 8) !== 0, name, ref, width, pts });
   }
   if (o !== bytes.length) throw new Error('bad OSM data size');
   return { attribution: str(attr), features };

@@ -24,7 +24,8 @@ Only the layers the game reads. Roads, streets and buildings come from LINZ (`to
 | aerodrome | `aeroway=aerodrome` (areas) | airfield boundaries (#32) |
 | runway, taxiway | `aeroway=runway` / `taxiway` (lines; split runway ways are joined by `ref`) | runways (checked against `src/core/airfields.ts`), concrete taxiways, blue edge lights |
 | apron, hangar, terminal | `aeroway=apron` / `hangar`, `building=hangar`, `aeroway=terminal` (areas) | aprons, extruded hangars and terminals, apron floodlights |
-| tower, helipad | `aeroway=control_tower` (or an aeroway ATC `man_made=tower`), `aeroway=helipad` | control tower position (none in the current data: a fallback places one) |
+| tower | `aeroway=control_tower` (or an aeroway ATC `man_made=tower`) | control tower position (none in the current data: a fallback places one) |
+| helipad | `aeroway=helipad` / `heliport`, nodes and polygons (a polygon as its centre, its size in the width field, flag bit 3 = heliport) | #125: the count; the full table with heights is `helipads.py`'s (below) |
 | pier, breakwater, marina, port | `man_made=pier` / `breakwater`, `leisure=marina`, `landuse=port` or `industrial=port` (every outer ring over 2,000 m²) | #33: port deck and berth faces, piers, pontoons, breakwaters, yachts (`src/world/scenery/aucklandSites.ts`) |
 | dock | `waterway=dock` (areas) | #33: Calliope Dock at the naval base |
 | storage tank | `man_made=storage_tank` at least 8 m across (farm water tanks dropped); flag for oil, fuel and gas content | airfield fuel farms; #33: Wiri terminal (`WIRI_TANKS` in `src/core/sites.ts`) |
@@ -64,6 +65,21 @@ class, which cuts the file by a third. A cell without a class keeps the game's h
 entry has the per-class areas and, for eight spot-check suburbs, the class shares computed exactly from the polygons,
 which `tests/world-landuse.test.ts` checks the grid against.
 
+## Helipads (`helipads.py`, #125)
+
+Every `aeroway=helipad` and `aeroway=heliport` in the world box, as a node or a polygon, into the generated table
+`src/core/helipadsData.ts` (re-exported as `HELIPADS` from `src/core/sites.ts`): centre, size and heading (a polygon's
+minimum rotated rectangle; a node is 20 m facing north unless tagged `diameter` / `width` / `direction`), name, parent
+site (the smallest hospital, aerodrome, naval base or vineyard area containing it) and height. A pad is on a **roof**
+when tagged `location=roof`, when it lies inside an OSM building outline, or when it is a hospital pad with the 2024
+LiDAR surface at least 4 m above the ground; its height is then the median 1 m DSM over its central 8 m square (Auckland
+Part 1 LiDAR on the mainland, Part 2 on the islands, `s3://nz-elevation`, read with `tools/hero/site.py`'s helpers),
+else the DEM. A node and a polygon mapping the same pad (4 pads) count once. `manifest.json`'s `helipads` entry has the
+counts (OSM objects, pads, heliports, roof pads, per area and per kind) and each roof pad's DSM and DEM, which
+`tests/world-helipads.test.ts` checks the table against. At the 2026-10-05 inputs: 87 OSM objects, 83 pads (81
+helipads, 2 heliports), 14 on Waiheke Island itself, 4 on roofs (Auckland City Hospital's at 63.6 m, 16 m above the
+ground; Middlemore's pad is on the lawn in the 2024 photo and LiDAR).
+
 ## Rebuild
 
 ```sh
@@ -76,6 +92,7 @@ osmium extract -b 174.31,-37.21,175.21,-36.49 <work>/new-zealand-260925.osm.pbf 
 python3 bake.py ../../src/world/scenery/data/auckland-osm.bin <work>/auckland.osm.pbf
 LINZ_API_KEY=… python3 topo50.py <work>     # Topo50 golf courses and cemeteries (cached)
 python3 landuse.py ../../src/world/scenery/data/auckland-landuse.bin <work> <work>/auckland.osm.pbf
+python3 helipads.py <stac-cache> <work>/auckland.osm.pbf     # needs numpy rasterio pyproj; LiDAR read over HTTP
 ```
 
 `bake.py` and `landuse.py` take one or more extracts. Several are merged first (osmium's merge: each object once, at

@@ -43,6 +43,7 @@ import { createConcreteTexture, createMotorwayTexture, createRailTexture } from 
 import { TileScatter } from './scatter';
 import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource } from './sources';
 import type { LandUse } from './aucklandLandUse';
+import { buildHelipadDecks, buildHelipads, createHelipadTexture, roofLookup } from './helipads';
 import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry, shedGeometry } from './archetypes';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { AIRBASE, airfieldOf } from '../terrain/features';
@@ -319,6 +320,8 @@ export class Scenery {
         buildStadiums(sites, lights, height, layout);
       }
       buildWiriTerminal(sites, lights, height, layout, concrete);
+      // the rooftop helipads on buildings the game does not model yet stand on a plain block (#125)
+      buildHelipadDecks(sites, height, roofLookup(aucklandBuildings(), height));
       addMesh(sites, 'akl-sites', aerialMat ?? buildingMat);
     }
 
@@ -357,6 +360,24 @@ export class Scenery {
         const m = new Mesh(g, mat);
         m.name = 'taxiways';
         m.renderOrder = -5;
+        this.group.add(m);
+      }
+    }
+    {
+      // every helipad and heliport (#125, core/sites.ts HELIPADS): one decal draw call, green edge lights at night
+      const pads = new DecalBuilder();
+      buildHelipads(pads, lights, height, roofLookup(aucklandBuildings(), height));
+      const g = pads.build();
+      if (g) {
+        const tex = createHelipadTexture();
+        tex.anisotropy = o.cfg.anisotropy;
+        this.textures.push(tex);
+        const mat = createDecalMaterial(o.atmo, tex);
+        this.materials.push(mat);
+        this.geometries.push(g);
+        const m = new Mesh(g, mat);
+        m.name = 'helipads';
+        m.renderOrder = -4;
         this.group.add(m);
       }
     }

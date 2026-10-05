@@ -144,6 +144,17 @@ on commercial, industrial and hospital land and on some school land (`landUseLot
 the painted and the 3D sheds agree). A cell without a class keeps the hand-traced suburbs (`AKL_URBAN`, `AKL_PARKS`),
 which stay the low tier's and the offline fallback. Gameplay never reads it.
 
+## Helipads (OpenStreetMap + LiDAR, #125)
+
+`HELIPADS` in `src/core/sites.ts` (generated `src/core/helipadsData.ts`, baked by `tools/osm/helipads.py`) is every
+OSM helipad and heliport in the world box with its size, heading, parent site (hospital, airfield, naval base,
+vineyard), area and height; rooftop pads carry the 2024 LiDAR roof height. It is synchronous and always present, like
+`WIRI_TANKS`: the scenery draws every pad in one decal draw call (`src/world/scenery/helipads.ts`: concrete with a
+yellow circle at hospitals, airfields and heliports, grass elsewhere; green edge lights at night on the hospital,
+airfield and heliport pads), and a rooftop pad whose building the game doesn't model yet (Auckland City Hospital:
+the LINZ CBD buildings stop short of Grafton) stands on a plain block in the sites mesh. Gameplay may read the table
+(the civil helicopters fly between its pads).
+
 ## Waterfront and strategic sites (OpenStreetMap)
 
 `src/world/scenery/aucklandSites.ts` builds from the same OSM file: the Ports of Auckland outline as a wharf deck (it
