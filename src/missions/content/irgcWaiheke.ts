@@ -32,8 +32,8 @@ export const G03_CLOCK = 240;
  * The stoat (#200, sim/stoat.ts): it runs east along the dune line from its start, stops at three
  * bait stations the volunteers set close to the nest (the drop windows) and ends at the nest. Its
  * first leg is the long one, so the windows fall when a jet that came the long way round can be
- * there: about 1:26–1:56, 2:14–2:44 and 3:02–3:32, each long enough for the run-in and a
- * StormBreaker's glide. Undisturbed it arrives at about 3:54, inside G03_CLOCK; a near miss makes
+ * there: about 1:09–1:49, 2:03–2:43 and 2:57–3:37, each long enough for the run-in and a
+ * StormBreaker's glide. Undisturbed it arrives at about 3:55, inside G03_CLOCK; a near miss makes
  * it bolt and cuts its stop short.
  */
 export const G03_STOAT = {
