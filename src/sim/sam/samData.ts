@@ -51,7 +51,7 @@ export interface SamTypeData {
   burstPause: number;
   ammo: number;
   /**
-   * Shoulder-launched IR missiles carried besides the main weapon (the IRGC Navy AD boat's SA-18s):
+   * Shoulder-launched IR missiles carried besides the main weapon (the Rat navy AD boat's SA-18s):
    * fired at a hostile aircraft inside `range`, one every `refire` s, `rounds` in all. Null = none.
    */
   manpads: { missile: MunitionId; minRange: number; range: number; refire: number; rounds: number } | null;
@@ -61,7 +61,7 @@ export interface SamTypeData {
    */
   pointDefense: { range: number; minRange: number; protect: number; pkAgm: number; pkBomb: number } | null;
   /**
-   * Close-in acquisition that stealth shaping doesn't beat (the IRGC Navy AD boat's electro-optical
+   * Close-in acquisition that stealth shaping doesn't beat (the Rat navy AD boat's electro-optical
    * tracker and lookouts, #115): any hostile aircraft inside `range` m with line of sight is
    * detected, and one with its weapon bay open inside `bayRange` m (the doors' radar flash and the
    * bomb leaving). A track found this way is held out to `bayRange`. Both scale with the difficulty's
@@ -179,7 +179,7 @@ export const SAM_DATA: Record<SamType, SamTypeData> = {
     burstPause: 1.4,
     ammo: 2_000,
   },
-  // IRGC Navy air-defence fast boat: a MOVING SAM (sim/boats.ts sails it). The radar SAM behaves
+  // Rat navy air-defence fast boat: a MOVING SAM (sim/boats.ts sails it). The radar SAM behaves
   // like the SA-15 (same missile and envelope, so the AGM-88G homes on its radar) from a low mast
   // on a small hull with fewer rounds, and without the Tor's point defence (a fast boat has no
   // munition-killing fire control); a crew with SA-18s fires at anything inside 5 km.
