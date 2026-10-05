@@ -209,6 +209,7 @@ function eyes(): Group {
   const tex = facets().clone();
   tex.needsUpdate = true;
   tex.repeat.set(7, 4);
+  tex.userData.own = true;
   const mat = new MeshPhysicalMaterial({ color: 0x1e150c, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.12, bumpMap: tex, bumpScale: 1.0, sheen: 0.5, sheenColor: 0x5a3e1c });
   for (const s of [1, -1]) {
     const e = new Mesh(new SphereGeometry(1, 40, 28), mat);

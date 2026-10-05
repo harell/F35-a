@@ -15,13 +15,14 @@ import type { WeaponId } from '../../core/types';
 import { WEAPON_BREVITY, WEAPON_HUD } from '../../hud/hmd/format';
 import { AIRCRAFT_HEALTH, GROUND_TARGET_DATA, SAM_SITE_DATA } from '../../sim/damage/tables';
 import { MUNITIONS } from '../../sim/weapons/defs';
+import { PESTS, type PestId } from '../../render/models/pests';
 import { GUN_CUE_RANGE, GUN_EFFECTIVE_RANGE, GUN_LETHAL_RANGE, GUN_MIN_RANGE } from '../../sim/weapons/gun';
 
 /* ───────────────────────────── categories ───────────────────────────── */
 
-export type CodexCat = 'aa' | 'ag' | 'gun' | 'thr' | 'fly' | 'cue' | 'ref';
+export type CodexCat = 'aa' | 'ag' | 'gun' | 'thr' | 'fly' | 'cue' | 'ref' | 'pest';
 
-export const CODEX_CATS: { id: CodexCat; name: string; icon: string; group: 'Weapons' | 'Warnings & cues' }[] = [
+export const CODEX_CATS: { id: CodexCat; name: string; icon: string; group: 'Weapons' | 'Warnings & cues' | 'The other enemy' }[] = [
   { id: 'aa', name: 'Air-to-air', icon: 'missile', group: 'Weapons' },
   { id: 'ag', name: 'Air-to-ground', icon: 'bomb', group: 'Weapons' },
   { id: 'gun', name: 'Gun & decoys', icon: 'crosshair', group: 'Weapons' },
@@ -29,6 +30,7 @@ export const CODEX_CATS: { id: CodexCat; name: string; icon: string; group: 'Wea
   { id: 'fly', name: 'Flight & systems', icon: 'jet', group: 'Warnings & cues' },
   { id: 'cue', name: 'Weapon cues', icon: 'target', group: 'Warnings & cues' },
   { id: 'ref', name: 'Threat reference', icon: 'sam', group: 'Warnings & cues' },
+  { id: 'pest', name: 'IRGC pest army', icon: 'paw', group: 'The other enemy' },
 ];
 
 /* ───────────────────────────── target classes ───────────────────────────── */
@@ -484,11 +486,72 @@ export const THREAT_REFERENCE: [string, string, string, string][] = [
   ['—', 'Shoulder-fired missile', 'up to 5 km', 'Fired from air-defence boats. No symbol and no warning until MISSILE.'],
 ];
 
+/* ───────────────────────────── the IRGC's pests ───────────────────────────── */
+
+/** What the IRGC is, shown on every pest page. */
+export const IRGC_INTRO =
+  'In this campaign the IRGC is the Interspecies Revolutionary Guard Corps: New Zealand\'s introduced pests, organised into an army against Predator Free 2050. Predator Free 2050 is the real national goal, set in 2016, to rid the country of possums, rats and mustelids (stoats, ferrets and weasels) by 2050.';
+
+export interface PestEntry {
+  kind: 'pest';
+  id: PestId;
+  cat: 'pest';
+  name: string;
+  latin: string;
+  /** IRGC unit and rank. */
+  rank: string;
+  /** Typical adult mass, as text. */
+  mass: string;
+  line: string;
+  /** Service record rows: when it arrived, how many, what it does. */
+  service: [string, string][];
+  /** What it does to New Zealand's wildlife (facts). */
+  record: string[];
+  /** What to look for on the 3D model. */
+  model: string;
+  /** On Predator Free 2050's target list. */
+  pf2050: boolean;
+}
+
+export const CODEX_PESTS: PestEntry[] = [
+  {
+    kind: 'pest', id: 'possum', cat: 'pest', name: 'Brushtail possum', latin: 'Trichosurus vulpecula', rank: 'Canopy Division · Brigadier', mass: '1.4–6.4 kg', pf2050: true,
+    line: 'The IRGC\'s heavy brigade. It strips the forest canopy by night and eats the eggs and chicks of the birds that live in it.',
+    service: [['Enlisted', '1837, shipped from Australia to start a fur trade'], ['Strength', 'Tens of millions, in most of the country\'s forests'], ['Orders', 'Strip the canopy by night']],
+    record: ['Browses rātā, kāmahi, tōtara and mistletoe until trees die back.', 'Takes eggs and chicks from nests, and the fruit and flowers native birds need.', 'Spreads bovine tuberculosis to cattle and deer.'],
+    model: 'Grey morph: silver-tipped back, cream throat and belly, dark muzzle bridge, big oval ears, and the bushy black tail with its bare grasping strip underneath.',
+  },
+  {
+    kind: 'pest', id: 'rat', cat: 'pest', name: 'Ship rat', latin: 'Rattus rattus', rank: 'Mast-Year Infantry · Sapper', mass: '120–160 g', pf2050: true,
+    line: 'The IRGC\'s infantry. It climbs every tree, raids every nest, and its numbers explode after a big seeding year.',
+    service: [['Enlisted', 'Mid-1800s, off European ships'], ['Strength', 'Booms after beech and rimu mast years'], ['Orders', 'Climb everything, raid every nest']],
+    record: ['The most widespread rat in New Zealand forest, and an expert climber.', 'Eats eggs, chicks, wētā, snails and lizards, plus the seeds forests need to regrow.', 'A plague of rats feeds a plague of stoats the following year.'],
+    model: 'Grey-brown agouti coat with ticked tips, pale belly, thin near-hairless ears, long whiskers, and a ringed, scaly tail longer than the body.',
+  },
+  {
+    kind: 'pest', id: 'stoat', cat: 'pest', name: 'Stoat', latin: 'Mustela erminea', rank: 'Special Operations · Commando', mass: '200–360 g', pf2050: true,
+    line: 'The IRGC\'s special forces. Small, fast and relentless: the stoat you hunt in mission g03 is one of these.',
+    service: [['Enlisted', '1880s, brought in to control rabbits'], ['Range', 'Mainland-wide, from beach to alpine tops'], ['Orders', 'Kiwi chicks. Then everything else.']],
+    record: ['The leading killer of kiwi chicks in the wild.', 'Hunts hole-nesting birds such as mohua, kākā and kākāriki.', 'Can swim more than a kilometre to reach a predator-free island.'],
+    model: 'Long, low body on short legs, chestnut back with a straight line to the cream belly, and the black tail tip that tells a stoat from a weasel.',
+  },
+  {
+    kind: 'pest', id: 'wasp', cat: 'pest', name: 'German wasp', latin: 'Vespula germanica', rank: 'Air Wing · Squadron Leader', mass: 'worker, about 14 mm', pf2050: false,
+    line: 'The IRGC\'s air wing. Tiny, but in beech forest there are more of them per hectare than almost anywhere on Earth.',
+    service: [['Enlisted', '1940s; the common wasp followed in the 1970s'], ['Strength', 'Among the densest wasp populations on Earth, in South Island beech forest'], ['Orders', 'Hold the honeydew']],
+    record: ['Takes the beech honeydew that kākā, tūī and korimako depend on.', 'Eats huge numbers of native insects and spiders.', 'Controlled with Vespex protein bait in late summer.'],
+    model: 'Banded gaster with the German wasp\'s central black points and paired dots, three black dots on the yellow clypeus, faceted eyes, elbowed antennae and veined wings. Shown enlarged: turn on Wing beat to see them move.',
+  },
+];
+
+// every pest model has an entry and every entry a model
+if (CODEX_PESTS.length !== PESTS.length) throw new Error('Codex: a pest model has no Codex entry');
+
 /* ───────────────────────────── lookup ───────────────────────────── */
 
-export type CodexEntry = WeaponEntry | WarningEntry;
+export type CodexEntry = WeaponEntry | WarningEntry | PestEntry;
 
-export const CODEX_ENTRIES: CodexEntry[] = [...CODEX_WEAPONS, ...CODEX_WARNINGS];
+export const CODEX_ENTRIES: CodexEntry[] = [...CODEX_WEAPONS, ...CODEX_WARNINGS, ...CODEX_PESTS];
 
 export function codexEntry(id: string): CodexEntry | null {
   return CODEX_ENTRIES.find((e) => e.id === id) ?? null;
@@ -508,7 +571,7 @@ export function searchCodex(q: string): CodexEntry[] {
   const s = q.trim().toLowerCase();
   if (!s) return [];
   return CODEX_ENTRIES.filter((e) => {
-    const labels = e.kind === 'weapon' ? e.hud.map((x) => x[0]).join(' ') + ' ' + e.short : e.chip;
+    const labels = e.kind === 'weapon' ? e.hud.map((x) => x[0]).join(' ') + ' ' + e.short : e.kind === 'pest' ? `${e.latin} ${e.rank} IRGC` : e.chip;
     return `${e.name} ${labels} ${e.line}`.toLowerCase().includes(s);
   });
 }

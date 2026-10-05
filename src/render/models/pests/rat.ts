@@ -107,6 +107,7 @@ function tail(): Mesh {
   const map = tailScales().clone();
   map.needsUpdate = true;
   map.repeat.set(170, 1);
+  map.userData.own = true;
   const bump = map;
   const mesh = new Mesh(geo, new MeshStandardMaterial({ vertexColors: true, map, bumpMap: bump, bumpScale: 0.6, roughness: 0.55 }));
   mesh.name = 'tail';
