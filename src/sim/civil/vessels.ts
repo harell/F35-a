@@ -16,7 +16,7 @@ const _p = new Vector3();
 
 /** What the radio and the HUD call a ship of this class ("tanker"; the HUD upper-cases it). */
 export function vesselNoun(v: VesselClass | null | undefined): string {
-  return v === 'tanker' ? 'tanker' : v === 'cruise' ? 'cruise ship' : v === 'ferry' ? 'ferry' : 'ship';
+  return v === 'tanker' ? 'tanker' : v === 'cruise' ? 'cruise ship' : 'ship';
 }
 
 /** A neutral merchant ship (has a vessel class). */

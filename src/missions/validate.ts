@@ -15,8 +15,8 @@ import type { Action, Condition, TaskDef } from './schema';
 /** Everything must stay inside ±LIMIT metres. */
 export const WORLD_LIMIT = 36_000;
 
-/** Worst-case (ace) SAM range scale. */
-const ACE_RANGE_SCALE = 1.1;
+/** Worst-case (Veteran) SAM range scale. */
+const WORST_RANGE_SCALE = 1;
 
 /**
  * Radius (m) inside which a SAM of this type can reasonably engage a (stealthy or beast-mode)
@@ -24,7 +24,7 @@ const ACE_RANGE_SCALE = 1.1;
  */
 export function samThreatRadius(type: SamType): number {
   const d = SAM_DATA[type];
-  return Math.min(d.engageMax, d.detectRange * 0.45) * ACE_RANGE_SCALE;
+  return Math.min(d.engageMax, d.detectRange * 0.45) * WORST_RANGE_SCALE;
 }
 
 export function validateMission(def: MissionDef): string[] {
@@ -226,7 +226,7 @@ export function validateMission(def: MissionDef): string[] {
     }
   }
   // objectives about difficulty-gated groups must be gated at least as strictly
-  const order = ['recruit', 'pilot', 'veteran', 'ace'];
+  const order = ['recruit', 'pilot', 'veteran'];
   const gate = (id: string): number => {
     const a = sc.groups.find((g) => g.id === id);
     if (a) return order.indexOf(a.minDifficulty ?? 'recruit');

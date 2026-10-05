@@ -424,22 +424,21 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
 describe('i1: Instant Action honours the difficulty', () => {
   const opts = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 } as const;
 
-  it("4 bandits → 3 on Recruit, 4 on Pilot / Veteran / Ace (Instant Action keeps Pilot's numbers on Ace, issue #60)", () => {
-    const count = (d: 'recruit' | 'pilot' | 'veteran' | 'ace') => harness(buildInstantMissionSeeded(opts, 9), d).world.aircraft.filter((a) => a.team === 'red').length;
+  it("4 bandits → 3 on Recruit, 4 on Pilot / Veteran", () => {
+    const count = (d: 'recruit' | 'pilot' | 'veteran') => harness(buildInstantMissionSeeded(opts, 9), d).world.aircraft.filter((a) => a.team === 'red').length;
     expect(count('recruit')).toBe(3);
     expect(count('pilot')).toBe(4);
     expect(count('veteran')).toBe(4);
-    expect(count('ace')).toBe(4);
     expect(scaleTotal([2, 2], 0.75)).toEqual([2, 1]);
     expect(scaleTotal([2, 2], 1.5)).toEqual([3, 3]);
     expect(scaleTotal([1], 0.5)).toEqual([1]);
   });
 
-  it("'mixed' flies MiG-29s / Su-27s on every difficulty (issue #60: the Su-35's and Su-57's R-77s walled Veteran, then Ace)", () => {
+  it("'mixed' flies MiG-29s / Su-27s on every difficulty (issue #60: the Su-35's and Su-57's R-77s walled Veteran, then Ace, since removed)", () => {
     const seen = new Set<string>();
     for (let seed = 1; seed < 30; seed++) {
       const def = buildInstantMissionSeeded(opts, seed);
-      for (const d of ['recruit', 'pilot', 'veteran', 'ace'] as const) {
+      for (const d of ['recruit', 'pilot', 'veteran'] as const) {
         const types = harness(def, d).world.aircraft.filter((a) => a.team === 'red').map((a) => a.type);
         types.forEach((t) => seen.add(t));
         expect(types.every((t) => t === 'mig29' || t === 'su27')).toBe(true);

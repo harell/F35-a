@@ -869,8 +869,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     for (const g of world.ground) {
       if (g.type !== 'ship' || !g.alive || !g.vessel) continue;
       if (g.hits > 0) burnHitShip(g, t, dt);
-      const funnel = shipDims(g.vessel).funnel;
-      if (!funnel) continue; // a harbour ferry: no funnel
+      const funnel = shipDims(g.vessel).funnel!;
       const d = distCam(g.position.x, 40, g.position.z);
       if (d > FUNNEL_SMOKE_FAR) {
         funnelAcc.delete(g.id);

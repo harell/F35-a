@@ -231,7 +231,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.winchester.update();
     this.awacs.update();
     this.civil?.update();
-    this.shipping?.update();
     this.checkEnd();
     this.hints.update();
   }

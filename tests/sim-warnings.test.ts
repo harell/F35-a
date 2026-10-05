@@ -9,7 +9,7 @@ function warningLog(tw: ReturnType<typeof makeWorld>) {
 
 describe('ICAWS warnings', () => {
   it('PULL UP when diving at the ground, cleared after recovery', () => {
-    const tw = makeWorld('ace', flatTerrain(0));
+    const tw = makeWorld('veteran', flatTerrain(0));
     const ac = tw.world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 3000, 0), heading: 0, speed: 250 });
     let firstAlt = -1;
     run(tw.world, 45, (t) => {

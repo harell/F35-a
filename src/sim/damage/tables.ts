@@ -66,8 +66,6 @@ export const VESSEL_DATA: Record<VesselClass, VesselData> = {
   cruise: { length: 290, beam: 36, height: 52, health: 3_200 },
   // Aframax-size crude carrier: low freeboard when laden, accommodation block and funnel aft
   tanker: { length: 250, beam: 44, height: 40, health: 3_000 },
-  // a 34 m harbour catamaran (render/traffic/ferryRoutes.ts): one short gun pass sinks it
-  ferry: { length: 34, beam: 10, height: 12, health: 400 },
 };
 
 /** Hit points of aircraft types that are not the default 100 (AircraftEntity.maxHealth). */
