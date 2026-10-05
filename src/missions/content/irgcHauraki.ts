@@ -2,7 +2,7 @@
  * F35-A — IRGC campaign, mission 2: "Straight Outta Hauraki" (#82, epic #72).
  *
  * An oil tanker leaves the Ports of Auckland for Singapore, out through the Rangitoto Channel into
- * the Hauraki Gulf. Fast boats from the IRGC mother ship come for her: three suicide boats on the
+ * the Hauraki Gulf. The Rat navy's fast boats from the Guard's mother ship come for her: three suicide boats on the
  * short clock (they reach her about 2 minutes in; two on Recruit), three Peykaap II missile boats on
  * the long one (they come in a minute into the mission, too late for the opening ripple, and are in
  * launch range 3–4 minutes in; a Kowsar can't be shot down: kill the boat first) and two air-defence
@@ -78,7 +78,7 @@ export const G02: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
-    `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The IRGC mother ship has put its fast boats in the water to stop her. Clear the way.`,
+    `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The Guard's rusting mother ship has put the Rat navy's fast boats in the water to stop her. Clear the way.`,
     'Suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Peykaap II missile boats come in from the north about a minute into the fight, too late for your first release. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. An air-defence boat rides with each wave, with a Tor-type radar SAM good to 20,000 ft and 12 km and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you. Stealth will not hide you from them up close: their trackers pick you up inside about 9 km, and inside 12 km the moment your bay opens. On Pilot and Veteran an open bay is seen from about 20 km, and they fire long shots at it to make you turn: those rounds fall short of a jet that breaks away and catch one that flies straight on.',
     'Two hits sink her: a ram, a Kowsar, or one of your own bombs. You carry two weapons that hit a moving boat. A GBU-53/B StormBreaker tracks any boat; it glides slowly from long range, so release early on the suicide boats. An AARGM-ER homes on a radar: one for each of the two escorts, fired while its radar is on (Veteran sends a third boat ahead of the wave: that one is for the gun). No air-to-air missiles today: nothing hostile flies. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today. On Veteran seven boats and two escorts are more than your bombs comfortably cover: sink the escorts first and the rest are gun passes without their missiles.',
   ],
@@ -179,7 +179,7 @@ export const G02: MissionDef = mission({
     hints: [{ id: 'h_boats', text: 'Boats: TGT, StormBreaker, release early. Kill the missile boats before they count down', when: { kind: 'time', t: 6 }, duration: 8 }],
     opening: [
       // two calls: one was 4 subtitle pages on a phone (tests/hud-textbudget.test.ts allows 3)
-      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. IRGC fast boats in the Gulf, heading for the tanker: suicide boats with an air-defence boat.', priority: 2 },
+      { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Rat navy fast boats in the Gulf, heading for the tanker: suicide boats with an air-defence boat.', priority: 2 },
       { kind: 'radio', from: DS, text: 'The mother ship is putting missile boats in the water behind them. Weapons free on the boats.', priority: 2 },
     ],
     successText: 'The Gulf is clear and the Kōtuku Star is on her way to Singapore. Good hunting, Viper.',
