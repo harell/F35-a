@@ -30,15 +30,15 @@ fs.mkdirSync(out, { recursive: true });
  */
 const VIEWS = {
   // a 6-car set coming out of the Britomart tunnel's east portal (the CRL's way out of Waitematā) at Quay Park
-  waitemata_portal: { at: [1330, -185], r: 120, cars: 6, cam: [260, 140, -260], look: [-60, 0, -20] },
+  waitemata_portal: { at: [1330, -185], r: 120, cars: 6, cam: [130, 70, -150], look: [-50, 0, -20] },
   // a set at the CRL's south portal, Maungawhau station
-  maungawhau_portal: { at: [-300, 2110], r: 140, cam: [-260, 160, 300], look: [40, 0, -40] },
+  maungawhau_portal: { at: [-300, 2110], r: 140, cam: [-160, 70, 170], look: [20, 0, -40] },
   // a train crossing Newmarket (the junction and the station)
-  newmarket: { at: [1481, 2354], r: 220, cam: [-420, 260, 380], look: [0, 0, 0] },
+  newmarket: { at: [1481, 2354], r: 220, cam: [-230, 130, 240], look: [0, 0, 0] },
   // a freight train in the port's rail yard along The Strand
-  port_freight: { at: [1650, -150], r: 400, line: 3, cam: [-200, 260, -500], look: [100, 0, 30] },
+  port_freight: { at: [1650, -150], r: 400, line: 3, cam: [-160, 120, -280], look: [80, 0, 30] },
   // night: a set at Newmarket, lit windows and headlights
-  night_newmarket: { tod: 'night', at: [1481, 2354], r: 260, cam: [-420, 260, 380], look: [0, 0, 0] },
+  night_newmarket: { tod: 'night', at: [1481, 2354], r: 260, cam: [-230, 130, 240], look: [0, 0, 0] },
 };
 
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

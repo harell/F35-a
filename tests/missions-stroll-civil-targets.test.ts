@@ -156,7 +156,8 @@ describe('A Stroll in the Park: civil targets', () => {
     for (const def of defs) {
       const m = sortie(def);
       for (const g of m.world.ground) {
-        if (g.team === 'neutral') expect(['container', 'cruise', 'tanker'], `${def.id}: ${g.name}`).toContain(g.vessel);
+        // (a civil train, #146, is a neutral ground entity too, but no ship)
+        if (g.team === 'neutral' && g.type !== 'train') expect(['container', 'cruise', 'tanker'], `${def.id}: ${g.name}`).toContain(g.vessel);
       }
       m.runner.dispose?.();
     }

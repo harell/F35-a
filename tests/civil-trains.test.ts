@@ -301,6 +301,20 @@ describe('trains in missions', () => {
     m.runner.dispose?.();
   });
 
+  it('train entities take their ids from the civil range: coming and going, they never shift the mission’s ids', () => {
+    const m = setup(missionById('g01')!);
+    m.overNewmarket();
+    const before = m.world.nextId();
+    m.tick(2);
+    expect(m.trains().length).toBeGreaterThan(0);
+    for (const g of m.trains()) expect(g.id).toBeGreaterThanOrEqual(1_000_000_000);
+    // only the mission's own spawns (and munitions) advance the shared sequence, not the trains
+    const ids = m.world.ground.filter((g) => g.type !== 'train').map((g) => g.id);
+    expect(ids.every((id) => id < 1_000_000_000)).toBe(true);
+    expect(m.world.nextId()).toBeLessThan(before + 50);
+    m.runner.dispose?.();
+  });
+
   it('no trains with civil traffic switched off', () => {
     const m = setup(missionById('g01')!, false);
     m.overNewmarket();

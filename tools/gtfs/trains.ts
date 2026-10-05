@@ -10,8 +10,9 @@
  *  - https://gtfs.at.govt.nz/gtfs.zip (Auckland Transport GTFS, CC BY 4.0): shapes.txt, stops.txt,
  *    trips.txt, stop_times.txt;
  *  - OpenStreetMap (main API, ODbL): the CRL / Britomart / Parnell tunnels (rail ways tagged
- *    tunnel=yes in three bounding boxes) and the freight-only track the GTFS lacks: the port's rail
- *    siding along Quay St / The Strand and the POAL sidings at Wiri (ways by id).
+ *    tunnel=yes in three bounding boxes) and the freight-only track the GTFS and LINZ lack: the link
+ *    from the port's siding to the main line and POAL Road 1 at Wiri (ways by id).
+ * The port's siding itself is the LINZ line (auckland-roads.bin), so the freight runs on the drawn ribbon.
  * Tunnels also come from the LINZ rail ribbons already baked in auckland-roads.bin (New Lynn trench,
  * Britomart, Parnell). The three underground CRL stations are tunnel whatever the tagging says.
  *
@@ -68,8 +69,14 @@ const TUNNEL_BOXES = [
   [174.758, -36.857, 174.775, -36.842],
   [174.775, -36.865, 174.785, -36.852],
 ];
-/** The port's rail siding along Quay St / The Strand, west (port yard) to east (the junction with the main line). */
-const PORT_WAYS = [23907231, 1105418422, 138404559, 138404558, 23907271, 371690641];
+/**
+ * The port's rail siding along Quay St / The Strand: the LINZ line (the drawn ribbon) from the yard by Quay Park
+ * east to where OSM's link to the main line (way 371690641) leaves it.
+ */
+const PORT_LINK_WAY = 371690641;
+/** A point on the LINZ port line (picks it out) and where the link leaves it. */
+const PORT_LINE_AT: Pt = [1600, -200];
+const PORT_LINK_AT: Pt = [2366, -57];
 /** POAL Road 1 at Wiri (the inland port's siding), main-line end first after chaining. */
 const WIRI_WAYS = [830631749];
 
@@ -418,7 +425,14 @@ for (const sh of SHAPES) {
 }
 
 // ── freight: the port's siding → the Eastern Line → the main trunk → POAL Road 1 at Wiri, and back ──
-const port = chainWays(PORT_WAYS.map((id) => parseOsm(osmFile(`osm-way-${id}.osm`, `way/${id}/full`)).find((w) => w.id === id)!));
+const portLinz = linzLines
+  .filter((l, i) => !linz[i].tunnel)
+  .map((l) => ({ l, d: project(l, cumulative(l), PORT_LINE_AT).d }))
+  .sort((a, b) => a.d - b.d)[0].l;
+const portLine = portLinz[0][0] < portLinz[portLinz.length - 1][0] ? portLinz : portLinz.slice().reverse();
+const link = parseOsm(osmFile(`osm-way-${PORT_LINK_WAY}.osm`, `way/${PORT_LINK_WAY}/full`)).find((w) => w.id === PORT_LINK_WAY)!.pts;
+const linkE = link[0][0] < link[link.length - 1][0] ? link : link.slice().reverse();
+const port = join([between(portLine, portLine[0], PORT_LINK_AT), between(linkE, PORT_LINK_AT, linkE[linkE.length - 1])]);
 let wiri = chainWays(WIRI_WAYS.map((id) => parseOsm(osmFile(`osm-way-${id}.osm`, `way/${id}/full`)).find((w) => w.id === id)!));
 // port: west (the yard by Quay Park) first; POAL Road 1: the main-line end (north) first
 if (port[0][0] > port[port.length - 1][0]) port.reverse();

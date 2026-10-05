@@ -114,6 +114,8 @@ class SimWorldImpl implements SimWorld {
   player: AircraftEntity | null = null;
 
   private idSeq = 1;
+  /** Ids of the civil trains near the player (#146): their own range, so their coming and going never shifts the mission's ids. */
+  private civilIdSeq = 1_000_000_000;
   private readonly byId = new Map<number, AnyEntity>();
   private readonly env: FlightEnv;
   private readonly damage: DamageSystem;
@@ -280,7 +282,7 @@ class SimWorldImpl implements SimWorld {
     const data = GROUND_TARGET_DATA[spec.type];
     // civil merchant ship: hull size / hit points of its class (bounding radius = half its length)
     const vessel = spec.type === 'ship' && spec.vessel ? VESSEL_DATA[spec.vessel] : null;
-    const e = new GroundTargetEntity(this.nextId(), spec.type, spec.team, {
+    const e = new GroundTargetEntity(spec.civilId ? this.civilIdSeq++ : this.nextId(), spec.type, spec.team, {
       name: spec.name ?? GROUND_NAMES[spec.type],
       radius: vessel ? vessel.length / 2 : data.radius,
       health: spec.health ?? vessel?.health ?? data.health,

@@ -129,6 +129,7 @@ export class TrainTraffic {
       position: new Vector3(_st.x, 0, _st.z),
       name: u.name,
       groupId: 'civil-train',
+      civilId: true, // never shifts the mission's own entity ids
       // drawn by the train renderer (render/traffic/Trains.ts), with every other train of the timetable
       scenery: true,
     });
