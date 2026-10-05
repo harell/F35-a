@@ -34,15 +34,15 @@ export interface CampaignEnding {
 }
 
 /** The IRGC campaign's name (a working title until it is decided: content/irgc.ts). */
-const irgcName = (): string => CAMPAIGNS.find((c) => c.id === 'irgc')?.name ?? 'IRGC Campaign';
+const irgcName = (): string => CAMPAIGNS.find((c) => c.id === 'irgc')?.name ?? 'IRGC · Interspecies Revolutionary Guard Corps';
 
 /**
  * Placeholder ending for the IRGC campaign until the campaign is complete (epic #72: its finale is
  * not decided yet). Short on purpose; the real epilogue arrives with the campaign's last mission.
  */
 const IRGC_EPILOGUE = (name: string) => [
-  'The IRGC drones are gone from the sky over Auckland and the fast boats from the Hauraki Gulf.',
-  `${name} is complete. Welcome home, Lightning.`,
+  'The Wasp air wing is out of the sky over Auckland, the Rat navy out of the Hauraki Gulf and Stoat Command off Waiheke.',
+  `${name}: the campaign is complete. 2050 is still ahead, and the Guard is counting too. Welcome home, Lightning.`,
 ];
 
 /** The ending of a campaign (the IRGC campaign is the only one; an unknown id gets its ending too). */

@@ -8,6 +8,7 @@ import { DIFFICULTIES } from '../../core/data';
 import type { Settings } from '../../core/types';
 import { icon } from '../art/icons';
 import { logoBlock } from '../art/logo';
+import { daysToPredatorFree } from '../predatorFree';
 import { basicTrainingDone, careerRank, dismissOnboarding, isFirstLaunch } from '../career';
 import { escapeHtml, h } from '../dom';
 import type { UiHost } from '../host';
@@ -41,9 +42,11 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
   return new Promise((resolve) => {
     const el = h('section', { class: 'scr-main' });
     let done = false;
+    let cleanup = () => {};
     const finish = (c: MainMenuChoice | 'record') => {
       if (done) return;
       done = true;
+      cleanup();
       host.leave(el);
       resolve(c);
     };
@@ -57,7 +60,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
       `<div class="mm-theatre ui-panel brk">` +
       `<div class="mm-th-k">${icon('pin')} THEATRE</div>` +
       `<div class="mm-th-t">Auckland, New Zealand</div>` +
-      `<div class="mm-th-s">IRGC drones over the city and fast boats in the Hauraki Gulf. Fly from RNZAF Base Auckland (Whenuapai) and defend the city.</div>` +
+      `<div class="mm-th-s">New Zealand's pests have formed an army, the Interspecies Revolutionary Guard Corps: drones over the city, fast boats in the Hauraki Gulf. Fly from RNZAF Base Auckland (Whenuapai) and defend the city.</div>` +
       `</div>` +
       `<div class="mm-ver mono">Build ${build}</div>`;
 
@@ -100,7 +103,13 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
       list.appendChild(b);
     }
     stagger(list);
-    el.append(left, list);
+    const right = h('div', { class: 'mm-right' }, list);
+    const pf = predatorFreeLine(Date.now());
+    if (pf) {
+      right.appendChild(pf.el);
+      cleanup = pf.cleanup;
+    }
+    el.append(left, right);
 
     // first launch: suggest the Training lessons
     let focus: HTMLElement | null = first;
@@ -128,4 +137,39 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
     }
     host.present(el, { bg: true, focus });
   });
+}
+
+/**
+ * The quiet "<N> days to Predator Free 2050" line under the menu list (#211), with its explainer:
+ * hover or keyboard focus opens it, a tap toggles it, a tap anywhere else closes it. Counted once,
+ * when the menu opens. Null once the deadline has come (the line is hidden).
+ */
+function predatorFreeLine(nowMs: number): { el: HTMLElement; cleanup: () => void } | null {
+  const days = daysToPredatorFree(nowMs);
+  if (days <= 0) return null;
+  // no thousands separator: the mono face renders "8,488" as "8, 488"
+  const sentence = `${days} days to Predator Free 2050`;
+  const line = h('button', {
+    class: 'mm-pf mono',
+    attrs: { type: 'button', 'aria-label': `${sentence}. New Zealand's goal: no possums, rats or stoats by 2050.`, 'aria-expanded': 'false' },
+    html:
+      `${icon('clock')}<span><b>${days}</b> days to Predator Free 2050</span>` +
+      `<span class="mm-pf-pop ui-panel" role="tooltip">` +
+      `<span class="mm-pf-k">PREDATOR FREE 2050</span>` +
+      `<span class="mm-pf-s">Days left to New Zealand's goal: no possums, rats or stoats by 2050. <em>The Guard is counting too.</em></span>` +
+      `</span>`,
+  });
+  const setOpen = (open: boolean) => {
+    line.classList.toggle('is-open', open);
+    line.setAttribute('aria-expanded', String(open));
+  };
+  line.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setOpen(!line.classList.contains('is-open'));
+  });
+  const outside = (e: PointerEvent) => {
+    if (!line.contains(e.target as Node)) setOpen(false);
+  };
+  document.addEventListener('pointerdown', outside);
+  return { el: line, cleanup: () => document.removeEventListener('pointerdown', outside) };
 }

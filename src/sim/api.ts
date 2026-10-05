@@ -236,7 +236,7 @@ export interface SamSpawn {
 }
 
 /**
- * How an IRGC Navy fast boat sails (sim/boats.ts): a suicide boat rams `chaseId`; a missile boat
+ * How a Rat navy fast boat sails (sim/boats.ts): a suicide boat rams `chaseId`; a missile boat
  * closes to `strike.range` of `strike.targetId`, counts down and fires; an AD boat keeps station on
  * `escortId`. With none of them (or once its target is gone) it sails `path`.
  * The `…Group` / `strike.group` forms name a mission group instead: the boat takes its first live
@@ -284,7 +284,7 @@ export interface GroundSpawn {
    * seeded behaviour keyed by id (a bot run changed outcome with nothing else different).
    */
   civilId?: boolean;
-  /** IRGC Navy fast boat ('suicide_boat' / 'missile_boat'): chase / strike target (sim/boats.ts). `path` and `speed` above still apply. */
+  /** Rat navy fast boat ('suicide_boat' / 'missile_boat'): chase / strike target (sim/boats.ts). `path` and `speed` above still apply. */
   boat?: BoatSpawn;
   /** The stoat ('stoat'): its route, bait stations and clock (sim/stoat.ts). */
   stoat?: import('./stoat').StoatSpawn;

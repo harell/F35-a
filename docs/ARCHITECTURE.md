@@ -21,7 +21,7 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 >   The CBD sits on the south shore of the Waitematā Harbour, the Hauraki Gulf and its islands lie to the east/north-east,
 >   the Manukau Harbour and the airport to the south-west/south, and the Waitākere Ranges (≤474 m) plus the Tasman coast to the west.
 > * **Campaign fiction:** the IRGC campaign (epic #72, `src/missions/content/irgc.ts` and `irgcHauraki.ts`, mission ids
->   `g01`, `g02`, …): Shahed one-way attack drones over the city and IRGC Navy fast boats in the Hauraki Gulf. F-35As fly
+>   `g01`, `g02`, …): Shahed one-way attack drones over the city and Rat navy fast boats in the Hauraki Gulf. F-35As fly
 >   from **RNZAF Base Auckland (Whenuapai)** to defend Auckland. Enemy targets are always **military**; never target
 >   civilian landmarks. The CBD, Sky Tower and Harbour Bridge are things you **protect**. Optional bonus: flying under the
 >   Harbour Bridge (43 m clearance) earns a score bonus and a HUD message. Instant Action still uses a hostile SAM belt on
@@ -291,7 +291,7 @@ four draw calls day and night; windows and the destination display glow at night
 shared material; headlights and tail lights in the entity renderer's sprite batch). A car in a tunnel isn't drawn.
 `__f35.trains(x, z, { ahead })` lists the trains or finds when one passes a spot; `e2e/train-shots.mjs` shoots them.
 
-## IRGC Navy fast boats (moving threats)
+## Rat navy fast boats (moving threats)
 
 `src/sim/boats.ts` sails the IRGC campaign's boats after the ground movers each step. A **suicide boat**
 (`'suicide_boat'` ground target) chases a ship (`BoatState.chaseId`, weaving about the intercept course)

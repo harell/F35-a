@@ -1,5 +1,5 @@
 /**
- * IRGC Navy fast boats (issue #79): low-poly hulls shared by the ground prototypes (suicide boat,
+ * Rat navy fast boats (issue #79): low-poly hulls shared by the ground prototypes (suicide boat,
  * missile boat) and the SAM prototype of the air-defence boat. Waterline at y = 0, bow at -Z. Their
  * wakes are drawn by the EntityRenderer's WakeBatch like every moving ship's.
  */
