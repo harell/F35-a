@@ -1,7 +1,9 @@
 /**
  * Hero neighbourhoods: Herne Bay, Westhaven and Mission Bay measured from the 2024 LiDAR and aerial on OSM outlines
  * (aucklandNeighbourhoods.ts, tools/hero/sites/neighbourhoods_bake.py). Herne Bay and Westhaven are drawn inside the
- * real-streets region; Mission Bay outside it, on a site mask with its LINZ streets as ribbons.
+ * real-streets region; Mission Bay outside it, on a site mask with its LINZ streets as ribbons. Then the suburbs under
+ * the flight line from Whenuapai to Auckland Airport, each clipped to a corridor ±400 m either side of the line
+ * (tools/hero/sites/flight_corridor.py): CORRIDOR below, one row per area.
  */
 import { describe, expect, it } from 'vitest';
 import { aucklandNeighbourhoods, canopyAt, decodeNeighbourhoods, neighbourhoodAt, setAucklandNeighbourhoods, type Neighbourhood } from '../src/world/scenery/aucklandNeighbourhoods';
@@ -30,6 +32,14 @@ const hb = nbs.find((n) => n.name === 'Herne Bay')!;
 const wh = nbs.find((n) => n.name === 'Westhaven')!;
 const mb = nbs.find((n) => n.name === 'Mission Bay')!;
 const st = aucklandStreets() as CbdStreets;
+
+/**
+ * The flight corridor's suburbs, NZWP → NZAA: at least `min` buildings, a point on the line inside the area and one in
+ * the same suburb off the corridor (lat, lon), and at least `streets` LINZ street ribbons touching it.
+ */
+const CORRIDOR: { name: string; min: number; inside: [number, number]; outside: [number, number]; streets: number }[] = [
+  { name: 'Whenuapai', min: 100, inside: [-36.79246, 174.63369], outside: [-36.79515, 174.61439], streets: 5 },
+];
 
 describe('pitched roofs (pitchedRoof.ts)', () => {
   // a 20 × 8 m house along +X, eaves at 3 m, 0.5 m/m
@@ -83,9 +93,9 @@ describe('pitched roofs (pitchedRoof.ts)', () => {
 });
 
 describe('neighbourhood data (auckland-neighbourhoods.bin)', () => {
-  it('is small enough for phones (the area budget: < 100 kB gzip an area, < 50 B a building) and holds all three', () => {
+  it('is small enough for phones (the area budget: < 100 kB gzip an area, < 50 B a building) and holds every area', () => {
     const areas = decodeNeighbourhoods(NEIGHBOURHOODS_BYTES);
-    expect(areas.map((n) => n.name)).toEqual(['Herne Bay', 'Westhaven', 'Mission Bay']);
+    expect(areas.map((n) => n.name)).toEqual(['Herne Bay', 'Westhaven', 'Mission Bay', ...CORRIDOR.map((c) => c.name)]);
     expect(NEIGHBOURHOODS_GZ.length).toBeLessThan(100_000 * areas.length);
     expect(NEIGHBOURHOODS_GZ.length / areas.reduce((s, n) => s + n.buildings.length, 0)).toBeLessThan(50);
     expect(() => decodeNeighbourhoods(NEIGHBOURHOODS_BYTES.subarray(0, NEIGHBOURHOODS_BYTES.length - 3))).toThrow();
@@ -156,6 +166,31 @@ describe('neighbourhood data (auckland-neighbourhoods.bin)', () => {
     expect(inMb.some((r) => r.name === 'Patteson Avenue')).toBe(true);
   });
 
+  for (const c of CORRIDOR)
+    it(`${c.name} (flight corridor): its measured roofs off the real-streets region, its grid stopped, its streets ribbons`, () => {
+      const a = nbs.find((n) => n.name === c.name)!;
+      expect(a.buildings.length).toBeGreaterThan(c.min);
+      for (const parts of a.buildings) {
+        expect(st.inRegion(parts[0].ring[0], parts[0].ring[1])).toBe(false);
+        for (const p of parts) {
+          expect(ringArea(p.ring)).toBeGreaterThan(0);
+          expect(p.eave).toBeGreaterThanOrEqual(2.4);
+          expect(p.eave).toBeLessThan(70);
+          if (p.roof) expect(p.roof.pitch).toBeGreaterThan(0.1);
+        }
+      }
+      const inside = geoToWorld(...c.inside);
+      const outside = geoToWorld(...c.outside);
+      expect(neighbourhoodAt(inside.x, inside.z)).toBe(a);
+      expect(neighbourhoodAt(outside.x, outside.z)).toBe(null);
+      expect(maskFromRings(siteRings(), 8)!.masked(inside.x, inside.z)).toBe(true);
+      const streets = aucklandRoadPaths().filter((r) => {
+        for (let i = 0; i < r.x.length; i++) if (neighbourhoodAt(r.x[i], r.z[i]) === a) return true;
+        return false;
+      });
+      expect(streets.length).toBeGreaterThanOrEqual(c.streets);
+    });
+
   it('Westhaven: every boat and pontoon of the marina, on the water', () => {
     expect(wh.boats.length).toBeGreaterThan(1500);
     expect(wh.pontoons.length).toBeGreaterThan(300);
@@ -193,7 +228,8 @@ describe('the neighbourhoods in the building list (applyNeighbourhoods)', () => 
   const houses = bs.filter((b) => b.hero === 'house');
 
   it('replace the LINZ buildings inside their footprints and join with roofs, colours and collision heights', () => {
-    expect(houses.length).toBe(hb.buildings.length + wh.buildings.length + mb.buildings.length);
+    expect(houses.length).toBe(nbs.reduce((n, a) => n + a.buildings.length, 0));
+    for (const b of houses) expect(nbs.some((a) => a.name === b.area)).toBe(true);
     for (const b of bs) if (b.hero !== 'house') expect(neighbourhoodAt(b.prisms[0].cx, b.prisms[0].cz)).toBe(null);
     const pitched = houses.flatMap((b) => b.prisms).filter((p) => p.pitch);
     expect(pitched.length).toBeGreaterThan(400);
@@ -218,6 +254,23 @@ describe('the neighbourhoods in the building list (applyNeighbourhoods)', () => 
     // ≈ 2,800 houses: under 45 triangles each on medium; the low tier drops garages and sheds (< 60 m²)
     expect(medium).toBeLessThan(45 * houses.length);
     expect(low).toBeLessThan(medium * 0.8);
+  });
+
+  it("an area outside the real-streets region can go in a mesh of its own (Scenery: frustum-culled), not the city's", () => {
+    const cbd = aucklandCbd();
+    const roads = new RoadNetwork(aucklandRoadPaths());
+    const height = () => 10;
+    const own = new GeometryBuilder();
+    const city = new GeometryBuilder();
+    const whole = new GeometryBuilder();
+    const stats = buildCBD(city, new LightList(), height, 0.7, cbd, roads, bs, (b) => (b.area === 'Mission Bay' ? own : null));
+    buildCBD(whole, new LightList(), height, 0.7, cbd, roads, bs);
+    expect(own.triangleCount).toBeGreaterThan(0);
+    expect(city.triangleCount + own.triangleCount).toBe(whole.triangleCount);
+    // its houses keep an empty vertex range in the city mesh (they don't collapse with it)
+    bs.forEach((b, i) => {
+      if (b.area === 'Mission Bay') expect(stats.buildingVerts![2 * i + 1]).toBe(stats.buildingVerts![2 * i]);
+    });
   });
 });
 

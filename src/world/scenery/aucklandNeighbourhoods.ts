@@ -1,16 +1,18 @@
 /**
- * Hero neighbourhoods: Herne Bay, Westhaven and Mission Bay measured house by house from the LINZ 2024 LiDAR and aerial
+ * Hero neighbourhoods: Herne Bay, Westhaven, Mission Bay and the suburbs under the flight line from Whenuapai to Auckland
+ * Airport (each clipped to a corridor ±400 m either side: tools/hero/sites/flight_corridor.py) measured house by house from the LINZ 2024 LiDAR and aerial
  * (CC BY 4.0) on OpenStreetMap outlines (© OpenStreetMap contributors, ODbL 1.0), baked by
- * tools/hero/sites/neighbourhoods_bake.py into src/world/scenery/data/auckland-neighbourhoods.bin (≈ 120 kB gzip; the
- * format is in the bake's header).
+ * tools/hero/sites/neighbourhoods_bake.py into src/world/scenery/data/auckland-neighbourhoods.bin (the format is in
+ * the bake's header).
  *
  * Per area: its footprint, every building as its outline plus a measured roof (flat, gable or hip: pitchedRoof.ts),
  * a 20 m canopy grid (share under trees and their height: TreeSource grows its own trees to match, the real trees'
  * density and height, not their exact positions) and, at Westhaven, every boat and pontoon of the marina.
  * Herne Bay and Westhaven lie inside the real-streets region (aucklandRoads.ts), so the LINZ streets are drawn around
- * them. Mission Bay lies outside it: the procedural grid and houses stop on its footprint (aucklandSites.ts siteRings →
+ * them. Mission Bay and the corridor's suburbs lie outside it, each in a mesh of its own (Scenery, frustum-culled): the procedural grid and houses stop on its footprint (aucklandSites.ts siteRings →
  * Scenery.siteMask) and its LINZ streets are road ribbons (tools/linz/neighbourhoodStreets.ts). Every area's buildings
- * join the LINZ list (aucklandBuildings.ts applyNeighbourhoods) for the scenery, collision and collapse.
+ * join the LINZ list (aucklandBuildings.ts applyNeighbourhoods) for the scenery and collision; those in the CBD mesh also
+ * collapse with it.
  * Without the file the region shows what it shows without buildings: the LINZ streets and the paved block pattern.
  */
 import neighbourhoodsUrl from './data/auckland-neighbourhoods.bin?url';

@@ -9,6 +9,8 @@ F35-A — hero neighbourhoods: bake Herne Bay and Westhaven into src/world/scene
 
   # or keep the areas already in the file (byte for byte) and bake only the sites given, replacing any of the same name:
   python3 tools/hero/sites/neighbourhoods_bake.py --keep /tmp/hero/mission_bay
+  # the flight corridor's suburbs, one at a time in flight order (flight_corridor.py), each appended after the others:
+  python3 tools/hero/sites/neighbourhoods_bake.py --keep /tmp/hero/whenuapai
 
 What goes in (the review page's option C: buildings as parameters, trees as a canopy grid; see the skill):
   buildings  one record per building, its parts as prisms (a terraced roof is several), each the OSM / LiDAR-traced

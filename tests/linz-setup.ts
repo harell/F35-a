@@ -3,7 +3,7 @@
  * (src/world/terrain/data/auckland-linz.bin: terrain, auckland-roads.bin: road centrelines,
  * auckland-buildings.bin: CBD buildings) and the OpenStreetMap layers (src/world/scenery/data/auckland-osm.bin:
  * airfield layouts), the Ports of Auckland container stacks (auckland-port.bin) and the hero neighbourhoods
- * (auckland-neighbourhoods.bin: Herne Bay, Westhaven, Mission Bay) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
+ * (auckland-neighbourhoods.bin: Herne Bay, Westhaven, Mission Bay, the flight corridor's suburbs) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
  * loadAucklandBuildings / loadAucklandOsm). Tests of the hand-traced fallbacks clear them with
  * setAucklandLinz(null) / setAucklandRoads(null) / setAucklandBuildings(null) / setAucklandOsm(null).
  */
