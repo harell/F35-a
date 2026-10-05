@@ -13,7 +13,7 @@ import { AIRFIELD_IDS, airfieldFeature, airfieldNear } from '../../core/airfield
 import { airfieldLayout } from './aucklandOsm';
 import { buildRealPort, buildRealWaterside, siteLayout } from './aucklandSites';
 import { mulberry32 } from '../../core/math';
-import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame } from './GeometryBuilder';
+import { frameFromHeading, GeometryBuilder, WIN_BALCONY, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HOME, WIN_INDUSTRIAL, WIN_LOBBY, WIN_NONE, WIN_OFFICE, type Frame, type PhotoRoof } from './GeometryBuilder';
 import type { CbdTower, TowerFacade } from '../../core/cbdTowers';
 import { towerSkin } from '../../core/cbdTowerSkins';
 import { CPO_ROW, GLASSHOUSE_ROW } from '../../core/britomart';
@@ -24,7 +24,7 @@ import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
 import { FOOTPATH, pointInRing, type CbdStreets } from './cbdStreets';
-import { ringArea, roofHeight, type Building, type BuildingPrism } from './aucklandBuildings';
+import { ringArea, roofHeight, roofPhotoOffset, type Building, type BuildingPrism } from './aucklandBuildings';
 
 const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
 
@@ -756,9 +756,15 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
         heights.push(p.h);
         continue;
       }
-      // towers on a podium: a little darker, the crown's roof the facade colour
+      // towers on a podium: a little darker, the crown's roof the facade colour; the aerial photo on the roof where it
+      // shows it (#140: medium and high tiers, when the builder carries photo roofs)
       const c = p === base ? col : tmp.setHex(col).multiplyScalar(0.92).getHex();
-      B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win);
+      let photo: PhotoRoof | undefined;
+      if (b.roof) {
+        const [dx, dz] = roofPhotoOffset(b, p);
+        photo = { dx, dz };
+      }
+      B.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win, true, photo);
       prisms.push({ ...p, y0, y1: g + p.h });
       heights.push(p.h);
     }

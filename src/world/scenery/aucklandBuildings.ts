@@ -11,12 +11,18 @@
  * One small gzip file, fetched once per page load next to the road data; when it is missing the CBD
  * falls back to the procedural towers on the real streets (auckland.ts buildRealCBD).
  *
- * Format (little-endian): 'AKLB' | u32 version | f32 quantum (m) | u32 buildings | u32 prisms |
- * buildings: u8 flags (bit 0 = traced from the LiDAR), varint prisms; prisms: varint (height in dm
+ * Format (little-endian): 'AKLB' | u32 version (2) | f32 quantum (m) | u32 buildings | u32 prisms |
+ * buildings: u8 flags (bit 0 = traced from the LiDAR, bit 1 = photo roof, bit 2 = its offset registered by
+ * correlation, not taken from the lean field), [photo roof: two zig-zag varint offsets (east, south; 0.25 m)],
+ * varint prisms; prisms: varint (height in dm
  * << 1 | sloped), if sloped two zig-zag varint roof slopes (east, south; 0.01 m/m), varint vertex
  * count, vertices. Vertices are zig-zag varint deltas (in quanta) from the previous vertex written
  * (the first from the origin), rings counter-clockwise on the map (+X east, +Z south). A sloped
  * roof's height is given at the ring's area centroid.
+ *
+ * Photo roofs (#140, tools/linz/roofs.py): the aerial photo is a standard orthophoto, so a roof is drawn displaced
+ * from its footprint by its height × the camera's lean there. A building with a photo roof carries that displacement
+ * at its tallest roof (`roof`); a lower prism's roof is displaced in proportion to its height (roofPhotoOffset).
  */
 import { type CbdTower, spirePrisms, type TowerPartKind } from '../../core/cbdTowers';
 import { CBD_TOWERS } from '../../core/cbdTowersData';
@@ -91,10 +97,33 @@ export interface Building {
   colors?: { wall: number; roof: number };
   /** A hero neighbourhood building's area name (aucklandNeighbourhoods.ts), so the scenery can mesh an area apart. */
   area?: string;
+  /**
+   * The aerial photo on its roofs (#140): the photo shows its tallest roof at footprint + (dx, dz) (m, east / south).
+   * `measured`: registered by correlation (else predicted from the neighbours' lean, a low roof only). None = plain roof.
+   */
+  roof?: RoofPhoto;
+}
+
+export interface RoofPhoto {
+  dx: number;
+  dz: number;
+  measured: boolean;
+}
+
+/** Quantum of the photo-roof offsets (m). */
+export const ROOF_OFFSET_QUANTUM = 0.25;
+
+/** Where the photo shows a prism's roof, relative to its footprint (m, east / south): the building's offset scaled by height. */
+export function roofPhotoOffset(b: Building, p: BuildingPrism): [number, number] {
+  if (!b.roof) return [0, 0];
+  let top = 0;
+  for (const q of b.prisms) top = Math.max(top, q.h);
+  const k = top > 0 ? Math.min(1, Math.max(0, p.h / top)) : 1;
+  return [b.roof.dx * k, b.roof.dz * k];
 }
 
 const MAGIC = 'AKLB';
-const VERSION = 1;
+const VERSION = 2;
 
 let current: Building[] | null = null;
 let version = 0;
@@ -171,7 +200,11 @@ export function encodeBuildings(bs: Building[], quantum = 0.25): Uint8Array {
   let px = 0;
   let pz = 0;
   for (const b of bs) {
-    out.push(b.lidar ? 1 : 0);
+    out.push((b.lidar ? 1 : 0) | (b.roof ? 2 : 0) | (b.roof?.measured ? 4 : 0));
+    if (b.roof) {
+      varint(zig(Math.round(b.roof.dx / ROOF_OFFSET_QUANTUM)));
+      varint(zig(Math.round(b.roof.dz / ROOF_OFFSET_QUANTUM)));
+    }
     varint(b.prisms.length);
     for (const p of b.prisms) {
       const qsx = Math.round(p.sx * 100);
@@ -199,7 +232,9 @@ export function encodeBuildings(bs: Building[], quantum = 0.25): Uint8Array {
 export function decodeBuildings(bytes: Uint8Array): Building[] {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
-  if (magic !== MAGIC || dv.getUint32(4, true) !== VERSION) throw new Error('bad LINZ buildings header');
+  // (version 1 is version 2 without photo roofs: its flags never set bit 1)
+  const ver = dv.getUint32(4, true);
+  if (magic !== MAGIC || (ver !== VERSION && ver !== 1)) throw new Error('bad LINZ buildings header');
   const q = dv.getFloat32(8, true);
   const n = dv.getUint32(12, true);
   const nPrisms = dv.getUint32(16, true);
@@ -222,6 +257,7 @@ export function decodeBuildings(bytes: Uint8Array): Building[] {
   for (let i = 0; i < n; i++) {
     if (o >= bytes.length) throw new Error('bad LINZ buildings size');
     const flags = bytes[o++];
+    const roof = flags & 2 ? { dx: unzig(varint()) * ROOF_OFFSET_QUANTUM, dz: unzig(varint()) * ROOF_OFFSET_QUANTUM, measured: (flags & 4) === 4 } : undefined;
     const np = varint();
     const prisms: BuildingPrism[] = [];
     for (let k = 0; k < np; k++) {
@@ -241,7 +277,7 @@ export function decodeBuildings(bytes: Uint8Array): Building[] {
       prisms.push({ h: Math.floor(hs / 2) / 10, ring, sx, sz, cx, cz });
     }
     total += np;
-    out.push({ lidar: (flags & 1) === 1, prisms });
+    out.push(roof ? { lidar: (flags & 1) === 1, prisms, roof } : { lidar: (flags & 1) === 1, prisms });
   }
   if (o !== bytes.length || total !== nPrisms) throw new Error('bad LINZ buildings size');
   return out;

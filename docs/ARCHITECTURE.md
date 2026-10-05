@@ -148,7 +148,7 @@ Wiri tanks still stand.
 the waterfront and Devonport (`AERIAL_RECT`; baked by `tools/linz/aerial.py`): 2048² on the medium tier, 4096² on
 high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial=0`). Its alpha marks land and the
 OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
-the wharf decks and the naval base take it on their top faces, and the house / tree scatter and the procedural
+the wharf decks and the naval base take it on their top faces, so do the CBD's LINZ buildings (below), and the house / tree scatter and the procedural
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
 procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
 photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
@@ -161,6 +161,17 @@ thinning with slant range (`aerialHouseShare`, the same curve as `scatterKeep` i
 At night the procedural ground still runs under the photo for its lamps and lit windows, and the photo gives half its
 colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
 sit on the warmer procedural colour instead of a cool grey square.
+
+**Photo roofs (#140).** The photo is a standard orthophoto, not a true one: a roof h m up is drawn displaced from its
+footprint by h × the camera's lean there (0.07 m per metre typically in the CBD, the mosaic switching frame to frame).
+`tools/linz/roofs.py` registers every LINZ building the game draws on the photo's 0.3 m source tiles (edge correlation of
+the outline, every side at once, the prisms leaning in proportion to their height) and bakes one offset per building into
+`auckland-buildings.bin` (format v2, `Building.roof`, `roofPhotoOffset`). The CBD mesh then carries an int16 `aRoof`
+attribute (`GeometryBuilder.enablePhotoRoofs`, only when the tier has the photo) and draws with the `roofs` variant of the
+building material: a photo roof samples the photo at its footprint + offset, its walls' top 0.9 m take the photo's roof
+border as a parapet band (no windows there), and every other part of the mesh (the tower kit, the heroes, the
+neighbourhoods) keeps its own roof. A roof under 35 m that failed the correlation takes the offset its neighbours'
+lean predicts; a taller one keeps today's plain roof. Same mesh, same draw call, same triangles; low tier unchanged.
 
 The terrain's night glow constants live in `src/world/terrain/nightGlow.ts`. In the CBD region (`cbdPattern`) the
 streets themselves glow with their lamps (the posts are `buildCBD`'s fixtures), with shop windows on the footpaths and

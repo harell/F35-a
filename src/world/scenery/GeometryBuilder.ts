@@ -3,7 +3,7 @@
  * BufferGeometry with per-vertex colour and a window-style attribute, so every scenery feature is a
  * single draw call. Local frames: yaw θ about +Y (three.js convention); θ = −heading.
  */
-import { BufferAttribute, BufferGeometry, Color, ShapeUtils, Vector2 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, Int16BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { pitchedHeight, roofFacets, wallBreaks, type PitchedRoof } from './pitchedRoof';
 
 export interface Frame {
@@ -37,7 +37,26 @@ export const WIN_BANDS = 9; // ribbon windows between precast bands, 3.6 m store
 export const WIN_FLOOD = 10; // plain stone walls, floodlit warm white at night (the War Memorial Museum)
 export const WIN_HERITAGE = 11; // dressed stone with punched windows on 3.7 m bays and 3.9 m storeys, floodlit with its windows lit at night (the Chief Post Office)
 
+/**
+ * Photo roofs (#140, the `aRoof` attribute: createBuildingMaterial's `roofs`): a prism's roof takes the aerial photo
+ * at its footprint + an offset (the photo's lean), its walls a parapet band of the photo's roof border. Per vertex,
+ * int16: offset east, south (ROOF_Q m), the wall's top (ROOF_TOP_Q m, world height) and the kind.
+ */
+export const ROOF_NONE = 0;
+export const ROOF_PHOTO = 1;
+export const ROOF_WALL = 2;
+export const ROOF_Q = 0.25;
+export const ROOF_TOP_Q = 0.1;
+
+/** Where a prism's roof finds itself in the aerial photo (m, east / south of its footprint). */
+export interface PhotoRoof {
+  dx: number;
+  dz: number;
+}
+
 export class GeometryBuilder {
+  /** The `aRoof` channel (photo roofs), when enabled; null = none (the geometry gets no attribute). */
+  private roof: number[] | null = null;
   private pos: number[] = [];
   private nrm: number[] = [];
   private col: number[] = [];
@@ -51,6 +70,30 @@ export class GeometryBuilder {
 
   get triangleCount(): number {
     return this.idx.length / 3;
+  }
+
+  /** Carry photo roofs (`aRoof`) from now on; vertices already added get none. */
+  enablePhotoRoofs(): void {
+    if (!this.roof) this.roof = new Array(this.vertexCount * 4).fill(0);
+  }
+
+  get photoRoofs(): boolean {
+    return this.roof !== null;
+  }
+
+  /** Keep `aRoof` in step with the vertices pushed since `from` (none unless set later). */
+  private padRoof(): void {
+    if (this.roof) while (this.roof.length < this.vertexCount * 4) this.roof.push(0, 0, 0, 0);
+  }
+
+  /** Set `aRoof` of vertex `v`. */
+  private setRoof(v: number, dx: number, dz: number, top: number, kind: number): void {
+    const r = this.roof!;
+    const c = (x: number) => Math.max(-32768, Math.min(32767, Math.round(x)));
+    r[v * 4] = c(dx / ROOF_Q);
+    r[v * 4 + 1] = c(dz / ROOF_Q);
+    r[v * 4 + 2] = c(top / ROOF_TOP_Q);
+    r[v * 4 + 3] = kind;
   }
 
   private wx(f: Frame, lx: number, lz: number): number {
@@ -85,6 +128,7 @@ export class GeometryBuilder {
       this.win.push(win);
     }
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    this.padRoof();
   }
 
   /** Triangle from 3 local points (counter-clockwise from the front). */
@@ -109,6 +153,7 @@ export class GeometryBuilder {
       this.win.push(win);
     }
     this.idx.push(base, base + 1, base + 2);
+    this.padRoof();
   }
 
   /**
@@ -170,9 +215,11 @@ export class GeometryBuilder {
    * Vertical prism over a footprint polygon in world XZ (flat [x0, z0, ...], either winding): walls from
    * y0 up to the roof, roof triangulated (earcut). `roof(x, z)` gives the roof height at a vertex (a
    * tilted plane for a sloped crown). Bottom face omitted; `walls = false` draws the roof alone (a flat
-   * slab: pontoons). Returns the triangle count.
+   * slab: pontoons). `photo`: the roof takes the aerial photo at that offset and the walls its border as a parapet
+   * band (needs enablePhotoRoofs(); ignored otherwise). Returns the triangle count.
    */
-  prism(ring: ArrayLike<number>, y0: number, roof: (x: number, z: number) => number, color: Color | number, roofColor: Color | number, win = WIN_NONE, walls = true): number {
+  prism(ring: ArrayLike<number>, y0: number, roof: (x: number, z: number) => number, color: Color | number, roofColor: Color | number, win = WIN_NONE, walls = true, photo?: PhotoRoof): number {
+    const ph = this.roof && photo ? photo : null;
     const n = ring.length / 2;
     if (n < 3) return 0;
     const t0 = this.triangleCount;
@@ -192,6 +239,13 @@ export class GeometryBuilder {
       const bz = ring[b * 2 + 1];
       if (ax === bx && az === bz) continue;
       this.quad(IDENT_FRAME, [ax, y0, az, bx, y0, bz, bx, top[b], bz, ax, top[a], az], colr, win);
+      if (ph) {
+        const v = this.vertexCount - 4;
+        this.setRoof(v, ph.dx, ph.dz, top[a], ROOF_WALL);
+        this.setRoof(v + 1, ph.dx, ph.dz, top[b], ROOF_WALL);
+        this.setRoof(v + 2, ph.dx, ph.dz, top[b], ROOF_WALL);
+        this.setRoof(v + 3, ph.dx, ph.dz, top[a], ROOF_WALL);
+      }
     }
     const pts: Vector2[] = [];
     for (let i = 0; i < n; i++) pts.push(new Vector2(ring[i * 2], ring[i * 2 + 1]));
@@ -200,6 +254,7 @@ export class GeometryBuilder {
       // upward normal: (p1 − p0) × (p2 − p0) has y = Δz1·Δx2 − Δx1·Δz2 > 0
       const up = (ring[b * 2 + 1] - ring[a * 2 + 1]) * (ring[c * 2] - ring[a * 2]) - (ring[b * 2] - ring[a * 2]) * (ring[c * 2 + 1] - ring[a * 2 + 1]) > 0;
       this.tri(IDENT_FRAME, up ? [...p(a), ...p(b), ...p(c)] : [...p(a), ...p(c), ...p(b)], roofColor, WIN_NONE);
+      if (ph) for (let v = this.vertexCount - 3; v < this.vertexCount; v++) this.setRoof(v, ph.dx, ph.dz, 0, ROOF_PHOTO);
     }
     return this.triangleCount - t0;
   }
@@ -278,6 +333,7 @@ export class GeometryBuilder {
     g.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3));
     g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3));
     g.setAttribute('aWin', new BufferAttribute(new Float32Array(this.win), 1));
+    if (this.roof) g.setAttribute('aRoof', new Int16BufferAttribute(this.roof, 4));
     const n = this.vertexCount;
     g.setIndex(n > 65535 ? new BufferAttribute(new Uint32Array(this.idx), 1) : new BufferAttribute(new Uint16Array(this.idx), 1));
     g.computeBoundingSphere();

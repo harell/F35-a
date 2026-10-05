@@ -12,6 +12,12 @@ import { AdditiveBlending, ShaderMaterial, type Color, type Texture, type Vector
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { AERIAL_LIGHT_GLSL } from '../terrain/terrainShader';
 import { AERIAL_NIGHT_MIX } from '../terrain/theaters/aucklandAerial';
+import { ROOF_PHOTO, ROOF_Q, ROOF_TOP_Q, ROOF_WALL } from './GeometryBuilder';
+
+/** Height (m) of the parapet band a photo roof's walls take from the photo's roof border (#140). */
+export const PARAPET_BAND = 0.9;
+/** How far in from the wall (m) the parapet band samples the photo: on the roof's border, not the street. */
+export const PARAPET_INSET = 1.0;
 
 const commonVertex = /* glsl */ `
 varying vec3 vWorld;
@@ -66,11 +72,19 @@ const v2 = (a: readonly number[]) => `vec2(${a.map((x) => x.toFixed(4)).join(', 
 const buildingVertex = /* glsl */ `
 attribute float aWin;
 varying float vWin;
+#ifdef ROOFS
+// photo roofs (GeometryBuilder aRoof): offset east / south (m), height below the wall's top (m), kind
+attribute vec4 aRoof;
+varying vec4 vRoof;
+#endif
 ${commonVertex}
 void main() {
   mat4 m = worldMatrix();
   vec4 w = m * vec4(position, 1.0);
   vWorld = w.xyz;
+  #ifdef ROOFS
+    vRoof = vec4(aRoof.xy * ${ROOF_Q.toFixed(4)}, aRoof.z * ${ROOF_TOP_Q.toFixed(4)} - w.y, aRoof.w);
+  #endif
   vNormal = normalize(mat3(m) * normal);
   vColor = vertexColor();
   #ifdef HOUSES
@@ -97,6 +111,9 @@ varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec3 vColor;
 varying float vWin;
+#ifdef ROOFS
+varying vec4 vRoof;
+#endif
 
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -113,13 +130,30 @@ void main() {
   #ifdef AERIAL
     // decks and roofs take the aerial photo where it shows land or a deck (yachts over the water keep
     // their own colour); light fixtures (aWin 4) keep theirs
-    if (N.y > 0.7 && vWin < 3.5) {
-      vec2 uv = (vWorld.xz - uAerialRect.xy) * uAerialRect.z;
+    bool photoTop = N.y > 0.7 && vWin < 3.5;
+    vec2 photoAt = vWorld.xz;
+    float band = 1.0;
+    #ifdef ROOFS
+      // the CBD mesh (#140): only the photo roofs, where the photo shows them (their lean), and a parapet band at the
+      // top of their walls from the photo's roof border; every other part (the tower kit, the heroes) keeps its own
+      photoTop = false;
+      if (vRoof.w > ${(ROOF_PHOTO - 0.5).toFixed(1)} && vRoof.w < ${(ROOF_PHOTO + 0.5).toFixed(1)} && N.y > 0.7) {
+        photoTop = true;
+        photoAt += vRoof.xy;
+      } else if (vRoof.w > ${(ROOF_WALL - 0.5).toFixed(1)} && abs(N.y) < 0.5 && vRoof.z < ${PARAPET_BAND.toFixed(2)} + mpp) {
+        photoTop = true;
+        photoAt += vRoof.xy - N.xz * ${PARAPET_INSET.toFixed(2)};
+        band = 1.0 - smoothstep(${PARAPET_BAND.toFixed(2)} - mpp, ${PARAPET_BAND.toFixed(2)} + mpp, vRoof.z);
+      }
+    #endif
+    if (photoTop) {
+      vec2 uv = (photoAt - uAerialRect.xy) * uAerialRect.z;
       float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
       if (e > 0.0) {
         vec4 p = texture2D(uAerial, uv);
-        photoW = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w));
-        vec3 photoCol = p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a);
+        photoW = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)) * band;
+        // (a parapet faces sideways: a little darker than the roof it edges)
+        vec3 photoCol = p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a) * (N.y > 0.7 ? 1.0 : 0.85);
         // at night half the photo's colour gives way to the top's own, as on the terrain photo (#61 item 5)
         if (uNight > 0.0) photoCol = mix(photoCol, base, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));
         base = mix(base, photoCol, photoW);
@@ -141,7 +175,8 @@ void main() {
     vec3 sky = atmoSky(normalize(reflect(normalize(vWorld - uCamPos), N) + vec3(0.0, 0.25, 0.0)));
     vec3 glass = mix(base * 0.25, sky * 0.55, 0.55);
     float cover = vWin < 1.5 ? 0.62 : 0.3;
-    base = mix(base, glass, mix(cover * 0.8, win, detail));
+    // (no windows on a photo roof's parapet band)
+    base = mix(base, glass, mix(cover * 0.8, win, detail) * (1.0 - photoW));
     if (uNight > 0.0) {
       float hsh = hash12(id + floor(vWorld.xz / 37.0) * 7.0);
       float litFrac = vWin < 1.5 ? ${WINDOW_STYLES.office.lit.toFixed(3)} : ${WINDOW_STYLES.home.lit.toFixed(3)};
@@ -158,7 +193,7 @@ void main() {
       vec3 blockCol = mix(vec3(1.0, 0.7, 0.38), vec3(0.75, 0.85, 1.0), step(0.8, fract(bh * 5.0))) * 1.5;
       float detail2 = 1.0 - smoothstep(0.35, 0.9, mpp / (spacing.y * 3.0));
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
-      emissive += uNight * mix(mid, warm * win * lit, detail);
+      emissive += uNight * mix(mid, warm * win * lit, detail) * (1.0 - photoW);
     }
   } else if (vWin > 10.5) {
     // dressed stone with punched windows (aWin 11, the Chief Post Office): a 1.5 m × 2.3 m window with a round head in
@@ -290,19 +325,25 @@ void main() {
 /**
  * `aerial`: the aerial photo's uniforms (TerrainRenderer aerialUniforms): upward faces inside its
  * square take the photo's colour (the OSM wharf decks, the sheds' and the naval base's roofs).
+ * `roofs` (the CBD mesh, #140): instead only the LINZ buildings' roofs take it, each where the photo shows it (the
+ * orthophoto's lean, registered per building: aucklandBuildings.ts roofPhotoOffset), with a parapet band from the
+ * photo's roof border at the top of their walls.
  */
 export function createBuildingMaterial(
   atmo: AtmosphereUniforms,
   opts: {
     houses?: boolean;
     aerial?: { uAerial: { value: Texture }; uAerialRect: { value: Vector4 }; uAerialGrade: { value: Vector4 }; uAerialHouseR: { value: number } };
+    /** With `aerial`: the photo only on photo roofs (GeometryBuilder enablePhotoRoofs, the CBD mesh), at their lean. */
+    roofs?: boolean;
   } = {},
 ): ShaderMaterial {
   const defines: Record<string, number> = {};
   if (opts.houses) defines.HOUSES = 1;
   if (opts.aerial) defines.AERIAL = 1;
+  if (opts.aerial && opts.roofs) defines.ROOFS = 1;
   return new ShaderMaterial({
-    name: opts.houses ? 'WorldHouses' : opts.aerial ? 'WorldBuildingAerial' : 'WorldBuilding',
+    name: opts.houses ? 'WorldHouses' : opts.aerial ? (opts.roofs ? 'WorldBuildingRoofs' : 'WorldBuildingAerial') : 'WorldBuilding',
     vertexShader: buildingVertex,
     fragmentShader: buildingFragment,
     uniforms: { ...atmo, ...(opts.aerial ?? {}) },
