@@ -86,6 +86,7 @@ import { isHomeView, sortieHomeView, type HomeView } from './views';
 import { autopilotBrainOpts, frameAccumulator, frameTakesControls, hudShown, testConditions, testSeed } from './testParams';
 import type { HudTestHooks } from '../hud/Hud';
 import type { CockpitTestHooks } from '../hud/Cockpit';
+import { inTunnel, type UnitState } from '../sim/civil/rail';
 
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
@@ -1133,6 +1134,40 @@ export class Game {
         if (!s || s.runner.state === 'running') return false;
         s.endTimer = 0.01;
         return true;
+      },
+      /**
+       * The sortie's trains (#146), nearest to (x, z) first (default: the player): unit id, name, line, the
+       * consist's middle, speed, whether its middle is underground, and its sim entity id (null: not near
+       * the player). With `ahead` (s), instead the first time within `ahead` s from now (5 s steps) at which a
+       * train (of `line` and with `cars` cars, if given) has its middle within `radius` m of (x, z) and above ground: `{ t, unit }`
+       * or null. Then `simulate(t - state().time)` and look.
+       */
+      trains: (x?: number, z?: number, opts: { ahead?: number; radius?: number; line?: number; cars?: number } = {}) => {
+        const s = this.session;
+        const svc = s?.world.trains;
+        if (!s || !svc) return null;
+        const px = x ?? s.world.player?.position.x ?? 0;
+        const pz = z ?? s.world.player?.position.z ?? 0;
+        const st = { path: null!, s: 0, v: 0, x: 0, z: 0 } as UnitState;
+        if (opts.ahead) {
+          const r = opts.radius ?? 150;
+          for (let t = s.world.time; t <= s.world.time + opts.ahead; t += 5) {
+            for (const u of svc.units) {
+              if (svc.isWrecked(u.id) || (opts.line !== undefined && u.line !== opts.line) || (opts.cars !== undefined && u.cars.length !== opts.cars)) continue;
+              svc.state(u, t, st);
+              if (Math.hypot(st.x - px, st.z - pz) <= r && !inTunnel(st.path, st.s)) return { t, unit: u.id, name: u.name };
+            }
+          }
+          return null;
+        }
+        const ent = new Map<number, number>();
+        for (const g of s.world.ground) if (g.train && g.alive) ent.set(g.train.unit, g.id);
+        return svc.units
+          .map((u) => {
+            svc.state(u, s.world.time, st);
+            return { unit: u.id, name: u.name, line: u.line, cars: u.cars.length, x: Math.round(st.x), z: Math.round(st.z), d: Math.round(Math.hypot(st.x - px, st.z - pz)), v: +st.v.toFixed(1), underground: inTunnel(st.path, st.s), wrecked: svc.isWrecked(u.id), entity: ent.get(u.id) ?? null };
+          })
+          .sort((a, b) => a.d - b.d);
       },
       /** Knock the Sky Tower down as if the player's JDAM hit it at height `y` (m above its base, from the east). */
       destroySkyTower: (y = 120) => {

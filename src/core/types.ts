@@ -292,6 +292,8 @@ export interface QualitySettings {
   wakes: boolean;
   /** Visual-only harbour ferries (Auckland), 0 = none; capped by the fleet size (render/traffic/ferryRoutes.ts). */
   ferries: number;
+  /** Trains drawn at once (Auckland, #146: the nearest to the camera, render/traffic/Trains.ts), 0 = none. */
+  trains: number;
   /** LINZ railway lines (Auckland) as ballast-and-track ribbons (one draw call); off = no tracks drawn. */
   railways: boolean;
   /**

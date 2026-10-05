@@ -193,6 +193,38 @@ first N of `FERRY_FLEET`; at night a second, unlit `InstancedMesh` on the same i
 and the `WakeBatch` (`src/render/effects/Wakes.ts`) draws the V-shaped foam wakes of every
 moving ship and ferry in one draw call (`QualitySettings.wakes`, off on `low`). Both are owned by the EntityRenderer.
 
+## Trains (#146: timetable, civil but targetable)
+
+Auckland Transport's AM class sets (3 and 6 cars) run the three post-CRL lines (East-West, South-City, Onehunga-West)
+and two KiwiRail container trains run between the Ports of Auckland's rail siding and the POAL sidings at Wiri. The
+network is baked by `tools/gtfs/trains.ts` into `src/sim/civil/railData.ts` (13 kB, base64 in the bundle so the sim
+and the tests have it synchronously): each line's two GTFS shapes (cleaned of their 1–3 m jogs, so cars don't bunch),
+its stations (each on the track within 10 m of its GTFS stop) with one representative weekday trip's stop times, and
+tunnel runs from OpenStreetMap (the CRL, Britomart, Parnell) and the LINZ ribbons (New Lynn, Purewa). The freight path
+is the OSM sidings joined to the GTFS main lines. `src/sim/civil/rail.ts` is the timetable, a pure function of mission
+time like `ferryAt`: every train is a unit circulating its line (out, a layover, back, a layover), the units a
+headway apart, so each direction departs every headway; a run between stations is a trapezoid (0.9 m/s², ≤ 110 km/h)
+fitted to the GTFS time less a 30 s dwell. Headways come from the GTFS by `servicePeriod(timeOfDay)`: dawn and dusk run
+the peak, day off-peak, night the evening service. `TrainService` (one per sortie, seeded) holds the units and the
+wrecks; the mission's `TrainTraffic` (`src/missions/runtime/trains.ts`) hangs it on `world.trains`.
+
+Trains are **sim entities only near the player**: every 0.5 s the nearest 12 within 15 km (released past 17 km, kept
+while designated or with a weapon in flight at them, never wholly underground) become neutral `'train'` ground
+entities (`known = false`, `scenery` so the entity renderer adds no model), posed every step from the timetable. That is
+the airliners' and merchant ships' path, so the consequences are the same with no new code in sensors, HUD or
+targeting: EOTS / radar ground-map contacts boxed CIV, designatable, AI and SAMs ignore them, a civilian loss in
+`callouts.ts` ("CIVILIAN TRAIN HIT", −500, −0.15 rating, a debrief row; never a mission failure). A render-only
+train with a separate hit test would have needed its own designation, TGT and kill path; 20–50 entities all the time
+would have cost every sensor scan. Hit tests run along the cars (`trainHullDistance` in `src/sim/civil/vessels.ts`; a
+car in a tunnel can't be hit), one bomb or missile destroys a train, the gun a few rounds. A destroyed train stops,
+burns (the ground kill fire), stays a charred wreck (`TrainService.wrecks`) and its unit leaves the timetable.
+
+`src/render/traffic/Trains.ts` draws the nearest `QualitySettings.trains` (4 / 8 / 14) within 6 / 9 / 13 km of the
+camera, plus the player's designated one, as four `InstancedMesh`es (AM end car, AM middle car, DL, container wagon:
+four draw calls day and night; windows and the destination display glow at night through a per-vertex term in the
+shared material; headlights and tail lights in the entity renderer's sprite batch). A car in a tunnel isn't drawn.
+`__f35.trains(x, z, { ahead })` lists the trains or finds when one passes a spot; `e2e/train-shots.mjs` shoots them.
+
 ## IRGC Navy fast boats (moving threats)
 
 `src/sim/boats.ts` sails the IRGC campaign's boats after the ground movers each step. A **suicide boat**

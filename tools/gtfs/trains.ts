@@ -190,6 +190,57 @@ function densify(p: Pt[], step: number): Pt[] {
   }
   return out;
 }
+/**
+ * Clean a GTFS shape into a track the cars can follow: the shapes jog 1–3 m sideways and double back a
+ * few metres where they were snapped to stops (≈ 800 turns over 30° on the six shapes). Drop the spikes
+ * (points the line turns back at) and points within 2 m of the last kept one, resample every 4 m, smooth with a ±12 m binomial
+ * window (a 150 m curve moves ≈ 0.2 m), keep the ends.
+ */
+function clean(raw: Pt[]): Pt[] {
+  // drop spikes (a point the line turns back at, > 90°) until there are none, then points within 2 m
+  let pts = raw.slice();
+  for (let pass = 0; pass < 20; pass++) {
+    const out: Pt[] = [pts[0]];
+    for (let i = 1; i + 1 < pts.length; i++) {
+      const a = out[out.length - 1];
+      const p = pts[i];
+      const b = pts[i + 1];
+      if ((p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]) < 0) continue;
+      out.push(p);
+    }
+    out.push(pts[pts.length - 1]);
+    const done = out.length === pts.length;
+    pts = out;
+    if (done) break;
+  }
+  const kept: Pt[] = [pts[0]];
+  for (const p of pts.slice(1, -1)) if (dist(kept[kept.length - 1], p) >= 2) kept.push(p);
+  kept.push(pts[pts.length - 1]);
+  // resample every 4 m
+  const cum = cumulative(kept);
+  const total = cum[cum.length - 1];
+  const n = Math.max(2, Math.round(total / 4));
+  const res: Pt[] = [];
+  let k = 0;
+  for (let i = 0; i <= n; i++) {
+    const s = (total * i) / n;
+    while (k + 1 < cum.length - 1 && cum[k + 1] < s) k++;
+    const l = cum[k + 1] - cum[k] || 1;
+    const u = (s - cum[k]) / l;
+    res.push([kept[k][0] + (kept[k + 1][0] - kept[k][0]) * u, kept[k][1] + (kept[k + 1][1] - kept[k][1]) * u]);
+  }
+  // binomial smoothing (1 4 6 4 1), three passes, the ends fixed
+  let cur = res;
+  for (let pass = 0; pass < 3; pass++) {
+    const nx: Pt[] = cur.map((p) => [p[0], p[1]]);
+    for (let i = 2; i + 2 < cur.length; i++) {
+      for (const c of [0, 1]) nx[i][c] = (cur[i - 2][c] + 4 * cur[i - 1][c] + 6 * cur[i][c] + 4 * cur[i + 1][c] + cur[i + 2][c]) / 16;
+    }
+    cur = nx;
+  }
+  return cur;
+}
+
 /** The part of `pl` between its nearest points to `a` and `b` (a before b along it). */
 function between(pl: Pt[], a: Pt, b: Pt): Pt[] {
   const cum = cumulative(pl);
@@ -335,20 +386,27 @@ const shapeLine = new Map<string, Pt[]>();
 
 for (const sh of SHAPES) {
   const raw = (shapePts.get(sh.shape) ?? []).sort((a, b) => a.seq - b.seq).map((r) => r.p);
-  const pl = simplify(raw, TOL);
-  shapeLine.set(sh.shape, raw);
+  const track = clean(raw);
+  const pl = simplify(track, TOL);
+  shapeLine.set(sh.shape, track);
   const cum = cumulative(pl);
   // the representative trip: the median weekday departure of this shape
   const ts = trips.filter((t) => t.shape_id === sh.shape && times.has(t.trip_id)).map((t) => ({ t, rows: times.get(t.trip_id)!.sort((a, b) => +a.stop_sequence - +b.stop_sequence) }));
   ts.sort((a, b) => secs(a.rows[0].departure_time) - secs(b.rows[0].departure_time));
   const rep = ts[Math.floor(ts.length / 2)];
   const t0 = secs(rep.rows[0].departure_time);
-  let from = 0;
+  // each stop is searched for near its GTFS shape_dist_traveled (km; scaled to the cleaned track), so the
+  // South-City's two calls at Newmarket (before and after the CRL loop) each find their own pass
+  const scale = cum[cum.length - 1] / (1000 * +rep.rows[rep.rows.length - 1].shape_dist_traveled);
   const st: Stop[] = rep.rows.map((r) => {
     const s = stops.get(r.stop_id)!;
     const g = geoToWorld(+s.stop_lat, +s.stop_lon);
-    const pr = project(pl, cum, [g.x, g.z], from);
-    from = pr.i;
+    const sd = 1000 * +r.shape_dist_traveled * scale;
+    let i0 = 0;
+    while (i0 + 1 < cum.length - 1 && cum[i0 + 1] < sd - 400) i0++;
+    let i1 = i0;
+    while (i1 < cum.length - 1 && cum[i1] < sd + 400) i1++;
+    const pr = project(pl, cum, [g.x, g.z], i0, i1);
     return { name: s.stop_name.replace(/ Train Station.*$/, ''), s: pr.s, t: secs(r.departure_time) - t0, gx: g.x, gz: g.z, off: pr.d } as Stop & { off: number };
   });
   const offs = (st as (Stop & { off: number })[]).map((x) => x.off);
@@ -379,7 +437,7 @@ const puhinui = (() => {
 const toWiri = join([port, between(ew1, portJn, puhinui), between(sc1, puhinui, wiriJn), wiri]);
 const toPort = join([wiri.slice().reverse(), between(sc0, wiriJn, puhinui), between(ew0, puhinui, portJn), port.slice().reverse()]);
 for (const [dir, raw] of [[0, toWiri], [1, toPort]] as const) {
-  const pl = simplify(raw, TOL);
+  const pl = simplify(clean(raw), TOL);
   const cum = cumulative(pl);
   const len = cum[cum.length - 1];
   const tunnels = tunnelRuns(pl, []);
