@@ -14,6 +14,11 @@
  *    the whole 270–290 m hull, its smoke and the swell read in the small window. Where land (or the
  *    wharf a ship is moored at) blocks part of the circle, the camera swings to and fro over the
  *    widest stretch of open water instead of flying through the city.
+ *  - the pod (EOTS) view of a ground target / SAM site (#199, podCamPose): on the line of sight from the
+ *    player's jet, looking along it, at the distance that frames the zoom step (core/pod.ts POD_ZOOM).
+ *
+ * Small ground targets (a radius well under a metre) are framed size-aware: closer than the usual 16 m
+ * and looked at at their own height (groundMinFraming, groundLookY).
  *
  * Everything here is allocation-free and three.js-math only so it can be unit tested without WebGL.
  */
@@ -142,7 +147,23 @@ export function framingDistance(t: CamTarget): number {
   if (t.kind === 'sam') return SAM_FRAMING[t.type as SamType]?.dist ?? 30;
   if (isShip(t)) return shipDims(t.vessel).length * SHIP_FRAMING.distK;
   const k = GROUND_SCALE[t.type as GroundTargetType] ?? 2.2;
-  return Math.max(16, Math.min(260, t.radius * k));
+  return Math.max(groundMinFraming(t.radius), Math.min(260, t.radius * k));
+}
+
+/**
+ * Closest framing (m) of a ground target of bounding radius `r`: 16 m for anything a metre or more
+ * across, closer for a small one (≈ 10 radii, never under 2 m), so a 0.4 m target still fills the frame.
+ */
+export function groundMinFraming(r: number): number {
+  return Math.min(16, Math.max(2, r * 10));
+}
+
+/**
+ * Look-at height (m above the entity origin) of a ground target: ~18 % of its radius, 1.5–12 m — or
+ * its own radius for one smaller than 1.5 m (a camera looking 1.5 m over a 0.4 m target misses it).
+ */
+export function groundLookY(r: number): number {
+  return Math.min(12, Math.max(Math.min(1.5, r), r * 0.18));
 }
 
 function isShip(t: CamTarget): boolean {
@@ -248,7 +269,7 @@ export function targetCamPose(
     out.up.set(0, 1, 0);
   } else {
     // slow orbit (one lap ≈ 70 s), phase from the id so two sites never look identical
-    const lookY = t.kind === 'sam' ? (SAM_FRAMING[t.type as SamType]?.lookY ?? 2.5) : Math.min(12, Math.max(1.5, t.radius * 0.18));
+    const lookY = t.kind === 'sam' ? (SAM_FRAMING[t.type as SamType]?.lookY ?? 2.5) : groundLookY(t.radius);
     const ang = time * 0.09 + t.id * 1.7;
     const el = 0.2;
     out.look.set(t.position.x, t.position.y + lookY, t.position.z);
@@ -263,6 +284,66 @@ export function targetCamPose(
   _fwd.copy(out.look).sub(out.position).normalize();
   _right.crossVectors(_fwd, out.up);
   if (_right.lengthSq() < 1e-6) out.up.set(0, 0, -1);
+  return out;
+}
+
+/* ───────────────────────── Pod (EOTS) shot (#199) ───────────────────────── */
+
+/** The pod camera keeps at least this far above the surface (m): it frames ~2 m of ground at ZOOM. */
+export const POD_MIN_AGL = 0.8;
+
+/**
+ * Camera distance (m) at which the target camera's vertical field of view shows `span` metres top to
+ * bottom: the pod's zoom step rendered with the window's own FOV (the same picture a narrow-FOV camera
+ * on the jet would give, without a second projection to manage).
+ */
+export function podDistance(span: number, fovDeg = TARGET_CAM_FOV): number {
+  return span / (2 * Math.tan((fovDeg * Math.PI) / 360));
+}
+
+/** The pod camera stays this many target radii out (outside the model, whatever the zoom step). */
+export const POD_CLEAR_K = 1.6;
+
+/**
+ * Vertical FOV (deg) that shows `span` metres top to bottom from `dist` m: the zoom step from where
+ * podCamPose put the camera. Never wider than the target camera's own FOV (the jet closer than the
+ * step's framing distance: the picture shows a little less than the step).
+ */
+export function podFov(span: number, dist: number): number {
+  if (!(dist > 0)) return TARGET_CAM_FOV;
+  return Math.min(TARGET_CAM_FOV, (2 * Math.atan(span / (2 * dist)) * 180) / Math.PI);
+}
+
+/** Look-at height (m above the entity origin) of a pod shot: the middle of the vehicle / site. */
+export function podLookY(t: CamTarget): number {
+  if (t.kind === 'sam') return SAM_FRAMING[t.type as SamType]?.lookY ?? 2.5;
+  return groundLookY(t.radius);
+}
+
+/**
+ * Pod (EOTS) shot of a ground target / SAM site: on the line of sight from the player's eye to the
+ * target, looking along it as the pod does, at the distance that frames `span` metres in the target
+ * camera's FOV (podDistance: the zoom step) — but outside the target (POD_CLEAR_K × its radius: a
+ * hangar framed 2 m across would put the camera inside it; podFov narrows the lens to match) and
+ * never further out than the jet itself. Level horizon; straight down, north is up.
+ * @param eye  the player's jet
+ * @param span the zoom step's field (m top to bottom, core/pod.ts POD_ZOOM)
+ */
+export function podCamPose(t: CamTarget, eye: { x: number; y: number; z: number }, span: number, out: CamPose, surfaceAt?: (x: number, z: number) => number): CamPose {
+  out.look.set(t.position.x, t.position.y + podLookY(t), t.position.z);
+  _fwd.set(eye.x - out.look.x, eye.y - out.look.y, eye.z - out.look.z);
+  const slant = _fwd.length();
+  if (slant < 1e-3) _fwd.set(0, 1, 0);
+  else _fwd.multiplyScalar(1 / slant);
+  const d = Math.min(Math.max(podDistance(span), t.radius * POD_CLEAR_K), Math.max(1, slant * 0.95));
+  out.position.copy(out.look).addScaledVector(_fwd, d);
+  if (surfaceAt) {
+    const floor = surfaceAt(out.position.x, out.position.z) + POD_MIN_AGL;
+    if (out.position.y < floor) out.position.y = floor;
+  }
+  out.up.set(0, 1, 0);
+  _right.set(out.look.x - out.position.x, out.look.y - out.position.y, out.look.z - out.position.z).normalize();
+  if (Math.abs(_right.y) > 0.999) out.up.set(0, 0, -1);
   return out;
 }
 

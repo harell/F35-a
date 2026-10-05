@@ -73,7 +73,8 @@ export type GroundTargetType =
   | 'parked_jet' // parked enemy fighter
   | 'ship' // corvette / frigate (can move)
   | 'suicide_boat' // IRGC Navy unmanned explosive boat (Ya Mahdi type): chases a ship and rams it (sim/boats.ts)
-  | 'missile_boat'; // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
+  | 'missile_boat' // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
+  | 'stoat'; // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
 
 /**
  * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):
@@ -108,6 +109,8 @@ export type LoadoutId =
   | 'sead_stealth'
   /** 8× GBU-53/B + 2× AARGM-ER, no air-to-air missile: the boat swarm's only loadout (#136). */
   | 'strike_maritime'
+  /** 2× AARGM-ER + 2× GBU-53/B, no air-to-air missile: open a gap, then one precise shot (g03, #197). */
+  | 'sead_precision'
   | 'a2a_beast'
   | 'strike_beast'
   /** Nothing in the bays or on the pylons: the gun only (free flight's default, #113). */

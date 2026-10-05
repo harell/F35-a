@@ -279,6 +279,23 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'ag',
   },
+  // g03's loadout (#197): an AARGM-ER and a StormBreaker in each bay. Two anti-radiation missiles
+  // can't clear the Waiheke defences, so the player picks which radars to kill; two StormBreakers
+  // (the only bomb that tracks a moving target) for one small target. Offered only where a mission lists it.
+  sead_precision: {
+    id: 'sead_precision',
+    name: 'Precision SEAD (Stealth)',
+    description: '2× AARGM-ER + 2× GBU-53/B StormBreaker internal, no air-to-air missiles. Open a gap in the air defences, then one precise shot at a small moving target.',
+    rcsMultiplier: 1,
+    stores: [
+      { weapon: 'aargm', count: 2, internal: true },
+      { weapon: 'gbu53', count: 2, internal: true },
+    ],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'sead',
+  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',

@@ -10,6 +10,8 @@
  *    with the sensors a human has (the target must be a contact), releases on the launch-zone cue
  *    (the StormBreaker glides from far out and also follows a mover);
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
+ *  - weather: under an overcast deck (cloudBase) it attacks from below the cloud, as a human must to
+ *    see the target (g03's target only appears under the deck), and plans its releases for that height;
  *  - Winchester / low fuel: there is no rearming (issue #63), so it flies home to Whenuapai
  *    (homeBase()) and circles the field, out of the fight, until the mission ends.
  *
@@ -36,6 +38,8 @@ import { Probe, type ProbeSpec } from './missions-probes';
 import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { spawnFloor } from '../src/missions/runtime/spawner';
+import { cloudBase } from '../src/core/weather';
+import { isSmallGround } from '../src/sim/weapons/small';
 
 const _h = new Vector3();
 const _q = new Vector3();
@@ -51,6 +55,9 @@ const isSdb = (w: AgWeapon): boolean => w === 'gbu53';
 const boatRank = (t: AnyEntity): number => (t.kind === 'ground' && t.type === 'suicide_boat' ? 0 : t.kind === 'ground' && t.type === 'missile_boat' ? 1 : 2);
 
 export const WHENUAPAI = new Vector3(AKL.whenuapai.x, 0, AKL.whenuapai.z);
+
+/** Under an overcast deck the bot drops below the cloud this far from a target waypoint (m). */
+export const UNDER_DECK_RANGE = 15_000;
 
 /**
  * Limit a horizontal steering direction to at most `maxDeg` off the current track (same side),
@@ -148,6 +155,13 @@ export class MissionBot {
   private readonly agLoadout: boolean;
   /** Home base (y = 0): where we go when out of weapons or fuel. */
   readonly home: Vector3;
+  /**
+   * Height above the ground the SAM defence descends to (m): into the clutter. A route probe flying a
+   * leg under a radar's floor (the SA-6 can't engage below 80 m) keeps its defence down there too.
+   */
+  defenceAgl = 120;
+  /** Base of the mission's cloud deck (m MSL), null in clear or scattered weather. */
+  private readonly deck: number | null;
 
   constructor(
     private readonly runner: MissionRunnerApi,
@@ -157,6 +171,7 @@ export class MissionBot {
   ) {
     this.opts = { reaction: 0.8, rtb: true, ...opts };
     this.agLoadout = this.agLeft() > 0;
+    this.deck = cloudBase(runner.def.weather);
     const h = homeBase(runner.def);
     this.home = new Vector3(h.x, 0, h.z);
     const wp = runner.currentWaypoint;
@@ -393,9 +408,13 @@ export class MissionBot {
       if (best) return this.nav(best.position, Math.max(3000, Math.min(8000, best.position.y)), 'HUNT', dt);
     }
 
-    // 7. steering cue
+    // 7. steering cue (a target under an overcast deck is looked for from below the cloud)
     const wp = this.runner.currentWaypoint;
-    if (wp) return this.nav(wp.position, wp.kind === 'target' ? Math.max(4_000, wp.position.y) : wp.position.y > 10 ? wp.position.y : 1500, 'NAV', dt);
+    if (wp) {
+      let alt = wp.kind === 'target' ? Math.max(4_000, wp.position.y) : wp.position.y > 10 ? wp.position.y : 1500;
+      if (this.deck !== null && wp.kind === 'target' && Math.hypot(wp.position.x - p.position.x, wp.position.z - p.position.z) < UNDER_DECK_RANGE) alt = this.deck - 400;
+      return this.nav(wp.position, alt, 'NAV', dt);
+    }
     this.nav(this.home, 2500, 'HOME', dt);
   }
 
@@ -488,7 +507,7 @@ export class MissionBot {
     const site = m && m.kind === 'missile' ? w.getEntity(m.shooterId) : null;
     const ref = site ? site.position : m ? m.position : p.position;
     const ground = p.position.y - p.flight.agl;
-    const it = this.pilot.begin(p, 60);
+    const it = this.pilot.begin(p, Math.min(60, this.defenceAgl - 20));
     // beam: perpendicular to the radar line of sight, on the side we are already turning to
     _q.set(p.position.x - ref.x, 0, p.position.z - ref.z).normalize();
     _h.set(-_q.z, 0, _q.x);
@@ -496,7 +515,7 @@ export class MissionBot {
     _h.multiplyScalar(this.beamSide);
     turnLimited(p, _h, 100);
     it.allowInverted = false;
-    dirWithElevation(_h, gammaForAltitude(p, ground + 120, 0.3, 3), it.dir);
+    dirWithElevation(_h, gammaForAltitude(p, ground + this.defenceAgl, 0.3, 3), it.dir);
     it.speed = 290;
     it.allowAb = urgent.guidance !== 'ir';
     it.gMax = urgent.timeToImpact < 2.5 ? 9 : 7;
@@ -547,21 +566,34 @@ export class MissionBot {
     inp.chaff = false;
   }
 
+  /**
+   * A probe's hands (tests/missions-probes.ts): fly to a point at an altitude (m MSL) at `speed` m/s
+   * (in burner when `burner`); `minAgl` is how low the autopilot may go (default 150 m).
+   */
+  navTo(point: Vector3, altitude: number, mode: string, dt: number, burner = false, minAgl = 150, speed?: number): void {
+    this.nav(point, altitude, mode, dt, burner, minAgl, speed);
+  }
+
+  /** A probe's hands: attack `t` as the mission bot attacks an objective target (weapon, IP, release). */
+  attack(t: AnyEntity, dt: number): void {
+    this.strike(t, dt);
+  }
+
   /** Fly to a point at an altitude (m MSL). */
-  private nav(point: Vector3, altitude: number, mode: string, dt: number): void {
+  private nav(point: Vector3, altitude: number, mode: string, dt: number, burner = false, minAgl = 150, speed?: number): void {
     const p = this.p;
     this.mode = mode;
     this.clearTriggers();
     const ground = p.position.y - p.flight.agl;
-    const it = this.pilot.begin(p, 150);
+    const it = this.pilot.begin(p, minAgl);
     _h.set(point.x - p.position.x, 0, point.z - p.position.z);
     // energy first: a jet that came out of a fight at 150 kt noses over before it climbs
     const V = p.velocity.length();
-    let gamma = gammaForAltitude(p, Math.max(altitude, ground + 200), 0.2, 6);
+    let gamma = gammaForAltitude(p, Math.max(altitude, ground + Math.min(200, minAgl + 15)), 0.2, 6);
     if (V < 180 && p.flight.agl > 400) gamma = Math.min(gamma, V < 130 ? -0.15 : 0);
     dirWithElevation(_h, gamma, it.dir);
-    it.speed = 250;
-    it.allowAb = V < 220;
+    it.speed = speed ?? (burner ? 480 : 250);
+    it.allowAb = burner || V < it.speed - 30;
     it.gMax = 4;
     it.gain = 1;
     this.pilot.fly(p, this.world, dt);
@@ -628,8 +660,9 @@ export class MissionBot {
     this.pilot.fly(p, w, dt);
   }
 
-  /** Release range the bot plans with (m) for a weapon from strike altitude. */
+  /** Release range the bot plans with (m) for a weapon from strike altitude (under an overcast deck: from below it). */
   private releaseRange(weapon: AgWeapon): number {
+    if (this.deck !== null) return weapon === 'gbu31' ? 4_000 : isSdb(weapon) ? 6_000 : 15_000;
     return weapon === 'gbu31' ? 9_500 : isSdb(weapon) ? 21_000 : 28_000;
   }
 
@@ -651,7 +684,9 @@ export class MissionBot {
       for (const s of this.world.sams) {
         if (!s.alive || s.team === this.p.team || s === t) continue;
         const d = Math.hypot(s.position.x - rx, s.position.z - rz);
-        const reach = s.type === 'sa6' ? 14_000 : s.type === 'sa15' ? 10_000 : 4_000;
+        // (an AD boat sees a jet at 9 km whatever its shaping: under a deck, where the run-in is short
+        // and close, its reach counts as the Tor's; elsewhere the bot keeps its old reading)
+        const reach = s.type === 'sa6' ? 14_000 : s.type === 'sa15' || (s.type === 'ad_boat' && this.deck !== null) ? 10_000 : 4_000;
         score -= Math.max(0, reach - d);
       }
       // prefer run-ins from our side of the target
@@ -662,7 +697,9 @@ export class MissionBot {
         best = b;
       }
     }
-    const ip = new Vector3(t.position.x + Math.sin(best) * (rel + 7_000), 0, t.position.z - Math.cos(best) * (rel + 7_000));
+    // under an overcast deck the run-in is short (the target is found from below the cloud, close in)
+    const out = rel + (this.deck !== null ? 2_000 : 7_000);
+    const ip = new Vector3(t.position.x + Math.sin(best) * out, 0, t.position.z - Math.cos(best) * out);
     this.ips.set(t.id, ip);
     return ip;
   }
@@ -724,7 +761,26 @@ export class MissionBot {
     if (runIn) this.runIn.add(t.id);
     const aim = runIn ? t.position : ip;
     _h.set(aim.x - p.position.x, 0, aim.z - p.position.z);
-    const alt = Math.min(8_500, Math.max(ground + 7_000, t.position.y + 7_000));
+    let alt = Math.min(8_500, Math.max(ground + 7_000, t.position.y + 7_000));
+    if (this.deck !== null) alt = Math.min(alt, this.deck - 300);
+    // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
+    // until it stops (a release now would land where it was), instead of overflying it into the defences
+    if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) {
+      const it3 = this.pilot.begin(p, 150);
+      const dIp = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
+      if (dIp > 1_500) _h.set(ip.x - p.position.x, 0, ip.z - p.position.z);
+      else _h.set(p.velocity.x - p.velocity.z * 0.6, 0, p.velocity.z + p.velocity.x * 0.6);
+      turnLimited(p, _h, 70);
+      dirWithElevation(_h, gammaForAltitude(p, alt, 0.15, 8), it3.dir);
+      it3.speed = 240;
+      it3.gMax = 4;
+      it3.gain = 1;
+      it3.allowInverted = false;
+      this.mode = 'WAIT';
+      this.runIn.delete(t.id);
+      this.pilot.fly(p, w, dt);
+      return;
+    }
     // energy first: no climbing while slow (a stalled climb at 30,000 ft is a sitting duck)
     const V = p.velocity.length();
     let gamma = gammaForAltitude(p, alt, 0.2, 8);
@@ -746,6 +802,8 @@ export class MissionBot {
       const b = c.bombImpactPoint(p, w);
       // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
       ok = !!b && b.inRange && (!isSdb(weapon) || R <= SDB_PRESS_RANGE);
+      // a target too small to track on the move (g03's stoat): released only while it stands still
+      if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) ok = false;
     }
     if (ok) {
       p.input.fireWeapon = true;
@@ -818,7 +876,7 @@ export function runPlaythrough(
   jitterRed();
   const bot = new MissionBot(runner, world, p, opts.bot);
   // park / gun-only probe (#118): it flies (or pins) the jet instead of the mission bot
-  const probe = opts.probe ? new Probe(opts.probe, world, p, bot) : null;
+  const probe = opts.probe ? new Probe(opts.probe, world, p, bot, def) : null;
   const log: string[] = [];
   const T = () => world.time.toFixed(0).padStart(3);
   if (opts.log && probe) log.push(`${T()} PROBE ${probe.label}`);

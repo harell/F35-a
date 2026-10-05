@@ -183,7 +183,5 @@ export const G02: MissionDef = mission({
       { kind: 'radio', from: DS, text: 'The mother ship is putting missile boats in the water behind them. Weapons free on the boats.', priority: 2 },
     ],
     successText: 'The Gulf is clear and the Kōtuku Star is on her way to Singapore. Good hunting, Viper.',
-    // the IRGC campaign's last mission: the win plays its ending (playtest 2026-10-02 bc94edd, 1.4-e)
-    campaignFinale: true,
   },
 });

@@ -63,6 +63,10 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       const g = s.groups.get(c.group);
       return !!g && g.spawnedAt >= 0;
     }
+    case 'stoat_alert': {
+      const g = s.groups.get(c.group);
+      return !!g && g.members.some((m) => m.alive && m.kind === 'ground' && (m.stoat?.alert ?? 0) > 0.9);
+    }
     case 'waypoint':
       return s.waypointsReached.has(c.id);
     case 'player_kills': {
@@ -129,6 +133,7 @@ export function conditionRefs(c: Condition, out: { groups: string[]; objectives:
     case 'group_destroyed':
     case 'group_defeated':
     case 'group_spawned':
+    case 'stoat_alert':
     case 'munitions_clear':
     case 'munitions_shot_down':
       out.groups.push(c.group);

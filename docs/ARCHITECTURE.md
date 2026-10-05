@@ -221,6 +221,54 @@ The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies
 must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
 friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 
+## The stoat (g03, #200)
+
+g03's target is a `'stoat'` ground target (`src/sim/stoat.ts`, one hit point, 0.2 m radius): it runs a route along
+the Onetangi dunes in dashes, stops at three bait stations (the drop windows) and reaching its last point is reaching
+the nest (a mission `area` trigger on its group ends the sortie). Its clock starts at mission start
+(`StoatSpawn.clockStart`), so when the mission spawns it late (under the cloud, near the nest) it catches up with where
+it would be. Designated, locked or with a weapon in flight at it, it rears up into the "periscope" stance at its next
+stop (`StoatState.alert`, posed by `src/render/visuals/stoatPose.ts` on the posable model in
+`src/render/models/stoat.ts`); a weapon that goes off within 30 m and misses makes it bolt to the next station. A
+ground target under 0.5 m (`src/sim/weapons/small.ts`) is too small for a GBU-53/B to track on the move: the seeker and
+the datalink only update its estimate while it stands still, and never lead it (`smallTargetGuidance`), so a release
+at a stop hits and one while it runs lands where it was. A killed stoat leaves no model, only a crater
+(`src/render/effects/Craters.ts`: a shallow dark bowl with a raised sand rim, conformed to the terrain, kept for the
+sortie; `Effects` adds one on the stoat's `destroyed` instead of the fire and smoke column a site gets). The
+volunteers' radio channel (`G03_VOLUNTEERS`, fictional like every local name in the mission) calls the bait stations
+and the moment the stoat stands up (the `stoat_alert` condition). The debrief prices the sortie against one volunteer's
+trap (`MissionScript.costSummary`, unit costs and their sources in `src/missions/runtime/costs.ts`).
+
+## Targeting pod view (#199)
+
+The target camera window (`src/render/TargetCam.ts`, laid out by `src/hud/hmd/pip.ts`) shows aircraft and ships in
+its cinematic shots near the target, but a ground target or SAM site through the targeting pod (`src/core/pod.ts`):
+the camera sits on the line of sight from the player's jet (`podCamPose` in `src/render/targetCam/pose.ts`) and frames
+one of three zoom steps (WIDE 150 m, NARROW 30 m, ZOOM 2 m top to bottom; a tap on the window cycles them), so a
+target a few tenths of a metre long is still a dozen pixels tall. With no line of sight (terrain, or the overcast
+deck between the jet and the target: `cloudBetween()` in `src/sim/sensors/los.ts`) nothing is rendered and the window
+reads MASKED. Small ground targets are framed size-aware in the orbit shot too (`groundMinFraming`).
+
+## Waiheke air defences: no free route (g03)
+
+The IRGC campaign's g03 "Stoat of Emergency" (`src/missions/content/irgcWaiheke.ts`, epic #196) sends the jet from
+west Auckland through a layered air-defence network to one small target on the Onetangi dunes, on a 4:00 clock
+(`timeLimit`) with 2 AARGM-ER and 2 GBU-53/B (`sead_precision`). The layout is built so no single route is free: an
+SA-6 and a Tor on Motuihe (the Tor's point defence covers the SA-6), an SA-6 at the Waiheke airstrip and a ZSU-23-4 on
+the ridge (the nest is inside both, so every route ends in a fight), and three patrolling AD boats over the water north
+and south (`SamSiteDef.path` + `loop`). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
+`SamSiteEntity.closeCue`, which overrides the type's `SamTypeData.closeCue`): it holds a jet beaming them low in the
+notch, where the radar alone would lose it. The weather is overcast; the deck height is `OVERCAST_DECK` in
+`src/core/weather.ts` (shared with `world/clouds/Clouds.ts`), and the target spawns only once the player has been under
+it within 6 km of the nest (an `area` spawn condition with `below`), so neither a high transit nor a stand-off release
+finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast, and the bot's route
+probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`) measure it in
+flight: every naive route (straight, either detour, the wide way, above the SAMs, killing every site) loses on Pilot,
+the intended path (low down the Tāmaki Strait, an AARGM at the strait's boat, a second at the airstrip SA-6 from close
+in, then the attack at one of the stoat's stops) wins about half the time on Pilot (`tests/missions-balance.test.ts`). Under an overcast deck the bot
+attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the campaign's finale
+while the campaign is being built (no `campaignFinale`).
+
 ## Frame / sim order (Game.ts)
 
 ```

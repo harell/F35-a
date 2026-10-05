@@ -36,6 +36,7 @@ export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
   // IRGC Navy fast boats (sim/boats.ts): small, unarmoured, a short gun burst sinks one
   suicide_boat: { radius: 8, health: 40, explosion: 'huge', naval: true }, // ~16 m, packed with explosive
   missile_boat: { radius: 9, health: 50, explosion: 'large', naval: true }, // Peykaap II, ~17 m
+  stoat: { radius: 0.2, health: 1, explosion: 'tiny', naval: false }, // g03: 0.38 m nose to tail tip, 0.3 kg
 };
 
 export interface VesselData {

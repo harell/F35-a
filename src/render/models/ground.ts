@@ -15,6 +15,7 @@ import { loftRings, prismX, prismZ } from './geom/loft';
 import { getAircraftPrototype } from './aircraft';
 import { SHIP_DIMS } from '../visuals/shipMotion';
 import { missileBoat, suicideBoat } from './boats';
+import { stoatModel } from './stoat';
 import { PALETTES, mast, meshFrom, panel, tank, type Palette, type PaletteId } from './vehicles';
 
 export type WreckStyle = 'vehicle' | 'building' | 'ship' | 'aircraft';
@@ -169,6 +170,13 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
       wreck = 'ship';
       radius = 36;
       farScale = 2;
+      break;
+    }
+    case 'stoat': {
+      // g03's stoat (models/stoat.ts): posable parts, posed by the renderer; a killed one is gone
+      root.add(stoatModel());
+      radius = 0.3;
+      farScale = 0.05;
       break;
     }
     case 'suicide_boat':

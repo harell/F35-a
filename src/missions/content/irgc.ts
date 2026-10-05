@@ -3,7 +3,9 @@
  * drones over the city and fast attack boats in the Gulf, launched from an IRGC mother ship.
  *
  * Missions: g01 "Buzz Kill", the Shahed swarm on the Sky Tower (#78); g02 "Straight Outta
- * Hauraki" (#82, irgcHauraki.ts), the escort through the boat swarm and the campaign's finale.
+ * Hauraki" (#82, irgcHauraki.ts), the escort through the boat swarm; g03 "Stoat of Emergency"
+ * (#196, irgcWaiheke.ts), through the Waiheke air defences to one small target. The campaign is still
+ * being built: no mission is its finale yet.
  * Mission ids are g01, g02, … ("Gulf"); every id must stay unique across campaigns and training
  * (progress is keyed by mission id). Old saves may still hold Southern Cross's c01–c11: don't reuse them.
  */
@@ -12,6 +14,7 @@ import type { CampaignDef, MissionDef } from '../../core/contracts';
 import { SHAHED_SPEED } from '../../sim/drone/oneWay';
 import { P, flight, mission } from './common';
 import { G02 } from './irgcHauraki';
+import { G03 } from './irgcWaiheke';
 
 /**
  * Working title, shown in the menus. The campaign's real name ("Operation …") is not decided yet
@@ -178,7 +181,8 @@ export const IRGC_CAMPAIGN: CampaignDef = {
   id: 'irgc',
   name: IRGC_CAMPAIGN_NAME,
   description: 'Shahed drone swarms over the city, fast attack boats in the Hauraki Gulf',
-  // 1. Buzz Kill (#78); 2. Straight Outta Hauraki (#82), in its own module (irgcHauraki.ts)
-  missions: [G01, G02],
+  // 1. Buzz Kill (#78); 2. Straight Outta Hauraki (#82); 3. Stoat of Emergency (#196): each later one in its own module.
+  // The campaign is still being built, so no mission is its finale yet (no campaignFinale, no ending screen).
+  missions: [G01, G02, G03],
 };
 

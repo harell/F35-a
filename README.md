@@ -85,7 +85,7 @@ Handy URL parameters: `?view=chase&difficulty=veteran&quality=high&fps=1` (`&hdt
 
 Test hooks, on the dev server and in `npm run build:test` builds only (never in the deployed game): `?mission=g01&autostart=1` flies any mission straight away,
 whatever the campaign has unlocked, and `window.__f35` exposes state, autopilot and fast-forward for Playwright.
-Missions: `g01`, `g02` (the IRGC campaign), `t01`–`t03`, and Instant Action ids like `ia_dogfight_auckland`.
+Missions: `g01`–`g03` (the IRGC campaign), `t01`–`t03`, and Instant Action ids like `ia_dogfight_auckland`.
 Playtesting (`/playtest`) is described in [`.claude/skills/playtest`](.claude/skills/playtest/SKILL.md) and logged in [`docs/playtests/`](docs/playtests/).
 
 Architecture, conventions and module ownership are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Developer labs for models,

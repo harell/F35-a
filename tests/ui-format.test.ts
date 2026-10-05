@@ -89,7 +89,7 @@ describe('mission cards', () => {
   };
 
   it('locked / open / done states', () => {
-    expect(CAMPAIGN.map((m) => m.id)).toEqual(['g01', 'g02']);
+    expect(CAMPAIGN.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
     expect(missionState(CAMPAIGN[0], fresh)).toBe('open');
     expect(missionState(CAMPAIGN[1], fresh)).toBe('locked');
     expect(missionState(CAMPAIGN[0], progress)).toBe('done');

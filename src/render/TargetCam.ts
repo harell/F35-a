@@ -13,12 +13,16 @@
  * city, roads, scatter and night lights are merged world-wide meshes a far plane can't cull).
  * The Sky Tower shot (pipView.landmark: the tower hit or collapsing) keeps the tower's own visual
  * (EnvironmentApi.targetCamLandmarks) when its scenery group is left out.
+ * A ground target or SAM site is shown through the targeting pod (#199, rect.pod): the camera looks along
+ * the line of sight from the player's jet, framing the zoom step (pose.ts podCamPose); with no line of
+ * sight (rect.mask) the pass is skipped and the HUD draws the window MASKED.
  */
 import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
+import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
-import { TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
+import { TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
 export interface TargetCamRect {
@@ -31,6 +35,12 @@ export interface TargetCamRect {
   h: number;
   /** A landmark shot (the Sky Tower hit / collapsing) instead of targetId. */
   landmark?: (CamLandmark & { readonly id: string }) | null;
+  /** The pod (EOTS) view of a ground target / SAM site (hud/hmd/pip.ts stepPod) instead of the orbit. */
+  pod?: boolean;
+  /** Pod zoom step (index into core/pod.ts POD_ZOOM). */
+  zoom?: number;
+  /** Pod view with no line of sight ('' / absent = clear): nothing is rendered. */
+  mask?: string;
 }
 
 /** The weapon window's shot (hud/hmd/wpnCam.ts wpnView): the weapon, its last state and its target. */
@@ -80,6 +90,8 @@ export class TargetCam {
   lastTargetId: number | null = null;
   /** Last rendered landmark (the Sky Tower shot; debug / tests). */
   lastLandmark: string | null = null;
+  /** The last render() was a pod view: its zoom step's name; 'MASKED' when it had no line of sight (debug / tests). */
+  lastPod: string | null = null;
   /** The last render() was the weapon window's chase shot (renderPose; debug / tests). */
   lastWeapon = false;
   /** Draw calls / triangles of the last render() (0 when nothing was drawn; test hooks read them). */
@@ -107,15 +119,28 @@ export class TargetCam {
     this.lastTargetId = null;
     this.lastLandmark = null;
     this.lastWeapon = false;
+    this.lastPod = null;
     this.lastStats.calls = 0;
     this.lastStats.triangles = 0;
     if (rect.vw < 2 || rect.vh < 2) return false;
     const lm = rect.landmark ?? null;
     const t = lm || rect.targetId === null ? null : this.world.getEntity(rect.targetId);
     if (!lm && (!t || t.kind === 'missile' || t.kind === 'decoy')) return false;
-    if (lm) landmarkCamPose(lm, this.world.time, this.pose, this.surfaceAt);
+    const eye = this.world.player?.position;
+    let fov = TARGET_CAM_FOV;
+    if (!lm && rect.pod && eye && isPodTarget(t as CamTarget)) {
+      // the pod: no line of sight, no picture (the HUD fills the window), and no cost
+      if (rect.mask) {
+        this.lastPod = 'MASKED';
+        return false;
+      }
+      const step = POD_ZOOM[rect.zoom ?? POD_ZOOM_DEFAULT] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
+      podCamPose(t as CamTarget, eye, step.span, this.pose, this.surfaceAt);
+      fov = podFov(step.span, this.pose.position.distanceTo(this.pose.look));
+      this.lastPod = step.name;
+    } else if (lm) landmarkCamPose(lm, this.world.time, this.pose, this.surfaceAt);
     else targetCamPose(t as CamTarget, this.world.time, this.pose, this.surfaceAt, this.waterAt);
-    this.pass(renderer, scene, rect, this.pose, TARGET_CAM_FOV, far, range, omit, lm ? keep : NONE);
+    this.pass(renderer, scene, rect, this.pose, fov, far, range, omit, lm ? keep : NONE);
     if (lm) this.lastLandmark = lm.id;
     else if (t) this.lastTargetId = t.id;
     return true;
@@ -130,6 +155,7 @@ export class TargetCam {
     this.lastTargetId = null;
     this.lastLandmark = null;
     this.lastWeapon = false;
+    this.lastPod = null;
     this.lastStats.calls = 0;
     this.lastStats.triangles = 0;
     if (rect.vw < 2 || rect.vh < 2) return false;

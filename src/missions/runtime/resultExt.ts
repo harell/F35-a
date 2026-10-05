@@ -4,6 +4,7 @@
  */
 import type { MissionResult } from '../../core/contracts';
 import type { SightseeingStats } from './sightseeing';
+import type { CostSummary } from './costs';
 
 export interface TeamKill {
   /** "Viper 2", "Weasel 1"… */
@@ -26,4 +27,6 @@ export type MissionResultExt = MissionResult & {
   saved?: { label: string; saved: number; total: number }[];
   /** Free flight: what the sightseer did (tour stops, distance, highest and lowest pass), shown instead of the combat stats. */
   sightseeing?: SightseeingStats;
+  /** The sortie's cost against the mission's comparison (MissionScript.costSummary, g03). */
+  costSummary?: CostSummary;
 };

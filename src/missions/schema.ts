@@ -62,6 +62,8 @@ export type Condition =
   | { kind: 'group_defeated'; group: string; count?: number }
   /** The group has spawned. */
   | { kind: 'group_spawned'; group: string }
+  /** A live stoat of the group stands in the periscope stance: targeted at a stop (g03, sim/stoat.ts StoatState.alert). */
+  | { kind: 'stoat_alert'; group: string }
   /** The player has reached (captured) a waypoint. */
   | { kind: 'waypoint'; id: string }
   /** The player has destroyed at least `count` targets of a category. */
@@ -248,6 +250,12 @@ export interface SamSiteDef {
   loop?: boolean;
   /** 'ad_boat': keep station on the first live member of this group (the boats it escorts; the next one when it dies). */
   escort?: string;
+  /**
+   * Close-in cue (m): an electro-optical tracker that detects a jet inside `range` whatever its shaping, and
+   * inside `bayRange` while its weapon bay is open (× samRangeScale), in place of the type's
+   * SamTypeData.closeCue. A fixed site with one can't be slipped past by stealth alone.
+   */
+  closeCue?: { range: number; bayRange: number };
   /** 'ad_boat' escort station: m behind its leader (negative = ahead of it, default 250) and m to its right (default 150). */
   escortAft?: number;
   escortRight?: number;
@@ -306,6 +314,13 @@ export interface GroundTargetDef {
   chase?: string;
   /** 'missile_boat': its target, launch range and countdown. */
   strike?: BoatStrikeDef;
+  /**
+   * 'stoat' (g03, sim/stoat.ts): the route after its start point (bait stations, then the nest last),
+   * which of those points are bait stations (indices into `route`, 0 = the first point after the
+   * start), its dash speed (m/s) and the stop at each station (s). Its clock starts at mission
+   * start, whenever it spawns.
+   */
+  stoat?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number };
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */
@@ -478,6 +493,12 @@ export interface MissionScript {
   successText?: string;
   /** Last mission of the campaign: success sets MissionResult.campaignComplete (campaign ending). */
   campaignFinale?: boolean;
+  /**
+   * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
+   * player killed, under `removed.label`.
+   */
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower

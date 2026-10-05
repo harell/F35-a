@@ -23,7 +23,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { buildInstantMissionSeeded, createMissionRunner, missionById, terrainPadsFor } from '../src/missions';
-import { DEFEND_BEAST_FROM, IA_ENEMY_COUNT_SCALE } from '../src/missions/content/instant';
+import { DEFEND_BEAST_FROM } from '../src/missions/content/instant';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';

@@ -231,6 +231,8 @@ export interface SamSpawn {
   known?: boolean;
   /** A moving SAM on a fast boat ('ad_boat'): its route / escort (sim/boats.ts). Ignored for fixed sites. */
   boat?: BoatSpawn;
+  /** Close-in cue overriding the type's SamTypeData.closeCue (SamSiteEntity.closeCue). */
+  closeCue?: { range: number; bayRange: number } | null;
 }
 
 /**
@@ -278,6 +280,8 @@ export interface GroundSpawn {
   scenery?: boolean;
   /** IRGC Navy fast boat ('suicide_boat' / 'missile_boat'): chase / strike target (sim/boats.ts). `path` and `speed` above still apply. */
   boat?: BoatSpawn;
+  /** The stoat ('stoat'): its route, bait stations and clock (sim/stoat.ts). */
+  stoat?: import('./stoat').StoatSpawn;
 }
 
 /* ───────────────────────── Sim world (implemented by SIM-CORE agent) ───────────────────────── */

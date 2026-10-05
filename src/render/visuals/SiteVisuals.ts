@@ -12,6 +12,7 @@ import type { GroundPrototype } from '../models/ground';
 import { munitionGeometry } from '../models/munitions';
 import { charredMaterial, getMaterial } from '../models/materials';
 import { shipMatrix } from './shipMotion';
+import { poseStoat, stoatNodes, type StoatNodes } from './stoatPose';
 
 const _v = new Vector3();
 const _m = new Matrix4();
@@ -161,9 +162,12 @@ export class GroundVisual {
   private readonly ship: boolean;
   /** Which ship lights are lit (afloat and in range): 0 = none, 1 under way, 2 at anchor, 4 moored (deck lights only). */
   lightMode = 0;
+  /** g03's stoat: its posable parts (render/visuals/stoatPose.ts); null for every other target. */
+  private readonly stoat: StoatNodes | null;
 
   constructor(readonly proto: GroundPrototype) {
     this.root = proto.root.clone(true);
+    this.stoat = proto.type === 'stoat' ? stoatNodes(this.root) : null;
     for (const s of proto.spinners) {
       const n = this.root.getObjectByName(s.name);
       if (n) this.spinners.push({ node: n, rate: s.rate });
@@ -190,6 +194,11 @@ export class GroundVisual {
       this.root.visible = false;
       return false;
     }
+    // a killed stoat leaves nothing to draw (only the crater the bomb dug)
+    if (this.stoat && !g.alive) {
+      this.root.visible = false;
+      return false;
+    }
     this.root.visible = true;
     if (!g.alive) {
       if (this.wreckT < 0) {
@@ -208,6 +217,7 @@ export class GroundVisual {
       this.root.scale.set(1, 1, 1);
     }
     for (const s of this.spinners) s.node.rotation.y = time * s.rate;
+    if (this.stoat && g.stoat) poseStoat(this.stoat, g.stoat, time, this.seed);
     const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
     if (this.proto.lights.length) this.lightMode = speed > 0.5 ? 1 : g.anchored ? 2 : 4;
     return true;

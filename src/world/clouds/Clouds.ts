@@ -21,6 +21,7 @@ import {
 } from 'three';
 import { mulberry32 } from '../../core/math';
 import type { QualitySettings, Weather } from '../../core/types';
+import { OVERCAST_DECK } from '../../core/weather';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import type { SkyPreset } from '../sky/presets';
 
@@ -128,8 +129,7 @@ interface Cloud {
   puffs: { dx: number; dy: number; dz: number; size: number; shade: number; atlas: number; rot: number; sun: number; opacity: number }[];
 }
 
-/** Overcast: base of the stratus deck (m) and its coverage (0..1). */
-export const OVERCAST_DECK = { altitude: 1800, cover: 0.985 } as const;
+export { OVERCAST_DECK };
 
 export interface CloudOptions {
   weather: Weather;

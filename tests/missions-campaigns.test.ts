@@ -3,7 +3,7 @@
  * stay inside it, every lookup finds missions in any campaign, and a save from the one-campaign days
  * keeps its progress.
  *
- * The IRGC campaign (g01, g02; g02 is the finale) is the only campaign. The "separate chains"
+ * The IRGC campaign (g01–g03; no finale yet: it is still being built) is the only campaign. The "separate chains"
  * mechanics are checked against the lower-level progress functions (src/missions/progress.ts takes
  * the chains explicitly) with a synthetic second campaign (x01–x02) next to the real one.
  */
@@ -125,14 +125,14 @@ describe('campaigns', () => {
     }
   });
 
-  it('the IRGC campaign file lists g01 (#78) then g02 (#82) and has a placeholder name', () => {
+  it('the IRGC campaign file lists g01 (#78), g02 (#82) then g03 (#196) and has a placeholder name', () => {
     expect(IRGC_CAMPAIGN.id).toBe('irgc');
     expect(IRGC_CAMPAIGN.name).toBe(IRGC_CAMPAIGN_NAME);
     expect(IRGC_CAMPAIGN.name.length).toBeGreaterThan(0);
-    expect(IRGC_CAMPAIGN.missions.map((m) => m.id)).toEqual(['g01', 'g02']);
-    expect(IRGC_CAMPAIGN.missions.map((m) => m.index)).toEqual([1, 2]);
+    expect(IRGC_CAMPAIGN.missions.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
+    expect(IRGC_CAMPAIGN.missions.map((m) => m.index)).toEqual([1, 2, 3]);
     // a campaign with a mission is no longer "coming soon" in the picker
-    expect(campaignStatus(IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 2, soon: false });
+    expect(campaignStatus(IRGC_CAMPAIGN, loadProgress())).toEqual({ done: 0, total: 3, soon: false });
   });
 
   it('mission ids are unique across every campaign and training (progress is keyed by mission id)', () => {
@@ -159,15 +159,16 @@ describe('campaigns', () => {
     const p1 = recordResult(p0, result('g01'));
     expect(newlyUnlocked(p0, p1)).toEqual(['g02']);
     expect(p1.best.g01).toEqual({ score: 1500, grade: 'B', difficulty: 'pilot' });
+    expect(newlyUnlocked(p1, recordResult(p1, result('g02')))).toEqual(['g03']);
     // the campaign's last mission unlocks nothing
-    expect(newlyUnlocked(p1, recordResult(p1, result('g02')))).toEqual([]);
+    expect(newlyUnlocked(p1, recordResult(p1, result('g03')))).toEqual([]);
     // two campaigns: an IRGC win unlocks only the next IRGC mission, a fixture win only the next fixture one
     const q0 = sanitizeProgress(null, CHAINS, TRAINING);
     const q1 = applyResult(q0, result('g01'), CHAINS);
     expect(newlyUnlocked(q0, q1)).toEqual(['g02']);
     expect(newlyUnlocked(q1, applyResult(q1, result('x01'), CHAINS))).toEqual(['x02']);
     // the last mission of either campaign unlocks nothing (never the other campaign)
-    expect(newlyUnlocked(q1, applyResult(q1, result('g02'), CHAINS))).toEqual([]);
+    expect(newlyUnlocked(q1, applyResult(q1, result('g03'), CHAINS))).toEqual([]);
     expect(newlyUnlocked(q1, applyResult(q1, result('x02'), CHAINS))).toEqual([]);
     // career totals are the pilot's, shared by every campaign
     expect(applyResult(q1, result('x01'), CHAINS).totals.missions).toBe(2);
@@ -182,7 +183,7 @@ describe('campaigns', () => {
     expect(newlyUnlocked(p, skipped)).toEqual(['g02']);
     expect(wasSkipped(skipped, 'g01')).toBe(true);
     // skipping a campaign's last mission unlocks nothing
-    expect(newlyUnlocked(p, skipMission(p, 'g02'))).toEqual([]);
+    expect(newlyUnlocked(p, skipMission(p, 'g03'))).toEqual([]);
     // two campaigns: the other campaign's streak and skips are untouched
     let q = sanitizeProgress(null, CHAINS, TRAINING);
     q = applyResult(q, result('g01', { success: false, reason: 'Shot down', grade: 'F' }), CHAINS);
@@ -192,7 +193,7 @@ describe('campaigns', () => {
     const qs = skipIn(q, 'g01', CHAINS);
     expect(newlyUnlocked(q, qs)).toEqual(['g02']);
     expect(wasSkipped(qs, 'x01')).toBe(false);
-    expect(newlyUnlocked(q, skipIn(q, 'g02', CHAINS))).toEqual([]);
+    expect(newlyUnlocked(q, skipIn(q, 'g03', CHAINS))).toEqual([]);
     expect(newlyUnlocked(q, skipIn(q, 'x02', CHAINS))).toEqual([]);
     // a win in the other campaign doesn't reset the IRGC streak
     expect(failStreak(applyResult(q, result('x01'), CHAINS), 'g01')).toBe(2);
@@ -207,12 +208,13 @@ describe('campaigns', () => {
     expect(campaignOf('ia_dogfight_auckland')).toBeNull();
     // NEXT walks the mission's own campaign and stops at its end
     expect(nextMissionAfter('g01')?.id).toBe('g02');
-    expect(nextMissionAfter('g02')).toBeNull();
+    expect(nextMissionAfter('g02')?.id).toBe('g03');
+    expect(nextMissionAfter('g03')).toBeNull();
     expect(nextMissionLabel('g01')).toBe('Next mission');
-    expect(nextMissionLabel('g02')).toBeNull();
+    expect(nextMissionLabel('g03')).toBeNull();
     // training leads into the first playable campaign
     expect(nextMissionAfter('t03')?.id).toBe('g01');
-    expect(IRGC().missions.map((m) => m.id)).toEqual(['g01', 'g02']);
+    expect(IRGC().missions.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
   });
 
   it('an old one-campaign save migrates with its progress intact', () => {
@@ -255,7 +257,7 @@ describe('campaigns', () => {
     p = applyResult(p, result('g01'), CHAINS);
     p = applyResult(p, result('x01'), CHAINS);
     p = applyResult(p, result('x02'), CHAINS);
-    expect(campaignStatus(IRGC(), p)).toEqual({ done: 1, total: 2, soon: false });
+    expect(campaignStatus(IRGC(), p)).toEqual({ done: 1, total: 3, soon: false });
     expect(campaignStatus(OTHER, p)).toEqual({ done: 2, total: 2, soon: false });
     expect(campaignStatus({ ...OTHER, missions: [] }, p)).toEqual({ done: 0, total: 0, soon: true });
   });
@@ -281,7 +283,8 @@ describe('campaigns', () => {
       expect(h.runner.state).toBe('success');
       return h.runner.result(h.world);
     };
-    expect(IRGC().missions.at(-1)!.script.campaignFinale).toBe(true);
+    // the IRGC campaign is still being built (#197): none of its missions is the finale yet
+    for (const m of IRGC().missions) expect(m.script.campaignFinale, m.id).toBeFalsy();
     const [x01, x02] = OTHER.missions;
     expect(win(x02).campaignComplete).toBe(true);
     expect(win(x01).campaignComplete).toBeFalsy();

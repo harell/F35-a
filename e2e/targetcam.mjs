@@ -6,6 +6,9 @@
  *                          [--view=cockpit|hud|chase] [--wait=6000] [--steps=1 --every=1000] [--clip] [--dpr=2]
  *                          [--out=e2e/screenshots/targetcam/<mission>-<kind>-<view>.png] [--shahed]
  *
+ * --zoom=WIDE|NARROW|ZOOM sets the pod view's zoom step (ground targets / SAM sites, #199); --weather=overcast
+ * flies the mission under the overcast deck (a jet above it sees MASKED in the pod view).
+ *
  * --shahed spawns a Shahed-136 one-way drone 1.2 km ahead of the player, crossing its nose at the
  * player's height, and designates it (no shipped mission flies them yet).
  *
@@ -43,7 +46,7 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-await page.goto(`${base}?mission=${mission}&autostart=1&view=${view}&quality=${quality}`, { waitUntil: 'load' });
+await page.goto(`${base}?mission=${mission}&autostart=1&view=${view}&quality=${quality}${args.weather ? `&weather=${args.weather}` : ''}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__f35?.state().inMission, null, { timeout: 90000 });
 await page.waitForTimeout(1500);
 
@@ -90,6 +93,7 @@ const picked = await page.evaluate((kind) => {
   return { id: best.id, type: best.type, dist: Math.round(bd) };
 }, kind);
 console.log('designated', JSON.stringify(picked));
+if (args.zoom) console.log('zoom', await page.evaluate((z) => window.__f35.podZoom(z), String(args.zoom)));
 
 for (let i = 0; i < steps; i++) {
   await page.waitForTimeout(i === 0 ? wait : every);

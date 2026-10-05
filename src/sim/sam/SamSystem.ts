@@ -242,8 +242,8 @@ function detects(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircraf
       if (lineOfSight(world.terrain, _eye, t.position)) return true;
     }
   }
-  // close-in cue that ignores stealth shaping (the AD boat's EO tracker: SamTypeData.closeCue)
-  const cue = data.closeCue;
+  // close-in cue that ignores stealth shaping (the AD boat's EO tracker: SamTypeData.closeCue, or the site's own)
+  const cue = s.closeCue !== undefined ? s.closeCue : data.closeCue;
   if (cue && agl >= data.altMin * 0.5) {
     const scale = ctx.world.difficulty.samRangeScale;
     const bay = tracking || t.bayDoors > 0.05;

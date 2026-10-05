@@ -7,6 +7,7 @@ import type { MunitionId, Team } from '../../core/types';
 import type { AircraftEntity, AnyEntity, SamSiteEntity } from '../entities';
 import { MissileEntity } from '../entities';
 import type { CombatCtx } from './context';
+import { isSmallGround } from './small';
 import { acState } from './context';
 import type { CombatMunitionDef } from './defs';
 
@@ -219,6 +220,8 @@ export function launchMunition(
       m.estPos.copy(target.position);
       m.estVel.copy(target.velocity);
     }
+    // a target too small to track on the move (the stoat): where it is now, never where it is heading
+    if (isSmallGround(target)) m.estVel.set(0, 0, 0);
     m.targetPoint.copy(m.estPos);
     m.hasEstimate = true;
   }

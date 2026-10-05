@@ -19,13 +19,22 @@
  *    long enough to see the hit or the whole collapse, then cuts back to the target with the usual
  *    "new shot" blink. The tower is a landmark, not an entity: pipView.landmark carries it to the 3D
  *    pass (render/targetCam/pose.ts landmarkCamPose frames it).
+ *  - the pod (EOTS) view (#199): a ground target or SAM site is shown as the targeting pod sees it, along
+ *    the line of sight from the jet at a fixed zoom step (core/pod.ts POD_ZOOM; a tap on the window
+ *    cycles WIDE → NARROW → ZOOM), under a crosshair, the TGT readout, the zoom step and the slant range.
+ *    With terrain or the overcast deck between the jet and the target the pod has no picture: the 3D
+ *    pass is skipped and the window reads MASKED over a dark frame (stepPod, checked 4× a second).
  */
+import { Vector3 } from 'three';
+import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, nextPodZoom } from '../../core/pod';
 import { COLLAPSE } from '../../core/skyTower';
 import type { AircraftType, SamType } from '../../core/types';
+import type { TerrainQuery } from '../../sim/api';
 import type { CivilPhase } from '../../sim/civil/route';
 import type { AnyEntity } from '../../sim/entities';
 import type { LandmarkEntity } from '../../sim/landmarks';
-import { AIRCRAFT_LABEL, SAM_LABEL, groundLabel } from './format';
+import { cloudBetween, lineOfSight } from '../../sim/sensors/los';
+import { AIRCRAFT_LABEL, SAM_LABEL, entityLabel, groundLabel } from './format';
 import type { HudFrame } from './frame';
 import type { HudLayout } from './layout';
 
@@ -190,9 +199,34 @@ export interface PipView {
   vy: number;
   vw: number;
   vh: number;
+  /** The pod (EOTS) view of a ground target / SAM site (stepPod), not the cinematic shot. */
+  pod: boolean;
+  /** Pod zoom step (index into core/pod.ts POD_ZOOM); kept across targets, a tap on the window cycles it. */
+  zoom: number;
+  /** Pod view with no line of sight ('' = clear): nothing is rendered and the window reads MASKED. */
+  mask: PodMask;
 }
 
-export const pipView: PipView = { open: false, anim: 0, targetId: null, landmark: null, x: 0, y: 0, w: 0, h: 0, vx: 0, vy: 0, vw: 0, vh: 0 };
+/** Why the pod has no picture: terrain or a solid cloud deck between the jet and the target. */
+export type PodMask = '' | 'TERRAIN' | 'CLOUD';
+
+export const pipView: PipView = {
+  open: false,
+  anim: 0,
+  targetId: null,
+  landmark: null,
+  x: 0,
+  y: 0,
+  w: 0,
+  h: 0,
+  vx: 0,
+  vy: 0,
+  vw: 0,
+  vh: 0,
+  pod: false,
+  zoom: POD_ZOOM_DEFAULT,
+  mask: '',
+};
 
 /**
  * Internal tracking (the destroyed-target hold, target switches). `shot`: what was on screen (entity id,
@@ -206,9 +240,67 @@ export function resetPip(): void {
   pipView.targetId = null;
   pipView.landmark = null;
   pipView.vw = pipView.vh = 0;
+  pipView.pod = false;
+  pipView.mask = '';
   track.id = null;
   track.deadAge = 0;
   track.shot = null;
+  pod.id = null;
+}
+
+/** Back to the default zoom step (a new sortie / a new jet). */
+export function resetPodZoom(): void {
+  pipView.zoom = POD_ZOOM_DEFAULT;
+}
+
+/** Seconds between two line-of-sight checks of the pod (a terrain ray march: not every frame). */
+export const POD_LOS_PERIOD = 0.25;
+/** The pod's line of sight ends this far above the target's origin (m). */
+const POD_LOS_LIFT = 1.5;
+
+/** Pod bookkeeping: the target the line of sight was last checked for, and how long ago. */
+const pod = { id: null as number | null, age: 0 };
+const _losTgt = new Vector3();
+
+/**
+ * Line of sight of the pod from `eye` to `tgt`: CLOUD with a solid deck (base `cloud`, core/weather.ts
+ * cloudBase) between them, TERRAIN with the ground in the way, '' when the pod can see the target.
+ */
+export function podMask(eye: Vector3, tgt: Vector3, terrain: TerrainQuery, cloud: number | null): PodMask {
+  if (cloudBetween(eye.y, tgt.y, cloud)) return 'CLOUD';
+  return lineOfSight(terrain, eye, tgt) ? '' : 'TERRAIN';
+}
+
+/**
+ * Pod state for this frame (after stepPip): the pod view for a ground target / SAM site on screen,
+ * and its line of sight from the player's jet (re-checked every POD_LOS_PERIOD s, at once on a new target).
+ */
+export function stepPod(subject: PipSubject | null, eye: Vector3, terrain: TerrainQuery, cloud: number | null, dt: number): void {
+  if (!subject || subject.kind === 'landmark' || !isPodTarget(subject)) {
+    pipView.pod = false;
+    pipView.mask = '';
+    pod.id = null;
+    return;
+  }
+  pipView.pod = true;
+  if (subject.id !== pod.id) {
+    pod.id = subject.id;
+    pod.age = Infinity;
+  }
+  pod.age += dt;
+  if (pod.age < POD_LOS_PERIOD) return;
+  pod.age = 0;
+  _losTgt.copy(subject.position);
+  _losTgt.y += POD_LOS_LIFT;
+  pipView.mask = podMask(eye, _losTgt, terrain, cloud);
+}
+
+/** A tap on the pod window: next zoom step. False when the tap isn't on an open pod window. */
+export function tapPip(x: number, y: number): boolean {
+  const v = pipView;
+  if (!v.pod || v.vh <= 0 || x < v.vx || x > v.vx + v.vw || y < v.vy || y > v.vy + v.vh) return false;
+  v.zoom = nextPodZoom(v.zoom);
+  return true;
 }
 
 /** Ease-out cubic. */
@@ -326,6 +418,10 @@ export function drawPip(f: HudFrame, t: PipSubject | null): void {
   }
   const { pal } = f;
   const locked = f.locked && f.target === t;
+  if (v.pod) {
+    drawPodPip(f, t, locked);
+    return;
+  }
   const civil = isCivil(t);
   drawFrame(f, civil ? pal.white : locked ? pal.bright : pal.main);
   if (v.anim < 0.9) return; // labels once the window is open
@@ -461,6 +557,89 @@ function drawLabels(f: HudFrame, t: AnyEntity, locked: boolean, civil: boolean):
     st.tone === 'danger' ? pal.danger : st.tone === 'warn' ? pal.warn : st.tone === 'good' ? pal.good : st.tone === 'dim' ? pal.dim : st.tone === 'civil' ? pal.white : pal.main;
   // pill: outlined, blinking dot for the active states
   // (a narrow window: the long DESTROYED tag falls back to KILL rather than overprinting the range)
+  let label = st.text;
+  if (x + w - 5 * u - (pen.textWidth(label, 9) + 18 * u) < rangeRight + 6 * u) label = STATUS_SHORT[label] ?? label;
+  pill(f, label, tone, st.tone === 'danger' || st.tone === 'warn', x + w - 5 * u, my, sh);
+}
+
+/* ───────────────────────── pod (EOTS) overlay ───────────────────────── */
+
+/** The TGT readout line of the pod window ("TGT SA-6", "LOCK HANGAR"), as the PCD's TGT line reads. */
+export function podReadout(t: AnyEntity, locked: boolean): string {
+  return (locked ? 'LOCK ' : 'TGT ') + entityLabel(t);
+}
+
+/** Text of the masked pod window. */
+export const POD_MASKED = 'MASKED';
+
+/**
+ * The pod's classification line under the readout, for a target that has one: g03's stoat (#200)
+ * reads as the pod identifies it. Longest first: the window takes the first one that fits.
+ */
+export function podClass(t: AnyEntity): readonly string[] | null {
+  return t.kind === 'ground' && t.type === 'stoat' ? STOAT_CLASS : null;
+}
+export const STOAT_CLASS = ['HOSTILE · MUSTELA ERMINEA · 0.3 KG', 'MUSTELA ERMINEA · 0.3 KG', 'MUSTELA ERMINEA'] as const;
+
+/**
+ * Pod view chrome: the crosshair, the TGT readout (top left), the zoom step (top right), and the slant
+ * range with the status pill in the bottom strip. Masked: a dark frame reading MASKED and why.
+ */
+function drawPodPip(f: HudFrame, t: AnyEntity, locked: boolean): void {
+  const v = pipView;
+  const { pen, pal, L, p } = f;
+  const u = L.u;
+  drawFrame(f, locked ? pal.bright : pal.main);
+  const x = v.vx;
+  const y = v.vy;
+  const w = v.vw;
+  const h = v.vh;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  if (v.mask) {
+    // no picture: the 3D pass is skipped, so the frame is filled opaque over the world
+    pen.setFill('#050a08');
+    pen.g.fillRect(x + 1, y + 1, w - 2, h - 2);
+    if (v.anim < 0.9) return;
+    pen.text(POD_MASKED, cx, cy - 5 * u, pal.warn, 12, 'center');
+    pen.text(v.mask, cx, cy + 9 * u, pal.dim, 9, 'center');
+  } else {
+    // crosshair: four arms from the edges in towards a gap at the centre
+    const gap = 6 * u;
+    const arm = Math.min(w, h) * 0.3;
+    pen.begin();
+    pen.line(cx - gap - arm, cy, cx - gap, cy);
+    pen.line(cx + gap, cy, cx + gap + arm, cy);
+    pen.line(cx, cy - gap - arm * 0.6, cx, cy - gap);
+    pen.line(cx, cy + gap, cx, cy + gap + arm * 0.6);
+    pen.strokeGlow(pal.main, 1.2);
+  }
+  if (v.anim < 0.9) return;
+  const zoom = POD_ZOOM[v.zoom]?.name ?? '';
+  pen.text(zoom, x + w - 6 * u, y + 9 * u, pal.bright, 9, 'right');
+  const room = w - 18 * u - pen.textWidth(zoom, 9);
+  let name = podReadout(t, locked);
+  while (name.length > 4 && pen.textWidth(name, 10) > room) name = name.slice(0, -1);
+  pen.text(name, x + 6 * u, y + 9 * u, locked ? pal.bright : pal.white, 10, 'left');
+  const cls = podClass(t);
+  if (cls) {
+    const line = cls.find((c) => pen.textWidth(c, 8) <= w - 12 * u);
+    if (line) pen.text(line, x + 6 * u, y + 20 * u, pal.danger, 8, 'left');
+  }
+  if (v.mask) return;
+  // bottom strip: slant range (NM, as the rest of the HUD) and the status pill
+  const sh = 16 * u;
+  const sy = y + h - sh;
+  pen.setFill('rgba(4,9,7,0.72)');
+  pen.g.fillRect(x + 1, sy, w - 2, sh - 1);
+  const my = sy + sh / 2;
+  const range = rangeLabel(t.position.distanceTo(p.position));
+  pen.text('SR', x + 6 * u, my, pal.dim, 9, 'left');
+  const rx = x + 6 * u + pen.textWidth('SR ', 9);
+  pen.text(range, rx, my, pal.white, 10, 'left');
+  const rangeRight = rx + pen.textWidth(range, 10);
+  const st = pipStatus(t, p.position, locked);
+  const tone = st.tone === 'danger' ? pal.danger : st.tone === 'warn' ? pal.warn : st.tone === 'good' ? pal.good : st.tone === 'dim' ? pal.dim : pal.main;
   let label = st.text;
   if (x + w - 5 * u - (pen.textWidth(label, 9) + 18 * u) < rangeRight + 6 * u) label = STATUS_SHORT[label] ?? label;
   pill(f, label, tone, st.tone === 'danger' || st.tone === 'warn', x + w - 5 * u, my, sh);
