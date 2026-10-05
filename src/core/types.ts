@@ -67,7 +67,7 @@ export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles
   | 'sa15' // 9K330 Tor — single vehicle, vertical launch, command guided, short range
   | 'zsu23' // ZSU-23-4 Shilka radar-directed AAA
-  | 'ad_boat'; // Rat navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
+  | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
 export type GroundTargetType =
   | 'bunker' // command bunker
@@ -75,8 +75,8 @@ export type GroundTargetType =
   | 'hangar' // hardened aircraft shelter
   | 'parked_jet' // parked enemy fighter
   | 'ship' // corvette / frigate (can move)
-  | 'suicide_boat' // Rat navy unmanned explosive boat: chases a ship and rams it (sim/boats.ts)
-  | 'missile_boat' // Rat navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
+  | 'suicide_boat' // IRGC Navy unmanned explosive boat: chases a ship and rams it (sim/boats.ts)
+  | 'missile_boat' // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
   | 'stoat' // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
   | 'train'; // Auckland's civil trains (AT AM class sets, KiwiRail freight): neutral, posed by their timetable (sim/civil/rail.ts)
 

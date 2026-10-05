@@ -1,5 +1,5 @@
 /**
- * Rat navy fast boats (issue #79, sim/boats.ts): the suicide boat chases a moving ship and rams it
+ * IRGC Navy fast boats (issue #79, sim/boats.ts): the suicide boat chases a moving ship and rams it
  * (one hit), the missile boat closes to its launch point, counts down and fires a Kowsar that scores
  * one hit (nothing if it is killed during the countdown), the air-defence boat is a SAM that moves
  * and still fires (radar SAM + SA-18s) and an AGM-88G homes on its radar, a GBU-53/B hits a weaving

@@ -1,7 +1,7 @@
 /**
  * F35-A — IRGC campaign, mission 3: "Stoat of Emergency" (epic #196).
  *
- * Stoat Command, the Guard's command (#211), holds Waiheke Island. A trap-line volunteer group asks for air support against one stoat
+ * The Guard (#211) holds Waiheke Island. A trap-line volunteer group asks for air support against one stoat
  * on the Onetangi dunes, heading for a nest of NZ dotterel chicks. The jet has to get through the
  * island's layered air defences, find the target under the overcast and kill it before the clock runs out.
  *
@@ -133,7 +133,7 @@ export const G03: MissionDef = mission({
   weather: 'overcast',
   briefing: [
     'Tasking from the Waiheke Trap Line volunteers. Their trail camera has one adult stoat on the dunes at Onetangi, moving east towards a nest of NZ dotterel chicks. It will reach the nest in four minutes. The volunteers have baited three stations on its path, close to the nest; it stops at each one. Those stops are your drop windows: a StormBreaker cannot track it while it runs.',
-    'Stoat Command holds the island. An SA-6 and a Tor stand on Motuihe, the Tor covering the SA-6 against anti-radiation missiles. A second SA-6 guards the airstrip beside the beach, with a ZSU-23-4 on the ridge above it. Rat navy air-defence boats patrol north of Rangitoto, off Onetangi and in the Tāmaki Strait. Every one of them carries an optical tracker that sees you inside 7 to 9 km whatever your shaping.',
+    'The Guard holds the island. An SA-6 and a Tor stand on Motuihe, the Tor covering the SA-6 against anti-radiation missiles. A second SA-6 guards the airstrip beside the beach, with a ZSU-23-4 on the ridge above it. IRGC Navy air-defence boats patrol north of Rangitoto, off Onetangi and in the Tāmaki Strait. Every one of them carries an optical tracker that sees you inside 7 to 9 km whatever your shaping.',
     'You carry two AARGM-ERs and two GBU-53/B StormBreakers. You will not destroy them all, and you will not need to. Pick your way in, kill what blocks it, and use the terrain, the notch and chaff for the rest. An AARGM fired from far out only silences a radar for a few seconds: fire it close in and go straight in behind it.',
     'The cloud base is about 6,000 ft. You will only find the target from under the cloud, within 6 km of the nest. Rules of engagement: the stoat is the only authorised target on the island.',
   ],
