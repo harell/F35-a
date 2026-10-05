@@ -29,7 +29,7 @@ import { computeLayout, makeLayout } from './hmd/layout';
 import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, killFeedAt, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
-import { drawPip, pipLandmarkFocus, pipView, resetPip, stepPip } from './hmd/pip';
+import { drawPip, pipLandmarkFocus, pipView, resetPip, resetPodZoom, stepPip, stepPod, tapPip } from './hmd/pip';
 import { ASSET_LOSS_HOLD, ASSET_LOSS_WINDOW } from './hmd/assetLoss';
 import { drawWpn, reserveWpn, resetWpn, stepWpn, tapWpn, wpnState, wpnView } from './hmd/wpnCam';
 import { Pen } from './hmd/pen';
@@ -55,6 +55,7 @@ import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, dr
 import { pcdZoom } from './cockpit/zoom';
 import { bandExt, clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
 import { COCKPIT_REST_PITCH, TEST_HOOKS } from '../core/data';
+import { cloudBase } from '../core/weather';
 import { beginDrawn, drawnLast, type DrawnCue } from './hmd/drawn';
 
 /** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit). */
@@ -319,6 +320,7 @@ export const createHud: CreateHud = (canvas, events) => {
         st.resetPlayer();
         st.playerId = p.id;
         resetWpn();
+        resetPodZoom();
         loss.id = loss.assetId = -1;
       }
       playerTeam = p?.team ?? null;
@@ -420,6 +422,8 @@ export const createHud: CreateHud = (canvas, events) => {
       }
 
       const pipTarget = stepPip(L, f.target, lookupEntity, pipAllowed && L.pipW > 0, ctx.paused ? 0 : ctx.dt, pipLandmark, asset && L.pipW > 0 ? asset : null);
+      // a ground target / SAM site: the pod view, with its line of sight (terrain, the overcast deck)
+      stepPod(pipView.vh > 0 ? pipTarget : null, p.position, ctx.world.terrain, cloudBase(ctx.mission?.def?.weather ?? 'clear'), ctx.paused ? 0 : ctx.dt);
       // the weapon window: a strip under the target camera, the video in its slot for the last seconds
       // (red cues and the Sky Tower cut keep it a strip); while it owns the slot the target camera is
       // neither rendered nor drawn (its bookkeeping, the DESTROYED hold, carries on underneath)
@@ -656,6 +660,8 @@ export const createHud: CreateHud = (canvas, events) => {
       if (pcdZoom.open) return null;
       // a tap on the weapon window shows the next weapon in flight
       if (tapWpn(x, y)) return null;
+      // a tap on the pod view (a ground target / SAM site) steps its zoom: WIDE → NARROW → ZOOM
+      if (tapPip(x, y)) return null;
       return picks.pick(x, y, PICK_RADIUS, st.clock, engagedByPlayer);
     },
 

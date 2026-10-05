@@ -51,6 +51,7 @@ import { createCameraRig } from '../render/CameraRig';
 import { TargetCam, targetCamOmitFor } from '../render/TargetCam';
 import { Bloom, bloomEnabled } from '../render/Bloom';
 import { pipView } from '../hud/hmd/pip';
+import { POD_ZOOM } from '../core/pod';
 import { wpnView } from '../hud/hmd/wpnCam';
 import { createHud } from '../hud/Hud';
 import { createCockpit } from '../hud/Cockpit';
@@ -945,6 +946,8 @@ export class Game {
               drawn: s?.targetCam.lastTargetId != null || s?.targetCam.lastLandmark != null || !!s?.targetCam.lastWeapon,
               /** the pass drew the weapon window's chase shot instead of the target */
               weapon: !!s?.targetCam.lastWeapon,
+              /** the pod view (#199): its zoom step's name ('MASKED': no line of sight, nothing drawn); null = not a pod view */
+              pod: s?.targetCam.lastPod ?? null,
               calls: s?.targetCam.lastStats.calls ?? 0,
               triangles: s?.targetCam.lastStats.triangles ?? 0,
             },
@@ -1156,7 +1159,16 @@ export class Game {
         rect: [pipView.vx, pipView.vy, pipView.vw, pipView.vh],
         rendered: this.session?.targetCam.lastTargetId ?? null,
         camera: this.session?.targetCam.camera.position.toArray().map((v) => Math.round(v)) ?? null,
+        /** pod view (#199): shown, zoom step, why masked ('' = clear), last rendered step ('MASKED' when skipped) */
+        pod: { on: pipView.pod, zoom: POD_ZOOM[pipView.zoom]?.name ?? null, mask: pipView.mask, rendered: this.session?.targetCam.lastPod ?? null },
       }),
+      /** Set the pod view's zoom step (0 WIDE, 1 NARROW, 2 ZOOM; a name works too) as a tap on the window steps it. Returns the step's name. */
+      podZoom: (step: number | string) => {
+        const i = typeof step === 'number' ? step : POD_ZOOM.findIndex((z) => z.name === String(step).toUpperCase());
+        if (i < 0 || i >= POD_ZOOM.length) throw new Error(`podZoom: no step ${step} (${POD_ZOOM.map((z) => z.name).join(', ')})`);
+        pipView.zoom = i;
+        return POD_ZOOM[i].name;
+      },
       // + the Instant Action scenario built on a fixed site (Wiri defence) so the e2e sweep covers it
       // every campaign's missions (a disabled campaign's too, with playable: false: the smoke skips them)
       missions: () =>
