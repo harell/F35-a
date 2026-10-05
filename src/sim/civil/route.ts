@@ -63,6 +63,11 @@ export interface CivilFlight {
   gearHeight: number;
   /** Set when the flight is over (landed and vacated / left the area): the world removes it. */
   despawn: boolean;
+  /**
+   * Peacetime (A Stroll in the Park): the airliner's ADS-B reaches the player's jet as a datalink
+   * track at any range, so it can be boxed and designated without the radar or the DAS seeing it.
+   */
+  adsb?: boolean;
 }
 
 /* Profile constants */
