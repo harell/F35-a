@@ -202,7 +202,7 @@ describe('AI strike', () => {
 
   it('bomber raid: runs in on its target, then turns for home', () => {
     const { world } = makeAiWorld('veteran');
-    const tgt = world.spawnGround({ type: 'bunker', team: 'blue', position: v3(0, 0, -30_000) });
+    const tgt = world.spawnGround({ type: 'hangar', team: 'blue', position: v3(0, 0, -30_000) });
     const b = world.spawnAircraft({ type: 'su27', team: 'red', position: v3(8_000, 7_000, 10_000), heading: 0, speed: 250, ai: createAiBrain('bomber', { skill: 0.5, seed: 1, task: { kind: 'attack', targetId: tgt.id } }) });
     let minD = Infinity;
     runFor(world, 240, () => {

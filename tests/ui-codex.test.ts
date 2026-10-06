@@ -84,9 +84,9 @@ describe('Codex ratings match the computed hits', () => {
     expect(classHits('aim120', air)).toEqual([1, 1]);
   });
 
-  it('a StormBreaker takes two hits on a bunker (250 vs 260 HP), one on a hangar', () => {
+  it('a StormBreaker kills a hardened hangar in one hit (250 vs 200 HP)', () => {
     const hard = TARGET_CLASSES.find((c) => c.id === 'hard')!;
-    expect(classHits('gbu53', hard)).toEqual([1, 2]);
+    expect(classHits('gbu53', hard)).toEqual([1, 1]);
   });
 
   it('"Use it on" lists only Best and Good, best first', () => {

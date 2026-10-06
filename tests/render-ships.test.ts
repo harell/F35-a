@@ -140,7 +140,7 @@ describe('ship sinking sequence', () => {
   });
 
   it('the whole hull is under water after the sinking time, and still partly afloat at a third of it', () => {
-    for (const vessel of ['container', 'cruise', null] as const) {
+    for (const vessel of ['container', 'cruise', 'tanker'] as const) {
       for (let id = 1; id <= 12; id++) {
         const g = ship(vessel, id, { anchored: id % 2 === 0, heading: id * 37 });
         g.alive = false;
@@ -192,18 +192,6 @@ describe('ship visual', () => {
     expect(v.root.visible).toBe(false);
   });
 
-  it('the corvette sinks the same way (no more 3.5 m sink)', () => {
-    const g = ship(null, 4);
-    const v = new GroundVisual(getGroundPrototype('ship', 'green', null));
-    const cam = new Vector3(3000, 200, -12000);
-    g.alive = false;
-    g.destroyedAt = 0;
-    v.update(g, 40, 1 / 60, cam, 9000);
-    expect(v.root.position.y).toBeLessThan(-5);
-    v.update(g, 95, 1 / 60, cam, 9000);
-    expect(v.root.visible).toBe(false);
-  });
-
   it('carries COLREGS night lights: red to port, green to starboard, white masthead / stern / anchor lights, cabin lights', () => {
     for (const vessel of ['container', 'cruise'] as const) {
       const p = getGroundPrototype('ship', 'green', vessel);
@@ -220,7 +208,7 @@ describe('ship visual', () => {
       expect(deck).toBeGreaterThan(vessel === 'cruise' ? 60 : 15);
       expect(p.lights.length).toBeLessThan(160);
     }
-    expect(getGroundPrototype('ship', 'green', null).lights.length).toBe(0); // the warship runs dark
+    expect(() => getGroundPrototype('ship', 'green', null)).toThrow(/VesselClass/); // a ship always has a class
   });
 
   it('lights by state: under way, at anchor, moored (deck lights only); none when sunk', () => {

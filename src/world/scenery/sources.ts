@@ -9,13 +9,14 @@ import { Color } from 'three';
 import type { TheaterId } from '../../core/types';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { VegetationField } from '../terrain/vegetation';
-import { TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
 import { FRONT_HOUSE, type FrontageMap, type FrontHouse } from './frontage';
 import { canopyAt, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
 import { pointInRing } from './cbdStreets';
+import type { AucklandDomain, DomainTree } from './aucklandDomain';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 import { LU_COMMERCIAL, LU_INDUSTRIAL, LU_PITCH, LU_SCHOOL, landUseAt, luOpen, luSheds, type LandUse } from './aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint, shedHeight, shedRoofOf } from './landUseLots';
@@ -74,6 +75,13 @@ export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: Dis
   return Math.min(fx, BLOCK_W - fx, fz, BLOCK_D - fz) < ROAD_HALF + 2;
 }
 
+/** Trees measured one by one on a site of their own (tamakiDrive.ts tamakiTrees: [x, y, z, width, height, palm, shade] each). */
+export interface MeasuredTrees {
+  trees: Float32Array;
+  /** True on the site (+ margin m): the scatter grows nothing else there. */
+  covers(x: number, z: number, margin: number): boolean;
+}
+
 export class TreeSource implements ScatterSource {
   readonly kinds = 3;
   private readonly dist: District = {} as District;
@@ -89,7 +97,78 @@ export class TreeSource implements ScatterSource {
     private readonly nbs: Neighbourhood[] | null = null,
     /** The real land use (#122): no garden trees on pitches, few in car parks and yards. */
     private readonly landUse: LandUse | null = null,
+    /** The Auckland Domain (aucklandDomain.ts): its measured trees grow there instead of the grid's. */
+    private readonly domain: AucklandDomain | null = null,
+    /** Measured trees standing on a strip of their own (the Tāmaki Drive waterfront): no others grow there. */
+    private readonly measured: MeasuredTrees | null = null,
   ) {}
+
+  /** The Domain's trees in 50 m buckets, its park's box, and its trees' mean colour (the shade reference). */
+  private domainIndex: { cells: Map<number, DomainTree[]>; box: [number, number, number, number]; mean: [number, number, number] } | null = null;
+
+  private domainTrees(): NonNullable<TreeSource['domainIndex']> | null {
+    const d = this.domain;
+    if (!d) return null;
+    if (!this.domainIndex) {
+      const cells = new Map<number, DomainTree[]>();
+      const mean: [number, number, number] = [0, 0, 0];
+      for (const t of d.trees) {
+        const k = (Math.floor(t.x / 50) + 8192) * 16384 + (Math.floor(t.z / 50) + 8192);
+        const l = cells.get(k);
+        if (l) l.push(t);
+        else cells.set(k, [t]);
+        mean[0] += ((t.colour >> 16) & 255) / d.trees.length;
+        mean[1] += ((t.colour >> 8) & 255) / d.trees.length;
+        mean[2] += (t.colour & 255) / d.trees.length;
+      }
+      const box: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < d.park.length; i += 2) {
+        box[0] = Math.min(box[0], d.park[i]);
+        box[1] = Math.min(box[1], d.park[i + 1]);
+        box[2] = Math.max(box[2], d.park[i]);
+        box[3] = Math.max(box[3], d.park[i + 1]);
+      }
+      this.domainIndex = { cells, box, mean };
+    }
+    return this.domainIndex;
+  }
+
+  /** Inside the Domain's park (its trees are the measured ones there). */
+  private inDomain(x: number, z: number): boolean {
+    const ix = this.domainTrees();
+    if (!ix) return false;
+    const [x0, z0, x1, z1] = ix.box;
+    return x >= x0 && x <= x1 && z >= z0 && z <= z1 && pointInRing(this.domain!.park, x, z);
+  }
+
+  /**
+   * The Domain's measured trees in the tile [x0, x0 + size) × [z0, z0 + size): one crown per LiDAR tree at its height and
+   * crown radius (the broadleaf archetype is 1 m tall with a 0.92 m crown), from the game's ground at its trunk, shaded
+   * by its aerial colour against the park's mean; a tall narrow crown is a conifer. No blocker applies: they are measured.
+   */
+  private domainTile(x0: number, z0: number, size: number, out: TileInstances): void {
+    const ix = this.domainTrees();
+    if (!ix) return;
+    const [bx0, bz0, bx1, bz1] = ix.box;
+    if (x0 > bx1 || z0 > bz1 || x0 + size < bx0 || z0 + size < bz0) return;
+    const hf = this.hf;
+    for (let j = Math.floor(z0 / 50); j <= Math.floor((z0 + size) / 50); j++)
+      for (let i = Math.floor(x0 / 50); i <= Math.floor((x0 + size) / 50); i++) {
+        const l = ix.cells.get((i + 8192) * 16384 + (j + 8192));
+        if (!l) continue;
+        for (const t of l) {
+          if (t.x < x0 || t.x >= x0 + size || t.z < z0 || t.z >= z0 + size) continue;
+          const conifer = t.h > 15 && t.r < 0.2 * t.h;
+          const w = conifer ? (2 * t.r) / 0.6 : (2 * t.r) / 0.92;
+          const k = (v: number, m: number) => Math.max(0.65, Math.min(1.35, v / Math.max(1, m)));
+          const r = k((t.colour >> 16) & 255, ix.mean[0]);
+          const g = k((t.colour >> 8) & 255, ix.mean[1]);
+          const b = k(t.colour & 255, ix.mean[2]);
+          const h = hash2(Math.round(t.x * 10), Math.round(t.z * 10), this.seed + 21);
+          out.data[conifer ? TREE_CONIFER : TREE_BROADLEAF].push(t.x, hf.meshHeightAt(t.x, t.z) - 0.3, t.z, h * 40, w, t.h, w, r, g, b, h);
+        }
+      }
+  }
 
   /** Hero neighbourhoods' building footprints in 20 m buckets (trunks stay out of the houses). */
   private nbBuildings: Map<number, Float32Array[]> | null = null;
@@ -159,6 +238,18 @@ export class TreeSource implements ScatterSource {
     const n = Math.floor(size / sp);
     const hf = this.hf;
     const seed = this.seed;
+    this.domainTile(x0, z0, size, out);
+    const m = this.measured;
+    if (m) {
+      // the measured trees in this tile (kept to the edge of the scatter's radius: they're the real ones)
+      const t = m.trees;
+      for (let i = 0; i < t.length; i += 7) {
+        const x = t[i], z = t[i + 2];
+        if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
+        _c.setScalar(t[i + 6]);
+        out.data[t[i + 5] ? TREE_PALM : TREE_BROADLEAF].push(x, t[i + 1], z, hash2(i, 7, seed) * 40, t[i + 3], t[i + 4], t[i + 3], _c.r, _c.g, _c.b, 0.1 * hash2(i, 9, seed));
+      }
+    }
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const gx = Math.floor(x0 / sp) + i;
@@ -168,6 +259,8 @@ export class TreeSource implements ScatterSource {
         const h3 = hash2(gx, gz, seed + 2);
         const x = (gx + 0.1 + 0.8 * h1) * sp;
         const z = (gz + 0.1 + 0.8 * h2) * sp;
+        if (this.domain && this.inDomain(x, z)) continue;
+        if (m?.covers(x, z, 2)) continue;
         const nb = this.nbs ? neighbourhoodAt(x, z, this.nbs) : null;
         if (nb) {
           this.nbTree(nb, x, z, gx, gz, out);

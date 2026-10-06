@@ -1,7 +1,7 @@
 /**
  * GBU-53/B StormBreaker (SDB II), issue #45: a datalinked glide bomb with a tri-mode terminal seeker.
  * It follows moving ships (civil or hostile), still hits a radar that shuts down, never retargets,
- * has the SDB's glide envelope, a warhead too small for a bunker, and no CCIP mode.
+ * has the SDB's glide envelope, a smaller warhead than the JDAM, and no CCIP mode.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -141,31 +141,13 @@ describe('GBU-53 StormBreaker: moving and moored civil ships', () => {
 });
 
 describe('GBU-53 StormBreaker: hostile targets', () => {
-  it('two GBU-53s sink a moving corvette (Strait Shooter patrol line, 400 HP; one hit is ~250)', () => {
-    const w = makeWorld(7);
-    const a = new Vector3(17_000, 0, -500);
-    const b = new Vector3(24_000, 0, 1_000);
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: b.clone(), name: 'Corvette 531', path: [a, b], loopPath: true, speed: 1 });
-    // a faster patrol than the mission's 1 m/s, to make the moving-target part count
-    cv.speed = 6;
-    run(w, 0.5);
-    const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
-    run(w, 1);
-    w.combat.designate(p, cv.id, w);
-    const m1 = release(w, p, 'gbu53', cv.id);
-    run(w, 4);
-    const m2 = release(w, p, 'gbu53', cv.id);
-    run(w, 200, () => !m1.alive && !m2.alive);
-    expect(cv.alive).toBe(false);
-  });
-
-  it('datalink: follows a corvette that turns back at the end of its patrol line after release', () => {
+  it('datalink: follows a hostile ship that turns back at the end of its patrol line after release', () => {
     const w = makeWorld(9);
     const a = new Vector3(-3_000, 0, 0);
     const b = new Vector3(400, 0, 0);
     // 400 m short of the turn at 8 m/s: it reverses ~50 s into a ~90 s glide, so a bomb flying to
     // the extrapolated launch track would land ~800 m from it
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [b, a], loopPath: true, speed: 8 });
+    const cv = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, 0), name: 'Hostile 531', path: [b, a], loopPath: true, speed: 8 });
     run(w, 0.2);
     expect(cv.velocity.x).toBeGreaterThan(7);
     const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
@@ -179,7 +161,7 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
 
   it('terminal seeker: the launcher is shot down after release and the target then stops; the seeker still finds it', () => {
     const w = makeWorld(10);
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(-5_000, 0, 0)], speed: 7 });
+    const cv = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, 0), name: 'Hostile 531', path: [new Vector3(-5_000, 0, 0)], speed: 7 });
     run(w, 0.2);
     const p = jetToward(w, cv.position, 20_000, 8_000, 'sead_stealth');
     run(w, 1);
@@ -192,19 +174,6 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
     run(w, 200, () => !m.alive);
     expect(p.alive).toBe(false);
     expect(cv.health).toBeLessThan(cv.maxHealth);
-  });
-
-  it('one GBU-53 never destroys a bunker', () => {
-    const w = makeWorld(2, true);
-    const bunker = w.spawnGround({ type: 'bunker', team: 'red', position: new Vector3(0, 0, 0), name: 'Bunker' });
-    const p = jetToward(w, bunker.position, 15_000, 7_000, 'sead_stealth');
-    run(w, 1);
-    w.combat.designate(p, bunker.id, w);
-    const m = release(w, p, 'gbu53', bunker.id);
-    run(w, 200, () => !m.alive);
-    expect(bunker.health).toBeLessThan(bunker.maxHealth); // hit
-    expect(bunker.alive).toBe(true);
-    expect(MUNITIONS.gbu53.damage).toBeLessThan(bunker.maxHealth);
   });
 
   it('still hits a SAM site that switches its radar off right after release', () => {
@@ -222,10 +191,10 @@ describe('GBU-53 StormBreaker: hostile targets', () => {
 });
 
 describe('GBU-53 StormBreaker: never retargets', () => {
-  it('a GBU-53 at a hostile corvette leaves a civil ship near its path untouched', () => {
+  it('a GBU-53 at a hostile ship leaves a civil ship near its path untouched', () => {
     const w = makeWorld(6);
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531' });
-    // a cruise liner steaming across the bomb's track, 3 km short of the corvette, and a container
+    const cv = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, 0), name: 'Hostile 531' });
+    // a cruise liner steaming across the bomb's track, 3 km short of the target, and a container
     // ship lying 180 m beyond it
     const crosser = civilShip(w, 'cruise', new Vector3(-1_500, 0, 3_000), 90, { path: [new Vector3(-1_500, 0, 3_000), new Vector3(4_000, 0, 3_000)], speed: 5 });
     const beyond = civilShip(w, 'container', new Vector3(0, 0, -200), 90);
@@ -246,8 +215,8 @@ describe('GBU-53 StormBreaker: never retargets', () => {
 
   it('a GBU-53 whose target is destroyed in flight goes off at the last point, not on the nearby ship', () => {
     const w = makeWorld(8);
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531' });
-    const other = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(400, 0, 0), name: 'Corvette 532' });
+    const cv = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, 0), name: 'Hostile 531' });
+    const other = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(400, 0, 0), name: 'Hostile 532' });
     const civ = civilShip(w, 'container', new Vector3(-450, 0, 0), 0);
     const p = jetToward(w, cv.position, 18_000, 8_000, 'sead_stealth');
     run(w, 1);
@@ -328,7 +297,7 @@ describe('GBU-53 StormBreaker: the IN RANGE cue is a range the bomb reaches (pla
   const shot = (alt: number, shipSpeed: number, frac: number, seed: number) => {
     const w = makeWorld(seed);
     // the ship steams across the bomb's track (east), well clear of the end of its path
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: shipSpeed });
+    const cv = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, 0), name: 'Hostile 531', path: [new Vector3(60_000, 0, 0)], speed: shipSpeed });
     run(w, 0.2);
     const p = jetToward(w, cv.position, 40_000, alt, 'sead_stealth');
     p.input.throttle = 0.85;
@@ -420,7 +389,7 @@ describe('GPS / glide bomb IN RANGE needs the target where the bomb can turn to 
 
   it('a StormBreaker released 60° off the nose turns onto the ship instead of orbiting it (c06: 14 km, 4,700 m)', () => {
     const w = makeWorld(12);
-    const cv = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, 0), name: 'Corvette 531', path: [new Vector3(60_000, 0, 0)], speed: 5 });
+    const cv = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, 0), name: 'Hostile 531', path: [new Vector3(60_000, 0, 0)], speed: 5 });
     run(w, 0.2);
     // 14 km from the ship, ground track 60° left of it
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_700, 14_000), heading: -60 * DEG, speed: 250, loadout: 'sead_stealth' });

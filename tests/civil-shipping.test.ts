@@ -463,16 +463,16 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
   it('TGT cycling and auto-designation skip the (closer) civil ship while a hostile is left (owner, 2026-10-06)', () => {
     const w = seaWorld(6);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 5_000, 0), heading: 0, speed: 240, loadout: 'strike_stealth' });
-    // range order: corvette 531, the civil ship, corvette 532
-    const cv1 = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(-400, 0, -6_000), heading: 0, name: 'Corvette 531' });
+    // range order: hostile 531, the civil ship, hostile 532
+    const cv1 = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(-400, 0, -6_000), heading: 0, name: 'Hostile 531' });
     const ship = spawnShip(w, 'container', 300, -10_000, 90);
-    const cv2 = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(200, 0, -16_000), heading: 0, name: 'Corvette 532' });
+    const cv2 = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(200, 0, -16_000), heading: 0, name: 'Hostile 532' });
     expect(p.radar.mode).toBe('ground');
     run(w, 1);
     const ids = p.radar.contacts.map((c) => c.id);
     expect(ids).toEqual(expect.arrayContaining([cv1.id, ship.id, cv2.id]));
     expect(p.radar.designatedId).toBe(cv1.id); // auto-designation: a hostile, never the ship
-    // TGT: lock the boxed corvette, then step on: the corvettes only, never the nearer ship
+    // TGT: lock the boxed hostile, then step on: the hostiles only, never the nearer ship
     const order: (number | null)[] = [];
     for (let i = 0; i < 4; i++) {
       w.combat.cycleTarget(p, w);
@@ -483,7 +483,7 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
     w.combat.designate(p, ship.id, w);
     w.combat.cycleTarget(p, w);
     expect(w.getEntity(p.radar.designatedId)?.team).toBe('red');
-    // both corvettes gone: TGT steps onto the ship
+    // both hostiles gone: TGT steps onto the ship
     w.combat.designate(p, null, w);
     cv1.alive = false;
     cv2.alive = false;
@@ -492,7 +492,7 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
     expect(p.radar.designatedId).toBe(ship.id);
   });
 
-  it('with the corvette dead the ship can still be cycled to, but is never auto-designated', () => {
+  it('with no hostile left the civil ship can still be cycled to, but is never auto-designated', () => {
     const w = seaWorld(7);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 5_000, 0), heading: 0, speed: 240, loadout: 'strike_stealth' });
     const ship = spawnShip(w, 'cruise', 0, -9_000, 90, 'Southern Barnacle');
@@ -518,9 +518,9 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
   it('HUD labels: CIV on the HMD, the ship name and status in the PiP', () => {
     const w = seaWorld();
     const ship = spawnShip(w, 'cruise', 0, -9_000, 90, 'Southern Barnacle');
-    const corvette = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 0, -16_000) });
+    const hostile = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 0, -16_000) });
     expect(entityLabel(ship)).toBe('CIV');
-    expect(entityLabel(corvette)).toBe('SHIP');
+    expect(entityLabel(hostile)).toBe('SHIP');
     expect(pipName(ship)).toBe('SOUTHERN BARNACLE');
     expect(pipStatus(ship, new Vector3()).text).toBe('MOORED');
     ship.anchored = true;

@@ -17,7 +17,7 @@ const ZOOM = POD_ZOOM.findIndex((z) => z.name === 'ZOOM');
 
 /** A 0.38 m ground target (the g03 stoat's size) on flat ground at the origin. */
 function tiny(): GroundTargetEntity {
-  const g = new GroundTargetEntity(5, 'bunker', 'red', { radius: 0.19 });
+  const g = new GroundTargetEntity(5, 'stoat', 'red', { radius: 0.19 });
   g.position.set(0, 0, 0);
   return g;
 }

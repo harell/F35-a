@@ -378,8 +378,8 @@ function cycleScope(ac: AircraftEntity): Scope {
 /**
  * Designation priority of a contact (higher first), or NaN if outside `scope`.
  * A/A: threat to us › in front (±60°) › range. A/G: (emitting, with AARGM) › in front › target of an
- * active primary objective (`objective`, set by the mission runner: the c06 corvettes before the
- * Shilka on the way, the c03 SA-6) › range. All (the gun): in front (±60°) › range, air and ground
+ * active primary objective (`objective`, set by the mission runner: a strike's target before the
+ * Shilka on the way, a SEAD sortie's SAM) › range. All (the gun): in front (±60°) › range, air and ground
  * alike. Civil traffic ranks behind every hostile in each. Requires _fwd = nose of `ac`.
  */
 const NEUTRAL_RANK_PENALTY = 1e12;

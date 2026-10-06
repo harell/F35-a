@@ -603,7 +603,7 @@ describe('boat presentation and mission options', () => {
     const errs = validateMission(def).filter((e) => /sb1|mb1|ad1|chase|strike|escort/.test(e));
     expect(errs).toEqual([]);
     const bad = emptyScript();
-    bad.ground.push({ id: 'x', group: 'g', type: 'bunker', x: 0, z: 0, chase: 'nope' });
+    bad.ground.push({ id: 'x', group: 'g', type: 'hangar', x: 0, z: 0, chase: 'nope' });
     bad.sams.push({ id: 'y', group: 'g', type: 'sa6', x: 0, z: 0, path: [{ x: 1, z: 1 }] });
     const badErrs = validateMission({ ...base, script: bad } as MissionDef);
     expect(badErrs.some((e) => /only a suicide boat chases/.test(e))).toBe(true);

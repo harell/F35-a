@@ -34,6 +34,7 @@ import { WESTFIELD_CENTRE, WESTFIELD_PRISMS } from '../core/westfieldNewmarket';
 import { CBD_BUILDING_NAMES } from '../core/cbdBuildingNames';
 import { HB_SUPPORTS, hbAt, hbSpanSolids } from '../core/harbourBridge';
 import { aucklandBuildings, aucklandBuildingsVersion, type Building } from '../world/scenery/aucklandBuildings';
+import { aucklandDomain } from '../world/scenery/aucklandDomain';
 
 /** Roof height above the ground (m) from which a building is a skyscraper the sim knows about (≈ 12 storeys). */
 export const SKYSCRAPER_MIN_HEIGHT = 40;
@@ -57,6 +58,8 @@ export const SPARK_ARENA_ID = -1;
 export const MUSEUM_ID = -10;
 /** Westfield Newmarket: `fixed`, it stands whatever hits it. */
 export const WESTFIELD_ID = -101;
+/** The Auckland Domain's park buildings: −1000, −1001, … (world/scenery/aucklandDomain.ts). */
+export const DOMAIN_ID = -1000;
 /**
  * The Auckland Harbour Bridge's seven spans (core/harbourBridge.ts HB_SUPPORTS), south to north: ids
  * HARBOUR_BRIDGE_ID − i. Each is a hero of its own, so the span the player's jet flies into falls and the rest stand.
@@ -230,6 +233,18 @@ export function buildBuildingGeometry(
   add(MUSEUM_ID, MUSEUM.x, MUSEUM.z, museumSolids(), false, HERO_BUILDINGS.museum);
   // Westfield Newmarket: its measured blocks (core/westfieldNewmarket.ts), a landmark that stands
   add(WESTFIELD_ID, WESTFIELD_CENTRE.x, WESTFIELD_CENTRE.z, WESTFIELD_PRISMS.map((p) => ({ ring: Float32Array.from(p.ring), h: p.h })), true, undefined, { name: 'Westfield Newmarket' });
+  // the Auckland Domain's park buildings and glasshouses (world/scenery/aucklandDomain.ts), measured: they stand
+  aucklandDomain()?.buildings.forEach((b, i) => {
+    const h = Math.max(b.h, b.ridge);
+    if (h < minHeight) return;
+    let cx = 0, cz = 0;
+    const n = b.ring.length / 2;
+    for (let k = 0; k < n; k++) {
+      cx += b.ring[k * 2] / n;
+      cz += b.ring[k * 2 + 1] / n;
+    }
+    add(DOMAIN_ID - i, cx, cz, [{ ring: b.ring, h }], true);
+  });
   // the Harbour Bridge: each span its deck and through truss over the open water (core/harbourBridge.ts hbSpanSolids)
   for (let i = 0; i < HARBOUR_BRIDGE_SPANS; i++) {
     const [x, z] = hbAt((HB_SUPPORTS[i] + HB_SUPPORTS[i + 1]) / 2, 0);

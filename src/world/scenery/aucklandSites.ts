@@ -16,6 +16,7 @@
  *
  * Without the file, auckland.ts keeps its hand-placed port and marinas; the Wiri tanks still stand.
  */
+import { aucklandDomain } from './aucklandDomain';
 import { Color } from 'three';
 import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
@@ -25,6 +26,7 @@ import { CONTAINER_TIER, PORT_CRANES, PORT_MASTS, type PortCrane } from '../../c
 import { aucklandPortStacks } from './aucklandPort';
 import { WESTFIELD_PRISMS } from '../../core/westfieldNewmarket';
 import { aucklandNeighbourhoods, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
+import { tamakiDriveRings } from './tamakiDriveData';
 import { mulberry32 } from '../../core/math';
 import { frameFromHeading, IDENT_FRAME, WIN_FLOOD, WIN_INDUSTRIAL, WIN_OFFICE, type GeometryBuilder } from './GeometryBuilder';
 import type { DecalBuilder, HeightFn, LightList } from './builders';
@@ -181,7 +183,8 @@ export function siteBlocker(): (x: number, z: number, margin: number) => boolean
  * siteMasked()): every stadium's grounds, the oil terminal's hardstand and Westfield Newmarket's buildings, where a 3D
  * landmark stands, and the hero neighbourhoods' footprints: Mission Bay lies outside the real-streets region, so its
  * measured houses would otherwise stand on painted grid lots (its LINZ streets are ribbons: tools/linz/neighbourhoodStreets.ts;
- * inside the region, Herne Bay's and Westhaven's change nothing). The port and the
+ * inside the region, Herne Bay's and Westhaven's change nothing), the Auckland Domain's park (its buildings and trees
+ * are measured: aucklandDomain.ts) and the Tāmaki Drive waterfront's strip. The port and the
  * naval base are not here: they lie in the real-streets region or under the aerial photo, which never paint the grid.
  */
 export function siteRings(): Float32Array[] {
@@ -191,6 +194,9 @@ export function siteRings(): Float32Array[] {
     ...(s ? s.stadiums.map((st) => st.outline.pts) : []),
     ...WESTFIELD_PRISMS.map((p) => Float32Array.from(p.ring)),
     ...(aucklandNeighbourhoods() ?? []).map((n) => n.footprint),
+    ...(aucklandDomain() ? [aucklandDomain()!.park] : []),
+    // the Tāmaki Drive waterfront (its paths, verges and trees: tamakiDrive.ts), in short pieces
+    ...tamakiDriveRings(),
   ];
 }
 

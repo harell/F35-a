@@ -70,19 +70,18 @@ export type SamType =
   | 'ad_boat'; // IRGC Navy air-defence fast boat: a MOVING SAM (SA-15-like radar SAM + shoulder-launched SA-18s, sim/boats.ts)
 
 export type GroundTargetType =
-  | 'bunker' // command bunker
   | 'fuel' // fuel tanks
   | 'hangar' // hardened aircraft shelter
   | 'parked_jet' // parked enemy fighter
-  | 'ship' // corvette / frigate (can move)
+  | 'ship' // merchant ship, always with a VesselClass (can move)
   | 'suicide_boat' // IRGC Navy unmanned explosive boat: chases a ship and rams it (sim/boats.ts)
   | 'missile_boat' // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
   | 'stoat' // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
   | 'train'; // Auckland's civil trains (AT AM class sets, KiwiRail freight): neutral, posed by their timetable (sim/civil/rail.ts)
 
 /**
- * Civil merchant ship class of a neutral `'ship'` ground entity (GroundTargetEntity.vessel):
- * picks the model, hull size and callouts. Military ships (corvettes, landing ships) have none.
+ * Merchant ship class of a `'ship'` ground entity (GroundTargetEntity.vessel; every ship has one):
+ * picks the model, hull size and callouts.
  * 'tanker' is a ~250 m crude carrier (the escort mission's protected ship).
  */
 export type VesselClass = 'container' | 'cruise' | 'tanker';

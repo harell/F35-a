@@ -969,7 +969,7 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     const oor = cueTexts({ bombAway: true });
     expect(oor).toContain('BOMB AWAY');
     expect(oor).not.toContain('OUT OF RANGE');
-    // a second bomb is still cued (a corvette takes two StormBreakers)
+    // a second bomb is still cued (a target can take two StormBreakers)
     const again = cueTexts({ inRange: true, timeToRelease: 0, bombAway: true });
     expect(again).toContain('IN RANGE');
     expect(again).not.toContain('BOMB AWAY');

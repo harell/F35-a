@@ -10,3 +10,6 @@ dist-artifact
 
 # Python bytecode (tools/)
 __pycache__/
+
+# Agents' git worktrees (Claude Code)
+.claude/worktrees/

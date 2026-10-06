@@ -29,15 +29,16 @@ export interface ShipDims {
 }
 
 /** Model dimensions (render/models/ground.ts builds the hulls from these). */
-export const SHIP_DIMS: Record<VesselClass | 'corvette', ShipDims> = {
+export const SHIP_DIMS: Record<VesselClass, ShipDims> = {
   container: { length: 270, beam: 34, height: 48, deck: 12, funnel: [0, 36, 111] },
   cruise: { length: 290, beam: 36, height: 50, deck: 14, funnel: [0, 50.8, 60] },
   tanker: { length: 250, beam: 44, height: 42, deck: 9, funnel: [0, 37, 106] },
-  corvette: { length: 72, beam: 10.4, height: 27, deck: 4.4, funnel: null },
 };
 
+/** Dimensions of a ship's class (every 'ship' has one: World.spawnGround enforces it). */
 export function shipDims(vessel: VesselClass | null | undefined): ShipDims {
-  return SHIP_DIMS[vessel ?? 'corvette'];
+  if (!vessel) throw new Error('a ship needs a VesselClass');
+  return SHIP_DIMS[vessel];
 }
 
 /** The entity fields the motion needs (a GroundTargetEntity of type 'ship'). */

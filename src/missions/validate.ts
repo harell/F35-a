@@ -177,6 +177,7 @@ export function validateMission(def: MissionDef): string[] {
     g.path?.forEach((q, i) => inWorld(q.x, q.z, `ground ${g.id} path ${i}`));
     checkCond(g.spawn, `ground ${g.id}`);
     if (g.vessel && g.type !== 'ship') err(`ground ${g.id} has a vessel class but is not a ship`);
+    if (g.type === 'ship' && !g.vessel) err(`ground ${g.id}: a ship needs a vessel class`);
     if (g.hitsToSink !== undefined && (!g.vessel || !(g.hitsToSink >= 1))) err(`ground ${g.id}: hitsToSink needs a vessel class and must be ≥ 1`);
     if (g.hitsToSink !== undefined && g.team !== 'neutral') err(`ground ${g.id}: hitsToSink needs team 'neutral' (only a civil ship takes several hits)`);
     if (g.chase !== undefined && g.type !== 'suicide_boat') err(`ground ${g.id}: only a suicide boat chases`);

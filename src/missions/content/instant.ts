@@ -209,7 +209,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       ground.push(
         target('fuel1', 'target', 'fuel', { x: lay.target.x - 120, z: lay.target.z }),
         target('fuel2', 'target', 'fuel', { x: lay.target.x + 120, z: lay.target.z + 60 }),
-        // a hangar, not a bunker: one GBU-53 from the SEAD loadout kills it (a bunker takes two, or one JDAM)
+        // a hangar: one GBU-53 from the SEAD loadout kills it
         target('hangar', 'target', 'hangar', { x: lay.target.x, z: lay.target.z + 260 }),
       );
       objectives.push(

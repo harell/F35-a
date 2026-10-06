@@ -28,10 +28,10 @@ export interface GroundTargetData {
 }
 
 export const GROUND_TARGET_DATA: Record<GroundTargetType, GroundTargetData> = {
-  bunker: { radius: 22, health: 260, explosion: 'huge', naval: false },
   fuel: { radius: 18, health: 60, explosion: 'huge', naval: false },
   hangar: { radius: 25, health: 200, explosion: 'huge', naval: false },
   parked_jet: { radius: 9, health: 40, explosion: 'large', naval: false },
+  // a ship's radius and hit points come from its class (VESSEL_DATA); these are never used
   ship: { radius: 60, health: 400, explosion: 'huge', naval: true },
   // IRGC Navy fast boats (sim/boats.ts): small, unarmoured, a short gun burst sinks one
   suicide_boat: { radius: 8, health: 40, explosion: 'huge', naval: true }, // ~16 m, packed with explosive

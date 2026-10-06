@@ -21,7 +21,6 @@ export const SAM_PAD_RADIUS: Record<SamType, number> = {
 };
 
 export const GROUND_PAD_RADIUS: Record<GroundTargetType, number> = {
-  bunker: 70,
   fuel: 60,
   hangar: 80,
   parked_jet: 35,

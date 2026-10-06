@@ -148,7 +148,7 @@ describe('strike_maritime: all eight StormBreakers release', () => {
   it('eight designated boats, eight releases, then the jet is out of GBU-53/B', () => {
     const w = createSimWorld({ terrain: new FlatTerrain(-20), difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(5) });
     const boats = Array.from({ length: 8 }, (_, i) =>
-      w.spawnGround({ type: 'ship', team: 'red', position: new Vector3((i - 3.5) * 600, 0, 0), heading: 0, name: `Boat ${i + 1}` }),
+      w.spawnGround({ type: 'missile_boat', team: 'red', position: new Vector3((i - 3.5) * 600, 0, 0), heading: 0, name: `Boat ${i + 1}` }),
     );
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 8_000, 18_000), heading: 0, speed: 250, loadout: FULL });
     const launches: MissileEntity[] = [];

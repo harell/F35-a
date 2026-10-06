@@ -42,7 +42,6 @@ export const SAM_LABEL: Record<SamType, string> = {
 };
 
 export const GROUND_LABEL: Record<GroundTargetType, string> = {
-  bunker: 'BUNKER',
   fuel: 'FUEL DEPOT',
   hangar: 'HAS',
   parked_jet: 'JET',
