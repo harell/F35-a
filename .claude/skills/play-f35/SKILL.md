@@ -100,6 +100,7 @@ npx vite --config vite.e2e.config.ts --port 5190 &       # stable dev server for
 ## Learned
 
 <!-- Dated one-liners appended by /playtest's efficiency retro. Keep only durable lessons; delete ones the code has made untrue. -->
+- 2026-10-06: Judge HUD clutter only with `browser-run.mjs --hudclock`: without it the mission title, radio box and objectives stay as at t = 0 in every shot. `--weapon=gbu53` reselects a weapon at each checkpoint (the autopilot picks its own, often the gun). The desktop keyboard legend hides on a wall-clock timer, so it shows in every headless shot: not a finding.
 - 2026-10-05: The bot can't fly under 70 m at speed: the autopilot's terrain-safety buffer (`src/ai/pilot/safety.ts`, 35 m + 0.1 s × speed) keeps it above the SA-6's 80 m floor much of the time. A human can fly lower; read a low-level probe's losses with that in mind.
 - 2026-10-05: An AARGM fired from far out (10–12 km) at a disciplined SA-6 mostly just silences it for a few seconds (`armDiscipline`); fired inside ~7 km and followed straight by the attack, g03's intended path went from 0/6 to 6/8 on Pilot (#198).
 - 2026-10-02: Browser: page load ~7 s, `simulate(180)` ~1.1 s, one screenshot ~4.5 s. Screenshots dominate a browser session; take them only at the checkpoints the charter needs.

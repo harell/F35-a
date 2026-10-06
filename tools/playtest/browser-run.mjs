@@ -11,6 +11,7 @@
  *       [--difficulty=pilot] [--autopilot=fighter|wingman|interceptor|off] [--controls='{"throttle":1}'] [--seed=7]
  *       [--device=phone|desktop] [--base=http://localhost:5190/] [--out=e2e/screenshots/playtest]
  *       [--tod=dawn|day|dusk|night] [--weather=clear|scattered|overcast]   (Instant Action ids, first mission)
+ *       [--hudclock] [--weapon=gbu53]
  *
  * --at: game-time checkpoints in seconds (default 0,60,180). Output: <out>/<mission>-<t>s.png per
  * checkpoint, one JSON line per checkpoint (state, objectives, errors so far) and timings, so the
@@ -29,6 +30,10 @@
  * first.
  * --text: also record every string the HUD draws (canvas fillText) over 8 frames at each checkpoint, as
  * `hudText`, so a blinking cue (IN RANGE, SHOOT) is caught even when a screenshot lands on its off phase.
+ * --hudclock: step the HUD's clock with the sim (`simulate(N, { hud: true })`), so timed elements (the
+ * mission title, radio, objectives, hints) have faded as they would by then. Without it they stay as
+ * at t = 0: judge clutter only with it.
+ * --weapon: select this weapon after the start (and again at each checkpoint: the autopilot picks its own).
  * Exit code 1 on page errors or if a mission never starts.
  */
 import { chromium } from 'playwright-core';
@@ -133,10 +138,16 @@ for (const [k, mission] of missions.entries()) {
   let simT = 0;
   for (const target of at) {
     if (target > simT) {
-      const state = await page.evaluate((s) => window.__f35.simulate(s), target - simT);
+      const state = await page.evaluate(({ s, hud }) => window.__f35.simulate(s, hud ? { hud: true } : undefined), { s: target - simT, hud: !!args.hudclock });
       simT = target;
       lap('simulate');
       if (state?.missionState !== 'running') console.error(`${mission}: mission ${state?.missionState} at ${state?.time?.toFixed(0)} s`);
+    }
+    if (args.weapon) {
+      await page.evaluate((wpn) => {
+        const w = window.__f35.game.session.world;
+        w.combat.selectWeapon(w.player, wpn, w);
+      }, args.weapon);
     }
     await frames(5);
     let file = null;
