@@ -360,23 +360,41 @@ function threatRank(ctx: CombatCtx, ac: AircraftEntity, id: number): number {
 }
 
 /**
- * Designation priority of a contact (higher first), or NaN if not eligible in the current mode.
+ * Which contacts a designation step may pick: `air` (A/A missiles; the auto-designation and the shoot
+ * list also use it with the gun), `ground` (A/G weapons) or `all` (TGT with the gun: it shoots both).
+ */
+type Scope = 'air' | 'ground' | 'all';
+
+/** The auto-designation's scope: the radar mode (the gun's ACM mode boxes air tracks only). */
+function modeScope(ac: AircraftEntity): Scope {
+  return isAirMode(ac) ? 'air' : 'ground';
+}
+
+/** TGT's scope: the selected weapon's targets, every target with the gun. */
+function cycleScope(ac: AircraftEntity): Scope {
+  return ac.selectedWeapon === 'gun' ? 'all' : modeScope(ac);
+}
+
+/**
+ * Designation priority of a contact (higher first), or NaN if outside `scope`.
  * A/A: threat to us › in front (±60°) › range. A/G: (emitting, with AARGM) › in front › target of an
  * active primary objective (`objective`, set by the mission runner: the c06 corvettes before the
- * Shilka on the way, the c03 SA-6) › range. Requires _fwd = nose of `ac`.
+ * Shilka on the way, the c03 SA-6) › range. All (the gun): in front (±60°) › range, air and ground
+ * alike. Civil traffic ranks behind every hostile in each. Requires _fwd = nose of `ac`.
  */
 const NEUTRAL_RANK_PENALTY = 1e12;
 
-function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): number {
+function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact, scope: Scope): number {
   if (c.team === ac.team) return NaN;
-  const air = isAirMode(ac);
+  const air = scope === 'all' ? c.entityKind === 'aircraft' : scope === 'air';
   if (air !== (c.entityKind === 'aircraft')) return NaN;
   _rel.subVectors(c.position, ac.position);
   const d = Math.max(1, _rel.length());
-  const inFront = _fwd.dot(_rel) / d >= (air ? 0.5 : 0.7) ? 1 : 0;
+  const inFront = _fwd.dot(_rel) / d >= (air || scope === 'all' ? 0.5 : 0.7) ? 1 : 0;
   // civil traffic (airliners, merchant ships) can be designated (tap or TGT cycling) but always
   // ranks behind every hostile
   const neutral = c.team === 'neutral' ? NEUTRAL_RANK_PENALTY : 0;
+  if (scope === 'all') return inFront * 1e7 - d - neutral;
   if (air) return threatRank(ctx, ac, c.id) * 1e9 + inFront * 1e7 - d - neutral;
   const e = ctx.world.getEntity(c.id);
   const emitting = e && e.kind === 'sam' && e.radarOn ? 1 : 0;
@@ -384,12 +402,12 @@ function candidateKey(ctx: CombatCtx, ac: AircraftEntity, c: TrackContact): numb
   return (ac.selectedWeapon === 'aargm' ? emitting * 1e9 : 0) + inFront * 1e7 + objective * 1e6 - d - neutral;
 }
 
-/** Candidates for designation in the current mode, sorted by priority (allocates; input-driven). */
-function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): TrackContact[] {
+/** Candidates for designation in `scope`, sorted by priority (allocates; input-driven). */
+function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, scope: Scope): TrackContact[] {
   forwardOf(ac.quaternion, _fwd);
   const list: { c: TrackContact; key: number }[] = [];
   for (const c of st.contacts.values()) {
-    const key = candidateKey(ctx, ac, c);
+    const key = candidateKey(ctx, ac, c, scope);
     if (!Number.isNaN(key)) list.push({ c, key });
   }
   list.sort((a, b) => b.key - a.key);
@@ -415,7 +433,7 @@ export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: numbe
   const fired = ctx.world.getEntity(firedAt);
   if (!fired || fired.kind !== 'aircraft' || !fired.oneWay) return;
   const st = acState(ac);
-  for (const c of candidates(ctx, ac, st)) {
+  for (const c of candidates(ctx, ac, st, 'air')) {
     if (c.id === firedAt || c.team === 'neutral' || c.entityKind !== 'aircraft' || c.lastSeen < ctx.time - 1.5) continue;
     if (engagedBy(ctx, ac, c.id)) continue;
     setDesignation(ctx, ac, c.id, true);
@@ -424,7 +442,8 @@ export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: numbe
 }
 
 /**
- * TGT button (LOCK / NEXT): with an unlocked, un-commanded TD box (the auto-designated primary
+ * TGT button (LOCK / NEXT), stepping through the selected weapon's targets: air with an A/A missile,
+ * ground with an A/G weapon, both with the gun (nearest in front first). With an unlocked, un-commanded TD box (the auto-designated primary
  * threat) the press commands the lock on THAT contact. A press while locking / locked moves the
  * designation to the next candidate (dropping the lock) and commands a lock on it. With a single
  * candidate it toggles: locked / locking → break lock (back to a silent TWS track). NEXT skips
@@ -432,7 +451,7 @@ export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: numbe
  */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
-  const all = candidates(ctx, ac, st);
+  const all = candidates(ctx, ac, st, cycleScope(ac));
   if (all.length === 0) return;
   const des = ac.radar.designatedId;
   const free = all.filter((c) => c.id === des || !engagedBy(ctx, ac, c.id));
@@ -505,7 +524,7 @@ function autoDesignate(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState): v
   let best = -Infinity;
   for (const k of st.contacts.values()) {
     if (k.team === 'neutral') continue; // never box an airliner / civil ship on our own
-    const key = candidateKey(ctx, ac, k);
+    const key = candidateKey(ctx, ac, k, modeScope(ac));
     if (key > best) {
       best = key;
       c = k;

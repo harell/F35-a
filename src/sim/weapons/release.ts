@@ -11,6 +11,8 @@
  *                         (GPS / SDB II: the range only, not the HUD cue's cone or turn circle; a
  *                         player JDAM may go 1.1 × past it on Recruit / Pilot, see gpsReleasePad)
  *  AARGM-ER               needs an emitting radar in its seeker field (or a designated known SAM)
+ *  'NO TARGET' with the box on the other kind of target (air vs surface) names it instead:
+ *  'AIR TGT: GUN OR A-A' / 'GND TGT: GUN OR A-G'
  * Internal stores: bay doors open first (0 → 1 over ~0.35 s, release at > 0.9, close ~1.5 s
  * after) — the authentic F-35 release delay. External pylons release immediately.
  */
@@ -69,6 +71,18 @@ function hostileAircraft(e: AnyEntity | null, ac: AircraftEntity): e is Aircraft
   return !!e && e.alive && e.kind === 'aircraft' && e.team !== ac.team;
 }
 
+/**
+ * The 'NO TARGET' denial, named when the box is on the wrong kind of target for the weapon (an A/G
+ * weapon on an airliner, an A/A missile on a ship), so the player knows to change weapon, not target.
+ */
+function noTarget(ctx: CombatCtx, ac: AircraftEntity, weapon: WeaponId, id: number | null, airWeapon: boolean): null {
+  const e = ctx.world.getEntity(id);
+  if (e && e.alive && e.team !== ac.team && (e.kind === 'aircraft') !== airWeapon && (e.kind === 'aircraft' || e.kind === 'ground' || e.kind === 'sam')) {
+    return deny(ctx, ac, weapon, airWeapon ? 'GND TGT: GUN OR A-G' : 'AIR TGT: GUN OR A-A');
+  }
+  return deny(ctx, ac, weapon, 'NO TARGET');
+}
+
 /** Best emitter for the AARGM seeker: designated site first, else emitting radars within ±45° of the nose. */
 function armTarget(ctx: CombatCtx, ac: AircraftEntity, def: { seekerFov: number; maxRange: number }, requested: number | null): AnyEntity | null {
   const world = ctx.world;
@@ -121,7 +135,7 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
     case 'active_radar':
     case 'semi_active': {
       const t = world.getEntity(wantTargetId);
-      if (!hostileAircraft(t, ac)) return deny(ctx, ac, weapon, 'NO TARGET');
+      if (!hostileAircraft(t, ac)) return noTarget(ctx, ac, weapon, wantTargetId, true);
       const c = st.contacts.get(t.id);
       const fresh = !!c && c.lastSeen >= ctx.time - 1.5;
       if (def.guidance === 'semi_active' ? lockedTarget !== t.id : !fresh) return deny(ctx, ac, weapon, 'NO LOCK');
@@ -148,7 +162,7 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
       }
       if (!t) {
         const any = world.getEntity(requested ?? ac.radar.designatedId);
-        return deny(ctx, ac, weapon, hostileAircraft(any, ac) ? 'NO SEEKER' : 'NO TARGET');
+        return hostileAircraft(any, ac) ? deny(ctx, ac, weapon, 'NO SEEKER') : noTarget(ctx, ac, weapon, requested ?? ac.radar.designatedId, true);
       }
       const range = t.position.distanceTo(ac.position);
       if (range < def.minRange) return deny(ctx, ac, weapon, 'MIN RANGE');
@@ -160,7 +174,7 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
     }
     case 'anti_radiation': {
       const t = armTarget(ctx, ac, def, requested);
-      if (!t) return deny(ctx, ac, weapon, 'NO TARGET');
+      if (!t) return noTarget(ctx, ac, weapon, requested ?? ac.radar.designatedId, false);
       const range = t.position.distanceTo(ac.position);
       launchZoneFor(ctx, ac, weapon, t, hooks, _zone);
       if (range > Math.max(_zone.rMax, def.maxRange * 0.5) * 1.3) return deny(ctx, ac, weapon, 'OUT OF RANGE');
@@ -193,7 +207,7 @@ export function fire(ctx: CombatCtx, ac: AircraftEntity, hooks: ZoneHooks, weapo
       // datalinked stand-off bomb: needs a designated live surface target (civil ships too, as for
       // the GPS bombs); no CCIP mode
       const t = world.getEntity(requested ?? ac.radar.designatedId);
-      if (!t || !t.alive || (t.kind !== 'ground' && t.kind !== 'sam') || t.team === ac.team) return deny(ctx, ac, weapon, 'NO TARGET');
+      if (!t || !t.alive || (t.kind !== 'ground' && t.kind !== 'sam') || t.team === ac.team) return noTarget(ctx, ac, weapon, requested ?? ac.radar.designatedId, false);
       const horiz = Math.hypot(t.position.x - ac.position.x, t.position.z - ac.position.z);
       const rMax = gpsMaxRange(def, ac.position.y - t.position.y, ac.velocity.length(), t.position.y);
       if (horiz > rMax * gpsReleasePad(ctx, ac, def)) return deny(ctx, ac, weapon, 'OUT OF RANGE');

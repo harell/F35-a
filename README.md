@@ -56,7 +56,7 @@ Clarity can't see inside the WebGL canvas, so the useful data is the custom even
 ## Controls
 
 **Touch (default):** throttle lever on the left (drag past the detent for afterburner; double-tap toggles MIL/AB), floating side-stick on the right.
-**FIRE** releases the selected weapon, **GUN** fires the gun, **CMS** drops flares and chaff, **WPN** cycles weapons, **TGT** designates/locks,
+**FIRE** releases the selected weapon, **GUN** fires the gun, **CMS** drops flares and chaff, **WPN** cycles weapons, **TGT** designates/locks and steps through the selected weapon's targets (air with an A/A missile, ground with an A/G weapon, both with the gun, nearest in front first),
 **CAM** changes view (long-press for padlock), **RADAR** toggles emission. Drag the empty centre of the screen to look around; tap a target box to designate it.
 
 **Keyboard:** arrows/WASD pitch & roll · Q/E yaw · Shift/Ctrl throttle · Tab afterburner · Space gun · Enter fire · R weapon · T target ·
