@@ -215,19 +215,19 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
 
 describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
   // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then
-  // the bot attacks. With the stoat (#200: a running stoat can't be bombed, so the drop waits for one
-  // of its stops), measured over 16 seeds: the straight line and both detours 0/16 on Pilot and
-  // Veteran; the intended way through (low down the Tāmaki Strait, an AARGM at the strait's boat, a
-  // second at the airstrip SA-6 from close in, then the attack at a stop) Recruit 14/16, Pilot 8/16,
-  // Veteran 4/16 (with master's AD-boat harassment on Pilot and Veteran). (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
-  // stops are the extra puzzle, and the bot pays for waiting near a live SA-6.) Bands over 6 seeds.
+  // the bot attacks the stoat, which sits at its bait station. There is no clock, so only the air
+  // defences close a route: measured over 6 seeds on Pilot, every naive route (straight, both detours,
+  // the wide way round Waiheke, above the SAMs, killing every site) 0/6, each run shot down, the wide
+  // way and kill-all after 4–7 minutes; the intended way through (low down the Tāmaki Strait, an AARGM
+  // at the strait's boat, a second at the airstrip SA-6 from close in, then the attack) Recruit 5/6,
+  // Pilot 5/6, Veteran 2/6.
   const run = (route: string, diff: Difficulty, seed: number) =>
-    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
+    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 600, probe: { kind: 'route', route } as ProbeSpec });
 
-  it('the straight line and both detours fail on Pilot', { timeout: 600_000 }, async () => {
+  it('every naive route fails on Pilot, the wide way round and kill-all included', { timeout: 900_000 }, async () => {
     const log: string[] = [];
     let won = 0;
-    for (const route of ['straight', 'north', 'south']) {
+    for (const route of ['straight', 'north', 'south', 'wide', 'killall']) {
       for (const seed of [0, 1, 2, 3]) {
         await new Promise((r) => setTimeout(r, 0));
         const r = run(route, 'pilot', seed);

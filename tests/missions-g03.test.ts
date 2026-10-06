@@ -3,8 +3,9 @@
  * one small target on the Onetangi dunes.
  *
  * The layout's promise is "no free route": the straight line crosses several threat rings, each
- * detour has its own threat and still ends inside the airstrip SA-6's ring, the wide way round is
- * slower than the clock, and the target can't be found from above the cloud. These are checked on the
+ * detour has its own threat and still ends inside the airstrip SA-6's ring, even the wide way round
+ * Waiheke crosses rings (there is no clock to rule it out), and the target can't be found from above
+ * the cloud. These are checked on the
  * real LINZ coast; the bot's route probes (#198) measure the same thing in flight.
  */
 import { describe, expect, it } from 'vitest';
@@ -19,9 +20,7 @@ import type { TerrainQuery } from '../src/sim/api';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import { rcsRangeFactor } from '../src/sim/sensors/signatures';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, terrainPadsFor, validateMission } from '../src/missions';
-import { G03, G03_BOATS, G03_CLOCK, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_SITES, G03_STOAT } from '../src/missions/content/irgcWaiheke';
-import { stoatArrival } from '../src/sim/stoat';
-import { Vector3 } from 'three';
+import { G03, G03_BOATS, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_SITES, G03_STOAT } from '../src/missions/content/irgcWaiheke';
 import type { XZ } from '../src/missions/schema';
 import { forceDestroy } from '../src/game/forceDestroy';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
@@ -30,8 +29,6 @@ import { allFeatures } from '../src/world/scenery/Scenery';
 
 const DT = 1 / 60;
 const PILOT = DIFFICULTIES.pilot;
-/** Cruise (m/s, ~480 kt; docs/ARCHITECTURE.md "Typical cruise"). */
-const CRUISE = 250;
 /** A clean F-35A's head-on RCS (m², sensors/signatures.ts). */
 const F35_RCS = 0.001;
 
@@ -147,13 +144,12 @@ describe('g03 Stoat of Emergency: content', () => {
     expect(radars).toBeGreaterThan(l.stores.find((s) => s.weapon === 'aargm')!.count * 3);
   });
 
-  it('is overcast with the deck the rest of the game draws, and starts on a 0.55 fuel state with a 4:00 clock', () => {
+  it('is overcast with the deck the rest of the game draws, and starts on a 0.55 fuel state with no clock', () => {
     expect(G03.weather).toBe('overcast');
     expect(cloudBase(G03.weather)).toBe(OVERCAST_DECK.altitude);
     expect(G03_REVEAL.below).toBe(OVERCAST_DECK.altitude);
     expect(G03.player.fuel).toBe(0.55);
-    expect(G03.timeLimit).toBe(G03_CLOCK);
-    expect(G03_CLOCK).toBe(240);
+    expect(G03.timeLimit).toBeUndefined();
   });
 });
 
@@ -205,10 +201,10 @@ describe('g03: the layout on the real LINZ coast', () => {
     for (const r of ['north', 'south']) expect(length(ROUTES[r]), r).toBeGreaterThan(length(ROUTES.straight));
   });
 
-  it('the wide way round Waiheke takes longer than the clock at cruise', () => {
-    expect(length(ROUTES.wide) / CRUISE).toBeGreaterThan(G03_CLOCK);
-    // while the straight line leaves time for the fight
-    expect(length(ROUTES.straight) / CRUISE).toBeLessThan(G03_CLOCK * 0.8);
+  it('the wide way round Waiheke is no free route either: with no clock, its rings close it', () => {
+    expect(crossed(ROUTES.wide)).toEqual(expect.arrayContaining(['ad_s', 'ad_n2', 'strip_sa6', 'ridge_zsu']));
+    // and it is the long way: more than half as far again as the straight line
+    expect(length(ROUTES.wide)).toBeGreaterThan(1.5 * length(ROUTES.straight));
     // the wide route stays inside the area of operations (±38 km)
     for (const p of ROUTES.wide) expect(Math.max(Math.abs(p.x), Math.abs(p.z))).toBeLessThan(38_000);
   });
@@ -219,7 +215,7 @@ describe('g03: the layout on the real LINZ coast', () => {
   });
 });
 
-describe('g03: the target, the cloud and the clock', () => {
+describe('g03: the target and the cloud', () => {
   it('the target is not revealed above the cloud, even straight over the nest', { timeout: 60_000 }, () => {
     const m = setup();
     m.tick(3, { x: G03_NEST.x, y: OVERCAST_DECK.altitude + 400, z: G03_NEST.z });
@@ -248,28 +244,14 @@ describe('g03: the target, the cloud and the clock', () => {
     m.runner.dispose?.();
   });
 
-  it('undisturbed, the stoat reaches the nest just inside 4:00 and the sortie is lost', { timeout: 60_000 }, () => {
+  it('the stoat stays at its bait station, and waiting does not end the sortie', { timeout: 60_000 }, () => {
     const m = setup();
-    // under the cloud near the nest from the start (revealed at once), unhurt
-    for (let i = 0; i < 260 * 60 && m.runner.state === 'running'; i++) {
-      m.tick(1 / 60, { x: G03_NEST.x - 4_000, y: 1_200, z: G03_NEST.z });
-    }
-    const at = m.world.time;
-    expect(m.runner.state).toBe('failed');
-    expect(m.runner.result(m.world).reason).toBe('The stoat reached the nest');
-    expect(at).toBeGreaterThan(G03_CLOCK - 20);
-    expect(at).toBeLessThan(G03_CLOCK);
-    expect(stoatArrival({ route: [G03_STOAT.start, ...G03_STOAT.stations, G03_NEST].map((p) => new Vector3(p.x, 0, p.z)), stations: [1, 2, 3], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime })).toBeLessThan(G03_CLOCK);
-    m.runner.dispose?.();
-  });
-
-  it('leaving the target alive fails the mission at 4:00', { timeout: 60_000 }, () => {
-    const m = setup();
-    // parked far from everything (south-west, under the cloud): nothing shoots, nothing is revealed
-    m.tick(G03_CLOCK - 1, { x: -30_000, y: 1_000, z: 30_000 });
+    // under the cloud near the nest from the start (revealed at once), unhurt, for six minutes
+    m.tick(360, { x: G03_NEST.x - 4_000, y: 1_200, z: G03_NEST.z });
     expect(m.runner.state).toBe('running');
-    m.tick(2, { x: -30_000, y: 1_000, z: 30_000 });
-    expect(m.runner.state).toBe('failed');
+    const [t] = m.targets();
+    expect(t.alive).toBe(true);
+    expect(Math.hypot(t.position.x - G03_STOAT.station.x, t.position.z - G03_STOAT.station.z)).toBeLessThan(0.5);
     m.runner.dispose?.();
   });
 });
