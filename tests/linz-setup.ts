@@ -12,6 +12,7 @@ import { setAucklandRoads } from '../src/world/scenery/aucklandRoads';
 import { setAucklandBuildings } from '../src/world/scenery/aucklandBuildings';
 import { setAucklandOsm } from '../src/world/scenery/aucklandOsm';
 import { setAucklandPort } from '../src/world/scenery/aucklandPort';
+import { setTamakiWaterfront } from '../src/world/scenery/tamakiWaterfront';
 import { setAucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
 
 // node:fs / node:zlib without @types/node (the project doesn't ship node typings): the surface used here
@@ -47,3 +48,7 @@ setAucklandPort(PORT_BYTES);
 export const NEIGHBOURHOODS_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/scenery/data/auckland-neighbourhoods.bin', import.meta.url)));
 export const NEIGHBOURHOODS_BYTES = new Uint8Array(zlib.gunzipSync(NEIGHBOURHOODS_GZ));
 setAucklandNeighbourhoods(NEIGHBOURHOODS_BYTES);
+
+export const WATERFRONT_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/scenery/data/tamaki-waterfront.bin', import.meta.url)));
+export const WATERFRONT_BYTES = new Uint8Array(zlib.gunzipSync(WATERFRONT_GZ));
+setTamakiWaterfront(WATERFRONT_BYTES);

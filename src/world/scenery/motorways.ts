@@ -130,6 +130,11 @@ export interface RoadPath {
   x: Float32Array;
   z: Float32Array;
   tunnel: Uint8Array;
+  /**
+   * A measured road surface (m) under each point, NaN where there is none: the ribbon rests on it (never lower than the
+   * ground) and gets no viaduct or generic lamps there (tamakiWaterfront.ts: Tāmaki Drive on its causeway and seawall).
+   */
+  floor?: Float32Array;
 }
 
 const SAMPLE = 30;
@@ -389,7 +394,9 @@ export class RoadNetwork {
       // Water under the centre line → deck height profile (smoothed ramps). Railways stay low: on the
       // ground, or on a causeway just above the water (RAIL_CAUSEWAY_Y), so no deck.
       const wet = new Float32Array(n);
-      for (let i = 0; i < n; i++) wet[i] = height(p.x[i], p.z[i]) < WET ? 1 : 0;
+      const floor = p.floor;
+      const floored = (k: number) => !!floor && !Number.isNaN(floor[k]);
+      for (let i = 0; i < n; i++) wet[i] = !floored(i) && height(p.x[i], p.z[i]) < WET ? 1 : 0;
       const deck = new Float32Array(n);
       for (let i = 0; i < n && !rail; i++) {
         let w = 0;
@@ -431,7 +438,7 @@ export class RoadNetwork {
           const x = p.x[i] + nx * off;
           const z = p.z[i] + nz * off;
           const g = height(x, z) + 0.45;
-          const y = rail ? Math.max(g, RAIL_CAUSEWAY_Y) : deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
+          const y = rail ? Math.max(g, RAIL_CAUSEWAY_Y) : floored(i) ? Math.max(g, floor![i] + 0.45) : deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
           pos.push(x, y, z);
           uv.push((k / 2) * p.span, s / 40);
         }
@@ -471,7 +478,7 @@ export class RoadNetwork {
             B.box(f, 0, 0, 0, p.width * 0.8, y - 2 - (Math.min(0, height(p.x[i], p.z[i])) - 2), 3, 0xa8a59c, 0xa8a59c);
           }
         }
-        if (lamps && p.kind !== 'rail' && s >= nextLamp) {
+        if (lamps && p.kind !== 'rail' && s >= nextLamp && !floored(i)) {
           nextLamp = s + lampStep;
           const side = lampN++ % 2 === 0 ? 1 : -1;
           const x = p.x[i] + nx * (hw + 1) * side;

@@ -9,13 +9,14 @@ import { Color } from 'three';
 import type { TheaterId } from '../../core/types';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { VegetationField } from '../terrain/vegetation';
-import { TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
 import { FRONT_HOUSE, type FrontageMap, type FrontHouse } from './frontage';
 import { canopyAt, neighbourhoodAt, type Neighbourhood } from './aucklandNeighbourhoods';
 import { pointInRing } from './cbdStreets';
+import { inWaterfrontStrip, waterfrontTreesIn } from './tamakiWaterfront';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 import { LU_COMMERCIAL, LU_INDUSTRIAL, LU_PITCH, LU_SCHOOL, landUseAt, luOpen, luSheds, type LandUse } from './aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint, shedHeight, shedRoofOf } from './landUseLots';
@@ -168,6 +169,8 @@ export class TreeSource implements ScatterSource {
         const h3 = hash2(gx, gz, seed + 2);
         const x = (gx + 0.1 + 0.8 * h1) * sp;
         const z = (gz + 0.1 + 0.8 * h2) * sp;
+        // the Tāmaki Drive waterfront grows its measured trees (below)
+        if (inWaterfrontStrip(x, z)) continue;
         const nb = this.nbs ? neighbourhoodAt(x, z, this.nbs) : null;
         if (nb) {
           this.nbTree(nb, x, z, gx, gz, out);
@@ -205,6 +208,16 @@ export class TreeSource implements ScatterSource {
         arr.push(x, hf.meshHeightAt(x, z) - 0.3, z, h3 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4));
       }
     }
+    // the Tāmaki Drive waterfront's LiDAR trees, where they stand (tamakiWaterfront.ts): crown width from the measured
+    // radius, shade from the aerial's brightness over the crown
+    waterfrontTreesIn(x0, z0, size, (t) => {
+      const kind = t.palm ? TREE_PALM : TREE_BROADLEAF;
+      const lum = (((t.color >> 16) & 255) + ((t.color >> 8) & 255) + (t.color & 255)) / 3;
+      _c.setScalar(Math.max(0.78, Math.min(1.12, 0.8 + (lum - 70) / 160)));
+      const w = t.palm ? Math.min(2 * t.radius, 8) : 2 * t.radius;
+      const g = Math.max(hf.meshHeightAt(t.x, t.z), t.ground);
+      out.data[kind].push(t.x, g - 0.3, t.z, hash2(Math.round(t.x), Math.round(t.z), seed + 5) * 40, w, t.height, w, _c.r, _c.g, _c.b, hash2(Math.round(t.x), Math.round(t.z), seed + 4));
+    });
   }
 }
 

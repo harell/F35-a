@@ -34,6 +34,7 @@ import { aucklandBuildings } from './aucklandBuildings';
 import { LotMask, maskFromRings, urbanBounds } from './lotMask';
 import { FRONT_BAND, FrontageMap } from './frontage';
 import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
+import { applyWaterfrontFloor, buildTamakiWaterfront, waterfrontChunks } from './tamakiWaterfront';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createLogoMaterial, createRoadMaterial, createSignMaterial } from './materials';
@@ -192,6 +193,8 @@ export class Scenery {
       const rails = o.quality.railways ? clipRailToLand(aucklandRailPaths(), height) : [];
       const roads = new RoadNetwork([...aucklandRoadPaths(), ...rails]);
       this.roads = roads;
+      // Tāmaki Drive rests on its measured road (no viaduct over the causeway the terrain has as sea)
+      applyWaterfrontFloor(roads.paths);
       // no painted streets or houses through a stadium (its stands are 3D): its site plus a street's width
       this.siteMask = maskFromRings(siteRings(), 8);
       // the arterials' frontage: a row of lots facing the road along both sides (frontage.ts)
@@ -331,6 +334,10 @@ export class Scenery {
       // the rooftop helipads on buildings the game does not model yet stand on a plain block (#125)
       buildHelipadDecks(sites, height, roofLookup(aucklandBuildings(), height));
       addMesh(sites, 'akl-sites', aerialMat ?? buildingMat);
+      // the Tāmaki Drive waterfront (tamakiWaterfront.ts): paths, seawall, railings, lamp poles; a mesh per 1.5 km
+      const wf = waterfrontChunks();
+      buildTamakiWaterfront(wf.get, o.lights > 0.01 ? lights : null, height, detail);
+      for (const [k, b] of wf.all) addMesh(b, `akl-tamaki-waterfront-${k}`);
     }
 
     // Decal meshes
