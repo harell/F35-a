@@ -174,12 +174,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. Airliners climb out over the city and ships sail the harbour: civilians going about their day, boxed CIV on the HUD.',
         // (playtest 1.1-d: until the suburbs' streets are baked from LINZ data, say so)
         "The CBD, the motorways and the main roads follow Auckland's real streets. The suburbs between them are stylised, so your own street isn't there yet.",
-        'The jet is clean, radar off, for the slowest and quietest flight. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',
+        'The jet is clean, radar off, for the slowest and quietest flight. Pull the throttle back and the autothrottle holds 150 knots (A/T by the speed box) so the jet never sinks. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',
         'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
       break;
     }
     case 'dogfight': {
+      // an AIM-9X for the close fight by default (#116, the pilot's suggestion 5); the stealth and
+      // Beast loads stay on offer
+      loadout = 'a2a_dogfight';
+      allowed = ['a2a_dogfight', 'a2a_stealth', 'a2a_beast'];
       // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
       // the player has fired.
       if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
@@ -190,7 +194,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
         n >= 3 ? 'Viper 2 is on your wing It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
-        'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
+        'The default load adds an AIM-9X on each outer pylon for the close fight, at a little stealth. Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
       script.parTime = 180 + n * 45;

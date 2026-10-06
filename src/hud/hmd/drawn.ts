@@ -17,6 +17,8 @@ export const drawnLast = {
   frame: -1,
   /** Gun LCOS pipper centre and ring radius (CSS px), when drawn this frame. */
   pipper: { drawn: false, x: 0, y: 0, r: 0 },
+  /** EEGS range bar across the gun funnel at the target's range: its centre, the funnel's width there (CSS px; the bar is drawn at least 22 u long) and the range (m). */
+  funnelBar: { drawn: false, x: 0, y: 0, len: 0, range: 0 },
   /**
    * The steering waypoint (mission steering cue): its label, whether its diamond was drawn and where
    * (centre), whether its name was printed beside it and where (text centre), and `next`: the fixed
@@ -31,6 +33,7 @@ export const drawnLast = {
 export function beginDrawn(frame: number): void {
   drawnLast.frame = frame;
   drawnLast.pipper.drawn = false;
+  drawnLast.funnelBar.drawn = false;
   drawnLast.steer.label = '';
   drawnLast.steer.diamond = false;
   drawnLast.steer.named = false;
@@ -44,6 +47,15 @@ export function notePipper(x: number, y: number, r: number): void {
   p.x = x;
   p.y = y;
   p.r = r;
+}
+
+export function noteFunnelBar(x: number, y: number, len: number, range: number): void {
+  const b = drawnLast.funnelBar;
+  b.drawn = true;
+  b.x = x;
+  b.y = y;
+  b.len = len;
+  b.range = range;
 }
 
 /** The steering waypoint this frame (label), before anything of it is drawn. */

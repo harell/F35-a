@@ -45,8 +45,10 @@ export interface SpeedRows {
   /** Fuel: at joker and below. */
   fuel: boolean;
   brake: boolean;
+  /** 'A/T': the free-flight autothrottle is holding the speed floor (#113). */
+  at: boolean;
 }
-const rows: SpeedRows = { g: false, aoa: false, thr: false, fuel: false, brake: false };
+const rows: SpeedRows = { g: false, aoa: false, thr: false, fuel: false, brake: false, at: false };
 
 function gOver(fl: HudFrame['p']['flight']): boolean {
   return fl.gLoad > G_SHOW || fl.gLoad < -1;
@@ -71,13 +73,14 @@ export function speedRows(f: HudFrame): SpeedRows {
   rows.thr = !!fl && (!f.ctx?.touchControls || inAfterburner(p));
   rows.fuel = !!fl && fuelFraction(p) < JOKER_FRACTION;
   rows.brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
+  rows.at = !!fl && fl.autoThrottle;
   return rows;
 }
 
 /** Number of rows the speed column draws under its box. */
 export function speedRowCount(f: HudFrame): number {
   const r = speedRows(f);
-  return (r.g ? 1 : 0) + (r.aoa ? 1 : 0) + (r.thr ? 1 : 0) + (r.fuel ? 1 : 0) + (r.brake ? 1 : 0);
+  return (r.g ? 1 : 0) + (r.aoa ? 1 : 0) + (r.thr ? 1 : 0) + (r.fuel ? 1 : 0) + (r.brake ? 1 : 0) + (r.at ? 1 : 0);
 }
 
 /** Radar altitude below this (ft AGL) always shows; up to RALT_MAX_FT only while descending. */
@@ -589,7 +592,11 @@ export function drawSpeedColumn(f: HudFrame): void {
     colText(f, txt.fuel.get((fl.fuel * KG_TO_LB) / 1000), right, y, ff < BINGO_FRACTION ? pal.danger : pal.warn, 12, 'right');
     y += L.line;
   }
-  if (r.brake) colText(f, 'SPD BRK', right, y, pal.main, 11.5, 'right');
+  if (r.brake) {
+    colText(f, 'SPD BRK', right, y, pal.main, 11.5, 'right');
+    y += L.line;
+  }
+  if (r.at) colText(f, 'A/T', right, y, pal.main, 11.5, 'right');
 }
 
 const KG_TO_LB = 2.20462;

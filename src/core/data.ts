@@ -317,6 +317,23 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 30,
     role: 'aa',
   },
+  // Instant Action Dogfight's default (#116, the pilot's suggestion 5): the stealth air load plus an
+  // AIM-9X on each outer pylon, so a close-in missile shot doesn't need the Beast load. Two small
+  // missiles on the outboard stations cost far less stealth than Beast's four loaded pylons.
+  a2a_dogfight: {
+    id: 'a2a_dogfight',
+    name: 'Air Dominance (Dogfight)',
+    description: '4× AIM-120D internal + 2× AIM-9X on the outer pylons. A heat-seeker for the close fight, for a little stealth.',
+    rcsMultiplier: 6,
+    stores: [
+      { weapon: 'aim120', count: 4, internal: true },
+      { weapon: 'aim9x', count: 2, internal: false },
+    ],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'aa',
+  },
   strike_beast: {
     id: 'strike_beast',
     name: 'Beast Mode (Strike)',

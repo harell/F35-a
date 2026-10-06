@@ -22,6 +22,7 @@ import { edgeOfEllipse } from './projector';
 import { protectedSites } from './sites';
 import { TEST_HOOKS } from '../../core/data';
 import { noteSteer, noteSteerDiamond, noteSteerName } from './drawn';
+import { inDasWindow } from '../cockpit/das';
 
 /** Max distance (m) at which ground targets / friendlies are drawn on the HMD. */
 const GROUND_RANGE = 30_000;
@@ -64,7 +65,8 @@ function drawable(f: HudFrame): boolean {
   const sp = f.sp;
   if (!sp.front || !sp.onScreen) return false;
   if (f.mode !== 'hmd') return true;
-  if (f.cockpit && sp.y > f.L.cockpitTop + 4) return false;
+  // behind the panel: only through the DAS window (#116)
+  if (f.cockpit && sp.y > f.L.cockpitTop + 4) return inDasWindow(sp.x, sp.y);
   return sp.y > f.L.tapeY + 44 * f.L.u;
 }
 
@@ -436,7 +438,7 @@ export function drawDesignated(f: HudFrame): void {
   const { p, pen, pal, L, picks, st, occ } = f;
   const u = L.u;
   const sp = f.sp;
-  const visible = project(f, t) && sp.onScreen && !(f.mode === 'hmd' && f.cockpit && sp.y > L.cockpitTop + 4);
+  const visible = project(f, t) && sp.onScreen && !(f.mode === 'hmd' && f.cockpit && sp.y > L.cockpitTop + 4 && !inDasWindow(sp.x, sp.y));
   const dist = t.position.distanceTo(p.position);
   if (!visible) {
     drawOffscreenCue(f, t, dist);

@@ -85,6 +85,8 @@ export interface FlightState {
   mass: number;
   /** Aircraft departed / stalled this step. */
   stalled: boolean;
+  /** The free-flight under-speed autothrottle is holding the speed floor (HMD 'A/T'). */
+  autoThrottle: boolean;
   /** Control surface deflections for visuals, -1..1. Positive = trailing edge down (elevator: nose-down input => positive). */
   surfaces: { elevator: number; aileron: number; rudder: number; flaps: number; airbrake: number };
   /** Accumulated over-stress 0..1 (1 = structural damage threshold reached). */
@@ -306,6 +308,7 @@ export class AircraftEntity implements Entity {
       fuelFlow: 0,
       mass: 0,
       stalled: false,
+      autoThrottle: false,
       surfaces: { elevator: 0, aileron: 0, rudder: 0, flaps: 0, airbrake: 0 },
       overstress: 0,
       supersonic: false,

@@ -23,7 +23,7 @@ import { drawExternalBlock, drawInset, drawMissileCam } from './hmd/external';
 import { WARNING_INFO, WEAPON_BREVITY, killText } from './hmd/format';
 import { classifyHudMessage } from './hmd/feeds';
 import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, drawSpeedColumn, drawWaterline } from './hmd/flight';
-import { HudState, makeFrame, type HudMode } from './hmd/frame';
+import { HudState, makeFrame, type HudMode, type HudFrame } from './hmd/frame';
 import { hitFlash, stepGEffects } from './hmd/gEffects';
 import { computeLayout, makeLayout } from './hmd/layout';
 import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, killFeedAt, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
@@ -53,6 +53,7 @@ import {
 import { damageHeight, drawDamage, drawGcas, drawIncoming, drawRwrEdge, drawWarningBand, reserveIncoming, reserveWarningBand } from './hmd/threats';
 import { drawAim9x, drawAirToGround, drawCues, drawDlz, drawGun, drawGunCues, drawSeekerLabel, drawWeaponBlock, planCues, weaponBlockLines } from './hmd/weapons';
 import { pcdZoom } from './cockpit/zoom';
+import { dasWindow } from './cockpit/das';
 import { bandExt, clearBandExt, reserveFixedZones, reservePip, resetZoneExtents, zoneExt } from './hmd/zones';
 import { COCKPIT_REST_PITCH, TEST_HOOKS } from '../core/data';
 import { cloudBase } from '../core/weather';
@@ -86,6 +87,10 @@ export interface HudLayoutRead {
   mode: HudMode;
   /** Gun LCOS pipper: centre and ring radius (CSS px); null = not drawn. */
   pipper: { x: number; y: number; r: number } | null;
+  /** The gun funnel's EEGS range bar (#116): centre, length (CSS px) and the target range (m); null = not drawn. */
+  funnelBar: { x: number; y: number; len: number; range: number } | null;
+  /** The DAS see-through window cut through the cockpit panel (#116): its target, centre and radius; null = closed. */
+  das: { id: number; x: number; y: number; r: number } | null;
   /**
    * Steering waypoint: label, its diamond's centre (null = not drawn), its name's text centre (null = not
    * printed by it), and `next`: the fixed NEXT line (by the heading box / in the info block) names it instead.
@@ -480,6 +485,11 @@ export const createHud: CreateHud = (canvas, events) => {
         g2.save();
         g2.beginPath();
         g2.rect(0, 0, W, Math.max(0, L.cockpitTop - 2));
+        // …except through the DAS window, where the panel isn't drawn (#116)
+        if (hmd && dasWindow.active) {
+          g2.moveTo(dasWindow.x + dasWindow.r, dasWindow.y);
+          g2.arc(dasWindow.x, dasWindow.y, dasWindow.r, 0, Math.PI * 2);
+        }
         g2.clip();
         pen.reset();
       }
@@ -553,6 +563,7 @@ export const createHud: CreateHud = (canvas, events) => {
         pen.reset();
         pen.baseTransform();
         g2.globalAlpha = 1;
+        if (hmd && dasWindow.active) drawDasFrame(f);
       }
 
       let colY: number;
@@ -691,6 +702,8 @@ export const createHud: CreateHud = (canvas, events) => {
           visible,
           mode: lastMode,
           pipper: pp.drawn ? { x: r1(pp.x), y: r1(pp.y), r: r1(pp.r) } : null,
+          funnelBar: drawnLast.funnelBar.drawn ? { x: r1(drawnLast.funnelBar.x), y: r1(drawnLast.funnelBar.y), len: r1(drawnLast.funnelBar.len), range: Math.round(drawnLast.funnelBar.range) } : null,
+          das: visible && dasWindow.active ? { id: dasWindow.id, x: r1(dasWindow.x), y: r1(dasWindow.y), r: r1(dasWindow.r) } : null,
           steer: sw.label ? { label: sw.label, diamond: sw.diamond ? [r1(sw.x), r1(sw.y)] : null, name: sw.named ? [r1(sw.nameX), r1(sw.nameY)] : null, next: sw.next } : null,
           cues: drawnLast.cues.slice(0, drawnLast.cueCount).map((c) => ({ ...c, x: r1(c.x), y: r1(c.y) })),
           designated: tid == null ? null : { id: tid, rect: boxes.find((b) => b.id === tid)?.rect ?? null },
@@ -730,3 +743,15 @@ export const createHud: CreateHud = (canvas, events) => {
   }
   return hud;
 };
+
+/** The DAS window's frame: a thin ring round the hole in the panel and its 'DAS' tag on top (#116). */
+function drawDasFrame(f: HudFrame): void {
+  const { pen, pal, L } = f;
+  const d = dasWindow;
+  pen.setDash('solid');
+  pen.begin();
+  pen.circle(d.x, d.y, d.r);
+  pen.strokeGlow(pal.dim, 1.4);
+  pen.box(d.x - 16 * L.u, d.y - d.r - 8 * L.u, 32 * L.u, 15 * L.u, pal.dim, 1.2, pal.back);
+  pen.text('DAS', d.x, d.y - d.r - 0.5 * L.u, pal.main, 11, 'center');
+}

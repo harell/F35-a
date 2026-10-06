@@ -12,7 +12,7 @@ import { dlzLayout, makeDlzGeometry } from './dlz';
 import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
 import { TEST_HOOKS } from '../../core/data';
-import { noteCue, notePipper } from './drawn';
+import { noteCue, noteFunnelBar, notePipper } from './drawn';
 import { colText } from './flight';
 import { weaponMismatch } from '../../sim/weapons/fit';
 
@@ -499,6 +499,8 @@ const funnelR = new Float32Array(FUNNEL_RANGES.length * 2);
 const GUN_EFFECTIVE = 1200;
 const BULLET_SPEED = 1040;
 const WINGSPAN = 11;
+/** Shortest the EEGS range bar is drawn (× the HUD unit, px). */
+const FUNNEL_BAR_MIN = 22;
 /** The gun's closure cue ("Vc 140", knots) shows inside this range of a designated air target (m). */
 export const GUN_VC_RANGE = 3000;
 /**
@@ -649,7 +651,38 @@ export function drawGun(f: HudFrame, dirs = true): void {
     for (let i = 1; i < n; i++) g.lineTo(funnelL[i * 2], funnelL[i * 2 + 1]);
     g.moveTo(funnelR[0], funnelR[1]);
     for (let i = 1; i < n; i++) g.lineTo(funnelR[i * 2], funnelR[i * 2 + 1]);
-    pen.strokeGlow(pal.dim, 1.4);
+    // (main, not dim: in the pilot's review the dim rails didn't read as a funnel at all, #116)
+    pen.strokeGlow(pal.main, 1.4);
+    // EEGS range line: a bar across the funnel at the target's range. The bandit's wings filling the
+    // funnel where the bar sits is the firing solution, the same cue as the pipper's range arc (#116)
+    const t = f.target;
+    if (t && t.kind === 'aircraft') {
+      const rt = t.position.distanceTo(p.position);
+      const k = funnelIndexAt(rt, n);
+      if (k >= 0) {
+        const i0 = Math.floor(k);
+        const i1 = Math.min(n - 1, i0 + 1);
+        const w = k - i0;
+        const lx = funnelL[i0 * 2] + (funnelL[i1 * 2] - funnelL[i0 * 2]) * w;
+        const ly = funnelL[i0 * 2 + 1] + (funnelL[i1 * 2 + 1] - funnelL[i0 * 2 + 1]) * w;
+        const rx = funnelR[i0 * 2] + (funnelR[i1 * 2] - funnelR[i0 * 2]) * w;
+        const ry = funnelR[i0 * 2 + 1] + (funnelR[i1 * 2 + 1] - funnelR[i0 * 2 + 1]) * w;
+        // past ~300 m a fighter's wingspan is only a few px on a phone: the bar never gets shorter than
+        // BAR_MIN, with ticks at the true funnel width so the "wings fill it" read stays
+        const mx = (lx + rx) / 2;
+        const my = (ly + ry) / 2;
+        const len = Math.hypot(rx - lx, ry - ly);
+        const half = Math.max(len, FUNNEL_BAR_MIN * u) / 2;
+        const ex = len > 0.5 ? (rx - lx) / len : 1;
+        const ey = len > 0.5 ? (ry - ly) / len : 0;
+        pen.begin();
+        pen.line(mx - ex * half, my - ey * half, mx + ex * half, my + ey * half);
+        pen.line(lx + ey * 3 * u, ly - ex * 3 * u, lx - ey * 3 * u, ly + ex * 3 * u);
+        pen.line(rx + ey * 3 * u, ry - ex * 3 * u, rx - ey * 3 * u, ry + ex * 3 * u);
+        pen.strokeGlow(rt < GUN_EFFECTIVE ? pal.bright : pal.main, 2);
+        if (TEST_HOOKS) noteFunnelBar(mx, my, len, rt);
+      }
+    }
     // protected: text never lands on the funnel (one box per funnel segment)
     for (let i = 1; i < n; i++) {
       const a = i * 2;
@@ -677,6 +710,20 @@ export function drawGun(f: HudFrame, dirs = true): void {
   }
   // LCOS pipper at the lead point with a range bar
   drawPipper(f, crossX, crossY);
+}
+
+/**
+ * Fractional index into the drawn funnel points (the first `n` of FUNNEL_RANGES) of a range (m);
+ * −1 outside the drawn funnel.
+ */
+export function funnelIndexAt(range: number, n: number): number {
+  if (n < 2 || range < FUNNEL_RANGES[0] || range > FUNNEL_RANGES[n - 1]) return -1;
+  for (let i = 1; i < n; i++) {
+    const a = FUNNEL_RANGES[i - 1];
+    const b = FUNNEL_RANGES[i];
+    if (range <= b) return i - 1 + (range - a) / (b - a);
+  }
+  return n - 1;
 }
 
 /** LCOS pipper (and the closure cue's anchor: the pipper, else the gun cross at crossX / crossY). */

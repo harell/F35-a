@@ -1,6 +1,7 @@
 /**
  * Iteration-2 combat regression tests (reviewer critiques in i2-combat.md).
  */
+import { LOADOUTS } from '../src/core/data';
 import { describe, expect, it } from 'vitest';
 import { FakeWorld, v3 } from './combat-helpers';
 import { Quaternion, Vector3 } from 'three';
@@ -196,9 +197,14 @@ describe('combat i2: AIM-9X rear-aspect kinematics', () => {
 });
 
 describe('combat i2: instant action & recruit forgiveness', () => {
-  it('Instant Action dogfight recommends the stealth loadout', () => {
+  it('Instant Action dogfight recommends the dogfight load: an AIM-9X for the close fight, not Beast (#116)', () => {
     const def = buildInstantMission({ mode: 'dogfight', enemyCount: 4, enemyType: 'mixed', theater: 'auckland', timeOfDay: 'day' } as never);
-    expect(def.recommendedLoadout).toBe('a2a_stealth');
+    expect(def.recommendedLoadout).toBe('a2a_dogfight');
+    expect(def.allowedLoadouts).toEqual(['a2a_dogfight', 'a2a_stealth', 'a2a_beast']);
+    const lo = LOADOUTS.a2a_dogfight;
+    expect(lo.stores.find((s) => s.weapon === 'aim9x')?.count).toBe(2);
+    expect(lo.stores.find((s) => s.weapon === 'aim120')).toEqual({ weapon: 'aim120', count: 4, internal: true });
+    expect(lo.rcsMultiplier).toBeLessThan(LOADOUTS.a2a_beast.rcsMultiplier / 4);
   });
 
   const rearShot = (diff: Difficulty, seed: number) => {
