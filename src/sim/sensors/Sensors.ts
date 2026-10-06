@@ -362,8 +362,8 @@ function threatRank(ctx: CombatCtx, ac: AircraftEntity, id: number): number {
 /**
  * Designation priority of a contact (higher first), or NaN if not eligible in the current mode.
  * A/A: threat to us › in front (±60°) › range. A/G: (emitting, with AARGM) › in front › target of an
- * active primary objective (`objective`, set by the mission runner: the c06 corvettes before the
- * Shilka on the way, the c03 SA-6) › range. Requires _fwd = nose of `ac`.
+ * active primary objective (`objective`, set by the mission runner: a strike's ship before the
+ * Shilka on the way, a SEAD sortie's SAM) › range. Requires _fwd = nose of `ac`.
  */
 const NEUTRAL_RANK_PENALTY = 1e12;
 

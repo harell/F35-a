@@ -2,6 +2,8 @@
  * Ground target prototypes: command bunker, fuel farm, hardened aircraft shelter, parked jet,
  * corvette, IRGC Navy fast boats, plus the civil
  * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
+ * No mission spawns the bunker or the corvette today (g03 swapped its bunker for a parked jet, #197;
+ * the corvette missions went with Operation Southern Cross): both stay as ready target types.
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
