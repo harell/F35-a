@@ -176,7 +176,9 @@ export class WpnTracker {
         const bomb = m.def.category === 'bomb';
         t = {
           id: m.id,
-          name: m.def.name,
+          // the designation only ('AIM-120D', 'GBU-53/B'): the full name ('AIM-120D AMRAAM', #211) plus
+          // '▲ SAME TGT' would overrun the 146 px strip on a phone
+          name: m.def.name.split(' ')[0],
           guidance: m.def.guidance,
           bomb,
           len: m.def.length || 3,

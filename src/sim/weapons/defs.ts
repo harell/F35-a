@@ -79,7 +79,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   aim120: {
     ...BASE,
     id: 'aim120',
-    name: 'AIM-120D',
+    name: 'AIM-120D AMRAAM',
     short: 'AMRAAM',
     category: 'aam',
     guidance: 'active_radar',
@@ -119,7 +119,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   aim9x: {
     ...BASE,
     id: 'aim9x',
-    name: 'AIM-9X',
+    name: 'AIM-9X Sidewinder',
     short: '9X',
     category: 'aam',
     guidance: 'ir',
@@ -313,7 +313,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   r73: {
     ...BASE,
     id: 'r73',
-    name: 'R-73',
+    name: 'R-73 (AA-11 Archer)',
     short: 'R-73',
     category: 'aam',
     guidance: 'ir',
@@ -350,7 +350,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   r27: {
     ...BASE,
     id: 'r27',
-    name: 'R-27ER',
+    name: 'R-27ER (AA-10 Alamo)',
     short: 'R-27',
     category: 'aam',
     guidance: 'semi_active',
@@ -385,7 +385,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   r77: {
     ...BASE,
     id: 'r77',
-    name: 'R-77',
+    name: 'R-77 (AA-12 Adder)',
     short: 'R-77',
     category: 'aam',
     guidance: 'active_radar',
@@ -425,7 +425,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   m_3m9: {
     ...BASE,
     id: 'm_3m9',
-    name: '3M9 (SA-6)',
+    name: '3M9 (SA-6 Gainful)',
     short: 'SA-6',
     category: 'sam',
     guidance: 'semi_active',
@@ -463,7 +463,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   m_9m330: {
     ...BASE,
     id: 'm_9m330',
-    name: '9M330 (SA-15)',
+    name: '9M330 (SA-15 Gauntlet)',
     short: 'SA-15',
     category: 'sam',
     guidance: 'command',
@@ -503,7 +503,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
   m_igla: {
     ...BASE,
     id: 'm_igla',
-    name: '9M39 Igla (SA-18)',
+    name: '9M39 Igla (SA-18 Grouse)',
     short: 'SA-18',
     category: 'sam',
     guidance: 'ir',
