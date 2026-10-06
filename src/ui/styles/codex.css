@@ -1,5 +1,5 @@
 /* F35-A menus — Codex (weapons, warnings, threats): list + detail, range bar, 3D viewer, HMD demo,
-   cross-reference matrix, the sheet opened from the briefing / debrief, and those screens' hooks. */
+   cross-reference matrix, the accordion list (one category open at a time), the sheet opened from the briefing / debrief, and those screens' hooks. */
 
 /* ───────── layout ───────── */
 .cx-body { display: flex; }
@@ -52,6 +52,27 @@
 }
 .cx-grp .ico { width: 13px; height: 13px; color: var(--acc); opacity: 0.8; }
 .cx-grp-top { padding-top: 12px; color: var(--acc); }
+.cx-cat {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cx-cat:hover,
+.cx-cat:focus-visible { background: rgba(var(--acc-rgb), 0.08); color: #eef8ff; outline: none; }
+.cx-cat.is-open { color: #eef8ff; }
+.cx-cn { margin-left: auto; font: 400 10px/1 var(--mono); letter-spacing: 0; color: var(--faint); }
+.cx-cat .ico:last-child { width: 11px; height: 11px; color: var(--faint); opacity: 1; transition: transform 0.15s ease; }
+.cx-cat.is-open .ico:last-child { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .cx-cat .ico:last-child { transition: none; } }
 .cx-item {
   -webkit-appearance: none;
   appearance: none;

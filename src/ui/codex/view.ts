@@ -128,6 +128,9 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
   let mode: 'inspect' | 'action' = 'action';
   const classFor = new Map<string, string>();
   let current = opts.initial && (codexEntry(opts.initial) || opts.initial === MATRIX_ID) ? opts.initial : CODEX_ENTRIES[0].id;
+  /** The one category open in the list (the cross-reference page sits under Gun & decoys). */
+  const catOf = (id: string): string | null => (id === MATRIX_ID ? 'gun' : (codexEntry(id)?.cat ?? null));
+  let openCat = catOf(current);
   let soundBtn: HTMLButtonElement | null = null;
   let soundTimer = 0;
   let disposed = false;
@@ -160,6 +163,9 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
 
   /* ───────── list ───────── */
   const renderList = () => {
+    // rebuilding the list drops focus; put it back on the same header or entry (keyboard / gamepad)
+    const a = document.activeElement as HTMLElement | null;
+    const refocus = a && listEl.contains(a) ? (a.dataset.cat ? `[data-cat="${a.dataset.cat}"]` : a.dataset.id ? `[data-id="${a.dataset.id}"]` : null) : null;
     listEl.innerHTML = '';
     const q = search.value;
     const item = (id: string, name: string, sub: string) => {
@@ -172,6 +178,7 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
       const hits = searchCodex(q);
       listEl.appendChild(h('div', { class: 'cx-grp', text: hits.length ? `${hits.length} found` : 'Nothing matches' }));
       for (const e of hits) listEl.appendChild(item(e.id, e.name, subOf(e)));
+      if (refocus) listEl.querySelector<HTMLElement>(refocus)?.focus();
       return;
     }
     let group = '';
@@ -180,10 +187,25 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
         group = c.group;
         listEl.appendChild(h('div', { class: 'cx-grp cx-grp-top', text: group }));
       }
-      listEl.appendChild(h('div', { class: 'cx-grp', html: `${icon(c.icon)}<span>${escapeHtml(c.name)}</span>` }));
+      // an accordion: only the open category lists its entries
+      const open = c.id === openCat;
+      const n = entriesIn(c.id).length + (c.id === 'gun' ? 1 : 0);
+      const hd = h('button', {
+        class: `cx-grp cx-cat ${open ? 'is-open' : ''}`,
+        attrs: { type: 'button', 'aria-expanded': String(open) },
+        dataset: { cat: c.id },
+        html: `${icon(c.icon)}<span>${escapeHtml(c.name)}</span><span class="cx-cn">${n}</span>${icon('next')}`,
+      });
+      hd.addEventListener('click', () => {
+        openCat = open ? null : c.id;
+        renderList();
+      });
+      listEl.appendChild(hd);
+      if (!open) continue;
       for (const e of entriesIn(c.id)) listEl.appendChild(item(e.id, e.name, subOf(e)));
       if (c.id === 'gun') listEl.appendChild(item(MATRIX_ID, 'Which weapon for which target', 'Cross-reference'));
     }
+    if (refocus) listEl.querySelector<HTMLElement>(refocus)?.focus();
   };
   search.addEventListener('input', renderList);
 
@@ -443,6 +465,7 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
   const select = (id: string) => {
     if (!codexEntry(id) && id !== MATRIX_ID) return;
     current = id;
+    openCat = catOf(id);
     renderList();
     render();
   };
