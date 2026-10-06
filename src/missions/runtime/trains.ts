@@ -135,7 +135,7 @@ export class TrainTraffic {
     });
     e.known = false; // no intel picture: only the player's own EOTS / radar ground map show them
     e.radius = u.length / 2 + 4;
-    e.train = { unit: u.id, cars: [] };
+    e.train = { unit: u.id, line: u.line, cars: [] };
     this.pose(e, u, t);
     this.bound.set(u.id, e);
     this.spawned.push(e);

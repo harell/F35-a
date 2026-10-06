@@ -5,6 +5,8 @@
  * hit on one counted as a civilian loss that never fails the mission.
  */
 import { describe, expect, it } from 'vitest';
+import { decodeRoads, ROAD_RAIL } from '../src/world/scenery/aucklandRoads';
+import { ROADS_BYTES } from './linz-setup';
 import { Vector3 } from 'three';
 import { EventBus } from '../src/core/events';
 import { DIFFICULTIES, QUALITY_PRESETS } from '../src/core/data';
@@ -64,6 +66,33 @@ describe('the baked rail network', () => {
     expect(names(LINE_OW, 0).at(-1)).toBe('Henderson');
     expect(names(LINE_OW, 0)).toEqual(expect.arrayContaining(['Penrose', 'Newmarket', 'Grafton', 'Maungawhau', 'Kingsland']));
     expect(names(LINE_FREIGHT, 0)).toEqual(['Ports of Auckland', 'Wiri Inland Port']);
+  });
+
+  it("the track runs on the LINZ rail centrelines (the ribbons drawn): median under 0.5 m, 95 % within 6 m (the freight's OSM links to the port and Wiri are not in LINZ), outside tunnels", () => {
+    const segs: number[][] = [];
+    for (const l of decodeRoads(ROADS_BYTES).lines.filter((r) => r.kind === ROAD_RAIL))
+      for (let k = 0; k + 1 < l.pts.length / 2; k++) segs.push([l.pts[2 * k], l.pts[2 * k + 1], l.pts[2 * k + 2], l.pts[2 * k + 3]]);
+    for (const path of net.paths) {
+      const off: number[] = [];
+      const q = { x: 0, z: 0 };
+      for (let sd = 0; sd < path.length; sd += 25) {
+        // (the CRL and its portals are not in LINZ: 50 m round a tunnel is left out)
+        if (inTunnel(path, sd) || inTunnel(path, sd - 50) || inTunnel(path, sd + 50)) continue;
+        pointAt(path, sd, q);
+        let m = Infinity;
+        for (const [ax, az, bx, bz] of segs) {
+          const dx = bx - ax;
+          const dz = bz - az;
+          const l2 = dx * dx + dz * dz;
+          const u = l2 ? Math.max(0, Math.min(1, ((q.x - ax) * dx + (q.z - az) * dz) / l2)) : 0;
+          m = Math.min(m, Math.hypot(ax + dx * u - q.x, az + dz * u - q.z));
+        }
+        off.push(m);
+      }
+      off.sort((x, y) => x - y);
+      expect(off[Math.floor(off.length * 0.5)], `${path.line}/${path.dir} median`).toBeLessThan(0.5);
+      expect(off[Math.floor(off.length * 0.95)], `${path.line}/${path.dir} p95`).toBeLessThan(6);
+    }
   });
 
   it('every station on the track is within 20 m of its GTFS stop position', () => {
@@ -182,7 +211,7 @@ describe('the timetable', () => {
       ['O-W', 'Onehunga West line', 0x00aeef],
     ]);
     const svc = new TrainService({ timeOfDay: 'dawn', seed: 4, height: flat });
-    for (const u of svc.units.filter((x) => x.line !== LINE_FREIGHT)) expect(u.name).toMatch(/^(E-W East West|S-C South City|O-W Onehunga West) line AM \d{3}(\+\d{3})?$/);
+    for (const u of svc.units.filter((x) => x.line !== LINE_FREIGHT)) expect(u.name).toMatch(/^(E-W|S-C|O-W)$/);
   });
 
   it('3- and 6-car AM sets (72 m and 144 m), at most 110 km/h; freight at most 80 km/h, leaving within the first 15 min', () => {
@@ -243,7 +272,7 @@ describe('the timetable', () => {
 });
 
 describe('train hit volume', () => {
-  const body = { unit: 0, cars: [{ kind: 'am_end', x: 0, y: 2, z: 0, heading: Math.PI / 2, pitch: 0, hidden: false, tint: 0 }] as CarPose[] };
+  const body = { unit: 0, line: 0, cars: [{ kind: 'am_end', x: 0, y: 2, z: 0, heading: Math.PI / 2, pitch: 0, hidden: false, tint: 0 }] as CarPose[] };
   it('is the car itself: 24 m long, 2.8 m wide, 4 m tall, along its heading', () => {
     expect(trainHullDistance(body, new Vector3(10, 4, 0))).toBe(0); // inside, 10 m along (heading east)
     expect(trainHullDistance(body, new Vector3(0, 4, 3.38))).toBeCloseTo(2, 5); // 2 m off the side
@@ -254,7 +283,7 @@ describe('train hit volume', () => {
     const g = { train: body, vessel: null } as never;
     expect(vesselSegmentHit(g, new Vector3(0, 30, -15), new Vector3(0, 0, 3))).toBeGreaterThan(0);
     expect(vesselSegmentHit(g, new Vector3(0, 30, -15), new Vector3(0, 0, -6))).toBe(-1);
-    const under = { unit: 0, cars: [{ ...body.cars[0], hidden: true }] };
+    const under = { unit: 0, line: 0, cars: [{ ...body.cars[0], hidden: true }] };
     expect(trainHullDistance(under, new Vector3(0, 3, 0))).toBe(Infinity);
   });
 });

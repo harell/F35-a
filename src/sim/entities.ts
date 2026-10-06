@@ -567,6 +567,8 @@ export class GroundTargetEntity implements Entity {
 export interface TrainBody {
   /** TrainUnit.id in the sortie's TrainService (world.trains). */
   unit: number;
+  /** Its line (rail.ts RAIL_LINES id; LINE_FREIGHT for the KiwiRail freight). */
+  line: number;
   /** Its cars, refreshed every step while alive (frozen where it stopped once destroyed). */
   cars: import('./civil/rail').CarPose[];
 }

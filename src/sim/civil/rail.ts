@@ -481,7 +481,7 @@ export class TrainService {
     this.period = servicePeriod(opts.timeOfDay);
     const rng = mulberry32(((opts.seed ?? 1) * 2654435761 + 146) >>> 0);
     let id = 0;
-    let fleetNo = Math.floor(rng() * 95);
+    rng(); // (once the fleet number's draw: kept so every seed's timetable stays as it was)
     for (const line of RAIL_LINES) {
       const a = passengerPlan(net.path(line.id, 0));
       const b = passengerPlan(net.path(line.id, 1));
@@ -493,11 +493,10 @@ export class TrainService {
       for (let k = 0; k < n; k++) {
         const six = rng() < line.sixCar[this.period];
         const cars = amConsist(six ? 2 : 1);
-        const no = 101 + (fleetNo++ % 95);
         this.units.push({
           id: id++,
           line: line.id,
-          name: `${line.code} ${line.name} AM ${no}${six ? `+${101 + (fleetNo++ % 95)}` : ''}`,
+          name: line.code, // like AT's line badge: the letters in the line's colour, no other name
           cars,
           length: consistLength(cars),
           a,
