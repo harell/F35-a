@@ -370,6 +370,78 @@ function tunnelRuns(pl: Pt[], stopsAt: { name: string; s: number }[]): [number, 
   return out;
 }
 
+
+/**
+ * Put the track on the LINZ rail centrelines (the ribbons the game draws): each vertex of the cleaned GTFS
+ * shape (a few metres off the real track) moves to the nearest point of a LINZ line within SNAP metres that
+ * runs the same way (cos ≥ 0.9, so a crossing line is ignored), sticking to the line it was on while that is
+ * about as near (so double track doesn't zigzag). Where LINZ has no line (the CRL, new works) the GTFS shape stays.
+ */
+const SNAP = 15;
+/** Largest step (m) between consecutive snapped vertices (the cleaned track is resampled every 4 m). */
+const MAX_STEP = 5.5;
+function snapToLinz(track: Pt[]): Pt[] {
+  const segs: { a: Pt; b: Pt; line: number }[] = [];
+  linzLines.forEach((l, line) => {
+    if (linz[line].tunnel) return;
+    for (let k = 0; k + 1 < l.length; k++) segs.push({ a: l[k], b: l[k + 1], line });
+  });
+  let prev = -1;
+  let moved = 0;
+  let last: Pt | null = null;
+  const out = track.map((q, i): Pt => {
+    const a = track[Math.max(0, i - 1)];
+    const b = track[Math.min(track.length - 1, i + 1)];
+    const hx = b[0] - a[0];
+    const hz = b[1] - a[1];
+    const hl = Math.hypot(hx, hz) || 1;
+    let best: { d: number; p: Pt; line: number } | null = null;
+    let same: { d: number; p: Pt; line: number } | null = null;
+    for (const g of segs) {
+      if (Math.min(g.a[0], g.b[0]) > q[0] + SNAP || Math.max(g.a[0], g.b[0]) < q[0] - SNAP) continue;
+      if (Math.min(g.a[1], g.b[1]) > q[1] + SNAP || Math.max(g.a[1], g.b[1]) < q[1] - SNAP) continue;
+      const dx = g.b[0] - g.a[0];
+      const dz = g.b[1] - g.a[1];
+      const l2 = dx * dx + dz * dz;
+      if (l2 === 0 || Math.abs(dx * hx + dz * hz) / (Math.sqrt(l2) * hl) < 0.9) continue;
+      const u = Math.max(0, Math.min(1, ((q[0] - g.a[0]) * dx + (q[1] - g.a[1]) * dz) / l2));
+      const p: Pt = [g.a[0] + dx * u, g.a[1] + dz * u];
+      const d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+      if (d > SNAP) continue;
+      // past the end of a LINZ line (a gap, a junction's stub): no track there, the vertices would pile up on its end
+      if ((u === 0 || u === 1) && d > 2) continue;
+      // continuity: the track runs on from the last vertex (the shape is resampled every 4 m), it never jumps sideways
+      if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) > MAX_STEP) continue;
+      if (!best || d < best.d) best = { d, p, line: g.line };
+      if (g.line === prev && (!same || d < same.d)) same = { d, p, line: g.line };
+    }
+    const pick = same && best && same.d <= best.d + 3 ? same : best;
+    if (!pick) {
+      // off LINZ: the GTFS shape, unless that is itself far from the last vertex (then it would kink)
+      prev = -1;
+      last = q;
+      return q;
+    }
+    prev = pick.line;
+    moved++;
+    last = pick.p;
+    return pick.p;
+  });
+  // smooth the displacements (3 passes of 1-2-1 over the 4 m vertices): a jog between two parallel LINZ lines becomes a
+  // gentle shift, never a kink the cars' bogies would turn on
+  const dxs = out.map((p, i) => p[0] - track[i][0]);
+  const dzs = out.map((p, i) => p[1] - track[i][1]);
+  for (let pass = 0; pass < 3; pass++) {
+    for (const v of [dxs, dzs]) {
+      const c = v.slice();
+      for (let i = 1; i + 1 < v.length; i++) v[i] = (c[i - 1] + 2 * c[i] + c[i + 1]) / 4;
+    }
+  }
+  const smooth = out.map((_, i): Pt => [track[i][0] + dxs[i], track[i][1] + dzs[i]]);
+  console.log(`  snapped ${moved} of ${track.length} vertices to the LINZ rail lines`);
+  return smooth;
+}
+
 // ───────────────────────── paths ─────────────────────────
 
 interface Stop {
@@ -393,7 +465,7 @@ const shapeLine = new Map<string, Pt[]>();
 
 for (const sh of SHAPES) {
   const raw = (shapePts.get(sh.shape) ?? []).sort((a, b) => a.seq - b.seq).map((r) => r.p);
-  const track = clean(raw);
+  const track = snapToLinz(clean(raw));
   const pl = simplify(track, TOL);
   shapeLine.set(sh.shape, track);
   const cum = cumulative(pl);
@@ -451,7 +523,7 @@ const puhinui = (() => {
 const toWiri = join([port, between(ew1, portJn, puhinui), between(sc1, puhinui, wiriJn), wiri]);
 const toPort = join([wiri.slice().reverse(), between(sc0, wiriJn, puhinui), between(ew0, puhinui, portJn), port.slice().reverse()]);
 for (const [dir, raw] of [[0, toWiri], [1, toPort]] as const) {
-  const pl = simplify(clean(raw), TOL);
+  const pl = simplify(snapToLinz(clean(raw)), TOL);
   const cum = cumulative(pl);
   const len = cum[cum.length - 1];
   const tunnels = tunnelRuns(pl, []);

@@ -30,6 +30,7 @@ import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, nextPodZoom } from '../../core
 import { COLLAPSE } from '../../core/skyTower';
 import type { AircraftType, SamType } from '../../core/types';
 import type { TerrainQuery } from '../../sim/api';
+import { RAIL_LINES } from '../../sim/civil/rail';
 import type { CivilPhase } from '../../sim/civil/route';
 import type { AnyEntity } from '../../sim/entities';
 import type { LandmarkEntity } from '../../sim/landmarks';
@@ -546,7 +547,15 @@ function drawLabels(f: HudFrame, t: AnyEntity, locked: boolean, civil: boolean):
     while (name.length > 3 && pen.textWidth(`${name}…`, 10) > room) name = name.slice(0, -1).trimEnd();
     name = `${name}…`;
   }
-  pen.text(name, x + 6 * u, y + 9 * u, pal.white, 10, 'left');
+  const line = t.kind === 'ground' && t.train ? RAIL_LINES.find((l) => l.id === t.train!.line) : undefined;
+  if (line) {
+    // a passenger train: AT's line badge, the code in the line's colour (not a name)
+    const bw = pen.textWidth(line.code, 10) + 10 * u;
+    pen.setFill('#' + line.color.toString(16).padStart(6, '0'));
+    pen.roundRect(x + 6 * u, y + 2 * u, bw, 14 * u, 3 * u);
+    g.fill();
+    pen.text(line.code, x + 6 * u + bw / 2, y + 9.5 * u, line.color === 0x00aeef ? '#04202e' : '#ffffff', 10, 'center');
+  } else pen.text(name, x + 6 * u, y + 9 * u, pal.white, 10, 'left');
   if (tag) pen.text(tag, x + w - 6 * u, y + 9 * u, civil ? (locked ? pal.warn : pal.white) : pal.bright, 9, 'right');
   // bottom strip: threat icon, range, status pill
   const sh = 16 * u;
