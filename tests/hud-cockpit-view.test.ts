@@ -116,7 +116,8 @@ describe('canopy (#116)', () => {
     cockpit.render(renderer);
     const meshes: Mesh[] = [];
     scene!.traverse((o) => {
-      if ((o as Mesh).isMesh) meshes.push(o as Mesh);
+      // (the DAS window's depth-only disc is hidden while the window is shut, #116)
+      if ((o as Mesh).isMesh && o.name !== 'dasMask') meshes.push(o as Mesh);
     });
     // shell, PCD, stick (shaft, grip, cap, boot), throttle (slot, arm, handle) — as before — plus the glass
     expect(meshes.length).toBe(10);

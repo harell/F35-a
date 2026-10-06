@@ -180,6 +180,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       break;
     }
     case 'dogfight': {
+      // an AIM-9X for the close fight by default (#116, the pilot's suggestion 5); the stealth and
+      // Beast loads stay on offer
+      loadout = 'a2a_dogfight';
+      allowed = ['a2a_dogfight', 'a2a_stealth', 'a2a_beast'];
       // Viper 2 backs the player up, it can't win the fight alone (issue #60): weapons hold until
       // the player has fired.
       if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
@@ -190,7 +194,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
         n >= 3 ? 'Viper 2 is on your wing It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
-        'Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
+        'The default load adds an AIM-9X on each outer pylon for the close fight, at a little stealth. Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
       script.parTime = 180 + n * 45;

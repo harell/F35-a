@@ -45,6 +45,9 @@ import { pcdZoom } from './cockpit/zoom';
 import type { PageId } from './cockpit/pages';
 import { COCKPIT_REST_PITCH, TEST_HOOKS } from '../core/data';
 import { CanopyGlass } from './cockpit/canopy';
+import { DasMask, dasRadius, dasWindow, inDasWindow } from './cockpit/das';
+import type { AircraftEntity } from '../sim/entities';
+import type { SimWorld } from '../sim/api';
 
 /**
  * Cockpit lighting per time of day (sun azimuth/elevation in degrees, colours sRGB). `glow` is the
@@ -68,6 +71,8 @@ const _x = new Vector3(1, 0, 0);
 const _z = new Vector3(0, 0, 1);
 const _qa = new Quaternion();
 const _qb = new Quaternion();
+const _tv = new Vector3();
+const _qCam = new Quaternion();
 
 export const createCockpit: CreateCockpit = (events, quality) => {
   void events;
@@ -113,6 +118,10 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   body.add(screen);
   const glass = new CanopyGlass(pcd.texture);
   body.add(glass.mesh);
+  // the DAS window's depth-only disc rides on the camera (#116)
+  const das = new DasMask();
+  scene.add(camera);
+  camera.add(das.mesh);
 
   void loadHudFont(() => pcd.fontsChanged());
 
@@ -126,6 +135,38 @@ export const createCockpit: CreateCockpit = (events, quality) => {
   let viewH = 1;
   const sunWorld = new Vector3(0, 1, 0);
   const tmpColor = new Color();
+
+  /**
+   * Open the DAS window when the designated (or locked) target is in view but behind the panel or the
+   * PCD: a ray from the eye through it hits the cockpit. Same target filter as the HMD's box.
+   */
+  function updateDas(world: SimWorld, p: AircraftEntity | null): void {
+    dasWindow.active = false;
+    if (p && p.alive && !pcdZoom.open) {
+      const t = world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
+      if (t && t.alive && t.team !== p.team && t.kind !== 'missile' && t.kind !== 'decoy') {
+        // the target in the cockpit camera's frame (the eye's offset is nothing at target ranges)
+        _tv.copy(t.position).sub(p.position).applyQuaternion(_qInv).applyQuaternion(_qCam.copy(camera.quaternion).invert());
+        if (_tv.z < -1) {
+          _tv.applyMatrix4(camera.projectionMatrix);
+          if (Math.abs(_tv.x) < 1 && Math.abs(_tv.y) < 1) {
+            body.updateMatrixWorld();
+            _ndc.set(_tv.x, _tv.y);
+            raycaster.setFromCamera(_ndc, camera);
+            if (raycaster.intersectObjects(dasTargets, false).length > 0) {
+              dasWindow.active = true;
+              dasWindow.id = t.id;
+              dasWindow.x = ((_tv.x + 1) / 2) * viewW;
+              dasWindow.y = ((1 - _tv.y) / 2) * viewH;
+              dasWindow.r = dasRadius(viewH);
+            }
+          }
+        }
+      }
+    }
+    das.place(camera, viewW, viewH);
+  }
+  const dasTargets: Object3D[] = [shell, screen];
 
   function applyLighting(tod: TimeOfDay, weather: Weather): void {
     const key = tod + weather;
@@ -154,6 +195,7 @@ export const createCockpit: CreateCockpit = (events, quality) => {
     update(ctx: FrameContext, headLocal: Quaternion) {
       if (!api.visible) {
         wasVisible = false;
+        dasWindow.active = false;
         if (pcdZoom.open) pcdZoom.close();
         return;
       }
@@ -201,6 +243,8 @@ export const createCockpit: CreateCockpit = (events, quality) => {
         sun.position.copy(_sun).multiplyScalar(5);
         glass.setSun(_sun.applyQuaternion(_qa.copy(body.quaternion).invert()));
       }
+      if (p) _qInv.copy(p.quaternion).invert();
+      updateDas(ctx.world, p);
       pcd.update(ctx, ctx.dt);
     },
 
@@ -229,6 +273,8 @@ export const createCockpit: CreateCockpit = (events, quality) => {
         else pcdZoom.close();
         return true;
       }
+      // a tap in the DAS window is on the target seen through it (the HUD picks it), not on the panel
+      if (inDasWindow(nx * viewW, ny * viewH)) return false;
       _ndc.set(nx * 2 - 1, -(ny * 2 - 1));
       // (matrices are normally refreshed by render(); a tap can come before the first cockpit frame)
       body.updateMatrixWorld();
@@ -249,6 +295,8 @@ export const createCockpit: CreateCockpit = (events, quality) => {
       gripMat.dispose();
       screenMat.dispose();
       glass.dispose();
+      das.dispose();
+      dasWindow.active = false;
       pcd.dispose();
       scene.clear();
     },

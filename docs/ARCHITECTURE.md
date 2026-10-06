@@ -377,6 +377,7 @@ fixed 60 Hz: world.step(dt) { AI brains (20 Hz) → flight model (sub-steps) →
                               → fast boats → collisions (+ landmark collapses) → warnings → cleanup }  →  missionRunner.update
 render: env.update → entities.update → cameraRig.update → effects.update → cockpit.update
         renderer.render(scene, camera) → cockpit.render (2nd pass, depth cleared) → hud.update (2D canvas) → audio.update
+        (cockpit.update opens the DAS window, src/hud/cockpit/das.ts, which hud.update reads in the same frame)
 ```
 
 Events (`src/core/events.ts`) decouple the sim from its presentation: audio, effects, HUD and haptics all
