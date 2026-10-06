@@ -460,7 +460,7 @@ describe('civil ship damage', () => {
 /* ───────────────────────── sensors and targeting ───────────────────────── */
 
 describe('sensors: ground mode / EOTS only, always ranked last', () => {
-  it('TGT cycling and auto-designation go through every hostile before the (closer) civil ship', () => {
+  it('TGT cycling and auto-designation skip the (closer) civil ship while a hostile is left (owner, 2026-10-06)', () => {
     const w = seaWorld(6);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 5_000, 0), heading: 0, speed: 240, loadout: 'strike_stealth' });
     // range order: hostile 531, the civil ship, hostile 532
@@ -472,13 +472,24 @@ describe('sensors: ground mode / EOTS only, always ranked last', () => {
     const ids = p.radar.contacts.map((c) => c.id);
     expect(ids).toEqual(expect.arrayContaining([cv1.id, ship.id, cv2.id]));
     expect(p.radar.designatedId).toBe(cv1.id); // auto-designation: a hostile, never the ship
-    // TGT: lock the boxed hostile, then step on — the far hostile comes before the nearer ship
+    // TGT: lock the boxed hostile, then step on: the hostiles only, never the nearer ship
     const order: (number | null)[] = [];
     for (let i = 0; i < 4; i++) {
       w.combat.cycleTarget(p, w);
       order.push(p.radar.designatedId);
     }
-    expect(order).toEqual([cv1.id, cv2.id, ship.id, cv1.id]);
+    expect(order).toEqual([cv1.id, cv2.id, cv1.id, cv2.id]);
+    // a tap still boxes the ship; the next TGT goes back to a hostile
+    w.combat.designate(p, ship.id, w);
+    w.combat.cycleTarget(p, w);
+    expect(w.getEntity(p.radar.designatedId)?.team).toBe('red');
+    // both hostiles gone: TGT steps onto the ship
+    w.combat.designate(p, null, w);
+    cv1.alive = false;
+    cv2.alive = false;
+    run(w, 0.5);
+    w.combat.cycleTarget(p, w);
+    expect(p.radar.designatedId).toBe(ship.id);
   });
 
   it('with no hostile left the civil ship can still be cycled to, but is never auto-designated', () => {

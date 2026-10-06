@@ -12,14 +12,16 @@
  * Livery (code-built, vertex colours): AT's silver body with a dark navy window band, bright yellow
  * doors, a yellow cab front round a black windscreen and the round blue AT roundel by the cab; KiwiRail's
  * red body side with a white stripe, yellow cab ends, grey roof and black underframe; containers in
- * shipping-line colours (instance colours). At night the windows, the destination display and the DL's
- * cab glow (a per-vertex glow term in the shared material, not another draw call), headlights and tail
- * lights go through the entity renderer's sprite batch.
+ * shipping-line colours (instance colours). The AM cab's destination display shows the line's AT colour
+ * (E-W green, S-C red, O-W light blue: RAIL_LINES, a per-instance line colour on the display's vertices).
+ * At night the windows, the destination display (in its line colour) and the DL's cab glow (a per-vertex
+ * glow term in the shared material, not another draw call), headlights and tail lights go through the
+ * entity renderer's sprite batch.
  */
 import { BufferAttribute, BufferGeometry, Color, Euler, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshLambertMaterial, Quaternion, Vector3 } from 'three';
 import type { SpriteBatch } from '../effects/SpriteBatch';
 import { box, merge, place } from '../models/geom/core';
-import { CAR_LENGTH, CAR_WIDTH, CONTAINER_TINTS, type CarKind, type CarPose, type TrainService, type UnitState } from '../../sim/civil/rail';
+import { CAR_LENGTH, CAR_WIDTH, CONTAINER_TINTS, RAIL_LINES, type CarKind, type CarPose, type TrainService, type UnitState } from '../../sim/civil/rail';
 
 const SILVER = 0xc9ced3;
 const PINSTRIPE = 0x8d949b;
@@ -38,6 +40,8 @@ const CONTAINER_COLORS = [0xffffff, 0x4aa3d6, 0xd9b23a, 0x2d4f8a, 0xe0782d, 0xc0
 const WRECK = new Color(0.24, 0.22, 0.2);
 
 const KINDS: readonly CarKind[] = ['am_end', 'am_mid', 'dl', 'wagon'];
+/** Line colour by RailLineDef id (the freight's, unused, is white). */
+const LINE_COLORS: readonly number[] = RAIL_LINES.reduce<number[]>((a, l) => ((a[l.id] = l.color), a), []);
 
 /** Draw range of the trains (m) per tier: about where a 3 m wide car is still a pixel or two. */
 const RANGE: Record<'low' | 'medium' | 'high', number> = { low: 6_000, medium: 9_000, high: 13_000 };
@@ -53,11 +57,18 @@ function glowing(g: Geo): Geo {
   return g;
 }
 
-/** Merge parts and give them the per-vertex `glow` attribute (1 on glowing parts). */
+/** A box painted in the train's line colour (the destination display). */
+function lineColoured(g: Geo): Geo {
+  g.userData.line = true;
+  return g;
+}
+
+/** Merge parts and give them the per-vertex `glow` and `lineMask` attributes (1 on glowing / line-coloured parts). */
 function build(parts: Geo[]): Geo {
   for (const p of parts) {
     const n = p.getAttribute('position').count;
     p.setAttribute('glow', new BufferAttribute(new Float32Array(n).fill(p.userData.glow ? 1 : 0), 1));
+    p.setAttribute('lineMask', new BufferAttribute(new Float32Array(n).fill(p.userData.line ? 1 : 0), 1));
   }
   const g = merge(parts)!;
   g.computeBoundingSphere();
@@ -84,7 +95,7 @@ export function amCarGeometry(cab: boolean): Geo {
     g.push(
       place(box(W - 0.06, 2.9, 1.2, YELLOW), [0, 2.35, -L / 2 + 0.6]), // cab front
       place(box(W - 0.5, 1.05, 0.12, BLACK), [0, 2.75, -L / 2 - 0.02]), // windscreen
-      glowing(place(box(1.5, 0.28, 0.1, 0x3a2a12), [0, 3.5, -L / 2 - 0.02])), // destination display
+      lineColoured(glowing(place(box(1.5, 0.28, 0.1, 0x3a2a12), [0, 3.5, -L / 2 - 0.02]))), // destination display
       place(box(W + 0.1, 0.62, 0.62, AT_BLUE), [0, 1.6, -L / 2 + 2.3]), // AT roundel
       place(box(W + 0.14, 0.3, 0.3, WHITE), [0, 1.6, -L / 2 + 2.3]),
     );
@@ -126,19 +137,28 @@ export function wagonGeometry(): Geo {
   ]);
 }
 
-/** The cars' shared material: vertex colours × instance colour, and at night the `glow` parts lit. */
+/**
+ * The cars' shared material: vertex colours × instance colour, the `lineMask` parts in the instance's
+ * line colour, and at night the `glow` parts lit (the line-coloured ones in their colour).
+ */
 function trainMaterial(): { mat: MeshLambertMaterial; night: { value: number } } {
   const mat = new MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
   const night = { value: 0 };
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = night;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute float glow;\nattribute float lineMask;\nattribute vec3 lineColor;\nvarying float vGlow;\nvarying float vLineMask;\nvarying vec3 vLineColor;',
+      )
       // a wreck (dark instance colour) stays dark
-      .replace('#include <color_vertex>', '#include <color_vertex>\nvGlow = glow;\n#ifdef USE_INSTANCING_COLOR\nvGlow *= step(0.6, instanceColor.r + instanceColor.g);\n#endif');
+      .replace(
+        '#include <color_vertex>',
+        '#include <color_vertex>\nvGlow = glow;\nvLineMask = lineMask;\nvLineColor = lineColor;\nvec3 lineTint = lineColor;\n#ifdef USE_INSTANCING_COLOR\nvGlow *= step(0.6, instanceColor.r + instanceColor.g);\nlineTint *= instanceColor;\n#endif\nvColor.rgb = mix(vColor.rgb, lineTint, lineMask);',
+      );
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying float vGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * uNight * vec3(1.0, 0.82, 0.55);');
+      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying float vGlow;\nvarying float vLineMask;\nvarying vec3 vLineColor;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * uNight * mix(vec3(1.0, 0.82, 0.55), vLineColor, vLineMask);');
   };
   mat.customProgramCacheKey = () => 'f35-trains';
   return { mat, night };
@@ -187,6 +207,7 @@ export class TrainRenderer {
       const m = new InstancedMesh(geo[k](), mat, cap[k]);
       m.name = `trains-${k}`;
       m.instanceColor = new InstancedBufferAttribute(new Float32Array(cap[k] * 3).fill(1), 3);
+      m.geometry.setAttribute('lineColor', new InstancedBufferAttribute(new Float32Array(cap[k] * 3).fill(1), 3));
       // the instances span the city: few and small, so no culling
       m.frustumCulled = false;
       m.count = 0;
@@ -224,7 +245,7 @@ export class TrainRenderer {
       for (const c of cars) {
         if (c.hidden) continue;
         any = true;
-        this.add(c, c.kind === 'wagon' ? CONTAINER_COLORS[c.tint % CONTAINER_TINTS] : 0xffffff, false);
+        this.add(c, c.kind === 'wagon' ? CONTAINER_COLORS[c.tint % CONTAINER_TINTS] : 0xffffff, false, 0, LINE_COLORS[u.line] ?? 0xffffff);
       }
       if (any) this.drawn++;
       const f = cars[0];
@@ -236,17 +257,18 @@ export class TrainRenderer {
     let w = 0;
     for (const wr of svc.wrecks.values()) {
       if (w++ >= MAX_WRECKS) break;
-      wr.cars.forEach((c, i) => !c.hidden && this.add(c, WRECK.getHex(), true, i));
+      wr.cars.forEach((c, i) => !c.hidden && this.add(c, WRECK.getHex(), true, i, LINE_COLORS[svc.units[wr.unit]?.line] ?? 0xffffff));
     }
     for (const k of KINDS) {
       const m = this.meshes[k];
       m.count = this.count[k];
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      m.geometry.getAttribute('lineColor').needsUpdate = true;
     }
   }
 
-  private add(c: CarPose, color: number, wreck: boolean, i = 0): void {
+  private add(c: CarPose, color: number, wreck: boolean, i = 0, line = 0xffffff): void {
     const m = this.meshes[c.kind];
     const k = this.count[c.kind];
     if (k >= m.instanceMatrix.count) return;
@@ -258,6 +280,8 @@ export class TrainRenderer {
     _m.compose(_p, _q, _s);
     m.setMatrixAt(k, _m);
     m.setColorAt(k, _c.setHex(color));
+    _c.setHex(line);
+    (m.geometry.getAttribute('lineColor') as InstancedBufferAttribute).setXYZ(k, _c.r, _c.g, _c.b);
     this.count[c.kind] = k + 1;
   }
 

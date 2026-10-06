@@ -1,22 +1,31 @@
 /**
- * Harbour ferries (render-only, issue #30): the timetable routes out of the Downtown Ferry Terminal and the
- * pure kinematics that place a ferry on them. Nothing here is a sim entity, in any mission or mode: ferries are not
- * on radar, not targetable, and cost the sim nothing.
+ * Harbour ferries (render-only, issue #30): Auckland Transport's harbour ferry routes out of the Downtown
+ * Ferry Terminal and the pure kinematics that place a ferry on them. Nothing here is a sim entity, in any
+ * mission or mode: ferries are not on radar, not targetable, and cost the sim nothing.
+ *
+ * The routes are AT's (at.govt.nz timetables, the GTFS feed of 2026-09-17), with their stops in their
+ * order: DEV Devonport, BAYS Bayswater, BIRK Te Onewa Northcote Point and Birkenhead, HOBS Hobsonville
+ * Point and Beach Haven, WSTH West Harbour. Stanley Bay has no AT service, and the Gulf routes (Waiheke,
+ * Rangitoto, Rakino, Half Moon Bay, Pine Harbour, Gulf Harbour) run past or to the enemy-held islands, so
+ * they are not here. Each route's headway is its weekday timetable's (peak for DEV and BAYS, about the
+ * day's average for BIRK, HOBS and WSTH), and the sailing times are the timetable's: the ferries sail as
+ * fast as the period needs, with a long stop at one end.
+ *
+ * The tracks follow the ferry routes mapped in OpenStreetMap (route=ferry), which keep to the channel:
+ * out of the basin north to the middle of the harbour, west under the Harbour Bridge's navigation span,
+ * and up the upper harbour along the Birkenhead shore past Kauri Point. AT's GTFS shapes are schematic
+ * there (they cross the bridge's low southern spans and Westhaven marina), so they are not used for the
+ * tracks. The docks are the ferry berths at the real terminals (OpenStreetMap piers and pontoons), except
+ * West Harbour, whose pontoon lies among the marina's finger piers: that ferry stops at the marina's
+ * outer breakwater.
  *
  * Every route is a loop of docks. At each dock a ferry comes in bow first along the dock's axis, dwells,
  * backs out `back` metres, turns on the spot (catamarans do) and sets off for the next dock along a
  * smoothed path through the route's via points. Moves accelerate and brake (a trapezoid profile). A
- * route runs to a fixed `period`; the slack left after the moves and the minimum dwells is spent at the
- * Downtown terminal. Each route's period divides FERRY_CYCLE, so the whole fleet repeats exactly every
- * FERRY_CYCLE seconds (tests/render-ferries.test.ts checks every hull on water and no two ferries
- * overlapping over that cycle).
- *
- * Downtown: four bow-in slots at the head of the basin between Princes and Queens Wharf (the moored
- * cruise liner lies along Princes Wharf east, so the lanes keep to the east half). Outer docks are the
- * real wharves from OpenStreetMap: Devonport, Stanley Bay, Bayswater, Te Onewa Northcote Point,
- * Birkenhead, Hobsonville Point (Harrier Point Wharf) and West Harbour (Hobsonville Marina). The
- * upper-harbour routes pass under the Harbour Bridge's navigation span. No route goes near Rangitoto,
- * Waiheke or the other enemy-held islands.
+ * route runs to a fixed `period`; the slack left after the moves and the minimum dwells is spent under
+ * way. Each route's period divides FERRY_CYCLE, so the whole fleet repeats exactly every FERRY_CYCLE
+ * seconds (tests/render-ferries.test.ts checks every hull on water and no two ferries overlapping over
+ * that cycle).
  *
  * Positions are world XZ (m); headings are degrees clockwise from north (the bow points along
  * (sin h, -cos h)). Motion is a function of mission time only: deterministic, allocation-free.
@@ -77,8 +86,7 @@ const APPROACH = 80;
 /**
  * Downtown slots, bow in along the basins' axis (heading 195°): three at the head of the basin between
  * Princes and Queens Wharf (W0–W2, east of the moored liner), two in the basin between Queens and Captain
- * Cook Wharf (E0, E1). Only routes with the same headway share a slot (Hobsonville and West Harbour, half
- * a headway apart): any other pair would sooner or later arrive together.
+ * Cook Wharf (E0, E1). Each route has its own slot, so a ferry's long stop Downtown never meets another route's.
  * Lanes are 35 m apart; neighbouring slots back out to different depths, so two ferries turning at the
  * same time never swing into each other.
  */
@@ -154,95 +162,137 @@ const UPPER_IN: [number, number][] = [
   [-2700, -2420],
 ];
 
+/**
+ * From the Downtown basins to the Harbour Bridge's navigation span (the OSM ferry route): north up the
+ * harbour, then west-north-west along the middle of it. Westbound lanes lie `o` m to the south-west of
+ * this line and eastbound lanes `o` m to the north-east (left of the direction of travel), as at the bridge.
+ */
+const BRIDGE_APPROACH: [number, number][] = [
+  [520, -1290],
+  [430, -1520],
+  [300, -1745],
+  [-90, -1955],
+];
+const toBridge = (o: number) => shift(BRIDGE_APPROACH, o);
+const fromBridge = (o: number) => shift([...BRIDGE_APPROACH].reverse(), o);
+
 export const FERRY_ROUTES: readonly FerryRouteDef[] = [
   {
+    // DEV: every 20 min at peak, 12 min a crossing (Downtown Pier 2 and 4 – Devonport, north berth)
     id: 'devonport',
     name: 'Devonport',
-    docks: [downtown(W0), { name: 'Devonport Wharf', x: 2990, z: -1590, heading: 0, dwell: 60, back: 90 }],
+    docks: [downtown(E1, 300), { name: 'Devonport Ferry Terminal', x: 2972, z: -1707, heading: 95, dwell: 660, back: 100 }],
     via: [
-      [...basinOut(W0), [1450, -1190], [2500, -1330]],
-      [[2650, -1400], [1500, -1290], ...basinIn(W0)],
+      [...basinOut(E1), [800, -1400], [900, -1480], [1720, -1615], [1960, -1622], [2360, -1517], [2560, -1540], [2700, -1610]],
+      [[2650, -1665], [2360, -1555], [1960, -1660], [1720, -1655], [900, -1520], [790, -1470], ...basinIn(E1)],
     ],
-    period: 900,
+    period: 2400,
     speed: 12,
     scale: 1,
     offset: 450,
-    ferries: 3,
+    ferries: 2,
   },
   {
+    // BAYS: every 30 min at peak, 10 min a crossing
     id: 'bayswater',
     name: 'Bayswater',
-    docks: [downtown(E0), { name: 'Bayswater Wharf', x: 520, z: -3030, heading: 0, dwell: 50, back: 90 }],
+    docks: [downtown(E0, 510), { name: 'Bayswater Ferry Terminal', x: 395, z: -2880, heading: 350, dwell: 90, back: 90 }],
     via: [
-      [...basinOut(E0), [640, -1700], [540, -2600]],
-      [[680, -2700], [900, -1700], ...basinIn(E0)],
+      [...basinOut(E0), [640, -1500], [560, -1800], [470, -2150], [470, -2500]],
+      [[520, -2550], [540, -2150], [640, -1800], [690, -1500], ...basinIn(E0)],
     ],
-    period: 900,
+    period: 1800,
     speed: 12,
-    scale: 1,
+    scale: 0.85,
     offset: 300,
-    ferries: 3,
-  },
-  {
-    id: 'stanley_bay',
-    name: 'Stanley Bay',
-    docks: [downtown(E1), { name: 'Stanley Bay Wharf', x: 1669, z: -2213, heading: 32, dwell: 45, back: 80 }],
-    via: [
-      [...basinOut(E1), [1250, -1650]],
-      [[1350, -1900], [1000, -1450], ...basinIn(E1)],
-    ],
-    period: 900,
-    speed: 10,
-    scale: 0.8,
-    offset: 330,
     ferries: 1,
   },
   {
+    // BIRK: about every 40 min; Downtown – Te Onewa Northcote Point 10 min – Birkenhead 3 min, back direct 15 min
     id: 'birkenhead',
     name: 'Northcote Point and Birkenhead',
     docks: [
-      downtown(W1),
-      { name: 'Te Onewa Northcote Point Wharf', x: -1424, z: -2386, heading: 46, dwell: 40, back: 80 },
-      { name: 'Birkenhead Wharf', x: -3331, z: -2894, heading: 315, dwell: 50, back: 80 },
+      downtown(W0, 600),
+      { name: 'Te Onewa Northcote Point Wharf', x: -1424, z: -2386, heading: 46, dwell: 60, back: 80 },
+      { name: 'Birkenhead Ferry Terminal', x: -2505, z: -2803, heading: 330, dwell: 60, back: 80 },
     ],
     via: [
-      [...basinOut(W1), [-250, -1440], ...BRIDGE_W],
-      [[-1800, -2250], [-2900, -2600]],
-      [[-2700, -2500], ...BRIDGE_E, [-250, -1560], ...basinIn(W1)],
+      [...basinOut(W0), ...toBridge(20), ...BRIDGE_W],
+      [
+        [-1700, -2480],
+        [-2100, -2640],
+        [-2330, -2650],
+      ],
+      [[-2400, -2600], [-1900, -2380], ...BRIDGE_E, ...fromBridge(20), ...basinIn(W0)],
     ],
-    period: 1440,
+    period: 2400,
     speed: 12,
     scale: 0.85,
     offset: 50,
-    ferries: 3,
+    ferries: 1,
   },
   {
+    // HOBS: hourly; Downtown – Hobsonville Point 30 min – Beach Haven 5 min – Hobsonville Point – Downtown
     id: 'hobsonville',
-    name: 'Hobsonville Point',
-    docks: [downtown(W2), { name: 'Hobsonville Point (Harrier Point Wharf)', x: -7845, z: -6478, heading: 0, dwell: 60, back: 90 }],
-    via: [
-      [...basinOut(W2), [-250, -1400], ...BRIDGE_W2, ...UPPER_OUT, [-6550, -3600], [-7100, -4600], [-7250, -5400], [-7650, -6000]],
-      [[-7550, -6050], [-7100, -5400], [-6900, -4600], [-6500, -3950], ...UPPER_IN, ...BRIDGE_E2, [-250, -1600], ...basinIn(W2)],
+    name: 'Hobsonville Point and Beach Haven',
+    docks: [
+      downtown(W1, 2820),
+      { name: 'Hobsonville Point Ferry Terminal', x: -7980, z: -6756, heading: 270, dwell: 60, back: 90 },
+      { name: 'Beach Haven Ferry Terminal', x: -7497, z: -6509, heading: 90, dwell: 60, back: 90 },
+      { name: 'Hobsonville Point Ferry Terminal', x: -7980, z: -6756, heading: 270, dwell: 60, back: 90 },
     ],
-    period: 2400,
+    via: [
+      [...basinOut(W1), ...toBridge(60), ...BRIDGE_W2, ...UPPER_OUT, [-6550, -3600], [-7030, -4550], [-7280, -5400], [-7480, -6100], [-7640, -6500]],
+      [[-7760, -6650]],
+      [[-7700, -6600]],
+      [[-7700, -6560], [-7520, -6250], [-7300, -5400], [-6980, -4550], [-6500, -3950], ...UPPER_IN, ...BRIDGE_E2, ...fromBridge(60), ...basinIn(W1)],
+    ],
+    period: 7200,
     speed: 14,
     scale: 1,
     offset: 30,
-    ferries: 3,
+    ferries: 2,
   },
   {
+    // WSTH: hourly over the day (every 20–25 min at peak), 35 min a crossing
     id: 'west_harbour',
     name: 'West Harbour',
-    docks: [downtown(W2), { name: 'West Harbour (Hobsonville Marina)', x: -10275, z: -4434, heading: 180, dwell: 60, back: 90 }],
+    docks: [downtown(W2, 2940), { name: 'West Harbour (Hobsonville Marina)', x: -10275, z: -4434, heading: 180, dwell: 60, back: 90 }],
     via: [
-      [...basinOut(W2), [-250, -1400], ...BRIDGE_W2, ...shift(UPPER_OUT, 45), [-7000, -3500], [-8500, -4250], [-9800, -4750]],
-      [[-9700, -4650], [-8450, -4400], [-6950, -3650], ...shift(UPPER_IN, -45), ...BRIDGE_E2, [-250, -1600], ...basinIn(W2)],
+      [
+        ...basinOut(W2),
+        ...toBridge(60),
+        ...BRIDGE_W2,
+        ...shift(UPPER_OUT, 45),
+        [-6500, -3420],
+        [-6740, -3530],
+        [-7260, -3605],
+        [-7890, -3575],
+        [-8300, -3680],
+        [-9020, -4290],
+        [-9420, -4520],
+        [-9900, -4600],
+      ],
+      [
+        [-9800, -4520],
+        [-9380, -4570],
+        [-9000, -4350],
+        [-8250, -3750],
+        [-7890, -3660],
+        [-7260, -3695],
+        [-6720, -3620],
+        [-6480, -3480],
+        ...shift(UPPER_IN, -45),
+        ...BRIDGE_E2,
+        ...fromBridge(60),
+        ...basinIn(W2),
+      ],
     ],
-    period: 2400,
+    period: 7200,
     speed: 14,
     scale: 1,
-    offset: 350,
-    ferries: 3,
+    offset: 1830,
+    ferries: 2,
   },
 ];
 
