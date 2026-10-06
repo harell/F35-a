@@ -166,7 +166,7 @@ export function buildMock(scene: Scenario): MockSetup {
   ground.push(fuel);
 
   // own missile in flight
-  const aim120 = munition('aim120', 'AIM-120D', 'AMRAAM', 'active_radar');
+  const aim120 = munition('aim120', 'AIM-120D AMRAAM', 'AMRAAM', 'active_radar');
   if (scene === 'lock' || scene === 'threat') {
     const m = add(new MissileEntity(nextId++, aim120, 'blue', player.id, mig.id));
     m.position.copy(player.position).lerp(mig.position, 0.3);
@@ -177,15 +177,15 @@ export function buildMock(scene: Scenario): MockSetup {
   }
   // incoming
   if (scene === 'threat') {
-    const r77 = add(new MissileEntity(nextId++, munition('r77', 'R-77', 'R-77', 'active_radar'), 'red', su35.id, player.id));
+    const r77 = add(new MissileEntity(nextId++, munition('r77', 'R-77 (AA-12 Adder)', 'R-77', 'active_radar'), 'red', su35.id, player.id));
     r77.position.copy(at(-3000, -4500, 300));
     r77.velocity.subVectors(player.position, r77.position).normalize().multiplyScalar(900);
     missiles.push(r77);
-    const sam = add(new MissileEntity(nextId++, munition('m_3m9', 'SA-6 3M9', 'SA-6', 'semi_active'), 'red', sa6.id, player.id));
+    const sam = add(new MissileEntity(nextId++, munition('m_3m9', '3M9 (SA-6 Gainful)', 'SA-6', 'semi_active'), 'red', sa6.id, player.id));
     sam.position.copy(at(5000, -2500, -2000));
     sam.velocity.subVectors(player.position, sam.position).normalize().multiplyScalar(800);
     missiles.push(sam);
-    const igla = add(new MissileEntity(nextId++, munition('m_igla', 'Igla', 'SA-18', 'ir'), 'red', sa6.id, player.id));
+    const igla = add(new MissileEntity(nextId++, munition('m_igla', '9M39 Igla (SA-18 Grouse)', 'SA-18', 'ir'), 'red', sa6.id, player.id));
     igla.position.copy(at(-1500, 2500, -1200));
     missiles.push(igla);
     player.incoming = [

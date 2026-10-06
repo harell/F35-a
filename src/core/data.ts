@@ -348,7 +348,7 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
 };
 
 export const WEAPON_INFO: Record<WeaponId, { name: string; short: string; kind: 'gun' | 'aam' | 'agm' | 'bomb' }> = {
-  gun: { name: 'GAU-22/A 25mm', short: 'GUN', kind: 'gun' },
+  gun: { name: 'GAU-22/A 25 mm', short: 'GUN', kind: 'gun' },
   aim120: { name: 'AIM-120D AMRAAM', short: 'AMRAAM', kind: 'aam' },
   aim9x: { name: 'AIM-9X Sidewinder', short: 'AIM-9X', kind: 'aam' },
   gbu31: { name: 'GBU-31 JDAM', short: 'JDAM', kind: 'bomb' },
