@@ -3,7 +3,8 @@
  * the right. Weapon pages lead with what the weapon is for ("Use it on"), then where it can be fired
  * (one range bar style for every weapon), the HUD labels, how to use it, a 3D Inspect / In-action
  * viewer, common mistakes and terms. Warning pages show the warning on a mock HMD and play its sound.
- * A cross-reference page rates every weapon against every target class.
+ * A cross-reference page rates every weapon against every target class. Pest pages (the IRGC's
+ * army) show the pest's service record next to a 3D model you can turn, zoom and pan.
  * Used full screen from the main menu (screens/codex.ts) and as a sheet from the briefing and debrief.
  */
 import { escapeHtml, h } from '../dom';
@@ -11,6 +12,7 @@ import { icon } from '../art/icons';
 import {
   CODEX_CATS,
   CODEX_ENTRIES,
+  IRGC_INTRO,
   MATRIX_WEAPONS,
   RATINGS,
   TARGET_CLASSES,
@@ -22,6 +24,7 @@ import {
   searchCodex,
   useOn,
   type CodexEntry,
+  type PestEntry,
   type RangeSpec,
   type TargetClass,
   type WarningEntry,
@@ -29,6 +32,7 @@ import {
 } from './data';
 import { drawWarningDemo } from './hudDemo';
 import { CodexTones } from './tones';
+import { PestStage, pestDetail } from './pestStage';
 import { CodexViewer } from './viewer3d';
 
 /** Pseudo entry id of the weapon × target cross-reference page. */
@@ -109,6 +113,15 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
 
   const tones = new CodexTones();
   let viewer: CodexViewer | null = null;
+  /** The pest viewer: alive only while a pest page is open (a model holds 5–8 MB). */
+  let stage: PestStage | null = null;
+  const stageCanvas = h('canvas', { class: 'cx-canvas cx-pcanvas' });
+  let pestFur = true;
+  let pestBuzz = false;
+  const dropStage = () => {
+    stage?.dispose();
+    stage = null;
+  };
   const viewCanvas = h('canvas', { class: 'cx-canvas' });
   const hudCanvas = h('canvas', { class: 'cx-canvas' });
   let hudRaf = 0;
@@ -143,6 +156,8 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
     return b;
   };
 
+  const subOf = (e: CodexEntry) => (e.kind === 'weapon' ? e.hud[0][0] : e.kind === 'pest' ? e.latin : e.chip);
+
   /* ───────── list ───────── */
   const renderList = () => {
     listEl.innerHTML = '';
@@ -156,7 +171,7 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
     if (q.trim()) {
       const hits = searchCodex(q);
       listEl.appendChild(h('div', { class: 'cx-grp', text: hits.length ? `${hits.length} found` : 'Nothing matches' }));
-      for (const e of hits) listEl.appendChild(item(e.id, e.name, e.kind === 'weapon' ? e.hud[0][0] : e.chip));
+      for (const e of hits) listEl.appendChild(item(e.id, e.name, subOf(e)));
       return;
     }
     let group = '';
@@ -166,7 +181,7 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
         listEl.appendChild(h('div', { class: 'cx-grp cx-grp-top', text: group }));
       }
       listEl.appendChild(h('div', { class: 'cx-grp', html: `${icon(c.icon)}<span>${escapeHtml(c.name)}</span>` }));
-      for (const e of entriesIn(c.id)) listEl.appendChild(item(e.id, e.name, e.kind === 'weapon' ? e.hud[0][0] : e.chip));
+      for (const e of entriesIn(c.id)) listEl.appendChild(item(e.id, e.name, subOf(e)));
       if (c.id === 'gun') listEl.appendChild(item(MATRIX_ID, 'Which weapon for which target', 'Cross-reference'));
     }
   };
@@ -295,6 +310,76 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
     return out;
   };
 
+  const pestPage = (p: PestEntry) => {
+    const tags = h('div', { class: 'cx-row' }, h('span', { class: 'cx-chip pest', text: p.rank }), h('span', { class: 'cx-tag cx-latin', text: `${p.latin} · ${p.mass}` }));
+    const out: Node[] = [head('IRGC · the pest army', p.name, p.line, tags)];
+
+    const wrap = h('div', { class: 'cx-vwrap' });
+    const box = h('div', { class: 'cx-viewer cx-pview' });
+    const bar = h('div', { class: 'cx-vbar' });
+    const foot = h('div', { class: 'cx-vfoot' });
+    const hint = h('div', { class: 'cx-vhint', text: 'Drag to turn it, scroll or pinch to zoom, right-drag or two-finger drag to pan.' });
+    const res = h('div', { class: 'cx-vout' });
+    foot.append(hint, res);
+    wrap.append(box, foot);
+    if (!stage) stage = new PestStage(stageCanvas, { detail: pestDetail() });
+    if (!stage.ok) {
+      dropStage();
+      box.appendChild(h('div', { class: 'cx-nogl', text: '3D view needs WebGL.' }));
+    } else {
+      const toggle = (label: string, on: boolean, set: (v: boolean) => void) => {
+        const b = h('button', { class: 'cx-vbtn', attrs: { type: 'button', 'aria-pressed': String(on) }, text: label });
+        b.addEventListener('click', () => {
+          const v = b.getAttribute('aria-pressed') !== 'true';
+          b.setAttribute('aria-pressed', String(v));
+          set(v);
+        });
+        return b;
+      };
+      bar.appendChild(
+        toggle(p.id === 'wasp' ? 'Hairs' : 'Fur', pestFur, (v) => {
+          pestFur = v;
+          stage?.setFur(v);
+        }),
+      );
+      if (p.id === 'wasp')
+        bar.appendChild(
+          toggle('Wing beat', pestBuzz, (v) => {
+            pestBuzz = v;
+            stage?.setBuzz(v);
+          }),
+        );
+      const reset = h('button', { class: 'cx-vbtn', attrs: { type: 'button' }, html: `${icon('retry')}<span>Reset view</span>` });
+      reset.addEventListener('click', () => stage?.view());
+      bar.appendChild(reset);
+      box.append(stageCanvas, bar);
+      res.innerHTML = '<span class="wait">Sculpting the model…</span>';
+      stage.setFur(pestFur);
+      stage.setBuzz(p.id === 'wasp' && pestBuzz);
+      stage.setSpin(!matchMedia('(prefers-reduced-motion: reduce)').matches);
+      void stage.show(p.id).then((r) => {
+        if (!r || current !== p.id) return;
+        const len = Math.max(r.size.x, r.size.z);
+        const real = len < 0.1 ? `${(len * 1000).toFixed(0)} mm` : `${(len * 100).toFixed(0)} cm`;
+        res.innerHTML = `<span>True size: <b>${real}</b> ${p.id === 'wasp' ? 'across its legs and antennae' : 'nose to tail'}</span>`;
+      });
+    }
+    out.push(wrap);
+
+    out.push(h('div', { class: 'cx-cols' }, card('Service record', dl(p.service, 'cx-tdl')), card('Field record', list('ul', p.record, 'cx-avoid'))));
+    out.push(card('On the model', h('p', { class: 'cx-p', text: p.model })));
+    out.push(
+      h(
+        'footer',
+        { class: 'cx-terms' },
+        h('div', { class: 'cx-kicker', text: 'About the IRGC' }),
+        h('p', { class: 'cx-note', text: IRGC_INTRO }),
+        p.pf2050 ? null : h('p', { class: 'cx-note', text: 'Wasps are not on the Predator Free 2050 list, so the Air Wing fights on as an unofficial ally. DOC controls them separately.' }),
+      ),
+    );
+    return out;
+  };
+
   const matrixPage = () => {
     const out: Node[] = [head('Cross-reference', 'Which weapon for which target', 'A cell is filled where the weapon is the right tool or works well, with the usual number of hits.')];
     const t = h('table', { class: 'cx-table cx-mx' });
@@ -347,8 +432,10 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
     if (current === MATRIX_ID) nodes = matrixPage();
     else {
       const e = codexEntry(current) as CodexEntry;
-      nodes = e.kind === 'weapon' ? weaponPage(e) : warningPage(e);
+      nodes = e.kind === 'weapon' ? weaponPage(e) : e.kind === 'pest' ? pestPage(e) : warningPage(e);
     }
+    // leaving the pest pages frees the model and its WebGL context
+    if (!(codexEntry(current)?.kind === 'pest')) dropStage();
     detail.append(...nodes);
     detail.scrollTop = 0;
   };
@@ -376,6 +463,7 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
       cancelAnimationFrame(hudRaf);
       viewer?.dispose();
       viewer = null;
+      dropStage();
     },
   };
 }

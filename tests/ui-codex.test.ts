@@ -169,3 +169,25 @@ describe('blast damage spares the shooter\'s own side (found while writing the C
     expect(mig.health).toBeLessThan(mig.maxHealth);
   });
 });
+
+describe('Codex: the IRGC pest army', () => {
+  it('has a page for every pest model, in its own category, findable by name, Latin name and "IRGC"', async () => {
+    const { CODEX_PESTS, entriesIn, searchCodex, codexEntry } = await import('../src/ui/codex/data');
+    const { PESTS } = await import('../src/render/models/pests');
+    expect(CODEX_PESTS.map((p) => p.id).sort()).toEqual(PESTS.map((p) => p.id).sort());
+    expect(entriesIn('pest')).toHaveLength(PESTS.length);
+    for (const p of CODEX_PESTS) {
+      expect(codexEntry(p.id)).toBe(p);
+      expect(p.record.length).toBeGreaterThan(0);
+    }
+    expect(searchCodex('mustela').map((e) => e.id)).toEqual(['stoat']);
+    expect(searchCodex('irgc')).toHaveLength(PESTS.length);
+    // Predator Free 2050 targets possums, rats and mustelids, not wasps
+    expect(CODEX_PESTS.filter((p) => !p.pf2050).map((p) => p.id)).toEqual(['wasp']);
+  });
+
+  it('entry ids stay unique across weapons, warnings and pests', () => {
+    const ids = CODEX_ENTRIES.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});

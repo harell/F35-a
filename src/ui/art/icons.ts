@@ -50,6 +50,7 @@ const P: Record<string, string> = {
   crosshair: '<circle cx="12" cy="12" r="8"/><path d="M12 4v5M12 15v5M4 12h5M15 12h5"/>',
   book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5"/>',
   flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  paw: '<path d="M12 12.5c-2.6 0-5 2.6-5 4.8 0 1.5 1.2 2.2 2.6 2.2 1 0 1.6-.5 2.4-.5s1.4.5 2.4.5c1.4 0 2.6-.7 2.6-2.2 0-2.2-2.4-4.8-5-4.8z"/><ellipse cx="6" cy="10" rx="1.6" ry="2.1"/><ellipse cx="9.6" cy="6.4" rx="1.6" ry="2.2"/><ellipse cx="14.4" cy="6.4" rx="1.6" ry="2.2"/><ellipse cx="18" cy="10" rx="1.6" ry="2.1"/>',
 };
 
 export type IconName = keyof typeof P;
