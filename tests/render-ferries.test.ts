@@ -1,5 +1,5 @@
 /**
- * Harbour ferries (issue #30): render-only traffic on timetable routes out of the Downtown Ferry Terminal.
+ * Harbour ferries (issue #30): render-only traffic on AT's timetable routes out of the Downtown Ferry Terminal.
  * Every hull position on every route lies on the real LINZ water (the 2 m waterMask), clear of the OpenStreetMap wharves,
  * piers and breakwaters, the Harbour Bridge piers and the moored ships; the docks are the real wharves;
  * no two ferries ever overlap over the fleet's whole cycle; the motion is deterministic; the quality
@@ -106,9 +106,18 @@ function hullPoints(s: FerryState, scale: number): [number, number][] {
 const st = (): FerryState => ({ x: 0, z: 0, heading: 0, speed: 0, dock: -1 });
 
 describe('ferry routes on the real harbour', () => {
-  it('runs 10–20 ferries on 6 routes, every period a divisor of the fleet cycle with room for the timetable', () => {
-    expect(FERRY_FLEET.length).toBeGreaterThanOrEqual(10);
-    expect(FERRY_FLEET.length).toBeLessThanOrEqual(20);
+  it("runs AT's five harbour routes with their stops, 8 ferries, every period a divisor of the fleet cycle with room for the timetable", () => {
+    // at.govt.nz timetables / GTFS: DEV, BAYS, BIRK (via Te Onewa Northcote Point), HOBS (and Beach Haven), WSTH
+    expect(FERRY_ROUTES.map((r) => r.docks.map((d) => d.name.split(' ')[0]).join('>'))).toEqual([
+      'Downtown>Devonport',
+      'Downtown>Bayswater',
+      'Downtown>Te>Birkenhead',
+      'Downtown>Hobsonville>Beach>Hobsonville',
+      'Downtown>West',
+    ]);
+    // headways (period / ferries): DEV 20 min, BAYS 30, BIRK 40, HOBS and WSTH 60
+    expect(FERRY_ROUTES.map((r) => r.period / r.ferries / 60)).toEqual([20, 30, 40, 60, 60]);
+    expect(FERRY_FLEET.length).toBe(8);
     for (const r of routes) {
       expect(FERRY_CYCLE % r.def.period, r.def.id).toBe(0);
       expect(r.minPeriod, `${r.def.id} needs ${r.minPeriod.toFixed(0)} s`).toBeLessThanOrEqual(r.def.period);
@@ -123,7 +132,7 @@ describe('ferry routes on the real harbour', () => {
     expect(water[0](AKL.devonport.x, AKL.devonport.z)).toBe(false);
     expect(water[0](300, -300)).toBe(false);
     expect(water[0](1500, -1250)).toBe(true);
-    expect(water[3](-3600, -3300)).toBe(false);
+    expect(water[2](-3600, -3300)).toBe(false);
     const s = st();
     const bad: string[] = [];
     routes.forEach((r, ri) => {
@@ -226,17 +235,17 @@ describe('ferry routes on the real harbour', () => {
     }
     expect([...docks].sort()).toEqual([0, 1]);
     expect(vmax).toBeCloseTo(r.speed, 1);
-    expect(r.speed).toBeGreaterThan(6);
+    expect(r.speed).toBeGreaterThan(4); // the timetable's 12 min crossing
     expect(astern).toBe(true);
     // never moves faster than its speed allows (no teleporting at segment joins)
     expect(jump).toBeLessThan(r.speed * 0.5 + 0.5);
   });
 
-  it('quality presets: wakes off on low, 10–20 ferries scaling with quality', () => {
+  it('quality presets: wakes off on low, ferries scaling with quality, one per route at least', () => {
     expect(QUALITY_PRESETS.low.wakes).toBe(false);
     expect(QUALITY_PRESETS.medium.wakes).toBe(true);
     expect(QUALITY_PRESETS.high.wakes).toBe(true);
-    expect(QUALITY_PRESETS.low.ferries).toBeGreaterThanOrEqual(10);
+    expect(QUALITY_PRESETS.low.ferries).toBeGreaterThanOrEqual(FERRY_ROUTES.length);
     expect(QUALITY_PRESETS.low.ferries).toBeLessThanOrEqual(QUALITY_PRESETS.medium.ferries);
     expect(QUALITY_PRESETS.medium.ferries).toBeLessThanOrEqual(QUALITY_PRESETS.high.ferries);
     expect(QUALITY_PRESETS.high.ferries).toBeLessThanOrEqual(FERRY_FLEET.length);

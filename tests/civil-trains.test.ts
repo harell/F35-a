@@ -174,6 +174,17 @@ describe('the timetable', () => {
     expect(RAIL_LINES[LINE_OW].perHour.offpeak).toBe(2);
   });
 
+  it('lines and trains carry AT names, codes and colours', () => {
+    // at.govt.nz timetables and GTFS routes.txt (route_short_name, route_color)
+    expect(RAIL_LINES.map((l) => [l.code, l.name, l.color])).toEqual([
+      ['E-W', 'East West line', 0x97c93d],
+      ['S-C', 'South City line', 0xd52923],
+      ['O-W', 'Onehunga West line', 0x00aeef],
+    ]);
+    const svc = new TrainService({ timeOfDay: 'dawn', seed: 4, height: flat });
+    for (const u of svc.units.filter((x) => x.line !== LINE_FREIGHT)) expect(u.name).toMatch(/^(E-W East West|S-C South City|O-W Onehunga West) line AM \d{3}(\+\d{3})?$/);
+  });
+
   it('3- and 6-car AM sets (72 m and 144 m), at most 110 km/h; freight at most 80 km/h, leaving within the first 15 min', () => {
     const svc = new TrainService({ timeOfDay: 'dawn', seed: 2, height: flat });
     const pass = svc.units.filter((u) => u.line !== LINE_FREIGHT);

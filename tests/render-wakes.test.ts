@@ -150,7 +150,7 @@ describe('entity renderer: wakes and ferries', () => {
     const routes = ferryRoutes();
     const m = new Matrix4();
     const p = new Vector3();
-    for (const i of [0, 3, 9]) {
+    for (const i of [0, 3, 7]) {
       const s = ferryAt(routes[FERRY_FLEET[i].route], FERRY_FLEET[i].k, 500, { x: 0, z: 0, heading: 0, speed: 0, dock: -1 });
       f.mesh.getMatrixAt(i, m);
       p.setFromMatrixPosition(m);
