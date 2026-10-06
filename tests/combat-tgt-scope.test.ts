@@ -1,7 +1,8 @@
 /**
  * TGT steps through the selected weapon's targets (owner, 2026-10-06): air tracks with an A/A missile,
  * surface tracks with an A/G weapon, both with the gun (nearest in front first). FIRE with the box on
- * the wrong kind of target names it ('AIR TGT: GUN OR A-A') instead of a bare 'NO TARGET'.
+ * the wrong kind of target names it ('AIR TGT: GUN OR A-A') instead of a bare 'NO TARGET'. Civil traffic
+ * comes up only once the weapon has no hostile track left.
  * Played on the stroll: no hostiles, only civil traffic (airliners, helicopters, ships, trains).
  */
 import { describe, expect, it } from 'vitest';
@@ -15,6 +16,7 @@ import { buildInstantMissionSeeded, createMissionRunner } from '../src/missions'
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { FlatTerrain } from './combat-helpers';
+import { weaponMismatch } from '../src/sim/weapons/fit';
 
 const DT = 1 / 60;
 
@@ -77,6 +79,21 @@ describe('TGT follows the selected weapon', () => {
   });
 });
 
+describe('TGT skips civil traffic while a hostile is left (owner, 2026-10-06)', () => {
+  it('a bandit among the airliners and helicopters: TGT boxes only the bandit, then the civil traffic once it is down', () => {
+    const { world, p, cycled } = setup();
+    const fwd = forwardOf(p.quaternion, new Vector3());
+    const bandit = world.spawnAircraft({ type: 'su27', team: 'red', position: p.position.clone().addScaledVector(fwd, 8_000), heading: 0, speed: 200, ai: null });
+    for (let i = 0; i < 30; i++) world.step(DT);
+    for (const w of ['aim120', 'gun'] as const) expect(cycled(w).map((e) => e.id)).toEqual([bandit.id]);
+    bandit.alive = false;
+    for (let i = 0; i < 30; i++) world.step(DT);
+    const civil = cycled('aim120');
+    expect(civil.length).toBeGreaterThan(1);
+    expect(civil.every((e) => e.team === 'neutral')).toBe(true);
+  });
+});
+
 describe('FIRE with the box on the wrong kind of target', () => {
   it('an AARGM on a locked airliner is denied naming the fix (the owner could not shoot an A320)', () => {
     const { world, p, denied } = setup('sead');
@@ -94,5 +111,28 @@ describe('FIRE with the box on the wrong kind of target', () => {
     world.combat.designate(p, ship.id, world);
     expect(world.combat.fire(p, world)).toBeNull();
     expect(denied.at(-1)).toBe('GND TGT: GUN OR A-G');
+  });
+});
+
+describe('which weapon fits which target (the HUD warning and the FIRE denial share it)', () => {
+  it('names the mismatch, null when the weapon can engage', () => {
+    expect(weaponMismatch('gun', 'aircraft')).toBeNull();
+    expect(weaponMismatch('gun', 'ground')).toBeNull();
+    expect(weaponMismatch('aim120', 'aircraft')).toBeNull();
+    expect(weaponMismatch('aim9x', 'sam')).toBe('GND TGT: GUN OR A-G');
+    expect(weaponMismatch('gbu31', 'aircraft')).toBe('AIR TGT: GUN OR A-A');
+    expect(weaponMismatch('gbu53', 'ground')).toBeNull();
+    expect(weaponMismatch('aargm', 'sam')).toBeNull();
+    expect(weaponMismatch('aargm', 'aircraft')).toBe('AIR TGT: GUN OR A-A');
+    expect(weaponMismatch('aargm', 'ground')).toBe('AARGM: RADARS ONLY');
+  });
+
+  it('an AARGM on a ship is denied: radars only', () => {
+    const { world, p, denied } = setup('sead');
+    world.combat.selectWeapon(p, 'aargm', world);
+    const ship = p.radar.contacts.find((c) => world.getEntity(c.id)?.kind === 'ground')!;
+    world.combat.designate(p, ship.id, world);
+    expect(world.combat.fire(p, world)).toBeNull();
+    expect(denied.at(-1)).toBe('AARGM: RADARS ONLY');
   });
 });

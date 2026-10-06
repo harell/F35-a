@@ -13,6 +13,7 @@ import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_B
 import { blink, type HudFrame } from './frame';
 import { TEST_HOOKS } from '../../core/data';
 import { noteCue, notePipper } from './drawn';
+import { weaponMismatch } from '../../sim/weapons/fit';
 
 const dlzGeom = makeDlzGeometry();
 const tofTxt = new NumText(0, 'TOF ');
@@ -55,6 +56,17 @@ export function masterMode(f: HudFrame): 'A-A' | 'A-G' | 'NAV' {
   return 'NAV';
 }
 
+/**
+ * The selected weapon can't engage the boxed target ('AIR TGT: GUN OR A-A'…): a steady amber line
+ * under the weapon and the target camera's status pill, before FIRE is pressed (owner, 2026-10-06:
+ * an AARGM on a locked A320 read LOCK and CHECK FIRE, as if it could shoot).
+ */
+export function weaponMismatchOf(f: HudFrame): string | null {
+  const t = f.target;
+  if (!t || (t.kind !== 'aircraft' && t.kind !== 'ground' && t.kind !== 'sam')) return null;
+  return weaponMismatch(f.p.selectedWeapon, t.kind);
+}
+
 /** Lines the full (non-compact) weapon block will use this frame. */
 export function weaponBlockLines(f: HudFrame): number {
   const p = f.p;
@@ -62,7 +74,9 @@ export function weaponBlockLines(f: HudFrame): number {
   if (p.selectedWeapon !== 'gun') n++;
   if (!p.radar.emitting) n++;
   if (p.bayDoors > 0.05) n++;
-  if (deniedShown(f)) n++;
+  const wrong = weaponMismatchOf(f);
+  if (wrong) n++;
+  if (deniedShown(f) && f.st.deniedText !== wrong) n++;
   return n;
 }
 
@@ -127,7 +141,14 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
     pen.text('BAY OPEN', x, y, pal.dim, 11, 'left');
     y += L.line * 0.9;
   }
-  if (deniedShown(f)) {
+  // the weapon can't engage the boxed target: steady, while it lasts (a denial saying the same blinks it)
+  const wrong = weaponMismatchOf(f);
+  if (wrong) {
+    if (!(deniedShown(f) && st.deniedText === wrong) || blink(f, 4, 0.7)) pen.text(wrong, x, y, pal.warn, 12.5, 'left');
+    if (TEST_HOOKS) noteCue(wrong, x, y, true);
+    y += L.line;
+  }
+  if (deniedShown(f) && st.deniedText !== wrong) {
     if (blink(f, 4, 0.7)) pen.text(st.deniedText, x, y, pal.warn, 12.5, 'left');
     y += L.line;
   }

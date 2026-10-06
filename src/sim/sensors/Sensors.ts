@@ -443,15 +443,19 @@ export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: numbe
 
 /**
  * TGT button (LOCK / NEXT), stepping through the selected weapon's targets: air with an A/A missile,
- * ground with an A/G weapon, both with the gun (nearest in front first). With an unlocked, un-commanded TD box (the auto-designated primary
- * threat) the press commands the lock on THAT contact. A press while locking / locked moves the
+ * ground with an A/G weapon, both with the gun (nearest in front first). With an unlocked,
+ * un-commanded TD box (the auto-designated primary threat) the press commands the lock on THAT contact. A press while locking / locked moves the
  * designation to the next candidate (dropping the lock) and commands a lock on it. With a single
  * candidate it toggles: locked / locking → break lock (back to a silent TWS track). NEXT skips
- * contacts our missiles are already flying at, unless nothing else is left to step to.
+ * contacts our missiles are already flying at, unless nothing else is left to step to. Civil traffic
+ * is a distraction while the weapon has hostile tracks to step to: TGT skips it then, and steps
+ * through it only once there are none (a tap still boxes it).
  */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
-  const all = candidates(ctx, ac, st, cycleScope(ac));
+  const scoped = candidates(ctx, ac, st, cycleScope(ac));
+  const hostile = scoped.filter((c) => c.team !== 'neutral');
+  const all = hostile.length > 0 ? hostile : scoped;
   if (all.length === 0) return;
   const des = ac.radar.designatedId;
   const free = all.filter((c) => c.id === des || !engagedBy(ctx, ac, c.id));
