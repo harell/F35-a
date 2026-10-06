@@ -117,19 +117,18 @@ describe('the words (#201)', () => {
     expect(text).toMatch(/fire it close in/);
   });
 
-  it('the volunteers call the stoat at its bait station and the moment it stands up; DARKSTAR types the contact', { timeout: 120_000 }, () => {
+  it('the volunteers call the bait stations and the moment it stands up; DARKSTAR types the contact', { timeout: 120_000 }, () => {
     const m = setup();
     m.tick(1);
     const s = m.stoat()!;
-    // designated: it stands up at its station and the volunteers say so
-    for (let i = 0; i < 40 && m.runner.state === 'running'; i++) {
+    // designated all along: at the first stop it stands up and the volunteers say so
+    for (let i = 0; i < 160 && m.runner.state === 'running'; i++) {
       m.p.radar.designatedId = s.id;
       m.tick(0.5);
-      if (m.radio.some((x) => /stood up/.test(x.text))) break;
+      if (m.radio.some((x) => /first station/.test(x.text)) && m.radio.some((x) => /stood up/.test(x.text))) break;
     }
-    m.tick(15);
     expect(m.radio.some((x) => x.from === 'DARKSTAR' && /Confirmed stoat/.test(x.text))).toBe(true);
-    expect(m.radio.some((x) => x.from === G03_VOLUNTEERS && /bait station, feeding/.test(x.text))).toBe(true);
+    expect(m.radio.some((x) => x.from === G03_VOLUNTEERS && /first station/.test(x.text))).toBe(true);
     expect(m.radio.some((x) => x.from === G03_VOLUNTEERS && /stood up/.test(x.text))).toBe(true);
     m.runner.dispose?.();
   });

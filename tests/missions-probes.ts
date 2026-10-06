@@ -60,8 +60,8 @@ export const KILL_ALL = 'killall';
  *  - golden: the intended way through: out of the harbour and down the Tāmaki Strait as low as the jet
  *    goes (the Motuihe SA-6 sees down it but can't engage under its 80 m floor; the Tor stands 8 km off),
  *    an AARGM at the strait's patrol boat, a second at the airstrip SA-6 from inside 7 km (fired from
- *    far out it only silences the radar for seconds), then the attack from under the cloud on the stoat
- *    at its bait station;
+ *    far out it only silences the radar for seconds), then the attack from under the cloud at one of the
+ *    stoat's stops (#200: the bot holds off while it runs);
  *  - golden_north: the same idea round the north (AARGMs at the two northern boats), slower and less sure.
  */
 export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
