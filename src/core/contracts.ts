@@ -43,6 +43,8 @@ export interface FrameContext {
   paused: boolean;
   /** CSS pixel size of the viewport + safe-area insets (notches). */
   screen: { width: number; height: number; dpr: number; safe: { top: number; right: number; bottom: number; left: number } };
+  /** The on-screen touch controls are showing (their buttons carry the weapon counts and the throttle). */
+  touchControls?: boolean;
 }
 
 /* ───────────────────────── World rendering (WORLD agent) ───────────────────────── */
@@ -235,6 +237,8 @@ export interface InputApi {
    * (sensor missing, permission denied), so the touch stick took over.
    */
   readonly activeScheme: ControlScheme;
+  /** The on-screen touch controls are showing (a coarse pointer, or the screen was touched). */
+  readonly touchShown: boolean;
   /** Poll devices, update touch controls & labels. */
   update(dt: number, ctx: FrameContext): void;
   on(cmd: InputCommand, fn: () => void): () => void;

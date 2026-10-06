@@ -276,7 +276,8 @@ export const drawSmsPage: PageFn = (pen, x, y, w, h, d) => {
   pen.text((sel === 'gun' ? 'RDS ' : 'QTY ') + n, cx, y + 62, n > 0 ? PC.value : PC.amber, 30);
   const bay = p.bayDoors > 0.05 ? (p.bayDoors > 0.9 ? 'BAY OPEN' : 'BAY MOVING') : 'BAY CLSD';
   pen.text(bay, cx, y + 94, p.bayDoors > 0.05 ? PC.amber : PC.label, 23);
-  pen.text('GUN ' + p.gunAmmo, x + 10, y + 124, sel === 'gun' ? PC.green : PC.value, 23, 'left');
+  // (GUN only under a missile or bomb: with the gun selected, RDS above says it, owner 2026-10-06)
+  if (sel !== 'gun') pen.text('GUN ' + p.gunAmmo, x + 10, y + 124, PC.value, 23, 'left');
   pen.text('F' + p.flares + ' C' + p.chaff, x + w - 10, y + 124, p.flares <= 4 || p.chaff <= 4 ? PC.amber : PC.value, 23, 'right');
 
   // planform with stations (internal bays + wing pylons)

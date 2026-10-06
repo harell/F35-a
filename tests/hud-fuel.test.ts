@@ -80,17 +80,17 @@ describe('fuel cues (1.2-h)', () => {
   });
 
   for (const view of ['cockpit', 'hud'] as CameraMode[]) {
-    it(`${view}: FUEL readout in klb, amber at joker, red at bingo`, { timeout: 20_000 }, () => {
+    it(`${view}: FUEL readout in klb from joker only (owner, 2026-10-06), amber at joker, red at bingo`, { timeout: 20_000 }, () => {
       const pal = paletteFor(DEFAULT_SETTINGS.hudColor);
       const r = rig('aa', view);
       const fuel = (frac: number): TextRec | undefined => {
         r.mock.player.flight.fuel = frac * CAP;
         return r.run(0.1).find((t) => /^FUEL \d+\.\d$/.test(t.text));
       };
-      const full = fuel(0.6);
-      expect(full?.text).toBe('FUEL ' + ((0.6 * CAP * 2.20462) / 1000).toFixed(1));
-      expect(full?.color).toBe(pal.main);
-      expect(fuel(JOKER_FRACTION - 0.02)?.color).toBe(pal.warn);
+      expect(fuel(0.6)).toBeUndefined();
+      const joker = fuel(JOKER_FRACTION - 0.02);
+      expect(joker?.text).toBe('FUEL ' + (((JOKER_FRACTION - 0.02) * CAP * 2.20462) / 1000).toFixed(1));
+      expect(joker?.color).toBe(pal.warn);
       expect(fuel(BINGO_FRACTION - 0.02)?.color).toBe(pal.danger);
     });
   }

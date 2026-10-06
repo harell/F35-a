@@ -10,8 +10,7 @@
  * Blocks whose height depends on their content (column, kill feed, external block) use the extent they
  * had on the previous frame (one frame of lag, no allocation, no double layout).
  */
-import { toFeet } from '../../core/math';
-import { reserveBankScale, reserveWaterline } from './flight';
+import { raltShown, reserveBankScale, reserveWaterline, speedRowCount } from './flight';
 import { WEAPON_IS_BOMB } from './format';
 import type { HudFrame } from './frame';
 import { controlRects } from './layout';
@@ -87,25 +86,23 @@ export function tapeBottom(f: HudFrame): number {
 }
 
 /**
- * Bottom of the HMD speed column: the box, Mach, G, max G, AoA, the THR / AB line, FUEL, and SPD BRK
- * while the speed brake is out (#62: a SAM label printed into "THR 94%", which the reservation missed).
+ * Bottom of the HMD speed column: the box and the rows it draws this frame (G, AoA, THR / AB, FUEL, SPD
+ * BRK: speedRows) (#62: a SAM label printed into "THR 94%", which the reservation missed).
  */
 export function speedColumnBottom(f: HudFrame): number {
-  const { L, p } = f;
-  const brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
-  return L.boxY + 11 * L.u + L.line * (brake ? 7.2 : 6.2);
+  const { L } = f;
+  return L.boxY + 11 * L.u + L.line * (speedRowCount(f) + 0.2);
 }
 
 /**
- * Bottom of the HMD altitude column: the box, radar altitude (below 5000 ft AGL), VSI, and closure and
- * aspect / angels with an air target designated. As drawAltColumn decides: with both the RALT row and
- * a target, the aspect line is the 4th row (#62).
+ * Bottom of the HMD altitude column: the box, radar altitude (raltShown: low, or descending), VSI, and
+ * closure and aspect / angels with an air target designated, as drawAltColumn draws them (#62).
  */
 export function altColumnBottom(f: HudFrame): number {
   const { L, p } = f;
   const t = f.target;
-  const fourRows = !!p && !!t && t.kind === 'aircraft' && toFeet(p.flight.agl) < 5000;
-  return L.boxY + 11 * L.u + L.line * (fourRows ? 4.4 : 3.4);
+  const rows = (raltShown(p) ? 1 : 0) + 1 + (t && t.kind === 'aircraft' ? 2 : 0);
+  return L.boxY + 11 * L.u + L.line * (rows + 0.4);
 }
 
 /**

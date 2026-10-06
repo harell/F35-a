@@ -94,15 +94,21 @@ describe('MissionDef.gunAmmo: launch', () => {
 });
 
 describe('MissionDef.gunAmmo: the stores page and the HUD rounds counter show the real number', () => {
-  it('cockpit SMS page: RDS 400 / GUN 400 for the jet of a gunAmmo: 400 mission', () => {
+  it('cockpit SMS page: RDS 400 with the gun selected (no second GUN line), GUN 400 under a missile, for a gunAmmo: 400 mission', () => {
     const h = harness(withGun(400));
     const p = h.world.player!;
+    const sms = () => {
+      const { ctx } = makeFakeCanvas(512, 512);
+      drawSmsPage(new Pen(ctx as unknown as CanvasRenderingContext2D), 0, 0, 480, 480, { ctx: {} as FrameContext, p, flash: false });
+      return ctx.texts.map((t) => t.text);
+    };
     h.world.combat.selectWeapon(p, 'gun', h.world);
-    const { ctx } = makeFakeCanvas(512, 512);
-    drawSmsPage(new Pen(ctx as unknown as CanvasRenderingContext2D), 0, 0, 480, 480, { ctx: {} as FrameContext, p, flash: false });
-    const texts = ctx.texts.map((t) => t.text);
-    expect(texts).toContain('RDS 400');
-    expect(texts).toContain('GUN 400');
+    expect(sms()).toContain('RDS 400');
+    expect(sms()).not.toContain('GUN 400');
+    const missile = p.stores.find((s) => s.count > 0)?.weapon;
+    expect(missile).toBeTruthy();
+    h.world.combat.selectWeapon(p, missile!, h.world);
+    expect(sms()).toContain('GUN 400');
   });
 
   it('HMD weapon box: GUN 400 with the gun selected, and as the secondary line under a missile', () => {
