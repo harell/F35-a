@@ -334,12 +334,17 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       const t = ctx.time;
       // (+200 m: a big airframe straddling the far plane is clipped by it, not dropped)
       const max2 = maxDist === undefined ? Infinity : (maxDist + 200) ** 2;
+      // the instanced helicopters are refilled for this viewpoint too: the main pass left out any beyond its LOD
+      // range, so a designated helicopter 20 km away was missing from its own target-camera close-up
+      helis.begin(t, env.isNight);
       for (const ac of world.aircraft) {
         const tr = aircraft.get(ac.id);
         if (!tr) continue;
         // (update() sets every aircraft's visibility again for the main camera)
         tr.v.root.visible = ac.position.distanceToSquared(camPos) <= max2 && tr.v.update(ac, t, 0, camPos, lodCfg, env.isNight);
+        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive);
       }
+      helis.end();
       for (const m of world.missiles) missiles.get(m.id)?.v.update(m, t, camPos);
       for (const s of world.sams) sams.get(s.id)?.v.update(s, t, 0, camPos, groundFar);
       for (const g of world.ground) grounds.get(g.id)?.v.update(g, t, 0, camPos, groundFar);
