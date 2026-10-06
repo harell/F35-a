@@ -373,9 +373,12 @@ export class RoadNetwork {
   /**
    * Ribbon geometry (position + uv: u across 0..1, v along in 40 m units) following the terrain,
    * raised onto causeways / bridges over water; bridge decks, piers and barriers go into `B`,
-   * lamp posts into `lights`. `only` picks the paths (one mesh per texture: roads, railways).
+   * lamp posts into `lights`. `only` picks the paths (one mesh per texture: roads, railways). `opts.ground` replaces
+   * `height` as the ground the ribbons stand on (and test for water), `opts.noLamp` keeps the generic lamp posts off a
+   * place that has its own (the Tāmaki Drive waterfront, tamakiDrive.ts).
    */
-  buildRibbons(height: HeightFn, B: GeometryBuilder, lights: LightList, lamps: boolean, only: (p: RoadPath) => boolean = () => true): BufferGeometry {
+  buildRibbons(height: HeightFn, B: GeometryBuilder, lights: LightList, lamps: boolean, only: (p: RoadPath) => boolean = () => true, opts: { ground?: HeightFn; noLamp?: (x: number, z: number) => boolean } = {}): BufferGeometry {
+    if (opts.ground) height = opts.ground;
     const pos: number[] = [];
     const uv: number[] = [];
     const idx: number[] = [];
@@ -476,7 +479,7 @@ export class RoadNetwork {
           const side = lampN++ % 2 === 0 ? 1 : -1;
           const x = p.x[i] + nx * (hw + 1) * side;
           const z = p.z[i] + nz * (hw + 1) * side;
-          lights.add(x, height(x, z) * (1 - deck[i]) + deckY * deck[i] + 11, z, 0xffd9a8, 4.5);
+          if (!opts.noLamp?.(x, z)) lights.add(x, height(x, z) * (1 - deck[i]) + deckY * deck[i] + 11, z, 0xffd9a8, 4.5);
         }
       }
     }

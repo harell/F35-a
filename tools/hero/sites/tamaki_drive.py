@@ -10,7 +10,9 @@ one axis (Tāmaki Drive's carriageway, west → east), 5 m apart. Offsets are ac
                                                      # the classified point cloud within 45 m of the axis (~4 min)
   python3 tools/hero/sites/tamaki_drive.py measure   # sections, profiles, path edges, seawall, poles, trees (~3 min)
   python3 tools/hero/sites/tamaki_drive.py model     # → model.json (site frame) + a ledger of the numbers
-Everything lands in /tmp/hero/tamaki (--out).
+  python3 tools/hero/sites/tamaki_drive.py bake      # model.json → src/world/scenery/data/tamaki-drive.bin (the game's
+                                                     # data, ~11 kB gzip; decoder src/world/scenery/tamakiDriveData.ts)
+Everything else lands in /tmp/hero/tamaki (--out).
 
 What each part rests on:
   paths      OSM centrelines ("Tāmaki Drive Shared Path", "Tāmaki Drive Cycleway", sidewalks; ±1–2 m), re-centred and
@@ -664,11 +666,168 @@ def model(out):
     print('rails', km(rails), 'km; lamps', len(lamps), '; trees', len(trees_), f"({sum(t[-1] for t in trees_)} palms)", '; model.json', os.path.getsize(f'{out}/model.json') // 1024, 'kB')
 
 
+# ───────────────────────── bake (the game's data) ─────────────────────────
+
+BAKE_STEP = 10.0          # m between the shipped stations (the model's 5 m values are smoothed over 25–45 m already)
+BIN = os.path.join(HERE, '..', '..', '..', 'src', 'world', 'scenery', 'data', 'tamaki-drive.bin')
+KINDS = {'SP': 0, 'CY': 1, 'FW': 2}
+SURFACES = {'asphalt': 0, 'concrete': 1, 'paving': 2}
+WALLS = {'rock': 0, 'concrete': 1, 'low': 2}
+LL = 1e6                  # lat/lon unit: 1e-6° (≈ 0.1 m)
+
+
+def bake(out, dst=BIN):
+    """model.json → src/world/scenery/data/tamaki-drive.bin (gzip): measured parameters only, every position as WGS84 so
+    the game converts it with its own geoToWorld. Layout in src/world/scenery/tamakiDriveData.ts (decodeTamakiDrive).
+
+    Stations every 10 m along the axis. On the two bridges (the Hobson Bay outlet at 1.0 km, Ngapipi Rd at 2.1 km) the
+    DEM under the road is the water, so the road and path levels there are the line between the abutments."""
+    import gzip, struct
+    F = Frame(out); M = json.load(open(f'{out}/model.json')); rows = json.load(open(f'{out}/measure.json'))
+    E0, N1 = M['meta']['E0'], M['meta']['N1']
+    nst = int(F.S[-1] // BAKE_STEP) + 1
+    SS = np.arange(nst) * BAKE_STEP
+    PX = np.stack([np.interp(SS, F.S, F.X[:, k]) for k in (0, 1)], 1)
+    lon, lat = hs.to_wgs.transform(PX[:, 0], PX[:, 1])
+    ilat, ilon = np.round(np.asarray(lat) * LL).astype(np.int64), np.round(np.asarray(lon) * LL).astype(np.int64)
+    # the road's level: the DEM at the measured carriageway, bridges bridged
+    road = M['road'][0]
+    rs = np.array(road['s']); ry = np.array([p[2] for p in road['pts']])
+    wet = ry < 0.8
+    ry = np.where(wet, np.interp(rs, rs[~wet], ry[~wet]), ry)
+    bridge = np.interp(SS, rs, wet.astype(float)) > 0.01
+    level = np.interp(SS, rs, ry)
+    _, lo, hi = strip_polygon(F, rows)
+    lo, hi = np.interp(SS, F.S, lo), np.interp(SS, F.S, hi)
+
+    def h8(v, bias=4.0):    # height, 0.1 m from −4 m
+        v = np.round((np.asarray(v, float) + bias) * 10)
+        assert v.min() >= 0 and v.max() <= 255, (v.min(), v.max())
+        return v.astype(np.uint8)
+
+    def i16(v, scale):
+        v = np.round(np.asarray(v, float) * scale)
+        assert np.abs(v).max() < 32767
+        return v.astype('<i2')
+
+    def seq(v, scale, bias=0.0):
+        """A smooth series: round((v + bias) · scale) as an i16 first value, then i8 steps (gzip packs them well); a
+        step out of ±127 is the escape −128 and the value itself as an i16."""
+        q = np.round((np.asarray(v, float) + bias) * scale).astype(np.int64)
+        assert np.abs(q).max() < 32767
+        out_ = bytearray(struct.pack('<h', int(q[0])))
+        for a, c in zip(q, q[1:]):
+            out_ += struct.pack('<b', int(c - a)) if abs(c - a) <= 127 else struct.pack('<bh', -128, int(c))
+        return bytes(out_)
+
+    def resample(s, cols, maxgap=15.0):
+        """Values at s (5 m) → runs over the shipped stations, split where the data has a gap."""
+        s = np.asarray(s, float); out_ = []
+        cut = np.where(np.diff(s) > maxgap)[0]
+        for a, b in zip(np.r_[0, cut + 1], np.r_[cut + 1, len(s)]):
+            k0, k1 = int(math.ceil(s[a] / BAKE_STEP)), int(math.floor(s[b - 1] / BAKE_STEP))
+            if k1 - k0 < 1:
+                continue
+            st = np.arange(k0, k1 + 1) * BAKE_STEP
+            out_.append((k0, [np.interp(st, s[a:b], np.asarray(c, float)[a:b]) for c in cols]))
+        return out_
+
+    def so_local(pts):
+        P = np.array([[p[0] + E0, N1 - p[1]] for p in pts])
+        return F.so(P)
+    b = bytearray()
+    b += b'AKTD' + struct.pack('<HHH', 1, int(BAKE_STEP * 10), nst) + struct.pack('<ii', int(ilat[0]), int(ilon[0]))
+    b += seq(np.diff(ilat), 1) + seq(np.diff(ilon), 1)      # the steps' steps: the axis is smooth
+    b += seq(level, 10) + np.packbits(bridge).tobytes() + seq(lo, 2) + seq(hi, 2)
+    # ── paths ──
+    # (their levels stay out: the game lays them on its own ground, raised to the road's level where that is lower)
+    rib = []
+    for r in M['ribbons']:
+        for k0, (o, w) in resample(r['s'], [r['o'], r['w']]):
+            rib.append((KINDS[r['kind']] | (r['side'] > 0) << 2 | SURFACES[r['surface']] << 3, k0, o, w))
+    b += struct.pack('<H', len(rib))
+    for code, k0, o, w in rib:
+        b += struct.pack('<BHH', code, k0, len(o)) + seq(o, 10) + seq(w, 10)
+    # ── seawall: one run per stretch with no gap, the kind per station ──
+    wl = []
+    ws = sorted(M['walls'], key=lambda w: w['s'][0])
+    merged = []
+    for w in ws:
+        kind = np.full(len(w['s']), WALLS[w['kind']])
+        if merged and w['s'][0] - merged[-1]['s'][-1] <= 10:
+            m = merged[-1]; keep = np.array(w['s']) > m['s'][-1]
+            for k in ('s', 'crest', 'toe'):
+                m[k] = m[k] + [v for v, ok in zip(w[k], keep) if ok]
+            m['kind'] = np.r_[m['kind'], kind[keep]]
+        else:
+            merged.append({'s': list(w['s']), 'crest': list(w['crest']), 'toe': list(w['toe']), 'kind': kind})
+    for w in merged:
+        _, oc = so_local(w['crest']); _, ot = so_local(w['toe'])
+        zt = [p[2] for p in w['toe']]     # (the crest is at the road's level: the platform's edge in the game)
+        for k0, (kd, a, t, d) in resample(w['s'], [w['kind'], oc, ot, zt]):
+            wl.append((k0, np.round(kd).astype(np.uint8), a, t, d))
+    b += struct.pack('<H', len(wl))
+    for k0, kd, a, t, d in wl:
+        b += struct.pack('<HH', k0, len(kd)) + kd.tobytes() + seq(a, 10) + seq(t, 10) + seq(d, 10)
+    # ── railings (OSM fences on the crest): offset per station ──
+    rl = []
+    for r in M['rails']:
+        s, o = so_local(r['pts'])
+        order = np.argsort(s); s, o = s[order], o[order]
+        keep = np.r_[True, np.diff(s) > 0.5]
+        for k0, (oo,) in resample(s[keep], [o[keep]], 12):
+            rl.append((k0, oo))
+    b += struct.pack('<H', len(rl))
+    for k0, o in rl:
+        b += struct.pack('<HH', k0, len(o)) + seq(o, 10)
+    # ── lamps: WGS84 (deltas from the previous), height over the ground, the arm in game metres ──
+    lamps = []
+    for x, z, g, top, hx, hz in M['lamps']:
+        if g < 0.3:      # on a bridge deck (the DEM is the water): the deck isn't modelled at the lamp's height
+            continue
+        E, N = x + E0, N1 - z
+        lo_, la_ = hs.to_wgs.transform(E, N); lo2, la2 = hs.to_wgs.transform(E + hx, N - hz)
+        ax_, az_ = (lo2 - lo_) * hs.MLON, -(la2 - la_) * hs.MLAT
+        lamps.append((round(la_ * LL), round(lo_ * LL), top - g, ax_, az_, g))
+
+    def ll_deltas(items):     # from the axis's start, then from the previous one
+        la = np.array([it[0] for it in items], np.int64); lo_ = np.array([it[1] for it in items], np.int64)
+        return i16(np.diff(np.r_[ilat[0], la]), 1), i16(np.diff(np.r_[ilon[0], lo_]), 1)
+    lamps.sort(key=lambda t: t[1])
+    dla, dlo = ll_deltas(lamps)
+    b += struct.pack('<H', len(lamps)) + dla.tobytes() + dlo.tobytes()
+    b += np.round(np.array([t[2] for t in lamps]) * 10).astype(np.uint8).tobytes()
+    b += np.round(np.clip([t[3] for t in lamps], -6.3, 6.3) * 20).astype(np.int8).tobytes()
+    b += np.round(np.clip([t[4] for t in lamps], -6.3, 6.3) * 20).astype(np.int8).tobytes()
+    b += h8([t[5] for t in lamps]).tobytes()
+    # ── trees: WGS84, ground, height (0.2 m), crown radius (0.1 m), palm bit + brightness of the crown in the aerial ──
+    trees = []
+    for x, z, g, top, r, cr, cg, cb, palm in M['trees']:
+        lo_, la_ = hs.to_wgs.transform(x + E0, N1 - z)
+        shade = int(np.clip(round((cr + cg + cb) / 3 / 2), 0, 127))      # mean sRGB / 2
+        trees.append((round(la_ * LL), round(lo_ * LL), g, top - g, r, palm << 7 | shade))
+    trees.sort(key=lambda t: t[1])
+    dla, dlo = ll_deltas(trees)
+    b += struct.pack('<H', len(trees)) + dla.tobytes() + dlo.tobytes()
+    b += np.round((np.clip([t[2] for t in trees], -2, 49) + 2) * 5).astype(np.uint8).tobytes()     # ground, 0.2 m from −2 m
+    b += np.round(np.clip([t[3] for t in trees], 0, 50) * 5).astype(np.uint8).tobytes()
+    b += np.round(np.clip([t[4] for t in trees], 0, 25) * 10).astype(np.uint8).tobytes()
+    b += np.array([t[5] for t in trees], np.uint8).tobytes()
+    raw = bytes(b)
+    gz = gzip.compress(raw, 9, mtime=0)
+    open(dst, 'wb').write(gz)
+    print(f'{dst}: {nst} stations, {len(rib)} path runs, {len(wl)} wall runs, {len(rl)} railings, {len(lamps)} lamps, {len(trees)} trees;'
+          f' {len(raw)} B raw, {len(gz)} B gzip')
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('step', choices=['fetch', 'measure', 'model', 'all'])
+    ap.add_argument('step', choices=['fetch', 'measure', 'model', 'bake', 'all'])
     ap.add_argument('--out', default='/tmp/hero/tamaki')
     a = ap.parse_args()
+    if a.step == 'bake':
+        bake(a.out)
+        return
     if a.step in ('fetch', 'all'):
         fetch(a.out)
     if a.step in ('measure', 'all'):
