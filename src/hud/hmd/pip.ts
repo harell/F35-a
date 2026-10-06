@@ -34,6 +34,7 @@ import type { CivilPhase } from '../../sim/civil/route';
 import type { AnyEntity } from '../../sim/entities';
 import type { LandmarkEntity } from '../../sim/landmarks';
 import { cloudBetween, lineOfSight } from '../../sim/sensors/los';
+import { weaponMismatch } from '../../sim/weapons/fit';
 import { AIRCRAFT_LABEL, SAM_LABEL, entityLabel, groundLabel } from './format';
 import type { HudFrame } from './frame';
 import type { HudLayout } from './layout';
@@ -152,6 +153,7 @@ const HELI_PHASE: Record<import('../../sim/civil/heli').HeliPhase, string> = {
  * Status pill. SAM: what its radar is doing. Aircraft: aspect relative to the player (HOT = pointing at
  * us, FLANK = beaming, COLD = running). Civil airliner: its flight phase, or CHECK FIRE once the player
  * has locked it. Civil ship: UNDERWAY / ANCHORED / MOORED (CHECK FIRE when locked). Ground: TGT.
+ * (The pill's callers put WRONG WPN over all of these while the selected weapon can't engage it.)
  */
 export function pipStatus(t: AnyEntity, playerPos: { x: number; y: number; z: number }, locked = false): { text: string; tone: PipTone } {
   if (isCivil(t)) {
@@ -402,6 +404,7 @@ const STATUS_SHORT: Record<string, string> = {
   SILENT: 'OFF',
   LAUNCH: 'LNCH',
   'CHECK FIRE': 'CHK FIRE',
+  'WRONG WPN': 'WPN',
   APPROACH: 'APPR',
   TAKEOFF: 'T/O',
   LANDING: 'LDG',
@@ -568,7 +571,8 @@ function drawLabels(f: HudFrame, t: AnyEntity, locked: boolean, civil: boolean):
   const range = rangeLabel(t.position.distanceTo(p.position));
   pen.text(range, ix + 9 * u, my, pal.white, 10, 'left');
   const rangeRight = ix + 9 * u + pen.textWidth(range, 10);
-  const st = pipStatus(t, p.position, locked);
+  const wrong = t.alive && t.team !== p.team && (t.kind === 'aircraft' || t.kind === 'ground' || t.kind === 'sam') && weaponMismatch(p.selectedWeapon, t.kind);
+  const st: { text: string; tone: PipTone } = wrong ? { text: 'WRONG WPN', tone: 'warn' } : pipStatus(t, p.position, locked);
   const tone =
     st.tone === 'danger' ? pal.danger : st.tone === 'warn' ? pal.warn : st.tone === 'good' ? pal.good : st.tone === 'dim' ? pal.dim : st.tone === 'civil' ? pal.white : pal.main;
   // pill: outlined, blinking dot for the active states
@@ -654,7 +658,8 @@ function drawPodPip(f: HudFrame, t: AnyEntity, locked: boolean): void {
   const rx = x + 6 * u + pen.textWidth('SR ', 9);
   pen.text(range, rx, my, pal.white, 10, 'left');
   const rangeRight = rx + pen.textWidth(range, 10);
-  const st = pipStatus(t, p.position, locked);
+  const wrong = t.alive && t.team !== p.team && (t.kind === 'aircraft' || t.kind === 'ground' || t.kind === 'sam') && weaponMismatch(p.selectedWeapon, t.kind);
+  const st: { text: string; tone: PipTone } = wrong ? { text: 'WRONG WPN', tone: 'warn' } : pipStatus(t, p.position, locked);
   const tone = st.tone === 'danger' ? pal.danger : st.tone === 'warn' ? pal.warn : st.tone === 'good' ? pal.good : st.tone === 'dim' ? pal.dim : pal.main;
   let label = st.text;
   if (x + w - 5 * u - (pen.textWidth(label, 9) + 18 * u) < rangeRight + 6 * u) label = STATUS_SHORT[label] ?? label;
