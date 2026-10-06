@@ -178,22 +178,22 @@ describe('combat: missile flight & guidance', () => {
   it('JDAM glides to a GPS point and destroys the target; unguided drop falls ballistically', () => {
     const w = new FakeWorld();
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', position: v3(0, 8000, 0), heading: 0, speed: 250, loadout: 'strike_beast' });
-    const bunker = w.spawnGround({ type: 'bunker', team: 'red', position: v3(300, 0, -7000), health: 300 });
-    bunker.known = true;
+    const hangar = w.spawnGround({ type: 'hangar', team: 'red', position: v3(300, 0, -7000), health: 300 });
+    hangar.known = true;
     f35.selectedWeapon = 'gbu31';
     f35.radar.mode = 'ground';
     w.run(0.5);
-    w.combat.designate(f35, bunker.id, w);
+    w.combat.designate(f35, hangar.id, w);
     expect(f35.radar.groundPoint).not.toBeNull();
     const bip = w.combat.bombImpactPoint(f35, w)!;
     expect(bip.inRange).toBe(true);
     const ends = w.record('munition:end');
     const explosions = w.record('explosion');
-    const m = w.combat.fire(f35, w, 'gbu31', bunker.id);
+    const m = w.combat.fire(f35, w, 'gbu31', hangar.id);
     expect(m).not.toBeNull();
     w.run(90, () => ends.length > 0);
     expect(ends[0].reason).toBe('hit');
-    expect(bunker.alive).toBe(false);
+    expect(hangar.alive).toBe(false);
     expect(explosions.some((e) => e.size === 'huge' && e.surface === 'ground')).toBe(true);
   });
 

@@ -110,6 +110,7 @@ describe('target camera pose', () => {
       expect(hill.y).toBeGreaterThanOrEqual(400 + TARGET_CAM_MIN_AGL);
     }
     const ship = new GroundTargetEntity(9, 'ship', 'red', { radius: 60 });
+    ship.vessel = 'container';
     expect(framingDistance(ship)).toBeGreaterThan(100);
   });
 });

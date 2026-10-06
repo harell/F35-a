@@ -117,15 +117,15 @@ const RAID_FIXTURE: MissionDef = mission({
 });
 
 /**
- * Ship strike: two slow corvettes on a patrol line (primary), a moored supply ship, two Tors,
- * a Shilka on Browns Island in front of the run-in, a Flanker CAP and a fighter sweep (once c06).
+ * Ship strike: two slow hostile ships on a patrol line (primary), a moored supply ship, two Tors,
+ * a Shilka on Browns Island in front of the run-in, a Flanker CAP and a fighter sweep.
  */
 const shipStart = { x: 1000, z: 7000, altitude: 3500, heading: 75, speed: 240 };
 const SHIP_FIXTURE: MissionDef = mission({
   ...base,
   id: 'fx_ships',
   title: 'Ship strike fixture',
-  subtitle: 'Sink the corvettes',
+  subtitle: 'Sink the hostile ships',
   recommendedLoadout: 'strike_stealth',
   allowedLoadouts: ['strike_stealth', 'strike_beast', 'sead_stealth', 'strike_maritime'],
   player: shipStart,
@@ -149,15 +149,15 @@ const SHIP_FIXTURE: MissionDef = mission({
       site('zsu', 'browns_aaa', 'zsu23', BROWNS_IS, { minDifficulty: 'pilot' }),
     ],
     ground: [
-      target('cv1', 'fleet', 'ship', { x: 24000, z: 1000 }, { name: 'Corvette 531', path: [{ x: 17000, z: -500 }, { x: 24000, z: 1000 }], loop: true, speed: 1 }),
-      target('cv2', 'fleet', 'ship', { x: 25500, z: 1800 }, { name: 'Corvette 532', path: [{ x: 18500, z: 300 }, { x: 25500, z: 1800 }], loop: true, speed: 1 }),
-      target('supply', 'supply', 'ship', { x: 20500, z: -2300 }, { name: 'Supply Ship' }),
+      target('cv1', 'fleet', 'ship', { x: 24000, z: 1000 }, { vessel: 'container', name: 'Hostile 531', path: [{ x: 17000, z: -500 }, { x: 24000, z: 1000 }], loop: true, speed: 1 }),
+      target('cv2', 'fleet', 'ship', { x: 25500, z: 1800 }, { vessel: 'container', name: 'Hostile 532', path: [{ x: 18500, z: 300 }, { x: 25500, z: 1800 }], loop: true, speed: 1 }),
+      target('supply', 'supply', 'ship', { x: 20500, z: -2300 }, { vessel: 'container', name: 'Supply Ship' }),
     ],
     objectives: [
-      { id: 'o_fleet', kind: 'destroy', groups: ['fleet'], label: 'Sink both corvettes', primary: true },
+      { id: 'o_fleet', kind: 'destroy', groups: ['fleet'], label: 'Sink both hostile ships', primary: true },
       { id: 'o_supply', kind: 'destroy', groups: ['supply'], label: 'Sink the supply ship', primary: false },
     ],
-    waypoints: [{ id: 'wp_fleet', label: 'Corvettes', kind: 'target', x: 21000, z: 500, objective: 'o_fleet' }],
+    waypoints: [{ id: 'wp_fleet', label: 'Hostiles', kind: 'target', x: 21000, z: 500, objective: 'o_fleet' }],
   },
 });
 
@@ -508,7 +508,7 @@ describe('A/G auto-designation ranks the primary targets first (playtest 2.2-f: 
     return e && (e.kind === 'ground' || e.kind === 'sam') ? e.groupId : null;
   };
 
-  it('ship strike with the StormBreaker: a corvette, not the Shilka on Browns Island in front', () => {
+  it('ship strike with the StormBreaker: a hostile ship, not the Shilka on Browns Island in front', () => {
     const def = SHIP_FIXTURE;
     const h = harness(def, 'pilot', 'strike_maritime');
     const p = h.world.player!;
@@ -522,7 +522,7 @@ describe('A/G auto-designation ranks the primary targets first (playtest 2.2-f: 
       return false;
     });
     expect(first).toBe('fleet');
-    // TGT cycling: the other corvette next, then the rest
+    // TGT cycling: the other hostile ship next, then the rest
     const order: string[] = [];
     for (let i = 0; i < 2; i++) {
       h.world.combat.cycleTarget(p, h.world);

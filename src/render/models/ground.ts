@@ -1,9 +1,7 @@
 /**
- * Ground target prototypes: command bunker, fuel farm, hardened aircraft shelter, parked jet,
- * corvette, IRGC Navy fast boats, plus the civil
- * container ship, cruise liner and crude carrier (a 'ship' with a VesselClass).
- * No mission spawns the bunker or the corvette today (g03 swapped its bunker for a parked jet, #197;
- * the corvette missions went with Operation Southern Cross): both stay as ready target types.
+ * Ground target prototypes: fuel farm, hardened aircraft shelter, parked jet, the stoat,
+ * IRGC Navy fast boats, plus the merchant ships: container ship, cruise liner and crude carrier
+ * (a 'ship' always has a VesselClass).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
@@ -13,12 +11,12 @@ import { BufferGeometry, Group, Object3D, Vector3 } from 'three';
 import type { GroundTargetType, VesselClass } from '../../core/types';
 import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
-import { loftRings, prismX, prismZ } from './geom/loft';
+import { loftRings, prismZ } from './geom/loft';
 import { getAircraftPrototype } from './aircraft';
 import { SHIP_DIMS } from '../visuals/shipMotion';
 import { missileBoat, suicideBoat } from './boats';
 import { stoatModel } from './stoat';
-import { PALETTES, mast, meshFrom, panel, tank, type Palette, type PaletteId } from './vehicles';
+import { PALETTES, meshFrom, panel, tank, type Palette, type PaletteId } from './vehicles';
 
 export type WreckStyle = 'vehicle' | 'building' | 'ship' | 'aircraft';
 
@@ -51,7 +49,10 @@ export interface GroundPrototype {
 const cache = new Map<string, GroundPrototype>();
 
 function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null = null): GroundPrototype {
-  if (type === 'ship' && vessel) return buildMerchant(vessel);
+  if (type === 'ship') {
+    if (!vessel) throw new Error('a ship needs a VesselClass');
+    return buildMerchant(vessel);
+  }
   const root = new Group();
   root.name = `ground:${type}`;
   const statics: BufferGeometry[] = [];
@@ -62,29 +63,6 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
   let mat = 'vehicle';
 
   switch (type) {
-    case 'bunker': {
-      mat = 'building';
-      statics.push(
-        prismX(
-          [
-            [-13, 0],
-            [13, 0],
-            [8, 5.5],
-            [-8, 5.5],
-          ],
-          18,
-          pal.earth,
-        ),
-      );
-      statics.push(place(box(8, 4.2, 1.0, pal.concrete), [0, 2.1, -10.2]), place(box(4.5, 3.2, 0.3, pal.dark), [0, 1.6, -10.8]));
-      statics.push(place(box(12, 0.6, 5, pal.concrete), [0, 0.3, -13.5]));
-      for (const x of [-5, 5]) statics.push(place(cylinder(0.4, 0.4, 2.2, 8, pal.metal), [x, 6.3, 2]));
-      statics.push(place(cylinder(0.08, 0.08, 9, 4, pal.metal), [3, 9, 6]));
-      wreck = 'building';
-      radius = 16;
-      farScale = 1.3;
-      break;
-    }
     case 'fuel': {
       mat = 'building';
       const spots: [number, number][] = [
@@ -130,48 +108,6 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
         statics.push(place(cylinder(0.1, 0.1, 1.6, 6, 0x333333), [s * 1.6, 0.9, 1.5]), place(cylinder(0.42, 0.42, 0.3, 10, 0x1d1d1d), [s * 1.6, 0.42, 1.5], [0, 0, Math.PI / 2]));
       wreck = 'aircraft';
       radius = 9;
-      break;
-    }
-    case 'ship': {
-      mat = 'building';
-      // hull: pointed bow at -Z, transom stern at +Z; waterline y = 0
-      const L = 72;
-      const hull = loftRings(
-        [
-          [-L / 2, 0.1],
-          [-L / 2 + 6, 0.55],
-          [-L / 2 + 18, 0.92],
-          [0, 1],
-          [L / 2 - 8, 0.95],
-          [L / 2, 0.85],
-        ].map(([z, k]) => {
-          const hw = 5.2 * k;
-          return {
-            z,
-            ring: [0, -3.2 * k, hw * 0.7, -2.4 * k, hw, 0, hw * 1.02, 4.2 + (z < 0 ? -z * 0.03 : 0), 0, 4.4 + (z < 0 ? -z * 0.03 : 0), -hw * 1.02, 4.2 + (z < 0 ? -z * 0.03 : 0), -hw, 0, -hw * 0.7, -2.4 * k],
-          };
-        }),
-        { capEnd: true, creases: [2, 3, 5, 6], color: 0x6e767b },
-      );
-      statics.push(hull);
-      statics.push(place(box(9.6, 0.3, 60, 0x5a5f61), [0, 4.35, 4]));
-      // superstructure
-      statics.push(place(box(8, 5, 16, 0x7e878b), [0, 6.9, 2]), place(box(6.5, 3.2, 8, 0x7e878b), [0, 11.0, -1]));
-      statics.push(place(box(6.6, 0.8, 0.2, 0x1c2328), [0, 11.6, -5.05]));
-      statics.push(place(box(3, 4, 4, 0x6f777b), [0, 11.4, 9]));
-      statics.push(...mast(12, 2, 0x70777a).map((g) => place(g, [0, 12.6, 1])));
-      // gun turret + missile canisters
-      statics.push(place(cylinder(1.6, 1.8, 1.6, 10, 0x7e878b), [0, 5.2, -22]), place(cylinder(0.12, 0.14, 4.5, 6, 0x4a4f52), [0, 5.6, -25], [Math.PI / 2, 0, 0]));
-      for (const s of [-1, 1]) statics.push(place(box(1.6, 1.4, 6, 0x6a7276), [s * 3.2, 5.2, 16], [0.25, 0, 0]));
-      const spin = new Object3D();
-      spin.name = 'spin:0';
-      spin.position.set(0, 25, 1);
-      spin.add(meshFrom(panel(4, 1, 0.2, 0x5e6568), 'building'));
-      root.add(spin);
-      spinners.push({ name: 'spin:0', rate: 2.5 });
-      wreck = 'ship';
-      radius = 36;
-      farScale = 2;
       break;
     }
     case 'stoat': {
@@ -349,7 +285,7 @@ function buildMerchant(vessel: VesselClass): GroundPrototype {
 }
 
 export function getGroundPrototype(type: GroundTargetType, palette: PaletteId = 'green', vessel: VesselClass | null = null): GroundPrototype {
-  const key = type === 'ship' && vessel ? `ship:${vessel}` : `${type}:${palette}`;
+  const key = type === 'ship' ? `ship:${vessel}` : `${type}:${palette}`;
   let p = cache.get(key);
   if (!p) {
     p = build(type, PALETTES[palette], vessel);

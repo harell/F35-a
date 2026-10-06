@@ -18,7 +18,6 @@ const SAM_HUD: Record<SamType, string> = {
 };
 
 const GROUND_HUD: Record<GroundTargetType, string> = {
-  bunker: 'BUNKER',
   fuel: 'FUEL DEPOT',
   hangar: 'HANGAR',
   parked_jet: 'PARKED JET',

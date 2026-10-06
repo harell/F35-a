@@ -241,7 +241,7 @@ describe('weapon window tracker', () => {
 
   it('a kill of the target camera’s target holds its DESTROYED hold (6 s for a ship)', () => {
     const w = fakeWorld();
-    const ship: FakeEnt = { id: 9, kind: 'ground', type: 'ship', name: 'CORVETTE', team: 'red', alive: true, position: new Vector3(0, 0, -9000), velocity: new Vector3() };
+    const ship: FakeEnt = { id: 9, kind: 'ground', type: 'ship', name: 'SHIP', team: 'red', alive: true, position: new Vector3(0, 0, -9000), velocity: new Vector3() };
     w.ents.set(9, ship);
     const tr = new WpnTracker();
     const a = w.fire({ targetId: 9, originalTargetId: 9 });

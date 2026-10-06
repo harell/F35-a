@@ -126,7 +126,7 @@ export interface CamTarget {
   readonly position: Vector3;
   readonly quaternion: Quaternion;
   readonly radius: number;
-  /** Civil merchant ship class (ground 'ship'); null / absent for the corvette and everything else. */
+  /** Civil merchant ship class (ground 'ship'); null / absent for everything but a ship. */
   readonly vessel?: VesselClass | null;
 }
 

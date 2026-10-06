@@ -19,7 +19,7 @@ const XA = new THREE.Vector3(1, 0, 0);
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const TARGET_NAME: Record<string, string> = {
-  fighter: 'Fighter', sa6: 'SAM site', fuel: 'Fuel depot', bunker: 'Bunker', ship: 'Warship', missile_boat: 'Missile boat',
+  fighter: 'Fighter', sa6: 'SAM site', fuel: 'Fuel depot', hangar: 'Hangar', missile_boat: 'Missile boat',
 };
 
 interface Target {
@@ -296,21 +296,15 @@ function buildTarget(t: Target): TargetModel {
         g.add(c);
       }
       break;
-    case 'bunker': {
-      box(R * 1.8, 0.4, R * 1.4, 0x6d6a60);
-      const d = new THREE.Mesh(new THREE.SphereGeometry(R * 0.75, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), m(0x7d7a70));
-      d.scale.set(1.15, 0.55, 0.9);
-      d.position.y = 0.4;
-      g.add(d);
-      box(0.8, 0.6, 0.4, 0x2b2a26, R * 0.9, 0.3, 0);
+    case 'hangar': {
+      // a hardened aircraft shelter: a low concrete vault with a dark door
+      const v = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.6, R * 0.6, R * 1.6, 24, 1, false, -Math.PI / 2, Math.PI), m(0x7d7a70));
+      v.rotation.x = -Math.PI / 2; // the half shell above the ground, its length along z
+      v.scale.set(1, 1, 0.7);
+      g.add(v);
+      box(R * 0.8, R * 0.35, 0.1, 0x2b2a26, 0, 0, R * 0.8);
       break;
     }
-    case 'ship':
-      box(R * 2, 0.8, R * 0.32, 0x5e666c);
-      box(R * 0.5, 0.9, R * 0.22, 0x6d767c, -R * 0.1, 0.8);
-      box(R * 0.15, 0.9, 0.15, 0x6d767c, -R * 0.1, 1.7);
-      box(0.6, 0.3, 0.4, 0x4d5358, R * 0.6, 0.8);
-      break;
     default:
       box(Math.max(1.4, R * 1.6), 0.35, Math.max(0.4, R * 0.35), 0x5e666c);
       box(0.5, 0.35, 0.3, 0x737c82, -0.2, 0.35);

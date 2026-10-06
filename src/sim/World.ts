@@ -64,11 +64,10 @@ const MIN_SPAWN_AGL = 60;
 /** Default driving speeds (m/s) for ground movers without an explicit speed. */
 const DEFAULT_MOVER_SPEED: Partial<Record<GroundTargetType, number>> = { ship: 8, suicide_boat: BOAT_SPEED, missile_boat: BOAT_SPEED };
 const GROUND_NAMES: Record<GroundTargetType, string> = {
-  bunker: 'Command Bunker',
   fuel: 'Fuel Depot',
   hangar: 'Hangar',
   parked_jet: 'Parked Jet',
-  ship: 'Corvette',
+  ship: 'Ship',
   suicide_boat: 'Suicide Boat',
   missile_boat: 'Peykaap II',
   stoat: 'Stoat',
@@ -281,7 +280,8 @@ class SimWorldImpl implements SimWorld {
 
   spawnGround(spec: GroundSpawn): GroundTargetEntity {
     const data = GROUND_TARGET_DATA[spec.type];
-    // civil merchant ship: hull size / hit points of its class (bounding radius = half its length)
+    if (spec.type === 'ship' && !spec.vessel) throw new Error(`a ship needs a VesselClass (${spec.name ?? 'unnamed'})`);
+    // merchant ship: hull size / hit points of its class (bounding radius = half its length)
     const vessel = spec.type === 'ship' && spec.vessel ? VESSEL_DATA[spec.vessel] : null;
     const e = new GroundTargetEntity(spec.civilId ? this.civilIdSeq++ : this.nextId(), spec.type, spec.team, {
       name: spec.name ?? GROUND_NAMES[spec.type],

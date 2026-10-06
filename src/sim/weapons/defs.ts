@@ -238,8 +238,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     category: 'bomb',
     guidance: 'tri_mode',
     launch: 'drop',
-    // SDB-class glide airframe; a smaller multi-effect warhead that
-    // still never takes out a bunker (260) in one hit — the JDAM stays the bunker weapon
+    // SDB-class glide airframe with a smaller multi-effect warhead than the JDAM
     mass: 93,
     boostTime: 0,
     boostAccel: 0,

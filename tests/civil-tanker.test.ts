@@ -119,8 +119,8 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
       expect(s.hits).toBe(0);
     }
     expect(t.alive).toBe(true);
-    // hitsToSink is only for civil ships: a corvette keeps its plain hit points
-    const c = w.spawnGround({ type: 'ship', team: 'red', hitsToSink: 2, position: new Vector3(-3000, 0, -4000) });
+    // hitsToSink is only for civil ships: a hostile one keeps its plain hit points
+    const c = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', hitsToSink: 2, position: new Vector3(-3000, 0, -4000) });
     expect(c.hitsToSink).toBe(1);
   });
 
@@ -139,7 +139,7 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
   it('a suicide boat ramming her is one hit (collision from a ground entity); other collisions only take hit points', () => {
     const w = seaWorld();
     const t = spawnTanker(w);
-    const boat = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(500, 0, -4000), name: 'Boat' });
+    const boat = w.spawnGround({ type: 'suicide_boat', team: 'red', position: new Vector3(500, 0, -4000), name: 'Boat' });
     const hits: GameEventMap['vessel:hit'][] = [];
     w.events.on('vessel:hit', (e) => hits.push(e));
     w.applyDamage(t, 100, null, 'collision');
@@ -162,7 +162,7 @@ describe('tanker damage (sim)', { timeout: 30_000 }, () => {
   it('the __f35.destroy() test hook sinks a two-hit tanker in one call', () => {
     const w = seaWorld();
     const t = spawnTanker(w);
-    const c = w.spawnGround({ type: 'ship', team: 'red', position: new Vector3(3000, 0, -4000) });
+    const c = w.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(3000, 0, -4000) });
     forceDestroy(w, t, null);
     forceDestroy(w, c, null);
     expect(t.alive).toBe(false);
@@ -194,11 +194,11 @@ function tankerMission(): MissionDef {
     ...emptyScript(),
     ground: [
       { id: 'tk', group: 'tanker', type: 'ship', team: 'neutral', vessel: 'tanker', hitsToSink: 2, name: 'MT Marsden Point', x: 4000, z: -6000, path: [{ x: 4000, z: -26_000 }], speed: 6 },
-      { id: 'cv', group: 'corvette', type: 'ship', x: 12_000, z: -20_000, name: 'Corvette' },
+      { id: 'cv', group: 'hostile', type: 'ship', vessel: 'container', x: 12_000, z: -20_000, name: 'Hostile' },
     ],
     objectives: [
       { id: 'protect', kind: 'protect', group: 'tanker', label: 'Protect the tanker', primary: true },
-      { id: 'kill', kind: 'destroy', groups: ['corvette'], label: 'Sink the corvette', primary: true },
+      { id: 'kill', kind: 'destroy', groups: ['hostile'], label: 'Sink the hostile ship', primary: true },
     ],
   };
   return { ...base, id: 't_tanker', script };
@@ -287,11 +287,11 @@ describe('protecting the tanker (mission)', { timeout: 30_000 }, () => {
     m.runner.dispose?.();
   });
 
-  it('sinking the corvette with the tanker afloat (even hit once) wins', () => {
+  it('sinking the hostile ship with the tanker afloat (even hit once) wins', () => {
     const m = setup();
     m.tick(2);
     m.world.applyDamage(m.tanker, 300, null, 'kab500');
-    const cv = m.world.ground.find((g) => g.groupId === 'corvette')!;
+    const cv = m.world.ground.find((g) => g.groupId === 'hostile')!;
     m.world.applyDamage(cv, 10_000, m.world.player!.id, 'gbu53');
     m.tick(3);
     expect(m.protect().state).toBe('complete');
@@ -301,8 +301,9 @@ describe('protecting the tanker (mission)', { timeout: 30_000 }, () => {
 
   it('validation: hitsToSink needs a vessel class and team neutral', () => {
     const noVessel = tankerMission();
-    noVessel.script.ground[1] = { ...noVessel.script.ground[1], team: 'neutral', hitsToSink: 2 };
+    noVessel.script.ground[1] = { ...noVessel.script.ground[1], team: 'neutral', hitsToSink: 2, vessel: undefined };
     expect(validateMission(noVessel)).toContain('t_tanker: ground cv: hitsToSink needs a vessel class and must be ≥ 1');
+    expect(validateMission(noVessel)).toContain('t_tanker: ground cv: a ship needs a vessel class');
     for (const team of [undefined, 'red', 'blue'] as const) {
       const def = tankerMission();
       def.script.ground[0] = { ...def.script.ground[0], team }; // no team = the default, 'red'

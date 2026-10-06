@@ -35,7 +35,7 @@ export const CODEX_CATS: { id: CodexCat; name: string; icon: string; group: 'Wea
 
 /* ───────────────────────────── target classes ───────────────────────────── */
 
-export type ClassId = 'air' | 'ad' | 'soft' | 'hard' | 'ship' | 'boat';
+export type ClassId = 'air' | 'ad' | 'soft' | 'hard' | 'boat';
 
 /**
  * Target classes the player recognises. `members` are sim entity types (aircraft, SAM or ground);
@@ -58,8 +58,7 @@ export const TARGET_CLASSES: TargetClass[] = [
   { id: 'air', name: 'Aircraft', examples: 'Fighters, drones', members: ['fighter', 'shahed136'], example: 'fighter', moving: true },
   { id: 'ad', name: 'Air defence', examples: 'SAM sites, anti-aircraft guns', members: ['sa6', 'sa15', 'zsu23'], example: 'sa6', emitters: ['sa6', 'sa15', 'zsu23'] },
   { id: 'soft', name: 'Soft targets', examples: 'Fuel depots, parked jets', members: ['fuel', 'parked_jet'], example: 'fuel' },
-  { id: 'hard', name: 'Hardened', examples: 'Bunkers, hardened hangars', members: ['bunker', 'hangar'], example: 'bunker' },
-  { id: 'ship', name: 'Warships', examples: 'Big, slow, can move', members: ['ship'], example: 'ship', moving: true },
+  { id: 'hard', name: 'Hardened', examples: 'Hardened aircraft shelters', members: ['hangar'], example: 'hangar' },
   { id: 'boat', name: 'Small boats', examples: 'Fast attack, suicide and air-defence boats', members: ['suicide_boat', 'missile_boat', 'ad_boat'], example: 'missile_boat', moving: true, emitters: ['ad_boat'] },
 ];
 
@@ -188,7 +187,7 @@ function buildWeapons(): WeaponEntry[] {
     },
     {
       kind: 'weapon', id: 'gbu53', cat: 'ag', name: 'GBU-53/B StormBreaker', short: hud('gbu53'), scene: 'bomb', glide: true, seeker: true, datalink: true,
-      line: 'Smart glide bomb with its own seeker. It chases moving boats and ships, but it needs a designated target.',
+      line: 'Smart glide bomb with its own seeker. It chases moving boats, but it needs a designated target.',
       inspect: 'The glass nose holds a seeker that searches from 3 km out. The wings fold along the body in the bay and swing out after release.',
       needs: 'Needs a designated live target. It won\'t release without one, and it can\'t be dropped by eye.',
       hud: [[`${hud('gbu53')} 8`, 'Selected, 8 left'], ['NO TARGET', 'Designate a target first'], ['IN RANGE', 'Release now'], [brev('gbu53'), 'It\'s released']],
@@ -215,7 +214,7 @@ function buildWeapons(): WeaponEntry[] {
       needs: `No lock needed. Put the pipper on the target. SHOOT blinks inside ${GUN_EFFECTIVE_RANGE.toLocaleString('en')} m.`,
       hud: [[`${hud('gun')} ${rounds}`, 'Rounds left'], ['SHOOT', `Inside ${GUN_EFFECTIVE_RANGE.toLocaleString('en')} m with the pipper on target`], ['OVERSHOOT', 'You\'ll pass the target within 4 s'], [brev('gun'), 'Flashes while firing']],
       how: ['Select GUN. The radar switches to dogfight mode.', 'Close until SHOOT blinks with the pipper on the target.', 'Fire short bursts.'],
-      avoid: ['Bunkers and ships take far too many rounds. Use a bomb.', 'It can\'t damage landmarks.'],
+      avoid: ['Hardened hangars take far too many rounds. Use a bomb.', 'It can\'t damage landmarks.'],
       terms: [['Pipper', 'The aiming dot of the gunsight. Put it on the target and fire.']],
       range: { unit: 'm', scale: 1600, min: GUN_MIN_RANGE, max: GUN_CUE_RANGE, best: [GUN_MIN_RANGE, GUN_LETHAL_RANGE], bestLabel: `full damage ≤ ${GUN_LETHAL_RANGE}`, mark: { at: GUN_EFFECTIVE_RANGE, label: `SHOOT ${GUN_EFFECTIVE_RANGE.toLocaleString('en')}` } },
     },
@@ -256,12 +255,12 @@ const NA: [Rating, string] = ['no', 'Can\'t target aircraft'];
 const NR: [Rating, string] = ['no', 'No radar to home on'];
 
 export const RATINGS: Record<Exclude<CodexWeaponId, 'cms'>, Record<ClassId, [Rating, string]>> = {
-  aim120: { air: ['best', 'One hit kills any fighter, out to 30 km'], ad: NG, soft: NG, hard: NG, ship: NG, boat: NG },
-  aim9x: { air: ['best', 'One hit inside 8 km, no radar lock needed'], ad: NG, soft: NG, hard: NG, ship: NG, boat: NG },
-  gbu31: { air: NA, ad: ['best', 'Kills any SAM site'], soft: ['good', 'Works, but a 2,000 lb bomb is overkill'], hard: ['best', 'Its main job'], ship: ['best', 'The 60 m blast covers a ship even if it moves'], boat: ['poor', 'Aims at a fixed point, and boats move'] },
-  gbu53: { air: NA, ad: ['best', 'Kills any SAM site'], soft: ['best', 'Kills a fuel depot or parked jet'], hard: ['good', 'Hangar 1, bunker always 2'], ship: ['good', 'Tracks it while it moves'], boat: ['best', 'Tracks it while it moves. Its main job'] },
-  aargm: { air: NA, ad: ['best', 'Only while the radar is switched on'], soft: NR, hard: NR, ship: NR, boat: ['poor', 'Only the air-defence boat, which has a radar'] },
-  gun: { air: ['good', 'Inside 1,200 m, behind the target'], ad: ['poor', 'You have to fly into its range'], soft: ['good', 'Good for strafing'], hard: ['poor', 'Use a bomb'], ship: ['poor', 'Use a bomb'], boat: ['good', 'Good for strafing'] },
+  aim120: { air: ['best', 'One hit kills any fighter, out to 30 km'], ad: NG, soft: NG, hard: NG, boat: NG },
+  aim9x: { air: ['best', 'One hit inside 8 km, no radar lock needed'], ad: NG, soft: NG, hard: NG, boat: NG },
+  gbu31: { air: NA, ad: ['best', 'Kills any SAM site'], soft: ['good', 'Works, but a 2,000 lb bomb is overkill'], hard: ['best', 'Its main job'], boat: ['poor', 'Aims at a fixed point, and boats move'] },
+  gbu53: { air: NA, ad: ['best', 'Kills any SAM site'], soft: ['best', 'Kills a fuel depot or parked jet'], hard: ['best', 'One hit kills a hardened hangar'], boat: ['best', 'Tracks it while it moves. Its main job'] },
+  aargm: { air: NA, ad: ['best', 'Only while the radar is switched on'], soft: NR, hard: NR, boat: ['poor', 'Only the air-defence boat, which has a radar'] },
+  gun: { air: ['good', 'Inside 1,200 m, behind the target'], ad: ['poor', 'You have to fly into its range'], soft: ['good', 'Good for strafing'], hard: ['poor', 'Use a bomb'], boat: ['good', 'Good for strafing'] },
 };
 
 /** Direct hits needed against each live member of a class: [fewest, most], or null if none can be hurt. */

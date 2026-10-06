@@ -190,7 +190,6 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     groundGroups.set(g.group, e);
   }
   const label: Record<GroundTargetType, string> = {
-    bunker: 'Command bunker',
     fuel: 'Fuel depot',
     hangar: 'Hangars',
     parked_jet: 'Parked jets',

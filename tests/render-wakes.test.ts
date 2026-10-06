@@ -62,7 +62,7 @@ describe('wake shape', () => {
   });
 
   it('no ship model carries its own wake mesh any more', () => {
-    for (const v of ['container', 'cruise', null] as (VesselClass | null)[]) {
+    for (const v of ['container', 'cruise', 'tanker'] as VesselClass[]) {
       const p = getGroundPrototype('ship', 'green', v);
       expect(p.root.getObjectByName('wake')).toBeUndefined();
     }
@@ -114,7 +114,7 @@ const find = (scene: Scene, name: string): Object3D[] => {
 describe('entity renderer: wakes and ferries', () => {
   it('Auckland, medium: one wake mesh for every moving ship and ferry under way, one ferry InstancedMesh', () => {
     const q = QUALITY_PRESETS.medium;
-    const ships = [ship(1, 'container', 3000, -13000, 5.5), ship(2, 'cruise', 6000, -12500, 0), ship(3, null, 9000, -15000, 9)];
+    const ships = [ship(1, 'container', 3000, -13000, 5.5), ship(2, 'cruise', 6000, -12500, 0), ship(3, 'tanker', 9000, -15000, 9)];
     const { scene, r, ctx } = setup('auckland', q, ships);
     const t = 1234;
     r.update(ctx(t));
@@ -123,7 +123,7 @@ describe('entity renderer: wakes and ferries', () => {
     const ferries = find(scene, 'ferries');
     expect(ferries).toHaveLength(1);
     expect((ferries[0] as InstancedMesh).count).toBe(q.ferries);
-    // the moving container ship and corvette, plus every ferry under way at this moment
+    // the moving container ship and tanker, plus every ferry under way at this moment
     const routes = ferryRoutes();
     const underWay = FERRY_FLEET.slice(0, q.ferries).filter((f) => wakeIntensity(ferryAt(routes[f.route], f.k, t, { x: 0, z: 0, heading: 0, speed: 0, dock: -1 }).speed) > 0.01).length;
     expect(underWay).toBeGreaterThan(0);

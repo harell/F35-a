@@ -53,9 +53,9 @@ describe('missions: campaign & training content', () => {
   });
 
   it('SAM sites and static compounds get terrain pads; ships and boats do not', () => {
-    // land SAMs and a command bunker (a test fixture: no remaining mission has a land SAM site)
+    // land SAMs and a hangar (a test fixture: no remaining mission has a land SAM site)
     const base = seadFixture();
-    const sead = { ...base, script: { ...base.script, ground: [target('bunker', 'rangi_bunker', 'bunker', P.rangN, { name: 'Command Bunker' })] } };
+    const sead = { ...base, script: { ...base.script, ground: [target('hangar', 'rangi_hangar', 'hangar', P.rangN, { name: 'Hangar' })] } };
     const pads = terrainPadsFor(sead);
     for (const s of [...sead.script.sams, ...sead.script.ground]) expect(pads.some((p) => Math.hypot(p.x - s.x, p.z - s.z) <= p.radius)).toBe(true);
     // g02: the tanker, the boats and the air-defence boats (SAM sites at sea) never raise an island

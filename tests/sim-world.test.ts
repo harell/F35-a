@@ -54,7 +54,7 @@ describe('SimWorld spawning', () => {
     expect(sam.radarOn).toBe(false);
     expect(sam.known).toBe(true);
     expect(sam.radius).toBeGreaterThan(20);
-    const ship = tw.world.spawnGround({ type: 'ship', team: 'red', position: new Vector3(0, 50, 0) });
+    const ship = tw.world.spawnGround({ type: 'ship', team: 'red', vessel: 'container', position: new Vector3(0, 50, 0) });
     expect(ship.position.y).toBe(0);
     // a taxiing jet: any ground target with a path is a mover
     const jet = tw.world.spawnGround({

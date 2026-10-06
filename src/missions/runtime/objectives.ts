@@ -237,7 +237,7 @@ export function updateObjectives(s: MissionState, dt: number): void {
 /**
  * Flag the surface targets of the open primary objectives (`objective` on SAM sites and ground
  * targets): the sim's A/G auto-designation and TGT cycling rank them above every other surface target,
- * so a ship strike boxes the ship, not the Shilka on the way, and a SEAD sortie still boxes its SAM first.
+ * so a strike boxes its target, not the Shilka on the way, and a SEAD sortie still boxes its SAM first.
  * "Open" = active, or pending with no activation condition (it goes active on the first evaluation:
  * the flag is already set when the radar builds its first picture).
  */
