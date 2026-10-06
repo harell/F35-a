@@ -1,0 +1,466 @@
+<!-- Tāmaki Drive waterfront prototype (a long linear site: paths, seawall, railings, lamps, trees). Built by
+     tools/hero/sites/tamaki_drive_page.py, which fills the data script below with the five segments (LiDAR grids,
+     aerial and game-today images as data URIs, the model cut to each segment). See .claude/skills/hero-building/SKILL.md. -->
+<title>Tāmaki Drive Waterfront</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: the answer first (what's there, both sides of the road), then one 3D viewer with a segment picker and four stages, then the numbers, the ledger and the port. Same system as the other hero prototypes. */
+:root {
+  --bg: #eef1f1; --surface: #ffffff; --fg: #15212a; --muted: #52606b; --line: #d5dbdb;
+  --accent: #2f6f86; --accent-ink: #ffffff; --measured: #1f6f8b; --guess: #9a6a00; --old: #c2571a;
+  --sp: #c4462f; --cy: #2f8a4a; --fw: #9a7a10; --wall: #5b6670;
+  --display: 'Oswald', 'Arial Narrow', sans-serif; --body: 'IBM Plex Sans', Arial, sans-serif; --mono: 'IBM Plex Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11191e; --surface: #19242b; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #6cb6d0; --accent-ink: #11191e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c;
+  --sp: #ef7a62; --cy: #6fcf8a; --fw: #e2c255; --wall: #a8b4bd; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11191e; --surface: #19242b; --fg: #e6ebea; --muted: #a0adb5; --line: #2b3841;
+  --accent: #6cb6d0; --accent-ink: #11191e; --measured: #6cc0dd; --guess: #e2b54a; --old: #ef8a4c;
+  --sp: #ef7a62; --cy: #6fcf8a; --fw: #e2c255; --wall: #a8b4bd; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 26px; }
+h3 { margin: 0; font-size: 17px; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+.lede { color: var(--muted); font-size: 18px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.k { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.k.sp { background: var(--sp); } .k.cy { background: var(--cy); } .k.fw { background: var(--fw); } .k.wall { background: var(--wall); }
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.segs { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--line); align-items: center; }
+.segs span { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.segs button { font: 14px var(--body); color: var(--fg); background: none; border: 1px solid var(--line); padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.segs button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.stages { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.stages button { flex: 1 1 200px; min-width: 0; text-align: left; background: none; border: 0; border-right: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--muted); font: 14.5px/1.3 var(--body); }
+.stages button:last-child { border-right: 0; }
+.stages button b { display: block; color: var(--fg); font-weight: 600; font-size: 15px; }
+.stages button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.stages button[aria-pressed="true"] b { color: var(--accent-ink); }
+.stages button:focus-visible, .views button:focus-visible, .segs button:focus-visible { outline: 3px solid var(--measured); outline-offset: -3px; }
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #b9cfdd; }
+#c { width: 100%; height: 100%; display: block; touch-action: none; }
+#today { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#notoday { position: absolute; inset: 0; display: grid; place-items: center; font: 14px var(--mono); color: #15212a; }
+.views { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 20px); }
+.views button { font: 500 12px var(--mono); color: #15212a; background: rgba(255,255,255,.84); border: 1px solid rgba(21,33,42,.2); padding: 5px 9px; border-radius: 4px; cursor: pointer; }
+.views button[aria-pressed="true"] { background: #15212a; color: #fff; }
+.hint { position: absolute; right: 10px; bottom: 10px; font: 12px var(--mono); color: #15212a; background: rgba(255,255,255,.78); padding: 4px 8px; border-radius: 4px; }
+.caption { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.caption .note { min-width: 0; flex: 1 1 420px; }
+.caption label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 15px; min-width: 0; }
+.tag { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; border-radius: 4px; height: fit-content; }
+.tag.m { color: var(--measured); border: 1px solid var(--measured); }
+.tag.r { color: var(--accent); border: 1px solid var(--accent); }
+.tag.g { color: var(--guess); border: 1px solid var(--guess); }
+.tag.o { color: var(--old); border: 1px solid var(--old); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--measured); }
+[hidden] { display: none !important; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">F35-A · hero site · Tāmaki Drive, The Strand to St Heliers</span>
+    <h1>Tāmaki Drive waterfront: paths, seawall, lamps and trees from LiDAR</h1>
+    <p class="lede">This is the first thing a player sees where the harbour stops and the land begins. Each segment is shown four ways: the game today from the same camera, the raw LiDAR, the model on the real ground, and the model against the LiDAR surface. Drag to orbit, scroll or pinch to zoom.</p>
+  </header>
+
+  <section>
+    <span class="eyebrow">Can we see it</span>
+    <h2>Yes, on both sides of the road, but not all the way</h2>
+    <p>OpenStreetMap, the 7.5 cm aerial, the LiDAR and street-level images all agree. Paths line both sides of the road only on the city end, from The Strand over the Hobson Bay causeway to Ngapipi Road (about <span class="num">2.1 km</span>). From Ngapipi Road to St Heliers there is one wide shared path on the seawall and an ordinary footpath on the land side. Bikes ride in green-painted lanes on the road there.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Stretch</th><th>Harbour side, water to kerb</th><th>Land side, kerb outwards</th></tr></thead>
+        <tbody>
+          <tr><td>The Strand → Ngapipi Rd<br><span class="num">0–2.3 km</span></td><td>Basalt revetment · white post-and-rail fence · <i class="k fw"></i>concrete promenade footpath · grass verge with pōhutukawa and lamps · <i class="k cy"></i>two-way Tāmaki Drive Cycleway behind a kerb</td><td><i class="k sp"></i>Tāmaki Drive Shared Path (asphalt) under a second tree row · rail line on its own embankment · Hobson Bay</td></tr>
+          <tr><td>Ngapipi bridge<br><span class="num">2.0–2.1 km</span></td><td>No seawall, the bridge over the outlet</td><td>The shared path crosses to the harbour side at the Ngapipi Rd lights</td></tr>
+          <tr><td>Okahu Bay → Kelly Tarlton’s → Orakei<br><span class="num">2.3–5.2 km</span></td><td>Rock revetment · <i class="k sp"></i>Tāmaki Drive Shared Path on the crest, lamps on its inner edge</td><td>Footpath where there is one; cliff and bush under Bastion Point</td></tr>
+          <tr><td>Mission Bay → Kohimarama → St Heliers<br><span class="num">5.6–8.2 km</span></td><td>Stepped concrete seawall or a low wall onto the beach · <i class="k sp"></i>shared path · lamps</td><td><i class="k fw"></i>Wide footpath in front of the houses and shops · Phoenix palms at Kohimarama</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="viewer" aria-label="3D viewer">
+    <div class="segs" role="group" aria-label="Segment" id="segs"><span>Segment</span></div>
+    <div class="stages" role="group" aria-label="What to show">
+      <button id="s0" aria-pressed="false"><b>1 · In the game today</b>A frame from the running game</button>
+      <button id="s1" aria-pressed="false"><b>2 · Raw LiDAR</b>1 m surface heights, aerial draped</button>
+      <button id="s2" aria-pressed="true"><b>3 · Model</b>On the LiDAR ground under the aerial</button>
+      <button id="s3" aria-pressed="false"><b>4 · Model over the LiDAR</b>The LiDAR surface in orange, to check heights</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="c" aria-label="3D model of the Tāmaki Drive waterfront"></canvas>
+      <img id="today" alt="F35-A today, the same camera" hidden>
+      <div id="notoday" hidden>No game shot for this segment yet</div>
+      <div class="views" role="group" aria-label="Camera" id="views">
+        <button aria-pressed="true">From the harbour</button>
+        <button aria-pressed="false">Low over the water</button>
+        <button aria-pressed="false">On the path</button>
+        <button aria-pressed="false">From above</button>
+      </div>
+      <span class="hint">drag · zoom</span>
+    </div>
+    <div class="caption">
+      <span class="note" id="note"></span>
+      <span style="display:inline-flex;gap:16px"><label for="night"><input type="checkbox" id="night"> Night</label></span>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">The numbers</span>
+    <h2>What the 8.2 km holds</h2>
+    <div class="table-wrap"><table id="nums"><thead><tr><th>Part</th><th>Length</th><th>Typical size</th><th>How it was measured</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">What the model is made of</span>
+      <h2>Measured, read off images, or guessed</h2>
+      <div class="ledger">
+        <div><span class="tag m">Measured</span><span>Where each path runs and how wide it is (OSM centrelines, corrected to the edges in the aerial and the LiDAR’s intensity, which tree shade doesn’t touch). Seawall crest and toe positions and heights, and whether it is rock, concrete or a low beach wall (LiDAR DEM and aerial texture). Every lamp pole’s position, height and arm direction (point cloud). Every tree’s position, height, crown size and colour, and which ones are palms (LiDAR, point cloud, aerial). Railing lines (OSM).</span></div>
+        <div><span class="tag r">From images</span><span>The lamp style: a grey galvanised pole with one short arm and a flat LED head. The white post-and-rail fence on the causeway. The concrete seawall’s steps at Mission Bay. Surface colours: asphalt, concrete, basalt (Mapillary, the aerial).</span></div>
+        <div><span class="tag g">Guessed</span><span>Railing height and post spacing (1.1 m, 2.5 m). Pole and head dimensions. Crown shapes (a squashed sphere; pōhutukawa really spread wider and lower). Arm length where the point cloud showed no head offset. The seabed under the water line.</span></div>
+        <div><span class="tag o">Not modelled</span><span>Road markings, kerbs, benches, bus shelters, signs, the boat ramps, the Ngapipi bridge’s balustrade and the rail line. Mission Bay reserve beyond the drive.</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="eyebrow">Putting it in the game</span>
+      <h2>What porting needs, after this review</h2>
+      <div class="ledger" id="port"></div>
+    </div>
+  </section>
+
+  <footer>Data: LINZ Auckland LiDAR 1 m DSM/DEM and classified point cloud (2024) and Auckland 0.075 m Urban Aerial Photos (2024), CC BY 4.0, via <a href="https://registry.opendata.aws/nz-elevation/">nz-elevation</a>, <a href="https://registry.opendata.aws/nz-imagery/">nz-imagery</a> and <a href="https://portal.opentopography.org/">OpenTopography</a>. Paths, fences and seawall lines: © <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ODbL. Street-level references (not embedded): Mapillary contributors, CC BY-SA 4.0. Recipe: <span class="num">tools/hero/sites/tamaki_drive.py</span>; page: <span class="num">tamaki_drive_page.py</span>.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+<script>__DATA__</script>
+<script>
+// ── frame: metres, x east, z south, from the recipe's box corner (E0, N1); y = metres above NZVD2016 ──
+const NULL = -32768;
+const dec = (b64) => { const b = atob(b64), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Int16Array(u.buffer); };
+const WATER_Y = DATA.meta.water + 0.3;
+const srgb = (c) => c.map((v) => v / 255);
+let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+// ── geometry kit: triangles with per-vertex colour, merged into one mesh per material ──
+class Kit {
+  constructor() { this.p = {}; this.c = {}; }
+  tri(m, a, b, c, col) { (this.p[m] ||= []).push(...a, ...b, ...c); (this.c[m] ||= []).push(...col, ...col, ...col); }
+  quad(m, a, b, c, d, col) { this.tri(m, a, b, c, col); this.tri(m, a, c, d, col); }
+  // a prism of n sides between two centres (a pole, a trunk)
+  pole(m, a, b, r0, r1, n, col) {
+    for (let i = 0; i < n; i++) {
+      const t0 = (i / n) * 2 * Math.PI, t1 = ((i + 1) / n) * 2 * Math.PI;
+      const P = (p, r, t) => [p[0] + r * Math.cos(t), p[1], p[2] + r * Math.sin(t)];
+      this.quad(m, P(a, r0, t0), P(a, r0, t1), P(b, r1, t1), P(b, r1, t0), col);
+    }
+  }
+  box(m, c, hx, hy, hz, col) {
+    const [x, y, z] = c, v = (i, j, k) => [x + i * hx, y + j * hy, z + k * hz];
+    const F = [[v(-1,-1,1), v(1,-1,1), v(1,1,1), v(-1,1,1)], [v(1,-1,-1), v(-1,-1,-1), v(-1,1,-1), v(1,1,-1)], [v(-1,1,1), v(1,1,1), v(1,1,-1), v(-1,1,-1)],
+               [v(1,-1,1), v(1,-1,-1), v(1,1,-1), v(1,1,1)], [v(-1,-1,-1), v(-1,-1,1), v(-1,1,1), v(-1,1,-1)]];
+    for (const f of F) this.quad(m, ...f, col);
+  }
+  // a square beam between two points
+  beam(m, a, b, w, col) {
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d); if (L < 1e-6) return;
+    const u = d.map((v) => v / L), up = Math.abs(u[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+    let x = [u[1] * up[2] - u[2] * up[1], u[2] * up[0] - u[0] * up[2], u[0] * up[1] - u[1] * up[0]]; const lx = Math.hypot(...x); x = x.map((v) => (v / lx) * w / 2);
+    const y = [u[1] * x[2] - u[2] * x[1], u[2] * x[0] - u[0] * x[2], u[0] * x[1] - u[1] * x[0]];
+    const ring = (p) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [p[0] + x[0] * i + y[0] * j, p[1] + x[1] * i + y[1] * j, p[2] + x[2] * i + y[2] * j]);
+    const A = ring(a), B = ring(b);
+    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; this.quad(m, A[i], A[j], B[j], B[i], col); }
+  }
+  // an ellipsoid crown (icosphere-ish: lat/lon rings)
+  blob(m, c, rx, ry, rz, col, jit) {
+    const nu = 8, nv = 5, P = [];
+    for (let j = 0; j <= nv; j++) for (let i = 0; i < nu; i++) {
+      const v = (j / nv) * Math.PI, u = (i / nu) * 2 * Math.PI + j * 0.4, k = 1 + (j > 0 && j < nv ? (rnd() - 0.5) * jit : 0);
+      P.push([c[0] + rx * k * Math.sin(v) * Math.cos(u), c[1] + ry * Math.cos(v), c[2] + rz * k * Math.sin(v) * Math.sin(u)]);
+    }
+    for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+      const a = j * nu + i, b = j * nu + ((i + 1) % nu), cc = a + nu, d = b + nu;
+      const shade = (1.08 - 0.28 * (j / nv)), cl = col.map((v) => Math.min(1, v * shade));
+      this.quad(m, P[a], P[cc], P[d], P[b], cl);
+    }
+  }
+  mesh(m, mat) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.p[m]), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.c[m]), 3));
+    g.computeVertexNormals(); return new THREE.Mesh(g, mat);
+  }
+}
+
+// along a polyline [[x, z, y], …]: unit tangent and left normal at each vertex
+function frames(pts) {
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let tx = b[0] - a[0], tz = b[1] - a[1]; const L = Math.hypot(tx, tz) || 1; tx /= L; tz /= L;
+    return { t: [tx, tz], n: [-tz, tx] };
+  });
+}
+
+const S = DATA.meta.surfaces;
+function buildModel(seg) {
+  const K = new Kit(); seed = 7;
+  // ── paths and road: ribbons with a kerb skirt each side ──
+  const ribbon = (r, lift, col, skirt) => {
+    const F = frames(r.pts);
+    for (let i = 0; i + 1 < r.pts.length; i++) {
+      const side = (k, s) => { const p = r.pts[k], f = F[k], h = r.w[k] / 2; return [p[0] + f.n[0] * h * s, p[2] + lift, p[1] + f.n[1] * h * s]; };
+      const a = side(i, -1), b = side(i, 1), c = side(i + 1, 1), d = side(i + 1, -1);
+      K.quad('ground', a, b, c, d, col);
+      if (skirt) for (const [p, q] of [[a, d], [c, b]]) K.quad('ground', p, q, [q[0], q[1] - skirt, q[2]], [p[0], p[1] - skirt, p[2]], col.map((v) => v * 0.8));
+    }
+  };
+  for (const r of seg.road) ribbon(r, 0.05, srgb(S.road), 0.5);
+  for (const r of seg.ribbons) {
+    let col = srgb(S[r.surface] || S.asphalt);
+    if (r.kind === 'CY') col = col.map((v, i) => v * [0.92, 1.04, 0.95][i]);   // the cycleway's surface reads a touch greener
+    ribbon(r, 0.14, col, 0.6);
+  }
+  // ── seawall: crest to toe, rock as a lumpy dark face, concrete as steps, the beach wall vertical; a coping on top ──
+  for (const w of seg.walls) {
+    const C = w.crest, T = w.toe;
+    for (let i = 0; i + 1 < C.length; i++) {
+      const c0 = [C[i][0], C[i][2], C[i][1]], c1 = [C[i + 1][0], C[i + 1][2], C[i + 1][1]];
+      const t0 = [T[i][0], Math.max(T[i][2], WATER_Y - 1.2), T[i][1]], t1 = [T[i + 1][0], Math.max(T[i + 1][2], WATER_Y - 1.2), T[i + 1][1]];
+      const lerp = (a, b, k) => a.map((v, j) => v + (b[j] - v) * k);
+      if (w.kind === 'rock') {
+        const rows = 4;
+        for (let r = 0; r < rows; r++) {
+          const k0 = r / rows, k1 = (r + 1) / rows;
+          const P = [lerp(c0, t0, k0), lerp(c1, t1, k0), lerp(c1, t1, k1), lerp(c0, t0, k1)].map((p, j) => (j === 0 && r === 0) || (j === 1 && r === 0) ? p : [p[0] + (rnd() - .5) * .5, p[1] + (rnd() - .5) * .4, p[2] + (rnd() - .5) * .5]);
+          const g = 0.75 + rnd() * 0.5; K.quad('wall', P[0], P[1], P[2], P[3], srgb(S.rock).map((v) => v * g));
+        }
+      } else if (w.kind === 'concrete') {
+        const steps = 5;
+        for (let r = 0; r < steps; r++) {
+          const k0 = r / steps, k1 = (r + 1) / steps;
+          const a0 = lerp(c0, t0, k0), a1 = lerp(c1, t1, k0), b0 = lerp(c0, t0, k1), b1 = lerp(c1, t1, k1);
+          const m0 = [b0[0], a0[1], b0[2]], m1 = [b1[0], a1[1], b1[2]];                   // tread then riser
+          const base = srgb(S.seawall); K.quad('wall', a0, a1, m1, m0, base); K.quad('wall', m0, m1, b1, b0, base.map((v) => v * 0.78));
+        }
+      } else {
+        const base = srgb(S.seawall).map((v) => v * 0.9);
+        K.quad('wall', c0, c1, [c1[0], t1[1], c1[2]], [c0[0], t0[1], c0[2]], base);
+      }
+      // coping: a 0.5 m lip, 0.25 m proud, on the crest
+      const lip = [c0, c1].map((p) => [p[0], p[1] + 0.25, p[2]]);
+      K.quad('wall', lip[0], lip[1], c1, c0, srgb(S.seawall));
+    }
+  }
+  // ── railings: posts every 2.5 m, top and mid rails ──
+  const white = [0.9, 0.9, 0.87];
+  for (const r of seg.rails) {
+    const P = r.pts.map((p) => [p[0], p[2] + 0.25, p[1]]);
+    let carry = 0;
+    for (let i = 0; i + 1 < P.length; i++) {
+      const a = P[i], b = P[i + 1], L = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      for (let s = carry; s < L; s += 2.5) { const k = s / L, p = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]; K.box('rail', [p[0], p[1] + r.h / 2, p[2]], 0.05, r.h / 2, 0.05, white); }
+      carry = (carry - L) % 2.5; if (carry < 0) carry += 2.5;
+      for (const hh of [r.h, r.h * 0.55]) K.beam('rail', [a[0], a[1] + hh, a[2]], [b[0], b[1] + hh, b[2]], 0.06, white);
+    }
+  }
+  // ── lamps: a tapered grey pole, one arm to the head the point cloud found, a flat LED head ──
+  const grey = [0.6, 0.62, 0.63], heads = [];
+  for (const l of seg.lamps) {
+    const [x, z, g, top, hx, hz] = l, H = top - g;
+    K.pole('lamp', [x, g, z], [x, top - 0.2, z], 0.12, 0.07, 6, grey);
+    let ax = hx, az = hz; if (Math.hypot(ax, az) < 0.6) { ax = 0; az = 0; }
+    const tip = [x + ax, top - 0.25, z + az];
+    if (ax || az) K.beam('lamp', [x, top - 0.6, z], tip, 0.09, grey);
+    K.box('lamp', tip, 0.35, 0.08, 0.35, [0.45, 0.47, 0.48]);
+    heads.push([tip[0], tip[1] - 0.12, tip[2], g]);
+  }
+  // ── trees: pōhutukawa and other broadleaf as a trunk under a squashed crown, palms as a tall trunk and a small head ──
+  for (const t of seg.trees) {
+    const [x, z, g, top, r, cr, cg, cb, palm] = t, H = top - g;
+    const col = [cr, cg, cb].map((v) => Math.min(1, (v / 255) * 1.25));
+    if (palm) {
+      // Phoenix palm: a thick trunk, a ball of fronds arching out and down from the top
+      const R = Math.max(3, Math.min(r, 5)), hy = top - 1.4;
+      K.pole('trunk', [x, g, z], [x, hy, z], 0.42, 0.34, 6, [0.42, 0.36, 0.28]);
+      K.blob('crown', [x, hy, z], 1.2, 1.1, 1.2, col, 0.2);
+      for (let f = 0; f < 14; f++) {
+        const a = (f / 14) * 2 * Math.PI + rnd() * 0.3, up = f % 2 ? 1.3 : 0.2, mid = [x + Math.cos(a) * R * 0.55, hy + up + 0.6, z + Math.sin(a) * R * 0.55];
+        const end = [x + Math.cos(a) * R, hy + up - 1.6, z + Math.sin(a) * R];
+        K.beam('crown', [x, hy, z], mid, 0.7, col); K.beam('crown', mid, end, 0.5, col.map((v) => v * 0.9));
+      }
+    } else {
+      const base = g + H * 0.3;
+      K.pole('trunk', [x, g, z], [x, base + 0.6, z], 0.28, 0.2, 5, [0.36, 0.31, 0.26]);
+      K.blob('crown', [x, (base + top) / 2, z], r, (top - base) / 2, r, col, 0.35);
+    }
+  }
+  return { K, heads };
+}
+
+// ── three.js scene ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+const DAY_SKY = new THREE.Color('#bcd3e2'), NIGHT_SKY = new THREE.Color('#0b1620');
+scene.background = DAY_SKY.clone(); scene.fog = new THREE.Fog(DAY_SKY.clone(), 900, 2600);
+const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.3, 6000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 3; controls.maxDistance = 2000;
+const hemi = new THREE.HemisphereLight(0xeef4f7, 0x7a8580, 0.85); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e2, 0.75); sun.position.set(-500, 800, 400); scene.add(sun);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), new THREE.MeshLambertMaterial({ color: 0x2f6e72, transparent: true, opacity: 0.86 }));
+water.rotation.x = -Math.PI / 2; scene.add(water);
+const MATS = {
+  ground: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+  wall: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+  rail: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  lamp: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  trunk: new THREE.MeshLambertMaterial({ vertexColors: true }),
+  crown: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+};
+const ghostMat = new THREE.MeshBasicMaterial({ color: 0xff7a2e, transparent: true, opacity: 0.32, depthWrite: false });
+let cur = null, stage = 2, view = 0, night = false, dirty = true;
+
+function gridMesh(seg, key, mat) {
+  const h = dec(seg[key]), W = seg.W, H = seg.H, R = seg.res, [x0, z0] = seg.box;
+  const pos = new Float32Array(W * H * 3), uv = new Float32Array(W * H * 2), idx = [];
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const k = j * W + i, v = h[k];
+    pos.set([x0 + (i + 0.5) * R, v === NULL ? WATER_Y - 2 : Math.max(v / 100, WATER_Y - 2), z0 + (j + 0.5) * R], k * 3);
+    uv.set([(i + 0.5) / W, 1 - (j + 0.5) / H], k * 2);
+    if (i + 1 < W && j + 1 < H && v !== NULL && h[k + 1] !== NULL && h[k + W] !== NULL && h[k + W + 1] !== NULL) idx.push(k, k + W, k + 1, k + 1, k + W, k + W + 1);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals(); return new THREE.Mesh(g, mat);
+}
+
+function loadSegment(k) {
+  if (cur) { scene.remove(cur.root); cur.root.traverse((o) => { o.geometry?.dispose(); }); cur.tex.dispose(); }
+  const seg = DATA.segments[k];
+  const tex = new THREE.TextureLoader().load(seg.aerial, () => (dirty = true)); tex.anisotropy = 8;
+  const aerialMat = new THREE.MeshLambertMaterial({ map: tex });
+  const root = new THREE.Group();
+  const lidar = gridMesh(seg, 'dsm', aerialMat), groundA = gridMesh(seg, 'dem', aerialMat), groundP = new THREE.Mesh(lidar.geometry, ghostMat);
+  const { K, heads } = buildModel(seg);
+  const model = new THREE.Group(); let tris = 0;
+  for (const m of Object.keys(K.p)) { model.add(K.mesh(m, MATS[m])); tris += K.p[m].length / 9; }
+  // night: lamp heads and their pools of light
+  const glow = new THREE.Group();
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(heads.flatMap((h) => h.slice(0, 3))), 3));
+  glow.add(new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xfff1d6, size: 3.5, sizeAttenuation: true })));
+  const pool = new THREE.CircleGeometry(9, 20); pool.rotateX(-Math.PI / 2);
+  const poolMat = new THREE.MeshBasicMaterial({ color: 0xffe2b0, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending });
+  const pools = new THREE.InstancedMesh(pool, poolMat, heads.length); const mm = new THREE.Matrix4();
+  heads.forEach((h, i) => { mm.makeTranslation(h[0], h[3] + 0.3, h[2]); pools.setMatrixAt(i, mm); }); glow.add(pools);
+  root.add(lidar, groundA, groundP, model, glow); scene.add(root);
+  water.position.set(seg.box[0], WATER_Y, seg.box[1]);
+  cur = { seg, root, tex, lidar, groundA, groundP, model, glow, tris, heads };
+  document.querySelectorAll('#segs button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  const img = document.getElementById('today'); if (seg.today) img.src = seg.today;
+  setStage(stage); setView(view);
+}
+
+function noteFor() {
+  const s = cur.seg, c = s.counts;
+  return [
+    'The game today, same camera: Tāmaki Drive is one 14 m road ribbon with no paths, seawall, lamp posts or measured trees, and the shore is a painted band on the terrain. On the western causeway the terrain reads as sea, so the road stands on a viaduct with piers.',
+    'LINZ 2024 LiDAR: 1 m surface heights with the 7.5 cm aerial draped on them. Trees, lamp poles and the revetment all stand out.',
+    `${s.title}. ${s.blurb} This segment: ${c.lamps} lamps, ${c.trees} trees (${c.palms} palms), ${Math.round(cur.tris / 1000)}k triangles in the prototype.`,
+    'Orange: the LiDAR surface (1 m DSM) over the model. Crowns, lamp heads and the seawall should meet it; where the model pokes through or sinks below, it is off in height.',
+  ][stage];
+}
+function setStage(k) {
+  stage = k;
+  const { lidar, groundA, groundP, model, glow } = cur;
+  lidar.visible = k === 1; groundA.visible = k >= 2; groundP.visible = k === 3; model.visible = k >= 2; glow.visible = night && k >= 2;
+  const showToday = k === 0;
+  document.getElementById('today').hidden = !(showToday && cur.seg.today);
+  document.getElementById('notoday').hidden = !(showToday && !cur.seg.today);
+  canvas.style.visibility = showToday ? 'hidden' : 'visible';
+  document.querySelectorAll('.stages button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  document.getElementById('note').textContent = noteFor();
+  dirty = true;
+}
+function setView(k) {
+  view = k; const s = cur.seg, L = s.cam.look, F = s.cam.from;
+  const dx = L[0] - F[0], dz = L[1] - F[1], d = Math.hypot(dx, dz), ux = dx / d, uz = dz / d;
+  const ground = 3.5;
+  if (k === 0) { camera.position.set(F[0], 55, F[1]); controls.target.set(L[0], 5, L[1]); }
+  else if (k === 1) { camera.position.set(L[0] - ux * 130, 10, L[1] - uz * 130); controls.target.set(L[0], 4, L[1]); }
+  else if (k === 2) {
+    // eye level on the harbour-most path near the middle of the segment, looking along it
+    const r = s.ribbons.filter((q) => q.side < 0 && q.pts.length > 20).sort((a, b) => b.pts.length - a.pts.length)[0] || s.road[0];
+    const i = Math.floor(r.pts.length * 0.35), p = r.pts[i], q = r.pts[Math.min(r.pts.length - 1, i + 12)];
+    camera.position.set(p[0], p[2] + 1.7, p[1]); controls.target.set(q[0], q[2] + 1.4, q[1]);
+  } else { camera.position.set(L[0] + 1, 420, L[1]); controls.target.set(L[0], ground, L[1]); }
+  controls.update();
+  document.querySelectorAll('#views button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+  dirty = true;
+}
+
+// segment buttons, stage and view buttons
+DATA.segments.forEach((s, i) => { const b = document.createElement('button'); b.textContent = s.title; b.setAttribute('aria-pressed', 'false'); b.addEventListener('click', () => loadSegment(i)); document.getElementById('segs').append(b); });
+document.querySelectorAll('.stages button').forEach((b, i) => b.addEventListener('click', () => setStage(i)));
+document.querySelectorAll('#views button').forEach((b, i) => b.addEventListener('click', () => setView(i)));
+document.getElementById('night').addEventListener('change', (e) => {
+  night = e.target.checked;
+  scene.background.copy(night ? NIGHT_SKY : DAY_SKY); scene.fog.color.copy(scene.background);
+  hemi.intensity = night ? 0.12 : 0.85; sun.intensity = night ? 0.04 : 0.75; setStage(stage);
+});
+controls.addEventListener('change', () => (dirty = true));
+
+// numbers and port plan
+{
+  const L = DATA.ledger, tb = document.querySelector('#nums tbody');
+  const row = (a, b, c, d) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${a}</td><td class="n">${b}</td><td class="n">${c}</td><td>${d}</td>`; tb.append(tr); };
+  for (const p of L.paths) row(p.what, `${p.len.toFixed(2)} km`, `${p.w.toFixed(1)} m wide`, 'OSM centreline, edges from the aerial and LiDAR intensity, median over 45 m');
+  for (const w of L.walls) row(w.what, `${w.len.toFixed(2)} km`, `${w.drop.toFixed(1)} m drop over ${w.face.toFixed(1)} m`, 'LiDAR DEM across every 5 m section; rock or concrete from the aerial’s texture');
+  row('Railings', `${L.rails_km.toFixed(2)} km`, '1.1 m post and rail', 'OSM fences along the crest; style from Mapillary');
+  row('Road, kerb to kerb', `${(L.length / 1000).toFixed(1)} km`, `${L.road_w.toFixed(1)} m median`, 'between the innermost paths each side, OSM carriageways where there are none');
+  row('Lamp poles', `${L.lamps}`, `${L.lamp_h.toFixed(1)} m tall (median)`, 'point cloud: LINZ files thin poles as class 18; arm from the head’s offset');
+  row('Trees', `${L.trees}`, `${L.tree_h.toFixed(1)} m tall, ${L.tree_r.toFixed(1)} m crown radius; ${L.palms} palms`, 'one crown per LiDAR tree (watershed), palms from the point cloud’s vertical profile');
+  const B = L.budget, port = document.getElementById('port');
+  const item = (tag, cls, html) => { const d = document.createElement('div'); d.innerHTML = `<span class="tag ${cls}">${tag}</span><span>${html}</span>`; port.append(d); };
+  item('Data', 'r', `Bake stations, offsets, widths, wall crest and toe, lamps and trees into one binary next to the roads: about <span class="num">${B.kb_gzip} kB</span> gzip (${B.stations} stations, ${L.lamps} lamps, ${L.trees} trees). Ship parameters, not triangles.`);
+  item('Meshes', 'r', `Paths, kerbs and the seawall go into one merged mesh with no new draw call, about <span class="num">${Math.round(B.tris / 1000)}k</span> triangles over the 8 km. Lamps get one merged low-poly mesh, and railings are a strip of quads. Trees go to the game’s TreeSource (palm and broadleaf instances), like the neighbourhoods.`);
+  item('Ground', 'r', 'The causeway first. In the game today its western half is sea, so the road ribbon becomes a viaduct on piers (stage 1, Hobson Bay causeway). The port has to raise the terrain to the measured crest (about 3.5 m) between the seawall toe and the rail embankment, then widen the ribbon to the measured kerbs (12.5 m median, 4 lanes on the causeway).');
+  item('Night', 'r', 'Put a warm light at every measured lamp head and drop the ribbon’s generic lamps every 120 m.');
+  item('Collision', 'r', 'Lamp poles, about 12 m tall, as thin obstacles along the shore, so a low pass over the water is a real risk.');
+}
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; }
+}
+function loop() {
+  resize();
+  if (controls.update()) dirty = true;
+  if (dirty) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+}
+loadSegment(0); loop();
+</script>

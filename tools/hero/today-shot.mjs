@@ -4,6 +4,7 @@
  *   npx vite --config vite.e2e.config.ts --port 5190 &        # dev server (test hooks on)
  *   node tools/hero/today-shot.mjs --x=1222 --z=2556 --out=/tmp/hero/<name>/today.jpg [--dist=280] [--alt=140]
  *       [--from=sw|se|nw|ne] [--tod=day|dusk|night] [--quality=high] [--base=http://localhost:5190/]
+ *       [--cam=x,y,z --look=x,y,z]   (an explicit camera instead of --from/--dist/--alt, game metres)
  *
  * --x/--z: the site centre in game metres (site.json → centre.game_x / game_z). The camera stands --dist m
  * away horizontally in the --from direction, --alt m up, looking at the centre 10 m above ground.
@@ -23,11 +24,14 @@ await page.goto(url);
 await page.waitForFunction(() => window.__f35?.state?.()?.player, null, { timeout: 180000 });
 const frames = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r)))));
 const k = dist / Math.SQRT2;
+const triple = (v) => v.split(',').map(Number);
+const cam = args.cam ? triple(args.cam) : [x + dir[0] * k, alt, z + dir[1] * k];
+const look = args.look ? triple(args.look) : [x, 10, z];
 await page.evaluate(([cam, look]) => {
   const f = window.__f35;
   f.autopilot(false); f.invulnerable(true); f.setView('chase'); f.place(15000, 3000, 15000, 0, 150); f.hud(false);
   f.camera(cam, look);
-}, [[x + dir[0] * k, alt, z + dir[1] * k], [x, 10, z]]);
+}, [cam, look]);
 await frames(); await frames();
 await page.screenshot({ path: args.out, type: args.out.endsWith('.png') ? 'png' : 'jpeg', timeout: 240000 });
 console.log(args.out);
