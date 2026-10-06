@@ -20,6 +20,8 @@ import { buildNavalBase, buildStadiums, buildWiriTerminal, siteBlocker, siteLayo
 import { buildSettlement } from './settlements';
 import { aucklandBuiltinFeatures, type CbdStats, buildCBD, buildCentres, inTownCentre, buildMarinas, buildObelisk, buildPort, buildSkyCityPodium, isDuplicateOfAuckland } from './auckland';
 import { buildMuseum } from './museum';
+import { buildDomainBuildings } from './domain';
+import { aucklandDomain } from './aucklandDomain';
 import { SkyTowerVisual } from './skyTower';
 import { buildHarbourBridge } from './harbourBridge';
 import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTexture, sparkArenaGround } from './sparkArena';
@@ -238,6 +240,9 @@ export class Scenery {
         return heroes[heroes.length - 1];
       };
       hero(MUSEUM_ID, height(MUSEUM.x, MUSEUM.z) - 1.5, () => buildMuseum(city, lights, height));
+      // the Auckland Domain round it (aucklandDomain.ts): its measured park buildings and glasshouses (its trees: TreeSource)
+      const domain = aucklandDomain();
+      if (domain) buildDomainBuildings(city, domain, height);
       buildObelisk(city, lights, height);
       // Westfield Newmarket, measured from the LiDAR and OSM (westfieldNewmarket.ts), in the same mesh
       buildWestfieldNewmarket(city, lights, height);
@@ -470,7 +475,7 @@ export class Scenery {
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, o.theater === 'auckland' ? aucklandDomain() : null),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },

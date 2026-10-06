@@ -16,6 +16,7 @@
  *
  * Without the file, auckland.ts keeps its hand-placed port and marinas; the Wiri tanks still stand.
  */
+import { aucklandDomain } from './aucklandDomain';
 import { Color } from 'three';
 import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
@@ -181,7 +182,8 @@ export function siteBlocker(): (x: number, z: number, margin: number) => boolean
  * siteMasked()): every stadium's grounds, the oil terminal's hardstand and Westfield Newmarket's buildings, where a 3D
  * landmark stands, and the hero neighbourhoods' footprints: Mission Bay lies outside the real-streets region, so its
  * measured houses would otherwise stand on painted grid lots (its LINZ streets are ribbons: tools/linz/neighbourhoodStreets.ts;
- * inside the region, Herne Bay's and Westhaven's change nothing). The port and the
+ * inside the region, Herne Bay's and Westhaven's change nothing), and the Auckland Domain's park (its buildings and trees
+ * are measured: aucklandDomain.ts). The port and the
  * naval base are not here: they lie in the real-streets region or under the aerial photo, which never paint the grid.
  */
 export function siteRings(): Float32Array[] {
@@ -191,6 +193,7 @@ export function siteRings(): Float32Array[] {
     ...(s ? s.stadiums.map((st) => st.outline.pts) : []),
     ...WESTFIELD_PRISMS.map((p) => Float32Array.from(p.ring)),
     ...(aucklandNeighbourhoods() ?? []).map((n) => n.footprint),
+    ...(aucklandDomain() ? [aucklandDomain()!.park] : []),
   ];
 }
 
