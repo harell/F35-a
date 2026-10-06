@@ -484,8 +484,9 @@ export function drawDesignated(f: HudFrame): void {
   const sw = Math.max(lw, pen.textWidth(pit ? 'PITBULL' : tof, 11.5) / 2);
   const rng = rangeLabel(dist);
   boxLabelLayout(f, x, y, h, sw, !!m);
-  // the labels (not the box) slide off the speed / altitude columns, which print on top (#62: "MIG-29"
-  // into "M 0.77", the range into "THR 76%" with the target near the screen side)
+  // the labels (not the box) slide off the speed / altitude columns (#62: "MIG-29" into "M 0.77", the
+  // range into "THR 76%" with the target near the screen side); a column row still under the box or a
+  // label dims (colText), so the symbol reads through
   const tw = Math.max(pen.textWidth(label, 12), pen.textWidth(rng, 12.5), pen.textWidth(pit ? 'PITBULL' : tof, 11.5)) / 2 + 2 * u;
   const tx = slideOffColumns(f, x, tw, lay.top - 8 * u, lay.bottom + 8 * u);
   if (Number.isFinite(lay.typeY)) pen.text(label, tx, lay.typeY, col, 12);

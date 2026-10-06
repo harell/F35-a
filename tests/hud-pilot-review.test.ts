@@ -396,13 +396,13 @@ describe('#116 wording', () => {
     expect(groundLabel(new GroundTargetEntity(3, 'fuel', 'red', { name: 'Fuel Depot', radius: 9 }))).toBe('FUEL DEPOT');
   });
 
-  it('1.2-n: missile time to impact reads T n (M is Mach), peak g reads GMAX', () => {
+  it('1.2-n: missile time to impact reads T n; no Mach or peak g on the HMD (limit-only column, owner 2026-10-06)', () => {
     const r = rig('lock', 'hud');
     const texts = r.run(0.2);
     expect(find(texts, /^T \d+$/).length).toBeGreaterThan(0);
     expect(find(texts, /^M \d+$/).length).toBe(0);
-    expect(find(texts, /^M \d\.\d\d$/).length).toBe(1);
-    expect(find(texts, /^GMAX \d+\.\d$/).length).toBe(1);
+    expect(find(texts, /^M \d\.\d\d$/).length).toBe(0);
+    expect(find(texts, /^GMAX \d+\.\d$/).length).toBe(0);
   });
 
   it('2.1-e: a release denial (NO SEEKER) goes away when the weapon changes', () => {

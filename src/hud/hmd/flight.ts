@@ -13,10 +13,8 @@ import { tapeBottom } from './zones';
 
 const txt = {
   kcas: new NumText(0),
-  mach: new NumText(2, 'M '),
   g: new NumText(1, 'G '),
   // peak g, labelled (a lone number under 'G' read as nothing: playtest 1.2-n)
-  gmax: new NumText(1, 'GMAX '),
   aoa: new NumText(1, 'α '),
   alt: new NumText(0, '', '', true),
   ralt: new NumText(0, 'R '),
@@ -27,8 +25,98 @@ const txt = {
 };
 
 /** Session max G (reset when the player changes). */
-let maxG = 1;
-let maxGOwner = -1;
+/**
+ * Limit-only rows of the speed column (owner, 2026-10-06: show the numbers near their limit, not all the
+ * time): G above G_SHOW (or negative), AoA above AOA_SHOW or stalling, held HOLD_S after so a pull that
+ * hovers at the threshold doesn't flicker the row.
+ */
+export const G_SHOW = 6;
+export const AOA_SHOW = 20;
+const HOLD_S = 2;
+/** HUD clock when G / AoA were last over their thresholds, for this player. */
+const held = { owner: -1, g: -Infinity, aoa: -Infinity };
+
+/** The rows the HMD speed column draws under its box this frame. */
+export interface SpeedRows {
+  g: boolean;
+  aoa: boolean;
+  /** Throttle % (or the AB stage): with no touch throttle lever showing it, or in afterburner. */
+  thr: boolean;
+  /** Fuel: at joker and below. */
+  fuel: boolean;
+  brake: boolean;
+}
+const rows: SpeedRows = { g: false, aoa: false, thr: false, fuel: false, brake: false };
+
+function gOver(fl: HudFrame['p']['flight']): boolean {
+  return fl.gLoad > G_SHOW || fl.gLoad < -1;
+}
+
+function aoaOver(p: HudFrame['p']): boolean {
+  return p.flight.alpha * RAD > AOA_SHOW || p.flight.stalled || !!p.warnings?.has('stall');
+}
+
+function inAfterburner(p: HudFrame['p']): boolean {
+  return p.flight.afterburner > 0.02 || p.input.throttle > AB_DETENT + 0.01;
+}
+
+/** Which speed-column rows show this frame (the reservation in zones.ts reads the same). */
+export function speedRows(f: HudFrame): SpeedRows {
+  const p = f.p;
+  const fl = p?.flight;
+  const now = f.st?.clock ?? 0;
+  const mine = held.owner === p?.id;
+  rows.g = !!fl && (gOver(fl) || (mine && now - held.g < HOLD_S));
+  rows.aoa = !!fl && (aoaOver(p) || (mine && now - held.aoa < HOLD_S));
+  rows.thr = !!fl && (!f.ctx?.touchControls || inAfterburner(p));
+  rows.fuel = !!fl && fuelFraction(p) < JOKER_FRACTION;
+  rows.brake = !!p && (p.input.airbrake || p.flight.surfaces.airbrake > 0.2);
+  return rows;
+}
+
+/** Number of rows the speed column draws under its box. */
+export function speedRowCount(f: HudFrame): number {
+  const r = speedRows(f);
+  return (r.g ? 1 : 0) + (r.aoa ? 1 : 0) + (r.thr ? 1 : 0) + (r.fuel ? 1 : 0) + (r.brake ? 1 : 0);
+}
+
+/** Radar altitude below this (ft AGL) always shows; up to RALT_MAX_FT only while descending. */
+export const RALT_SHOW_FT = 1500;
+const RALT_MAX_FT = 5000;
+/** "Descending": faster than this (ft/min) toward the ground. */
+const RALT_DESCENT_FPM = -1000;
+
+/** The altitude column's radar-altitude row shows this frame. */
+export function raltShown(p: HudFrame['p'] | undefined): boolean {
+  if (!p?.flight) return false;
+  const aglFt = toFeet(p.flight.agl);
+  return aglFt < RALT_SHOW_FT || (aglFt < RALT_MAX_FT && toFpm(p.flight.verticalSpeed) < RALT_DESCENT_FPM);
+}
+
+/** Text a fixed column (speed, altitude, weapon block) draws under a symbol or its labels is dimmed. */
+export const COLUMN_DIM = 0.3;
+
+/**
+ * A fixed column's text line: dimmed where a world symbol (contact, SAM, ground target, waypoint) or a
+ * protected one (the designated box and its labels, the FPM, the pipper) is under it, so the symbol
+ * reads through (owner, 2026-10-06: SA-15 and AD BOAT printed under "G 1.0" and "FL 24 CH 24").
+ */
+export function colText(f: HudFrame, s: string, x: number, y: number, color: string, size: number, align: 'left' | 'right'): void {
+  const { pen, L } = f;
+  const w = pen.textWidth(s, size);
+  const x0 = align === 'right' ? x - w : x;
+  const hh = size * 0.55 * L.u;
+  const under = f.occ.hits(x0, y - hh, x0 + w, y + hh, 1) || f.sym.hits(x0, y - hh, x0 + w, y + hh);
+  if (!under) {
+    pen.text(s, x, y, color, size, align);
+    return;
+  }
+  const g = pen.g;
+  const a = g.globalAlpha;
+  g.globalAlpha = a * COLUMN_DIM;
+  pen.text(s, x, y, color, size, align);
+  g.globalAlpha = a;
+}
 
 /* ───────────────────────── Flight path marker ───────────────────────── */
 
@@ -462,42 +550,46 @@ export function drawSpeedColumn(f: HudFrame): void {
   const by = L.boxY;
   pen.box(right - bw, by - bh / 2, bw, bh, pal.main, 1.6, pal.back);
   pen.text(txt.kcas.get(Math.max(0, toKnots(fl.ias))), right - 6 * u, by + 0.5, pal.main, 16, 'right');
+  // limit-only rows (Mach and max G are gone: owner, 2026-10-06)
+  const now = f.st.clock;
+  if (held.owner !== p.id) {
+    held.owner = p.id;
+    held.g = held.aoa = -Infinity;
+  }
+  if (gOver(fl)) held.g = now;
+  if (aoaOver(p)) held.aoa = now;
+  const r = speedRows(f);
   let y = by + bh / 2 + L.line * 0.75;
-  pen.text(txt.mach.get(fl.mach), right, y, pal.main, 12.5, 'right');
-  y += L.line;
-  // G and max G
-  if (p.id !== maxGOwner) {
-    maxGOwner = p.id;
-    maxG = 1;
-  }
-  if (!f.ctx.paused) maxG = Math.max(maxG, fl.gLoad);
-  const gCol = fl.gLoad > 8.5 || fl.gLoad < -2.5 ? pal.warn : pal.main;
-  pen.text(txt.g.get(fl.gLoad), right, y, gCol, 12.5, 'right');
-  y += L.line;
-  pen.text(txt.gmax.get(maxG), right, y, pal.dim, 11.5, 'right');
-  y += L.line;
-  const aoaDeg = fl.alpha * RAD;
-  const stall = fl.stalled || f.p.warnings.has('stall');
-  const aoaCol = stall ? pal.danger : aoaDeg > 20 ? pal.warn : pal.main;
-  if (!(stall && !blink(f, 3))) pen.text(txt.aoa.get(aoaDeg), right, y, aoaCol, 12.5, 'right');
-  y += L.line;
-  // throttle / afterburner
-  const thr = p.input.throttle;
-  if (fl.afterburner > 0.02 || thr > AB_DETENT + 0.01) {
-    const stage = Math.max(1, Math.min(5, Math.ceil(((thr - AB_DETENT) / (1 - AB_DETENT)) * 5)));
-    pen.text(AB_STR[stage], right, y, pal.warn, 13, 'right');
-  } else {
-    pen.text(txt.thr.get((thr / AB_DETENT) * 100), right, y, pal.main, 12, 'right');
-  }
-  // fuel (klb): amber at joker, red at bingo (playtest 1.2-h: the only fuel cue was the BINGO chip)
-  y += L.line;
-  const ff = fuelFraction(p);
-  const fuelCol = ff < BINGO_FRACTION ? pal.danger : ff < JOKER_FRACTION ? pal.warn : pal.main;
-  pen.text(txt.fuel.get((fl.fuel * KG_TO_LB) / 1000), right, y, fuelCol, 12, 'right');
-  if (p.input.airbrake || fl.surfaces.airbrake > 0.2) {
+  if (r.g) {
+    const gCol = fl.gLoad > 8.5 || fl.gLoad < -2.5 ? pal.warn : pal.main;
+    colText(f, txt.g.get(fl.gLoad), right, y, gCol, 12.5, 'right');
     y += L.line;
-    pen.text('SPD BRK', right, y, pal.main, 11.5, 'right');
   }
+  if (r.aoa) {
+    const aoaDeg = fl.alpha * RAD;
+    const stall = fl.stalled || p.warnings.has('stall');
+    const aoaCol = stall ? pal.danger : aoaDeg > AOA_SHOW ? pal.warn : pal.main;
+    if (!(stall && !blink(f, 3))) colText(f, txt.aoa.get(aoaDeg), right, y, aoaCol, 12.5, 'right');
+    y += L.line;
+  }
+  // throttle / afterburner
+  if (r.thr) {
+    const thr = p.input.throttle;
+    if (inAfterburner(p)) {
+      const stage = Math.max(1, Math.min(5, Math.ceil(((thr - AB_DETENT) / (1 - AB_DETENT)) * 5)));
+      colText(f, AB_STR[stage], right, y, pal.warn, 13, 'right');
+    } else {
+      colText(f, txt.thr.get((thr / AB_DETENT) * 100), right, y, pal.main, 12, 'right');
+    }
+    y += L.line;
+  }
+  // fuel (klb), from joker: amber at joker, red at bingo (playtest 1.2-h: the only fuel cue was the BINGO chip)
+  if (r.fuel) {
+    const ff = fuelFraction(p);
+    colText(f, txt.fuel.get((fl.fuel * KG_TO_LB) / 1000), right, y, ff < BINGO_FRACTION ? pal.danger : pal.warn, 12, 'right');
+    y += L.line;
+  }
+  if (r.brake) colText(f, 'SPD BRK', right, y, pal.main, 11.5, 'right');
 }
 
 const KG_TO_LB = 2.20462;
@@ -524,24 +616,26 @@ export function drawAltColumn(f: HudFrame): void {
   pen.text(txt.alt.get(Math.round(altFt / 10) * 10), left + bw - 6 * u, by + 0.5, pal.main, 16, 'right');
   let y = by + bh / 2 + L.line * 0.75;
   const aglFt = toFeet(fl.agl);
-  if (aglFt < 5000) {
+  // radar altitude: low, or descending toward the ground (owner, 2026-10-06; it read as a range beside
+  // the target data at 2,500 ft in level flight)
+  if (raltShown(p)) {
     const low = aglFt < 500 && fl.verticalSpeed < -2;
-    if (!(low && !blink(f, 2.5))) pen.text(txt.ralt.get(Math.max(0, Math.round(aglFt / 10) * 10)), left, y, low ? pal.warn : pal.main, 12.5, 'left');
+    if (!(low && !blink(f, 2.5))) colText(f, txt.ralt.get(Math.max(0, Math.round(aglFt / 10) * 10)), left, y, low ? pal.warn : pal.main, 12.5, 'left');
     y += L.line;
   }
   const vvi = toFpm(fl.verticalSpeed);
   const vq = Math.round(vvi / 50) * 50;
   const vs = txt.vvi.get(vq);
-  pen.text(vq > 0 ? '+' + vs : vs, left, y, pal.main, 12, 'left');
+  colText(f, vq > 0 ? '+' + vs : vs, left, y, pal.main, 12, 'left');
   y += L.line;
   // target data (closure, angels, aspect)
   const t = f.target;
   if (t && t.kind === 'aircraft') {
     const vc = f.zone ? f.zone.closure : closureOf(f);
-    pen.text(txt.vc.get(toKnots(vc)), left, y, pal.main, 12, 'left');
+    colText(f, txt.vc.get(toKnots(vc)), left, y, pal.main, 12, 'left');
     y += L.line;
     const angels = Math.max(0, Math.round(toFeet(t.position.y) / 1000));
-    pen.text(aspectText(f, angels), left, y, pal.main, 12, 'left');
+    colText(f, aspectText(f, angels), left, y, pal.main, 12, 'left');
   }
 }
 

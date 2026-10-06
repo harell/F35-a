@@ -9,10 +9,11 @@ import type { Vector3 } from 'three';
 import type { WeaponId } from '../../core/types';
 import type { BombCue } from '../../sim/api';
 import { dlzLayout, makeDlzGeometry } from './dlz';
-import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_AG, WEAPON_IS_BOMB } from './format';
+import { INT_STR, NumText, WEAPON_BREVITY, WEAPON_HUD, WEAPON_IS_BOMB } from './format';
 import { blink, type HudFrame } from './frame';
 import { TEST_HOOKS } from '../../core/data';
 import { noteCue, notePipper } from './drawn';
+import { colText } from './flight';
 import { weaponMismatch } from '../../sim/weapons/fit';
 
 const dlzGeom = makeDlzGeometry();
@@ -43,19 +44,6 @@ export function remainingOf(f: HudFrame, w: WeaponId): number {
 
 /* ───────────────────────── Weapon status block ───────────────────────── */
 
-/** Master mode: A-G with an air-to-ground store selected, A-A with a target or hostile air track, else NAV. */
-export function masterMode(f: HudFrame): 'A-A' | 'A-G' | 'NAV' {
-  const p = f.p;
-  if (WEAPON_IS_AG[p.selectedWeapon]) return 'A-G';
-  if (f.target) return 'A-A';
-  for (const c of p.radar.contacts) {
-    if (c.team === p.team || c.team === 'neutral') continue;
-    const e = f.world.getEntity(c.id);
-    if (e && e.alive && e.kind === 'aircraft') return 'A-A';
-  }
-  return 'NAV';
-}
-
 /**
  * The selected weapon can't engage the boxed target ('AIR TGT: GUN OR A-A'…): a steady amber line
  * under the weapon and the target camera's status pill, before FIRE is pressed (owner, 2026-10-06:
@@ -67,17 +55,60 @@ export function weaponMismatchOf(f: HudFrame): string | null {
   return weaponMismatch(f.p.selectedWeapon, t.kind);
 }
 
+/** Seconds the weapon block shows the selected weapon after a change. */
+export const WEAPON_NEWS_S = 2;
+
+/** "Low" for the selected weapon: the last store, or under a fifth of the gun's rounds. */
+function weaponLow(f: HudFrame, w: WeaponId, n: number): boolean {
+  return w === 'gun' ? n < 0.2 * Math.max(1, f.p.gunMaxAmmo) : n <= 1;
+}
+
+/** The rows the weapon block draws this frame. */
+export interface WeaponRows {
+  /** The selected weapon and its count (and "n IN FLT"). */
+  weapon: boolean;
+  /** Gun rounds under a selected missile or bomb. */
+  gun: boolean;
+  /** Flares and chaff. */
+  cms: boolean;
+  emcon: boolean;
+  bay: boolean;
+  wrong: string | null;
+  denied: boolean;
+}
+const wrows: WeaponRows = { weapon: false, gun: false, cms: false, emcon: false, bay: false, wrong: null, denied: false };
+
+/**
+ * The counts have another home in this view: the SMS page in the cockpit, the buttons with touch controls.
+ * The block then shows only news (owner, 2026-10-06): a weapon change (WEAPON_NEWS_S), low or empty, our
+ * weapons in flight, a refusal or a wrong weapon. Elsewhere (HUD and chase views on a desktop) it keeps
+ * the counts as before.
+ */
+export function countsElsewhere(f: HudFrame): boolean {
+  return f.cockpit || !!f.ctx.touchControls;
+}
+
+/** Which weapon-block rows show this frame (drawWeaponBlock and weaponBlockLines read the same). */
+export function weaponRows(f: HudFrame, compact = false): WeaponRows {
+  const { p, st } = f;
+  const w = p.selectedWeapon;
+  const n = remainingOf(f, w);
+  const news = countsElsewhere(f);
+  wrows.wrong = weaponMismatchOf(f);
+  wrows.denied = deniedShown(f) && st.deniedText !== wrows.wrong;
+  wrows.weapon = !news || st.weaponAge < WEAPON_NEWS_S || weaponLow(f, w, n) || ownInFlight(f) > 0 || !!wrows.wrong || wrows.denied;
+  wrows.gun = !compact && !news && w !== 'gun';
+  wrows.cms = !compact && (!news || p.flares <= 4 || p.chaff <= 4);
+  // EMCON: the RDR button says it with touch controls
+  wrows.emcon = !p.radar.emitting && !f.ctx.touchControls;
+  wrows.bay = !compact && !news && p.bayDoors > 0.05;
+  return wrows;
+}
+
 /** Lines the full (non-compact) weapon block will use this frame. */
 export function weaponBlockLines(f: HudFrame): number {
-  const p = f.p;
-  let n = 3;
-  if (p.selectedWeapon !== 'gun') n++;
-  if (!p.radar.emitting) n++;
-  if (p.bayDoors > 0.05) n++;
-  const wrong = weaponMismatchOf(f);
-  if (wrong) n++;
-  if (deniedShown(f) && f.st.deniedText !== wrong) n++;
-  return n;
+  const r = weaponRows(f);
+  return (r.weapon ? 1 : 0) + (r.gun ? 1 : 0) + (r.cms ? 1 : 0) + (r.emcon ? 1 : 0) + (r.bay ? 1 : 0) + (r.wrong ? 1 : 0) + (r.denied ? 1 : 0);
 }
 
 /**
@@ -103,53 +134,53 @@ export function drawWeaponBlock(f: HudFrame, x: number, y: number, compact = fal
   const u = L.u;
   const w = p.selectedWeapon;
   const n = remainingOf(f, w);
-  if (!compact) {
-    pen.text(masterMode(f), x, y, pal.main, 13, 'left');
-    y += L.line;
-  }
-  // selected weapon (flashes briefly after a change; amber when empty)
-  const label = weaponLabel(w, n);
-  const fresh = st.weaponAge < 0.9;
-  const col = n === 0 ? pal.warn : fresh ? pal.bright : pal.main;
-  if (fresh) {
-    const tw = pen.textWidth(label, 14) + 8 * u;
-    pen.box(x - 4 * u, y - 9 * u, tw, 18 * u, pal.bright, 1.4, pal.back);
-  }
-  pen.text(label, x, y, col, 14, 'left');
-  // our weapons in flight ("3 IN FLT"): a fixed place that always reads, where the per-box "T n" marks
-  // in a tight swarm find no room (playtest 2.1-a)
-  const flying = ownInFlight(f);
-  if (flying > 0) pen.text(inFltTxt.get(flying), x + pen.textWidth(label, 14) + 10 * u, y + 0.5, pal.main, 11.5, 'left');
-  y += L.line + 1;
-  if (!compact) {
-    // gun rounds as a secondary line when a missile/bomb is selected
-    if (w !== 'gun') {
-      pen.text(weaponLabel('gun', p.gunAmmo), x, y, pal.dim, 11.5, 'left');
-      y += L.line * 0.9;
+  const r = weaponRows(f, compact);
+  // (no A-A / A-G master-mode line: the weapon's name says it, owner 2026-10-06)
+  if (r.weapon) {
+    // selected weapon (flashes briefly after a change; amber when low, as when empty)
+    const label = weaponLabel(w, n);
+    const fresh = st.weaponAge < 0.9;
+    const col = n === 0 || (countsElsewhere(f) && weaponLow(f, w, n)) ? pal.warn : fresh ? pal.bright : pal.main;
+    if (fresh) {
+      const tw = pen.textWidth(label, 14) + 8 * u;
+      pen.box(x - 4 * u, y - 9 * u, tw, 18 * u, pal.bright, 1.4, pal.back);
     }
+    colText(f, label, x, y, col, 14, 'left');
+    // our weapons in flight ("3 IN FLT"): a fixed place that always reads, where the per-box "T n" marks
+    // in a tight swarm find no room (playtest 2.1-a)
+    const flying = ownInFlight(f);
+    if (flying > 0) colText(f, inFltTxt.get(flying), x + pen.textWidth(label, 14) + 10 * u, y + 0.5, pal.main, 11.5, 'left');
+    y += L.line + 1;
+  }
+  // gun rounds as a secondary line when a missile/bomb is selected
+  if (r.gun) {
+    colText(f, weaponLabel('gun', p.gunAmmo), x, y, pal.dim, 11.5, 'left');
+    y += L.line * 0.9;
+  }
+  if (r.cms) {
     const fl = flTxt.get(p.flares);
     const ch = chTxt.get(p.chaff);
-    pen.text(fl, x, y, p.flares <= 4 ? pal.warn : pal.main, 11.5, 'left');
-    pen.text(ch, x + pen.textWidth(fl, 11.5) + 8 * u, y, p.chaff <= 4 ? pal.warn : pal.main, 11.5, 'left');
+    colText(f, fl, x, y, p.flares <= 4 ? pal.warn : pal.main, 11.5, 'left');
+    colText(f, ch, x + pen.textWidth(fl, 11.5) + 8 * u, y, p.chaff <= 4 ? pal.warn : pal.main, 11.5, 'left');
     y += L.line * 0.9;
   }
-  if (!p.radar.emitting) {
-    pen.text('EMCON', x, y, pal.warn, 12, 'left');
+  if (r.emcon) {
+    colText(f, 'EMCON', x, y, pal.warn, 12, 'left');
     y += L.line * 0.9;
   }
-  if (p.bayDoors > 0.05 && !compact) {
-    pen.text('BAY OPEN', x, y, pal.dim, 11, 'left');
+  if (r.bay) {
+    colText(f, 'BAY OPEN', x, y, pal.dim, 11, 'left');
     y += L.line * 0.9;
   }
   // the weapon can't engage the boxed target: steady, while it lasts (a denial saying the same blinks it)
-  const wrong = weaponMismatchOf(f);
+  const wrong = r.wrong;
   if (wrong) {
-    if (!(deniedShown(f) && st.deniedText === wrong) || blink(f, 4, 0.7)) pen.text(wrong, x, y, pal.warn, 12.5, 'left');
+    if (!(deniedShown(f) && st.deniedText === wrong) || blink(f, 4, 0.7)) colText(f, wrong, x, y, pal.warn, 12.5, 'left');
     if (TEST_HOOKS) noteCue(wrong, x, y, true);
     y += L.line;
   }
-  if (deniedShown(f) && st.deniedText !== wrong) {
-    if (blink(f, 4, 0.7)) pen.text(st.deniedText, x, y, pal.warn, 12.5, 'left');
+  if (r.denied) {
+    if (blink(f, 4, 0.7)) colText(f, st.deniedText, x, y, pal.warn, 12.5, 'left');
     y += L.line;
   }
   return y;

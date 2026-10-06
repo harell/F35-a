@@ -346,13 +346,30 @@ describe('the off-screen target cue keeps clear of the HMD text', () => {
 });
 
 describe('the speed column reservation', () => {
-  it('covers the THR line, and SPD BRK while the speed brake is out', () => {
-    // rows: box (±11u), Mach at +0.75 line, G, max G, AoA, THR at +4.75 line, SPD BRK at +5.75 line
+  it('covers the rows it draws: THR on a desktop, the limit-only rows near their limits, SPD BRK while the brake is out', () => {
+    // rows (owner, 2026-10-06): box (±11u), then G (> 6 g), AoA (> 20°), THR (no touch lever, or AB),
+    // FUEL (joker), SPD BRK, from +0.75 line down, one line each
     const L = { boxY: 200, u: 1, line: 15 };
-    const frame = (airbrake: boolean) => ({ L, p: { input: { airbrake }, flight: { surfaces: { airbrake: 0 } } } }) as unknown as HudFrame;
+    const frame = (o: { airbrake?: boolean; g?: number; alpha?: number; touch?: boolean; fuel?: number }) =>
+      ({
+        L,
+        ctx: { touchControls: !!o.touch },
+        p: {
+          id: 1,
+          type: 'f35a',
+          warnings: new Set(),
+          input: { airbrake: !!o.airbrake, throttle: 0.5 },
+          flight: { surfaces: { airbrake: 0 }, gLoad: o.g ?? 1, alpha: o.alpha ?? 0.05, afterburner: 0, stalled: false, fuel: o.fuel ?? 1e6 },
+        },
+      }) as unknown as HudFrame;
     const row = (k: number) => L.boxY + 11 + k * L.line + 6.5; // bottom of a 12 px row
-    expect(speedColumnBottom(frame(false))).toBeGreaterThanOrEqual(row(4.75));
-    expect(speedColumnBottom(frame(true))).toBeGreaterThanOrEqual(row(5.75));
+    // desktop, level flight: THR only
+    expect(speedColumnBottom(frame({}))).toBeGreaterThanOrEqual(row(0.75));
+    expect(speedColumnBottom(frame({}))).toBeLessThan(row(1.75));
+    // touch lever showing: no rows at all
+    expect(speedColumnBottom(frame({ touch: true }))).toBeLessThan(row(0.75));
+    // 7 g, 25° AoA, joker fuel and the brake out: G, AoA, THR, FUEL, SPD BRK
+    expect(speedColumnBottom(frame({ g: 7, alpha: 0.44, fuel: 1, airbrake: true }))).toBeGreaterThanOrEqual(row(4.75));
   });
 
   it('on the altitude side, covers the aspect line under RALT, VVI and closure when flying low', () => {
@@ -518,7 +535,8 @@ describe("the target box's labels keep off the speed column", () => {
       screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
     };
     hud.update(ctx);
-    const mach = fake.texts.find((t) => /^M \d/.test(t.text))!;
+    // (the column's first row under the box: THR, with Mach gone and G at 1 g hidden, owner 2026-10-06)
+    const mach = fake.texts.find((t) => /^THR \d/.test(t.text))!;
     expect(mach).toBeTruthy();
     const t = mock.world.getEntity(p.radar.designatedId!)!;
     const at = (sx: number, sy: number) => {
@@ -528,7 +546,7 @@ describe("the target box's labels keep off the speed column", () => {
       if (c) c.position.copy(t.position);
     };
     const bad: string[] = [];
-    // the box just right of the column, level with the Mach and G lines
+    // the box just right of the column, level with its first rows
     for (const [dx, dy] of [[10, 0], [25, 10], [40, 25]]) {
       for (let i = 0; i < 3; i++) {
         fake.reset();

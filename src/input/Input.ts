@@ -195,6 +195,9 @@ export const createInput: CreateInput = (root, initialSettings) => {
   const api: InputApi = {
     controls,
 
+    get touchShown() {
+      return touchShown === true;
+    },
     get activeScheme() {
       return settings.controlScheme === 'tilt' && !tiltFallback ? 'tilt' : 'stick';
     },

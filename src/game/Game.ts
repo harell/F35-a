@@ -799,6 +799,7 @@ export class Game {
       quality: g.quality,
       paused: g.paused,
       screen: g.screen,
+      touchControls: g.input.touchShown,
     };
   }
 
