@@ -44,6 +44,14 @@ export interface AircraftSimState {
   buffet: number;
   /** Speed brake extension 0..1. */
   airbrake: number;
+  /**
+   * Under-speed autothrottle floor (IAS, m/s; 0 = off). Free flight sets it for the player (#113):
+   * with the throttle back the engine holds this speed instead of letting the jet sink on the
+   * AoA limiter. More throttle from the pilot always wins.
+   */
+  speedFloor: number;
+  /** The autothrottle is adding power this step. */
+  autoThrottle: boolean;
 
   /* ── Loads ── */
   /** Max |g| per 0.1 s bucket over the last second. */
@@ -112,6 +120,8 @@ export function createSimState(type: AircraftType, seed: number): AircraftSimSta
     noiseR: 0,
     buffet: 0,
     airbrake: 0,
+    speedFloor: 0,
+    autoThrottle: false,
     gBuckets: new Float32Array(10).fill(1),
     gBucketIdx: 0,
     gBucketTime: 0,

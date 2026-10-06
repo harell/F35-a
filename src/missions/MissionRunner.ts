@@ -43,6 +43,7 @@ import { CivilShipping } from './runtime/shipping';
 import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
 import { SightseeingLog } from './runtime/sightseeing';
+import { FREE_FLIGHT_SPEED_FLOOR, setSpeedFloor } from '../sim/flight/FlightModel';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
@@ -184,6 +185,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
       // a calm cockpit (#113): radar off at the start (the player can turn it on); the civil traffic
       // shows as CIV boxes, and a tap or TGT designates it like anything else (owner, 2026-10-04)
       world.combat.setRadarEmitting(p, false, world);
+      // slow flight for sightseeing (#113): with the throttle back the autothrottle holds 150 KIAS
+      // instead of letting the jet sink on the AoA limiter; the HMD shows 'A/T' while it does
+      setSpeedFloor(p, FREE_FLIGHT_SPEED_FLOOR);
     }
     spawnInitial(s);
     // (before the radar's first picture: A/G auto-designation ranks the primary targets first)

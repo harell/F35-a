@@ -72,6 +72,36 @@ export function controlLawFor(ac: AircraftEntity, env: FlightEnv): ControlLaw {
   return isAssisted(ac, env) ? LAW_ASSISTED : LAW_NO_ASSIST;
 }
 
+/** Free-flight speed floor (#113): 150 KIAS, about 1.3 × the clean jet's 1 g stall at low level. */
+export const FREE_FLIGHT_SPEED_FLOOR = 150 * 0.514444;
+/** The autothrottle starts adding power this far (IAS, m/s) above the floor. */
+const AT_ENGAGE_BAND = 4;
+/** Speed-error gain of the autothrottle (1/s): thrust per kg per m/s below the floor. */
+const AT_GAIN = 0.35;
+
+/**
+ * Set (or clear with 0) the under-speed autothrottle floor of an aircraft (IAS, m/s). With the
+ * throttle back the engine then holds this speed, up to MIL (never the afterburner); the pilot's
+ * throttle wins whenever it asks for more.
+ */
+export function setSpeedFloor(ac: AircraftEntity, ias: number): void {
+  const st = ensureSimState(ac);
+  st.speedFloor = Math.max(0, ias);
+  if (st.speedFloor === 0) st.autoThrottle = false;
+}
+
+/**
+ * Lever position the autothrottle wants (≤ AB_DETENT): the thrust that cancels the last
+ * sub-step's acceleration along the flight path, plus a proportional term on the speed error.
+ */
+function autoThrottleLever(st: AircraftSimState, ad: typeof AD, thrust: number, ias: number, alt: number): number {
+  const sfAlong = st.specificForce.dot(_vHat); // (T·cosα − D)/m of the last sub-step
+  const cosA = Math.max(0.5, Math.cos(ad.alpha));
+  const err = st.speedFloor - ias;
+  const tReq = (thrust * cosA + ad.mass * (G * Math.sin(ad.gamma) - sfAlong + AT_GAIN * err)) / cosA;
+  return Math.min(AB_DETENT, throttleForThrust(st, Math.max(0, tReq), alt, ATM.sigma, ad.mach));
+}
+
 /** Stores mass (kg) and drag increment for the current loadout. */
 function storesOf(ac: AircraftEntity, st: AircraftSimState): typeof _stores {
   const perf = st.perf;
@@ -321,6 +351,18 @@ function substep(ac: AircraftEntity, st: AircraftSimState, h: number, env: Fligh
     throttle = applyGcasOverride(ac, st, _stick, throttle, _hpr.roll);
   }
   if (!alive) throttle = 0;
+  // Free-flight under-speed autothrottle (#113): holds the floor with the throttle back.
+  st.autoThrottle = false;
+  if (alive && st.speedFloor > 0 && !st.gcasActive && !st.flamedOut) {
+    const ias = tasToIas(V, pos.y);
+    if (ias < st.speedFloor + AT_ENGAGE_BAND) {
+      const at = autoThrottleLever(st, ad, f.thrust, ias, pos.y); // (AD is shared: last thrust from the jet's own state)
+      if (at > throttle + 0.01) {
+        throttle = at;
+        st.autoThrottle = true;
+      }
+    }
+  }
 
   /* ── Engine ── */
   const eng = updateEngine(ac, st, h, throttle, pos.y, ATM.sigma, ad.mach, V, env.difficulty.fuelBurnScale);
@@ -421,6 +463,7 @@ function writeOutputs(ac: AircraftEntity, st: AircraftSimState, env: FlightEnv |
   f.mass = AD.mass;
   const over = f.alpha >= 0 ? f.alpha - perf.alphaStall : -f.alpha - perf.alphaStallNeg;
   f.stalled = ac.alive && (st.departure > 0.25 || over > 1 * (Math.PI / 180));
+  f.autoThrottle = ac.alive && st.autoThrottle;
   ac.buffet = ac.alive ? st.buffet : 0;
   const s = f.surfaces;
   s.airbrake = st.airbrake;
