@@ -34,7 +34,11 @@ export const LINE_FREIGHT = 3;
 
 export interface RailLineDef {
   id: number;
+  /** AT's short code, as on the timetables and the trains' destination displays. */
+  code: string;
   name: string;
+  /** AT's line colour (GTFS route_color). */
+  color: number;
   /** Departures per hour each way, by service period (AT GTFS, a Wednesday of the 2026-09-17 feed). */
   perHour: { peak: number; offpeak: number; evening: number };
   /** Share of 6-car trains, by service period (the rest run as 3 cars). */
@@ -42,13 +46,15 @@ export interface RailLineDef {
 }
 
 /**
- * The lines. Departures per hour from the GTFS (first departures of each trip, by hour): East-West
- * 7–8 at peak, 4 off-peak, 2 in the evening; South-City 6 / 4 / 2; Onehunga-West 2 all day.
+ * The lines, named and coloured as AT names them (at.govt.nz timetables; GTFS routes.txt route_short_name
+ * and route_color): E-W East West line green, S-C South City line red, O-W Onehunga West line light blue.
+ * Departures per hour from the GTFS (first departures of each trip, by hour): East-West 7–8 at peak,
+ * 4 off-peak, 2 in the evening; South-City 6 / 4 / 2; Onehunga-West 2 all day.
  */
 export const RAIL_LINES: readonly RailLineDef[] = [
-  { id: LINE_EW, name: 'East-West', perHour: { peak: 8, offpeak: 4, evening: 2 }, sixCar: { peak: 0.75, offpeak: 0.5, evening: 0.25 } },
-  { id: LINE_SC, name: 'South-City', perHour: { peak: 6, offpeak: 4, evening: 2 }, sixCar: { peak: 0.75, offpeak: 0.5, evening: 0.25 } },
-  { id: LINE_OW, name: 'Onehunga-West', perHour: { peak: 2, offpeak: 2, evening: 2 }, sixCar: { peak: 0, offpeak: 0, evening: 0 } },
+  { id: LINE_EW, code: 'E-W', name: 'East West line', color: 0x97c93d, perHour: { peak: 8, offpeak: 4, evening: 2 }, sixCar: { peak: 0.75, offpeak: 0.5, evening: 0.25 } },
+  { id: LINE_SC, code: 'S-C', name: 'South City line', color: 0xd52923, perHour: { peak: 6, offpeak: 4, evening: 2 }, sixCar: { peak: 0.75, offpeak: 0.5, evening: 0.25 } },
+  { id: LINE_OW, code: 'O-W', name: 'Onehunga West line', color: 0x00aeef, perHour: { peak: 2, offpeak: 2, evening: 2 }, sixCar: { peak: 0, offpeak: 0, evening: 0 } },
 ];
 
 export type ServicePeriod = 'peak' | 'offpeak' | 'evening';
@@ -491,7 +497,7 @@ export class TrainService {
         this.units.push({
           id: id++,
           line: line.id,
-          name: `${line.name} train AM ${no}${six ? `+${101 + (fleetNo++ % 95)}` : ''}`,
+          name: `${line.code} ${line.name} AM ${no}${six ? `+${101 + (fleetNo++ % 95)}` : ''}`,
           cars,
           length: consistLength(cars),
           a,
