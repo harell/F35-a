@@ -9,7 +9,7 @@ import { Color } from 'three';
 import type { TheaterId } from '../../core/types';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { VegetationField } from '../terrain/vegetation';
-import { TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
@@ -74,6 +74,13 @@ export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: Dis
   return Math.min(fx, BLOCK_W - fx, fz, BLOCK_D - fz) < ROAD_HALF + 2;
 }
 
+/** Trees measured one by one on a site of their own (tamakiDrive.ts tamakiTrees: [x, y, z, width, height, palm, shade] each). */
+export interface MeasuredTrees {
+  trees: Float32Array;
+  /** True on the site (+ margin m): the scatter grows nothing else there. */
+  covers(x: number, z: number, margin: number): boolean;
+}
+
 export class TreeSource implements ScatterSource {
   readonly kinds = 3;
   private readonly dist: District = {} as District;
@@ -89,6 +96,8 @@ export class TreeSource implements ScatterSource {
     private readonly nbs: Neighbourhood[] | null = null,
     /** The real land use (#122): no garden trees on pitches, few in car parks and yards. */
     private readonly landUse: LandUse | null = null,
+    /** Measured trees standing on a strip of their own (the Tāmaki Drive waterfront): no others grow there. */
+    private readonly measured: MeasuredTrees | null = null,
   ) {}
 
   /** Hero neighbourhoods' building footprints in 20 m buckets (trunks stay out of the houses). */
@@ -159,6 +168,17 @@ export class TreeSource implements ScatterSource {
     const n = Math.floor(size / sp);
     const hf = this.hf;
     const seed = this.seed;
+    const m = this.measured;
+    if (m) {
+      // the measured trees in this tile (kept to the edge of the scatter's radius: they're the real ones)
+      const t = m.trees;
+      for (let i = 0; i < t.length; i += 7) {
+        const x = t[i], z = t[i + 2];
+        if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
+        _c.setScalar(t[i + 6]);
+        out.data[t[i + 5] ? TREE_PALM : TREE_BROADLEAF].push(x, t[i + 1], z, hash2(i, 7, seed) * 40, t[i + 3], t[i + 4], t[i + 3], _c.r, _c.g, _c.b, 0.1 * hash2(i, 9, seed));
+      }
+    }
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const gx = Math.floor(x0 / sp) + i;
@@ -168,6 +188,7 @@ export class TreeSource implements ScatterSource {
         const h3 = hash2(gx, gz, seed + 2);
         const x = (gx + 0.1 + 0.8 * h1) * sp;
         const z = (gz + 0.1 + 0.8 * h2) * sp;
+        if (m?.covers(x, z, 2)) continue;
         const nb = this.nbs ? neighbourhoodAt(x, z, this.nbs) : null;
         if (nb) {
           this.nbTree(nb, x, z, gx, gz, out);

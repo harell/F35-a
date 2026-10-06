@@ -13,6 +13,7 @@ import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { AKL } from '../src/core/auckland';
 import { WESTFIELD_CENTRE, WESTFIELD_PRISMS } from '../src/core/westfieldNewmarket';
 import { aucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
+import { tamakiDriveRings } from '../src/world/scenery/tamakiDriveData';
 
 const rings = siteRings();
 const mask = maskFromRings(rings, 8)!;
@@ -20,8 +21,8 @@ const st = aucklandStreets() as CbdStreets;
 const eden = siteLayout()!.stadiums.find((s) => pointInRing(s.outline.pts, AKL.eden_park.x, AKL.eden_park.z))!;
 
 describe('landmark sites stop the procedural grid', () => {
-  it('every stadium, the oil terminal, Westfield Newmarket and the hero neighbourhoods are sites; the mask covers each one and a street width round it', () => {
-    expect(rings.length).toBe(siteLayout()!.stadiums.length + 1 + WESTFIELD_PRISMS.length + aucklandNeighbourhoods()!.length);
+  it('every stadium, the oil terminal, Westfield Newmarket, the hero neighbourhoods and the Tāmaki Drive waterfront are sites; the mask covers each one and a street width round it', () => {
+    expect(rings.length).toBe(siteLayout()!.stadiums.length + 1 + WESTFIELD_PRISMS.length + aucklandNeighbourhoods()!.length + tamakiDriveRings().length);
     expect(mask.masked(WESTFIELD_CENTRE.x + 20, WESTFIELD_CENTRE.z - 60)).toBe(true);
     expect(eden).toBeTruthy();
     expect(mask.masked(AKL.eden_park.x, AKL.eden_park.z)).toBe(true);

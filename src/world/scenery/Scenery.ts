@@ -41,7 +41,9 @@ import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
-import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource } from './sources';
+import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource, type MeasuredTrees } from './sources';
+import { buildTamakiDrive, tamakiCovers, tamakiGround, tamakiTrees } from './tamakiDrive';
+import { tamakiDrive } from './tamakiDriveData';
 import type { LandUse } from './aucklandLandUse';
 import { buildHelipadDecks, buildHelipads, createHelipadTexture, roofLookup } from './helipads';
 import { apartmentGeometry, broadleafGeometry, coniferGeometry, houseGeometry, palmGeometry, shedGeometry } from './archetypes';
@@ -103,6 +105,8 @@ export class Scenery {
   /** The Harbour Bridge's spans falling into the harbour (Auckland). */
   bridgeCollapse: BridgeCollapseVisual | null = null;
   cbdStats: CbdStats | null = null;
+  /** The Tāmaki Drive waterfront's measured trees (tamakiDrive.ts), grown by the tree scatter. */
+  private tamakiTrees: MeasuredTrees | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
   stats = { meshes: 0, lights: 0 };
@@ -281,8 +285,18 @@ export class Scenery {
       // (nor on an arterial's frontage, whose shops and houses are the lots')
       const front = this.frontage;
       buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z));
+      // the Tāmaki Drive waterfront (tamakiDrive.ts: paths, seawall, railings, lamps) in the centres mesh; its trees
+      // join the tree scatter below. The road ribbon stands on its raised ground (the Hobson Bay causeway is sea in the
+      // terrain) and leaves the lamps to the measured ones there
+      const td = tamakiDrive();
+      const tdGround = td ? tamakiGround(td, height) : undefined;
+      const tdCovers = td ? tamakiCovers(td) : undefined;
+      if (td && tdGround) {
+        buildTamakiDrive(centres, lights, td, tdGround, height, detail);
+        this.tamakiTrees = { trees: tamakiTrees(td, tdGround), covers: tdCovers! };
+      }
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
-      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail');
+      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail', { ground: tdGround, noLamp: tdCovers });
       // railway ribbons (+ bridges over the water): one more draw call
       const railGeo = rails.length ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'rail') : null;
       addMesh(centres, 'akl-centres');
@@ -470,7 +484,7 @@ export class Scenery {
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, this.tamakiTrees),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },

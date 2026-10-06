@@ -3,7 +3,7 @@
  * (src/world/terrain/data/auckland-linz.bin: terrain, auckland-roads.bin: road centrelines,
  * auckland-buildings.bin: CBD buildings) and the OpenStreetMap layers (src/world/scenery/data/auckland-osm.bin:
  * airfield layouts), the Ports of Auckland container stacks (auckland-port.bin) and the hero neighbourhoods
- * (auckland-neighbourhoods.bin: Herne Bay, Westhaven, Mission Bay, the flight corridor's suburbs) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
+ * (auckland-neighbourhoods.bin: Herne Bay, Westhaven, Mission Bay, the flight corridor's suburbs) and the Tāmaki Drive waterfront (tamaki-drive.bin) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
  * loadAucklandBuildings / loadAucklandOsm). Tests of the hand-traced fallbacks clear them with
  * setAucklandLinz(null) / setAucklandRoads(null) / setAucklandBuildings(null) / setAucklandOsm(null).
  */
@@ -13,6 +13,7 @@ import { setAucklandBuildings } from '../src/world/scenery/aucklandBuildings';
 import { setAucklandOsm } from '../src/world/scenery/aucklandOsm';
 import { setAucklandPort } from '../src/world/scenery/aucklandPort';
 import { setAucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
+import { setTamakiDrive } from '../src/world/scenery/tamakiDriveData';
 
 // node:fs / node:zlib without @types/node (the project doesn't ship node typings): the surface used here
 interface Fs {
@@ -47,3 +48,7 @@ setAucklandPort(PORT_BYTES);
 export const NEIGHBOURHOODS_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/scenery/data/auckland-neighbourhoods.bin', import.meta.url)));
 export const NEIGHBOURHOODS_BYTES = new Uint8Array(zlib.gunzipSync(NEIGHBOURHOODS_GZ));
 setAucklandNeighbourhoods(NEIGHBOURHOODS_BYTES);
+
+export const TAMAKI_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/scenery/data/tamaki-drive.bin', import.meta.url)));
+export const TAMAKI_BYTES = new Uint8Array(zlib.gunzipSync(TAMAKI_GZ));
+setTamakiDrive(TAMAKI_BYTES);
