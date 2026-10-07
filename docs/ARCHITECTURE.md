@@ -228,6 +228,14 @@ with the canopy colour by the share, the lot-level garden trees follow it, and o
 grid's edge blends into the procedural mix. Without the file (low tier, offline) the Topo50 cover and the garden-tree
 rule stay. Gameplay never reads it.
 
+**Island and Devonport roads (#127).** Where the real houses stand (#121's coverage: the Devonport peninsula and the
+gulf islands) every LINZ road is a ribbon (`ROAD_LOCAL` in `auckland-roads.bin`, baked by `tools/linz/islandRoads.ts`:
+the address road sections with the Topo50 surface, and Topo50 for the islands' roads with no addresses), sealed or
+unsealed, 4.5–9 m wide. They join `RoadNetwork`, so the procedural and real houses, the trees and the canopy keep off
+them, and are drawn as one unlit mesh (`akl-local-roads`, two vertices across, the sealed or gravel half of
+`createLocalRoadTexture`; no lamp posts, no frontage lots, low over causeways). On the low tier (no photo) they are the
+streets of the covered land, which #121 left as plain garden ground. Without the data file nothing changes.
+
 **Landmark buildings (#124).** `src/world/scenery/aucklandLandmarks.ts` loads `auckland-landmarks.bin` (baked by
 `tools/linz/landmark-buildings.py` + `.ts`: OSM hospital, mall, station and school sites, the LINZ outlines inside them
 with their 2024 LiDAR roof levels, the station platforms moved beside the railway ribbons, and the outlines over 600 m²
