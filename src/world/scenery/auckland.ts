@@ -24,6 +24,7 @@ import { LightList, type HeightFn } from './builders';
 import { BLOCK_D, BLOCK_W, districtAt, toLocal, toWorld, blockHash, ROAD_HALF, type CbdGrid } from './urbanGrid';
 import type { RoadNetwork } from './motorways';
 import { FOOTPATH, pointInRing, type CbdStreets } from './cbdStreets';
+import type { LandmarkKind } from './aucklandLandmarks';
 import { BUILDING_MATERIALS, BUILDING_USES, ringArea, roofHeight, roofPhotoOffset, type Building, type BuildingPrism, type BuildingUse } from './aucklandBuildings';
 
 const IDENT: Frame = { ox: 0, oy: 0, oz: 0, c: 1, s: 0 };
@@ -655,6 +656,8 @@ export interface BuiltPrism extends BuildingPrism {
   y1: number;
   /** Its storey height (m, #141), where the facade has one. */
   storey?: number;
+  /** A landmark site's building (#124): its kind (the night lights by kind: a hospital's windows are lit all night). */
+  landmark?: LandmarkKind;
 }
 
 /** Douglas–Peucker on a closed ring (flat [x, z, ...]); keeps ≥ 3 vertices. */
@@ -746,6 +749,34 @@ function buildSceneFins(B: GeometryBuilder, height: HeightFn): void {
 /** Window style of a kit tower's shaft facade (core/cbdTowers.ts). */
 const TOWER_WIN: Record<TowerFacade, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, balcony: WIN_BALCONY, plain: WIN_FLOOD };
 
+/** Wall palettes of the landmark sites (#124): hospitals white and light grey, malls blank render, schools brick and weatherboard. */
+const HOSPITAL_WALLS = [0xe9eae5, 0xdfe2df, 0xf0eee8, 0xd3d9da, 0xe3ded2];
+const MALL_WALLS = [0xd9d1c1, 0xcac3b5, 0xbfbab0, 0xe3ddd0, 0xb3aea4];
+const SCHOOL_WALLS = [0xb8a48a, 0xa45f45, 0xd9d4c8, 0xc2b59b, 0x9a5a44, 0xe0dbcf];
+const STATION_WALLS = [0xcfc9bd, 0xb9b3a8, 0xd8d6d0];
+/** Mall signage bands: red, blue, green, orange, purple (the stores' colours, not their logos). */
+const MALL_SIGNS = [0xc8302c, 0x1f5fa8, 0x2f8a4a, 0xe07a1f, 0x6b3fa0, 0xd6a21e];
+
+/**
+ * The facade of a landmark site's building (#124, aucklandLandmarks.ts) by its kind: hospitals white and light grey with
+ * many windows (and storeys of ≈ 4 m), malls blank walls, stations stone and glass, schools brick and weatherboard with
+ * homes' windows when low; the 'other' big buildings of Devonport and the islands as any LINZ building.
+ */
+export function landmarkFacade(b: Building, top: number, area: number, hsh: number): BuildingFacade {
+  const storey = (h: number) => Math.min(6.5, Math.max(2.6, top / Math.max(1, Math.round(top / h))));
+  switch (b.landmark?.kind) {
+    case 'hospital':
+      return { col: pick(HOSPITAL_WALLS, hsh), win: WIN_OFFICE, storey: storey(4.0), glass: top >= 20 && (hsh * 7.31) % 1 < 0.25, use: 'civic' };
+    case 'mall':
+      return { col: pick(MALL_WALLS, hsh), win: top >= 14 && area < 2500 ? WIN_OFFICE : WIN_NONE, storey: top >= 14 && area < 2500 ? storey(3.8) : 0, glass: false, use: 'retail' };
+    case 'station':
+      return { col: pick(STATION_WALLS, hsh), win: WIN_OFFICE, storey: storey(4.2), glass: (hsh * 7.31) % 1 < 0.3, use: 'civic' };
+    case 'school':
+      return { col: pick(SCHOOL_WALLS, hsh), win: top < 9 ? WIN_HOME : WIN_OFFICE, storey: storey(3.6), glass: false, use: 'education' };
+  }
+  return buildingFacade(b, top, area, hsh);
+}
+
 /** Wall colour, roof colour and window style of a kit tower's part. */
 function towerPartFacade(t: CbdTower, kind: string | undefined, tmp: Color): [number, number, number] {
   switch (kind) {
@@ -760,6 +791,37 @@ function towerPartFacade(t: CbdTower, kind: string | undefined, tmp: Color): [nu
       break;
   }
   return [t.wall, tmp.setHex(t.wall).multiplyScalar(0.55).getHex(), TOWER_WIN[t.facade]];
+}
+
+/**
+ * A mall's signage band (#124): a strip 1.6 m tall just under the roof, 0.25 m proud of the two longest walls over 25 m,
+ * lit at night (WIN_GLOW).
+ */
+function signBand(B: GeometryBuilder, ring: Float32Array, top: number, colour: number): void {
+  const n = ring.length / 2;
+  const edges: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const len = Math.hypot(ring[j * 2] - ring[i * 2], ring[j * 2 + 1] - ring[i * 2 + 1]);
+    if (len >= 25) edges.push([i, len]);
+  }
+  edges.sort((a, b) => b[1] - a[1]);
+  const area = ringArea(ring);
+  for (const [i, len] of edges.slice(0, 2)) {
+    const j = (i + 1) % n;
+    const ax = ring[i * 2], az = ring[i * 2 + 1], bx = ring[j * 2], bz = ring[j * 2 + 1];
+    // outward normal: right of a → b for a positive shoelace area (x, z)
+    const s = area > 0 ? 1 : -1;
+    const nx = (s * (bz - az)) / len;
+    const nz = (-s * (bx - ax)) / len;
+    // a band over the middle 60 % of the wall, facing out (the quad runs b → a for a positive area, as prism's walls)
+    const t0 = 0.2, t1 = 0.8;
+    const px = (t: number) => ax + (bx - ax) * t + nx * 0.25;
+    const pz = (t: number) => az + (bz - az) * t + nz * 0.25;
+    const y0 = top - 2.2, y1 = top - 0.6;
+    const [u, v] = area > 0 ? [t1, t0] : [t0, t1];
+    B.quad(IDENT, [px(u), y0, pz(u), px(v), y0, pz(v), px(v), y1, pz(v), px(u), y1, pz(u)], colour, WIN_GLOW);
+  }
 }
 
 /**
@@ -790,13 +852,14 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     const top = Math.max(...b.prisms.map((p) => p.h));
     const area = Math.abs(ringArea(base.ring));
     const hsh = ringHash(base.ring);
-    // facade by use (OSM tags) or height class, storeys by use and height (#141)
-    const fac = buildingFacade(b, top, area, hsh);
+    // facade by use (OSM tags) or height class, storeys by use and height (#141); a landmark site's by its kind (#124)
+    const fac = b.landmark ? landmarkFacade(b, top, area, hsh) : buildingFacade(b, top, area, hsh);
     const { col, win } = fac;
     // the roof (the low tier's, and wherever the photo doesn't reach): a membrane, concrete or bitumen, a hint of the facade
     const roofCol = top >= 60 ? tmp.setHex(col).multiplyScalar(0.62).getHex() : tmp.setHex(pick(ROOFS, (hsh * 13.7) % 1)).lerp(new Color(col), 0.15).multiplyScalar(0.85 + hsh * 0.25).getHex();
     // every wall: its base for the contact shading; the LINZ blocks their storeys, window rhythm and glass
-    const H0 = b.hero === 'house' ? houseBuilder?.(b) ?? B : B;
+    // (a hero neighbourhood's house or a landmark site's building: its area's own mesh where the caller gives one)
+    const H0 = b.hero === 'house' || b.landmark ? houseBuilder?.(b) ?? B : B;
     const storey = b.hero ? 0 : fac.storey;
     H0.setFacade(gMin, storey, hsh, !b.hero && fac.glass ? FACADE_GLASS : 0);
     if (H0 !== B) B.setFacade(gMin, storey, hsh, 0);
@@ -856,6 +919,18 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
         heights.push(p.h);
         continue;
       }
+      if (b.landmark) {
+        // a landmark site's building (#124): its kind's facade in its area's mesh; a platform canopy is a roof slab, a
+        // mall's walls carry a signage band under the roof
+        const c = p === base ? col : tmp.setHex(col).multiplyScalar(0.94).getHex();
+        if (b.landmark.canopy) H0.prism(ring, g + Math.max(2.2, p.h - 0.5), roof, 0x7c8186, 0x9aa0a4, WIN_NONE);
+        else {
+          H0.prism(ring, y0, roof, c, p.sx || p.sz ? col : roofCol, win, true);
+          if (b.landmark.kind === 'mall' && p === base && p.h >= 6 && detail >= 0.5) signBand(H0, ring, g + p.h, pick(MALL_SIGNS, (hsh * 3.7) % 1));
+        }
+        if (!b.landmark.canopy) prisms.push({ ...p, y0, y1: g + p.h, storey: fac.storey || undefined, landmark: b.landmark.kind });
+        continue;
+      }
       // towers on a podium: a little darker, the crown's roof the facade colour; the aerial photo on the roof where it
       // shows it (#140: medium and high tiers, when the builder carries photo roofs)
       const c = p === base ? col : tmp.setHex(col).multiplyScalar(0.92).getHex();
@@ -882,8 +957,9 @@ function buildLinzCBD(B: GeometryBuilder, lights: LightList, height: HeightFn, d
     H0.clearFacade();
     buildingVerts[bi * 2 + 1] = B.vertexCount;
     buildingGround[bi] = g;
-    tallest = Math.max(tallest, top);
-    if (top > 60) towers++;
+    // (the CBD's skyline stats: not the landmark sites')
+    if (!b.landmark) tallest = Math.max(tallest, top);
+    if (top > 60 && !b.landmark) towers++;
     if (top > 95) {
       const t = b.prisms.reduce((a, p) => (p.h > a.h ? p : a));
       lights.add(t.cx, g + roofHeight(t, t.cx, t.cz) + 4, t.cz, 0xff2a18, 3.5, hsh);
@@ -974,6 +1050,8 @@ export function buildCentres(
   cbd: CbdGrid,
   roads: RoadNetwork | null,
   skip: ((x: number, z: number) => boolean) | null = null,
+  /** Each block's centre and vertex range [x, z, v0, v1, …] (#126: hidden where the corridor's real houses load). */
+  blocks: number[] | null = null,
 ): number {
   const rnd = mulberry32(777);
   let n = 0;
@@ -1011,6 +1089,7 @@ export function buildCentres(
             if (height(wx, wz) < 1.5 || (roads && roads.near(wx, wz, 10)) || skip?.(wx, wz)) continue;
             const g = height(wx, wz) - 2;
             const fr = frameFromHeading(wx, g, wz, d.angle);
+            const v0 = B.vertexCount;
             const bw = w - 2 - rnd() * 4;
             const bd = (c.industrial ? z1 - z0 : (z1 - z0) / 2) - 3 - rnd() * 5;
             if (c.industrial) {
@@ -1024,6 +1103,7 @@ export function buildCentres(
               if (detail > 0.5 && h > 10 && rnd() < 0.4) B.box(fr, bw * 0.2, h, 0, bw * 0.3, 2.5, bd * 0.3, 0x8a8a88, 0x6a6a68);
               if (h > 45) lights.add(wx, g + h + 3, wz, 0xff2a18, 3, rnd());
             }
+            blocks?.push(wx, wz, v0, B.vertexCount);
             n++;
           }
         }

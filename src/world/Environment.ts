@@ -22,6 +22,7 @@ import {
   UnsignedByteType,
   Vector3,
   type Camera,
+  type CompressedTexture,
   type Scene,
   type WebGLRenderer,
 } from 'three';
@@ -37,7 +38,8 @@ import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
-import { AERIAL_FEATHER, AERIAL_RECT, aerialGrade, imageMeanLinear, loadAucklandAerial } from './terrain/theaters/aucklandAerial';
+import { aucklandCanopy, loadAucklandCanopy } from './terrain/theaters/aucklandCanopy';
+import { AERIAL_FEATHER, AERIAL_OUTER, AERIAL_RECT, aerialGrade, aerialOuterUv, imageAlphaMask, imageMeanLinear, loadAucklandAerial, loadAucklandAerialOuter } from './terrain/theaters/aucklandAerial';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './terrain/urbanColor';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
@@ -45,6 +47,10 @@ import { loadAucklandOsm } from './scenery/aucklandOsm';
 import { aucklandLandUse, loadAucklandLandUse } from './scenery/aucklandLandUse';
 import { loadAucklandPort } from './scenery/aucklandPort';
 import { loadAucklandNeighbourhoods } from './scenery/aucklandNeighbourhoods';
+import { loadAucklandHouses } from './scenery/aucklandHouses';
+import { createCorridorHouses } from './scenery/corridorTiles';
+import type { CorridorHouses, CorridorStats } from './scenery/corridorHouses';
+import { loadAucklandLandmarks } from './scenery/aucklandLandmarks';
 import { loadAucklandDomain } from './scenery/aucklandDomain';
 import { loadTamakiDrive } from './scenery/tamakiDriveData';
 import { runwaysOf } from '../core/airfields';
@@ -65,7 +71,9 @@ import type { EnvironmentOptions } from '../core/contracts';
 /** Extra (non-contract) surface for dev tools / other world code. */
 export interface EnvironmentInternals extends EnvironmentApi {
   readonly heightfield: Heightfield;
-  readonly stats: () => { patches: number; genMs: number; bakeMs: number; workers: number; timings: Record<string, number>; instances: number; meshes: number; lights: number; idle: boolean };
+  readonly stats: () => { patches: number; genMs: number; bakeMs: number; workers: number; timings: Record<string, number>; instances: number; meshes: number; lights: number; idle: boolean; corridor?: CorridorStats | null };
+  /** The corridor's streamed real houses (#126; Auckland, null without): the test hooks read it (`__f35.corridor()`). */
+  readonly corridor?: CorridorHouses | null;
 }
 
 export const createEnvironment: CreateEnvironment = async (scene, renderer, opts) => {
@@ -90,10 +98,16 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
   // the main thread while the terrain generates, needed only for the GPU objects below.
   const aerialLoad = cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
+  // … and the outer photo (#120: the rest of Devonport, the gulf islands), the same tiers; the high tier's is KTX2,
+  // transcoded in a worker for this GPU
+  const aerialOuterLoad = cfg.aerial ? loadAucklandAerialOuter(cfg.aerial, renderer) : null;
   // The real land use (#122, medium and high only: its grid is 12.5 MB on the GPU)
   const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
-  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad]);
+  // … and the real tree canopy (#123, the same tiers: its shader grid rides in the land use's texture)
+  const canopyLoad = cfg.landUse ? loadAucklandCanopy() : Promise.resolve(false);
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandHouses(), loadAucklandLandmarks(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad, canopyLoad]);
   const landUse = cfg.landUse ? aucklandLandUse() : null;
+  const canopy = cfg.landUse ? aucklandCanopy() : null;
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain, landUse: !!landUse };
@@ -238,9 +252,10 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   dummyTex.needsUpdate = true;
   let aerial: AerialPhotoInfo | null = null;
   const aerialImage = aerialLoad ? await aerialLoad : null;
-  if (aerialImage) {
-    const t = new Texture(aerialImage);
-    // row 0 is the square's north edge (z0) at v = 0; the alpha channel is a mask, not coverage
+  const aerialOuterPhoto = aerialOuterLoad ? await aerialOuterLoad : null;
+  const photoTexture = (img: ImageBitmap | HTMLImageElement) => {
+    const t = new Texture(img);
+    // row 0 is the north edge (z0) at v = 0; the alpha channel is a mask, not coverage
     t.flipY = false;
     t.premultiplyAlpha = false;
     t.colorSpace = SRGBColorSpace;
@@ -250,13 +265,35 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     t.generateMipmaps = true;
     t.anisotropy = Math.min(maxAniso, cfg.anisotropy);
     t.needsUpdate = true;
+    return t;
+  };
+  // a KTX2 atlas (aucklandAerial.ts): its mips come with it, in the GPU's block format; same sampling as photoTexture
+  const compressedPhotoTexture = (t: CompressedTexture) => {
+    t.colorSpace = SRGBColorSpace;
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = LinearFilter;
+    t.minFilter = t.mipmaps.length > 1 ? LinearMipmapLinearFilter : LinearFilter;
+    t.anisotropy = Math.min(maxAniso, cfg.anisotropy);
+    t.needsUpdate = true;
+    return t;
+  };
+  if (aerialImage) {
+    const t = photoTexture(aerialImage);
     // graded toward the procedural suburbs it fades into, fully from dawn on (#61)
     const st = terrainStyle(opts.theater);
     const leafy = suburbFarAlbedo(st, LEAFY_MIX);
     const bare = suburbFarAlbedo(st, BARE_MIX);
     const target: [number, number, number] = [(leafy.r + bare.r) / 2, (leafy.g + bare.g) / 2, (leafy.b + bare.b) / 2];
     const grade = aerialGrade(imageMeanLinear(aerialImage), target, opts.timeOfDay);
-    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade, houseRadius: cfg.houseRadius };
+    // the outer photo (#120) only with the square: it shares its grade, and its Devonport boxes continue it
+    let outer: AerialPhotoInfo['outer'] = null;
+    if (aerialOuterPhoto && cfg.aerial) {
+      const uv = aerialOuterUv(cfg.aerial);
+      const p = aerialOuterPhoto;
+      const m = p.texture ? p.cover && imageAlphaMask(p.cover) : imageAlphaMask(p.image);
+      outer = { texture: p.texture ? compressedPhotoTexture(p.texture) : photoTexture(p.image), boxes: AERIAL_OUTER, uv, cover: m ? { ...m, uv } : null };
+    }
+    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade, houseRadius: cfg.houseRadius, outer };
   }
   const cloudLayer = createCloudLayerTexture();
 
@@ -322,13 +359,21 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     lights: preset.lights,
     aerial,
     landUse,
+    canopy,
+    // the corridor's real houses and streets (#126), streamed as the house scatter reaches them
+    corridor: opts.theater === 'auckland' ? createCorridorHouses(cfg.houseRadius) : null,
   });
   scene.add(scenery.group);
   // the terrain leaves the lots along the road and railway ribbons unbuilt, as the scenery's houses do
   terrain.setLotMask(scenery.lotMask);
   terrain.setSiteMask(scenery.siteMask);
+  // the corridor's loaded tiles (#126): no procedural lots or streets under them, re-read as they come and go
+  if (scenery.corridor) {
+    terrain.setHouseMask(scenery.corridor.cover, cfg.houseRadius);
+    scenery.onCorridorCover = (r0, r1) => terrain.updateHouseMask(r0, r1);
+  }
   terrain.setFrontage(scenery.frontage);
-  terrain.setLandUse(landUse);
+  terrain.setLandUse(landUse, canopy);
   let reflections: LightReflections | null = null;
   if (scenery.reflectionSources.length) {
     reflections = new LightReflections(atmo, scenery.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));
@@ -385,7 +430,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     // …but a PiP shot of the Sky Tower being hit or falling keeps the tower itself
     targetCamLandmarks: scenery.skyTower ? [scenery.skyTower.group] : [],
     heightfield: hf,
-    stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle }),
+    corridor: scenery.corridor,
+    stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle, corridor: scenery.corridor ? { ...scenery.corridor.stats } : null }),
 
     update(ctx: FrameContext) {
       if (!ctx.paused) {
@@ -414,6 +460,11 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       if (cam) {
         const agl = cam.position.y - terrainQuery.surfaceHeightAt(cam.position.x, cam.position.z);
         scenery.update(cam.position, agl);
+        // the corridor's real houses (#126): their ground turns to the far average past where the scatter's houses end
+        if (scenery.corridor) {
+          const r = scenery.houseReach;
+          terrain.setRealHouseCut(Number.isFinite(r) ? Math.hypot(r, Math.max(0, agl)) : 1e9);
+        }
       }
     },
 
@@ -434,6 +485,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       cloudLayer.dispose();
       coast?.texture.dispose();
       aerial?.texture.dispose();
+      aerial?.outer?.texture.dispose();
       dummyTex.dispose();
     },
   };

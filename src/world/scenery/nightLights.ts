@@ -92,9 +92,9 @@ const LIT = 0.35;
 /**
  * Add lit windows on the facades of `prisms` (≥ 10 m tall) to `out`: one light per lit bay, 0.6 m
  * out from the wall, from the second floor to just under the roof. `maxLights` caps the total
- * (thinned uniformly). Returns the number of lights.
+ * (thinned uniformly); `litShare` of the bays are lit (a hospital's more, #124). Returns the number of lights.
  */
-export function buildFacadeLightPoints(prisms: FacadePrism[], seed: number, maxLights: number, out: LightList): number {
+export function buildFacadeLightPoints(prisms: FacadePrism[], seed: number, maxLights: number, out: LightList, litShare = LIT): number {
   const tall = prisms.filter((p) => p.y1 - p.y0 >= 10);
   /** Visit every window bay: prism index, edge, bay, floor, position. */
   const bays = (f: (pi: number, i: number, b: number, fl: number, x: number, y: number, z: number) => void) =>
@@ -125,7 +125,7 @@ export function buildFacadeLightPoints(prisms: FacadePrism[], seed: number, maxL
     });
   let slots = 0;
   bays(() => slots++);
-  const lit = LIT * Math.min(1, maxLights / Math.max(1, slots * LIT));
+  const lit = litShare * Math.min(1, maxLights / Math.max(1, slots * litShare));
   let count = 0;
   bays((pi, i, b, fl, x, y, z) => {
     if (hash2(pi * 131 + i, b * 977 + fl, seed + 23) >= lit) return;

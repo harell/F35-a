@@ -2,7 +2,8 @@
  * F35-A — static per-type data for ground entities (SIM-CORE): bounding radius, hit points,
  * missiles carried and the explosion played when destroyed.
  */
-import type { AircraftType, ExplosionSize, GroundTargetType, SamType, VesselClass } from '../../core/types';
+import type { AircraftType, ExplosionSize, GroundTargetType, MerchantClass, SamType, VesselClass } from '../../core/types';
+import { SUPERYACHTS, type SuperyachtId } from '../../core/superyachts';
 
 export interface SamSiteData {
   radius: number;
@@ -63,12 +64,26 @@ export interface VesselData {
 export const VESSEL_HIT_SPEED_FACTOR = 0.8;
 
 /** Civil merchant ships (neutral 'ship' entities with a VesselClass). */
-export const VESSEL_DATA: Record<VesselClass, VesselData> = {
+const MERCHANT_DATA: Record<MerchantClass, VesselData> = {
   container: { length: 270, beam: 34, height: 40, health: 2_800 },
   cruise: { length: 290, beam: 36, height: 52, health: 3_200 },
   // Aframax-size crude carrier: low freeboard when laden, accommodation block and funnel aft
   tanker: { length: 250, beam: 44, height: 40, health: 3_000 },
 };
+
+/**
+ * Hit points of a named superyacht (#145): a bomb or missile sinks her like any civil ship; one held gun pass
+ * (~1,300) does too.
+ */
+export const SUPERYACHT_HEALTH = 900;
+
+/** Hull volume of each named superyacht from her shape data (core/superyachts.ts); the masts aren't hit. */
+const YACHT_DATA = Object.fromEntries(
+  Object.values(SUPERYACHTS).map((y) => [y.id, { length: y.length, beam: y.beam, height: y.height, health: SUPERYACHT_HEALTH }]),
+) as Record<SuperyachtId, VesselData>;
+
+/** Every civil vessel class: the merchant ships and the named superyachts. */
+export const VESSEL_DATA: Record<VesselClass, VesselData> = { ...MERCHANT_DATA, ...YACHT_DATA };
 
 /** Hit points of aircraft types that are not the default 100 (AircraftEntity.maxHealth). */
 export const AIRCRAFT_HEALTH: Partial<Record<AircraftType, number>> = {

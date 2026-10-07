@@ -15,6 +15,7 @@
  *                                            only __f35.simulate() advances it (__f35.hold(false) lets
  *                                            it run), so browser perf reads reproduce (#66)
  */
+import type { CorridorHouses } from '../world/scenery/corridorHouses';
 import { HARBOUR_BRIDGE_ID, HARBOUR_BRIDGE_MAIN_SPAN } from '../sim/buildings';
 import { hbDeck, hbFrame } from '../core/harbourBridge';
 import { ACESFilmicToneMapping, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
@@ -1113,6 +1114,15 @@ export class Game {
         p.position.set(at.x + Math.sin(brg) * dist, at.y, at.z - Math.cos(brg) * dist);
         initFlight(p, { heading: brg + Math.PI, speed: 150 });
         return true;
+      },
+      /**
+       * The corridor's streamed real houses (#126): its stream's numbers, the loaded tiles, whether tiles are still to
+       * come (`busy`), and with (x, z) whether a loaded tile's houses are the truth there. null outside Auckland.
+       */
+      corridor: (x?: number, z?: number) => {
+        const c = (this.session?.env as { corridor?: CorridorHouses | null } | undefined)?.corridor;
+        if (!c) return null;
+        return { ...c.stats, busy: c.busy, tiles: [...c.tiles.keys()], covers: x !== undefined && z !== undefined ? c.covers(x, z) : null };
       },
       /** Pin the camera at `pos` looking at `look` (scenery checks without a driver); null hands it back to the rig. */
       camera: (pos: [number, number, number] | null, look: [number, number, number] = [0, 0, 0]) => {

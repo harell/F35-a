@@ -6,6 +6,7 @@
  */
 import type { AircraftType, GroundTargetType, SamType, WarningId, WeaponId } from '../../core/types';
 import type { AnyEntity } from '../../sim/entities';
+import { isSuperyachtId } from '../../core/superyachts';
 
 export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   f35a: 'F-35A',
@@ -156,11 +157,21 @@ function withTag(base: string, tag: string): string {
   return s;
 }
 
+const yachtLabels = new Map<string, string>();
+/** "KORU" (cached: no string built per frame). */
+function yachtLabel(name: string): string {
+  let s = yachtLabels.get(name);
+  if (!s) yachtLabels.set(name, (s = name.toUpperCase()));
+  return s;
+}
+
 /**
  * entityLabel plus a jet's mission tag (AircraftEntity.hudTag): "SU-27 STRK" for a striker, so the
  * strike package can be told from an escort of the same type. Other entities: entityLabel.
  */
 export function trackLabel(e: AnyEntity | null | undefined): string {
+  // a named superyacht (#145): her name ("KORU") on the designated box, the TSD and the PCD, not the generic CIV
+  if (e && e.kind === 'ground' && e.team === 'neutral' && isSuperyachtId(e.vessel)) return yachtLabel(e.name);
   const base = entityLabel(e);
   return e?.kind === 'aircraft' && e.hudTag ? withTag(base, e.hudTag) : base;
 }

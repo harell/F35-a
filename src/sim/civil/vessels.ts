@@ -14,13 +14,19 @@ import type { VesselClass } from '../../core/types';
 import type { AnyEntity, GroundTargetEntity, TrainBody } from '../entities';
 import { CAR_HEIGHT, CAR_LENGTH, CAR_WIDTH } from './rail';
 import { VESSEL_DATA } from '../damage/tables';
+import { isSuperyachtId } from '../../core/superyachts';
 
 const _fwd = new Vector3();
 const _p = new Vector3();
 
 /** What the radio and the HUD call a ship of this class ("tanker"; the HUD upper-cases it). */
 export function vesselNoun(v: VesselClass | null | undefined): string {
-  return v === 'tanker' ? 'tanker' : v === 'cruise' ? 'cruise ship' : 'ship';
+  return v === 'tanker' ? 'tanker' : v === 'cruise' ? 'cruise ship' : isSuperyachtId(v) ? 'yacht' : 'ship';
+}
+
+/** A named superyacht (#145: a neutral ship whose class is one of core/superyachts.ts). */
+export function isSuperyacht(e: AnyEntity | null | undefined): e is GroundTargetEntity {
+  return isCivilVessel(e) && isSuperyachtId(e.vessel);
 }
 
 /** A neutral merchant ship (has a vessel class). */

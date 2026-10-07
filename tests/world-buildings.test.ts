@@ -18,8 +18,9 @@ import { BUILDINGS_BYTES, BUILDINGS_GZ } from './linz-setup';
 import SPOT from './fixtures/linz-buildings-spotchecks.json';
 import ROOF_SPOT from './fixtures/linz-roof-spotchecks.json';
 
-// the LINZ file's buildings (the hero neighbourhoods' houses joined to the list are tested in world-neighbourhoods)
-const bs = aucklandBuildings()!.filter((b) => b.hero !== 'house');
+// the LINZ file's buildings (the hero neighbourhoods' houses joined to the list are tested in world-neighbourhoods, the
+// landmark sites' in world-landmark-buildings)
+const bs = aucklandBuildings()!.filter((b) => b.hero !== 'house' && !b.landmark);
 const st = aucklandStreets() as CbdStreets;
 const cbd = aucklandCbd();
 const roads = new RoadNetwork(aucklandRoadPaths());

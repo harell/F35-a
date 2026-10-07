@@ -18,11 +18,35 @@
  * faces (scenery building material). The scattered houses and trees stay off it: the photo already
  * shows the real ones. Low tier: never fetched. Each file is a separate Vite asset fetched once, only
  * by the tier that uses it (public/sw.js ON_DEMAND keeps both out of the precache).
+ *
+ * The outer photo (#120): the rest of the Devonport peninsula (Stanley Bay, Bayswater, Belmont, Narrow Neck,
+ * Cheltenham, North Head) at the square's resolution and the gulf islands (Rangitoto, Motutapu, Rakino, Motuihe,
+ * Browns Island, Waiheke with Pakatoa and Rotoroa) at 5 m (high) / 10 m (medium), as boxes packed into one atlas
+ * per tier (AERIAL_OUTER, auckland-aerial-outer.json, both baked by aerial.py):
+ *
+ *   auckland-aerial-outer-2048.webp  2048 px wide (medium tier)
+ *   auckland-aerial-outer-4096.ktx2  4096 px wide (high tier), with its alpha in auckland-aerial-outer-cover.png
+ *
+ * The high tier's atlas is GPU-compressed (KTX2, Basis Universal ETC1S): three.js's KTX2Loader transcodes it in a
+ * worker to the GPU's own block format (BC7, ASTC, ETC2 or BC3: 1 byte a pixel), so its 27.5 Mpx take ~35 MB of GPU
+ * memory instead of ~140 MB as RGBA8 with mips, and arrive with their mips (none built on the main thread). A
+ * compressed texture can't be read back, so the scatters read the alpha from the small cover PNG beside it.
+ *
+ * Each box fades out over its own feather; the Devonport boxes overlap the square (and each other) by their feather
+ * so the fades cross over and no edge shows; the island boxes' alpha is the islands' land only. The terrain shader
+ * sums the weights of the square and every box (aerialPhoto()); the scatters keep off where the sum is over ½
+ * (aerialCovers with the outer photo's alpha, read back at load: AerialOuterCover).
  */
+import type { CompressedTexture, WebGLRenderer } from 'three';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import type { TimeOfDay } from '../../../core/types';
 import { scatterKeep } from '../../scenery/scatter';
 import aerial2048Url from '../data/auckland-aerial-2048.webp?url';
 import aerial4096Url from '../data/auckland-aerial-4096.webp?url';
+import outer2048Url from '../data/auckland-aerial-outer-2048.webp?url';
+import outer4096Url from '../data/auckland-aerial-outer-4096.ktx2?url';
+import outerCoverUrl from '../data/auckland-aerial-outer-cover.png?url';
+import outerLayout from '../data/auckland-aerial-outer.json';
 
 /** Photo square (m, game XZ): x0, z0 = north-west corner, size = side. */
 export const AERIAL_RECT = { x0: -1536, z0: -3072, size: 5120 } as const;
@@ -35,20 +59,98 @@ export type AerialSize = 0 | 2048 | 4096;
 /** Resolved by Vite relative to the bundle. Importing the URLs downloads nothing. */
 export const AERIAL_URLS: Record<Exclude<AerialSize, 0>, string> = { 2048: aerial2048Url, 4096: aerial4096Url };
 
+/** A photo box in game XZ (m): north-west corner, width, height, and the width of the fade at its edge. */
+export interface AerialBox {
+  name: string;
+  x0: number;
+  z0: number;
+  w: number;
+  h: number;
+  feather: number;
+}
+
+/** Weight of a box at (x, z): 1 inside, fading to 0 across its feather at the edge (smoothstep). Same curve as the shader's. */
+export function aerialBoxWeight(b: Pick<AerialBox, 'x0' | 'z0' | 'w' | 'h' | 'feather'>, x: number, z: number): number {
+  const e = Math.min(x - b.x0, b.x0 + b.w - x, z - b.z0, b.z0 + b.h - z);
+  const t = Math.min(1, Math.max(0, e / b.feather));
+  return t * t * (3 - 2 * t);
+}
+
 /**
  * Weight of the photo at (x, z) from the square alone (1 inside, fading to 0 across the feather band
  * at the edge); the shader multiplies it by the photo's alpha. Same curve as the shader's.
  */
 export function aerialEdgeWeight(x: number, z: number): number {
   const r = AERIAL_RECT;
-  const e = Math.min(x - r.x0, r.x0 + r.size - x, z - r.z0, r.z0 + r.size - z);
-  const t = Math.min(1, Math.max(0, e / AERIAL_FEATHER));
-  return t * t * (3 - 2 * t);
+  return aerialBoxWeight({ x0: r.x0, z0: r.z0, w: r.size, h: r.size, feather: AERIAL_FEATHER }, x, z);
 }
 
-/** True where the photo dominates the ground (edge weight > ½): no scattered houses or trees. */
-export function aerialCovers(x: number, z: number): boolean {
-  return aerialEdgeWeight(x, z) > 0.5;
+/** The outer photo's boxes (#120): the rest of the Devonport peninsula and the gulf islands. */
+export const AERIAL_OUTER: readonly AerialBox[] = outerLayout.rects;
+/** Most boxes the shader takes (terrainShader.ts MAX_AERIAL_BOXES). */
+export const MAX_AERIAL_BOXES = 8;
+
+/** Resolved by Vite relative to the bundle. Importing the URLs downloads nothing. */
+export const AERIAL_OUTER_URLS: Record<Exclude<AerialSize, 0>, string> = { 2048: outer2048Url, 4096: outer4096Url };
+/** The alpha of the KTX2 atlas (high tier), 512 px wide, for the scatters (imageAlphaMask). */
+export const AERIAL_OUTER_COVER_URL: string = outerCoverUrl;
+/** Tiers whose outer atlas is a KTX2 file (tools/linz/aerial.py OUTER_KTX2). */
+export const aerialOuterKtx2 = (size: AerialSize): boolean => size === 4096;
+
+/** Where each AERIAL_OUTER box lies in a tier's atlas: [u0, v0, u1, v1] (0..1; v = 0 is the image's top row). */
+export function aerialOuterUv(size: Exclude<AerialSize, 0>): [number, number, number, number][] {
+  const t = outerLayout.tiers[String(size) as '2048' | '4096'];
+  return t.boxes.map(([a, b, c, d]) => [a / t.width, b / t.height, c / t.width, d / t.height]);
+}
+
+/** Atlas size (px) of a tier's outer photo. */
+export function aerialOuterSize(size: Exclude<AerialSize, 0>): { width: number; height: number } {
+  const t = outerLayout.tiers[String(size) as '2048' | '4096'];
+  return { width: t.width, height: t.height };
+}
+
+/**
+ * The outer photo's alpha, read back at load (imageAlphaMask) so the scatters know where it shows land: a coarse
+ * copy of the atlas's alpha (row-major, top row first) and each box's place in it (aerialOuterUv).
+ */
+export interface AerialOuterCover {
+  alpha: Uint8Array;
+  width: number;
+  height: number;
+  uv: readonly (readonly [number, number, number, number])[];
+}
+
+/** Alpha (0..1) of the outer photo for box `i` at (x, z), nearest cell of the coarse copy. */
+function outerAlpha(c: AerialOuterCover, i: number, x: number, z: number): number {
+  const b = AERIAL_OUTER[i];
+  const [u0, v0, u1, v1] = c.uv[i];
+  const u = u0 + ((x - b.x0) / b.w) * (u1 - u0);
+  const v = v0 + ((z - b.z0) / b.h) * (v1 - v0);
+  const ci = Math.min(c.width - 1, Math.max(0, Math.floor(u * c.width)));
+  const cj = Math.min(c.height - 1, Math.max(0, Math.floor(v * c.height)));
+  return c.alpha[cj * c.width + ci] / 255;
+}
+
+/**
+ * Weight of all the photo at (x, z), as the terrain shader sums it: the square's edge weight (its alpha left out, as
+ * always: the scatters only stand on land), plus each outer box's edge weight × its alpha; at most 1.
+ */
+export function aerialWeight(x: number, z: number, outer?: AerialOuterCover | null): number {
+  let w = aerialEdgeWeight(x, z);
+  if (outer && w < 1) {
+    for (let i = 0; i < AERIAL_OUTER.length; i++) {
+      const b = AERIAL_OUTER[i];
+      if (x <= b.x0 || x >= b.x0 + b.w || z <= b.z0 || z >= b.z0 + b.h) continue;
+      const e = aerialBoxWeight(b, x, z);
+      if (e > 0) w += e * outerAlpha(outer, i, x, z);
+    }
+  }
+  return Math.min(1, w);
+}
+
+/** True where the photo dominates the ground (weight > ½): no scattered houses or trees. */
+export function aerialCovers(x: number, z: number, outer?: AerialOuterCover | null): boolean {
+  return aerialWeight(x, z, outer) > 0.5;
 }
 
 export type AerialImage = ImageBitmap | HTMLImageElement;
@@ -145,12 +247,24 @@ export function imageMeanLinear(img: AerialImage): [number, number, number] | nu
   }
 }
 
-let current: { size: AerialSize; image: AerialImage } | null = null;
-let pending: { size: AerialSize; promise: Promise<AerialImage | null> } | null = null;
-
-/** The decoded photo of the given size, or null when it has not been (or could not be) loaded. */
-export function aucklandAerial(size: AerialSize): AerialImage | null {
-  return current && current.size === size ? current.image : null;
+/** Alpha of an image downsampled to `width` columns (canvas), for AerialOuterCover; null without a canvas. */
+export function imageAlphaMask(img: AerialImage, width = 512): { alpha: Uint8Array; width: number; height: number } | null {
+  try {
+    const w = Math.min(width, img.width);
+    const h = Math.max(1, Math.round((img.height * w) / img.width));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    if (!g) return null;
+    g.drawImage(img, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data;
+    const alpha = new Uint8Array(w * h);
+    for (let k = 0; k < alpha.length; k++) alpha[k] = d[4 * k + 3];
+    return { alpha, width: w, height: h };
+  } catch {
+    return null;
+  }
 }
 
 /** Decode a WebP blob without the browser flipping or premultiplying it (alpha is a mask, not coverage). */
@@ -173,32 +287,100 @@ async function decode(blob: Blob): Promise<AerialImage> {
   }
 }
 
+const fetchOk = (url: string): Promise<Response> =>
+  fetch(url).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res;
+  });
+
+/** Fetch and decode an image file (WebP, PNG). */
+const readImage = (url: string): Promise<AerialImage> =>
+  fetchOk(url)
+    .then((res) => res.blob())
+    .then(decode);
+
+/**
+ * One photo file per tier, fetched and read once by `read`: concurrent and repeated calls for a size share the first
+ * load.
+ */
+function photoLoader<T, A extends unknown[] = []>(urls: Record<Exclude<AerialSize, 0>, string>, what: string, read: (url: string, size: AerialSize, ...args: A) => Promise<T>) {
+  let current: { size: AerialSize; photo: T } | null = null;
+  let pending: { size: AerialSize; promise: Promise<T | null> } | null = null;
+  const get = (size: AerialSize): T | null => (current && current.size === size ? current.photo : null);
+  const load = (size: AerialSize, url = size ? urls[size] : '', ...args: A): Promise<T | null> => {
+    if (!size) return Promise.resolve(null);
+    const have = get(size);
+    if (have) return Promise.resolve(have);
+    if (pending && pending.size === size) return pending.promise;
+    const promise = read(url, size, ...args)
+      .then((photo) => {
+        current = { size, photo };
+        return photo as T | null;
+      })
+      .catch((err) => {
+        console.warn(`[world] ${what} unavailable, using procedural ground`, err);
+        return null;
+      })
+      .finally(() => {
+        if (pending?.promise === promise) pending = null;
+      });
+    pending = { size, promise };
+    return promise;
+  };
+  return { get, load };
+}
+
+/**
+ * The outer photo of a tier: the decoded image (WebP, medium), or the GPU-compressed texture (KTX2, high) with its
+ * alpha cover beside it (null if the cover failed: the scatters then ignore the outer photo, as before #120).
+ */
+export type AerialOuterPhoto = { image: AerialImage; texture?: undefined; cover?: undefined } | { image?: undefined; texture: CompressedTexture; cover: AerialImage | null };
+
+/** Fetch the KTX2 atlas and transcode it for this renderer's GPU (three.js KTX2Loader, in a worker), and its cover. */
+async function readKtx2(url: string, renderer?: WebGLRenderer): Promise<AerialOuterPhoto> {
+  if (!renderer) throw new Error('a KTX2 atlas needs the renderer');
+  const cover = readImage(AERIAL_OUTER_COVER_URL).catch((err) => {
+    console.warn('[world] outer aerial photo cover unavailable, the scatters ignore the outer photo', err);
+    return null;
+  });
+  const buffer = await fetchOk(url).then((res) => res.arrayBuffer());
+  const loader = new KTX2Loader().detectSupport(renderer);
+  try {
+    const texture = await new Promise<CompressedTexture>((resolve, reject) => loader.parse(buffer, resolve, reject));
+    return { texture, cover: await cover };
+  } finally {
+    // once per tier: the transcoder's workers aren't needed after
+    loader.dispose();
+  }
+}
+
+const square = photoLoader(AERIAL_URLS, 'aerial photo', readImage);
+const outer = photoLoader(AERIAL_OUTER_URLS, 'outer aerial photo (Devonport, gulf islands)', (url, size, renderer?: WebGLRenderer) =>
+  aerialOuterKtx2(size) ? readKtx2(url, renderer) : readImage(url).then((image): AerialOuterPhoto => ({ image })),
+);
+
+/** The decoded photo of the given size, or null when it has not been (or could not be) loaded. */
+export function aucklandAerial(size: AerialSize): AerialImage | null {
+  return square.get(size);
+}
+
 /**
  * Fetch and decode the photo of the given size. Resolves to null on any failure (the ground keeps
  * its procedural colours). Concurrent and repeated calls for the same size share the first load.
  */
-export function loadAucklandAerial(size: AerialSize, url = size ? AERIAL_URLS[size] : ''): Promise<AerialImage | null> {
-  if (!size) return Promise.resolve(null);
-  const have = aucklandAerial(size);
-  if (have) return Promise.resolve(have);
-  if (pending && pending.size === size) return pending.promise;
-  const promise = fetch(url)
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.blob();
-    })
-    .then(decode)
-    .then((image) => {
-      current = { size, image };
-      return image as AerialImage | null;
-    })
-    .catch((err) => {
-      console.warn('[world] aerial photo unavailable, using procedural ground', err);
-      return null;
-    })
-    .finally(() => {
-      if (pending?.promise === promise) pending = null;
-    });
-  pending = { size, promise };
-  return promise;
+export function loadAucklandAerial(size: AerialSize, url?: string): Promise<AerialImage | null> {
+  return square.load(size, url);
+}
+
+/** The loaded outer photo (Devonport, the gulf islands; #120) of the given size, or null. */
+export function aucklandAerialOuter(size: AerialSize): AerialOuterPhoto | null {
+  return outer.get(size);
+}
+
+/**
+ * Fetch and decode the outer photo of the given size, as loadAucklandAerial; null on any failure. The high tier's
+ * KTX2 atlas is transcoded for `renderer`'s GPU (without one it fails).
+ */
+export function loadAucklandAerialOuter(size: AerialSize, renderer?: WebGLRenderer, url?: string): Promise<AerialOuterPhoto | null> {
+  return outer.load(size, url, renderer);
 }

@@ -40,6 +40,7 @@ import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type Waypoin
 import { CivilTraffic } from './runtime/civil';
 import { HelicopterTraffic } from './runtime/helicopters';
 import { CivilShipping } from './runtime/shipping';
+import { SuperyachtTraffic } from './runtime/superyachts';
 import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
 import { SightseeingLog } from './runtime/sightseeing';
@@ -83,6 +84,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   readonly helicopters: HelicopterTraffic | null;
   /** Neutral container ships and cruise liners (Auckland theatre only, gated with the airliners). */
   private readonly shipping: CivilShipping | null;
+  /** Named superyachts at their berths, and now and then one under way (#145; gated with the airliners). */
+  readonly superyachts: SuperyachtTraffic | null;
   /** Auckland Transport and KiwiRail trains on their timetable (Auckland theatre only, gated with the airliners, #146). */
   private readonly trains: TrainTraffic | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
@@ -133,6 +136,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.helicopters = civilTraffic ? new HelicopterTraffic(this.s, deps.helicopters ?? 3) : null;
     this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
+    this.superyachts = civilTraffic ? new SuperyachtTraffic(this.s) : null;
     this.trains = civilTraffic ? new TrainTraffic(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
     this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
@@ -195,6 +199,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.civil?.setup();
     this.helicopters?.setup();
     this.shipping?.setup();
+    this.superyachts?.setup();
     this.trains?.setup();
     this.landmarks.setup();
     this.callouts.attach();
@@ -312,6 +317,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.civilianShipKills > 0) (r as MissionResultExt).civilianShipKills = s.civilianShipKills;
     if (s.civilianHeliKills > 0) (r as MissionResultExt).civilianHeliKills = s.civilianHeliKills;
     if (s.civilianTrainKills > 0) (r as MissionResultExt).civilianTrainKills = s.civilianTrainKills;
+    if (s.civilianYachts.length) (r as MissionResultExt).civilianYachts = [...s.civilianYachts];
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)

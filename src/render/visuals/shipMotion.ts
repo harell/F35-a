@@ -12,7 +12,8 @@
  * allocation-free, no three.js scene objects (unit tested in tests/render-ships.test.ts).
  */
 import { Matrix4, Quaternion, Vector3 } from 'three';
-import type { VesselClass } from '../../core/types';
+import type { MerchantClass, VesselClass } from '../../core/types';
+import { SUPERYACHTS, type SuperyachtId } from '../../core/superyachts';
 
 const DEG = Math.PI / 180;
 
@@ -24,16 +25,23 @@ export interface ShipDims {
   height: number;
   /** Main deck height above the waterline (freeboard). */
   deck: number;
-  /** Funnel top (local x, y, z). */
+  /** Funnel top (local x, y, z); null for a yacht (no smoke plume). */
   funnel: readonly [number, number, number] | null;
 }
 
-/** Model dimensions (render/models/ground.ts builds the hulls from these). */
-export const SHIP_DIMS: Record<VesselClass, ShipDims> = {
+const MERCHANT_DIMS: Record<MerchantClass, ShipDims> = {
   container: { length: 270, beam: 34, height: 48, deck: 12, funnel: [0, 36, 111] },
   cruise: { length: 290, beam: 36, height: 50, deck: 14, funnel: [0, 50.8, 60] },
   tanker: { length: 250, beam: 44, height: 42, deck: 9, funnel: [0, 37, 106] },
 };
+
+/** A named superyacht (#145): her height is the mast tops (a sinking yacht goes under masts and all). */
+const YACHT_DIMS = Object.fromEntries(
+  Object.values(SUPERYACHTS).map((y) => [y.id, { length: y.length, beam: y.beam, height: y.air, deck: y.freeboard, funnel: null }]),
+) as Record<SuperyachtId, ShipDims>;
+
+/** Model dimensions (render/models/ground.ts and superyachts.ts build the hulls from these). */
+export const SHIP_DIMS: Record<VesselClass, ShipDims> = { ...MERCHANT_DIMS, ...YACHT_DIMS };
 
 /** Dimensions of a ship's class (every 'ship' has one: World.spawnGround enforces it). */
 export function shipDims(vessel: VesselClass | null | undefined): ShipDims {

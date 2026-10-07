@@ -6,6 +6,7 @@
  */
 import type { SimWorld } from '../../sim/api';
 import type { GroundTargetEntity } from '../../sim/entities';
+import type { VesselClass } from '../../core/types';
 import { isCivilVessel, vesselNoun } from '../../sim/civil/vessels';
 import type { HudFrame } from './frame';
 
@@ -19,13 +20,14 @@ export interface VesselCounter {
 
 const MAX = 3;
 const texts = new Map<number, string>();
-const CLASS_KEY = { container: 1, cruise: 2, tanker: 3 } as const;
+/** Numeric key of the noun (a superyacht's is 4: "YACHT"). */
+const CLASS_KEY: Partial<Record<VesselClass, number>> = { container: 1, cruise: 2, tanker: 3 };
 const out: { ship: GroundTargetEntity; text: string; tone: VesselCounter['tone'] }[] = [];
 const pool = Array.from({ length: MAX }, () => ({ ship: null as unknown as GroundTargetEntity, text: '', tone: 'main' as VesselCounter['tone'] }));
 
 function counterText(g: GroundTargetEntity): string {
   // numeric key: no string built per frame
-  const key = (g.vessel ? CLASS_KEY[g.vessel] : 0) * 1e4 + (g.alive ? g.hits : 99) * 100 + g.hitsToSink;
+  const key = (g.vessel ? (CLASS_KEY[g.vessel] ?? 4) : 0) * 1e4 + (g.alive ? g.hits : 99) * 100 + g.hitsToSink;
   let s = texts.get(key);
   if (!s) {
     const noun = vesselNoun(g.vessel).toUpperCase();

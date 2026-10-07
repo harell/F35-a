@@ -11,7 +11,9 @@ enhancements, and each has a procedural fallback or is only used where noted.
 | `lensflare0.png`, `lensflare3.png` | three.js examples — https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/lensflare/ | MIT (© three.js authors) | Sun lens flare (high quality, daytime only) |
 | `moon_1024.jpg` | three.js examples — https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/moon_1024.jpg | MIT (© three.js authors) | Night-sky moon disc (loaded only for night missions; grey fallback) |
 
-Code dependencies: `three` (MIT) including `three/examples/jsm/objects/Lensflare.js`.
+Code dependencies: `three` (MIT) including `three/examples/jsm/objects/Lensflare.js` and
+`three/examples/jsm/loaders/KTX2Loader.js` with its Basis Universal transcoder (`libs/basis/basis_transcoder.js` /
+`.wasm`, Apache 2.0, Binomial LLC; fetched only by the high tier, for its KTX2 aerial atlas).
 
 Techniques and references (reimplemented, no code copied):
 * CDLOD terrain: F. Strugar, *Continuous Distance-Dependent Level of Detail for Rendering

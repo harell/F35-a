@@ -19,7 +19,8 @@
  * a crash into the hill leaves the museum standing, and a crash into the museum leaves the hill.
  * The Ports of Auckland's eight ship-to-shore cranes (core/portOfAuckland.ts, ids −2…−9) are `fixed`:
  * their portals up to the A-frame crash an aircraft and never collapse. So is Westfield Newmarket
- * (core/westfieldNewmarket.ts, id −101): its measured blocks crash an aircraft and stand.
+ * (core/westfieldNewmarket.ts, id −101): its measured blocks crash an aircraft and stand. The landmark sites' buildings
+ * outside the CBD (#124, world/scenery/aucklandLandmarks.ts) are scenery only.
  * The Auckland Harbour Bridge is a hero too, one per span (ids −20…−26, core/harbourBridge.ts hbSpanSolids): its deck
  * and through truss with their own bases, so the water and the clearance under the deck stay open; the span the
  * player's jet hits falls into the harbour (world/scenery/bridgeCollapse.ts).
@@ -216,7 +217,9 @@ export function buildBuildingGeometry(
   };
   for (let id = 0; list && id < list.length; id++) {
     const b = list[id];
-    if (!b.prisms.length || !b.prisms.some((p) => p.h >= minHeight)) continue;
+    // (not the landmark sites' buildings outside the CBD, #124: scenery only for now. As solids, the mission bot's jet
+    // flew into a hospital tower and g01's balance test flipped; neither the AI nor the bot steers round buildings)
+    if (!b.prisms.length || b.landmark || !b.prisms.some((p) => p.h >= minHeight)) continue;
     add(id, b.prisms[0].cx, b.prisms[0].cz, b.prisms, false, undefined, buildingName(b));
   }
   // Ports of Auckland's ship-to-shore cranes: the portal between the legs, up to the A-frame (core/portOfAuckland.ts)

@@ -21,6 +21,7 @@
  *     roll + = right wing down.
  *  Display units: knots, feet, feet/min (like the real HMD). Internals are SI.
  */
+import type { SuperyachtId } from './superyachts';
 
 /**
  * 'neutral' = civilian traffic (airliners, merchant ships, trains). Neither side treats neutrals as hostile: AI, SAMs and
@@ -83,8 +84,11 @@ export type GroundTargetType =
  * Merchant ship class of a `'ship'` ground entity (GroundTargetEntity.vessel; every ship has one):
  * picks the model, hull size and callouts.
  * 'tanker' is a ~250 m crude carrier (the escort mission's protected ship).
+ * A named superyacht (#145: Koru, Serene, A, Aquijo) is a class of her own, her shape data in core/superyachts.ts.
  */
-export type VesselClass = 'container' | 'cruise' | 'tanker';
+export type VesselClass = MerchantClass | SuperyachtId;
+/** The merchant ship classes (every VesselClass that is not a named superyacht). */
+export type MerchantClass = 'container' | 'cruise' | 'tanker';
 
 export type WeaponId =
   | 'gun' // GAU-22/A 25 mm, 180 rds
@@ -277,8 +281,9 @@ export interface QualitySettings {
    */
   hdTerrain: boolean;
   /**
-   * Real aerial photo of the CBD and waterfront (Auckland, a lazily loaded ≈ 270 kB / 630 kB download on
-   * the medium / high tier: terrainDetail 1 → 2048², 2 → 4096²). Low never downloads it.
+   * Real aerial photo of the CBD and waterfront, plus the rest of the Devonport peninsula and the gulf islands
+   * (Auckland, lazily loaded: ≈ 270 + 280 kB on the medium tier, 630 kB + 2.7 MB on high: terrainDetail 1 → 2048²
+   * and the 2048-wide outer atlas, 2 → 4096² and the 4096-wide one, GPU-compressed KTX2). Low never downloads it.
    */
   aerialPhoto: boolean;
   /** Number of cloud billboards/puffs. */
@@ -356,6 +361,6 @@ export interface Settings {
   missileCam: 'off' | 'compact' | 'dynamic';
   /** HD terrain on the high quality tier (see QualitySettings.hdTerrain). Off: procedural detail, no download. */
   hdTerrain: boolean;
-  /** Aerial photo of the CBD and waterfront on the medium / high tier (see QualitySettings.aerialPhoto). Off: procedural ground, no download. */
+  /** Aerial photo of the CBD, the waterfront, Devonport and the gulf islands on the medium / high tier (see QualitySettings.aerialPhoto). Off: procedural ground, no download. */
   aerialPhoto: boolean;
 }

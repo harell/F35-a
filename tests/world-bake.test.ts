@@ -121,7 +121,7 @@ describe('scatter sources', () => {
     expect(a.data[0].length + a.data[1].length).toBeGreaterThan(11 * 20);
     expect(a.data).toEqual(b.data);
     for (const arr of a.data) {
-      for (let i = 0; i < arr.length; i += 11) {
+      for (let i = 0; i < arr.length; i += 12) {
         const [x, y, z] = [arr[i], arr[i + 1], arr[i + 2]];
         // house centres are offset inside their lot (lot centres lie in the tile)
         expect(x).toBeGreaterThanOrEqual(1200 - 12);

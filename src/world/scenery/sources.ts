@@ -3,13 +3,15 @@
  *  - TreeSource: jittered-grid candidates accepted by the baked forest density (colour map alpha),
  *    plus garden/street trees in suburbs; species by theatre/altitude
  *  - HouseSource: houses / apartment blocks on the exact lots the terrain shader paints (urbanGrid;
- *    none inside the CBD region with real streets, whose buildings come from buildCBD)
+ *    none inside the CBD region with real streets, whose buildings come from buildCBD), and the real houses of
+ *    Devonport and the gulf islands (aucklandHouses.ts, #121) through the same archetypes
  */
 import { Color } from 'three';
 import type { TheaterId } from '../../core/types';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { VegetationField } from '../terrain/vegetation';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { MAT_PINE } from '../terrain/types';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
@@ -20,6 +22,9 @@ import type { AucklandDomain, DomainTree } from './aucklandDomain';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 import { LU_COMMERCIAL, LU_INDUSTRIAL, LU_PITCH, LU_SCHOOL, landUseAt, luOpen, luSheds, type LandUse } from './aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint, shedHeight, shedRoofOf } from './landUseLots';
+import { housesCover, housesIn, type RealHouses } from './aucklandHouses';
+import type { CorridorHouses } from './corridorHouses';
+import { canopyAt as realCanopyAt, canopyHeightAt, type Canopy } from '../terrain/theaters/aucklandCanopy';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
 export class ColorMapSampler {
@@ -75,6 +80,55 @@ export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: Dis
   return Math.min(fx, BLOCK_W - fx, fz, BLOCK_D - fz) < ROAD_HALF + 2;
 }
 
+/**
+ * The real tree canopy (#123, aucklandCanopy.ts) and what keeps its trees' trunks clear. Where the grid covers, it
+ * decides the trees (on the aerial photo too: the photo's own trees get 3D trees standing on them).
+ */
+export interface CanopyTrees {
+  grid: Canopy;
+  /** The road ribbons and the landmark sites (not the photo). */
+  blocked: ((x: number, z: number, margin: number) => boolean) | null;
+  /** The real houses (#121): no trunk inside one. */
+  houses: RealHouses | null;
+  /** Lots cleared along the ribbons and on the sites (no procedural house stands there). */
+  lotMask: Pick<LotMask, 'masked'> | null;
+}
+
+/** Where the canopy grid is: the share (0 … 1) the trees there follow, or −1 (the Topo50 cover and the gardens rule). */
+export function canopyShareAt(c: CanopyTrees | null, x: number, z: number): number {
+  return c ? realCanopyAt(c.grid, x, z) : -1;
+}
+
+/** A closed canopy's crowns widen up to this × their height (a pōhutukawa is wider than tall). */
+const CANOPY_MAX_WIDEN = 2.2;
+/** The share the crowns' overlap correction saturates at. */
+const CANOPY_MAX_SHARE = 0.9;
+
+const LOT_W = BLOCK_W / LOTS_X;
+const LOT_D = BLOCK_D / LOTS_Z;
+
+/**
+ * True when (x, z) lies within `margin` m of a procedural house of the scatter (HouseSource's lot rule: the built lots
+ * of the urban colour map, off the park blocks and the masked lots; the land-use sheds and the frontage lots are left
+ * out). A tree of the real canopy does not grow through one.
+ */
+export function onProceduralHouse(x: number, z: number, cmap: ColorMapSampler, cbd: CbdGrid | null, masked: Pick<LotMask, 'masked'> | null, margin: number, scratch: District): boolean {
+  const d = districtAt(x, z, undefined, scratch, cbd);
+  if (d.real || d.border < 9) return false;
+  const [px, pz] = toLocal(d, x, z);
+  const lx = Math.floor(px / LOT_W);
+  const lz = Math.floor(pz / LOT_D);
+  const [cwx, cwz] = toWorld(d, (lx + 0.5) * LOT_W, (lz + 0.5) * LOT_D);
+  const dens = cmap.urban(cwx, cwz);
+  if (dens < 0.08) return false;
+  if (blockHash(d, Math.floor(lx / LOTS_X), Math.floor(lz / LOTS_Z)) >= 0.975 - dens * 0.03) return false;
+  const lh = lotHash(d, lx, lz);
+  if (lh >= 0.8 + 0.2 * dens) return false;
+  if (masked?.masked(cwx, cwz)) return false;
+  const fp = houseFootprint(lh, lz, dens > 0.9);
+  return Math.abs((px / LOT_W - lx - fp.cx) * LOT_W) < (fp.sx * LOT_W) / 2 + margin && Math.abs((pz / LOT_D - lz - fp.cz) * LOT_D) < (fp.sz * LOT_D) / 2 + margin;
+}
+
 /** Trees measured one by one on a site of their own (tamakiDrive.ts tamakiTrees: [x, y, z, width, height, palm, shade] each). */
 export interface MeasuredTrees {
   trees: Float32Array;
@@ -101,7 +155,96 @@ export class TreeSource implements ScatterSource {
     private readonly domain: AucklandDomain | null = null,
     /** Measured trees standing on a strip of their own (the Tāmaki Drive waterfront): no others grow there. */
     private readonly measured: MeasuredTrees | null = null,
+    /** The real tree canopy (#123): where its grid covers, the trees follow it instead of the Topo50 cover. */
+    private readonly canopy: CanopyTrees | null = null,
+    /**
+     * The corridor's streamed real houses (#126, corridorHouses.ts): where a loaded tile covers, the trees keep off its
+     * houses (and its street ribbons: `blocked`) instead of the procedural grid's painted houses and streets.
+     */
+    private readonly stream: CorridorHouses | null = null,
   ) {}
+
+  private readonly realIdx: number[] = [];
+  private readonly realFiles: RealHouses[] = [];
+
+  /** Within `margin` m of a real house (#121, and the corridor's loaded tiles, #126: an oriented rectangle). */
+  private onRealHouse(x: number, z: number, margin: number): boolean {
+    const files = this.realFiles;
+    files.length = 0;
+    if (this.canopy?.houses) files.push(this.canopy.houses);
+    // (#121's houses are under 600 m², ≤ 16 m from their centre to a corner + margin; the corridor's pieces of a big
+    // building up to 63 m a side, ≤ 46 m)
+    this.stream?.filesIn(x - 46, z - 46, x + 46, z + 46, files);
+    for (const h of files) {
+      this.realIdx.length = 0;
+      const r = h === this.canopy?.houses ? 16 : 46;
+      for (const k of housesIn(h, x - r, z - r, x + r, z + r, this.realIdx)) {
+        const dx = x - h.x[k];
+        const dz = z - h.z[k];
+        const c = Math.cos(h.dir[k]);
+        const s = Math.sin(h.dir[k]);
+        if (Math.abs(dx * c + dz * s) < h.d[k] / 2 + margin && Math.abs(-dx * s + dz * c) < h.w[k] / 2 + margin) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * A tree of the real canopy (#123) for the grid point (gx, gz), or none: the cell's share of land under trees and the
+   * trees' measured height decide it, as nbTree does for the hero neighbourhoods (a 14 m point stands for 196 m², so it
+   * takes a tree with probability −ln(1 − share) · 196 / crown area, the overlap of crowns put down at random allowed
+   * for, the crowns widened up to CANOPY_MAX_WIDEN × the height where that would exceed one: a closed canopy). Its trunk keeps off the road ribbons, the landmark sites, the real and the procedural
+   * houses and the painted streets; a point blocked there tries two more spots in its square, so the canopy stays near
+   * its share round them. Palms only in gardens (the bush and the islands' pōhutukawa forest are broadleaf).
+   */
+  private canopyTree(share: number, gx: number, gz: number, out: TileInstances): void {
+    if (share <= 0) return;
+    const ct = this.canopy!;
+    const seed = this.seed;
+    const sp = this.spacing;
+    const top = canopyHeightAt(ct.grid, (gx + 0.5) * sp, (gz + 0.5) * sp);
+    const r = hash2(gx, gz, seed + 33);
+    const s = Math.max(3, (top >= 3 ? top : 9) * (0.7 + 0.45 * hash2(gx, gz, seed + 32)));
+    const cell = sp * sp;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const x = (gx + 0.1 + 0.8 * hash2(gx, gz, seed + 40 + attempt * 2)) * sp;
+      const z = (gz + 0.1 + 0.8 * hash2(gx, gz, seed + 41 + attempt * 2)) * sp;
+      const hf = this.hf;
+      const gh = hf.heightAt(x, z);
+      if (gh < 0.6) return;
+      const mi = Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell);
+      const mat = hf.mat[Math.max(0, Math.min(hf.mat.length - 1, mi))];
+      const urban = this.cmap.urban(x, z);
+      // conifers in the pine plantations and the gardens, palms in the gardens; the bush is broadleaf
+      let kind = this.veg.species(gh, mat, r, x, z);
+      if (urban <= 0.05 && (kind === TREE_PALM || (kind === TREE_CONIFER && mat !== MAT_PINE))) kind = TREE_BROADLEAF;
+      const ratio = kind === TREE_CONIFER ? 0.55 : kind === TREE_PALM ? 0.75 : 0.95;
+      // crowns fall where they will, so some overlap: the cover their union reaches is 1 − e^(−crown area per m²)
+      const want = -Math.log(1 - Math.min(share, CANOPY_MAX_SHARE)) * cell;
+      let w = s * ratio;
+      let p = want / (Math.PI * (w / 2) ** 2);
+      if (p > 1) {
+        w = Math.min(s * CANOPY_MAX_WIDEN, 2 * Math.sqrt(want / Math.PI));
+        p = Math.min(1, want / (Math.PI * (w / 2) ** 2));
+      }
+      if (attempt === 0 && hash2(gx, gz, seed + 31) > p) return;
+      if (ct.blocked?.(x, z, 1.5)) continue;
+      const st = this.cbd?.streets;
+      // CBD (real streets): its blocks are built up (buildCBD), trees only in the parks
+      if (st && st.regionSD(x, z) > -2 && (st.park(x, z) < 0.6 || st.streetSD(x, z) < 2)) continue;
+      if (this.onRealHouse(x, z, 1)) continue;
+      // the procedural suburbs' painted streets and houses (none where the real houses are the truth)
+      if (urban > 0.05 && !(ct.houses && housesCover(ct.houses, x, z)) && !this.stream?.covers(x, z)) {
+        if (onStreet(x, z, this.cbd, this.dist)) continue;
+        if (onProceduralHouse(x, z, this.cmap, this.cbd, ct.lotMask, 1, this.dist)) continue;
+      }
+      // the bush darker than the gardens' trees (the photo's crowns under them are a deep green)
+      _c.setScalar((urban <= 0.05 ? 0.55 : 0.8) + 0.25 * hash2(gx, gz, seed + 34));
+      // aux: a real canopy tree (1 + a shade in [0, 1)): on the photo it takes the photo's colour (materials.ts foliage)
+      out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, r * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 1 + 0.999 * hash2(gx, gz, seed + 35));
+      return;
+    }
+  }
 
   /** The Domain's trees in 50 m buckets, its park's box, and its trees' mean colour (the shade reference). */
   private domainIndex: { cells: Map<number, DomainTree[]>; box: [number, number, number, number]; mean: [number, number, number] } | null = null;
@@ -165,7 +308,7 @@ export class TreeSource implements ScatterSource {
           const g = k((t.colour >> 8) & 255, ix.mean[1]);
           const b = k(t.colour & 255, ix.mean[2]);
           const h = hash2(Math.round(t.x * 10), Math.round(t.z * 10), this.seed + 21);
-          out.data[conifer ? TREE_CONIFER : TREE_BROADLEAF].push(t.x, hf.meshHeightAt(t.x, t.z) - 0.3, t.z, h * 40, w, t.h, w, r, g, b, h);
+          out.data[conifer ? TREE_CONIFER : TREE_BROADLEAF].push(t.x, hf.meshHeightAt(t.x, t.z) - 0.3, t.z, h * 40, w, t.h, w, r, g, b, h, 0);
         }
       }
   }
@@ -230,7 +373,7 @@ export class TreeSource implements ScatterSource {
     const mat = hf.mat[Math.max(0, Math.min(hf.mat.length - 1, mi))];
     const kind = this.veg.species(hf.heightAt(x, z), mat, hash2(gx, gz, seed + 3), x, z);
     _c.setScalar(0.82 + 0.3 * hash2(gx, gz, seed + 13));
-    out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, h1 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4));
+    out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, h1 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 0);
   }
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
@@ -247,7 +390,7 @@ export class TreeSource implements ScatterSource {
         const x = t[i], z = t[i + 2];
         if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
         _c.setScalar(t[i + 6]);
-        out.data[t[i + 5] ? TREE_PALM : TREE_BROADLEAF].push(x, t[i + 1], z, hash2(i, 7, seed) * 40, t[i + 3], t[i + 4], t[i + 3], _c.r, _c.g, _c.b, 0.1 * hash2(i, 9, seed));
+        out.data[t[i + 5] ? TREE_PALM : TREE_BROADLEAF].push(x, t[i + 1], z, hash2(i, 7, seed) * 40, t[i + 3], t[i + 4], t[i + 3], _c.r, _c.g, _c.b, 0.1 * hash2(i, 9, seed), 0);
       }
     }
     for (let j = 0; j < n; j++) {
@@ -266,6 +409,11 @@ export class TreeSource implements ScatterSource {
           this.nbTree(nb, x, z, gx, gz, out);
           continue;
         }
+        const cs = canopyShareAt(this.canopy, x, z);
+        if (cs >= 0) {
+          this.canopyTree(cs, gx, gz, out);
+          continue;
+        }
         let dens = this.cmap.forest(x, z);
         const urban = dens > 0 ? 0 : this.cmap.urban(x, z);
         if (urban > 0.05) dens = 0.1 * (1 - urban * 0.7); // garden & street trees
@@ -274,8 +422,10 @@ export class TreeSource implements ScatterSource {
         const gh = hf.heightAt(x, z);
         if (gh < 0.6) continue;
         if (this.blocked && this.blocked(x, z, 3)) continue;
-        // garden / street trees stay off the painted streets and arterials
-        if (urban > 0.05 && onStreet(x, z, this.cbd, this.dist)) continue;
+        // garden / street trees stay off the painted streets and arterials; where the corridor's real houses stand
+        // (#126), off them instead (their streets are ribbons: `blocked`)
+        if (urban > 0.05 && !this.stream?.covers(x, z) && onStreet(x, z, this.cbd, this.dist)) continue;
+        if (this.stream?.tiles.size && this.onRealHouse(x, z, 1)) continue;
         if (urban > 0.05 && this.landUse) {
           const c = landUseAt(this.landUse, x, z);
           if (c === LU_PITCH || c === LU_SCHOOL || ((c === LU_COMMERCIAL || c === LU_INDUSTRIAL) && h1 > 0.2)) continue;
@@ -295,7 +445,7 @@ export class TreeSource implements ScatterSource {
         const shade = 0.82 + 0.3 * h2;
         _c.setScalar(shade);
         const arr = out.data[kind];
-        arr.push(x, hf.meshHeightAt(x, z) - 0.3, z, h3 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4));
+        arr.push(x, hf.meshHeightAt(x, z) - 0.3, z, h3 * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 0);
       }
     }
   }
@@ -303,6 +453,13 @@ export class TreeSource implements ScatterSource {
 
 export const HOUSE = 0;
 export const APARTMENT = 1;
+/** The house archetype's roof overhangs its walls by these factors across and along its ridge (archetypes.ts houseGeometry). */
+export const HOUSE_OVERHANG_W = 1.1;
+export const HOUSE_OVERHANG_D = 1.08;
+/** Record aux of a real building drawn with its archetype's own roof (aux 0: procedural; ≥ 1: a real house, 1 + its rise). */
+export const REAL_FLAG = 0.5;
+/** A real flat-roofed building with its eave this high (m) or more is drawn as an apartment block (three storeys). */
+export const REAL_APARTMENT_EAVE = 8;
 /** A flat-roofed shed on commercial, industrial, hospital or school land (landUseLots.ts). */
 export const SHED = 2;
 
@@ -335,14 +492,65 @@ export class HouseSource implements ScatterSource {
     private readonly frontage: FrontageMap | null = null,
     /** The real land use (#122): houses only off open ground, sheds on commercial / industrial / hospital land. */
     private readonly landUse: LandUse | null = null,
+    /**
+     * The real houses (#121, aucklandHouses.ts): drawn as they were measured, under the aerial photo too (the procedural
+     * lots step aside round them: their coverage is in `lotMask`). `realBlocked` keeps them off the road ribbons and the
+     * landmark sites that have buildings of their own (the naval base).
+     */
+    private readonly real: RealHouses | null = null,
+    private readonly realBlocked: ((x: number, z: number, margin: number) => boolean) | null = null,
+    /**
+     * The corridor's streamed real houses (#126, corridorHouses.ts): a loaded tile's houses are drawn like #121's, and
+     * where its coverage is set no procedural, frontage or shed lot is built (until it loads, and offline, they are).
+     */
+    private readonly stream: CorridorHouses | null = null,
   ) {
     this.kinds = landUse ? 3 : 2;
   }
   readonly kinds: number;
 
   private readonly front: FrontHouse[] = [];
+  private readonly realIdx: number[] = [];
+  private readonly realFiles: RealHouses[] = [];
+
+  /**
+   * The real houses in the tile: a gable along the measured ridge (the house archetype, its roof's rise per instance:
+   * record aux = 1 + rise, materials.ts HOUSES) or, flat and three storeys or more, an apartment block (aux = REAL_FLAG:
+   * its own roof); the roof colour from the photo (roofColorFn takes the record's colour when aux > 0). The roof is the outline's (LINZ traces roofs), so the walls are the archetype's overhang inside it.
+   * They stand from the lowest ground under their corners (no floating downhill side), their eave at the measured
+   * height over the ground at their centre.
+   */
+  private realTile(h: RealHouses, x0: number, z0: number, size: number, out: TileInstances): void {
+    // (each corridor tile's houses rank apart from another's: their indices start at 0 in every tile)
+    const salt = h === this.real ? 0 : 1 + Math.abs(Math.round(h.cover.x0 / 64) * 7919 + Math.round(h.cover.z0 / 64) * 104729) % 65521;
+    this.realIdx.length = 0;
+    const idx = housesIn(h, x0, z0, x0 + size, z0 + size, this.realIdx);
+    for (const k of idx) {
+      const x = h.x[k], z = h.z[k];
+      if (this.realBlocked?.(x, z, 0.5)) continue;
+      const c = Math.cos(h.dir[k]), sn = Math.sin(h.dir[k]);
+      const hd = h.d[k] / 2, hw = h.w[k] / 2;
+      const gc = this.groundAt(x, z);
+      let base = gc;
+      for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) base = Math.min(base, this.groundAt(x + c * hd * a - sn * hw * b, z + sn * hd * a + c * hw * b));
+      base = Math.max(base, 0.2);
+      const yaw = Math.atan2(c, sn); // local +Z (the archetype's ridge) along (c, sn)
+      _c.setHex(h.color[k]);
+      const rank = hash2(k & 0xffff, (k >> 16) + salt, 121);
+      const wall = h.eave[k] + Math.max(0, gc - base) + 0.3;
+      if (h.rise[k] < 0.3 && h.eave[k] >= REAL_APARTMENT_EAVE)
+        out.data[APARTMENT].push(x, base - 0.3, z, yaw, h.w[k], wall, h.d[k], _c.r, _c.g, _c.b, rank, REAL_FLAG);
+      else out.data[HOUSE].push(x, base - 0.3, z, yaw, h.w[k] / HOUSE_OVERHANG_W, wall, h.d[k] / HOUSE_OVERHANG_D, _c.r, _c.g, _c.b, rank, 1 + h.rise[k]);
+    }
+  }
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
+    const files = this.realFiles;
+    files.length = 0;
+    if (this.real) files.push(this.real);
+    this.stream?.filesIn(x0, z0, x0 + size, z0 + size, files);
+    for (const h of files) this.realTile(h, x0, z0, size, out);
+    const stream = this.stream;
     // Districts overlapping the tile (sampled on a 3×3 grid)
     const seen: District[] = [];
     for (let j = 0; j <= 2; j++)
@@ -358,7 +566,8 @@ export class HouseSource implements ScatterSource {
         if (gh < 1) continue;
         if (this.blocked && this.blocked(h.x, h.z, 4)) continue;
         if (this.landUse && luOpen(landUseAt(this.landUse, h.x, h.z))) continue;
-        out.data[h.kind === FRONT_HOUSE ? HOUSE : APARTMENT].push(h.x, gh - 0.8, h.z, h.yaw, h.w, h.h + 0.8, h.d, 1, 1, 1, h.lh);
+        if (stream?.covers(h.x, h.z)) continue;
+        out.data[h.kind === FRONT_HOUSE ? HOUSE : APARTMENT].push(h.x, gh - 0.8, h.z, h.yaw, h.w, h.h + 0.8, h.d, 1, 1, 1, h.lh, 0);
       }
     }
     const lotW = BLOCK_W / LOTS_X;
@@ -400,6 +609,7 @@ export class HouseSource implements ScatterSource {
               const uh = lotHash(d, lx, lz);
               if (cu === LU_SCHOOL && uh >= SCHOOL_BUILT) continue;
               if (this.lotMask?.masked(ucx, ucz)) continue;
+              if (stream?.covers(ucx, ucz)) continue;
               const fp = shedFootprint(cu);
               const gh = this.groundAt(ucx, ucz);
               if (gh < 1) continue;
@@ -408,7 +618,7 @@ export class HouseSource implements ScatterSource {
               const own2 = districtAt(ucx, ucz, undefined, this.dist, this.cbd);
               if (own2.real || own2.cx !== d.cx || own2.cz !== d.cz || own2.border < 20) continue;
               const hgt = shedHeight(cu, uh);
-              out.data[SHED].push(ucx, gh - 0.8, ucz, -d.angle, fp.sx * UNIT_LOTS * lotW, hgt + 0.8, fp.sz * lotD, 1, 1, 1, uh);
+              out.data[SHED].push(ucx, gh - 0.8, ucz, -d.angle, fp.sx * UNIT_LOTS * lotW, hgt + 0.8, fp.sz * lotD, 1, 1, 1, uh, 0);
               continue;
             }
             if (luOpen(landUseAt(lu, cwx, cwz))) continue;
@@ -417,6 +627,8 @@ export class HouseSource implements ScatterSource {
           if (lh >= 0.8 + 0.2 * dens) continue;
           // the corridor along a road or railway ribbon (lotMask.ts; tested at the lot centre, as the shader does)
           if (this.lotMask?.masked(cwx, cwz)) continue;
+          // the corridor's loaded real houses (#126; tested at the lot centre, as the shader does)
+          if (stream?.covers(cwx, cwz)) continue;
           const apt = dens > 0.9;
           const fp = houseFootprint(lh, lz, apt);
           const [wx, wz] = toWorld(d, (lx + fp.cx) * lotW, (lz + fp.cz) * lotD);
@@ -430,7 +642,7 @@ export class HouseSource implements ScatterSource {
           const hgt = apt ? 12 + 26 * lotFrac(lh, 5.7) * dens : 3.2 + 1.6 * lotFrac(lh, 3.3);
           // ridge along the long side: the unit archetype's ridge runs along local Z
           const swap = w > dd;
-          out.data[apt ? APARTMENT : HOUSE].push(wx, gh - 0.8, wz, -d.angle + (swap ? Math.PI / 2 : 0), swap ? dd : w, hgt + 0.8, swap ? w : dd, 1, 1, 1, lh);
+          out.data[apt ? APARTMENT : HOUSE].push(wx, gh - 0.8, wz, -d.angle + (swap ? Math.PI / 2 : 0), swap ? dd : w, hgt + 0.8, swap ? w : dd, 1, 1, 1, lh, 0);
         }
       }
     }
@@ -447,9 +659,13 @@ export function shedColorFn(): (rec: number[], i: number, out: Color) => void {
   };
 }
 
-/** Roof colour for a house record (matches the terrain shader's roofColor(lh)). */
+/** Roof colour for a house record (matches the terrain shader's roofColor(lh)); a real house (aux > 0) has its own. */
 export function roofColorFn(roofs: Color[]): (rec: number[], i: number, out: Color) => void {
   return (rec, _i, out) => {
+    if (rec[11] > 0) {
+      out.setRGB(rec[7], rec[8], rec[9]);
+      return;
+    }
     const lh = rec[10];
     const c = roofs[Math.min(roofs.length - 1, Math.floor(lotFrac(lh, 5.1) * 5.999))];
     const k = 0.85 + 0.3 * lotFrac(lh, 7.3);
