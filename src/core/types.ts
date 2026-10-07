@@ -21,6 +21,7 @@
  *     roll + = right wing down.
  *  Display units: knots, feet, feet/min (like the real HMD). Internals are SI.
  */
+import type { SuperyachtId } from './superyachts';
 
 /**
  * 'neutral' = civilian traffic (airliners, merchant ships, trains). Neither side treats neutrals as hostile: AI, SAMs and
@@ -83,8 +84,11 @@ export type GroundTargetType =
  * Merchant ship class of a `'ship'` ground entity (GroundTargetEntity.vessel; every ship has one):
  * picks the model, hull size and callouts.
  * 'tanker' is a ~250 m crude carrier (the escort mission's protected ship).
+ * A named superyacht (#145: Koru, Serene, A, Aquijo) is a class of her own, her shape data in core/superyachts.ts.
  */
-export type VesselClass = 'container' | 'cruise' | 'tanker';
+export type VesselClass = MerchantClass | SuperyachtId;
+/** The merchant ship classes (every VesselClass that is not a named superyacht). */
+export type MerchantClass = 'container' | 'cruise' | 'tanker';
 
 export type WeaponId =
   | 'gun' // GAU-22/A 25 mm, 180 rds

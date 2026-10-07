@@ -9,13 +9,13 @@
  * rides at a free anchorage, so the player can box and shoot every kind of merchant ship there is.
  * The harbour ferries are never sim ships, in any mode: render/traffic/HarbourFerries draws them as scenery.
  *
- * They are ordinary sim ground entities (type 'ship', team 'neutral', a VesselClass): the player's
+ * They are ordinary sim ground entities (type 'ship', team 'neutral', a MerchantClass): the player's
  * EOTS and radar ground map see them, AI crews and SAMs never do, and TGT cycling ranks them behind
  * every hostile. A bomb or missile hit sinks one; the Callouts module handles the consequences.
  */
 import { Vector3 } from 'three';
 import { mulberry32 } from '../../core/math';
-import type { VesselClass } from '../../core/types';
+import type { MerchantClass } from '../../core/types';
 import type { GroundTargetEntity } from '../../sim/entities';
 import type { MissionState } from './state';
 
@@ -26,7 +26,7 @@ export interface ShipBerth {
   z: number;
   /** Bow heading (deg, clockwise from north). */
   heading: number;
-  vessel: VesselClass;
+  vessel: MerchantClass;
 }
 
 /**
@@ -64,7 +64,7 @@ export interface ShipRoute {
   b: number;
   /** Speed (m/s). */
   speed: number;
-  vessel: VesselClass;
+  vessel: MerchantClass;
 }
 
 /** Slow loops along the deep-water channel (> 20 m) between the North Shore and Tiritiri Matangi. */
@@ -112,7 +112,7 @@ export const HARBOUR_LANE: readonly [number, number][] = [
   [3500, -900],
 ];
 /** Peacetime harbour traffic (A Stroll in the Park only): who sails the lane, half a loop apart. */
-const LANE_VESSELS: readonly VesselClass[] = ['cruise', 'container'];
+const LANE_VESSELS: readonly MerchantClass[] = ['cruise', 'container'];
 /** Speed on the lane (m/s, ≈ 12 kn): both the same, so they never close on each other. */
 export const LANE_SPEED = 6;
 
@@ -173,13 +173,13 @@ const CONTAINER_NAMES = ['MV Kōtuku Trader', 'MV Tasman Kererū', 'MV Hauraki P
 const CRUISE_NAMES = ['Southern Barnacle', 'Pacific Interislander', 'SuperGold Majesty'];
 /** Crude carriers (the wartime traffic has none; the stroll's tanker and a mission's escorted one take these). */
 export const TANKER_NAMES = ['MT Marsden Point', 'MT Tasman Spirit', 'MT Pacific Kauri'];
-const NAMES: Record<VesselClass, readonly string[]> = { container: CONTAINER_NAMES, cruise: CRUISE_NAMES, tanker: TANKER_NAMES };
+const NAMES: Record<MerchantClass, readonly string[]> = { container: CONTAINER_NAMES, cruise: CRUISE_NAMES, tanker: TANKER_NAMES };
 
 export class CivilShipping {
   private readonly rng: () => number;
   /** Every civil ship spawned this sortie. */
   readonly ships: GroundTargetEntity[] = [];
-  private nameIdx: Record<VesselClass, number> = { container: 0, cruise: 0, tanker: 0 };
+  private nameIdx: Record<MerchantClass, number> = { container: 0, cruise: 0, tanker: 0 };
 
   constructor(private readonly s: MissionState) {
     this.rng = mulberry32(((s.def.seed ?? 1) * 4099 + 31) >>> 0);
@@ -217,7 +217,7 @@ export class CivilShipping {
     });
   }
 
-  private nextName(v: VesselClass): string {
+  private nextName(v: MerchantClass): string {
     const list = NAMES[v];
     return list[this.nameIdx[v]++ % list.length];
   }
@@ -242,7 +242,7 @@ export class CivilShipping {
   }
 
   /** A ship on point k of a closed loop, sailing from k+1 round to k. */
-  private spawnOnPath(vessel: VesselClass, pts: Vector3[], k: number, speed: number): GroundTargetEntity {
+  private spawnOnPath(vessel: MerchantClass, pts: Vector3[], k: number, speed: number): GroundTargetEntity {
     const path = [...pts.slice(k + 1), ...pts.slice(0, k + 1)];
     const e = this.s.world.spawnGround({
       type: 'ship',

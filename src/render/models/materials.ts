@@ -222,6 +222,9 @@ function builtin(key: string): Factory {
       return () => new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, map: grimeTexture() });
     case 'building':
       return () => new MeshLambertMaterial({ color: 0xffffff, vertexColors: true, map: grimeTexture() });
+    case 'yacht':
+      // superyachts (#145): glossy paint, a little of the sky in the hull
+      return () => std({ color: 0xffffff, vertexColors: true, roughness: 0.32, metalness: 0.05, envMapIntensity: 0.7 });
     case 'munition':
       return () => std({ color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0.1, envMapIntensity: 0.5 });
     case 'charred':
