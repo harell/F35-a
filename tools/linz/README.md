@@ -478,6 +478,56 @@ Motutapu 108, Motuihe 9, Rakino 212; 73 of them new since 2017 from the LiDAR), 
 gone since 2017. 143.6 kB of houses raw (8.40 B a house) + 6.2 kB of coverage; 129.8 kB gzip (7.60 B a house; the
 houses alone 7.32 B).
 
+# Real suburbs 7/9: the corridor's real houses and streets, streamed (#126)
+
+`corridor-houses.py` and `corridor-houses.ts` bake every house and local street from Whenuapai to Auckland Airport into
+136 tiles of 2,048 m, `src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin` (gzip; ≈ 2.4 MB in all, the same on
+every tier), and their manifest `corridor.json` (bundled: tiles, bytes, the shared roof palette). The game fetches a tile
+as the house scatter's radius reaches it (`src/world/scenery/corridorHouses.ts`); the service worker caches it on first
+use and never precaches it (`public/sw.js` `ON_DEMAND`). Same licence and attribution as above.
+
+| Product | Source | Used for |
+|---|---|---|
+| NZ Building Outlines | LDS layer 101290, per LiDAR sheet as `canopy.py` (#123) cached them in `<work>/../canopy/outlines/` | footprints → rectangles |
+| Auckland Part 1 LiDAR 1m DSM / DEM (2024) | the 19 sheets of the corridor in `<work>/../lidar/part1/` (`canopy.py fetch`) | eave, roof pitch, gone since 2017, new since 2017 |
+| Auckland 0.075m Urban Aerial Photos (2024-2025) | COG overview 1/16 (1.2 m), one mosaic per sheet (`aerial.py` `mosaic()`, cached in `<aerial work>`; ≈ 150 tiles a sheet by range requests) | roof colours, the trees-vs-roofs test |
+| NZ Addresses: Road Sections | LDS layer 123109 (WFS, `LINZ_API_KEY`), 4 km boxes cached in `<work>` | the local streets (#127 phase B) |
+
+```sh
+python3 tools/linz/canopy.py fetch /home/user/work/canopy                 # (#123) the sheets and outlines, if not cached
+python3 tools/linz/corridor-houses.py /home/user/work/corridor           # → corridor-houses.json (≈ 12 min, 4 processes)
+LINZ_API_KEY=… npx vite-node tools/linz/corridor-houses.ts /home/user/work/corridor   # → the tiles, corridor.json, tests/fixtures/corridor-house-spotchecks.json (≈ 4 min)
+```
+
+How it works (the details are in the two files' headers):
+
+- **The corridor**: the box of epic #119's count (lon 174.58 … 174.86, lat −37.03 … −36.76) inside the 19 Part 1 sheets
+  `canopy.py` reads (604 km² with the water). Its edges outside them (≈ 15,600 outlines: a 1 km strip west of
+  Hobsonville, 0.4 km of Ōtāhuhu east of E 1765600, Papatoetoe and the Manukau shore south of the airport) stay
+  procedural.
+- **Houses**: `houses.py`'s fit (#121) on every outline of 20–20,000 m²: an oriented rectangle, the LiDAR roof, gone since
+  2017, the LiDAR-only buildings since 2017 (the photo's green test at 1.2 m), the photo's roof colour at the city
+  square's exposure in a 256-colour palette of the corridor's own. Unlike #121 the buildings over 600 m² are kept (shops,
+  warehouses, apartment blocks: nothing else draws them here, and the procedural sheds step aside); one longer than a
+  record holds (63 m) is cut into equal flat pieces. Not registered to the photo (#121's lean field): the game shows no
+  photo here, and the houses stand where LINZ traced them.
+- **Left out** (`corridor-houses.ts`): houses in the water, in the CBD region (its LINZ buildings), on #121's coverage
+  (Devonport), on the landmark and hero sites (`siteRings`, `siteBlocker`: #124's sites and footprints, the hero
+  neighbourhoods, the stadiums, the port, the oil terminal) and the OSM aerodromes (the airfields' own buildings).
+- **Coverage** (32 m cells, in each tile): the corridor's land outside the CBD region and #121's coverage.
+- **Streets (#127 phase B)**: every road section on the coverage that is not a footpath, a motorway or a placeholder, not
+  along a ribbon already baked (motorways, arterials, the hero neighbourhoods' streets) and outside the hero
+  neighbourhoods: a sealed `ROAD_LOCAL` ribbon, 9 m kerb to kerb (lanes and places 6 m), cut at the tiles' edges.
+- **Tile file**: `'AKLC'`, version, a houses file (`aucklandHouses.ts` format, no palette of its own, the tile's coverage
+  grid) and a roads file (`aucklandRoads.ts` format, no region, no names).
+
+2026-10-07: 345,316 outlines in the sheets (9,679 outside the box, 22,536 under 20 m², 46 over 20,000 m²); 307,120 houses
+fitted (12,256 outlines gone since 2017, 6,326 LiDAR-only buildings since); 285,961 records in the tiles after the
+exclusions (CBD region 2,155, Devonport 8,443, sites 12,891, aerodromes 320, water 139, landmark footprints 24; 2,303 big
+outlines cut into 4,661 pieces). Streets: 28,483 sections → 14,159 ribbon pieces, 2,109 km. **2,357,689 B gzip** in all
+(8.24 B a house): the houses alone 2.16 MB (7.57 B a house), the streets 179 kB, coverage and cell tables ≈ 82 kB raw.
+A tile: median 15.0 kB, p90 36.8 kB, max 46.7 kB.
+
 ## Real tree canopy (#123)
 
 `canopy.py` and `canopy.ts` bake the real tree canopy of the suburbs and the gulf islands into

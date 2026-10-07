@@ -236,6 +236,24 @@ them, and are drawn as one unlit mesh (`akl-local-roads`, two vertices across, t
 `createLocalRoadTexture`; no lamp posts, no frontage lots, low over causeways). On the low tier (no photo) they are the
 streets of the covered land, which #121 left as plain garden ground. Without the data file nothing changes.
 
+**The corridor's real houses and streets, streamed (#126).** From Whenuapai to Auckland Airport (the box of epic #119's
+count inside the 2024 LiDAR Part 1 sheets: ≈ 286,000 houses) the real houses and their LINZ streets ship as 136 tiles of
+2,048 m (`src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin`, ≈ 2.4 MB gzip in all, baked by
+`tools/linz/corridor-houses.py` + `.ts`; #121's record format, #127's local road ribbons) and a bundled manifest
+(`corridor.json`: tiles, bytes, the shared roof palette). `CorridorHouses` (`corridorHouses.ts`, built by
+`createCorridorHouses` in `corridorTiles.ts` from the Environment) fetches the tiles whose square comes within the house
+scatter's radius + 1.5 km of the camera, nearest first, two at a time, while the houses are drawn (`Scenery.update`), and
+drops them past radius + 6 km. A tile's arrival: its houses join `HouseSource` (and the trees keep off them), its coverage
+(32 m cells) is set in `cover`, under which no procedural, frontage or shed lot is built, the town centres' blocks hide
+(their vertex ranges collapsed in `akl-centres`), and the terrain shader reads the cells from rows below the site mask's
+in the same texture (`setHouseMask` / `updateHouseMask`: no sampler unit to spare) and paints no procedural lots, sheds
+or streets there; its ground is gardens where the 3D houses are drawn and fades to the suburbs' far average as they
+thin out (`realHouseShare`, the scatter's curve). Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
+tiles come and go: +1 draw call) and the trees keep off them. The scatter tiles under a changed tile regenerate
+(`TileScatter.invalidate`), drawn as they were until then. The service worker never precaches the tiles and keeps them
+in a cache of their own (`f35a-tiles-<VERSION>`). Until a tile has loaded, offline, and without the files, the
+procedural suburbs stay.
+
 **Landmark buildings (#124).** `src/world/scenery/aucklandLandmarks.ts` loads `auckland-landmarks.bin` (baked by
 `tools/linz/landmark-buildings.py` + `.ts`: OSM hospital, mall, station and school sites, the LINZ outlines inside them
 with their 2024 LiDAR roof levels, the station platforms moved beside the railway ribbons, and the outlines over 600 m²
