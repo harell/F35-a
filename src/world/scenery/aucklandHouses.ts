@@ -201,7 +201,11 @@ export function encodeHouses(houses: HouseRecord[], palette: number[], cover: Co
   return out;
 }
 
-export function decodeHouses(bytes: Uint8Array): RealHouses {
+/**
+ * Decode a houses file. `palette`: the colours when the file carries none (the corridor's streamed tiles, #126, share
+ * one palette from their manifest: corridorHouses.ts).
+ */
+export function decodeHouses(bytes: Uint8Array, shared: readonly number[] | null = null): RealHouses {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (bytes.length < 16 || String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== MAGIC || dv.getUint32(4, true) !== VERSION) throw new Error('bad houses header');
   const count = dv.getUint32(8, true);
@@ -229,6 +233,7 @@ export function decodeHouses(bytes: Uint8Array): RealHouses {
   o += 2;
   const palette: number[] = [];
   for (let k = 0; k < np; k++) palette.push((u8() << 16) | (u8() << 8) | u8());
+  if (!np && shared) palette.push(...shared);
   need(6);
   const cell = dv.getUint16(o, true);
   const nCells = dv.getUint32(o + 2, true);
