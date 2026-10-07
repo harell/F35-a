@@ -246,6 +246,22 @@ and both rotors merged, the rotors turned in the vertex shader); their `Aircraft
 (`AircraftPrototype.instanced`), only the pose, LOD distance and nav-light anchors, which join the shared sprite batch.
 The Eagle's searchlight is one more instanced draw, at night only.
 
+## Named superyachts (#145)
+
+Koru, Serene, A and Aquijo are civil ships like the merchant ships, each yacht a `VesselClass` of her own
+(`SuperyachtId`, `src/core/superyachts.ts`): her shape data there (length, beam, colours, bow rake, tumblehome,
+superstructure tiers, masts or radar mast) sizes the sim's hull volume (`VESSEL_DATA`), the ship motion and sinking
+(`SHIP_DIMS`, the masts included) and the model, built in code by `src/render/models/superyachts.ts` (one merged mesh,
+one draw call, the glossy `yacht` material; night lights through `ShipLight`: navigation, lit windows, blue underwater
+lights, red obstruction lights on the mast tops). `SUPERYACHT_BERTHS` (Koru on Wynyard Wharf, A at Silo Marina, Aquijo in
+the Viaduct) is a static table checked against the LINZ coast and the OSM quays (`tests/civil-superyachts.test.ts`);
+the marina scenery keeps its small yachts out of it (`inSuperyachtBerth`). `src/missions/runtime/superyachts.ts` spawns
+them per Auckland sortie with the civil traffic, and Serene under way on `YACHT_LANE` (a harbour loop toward North Head
+at 10 kn; always in the stroll, half the combat sorties), whose wake the shared `WakeBatch` draws. Neutral and boxed CIV,
+a yacht is named on the designated box, the TSD and the PCD (`trackLabel`: "KORU"); one bomb or missile or a held gun
+pass sinks her, a civilian loss ("CIVILIAN YACHT DESTROYED", −500, −0.15 rating, a debrief row naming her,
+`MissionResultExt.civilianYachts`), never a kill or a failed sortie.
+
 ## Harbour ferries and wakes (render-only)
 
 The harbour ferries are not sim entities: no radar, no targeting, no sim cost. `src/render/traffic/ferryRoutes.ts`

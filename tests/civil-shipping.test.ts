@@ -14,6 +14,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { VESSEL_DATA } from '../src/sim/damage/tables';
+import { isSuperyachtId } from '../src/core/superyachts';
 import { isCivilVessel, vesselHullDistance, vesselSegmentHit } from '../src/sim/civil/vessels';
 import type { SimWorld } from '../src/sim/api';
 import type { GroundTargetEntity } from '../src/sim/entities';
@@ -168,7 +169,8 @@ describe('civil shipping in missions', () => {
         runner.update(world, DT);
       }
     };
-    const ships = () => world.ground.filter((g) => g.team === 'neutral' && g.type === 'ship'); // (not the civil trains, #146)
+    // (not the civil trains, #146, nor the named superyachts, #145: tests/civil-superyachts.test.ts)
+    const ships = () => world.ground.filter((g) => g.team === 'neutral' && g.type === 'ship' && !isSuperyachtId(g.vessel));
     return { world, runner, radio, hud, tick, ships };
   }
 

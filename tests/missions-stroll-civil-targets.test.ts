@@ -18,6 +18,7 @@ import { setQuatFromHPR } from '../src/sim/flight/attitude';
 import type { AircraftEntity, Entity } from '../src/sim/entities';
 import { FERRY_LENGTH } from '../src/render/traffic/ferryRoutes';
 import { VESSEL_DATA } from '../src/sim/damage/tables';
+import { SUPERYACHT_IDS, isSuperyachtId } from '../src/core/superyachts';
 import { FlatTerrain } from './combat-helpers';
 
 const DT = 1 / 60;
@@ -43,7 +44,8 @@ describe('A Stroll in the Park: civil targets', () => {
   it('every merchant class sails (container, cruise, tanker) and the player can designate each, and an airliner', () => {
     const m = sortie(instant('stroll'));
     m.tick(40); // the first departure is off the runway
-    const ships = m.world.ground.filter((g) => g.type === 'ship' && g.team === 'neutral');
+    // (the merchant ships; the named superyachts, #145, are tests/civil-superyachts.test.ts's)
+    const ships = m.world.ground.filter((g) => g.type === 'ship' && g.team === 'neutral' && !isSuperyachtId(g.vessel));
     expect(new Set(ships.map((g) => g.vessel))).toEqual(new Set(['container', 'cruise', 'tanker']));
     const airliner = m.world.aircraft.find((a) => a.civil && a.alive)!;
     expect(airliner).toBeTruthy();
@@ -77,12 +79,21 @@ describe('A Stroll in the Park: civil targets', () => {
     // beyond the DAS (15 km) and the gun's ACM radar (18.5 km), yet every airliner is a contact
     expect(Math.min(...civil.map((a) => a.position.distanceTo(p.position)))).toBeGreaterThan(15_000);
     for (const a of civil) expect(p.radar.contacts.some((c) => c.id === a.id), a.callsign).toBe(true);
-    m.world.combat.cycleTarget(p, m.world);
-    // TGT steps to a civil aircraft: an airliner, or one of the civil helicopters (#144), which broadcast ADS-B too
+    // TGT steps to a civil aircraft: an airliner, or one of the civil helicopters (#144), which broadcast ADS-B too.
+    // The superyachts moored near the tour's start (#145) are civil contacts of the EOTS too, so it may box one of
+    // them on the way: a few presses reach an aircraft.
     const helis = m.world.aircraft.filter((a) => a.heli && a.alive);
     expect(helis.length).toBeGreaterThan(0);
     for (const h of helis) expect(p.radar.contacts.some((c) => c.id === h.id), h.callsign).toBe(true);
-    expect([...civil, ...helis].map((a) => a.id)).toContain(p.radar.designatedId);
+    const air = new Set([...civil, ...helis].map((a) => a.id));
+    const boxed: (number | null)[] = [];
+    for (let i = 0; i < 12 && !air.has(p.radar.designatedId ?? -1); i++) {
+      m.world.combat.cycleTarget(p, m.world);
+      boxed.push(p.radar.designatedId);
+    }
+    expect(air.has(p.radar.designatedId ?? -1), `boxed ${boxed.join(', ')}`).toBe(true);
+    // anything boxed on the way was a civil yacht
+    for (const id of boxed) if (id !== null && !air.has(id)) expect(isSuperyachtId((m.world.getEntity(id) as { vessel?: string }).vessel)).toBe(true);
     m.runner.dispose?.();
   });
 
@@ -156,12 +167,13 @@ describe('A Stroll in the Park: civil targets', () => {
       ...CAMPAIGNS.flatMap((c) => c.missions),
     ];
     const smallest = Math.min(...Object.values(VESSEL_DATA).map((v) => v.length));
-    expect(smallest).toBeGreaterThan(FERRY_LENGTH * 3);
+    // (the smallest sim ship is a superyacht, #145: Aquijo, 86 m, against a 34 m ferry)
+    expect(smallest).toBeGreaterThan(FERRY_LENGTH * 2.4);
     for (const def of defs) {
       const m = sortie(def);
       for (const g of m.world.ground) {
         // (a civil train, #146, is a neutral ground entity too, but no ship)
-        if (g.team === 'neutral' && g.type !== 'train') expect(['container', 'cruise', 'tanker'], `${def.id}: ${g.name}`).toContain(g.vessel);
+        if (g.team === 'neutral' && g.type !== 'train') expect(['container', 'cruise', 'tanker', ...SUPERYACHT_IDS], `${def.id}: ${g.name}`).toContain(g.vessel);
       }
       m.runner.dispose?.();
     }
