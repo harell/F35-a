@@ -22,6 +22,7 @@ import {
   UnsignedByteType,
   Vector3,
   type Camera,
+  type CompressedTexture,
   type Scene,
   type WebGLRenderer,
 } from 'three';
@@ -90,8 +91,9 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
   // the main thread while the terrain generates, needed only for the GPU objects below.
   const aerialLoad = cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
-  // … and the outer photo (#120: the rest of Devonport, the gulf islands), the same tiers
-  const aerialOuterLoad = cfg.aerial ? loadAucklandAerialOuter(cfg.aerial) : null;
+  // … and the outer photo (#120: the rest of Devonport, the gulf islands), the same tiers; the high tier's is KTX2,
+  // transcoded in a worker for this GPU
+  const aerialOuterLoad = cfg.aerial ? loadAucklandAerialOuter(cfg.aerial, renderer) : null;
   // The real land use (#122, medium and high only: its grid is 12.5 MB on the GPU)
   const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
   await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad]);
@@ -240,7 +242,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   dummyTex.needsUpdate = true;
   let aerial: AerialPhotoInfo | null = null;
   const aerialImage = aerialLoad ? await aerialLoad : null;
-  const aerialOuterImage = aerialOuterLoad ? await aerialOuterLoad : null;
+  const aerialOuterPhoto = aerialOuterLoad ? await aerialOuterLoad : null;
   const photoTexture = (img: ImageBitmap | HTMLImageElement) => {
     const t = new Texture(img);
     // row 0 is the north edge (z0) at v = 0; the alpha channel is a mask, not coverage
@@ -255,6 +257,16 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     t.needsUpdate = true;
     return t;
   };
+  // a KTX2 atlas (aucklandAerial.ts): its mips come with it, in the GPU's block format; same sampling as photoTexture
+  const compressedPhotoTexture = (t: CompressedTexture) => {
+    t.colorSpace = SRGBColorSpace;
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = LinearFilter;
+    t.minFilter = t.mipmaps.length > 1 ? LinearMipmapLinearFilter : LinearFilter;
+    t.anisotropy = Math.min(maxAniso, cfg.anisotropy);
+    t.needsUpdate = true;
+    return t;
+  };
   if (aerialImage) {
     const t = photoTexture(aerialImage);
     // graded toward the procedural suburbs it fades into, fully from dawn on (#61)
@@ -265,10 +277,11 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     const grade = aerialGrade(imageMeanLinear(aerialImage), target, opts.timeOfDay);
     // the outer photo (#120) only with the square: it shares its grade, and its Devonport boxes continue it
     let outer: AerialPhotoInfo['outer'] = null;
-    if (aerialOuterImage && cfg.aerial) {
+    if (aerialOuterPhoto && cfg.aerial) {
       const uv = aerialOuterUv(cfg.aerial);
-      const m = imageAlphaMask(aerialOuterImage);
-      outer = { texture: photoTexture(aerialOuterImage), boxes: AERIAL_OUTER, uv, cover: m ? { ...m, uv } : null };
+      const p = aerialOuterPhoto;
+      const m = p.texture ? p.cover && imageAlphaMask(p.cover) : imageAlphaMask(p.image);
+      outer = { texture: p.texture ? compressedPhotoTexture(p.texture) : photoTexture(p.image), boxes: AERIAL_OUTER, uv, cover: m ? { ...m, uv } : null };
     }
     aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade, houseRadius: cfg.houseRadius, outer };
   }

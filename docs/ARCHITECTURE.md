@@ -179,7 +179,9 @@ suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it
 procedural ground stays. **The outer photo (#120)** continues it over the rest of the Devonport peninsula (same
 resolution) and over the gulf islands' land (Rangitoto, Motutapu, Rakino, Motuihe, Browns Island, Waiheke; 5 m on
 high, 10 m on medium): boxes packed into one atlas per tier (`AERIAL_OUTER` from `auckland-aerial-outer.json`,
-`auckland-aerial-outer-<2048|4096>.webp`), loaded with the square (and only with it: it takes the square's grade).
+`auckland-aerial-outer-2048.webp`; on high `auckland-aerial-outer-4096.ktx2`, GPU-compressed ETC1S that three.js's
+`KTX2Loader` transcodes in a worker to the GPU's block format, ≈ 35 MB instead of ≈ 140 MB, with its alpha in
+`auckland-aerial-outer-cover.png`), loaded with the square (and only with it: it takes the square's grade).
 The terrain shader's `aerialPhoto()` sums the square's weight and every box's (alpha × the box's own edge fade,
 sampled with `textureGrad`); the Devonport boxes overlap the square by their 320 m feather so the fades cross over.
 The scatters keep off where that sum is over ½ (`aerialCovers(x, z, cover)`, the outer alpha read back once at load
