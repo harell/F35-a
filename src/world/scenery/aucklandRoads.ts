@@ -10,15 +10,17 @@
  *  - the motorway carriageways of the whole theatre (road ribbons, motorways.ts),
  *  - the main arterials and the streets round the stadiums outside the region (road ribbons),
  *  - the railway lines (kind ROAD_RAIL, ballast-and-track ribbons, width = the formation),
+ *  - the local roads of the gulf islands and the Devonport peninsula (kind ROAD_LOCAL, #127), where the real houses
+ *    stand (aucklandHouses.ts) and the procedural street grid is off,
  *  - the CBD region polygon: the area that uses the real streets instead of the procedural grid.
  *    Its border runs along Jervois Rd / Shelly Beach Rd, the SH1 / SH16 carriageways, Stanley St /
  *    Beach Rd and out into the harbour, so the hand-over to the procedural suburbs happens under a motorway, not across a block.
- * One small gzip file (≈ 40 kB), fetched once per page load next to the LINZ terrain. When it is
+ * One small gzip file (≈ 68 kB), fetched once per page load next to the LINZ terrain. When it is
  * missing the theatre falls back to the hand-traced motorways and the procedural CBD grid.
  *
  * Format (little-endian): 'AKLR' | u32 version | f32 quantum (m) | u32 names | u32 lines | u32 region
  * vertices | names (u8 length + UTF-8) | region vertices | lines: varint name, u8 kind, u8 width
- * (0.5 m units), u8 flags (bit 0 = tunnel), varint vertex count, vertices. Vertices are zig-zag varint
+ * (0.5 m units), u8 flags (bit 0 = tunnel, bit 1 = unsealed), varint vertex count, vertices. Vertices are zig-zag varint
  * deltas (in quanta) from the previous vertex written (the first from the origin).
  */
 import roadsUrl from '../terrain/data/auckland-roads.bin?url';
@@ -32,7 +34,12 @@ export const ROAD_MOTORWAY = 1;
 export const ROAD_ARTERIAL = 2;
 /** Railway lines (Topo50 railway centrelines, baked by tools/linz/railways.ts). */
 export const ROAD_RAIL = 3;
-export type RoadKind = typeof ROAD_STREET | typeof ROAD_MOTORWAY | typeof ROAD_ARTERIAL | typeof ROAD_RAIL;
+/**
+ * Local roads where the real houses stand (#127: the gulf islands and the Devonport peninsula, baked by
+ * tools/linz/islandRoads.ts): unlit two-lane, one-lane and gravel road ribbons, no frontage lots.
+ */
+export const ROAD_LOCAL = 4;
+export type RoadKind = typeof ROAD_STREET | typeof ROAD_MOTORWAY | typeof ROAD_ARTERIAL | typeof ROAD_RAIL | typeof ROAD_LOCAL;
 
 export interface RoadLine {
   name: string;
@@ -40,6 +47,8 @@ export interface RoadLine {
   /** Carriageway width, kerb to kerb (m). */
   width: number;
   tunnel: boolean;
+  /** An unsealed (metalled or unmetalled) road: local roads only (Topo50 surface). */
+  unsealed?: boolean;
   /** Flat [x0, z0, x1, z1, ...] (m, game XZ). */
   pts: Float32Array;
 }
@@ -158,7 +167,7 @@ export function encodeRoads(d: RoadData, quantum = 0.5): Uint8Array {
     w.varint(nameIdx.get(l.name)!);
     w.u8(l.kind);
     w.u8(Math.max(1, Math.min(255, Math.round(l.width * 2))));
-    w.u8(l.tunnel ? 1 : 0);
+    w.u8((l.tunnel ? 1 : 0) | (l.unsealed ? 2 : 0));
     w.varint(l.pts.length / 2);
     pts(l.pts);
   }
@@ -210,9 +219,12 @@ export function decodeRoads(bytes: Uint8Array): RoadData {
     const name = names[varint()];
     const kind = bytes[o++] as RoadKind;
     const width = bytes[o++] / 2;
-    const tunnel = (bytes[o++] & 1) === 1;
+    const flags = bytes[o++];
+    const tunnel = (flags & 1) === 1;
     const n = varint();
-    lines.push({ name, kind, width, tunnel, pts: pts(n) });
+    const line: RoadLine = { name, kind, width, tunnel, pts: pts(n) };
+    if (flags & 2) line.unsealed = true;
+    lines.push(line);
   }
   if (o !== bytes.length) throw new Error('bad LINZ roads size');
   return { region, lines };

@@ -107,7 +107,7 @@ Coordinates: game origin = Sky Tower, +X east, +Z south, the equirectangular pro
 
 # Phase 2a: roads (CBD streets, motorways, arterials)
 
-`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 38 kB gzip with the railways), fetched next to
+`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 68 kB gzip with the railways and the island and Devonport roads), fetched next to
 the terrain data (`src/world/scenery/aucklandRoads.ts`). Same licence and attribution as above.
 
 | Product | LDS layer | Used for |
@@ -166,6 +166,39 @@ At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over 
 distance, parks and the hero neighbourhoods' gardens, motorway verges); the shader and the JS placement code read the same
 texels. Since the region took in Herne Bay and Westhaven it is ≈ 1190 × 790 texels (3.7 MB of GPU memory, ≈ 0.22 s to
 build on the cloud container, ≈ 0.1 s before).
+
+## Island and Devonport roads (#127)
+
+`islandRoads.ts` adds every road of the gulf islands (Waiheke, Rangitoto, Motutapu, Motuihe, Rakino, Rotoroa, Pakatoa)
+and of the Devonport peninsula to the same file as **local roads** (kind `ROAD_LOCAL`): where #121's real houses stand
+(the coverage grid of `auckland-houses.bin`) and the procedural street grid is off. `roads.ts` runs it in a full re-bake;
+after a re-bake of the houses, `island-roads.ts` replaces just the local roads:
+
+```sh
+npx vite-node tools/linz/island-roads.ts <work> [preview.svg]   # SVG_BOX="x0,z0,x1,z1" picks the preview's view
+```
+
+| Product | LDS layer | Used for |
+|---|---|---|
+| NZ Addresses: Road Sections | 123109 | every section on the coverage, outside the CBD region and not along a ribbon already baked (Lake Rd, Victoria Rd, Bayswater Ave) |
+| NZ Road Centrelines (Topo, 1:50k) | 50329 | the surface (`surface`: sealed / metalled / unmetalled, `lane_count`), matched to a section by road id (`rna_sufi` = `road_id`) within 40 m or any line within 20 m, the section's majority; and the island roads with no address sections (Rangitoto's summit and Islington Bay roads, Motutapu's and Motuihe's farm roads), sealed and metalled only, where they run over 25 m from every address section |
+
+- Left out: footpaths (accessways, walks, steps, tracks), and the address data's placeholder "roads" with no road type
+  named after an island, bay, inlet or beach (Motutapu Island, Rotoroa Island, Matiatia Bay, Blackpool Beach): lines
+  round a shore, up to 15 m out to sea. Stretches off the coastline longer than 60 m (wharves) are cut; shorter ones
+  (causeways) stay, drawn at least 1.2 m over the water, without a deck.
+- Widths (m): island roads 7 for the sealed spine (`ISLAND_MAIN`: Ocean View, Onetangi, Waiheke, Te Whau, Orapiu, …),
+  6 for other sealed roads, 4.5 for one-lane roads, lanes and every unsealed road; Devonport's streets 9 (parking both
+  sides), lanes and places 6.
+- 2026-10-07: 1,257 sections (80 footpaths, motorways and placeholders skipped) and 44.8 km from Topo50 → 894 ribbons:
+  islands 129.0 km sealed + 80.8 km unsealed, Devonport 58.8 km. The file grew from 46.9 kB to 67.8 kB gzip (89 kB raw).
+- Checked on the 2024 photo (the 2.4 m mosaics `aerial.py` caches, every ribbon drawn on them): Waiheke's, Rakino's and
+  Devonport's roads lie on the photographed roads; the Topo50 lines on Rangitoto and Motutapu within a few metres in most
+  places, ≈ 10–20 m off on some bends (1:50k).
+
+At runtime `RoadNetwork` holds them like the other ribbons (houses, real houses, trees and the canopy keep off), drawn
+as one mesh of their own (`akl-local-roads`, Scenery.ts): two vertices across, unlit, no lamp posts and no frontage lots,
+the sealed or gravel half of `createLocalRoadTexture`.
 
 # Railways (#31)
 
