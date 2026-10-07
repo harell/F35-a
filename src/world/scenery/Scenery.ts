@@ -43,7 +43,7 @@ import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createLogoMaterial, createRoadMaterial, createSignMaterial } from './materials';
 import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
-import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
+import { createConcreteTexture, createMotorwayTexture, createLocalRoadTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
 import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource, type CanopyTrees, type MeasuredTrees } from './sources';
 import type { Canopy } from '../terrain/theaters/aucklandCanopy';
@@ -348,7 +348,9 @@ export class Scenery {
         this.tamakiTrees = { trees: tamakiTrees(td, tdGround), covers: tdCovers! };
       }
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
-      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail', { ground: tdGround, noLamp: tdCovers });
+      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail' && p.kind !== 'local', { ground: tdGround, noLamp: tdCovers });
+      // the local roads of the islands and Devonport (#127): unlit, their own texture (sealed / gravel), one draw call
+      const localGeo = roads.paths.some((p) => p.kind === 'local') ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'local') : null;
       // railway ribbons (+ bridges over the water): one more draw call
       const railGeo = rails.length ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'rail') : null;
       addMesh(centres, 'akl-centres');
@@ -364,6 +366,19 @@ export class Scenery {
       roadMesh.renderOrder = -4;
       roadMesh.matrixAutoUpdate = false;
       this.group.add(roadMesh);
+      if (localGeo) {
+        const localTex = createLocalRoadTexture();
+        localTex.anisotropy = o.cfg.anisotropy;
+        this.textures.push(localTex);
+        const localMat = createRoadMaterial(o.atmo, localTex);
+        this.materials.push(localMat);
+        this.geometries.push(localGeo);
+        const localMesh = new Mesh(localGeo, localMat);
+        localMesh.name = 'akl-local-roads';
+        localMesh.renderOrder = -4;
+        localMesh.matrixAutoUpdate = false;
+        this.group.add(localMesh);
+      }
       if (railGeo) {
         const railTex = createRailTexture();
         railTex.anisotropy = o.cfg.anisotropy;
