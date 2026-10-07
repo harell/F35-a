@@ -8,7 +8,12 @@
  * 4.0): every side of each tower as an orthographic elevation in the frame of its shaft's box (face-aligned, 0.2 m a
  * pixel, a 5 m grid), positions by eye to about ±1 m, colours the median of each zone (white-balanced as
  * cbd_towers_colours.py does). The mesh's heights are its own: `dy` moves them onto the LiDAR heights the kit uses,
- * matched at the main roof. Signs are drawn as text with a simple stand-in mark (towerSkins.ts), not the logo files.
+ * matched at the main roof. Signs are drawn as text with a simple stand-in mark (towerLogos.ts), not the logo files.
+ *
+ * Issue #213 took it to all 47 Tier A and B towers (#156 rows 1–47; Tier C, rows 48–116, deferred by the owner): the
+ * street sides checked on Mapillary, the signs, crowns and night looks (which letters are lit) from dated photos, and
+ * the towers finished after the 2023 mesh (Seascape, 51 Albert, Fifty Albert) from photos alone. Each row's comment
+ * says what it shows and where a part of it came from when that isn't the mesh.
  */
 
 /** Wall finish of a zone: the kit's facades (cbdTowers.ts) plus `glow` (a lit panel at night), `none` (plain),
