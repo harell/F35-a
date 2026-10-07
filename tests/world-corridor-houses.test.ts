@@ -345,6 +345,26 @@ describe('the scatters under a loaded tile', () => {
     expect(gen).toBe(n + 1);
     expect(sc.instanceCount).toBe(drawn);
   });
+
+  it("reports how far a scatter's instances reach when its capacity runs out (the terrain's ground fades there)", () => {
+    const src: ScatterSource = {
+      kinds: 1,
+      generate(x0, z0, _size, out) {
+        for (let k = 0; k < 10; k++) out.data[0].push(x0 + k, 0, z0 + 1, 0, 1, 1, 1, 1, 1, 1, 0, 0);
+      },
+    };
+    const geo = new BoxGeometry();
+    const mat = new MeshBasicMaterial();
+    const roomy = new TileScatter(src, [{ geometry: geo, material: mat, capacity: 10_000, kind: 0 }], 300, 1500, 1000);
+    roomy.update(new Vector3());
+    expect(roomy.reach[0]).toBe(Number.POSITIVE_INFINITY);
+    const tight = new TileScatter(src, [{ geometry: geo, material: mat, capacity: 95, kind: 0 }], 300, 1500, 1000);
+    tight.update(new Vector3());
+    expect(tight.instanceCount).toBe(95);
+    // ten tiles' worth fit: the nearest ten tiles lie within ≈ 450 m of the camera
+    expect(tight.reach[0]).toBeGreaterThan(0);
+    expect(tight.reach[0]).toBeLessThan(600);
+  });
 });
 
 describe('the service worker', () => {

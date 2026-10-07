@@ -74,6 +74,12 @@ export class TileScatter {
   private lastTz = Number.NaN;
   private pending: { tx: number; tz: number; d: number }[] = [];
   private dirty = false;
+  /**
+   * Per mesh: how far (m, horizontally) its instances reach, Infinity when every tile in range fitted its capacity; else
+   * the near edge of the first tile it ran out in (the terrain fades the real houses' ground to the suburbs' far average
+   * past it, #126).
+   */
+  readonly reach: number[] = [];
   /** Camera height above ground (m): instances thin out with slant range, not map distance. */
   private agl = 0;
   private aglBucket = -1;
@@ -189,12 +195,17 @@ export class TileScatter {
       }
       // the crowns left widen to keep part of the cover the thinned ones gave (up to FIT_WIDEN ×)
       const widen = Math.min(FIT_WIDEN, 1 / Math.sqrt(fit));
+      this.reach[si] = Infinity;
       for (const { t, d } of list) {
         // rank-based thinning with slant range: keep everything near, ~22 % at the edge, none beyond
         const keep = scatterKeep(Math.sqrt(d * d + agl2), R) * fit;
         if (keep <= 0) continue;
         const arr = t.inst.data[spec.kind];
-        for (let i = 0; i < arr.length && n < spec.capacity; i += REC) {
+        for (let i = 0; i < arr.length; i += REC) {
+          if (n >= spec.capacity) {
+            this.reach[si] = Math.max(0, d - ts * 0.71);
+            break;
+          }
           if (arr[i + 10] > keep) continue;
           _p.set(arr[i], arr[i + 1], arr[i + 2]);
           _q.setFromAxisAngle(_up, arr[i + 3]);

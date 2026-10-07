@@ -460,6 +460,11 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       if (cam) {
         const agl = cam.position.y - terrainQuery.surfaceHeightAt(cam.position.x, cam.position.z);
         scenery.update(cam.position, agl);
+        // the corridor's real houses (#126): their ground turns to the far average past where the scatter's houses end
+        if (scenery.corridor) {
+          const r = scenery.houseReach;
+          terrain.setRealHouseCut(Number.isFinite(r) ? Math.hypot(r, Math.max(0, agl)) : 1e9);
+        }
       }
     },
 

@@ -377,6 +377,7 @@ export class TerrainRenderer {
         uHouseMaskRect: { value: new Vector4(0, 0, 1, 0) },
         uHouseMaskRows: { value: new Vector2(1, 0) },
         uRealHouseR: { value: 0 },
+        uRealHouseCut: { value: 1e9 },
         // the districts an arterial runs through turn their grid to it (urbanGrid.ts districtAngles)
         uDistAngles: { value: o.dummy },
         uDistAngleRect: { value: new Vector4(0, 0, 0, 0) },
@@ -547,6 +548,14 @@ export class TerrainRenderer {
     this.houseMask = mask;
     this.material.uniforms.uRealHouseR.value = mask ? radius : 0;
     this.installSiteMasks();
+  }
+
+  /**
+   * The slant range (m) past which the house scatter drew no real house this frame (its capacity ran out: Scenery.houseReach),
+   * where the house mask's ground turns to the suburbs' far average.
+   */
+  setRealHouseCut(range: number): void {
+    this.material.uniforms.uRealHouseCut.value = Math.min(range, 1e9);
   }
 
   /** Upload the house mask's texel rows [r0, r1) again (a corridor tile came or went). */

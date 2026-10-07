@@ -785,6 +785,11 @@ export class Scenery {
     this.bridgeCollapse?.update(world);
   }
 
+  /** How far (m, horizontally) the house scatter's houses reach this frame (Infinity: every tile in range fitted). */
+  get houseReach(): number {
+    return this.houses?.reach[0] ?? Number.POSITIVE_INFINITY;
+  }
+
   get idle(): boolean {
     return (this.trees?.idle ?? true) && (this.houses?.idle ?? true) && !(this.houses?.visible && this.corridor?.busy) && !this.corridorRoadsDirty;
   }

@@ -196,6 +196,7 @@ uniform vec2 uSiteMaskSize; // the texture's texels across, down: the site rows,
 uniform vec4 uHouseMaskRect; // the corridor's loaded real houses (#126, corridorHouses.ts): x0, z0, cell, texels across
 uniform vec2 uHouseMaskRows; // its texels down, its first row in uSiteMask
 uniform float uRealHouseR; // the house scatter's radius (m): how far the real houses are drawn; 0 = none
+uniform float uRealHouseCut; // slant range (m) past which its capacity ran out this frame (TileScatter.reach)
 uniform sampler2D uDistAngles; // street grid angle of the districts an arterial runs through (urbanGrid.ts DistrictAngles)
 uniform vec4 uDistAngleRect; // cell index of texel (0, 0), texels across, down; across 0 = none
 uniform sampler2D uFrontCells; // road frontage (frontage.ts): candidate segments per cell (RGBA8 start, count)
@@ -341,7 +342,8 @@ float realHouseShare(float ds) {
   float R = uRealHouseR;
   if (R <= 0.0) return 0.0;
   float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);
-  return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds));
+  // (and none past where the scatter's capacity ran out: a dense real suburb fills it within ≈ 1 km)
+  return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds)) * (1.0 - smoothstep(uRealHouseCut - 150.0, uRealHouseCut + 50.0, ds));
 }
 
 // Real land-use class at wp (aucklandLandUse.ts landUseAt() is the same lookup); -1 without the grid, 0 = none.
