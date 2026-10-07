@@ -23,6 +23,8 @@ import {
 } from '../src/world/terrain/theaters/aucklandCanopy';
 import { ColorMapSampler, TreeSource, type CanopyTrees } from '../src/world/scenery/sources';
 import { REC, type TileInstances } from '../src/world/scenery/scatter';
+import { createFoliageMaterial } from '../src/world/scenery/materials';
+import type { AtmosphereUniforms } from '../src/world/sky/atmosphere';
 import { pointInRing } from '../src/world/scenery/cbdStreets';
 import { aucklandHouses, housesIn } from '../src/world/scenery/aucklandHouses';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
@@ -262,6 +264,12 @@ describe('the tree scatter grows the real canopy', () => {
     const [x0, z0] = bbox(a);
     const trees = grow(x0 + 2000, z0 + 2000, x0 + 2800, z0 + 2800);
     expect(trees.length / 3).toBeGreaterThan(500);
+    // they are flagged for the photo's colour (record aux ≥ 1: the foliage shader tints them where the photo covers)
+    const out: TileInstances = { data: [[], [], []] };
+    src.generate(x0 + 2000, z0 + 2000, 400, out);
+    for (const arr of out.data) for (let i = 0; i < arr.length; i += REC) expect(arr[i + 11]).toBeGreaterThanOrEqual(1);
+    expect(createFoliageMaterial({} as AtmosphereUniforms, { uAerial: { value: null } }).defines.AERIAL).toBe('');
+    expect(createFoliageMaterial({} as AtmosphereUniforms).defines.AERIAL).toBeUndefined();
     // Devonport village: the trees stand round the real houses, not in them
     const dv = grow(2400, -2400, 3600, -1200);
     expect(dv.length / 3).toBeGreaterThan(300);

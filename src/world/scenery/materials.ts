@@ -11,7 +11,7 @@
 import { AdditiveBlending, ShaderMaterial, type Color, type Texture, type Vector4 } from 'three';
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { AERIAL_LIGHT_GLSL } from '../terrain/terrainShader';
-import { AERIAL_NIGHT_MIX } from '../terrain/theaters/aucklandAerial';
+import { AERIAL_NIGHT_MIX, MAX_AERIAL_BOXES } from '../terrain/theaters/aucklandAerial';
 import { FACADE_BASE_Q, FACADE_STOREY_Q, ROOF_PHOTO, ROOF_Q, ROOF_TOP_Q, ROOF_WALL } from './GeometryBuilder';
 
 /** Height (m) of the parapet band a photo roof's walls take from the photo's roof border (#140). */
@@ -647,7 +647,58 @@ export function createLogoMaterial(atmo: AtmosphereUniforms, map: Texture): Shad
   });
 }
 
+// The aerial photo at a tree's trunk (#123): the terrain shader's aerialPhoto() (the square and the outer boxes, summed by
+// weight, graded) read in the vertex shader at a ≈ 12 m footprint (textureLod: no derivatives here).
+const FOLIAGE_PHOTO_GLSL = /* glsl */ `
+#ifdef AERIAL
+attribute float aPhoto;
+uniform sampler2D uAerial;
+uniform vec4 uAerialRect;
+uniform vec4 uAerialGrade;
+uniform sampler2D uAerialOuter;
+uniform vec4 uAerialBox[${MAX_AERIAL_BOXES}];
+uniform vec4 uAerialBoxUv[${MAX_AERIAL_BOXES}];
+uniform float uAerialBoxFeather[${MAX_AERIAL_BOXES}];
+uniform vec4 uAerialOuterBounds;
+const float PHOTO_FOOT = 12.0;
+vec4 treePhoto(vec2 wp) {
+  vec4 acc = vec4(0.0);
+  if (uAerialRect.z > 0.0) {
+    vec2 uv = (wp - uAerialRect.xy) * uAerialRect.z;
+    float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+    if (e > 0.0) {
+      float lod = log2(max(1.0, PHOTO_FOOT * uAerialRect.z * float(textureSize(uAerial, 0).x)));
+      vec4 p = textureLod(uAerial, uv, lod);
+      float w = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w));
+      acc = vec4(p.rgb * w, w);
+    }
+  }
+  if (acc.a < 1.0 && wp.x > uAerialOuterBounds.x && wp.y > uAerialOuterBounds.y && wp.x < uAerialOuterBounds.z && wp.y < uAerialOuterBounds.w) {
+    float size = float(textureSize(uAerialOuter, 0).x);
+    for (int i = 0; i < ${MAX_AERIAL_BOXES}; i++) {
+      vec4 b = uAerialBox[i];
+      if (b.z <= 0.0) break;
+      vec2 t = (wp - b.xy) * b.zw;
+      if (t.x <= 0.0 || t.y <= 0.0 || t.x >= 1.0 || t.y >= 1.0) continue;
+      float e = min(min(t.x, 1.0 - t.x) / b.z, min(t.y, 1.0 - t.y) / b.w);
+      vec4 a = uAerialBoxUv[i];
+      float lod = log2(max(1.0, PHOTO_FOOT * b.z * a.z * size));
+      vec4 p = textureLod(uAerialOuter, a.xy + t * a.zw, lod);
+      float w = p.a * smoothstep(0.0, 1.0, e / uAerialBoxFeather[i]);
+      acc += vec4(p.rgb * w, w);
+    }
+  }
+  if (acc.a <= 0.0) return vec4(0.0);
+  return vec4(acc.rgb / acc.a * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), min(acc.a, 1.0));
+}
+#endif
+`;
+
+/** Luminance of the broadleaf archetype's mean leaf colour (linear; archetypes.ts leafA / leafB): a vertex's own shade against it. */
+const LEAF_LUM = 0.072;
+
 const foliageVertex = /* glsl */ `
+${FOLIAGE_PHOTO_GLSL}
 #ifdef HOUSES
 // real houses (#121, sources.ts HouseSource): 1 + the roof's rise (m) above the eave; below 1 the archetype's own roof
 attribute float aRise;
@@ -671,6 +722,19 @@ void main() {
   vWorld = w.xyz;
   vNormal = normalize(mat3(m) * normal);
   vColor = vertexColor();
+  #ifdef AERIAL
+    // a tree of the real canopy on the photo (#123: record aux 1) takes the photo's colour under it, so its crown sits in
+    // the photographed forest instead of on it (the vertex's own shade against the leaf mean keeps its form)
+    if (aPhoto > 0.5) {
+      vec4 ph = treePhoto(m[3].xz);
+      #ifdef USE_COLOR
+        float shade = dot(color, vec3(0.2126, 0.7152, 0.0722)) / ${LEAF_LUM.toFixed(3)};
+      #else
+        float shade = 1.0;
+      #endif
+      vColor = mix(vColor, ph.rgb * shade * (0.85 + 0.3 * fract(aPhoto * 7.31)), ph.a);
+    }
+  #endif
   gl_Position = projectionMatrix * viewMatrix * w;
 }
 `;
@@ -693,12 +757,17 @@ void main() {
 }
 `;
 
-export function createFoliageMaterial(atmo: AtmosphereUniforms): ShaderMaterial {
+/**
+ * The trees' material. `aerial`: the photo's uniforms (TerrainRenderer aerialUniforms + aerialOuterUniforms): the real
+ * canopy's trees (#123, the `aPhoto` instance attribute > 0.5) take the photo's colour at their trunk.
+ */
+export function createFoliageMaterial(atmo: AtmosphereUniforms, aerial?: Record<string, { value: unknown }>): ShaderMaterial {
   return new ShaderMaterial({
     name: 'WorldFoliage',
     vertexShader: foliageVertex,
     fragmentShader: foliageFragment,
-    uniforms: { ...atmo },
+    uniforms: { ...atmo, ...(aerial ?? {}) },
+    defines: aerial ? { AERIAL: '' } : {},
     vertexColors: true,
   });
 }

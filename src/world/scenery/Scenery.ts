@@ -9,7 +9,7 @@ import type { QualitySettings, TheaterId } from '../../core/types';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { WorldConfig } from '../config';
-import { aerialUniforms, type AerialPhotoInfo, type TerrainStyle } from '../terrain/TerrainRenderer';
+import { aerialOuterUniforms, aerialUniforms, type AerialPhotoInfo, type TerrainStyle } from '../terrain/TerrainRenderer';
 import { aerialCovers } from '../terrain/theaters/aucklandAerial';
 import { createVegetation } from '../terrain/vegetation';
 import { GeometryBuilder } from './GeometryBuilder';
@@ -490,7 +490,8 @@ export class Scenery {
     // ── Instanced scatters ──
     const cmap = new ColorMapSampler(o.colorData, o.colorSize, hf.origin, hf.extent);
     const veg = createVegetation(o.theater, o.seed, features);
-    const foliage = createFoliageMaterial(o.atmo);
+    // the real canopy's trees (#123) take the photo's colour where it covers
+    const foliage = createFoliageMaterial(o.atmo, o.aerial && o.canopy ? { ...aerialUniforms(o.aerial, o.aerial.texture), ...aerialOuterUniforms(o.aerial.outer ?? null, o.aerial.texture) } : undefined);
     this.materials.push(foliage);
     const treeCap = Math.max(300, o.cfg.treeMax);
     const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry()];
@@ -511,9 +512,9 @@ export class Scenery {
     this.trees = new TileScatter(
       new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, o.theater === 'auckland' ? aucklandDomain() : null, this.tamakiTrees, canopy),
       [
-        { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
-        { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
-        { geometry: treeGeoms[TREE_CONIFER], material: foliage, capacity: treeCap, kind: TREE_CONIFER },
+        { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM, aux: 'aPhoto' },
+        { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: o.canopy ? treeCap * CANOPY_BROADLEAF_CAP : treeCap, kind: TREE_BROADLEAF, aux: 'aPhoto' },
+        { geometry: treeGeoms[TREE_CONIFER], material: foliage, capacity: treeCap, kind: TREE_CONIFER, aux: 'aPhoto' },
       ],
       400,
       o.cfg.treeRadius,
@@ -595,6 +596,13 @@ export class Scenery {
     for (const t of this.textures) t.dispose();
   }
 }
+
+/**
+ * With the real canopy (#123) the broadleaf mesh takes this × the tier's tree budget: a forest over a whole island (Rangitoto,
+ * Waiheke's bush) is many times the budget, and its crowns are what the photo's forest reads as at 1–3 km (≈ 16 triangles a
+ * crown).
+ */
+const CANOPY_BROADLEAF_CAP = 2;
 
 /** Either mask (a lot cleared by a road corridor or a landmark site), as HouseSource asks it. */
 function joinMasks(a: LotMask | null, b: LotMask | null): Pick<LotMask, 'masked'> | null {
