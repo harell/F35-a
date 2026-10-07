@@ -353,7 +353,15 @@ export function houseCoverage(h: RealHouses, cell = LOT_MASK_CELL): LotMask | nu
   const cols = Math.ceil((c.x0 + c.cols * c.cell - x0) / cell);
   const rows = Math.ceil((c.z0 + c.rows * c.cell - z0) / cell);
   const m = new LotMask(x0, z0, cols, rows, cell);
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) if (housesCover(h, x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell)) m.mark(i, j);
+  // per covered grid cell, the lot cells whose centre falls in it (the grid is sparse over the gulf)
+  for (let cj = 0; cj < c.rows; cj++)
+    for (let ci = 0; ci < c.cols; ci++) {
+      if (!c.bits[cj * c.cols + ci]) continue;
+      const gx = c.x0 + ci * c.cell;
+      const gz = c.z0 + cj * c.cell;
+      for (let j = Math.ceil((gz - z0) / cell - 0.5); z0 + (j + 0.5) * cell < gz + c.cell; j++)
+        for (let i = Math.ceil((gx - x0) / cell - 0.5); x0 + (i + 0.5) * cell < gx + c.cell; i++) m.mark(i, j);
+    }
   return m;
 }
 
@@ -370,8 +378,16 @@ export function unionMasks(a: LotMask | null, b: LotMask | null): LotMask | null
   for (const src of [a, b]) {
     const oi = Math.round((src.x0 - x0) / cell);
     const oj = Math.round((src.z0 - z0) / cell);
-    for (let j = 0; j < src.texH * 4; j++)
-      for (let i = 0; i < src.texW * 8; i++) if (src.masked(src.x0 + (i + 0.5) * cell, src.z0 + (j + 0.5) * cell)) m.mark(i + oi, j + oj);
+    // the set bits only (byte j & 3 of texel (i >> 3, j >> 2), bit i & 7: lotMask.ts)
+    const d = src.data;
+    for (let t = 0; t < d.length; t++) {
+      const v = d[t];
+      if (!v) continue;
+      const texel = t >> 2;
+      const i0 = (texel % src.texW) * 8;
+      const j = Math.floor(texel / src.texW) * 4 + (t & 3);
+      for (let bit = 0; bit < 8; bit++) if ((v >> bit) & 1) m.mark(i0 + bit + oi, j + oj);
+    }
   }
   return m;
 }
