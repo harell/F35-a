@@ -195,6 +195,16 @@ At night the procedural ground still runs under the photo for its lamps and lit 
 colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
 sit on the warmer procedural colour instead of a cool grey square.
 
+**Real houses under the photo (#121).** Where the photo covers the Devonport peninsula and the gulf islands, the house
+scatter draws the real houses instead (`src/world/scenery/aucklandHouses.ts`, `auckland-houses.bin`, ≈ 17,000 houses at
+8 bytes each, baked by `tools/linz/houses.py` + `houses.ts`): each LINZ outline up to 600 m² as an oriented rectangle with
+its LiDAR eave, ridge rise and photo roof colour, through the same instanced house and apartment archetypes
+(`HouseSource`; the roof's rise rides in the record's `aux` slot to the `aRise` attribute of the `HOUSES` shader), so no
+draw call is added. The file also carries its coverage (the land under those photo boxes, 32 m cells); `houseCoverage`
+turns it into lot-mask cells joined to `Scenery.siteMask`, so the procedural lots and streets (terrain shader), the
+procedural and frontage houses and the centres' blocks keep off it on every tier, by day and by night. Without the file
+the suburbs there are procedural again (and the photo keeps them off on medium and high, as before).
+
 **Photo roofs (#140).** The photo is a standard orthophoto, not a true one: a roof h m up is drawn displaced from its
 footprint by h × the camera's lean there (0.07 m per metre typically in the CBD, the mosaic switching frame to frame).
 `tools/linz/roofs.py` registers every LINZ building the game draws on the photo's 0.3 m source tiles (edge correlation of
