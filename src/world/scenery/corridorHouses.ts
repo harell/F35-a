@@ -89,7 +89,7 @@ export interface CorridorOptions {
   keepRadius: number;
   /** Requests in flight at once. */
   maxInFlight?: number;
-  /** A failed tile is asked for again after this (ms). */
+  /** A failed tile is asked for again after this (ms), doubling with each failure up to RETRY_MAX (offline: a few requests a minute, one warning a tile). */
   retryMs?: number;
 }
 
@@ -110,6 +110,8 @@ export interface CorridorStats {
 }
 
 const key = (i: number, j: number) => `${i}_${j}`;
+/** The longest a failed tile waits before it is asked for again (ms). */
+const RETRY_MAX = 300_000;
 
 /**
  * The corridor's streamed tiles: which to fetch as the camera moves, the loaded ones' houses, roads and coverage
@@ -125,6 +127,9 @@ export class CorridorHouses {
   private readonly entries = new Map<string, [number, number, number, number]>();
   private readonly pending = new Set<string>();
   private readonly failed = new Map<string, number>();
+  /** Failures in a row per tile (the retry backs off). */
+  private readonly fails = new Map<string, number>();
+  private retryCheck = 0;
   private readonly tmp: CorridorTile[] = [];
   private lastI = Number.NaN;
   private lastJ = Number.NaN;
@@ -158,7 +163,9 @@ export class CorridorHouses {
     // (re-list the tiles in range whenever the camera crosses a quarter tile)
     const qi = Math.floor((x * 4) / T);
     const qj = Math.floor((z * 4) / T);
-    if (qi !== this.lastI || qj !== this.lastJ || this.failed.size) {
+    // (and, while tiles have failed, once a second for their retries)
+    if (qi !== this.lastI || qj !== this.lastJ || (this.failed.size && now >= this.retryCheck)) {
+      this.retryCheck = now + 1000;
       this.lastI = qi;
       this.lastJ = qj;
       const R = this.opts.fetchRadius;
@@ -199,9 +206,11 @@ export class CorridorHouses {
         })
         .catch((err) => {
           this.pending.delete(k);
-          this.failed.set(k, Date.now() + (this.opts.retryMs ?? 20000));
+          const n = this.fails.get(k) ?? 0;
+          this.fails.set(k, n + 1);
+          this.failed.set(k, Date.now() + Math.min(RETRY_MAX, (this.opts.retryMs ?? 20000) * 2 ** n));
           this.count();
-          console.warn(`[world] corridor tile ${k} unavailable, keeping the procedural suburbs there`, err);
+          if (!n) console.warn(`[world] corridor tile ${k} unavailable, keeping the procedural suburbs there`, err);
         });
     }
   }
@@ -218,6 +227,7 @@ export class CorridorHouses {
     if (old) this.setCover(old, false);
     this.tiles.set(k, t);
     this.setCover(t, true);
+    this.fails.delete(k);
     this.stats.installs++;
     this.stats.bytes += t.bytes;
     this.count();
