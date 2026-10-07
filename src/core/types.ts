@@ -278,7 +278,7 @@ export interface QualitySettings {
   hdTerrain: boolean;
   /**
    * Real aerial photo of the CBD and waterfront, plus the rest of the Devonport peninsula and the gulf islands
-   * (Auckland, lazily loaded: ≈ 270 + 260 kB on the medium tier, 630 + 590 kB on high: terrainDetail 1 → 2048²
+   * (Auckland, lazily loaded: ≈ 270 + 280 kB on the medium tier, 630 + 600 kB on high: terrainDetail 1 → 2048²
    * and the 2048-wide outer atlas, 2 → 4096² and the 4096-wide one). Low never downloads it.
    */
   aerialPhoto: boolean;

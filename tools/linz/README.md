@@ -282,8 +282,8 @@ database for these tags).
 `aerial-mask.ts` and `aerial.py` bake the LINZ Auckland 0.075 m Urban Aerial Photos (2024–2025) into
 `src/world/terrain/data/auckland-aerial-2048.webp` (≈ 274 KiB, medium tier) and `auckland-aerial-4096.webp`
 (≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`, and (#120) the outer atlas of the rest
-of the Devonport peninsula and the gulf islands, `auckland-aerial-outer-2048.webp` (≈ 257 KiB, medium) and
-`auckland-aerial-outer-4096.webp` (≈ 584 KiB, high) with its layout `auckland-aerial-outer.json`. Same licence and
+of the Devonport peninsula and the gulf islands, `auckland-aerial-outer-2048.webp` (≈ 272 KiB, medium) and
+`auckland-aerial-outer-4096.webp` (≈ 599 KiB, high) with its layout `auckland-aerial-outer.json`. Same licence and
 attribution as above.
 
 | Product | Source | Used for |
@@ -342,8 +342,11 @@ filtering and the first mips never mix in a neighbour:
   Overlapping boxes fade across each other over their feather; the weights add up to ≥ 1 there, so the only fade on
   the peninsula's land is the one across the neck north of Belmont (z −5500 … −5180).
 - **Islands' alpha** = the land wholly inside the box (a land component the box's edge cuts, Ponui's tip inside
-  Waiheke's box, stays procedural); decks are left out there.
-- **Resolution.** Measured per tier before choosing: the whole atlas is 257 KiB on medium and 584 KiB on high (the
+  Waiheke's box, stays procedural); decks are left out there. It also reaches 90 m out to sea (`SEA_BAND`, the
+  photo's real shallows and beaches): the islands lie beyond the 32 km coast mask round the city, where the drawn
+  shoreline is the heightfield's own (86 m cells on medium), and a strip of terrain standing above the water between
+  it and the LINZ line read as bright procedural grass round every bay (the sea covers the rest of the band).
+- **Resolution.** Measured per tier before choosing: the whole atlas is 272 KiB on medium and 599 KiB on high (the
   islands at 5 m and Devonport at 1.25 m are in the high one). At 5 m the high atlas is 4096 × 6724 (147 MB of GPU
   memory with mips); the islands at 5 m on medium would have needed a 4096-wide atlas too (≈ 100 MB on a phone), so the
   medium tier has them at 10 m (2048 × 3362, 37 MB): Rangitoto's lava and bush patches and Waiheke's vineyard blocks

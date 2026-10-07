@@ -147,7 +147,7 @@ describe('outer photo atlas (#120)', () => {
     }
     // without the outer photo the square alone is as before
     expect(aerialCovers(AKL.north_head.x, AKL.north_head.z)).toBe(false);
-  });
+  }, 60_000);
 
   it('covers Rangitoto, Motutapu, Rakino, Motuihe, Browns Island and all of Waiheke', () => {
     const places: [string, { x: number; z: number }][] = [

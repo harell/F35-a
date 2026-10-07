@@ -8,6 +8,7 @@
  *     at several times of day: <out-dir>/<view>-{photo,procedural}.png (1280×720, seed 1840)
  *
  *   node e2e/aerial-shots.mjs --game [--base=http://localhost:5190/] [--out=e2e/screenshots] [--quality=medium] [--only=view,view]
+ *                                [--variants=photo,procedural]   (photo only: e.g. against a server of master for the before shots)
  *     the game (mission t01, seed 7, chase view, HUD hidden) through `__f35.camera(cam, look)`: the Devonport peninsula from the
  *     cameras of issue #120 (the old square's edge, North Head, the fade across the Belmont neck) and the gulf islands
  *     from 1–3 km: <out>/120-<view>-{photo,procedural}.png (1280×720). One page per variant, every view in it.
@@ -45,15 +46,19 @@ if (process.argv.includes('--game')) {
     oneroa: { cam: [21000, 800, -3500], look: [22300, 20, -7000] },
     // Waiheke's vineyards (Onetangi valley) from 1.5 km
     vineyards: { cam: [26800, 700, -4600], look: [27300, 20, -6100] },
+    // straight down on Waiheke's Putiki Bay inlet and the Onetangi valley south of it (the coast under the photo)
+    putiki: { cam: [26800, 1400, -4700], look: [26800, 0, -4900] },
     // Man O' War and Stony Batter, the east end, from 3 km
     waiheke_east: { cam: [34500, 900, -5200], look: [36800, 60, -8600] },
   };
   fs.mkdirSync(out, { recursive: true });
   const browser = await launch();
+  const variants = String(args.variants || 'photo,procedural').split(',');
   for (const [tag, flag] of [
     ['photo', ''],
     ['procedural', '&aerial=0'],
   ]) {
+    if (!variants.includes(tag)) continue;
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const errs = [];
     page.on('pageerror', (e) => errs.push(e.message));

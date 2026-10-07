@@ -48,7 +48,7 @@ import rasterio
 from PIL import Image
 from pyproj import Transformer
 from rasterio.enums import Resampling
-from scipy.ndimage import gaussian_filter, label, map_coordinates
+from scipy.ndimage import binary_dilation, gaussian_filter, label, map_coordinates
 from scipy.signal import fftconvolve
 
 os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
@@ -88,6 +88,15 @@ OUTER = [
     dict(name='rakino', x0=15660, z0=-15660, w=1600, h=2560, px=5, ov=32, feather=60, islands=True),
     dict(name='browns', x0=11120, z0=-2580, w=1300, h=1340, px=5, ov=32, feather=60, islands=True),
 ]
+SEA_BAND = 90  # m of the islands' photo past the coastline (the terrain's shore can lie a heightfield cell out)
+
+
+def ndi_dilate(mask, r):
+    """Disc dilation by r pixels (separable box passes are too square for a coast)."""
+    y, x = np.ogrid[-r:r + 1, -r:r + 1]
+    return binary_dilation(mask, structure=(x * x + y * y) <= r * r)
+
+
 APRON = 32  # px of real photo round each atlas box at the high tier (16 at medium)
 ATLAS_W = {4096: 4096, 2048: 2048}
 
@@ -422,6 +431,11 @@ def bake_rect(work, r, k):
         lab, _ = label(landl)
         cut = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
         land &= (lab > 0) & ~np.isin(lab, list(cut))
+        # out here (beyond the 32 km coast mask round the city) the drawn shoreline is the terrain's own, up to a
+        # heightfield cell off the LINZ line: the photo (its real shallows and beaches) reaches SEA_BAND m out to sea
+        # too, so terrain standing above the water there is not left a strip of procedural grass (the sea covers the rest)
+        near = ndi_dilate(land, int(np.ceil(SEA_BAND / px))) & (coast_sd < 2) & ~nodata
+        land |= near
     if (land & nodata).any():
         print(f'  {r["name"]}: {int((land & nodata).sum())} land px without photo (left out)', flush=True)
         land &= ~nodata
