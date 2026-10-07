@@ -339,7 +339,7 @@ def process(job):
     seen_c = np.bincount(k, minlength=bw * bh).astype(np.uint16).reshape(bh, bw)
     land_c = np.bincount(k, weights=land[ok], minlength=bw * bh).astype(np.uint16).reshape(bh, bw)
     tree_c = np.bincount(k, weights=tree[ok], minlength=bw * bh).astype(np.uint16).reshape(bh, bw)
-    # heights: 0.5 m bins per 64 m cell
+    # heights: 0.5 m bins per 64 m cell (summed into OUT_HCELL cells in bake)
     tk = ok & tree
     hi = np.floor((X[tk] - GX0) / HCELL).astype(np.int64)
     hj = np.floor((Z[tk] - GZ0) / HCELL).astype(np.int64)

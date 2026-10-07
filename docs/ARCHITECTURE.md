@@ -208,7 +208,7 @@ the suburbs there are procedural again (and the photo keeps them off on medium a
 **Real tree canopy (#123).** `src/world/terrain/theaters/aucklandCanopy.ts` loads `auckland-canopy.bin` (baked by
 `tools/linz/canopy.py` + `canopy.ts` from the 2024 LiDAR: DSM − DEM ≥ 3 m, the LINZ outlines buffered 1 m and the
 buildings since 2017 taken out) on the medium and high tiers, with the land use: the share of each 32 m cell's land under
-trees (16 levels, on the land-use lattice) and the trees' 75th-percentile height per 64 m, over Devonport, the North
+trees (16 levels, on the land-use lattice) and the trees' 75th-percentile height per 128 m, over Devonport, the North
 Shore to Takapuna, the CBD, the isthmus and the flight corridor (20 Part 1 sheets) and the island boxes of the outer photo
 (Part 2). Where it covers, `TreeSource` grows its trees by it (`canopyTree`: a 14 m point takes a tree with probability
 −ln(1 − share) · 196 m² / crown area, crowns sized from the measured height and widened in a closed canopy) instead of the
