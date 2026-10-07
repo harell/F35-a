@@ -277,11 +277,14 @@ commercial 60, office 24, civic 19, hotel 15, industrial 12, parking 8, house 2;
 material, 5 with a colour). +0.9 kB gzip. OSM data: © OpenStreetMap contributors, ODbL 1.0 (the file is a derivative
 database for these tags).
 
-# Open data 4: CBD and waterfront aerial photo
+# Open data 4: CBD and waterfront aerial photo (and Devonport and the gulf islands, #120)
 
 `aerial-mask.ts` and `aerial.py` bake the LINZ Auckland 0.075 m Urban Aerial Photos (2024–2025) into
 `src/world/terrain/data/auckland-aerial-2048.webp` (≈ 274 KiB, medium tier) and `auckland-aerial-4096.webp`
-(≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`. Same licence and attribution as above.
+(≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`, and (#120) the outer atlas of the rest
+of the Devonport peninsula and the gulf islands, `auckland-aerial-outer-2048.webp` (≈ 257 KiB, medium) and
+`auckland-aerial-outer-4096.webp` (≈ 584 KiB, high) with its layout `auckland-aerial-outer.json`. Same licence and
+attribution as above.
 
 | Product | Source | Used for |
 |---|---|---|
@@ -289,12 +292,18 @@ database for these tags).
 
 ```sh
 pip install numpy scipy rasterio pyproj pillow
-npx vite-node tools/linz/aerial-mask.ts <work>     # coastline / OSM deck / CBD street masks on the photo grid
-python3 tools/linz/aerial.py <work>                # writes both .webp files and prints the alignment report
+python3 tools/linz/aerial.py <work> city     # the square: both .webp files, its alignment report (runs aerial-mask.ts)
+python3 tools/linz/aerial.py <work> outer    # the outer atlas (Devonport, the islands), its seam and alignment reports
+python3 tools/linz/aerial.py <work> align    # the outer boxes' seam and alignment reports again (needs LINZ_API_KEY)
 ```
 
-The first run reads every item of the STAC collection (≈ 17,700 JSONs, ≈ 10 min) to find the 154 tiles over the
-square; the list and the 0.6 m mosaic are cached in `<work>`. Then ≈ 1 min (the COGs' 1/8 overviews, ≈ 20 MB).
+`aerial-mask.ts <out.bin> <x0> <z0> <cols> <rows> <cell>` writes the coastline / OSM deck / CBD street / land masks on
+any photo grid (aerial.py runs it per box and caches it). The first run reads every item of the STAC collection
+(≈ 17,700 JSONs, 3–10 min) into `<work>/stac-all.json`, reused by every later bake (and by other layers that need
+the 7.5 cm tiles); each box's mosaic (`aerial-mosaic-<box>.npz`), masks and graded image (`aerial-rect-<box>.png`)
+are cached in `<work>` too. The square then takes ≈ 2 min (117 tiles, the COGs' 1/8 overviews), the outer atlas
+≈ 4 min (the Devonport boxes' 74 tiles at 1/8, the islands' 697 tiles at 1/32). Re-running `city` reproduces the
+committed square byte for byte. Delete a box's `aerial-rect-*.png` to bake it again.
 
 - **Square**: `AERIAL_RECT`, x −1536 … 3584, z −3072 … 2048 (5.12 km): Westhaven to the Fergusson terminal, Devonport and
   the naval base to the Domain, Grafton and Parnell. The issue's 4 × 4 km at 0.5–1 m in ≤ 500 KB is not reachable: the
@@ -315,6 +324,44 @@ square; the list and the 0.6 m mosaic are cached in `<work>`. Then ≈ 1 min (th
   (≈ 0.085 linear), so the photo carries no strong sun of its own and the fade at the square's edge does not jump.
 - **Alpha** = land ≥ 2 m inside the LINZ coastline (the game's shore band paints the last metres) or inside an OSM
   wharf / pier / breakwater / dock outline; the open water is push-pull padded from the land colour.
+
+**The outer atlas (#120).** Boxes (`OUTER` in `aerial.py`, game XZ) packed into one atlas per tier (4096 px wide on
+high, 2048 on medium, the same layout halved), each with a 32 px apron of real photo round it (16 on medium) so
+filtering and the first mips never mix in a neighbour:
+
+| Box | x, z (m) | Pixel (high / medium) | Fade |
+|---|---|---|---|
+| `devonport_north`: Stanley Bay, Bayswater, Belmont, Narrow Neck | −1 … 4479, −5499.5 … −2749.5 | 1.25 / 2.5 m (the square's) | 320 m; overlaps the square's north fade, fades out across the Hauraki neck north of Belmont |
+| `devonport_east`: Cheltenham, North Head | 3261.5 … 5001.5, −3069.5 … −1399.5 | 1.25 / 2.5 m | 320 m; overlaps the square's east fade and `devonport_north`'s south fade |
+| `waiheke` (with Pakatoa, Rotoroa) | 19380 … 39420, −12420 … 160 | 5 / 10 m | 60 m, in the sea |
+| `rangitoto_motutapu` | 5720 … 15780, −13280 … −4200 | 5 / 10 m | 60 m |
+| `motuihe`, `rakino`, `browns` | (see `OUTER`) | 5 / 10 m | 40–60 m |
+
+- **Seamless Devonport.** The Devonport boxes lie on the square's pixel lattice and use the square's exposure, so where
+  they overlap it their pixels are the square's (`seam` lines of the report: 0.00 m, colour difference 0.00 / 255).
+  Overlapping boxes fade across each other over their feather; the weights add up to ≥ 1 there, so the only fade on
+  the peninsula's land is the one across the neck north of Belmont (z −5500 … −5180).
+- **Islands' alpha** = the land wholly inside the box (a land component the box's edge cuts, Ponui's tip inside
+  Waiheke's box, stays procedural); decks are left out there.
+- **Resolution.** Measured per tier before choosing: the whole atlas is 257 KiB on medium and 584 KiB on high (the
+  islands at 5 m and Devonport at 1.25 m are in the high one). At 5 m the high atlas is 4096 × 6724 (147 MB of GPU
+  memory with mips); the islands at 5 m on medium would have needed a 4096-wide atlas too (≈ 100 MB on a phone), so the
+  medium tier has them at 10 m (2048 × 3362, 37 MB): Rangitoto's lava and bush patches and Waiheke's vineyard blocks
+  still show at 10 m, its vine rows don't at either.
+- **Grade.** The city square's exposure for every box (the islands' own would be ×1.1–2.2 brighter: bush is darker than
+  a suburb), so the islands sit in the same light as the city.
+- **Alignment.** The plain cross-correlation of the photo's water against the coastline (the square's check) does not
+  work here: Shoal Bay's mudflats and mangroves and the islands' reefs and beaches are dry in the photo but sea in the
+  high-water coastline, and the photo's blue-green cast makes shaded gardens look like water. The report has two
+  checks instead: (1) along the coast's normal every 5 m, where the photo's (smooth, blue) water ends, fitted as a
+  translation plus a mean waterline shift with outliers trimmed; and (2) the photo's roof edges cross-correlated
+  with the LINZ NZ Building Outlines (layer 101290, WFS, `LINZ_API_KEY`) over dense houses. Measured (east, south):
+  buildings Bayswater / Belmont +1.1, −0.0 m; Cheltenham +0.6, +0.4 m; Oneroa +1.4, +0.8 m; Surfdale / Ostend +1.5,
+  +1.1 m, against +0.9, +0.5 m for the square itself (Freemans Bay), i.e. 0 at the pixel. The coast fit gives
+  Waiheke −1.0, +5.2 m and Rangitoto–Motutapu −0.5, +5.2 m (≈ 1 pixel of the islands' 5 m; the coastline itself is
+  traced on a 16 m grid; Rakino −10, +9 and Motuihe −7, +3 m with a few hundred edges each), with the waterline
+  10–17 m seaward of the high-water line (the photos were flown on a falling tide); the Devonport boxes have too few
+  clear water edges (beaches, mudflats) for it to mean much.
 
 At runtime (medium / high tier, *Aerial photo* setting, `?aerial=0` to compare): the terrain shader mixes the photo
 over its procedural colour by alpha × a 320 m fade at the square's edge, skips the street / house / paddock patterns

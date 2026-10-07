@@ -168,7 +168,7 @@ Harbour Bridge piers (`BRIDGE_PIERS_T`, which also set the fly-under span) are s
 `tests/world-sites.test.ts` checks against it. Without the file the hand-placed port and marinas come back, and the
 Wiri tanks still stand.
 
-## Aerial photo (LINZ, CBD and waterfront)
+## Aerial photo (LINZ, CBD and waterfront; Devonport and the gulf islands)
 
 `src/world/terrain/theaters/aucklandAerial.ts` loads the LINZ 2024 aerial photo of a 5.12 km square over the CBD,
 the waterfront and Devonport (`AERIAL_RECT`; baked by `tools/linz/aerial.py`): 2048² on the medium tier, 4096² on
@@ -176,7 +176,14 @@ high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial
 OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
 the wharf decks and the naval base take it on their top faces, so do the CBD's LINZ buildings (below), and the house / tree scatter and the procedural
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
-procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
+procedural ground stays. **The outer photo (#120)** continues it over the rest of the Devonport peninsula (same
+resolution) and over the gulf islands' land (Rangitoto, Motutapu, Rakino, Motuihe, Browns Island, Waiheke; 5 m on
+high, 10 m on medium): boxes packed into one atlas per tier (`AERIAL_OUTER` from `auckland-aerial-outer.json`,
+`auckland-aerial-outer-<2048|4096>.webp`), loaded with the square (and only with it: it takes the square's grade).
+The terrain shader's `aerialPhoto()` sums the square's weight and every box's (alpha × the box's own edge fade,
+sampled with `textureGrad`); the Devonport boxes overlap the square by their 320 m feather so the fades cross over.
+The scatters keep off where that sum is over ½ (`aerialCovers(x, z, cover)`, the outer alpha read back once at load
+through a 512-wide canvas: `imageAlphaMask`). The photo-topped building material still reads the square only. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
 photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
 day. That matches the average albedo; two lighting terms do the rest. Under a low sun (dawn, dusk) the photo also
 takes the light of a 28° roof facing the sun on 80 % of its area (`aerialLowSun`, `AERIAL_LIGHT_GLSL`, on the terrain

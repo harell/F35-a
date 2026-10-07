@@ -277,8 +277,9 @@ export interface QualitySettings {
    */
   hdTerrain: boolean;
   /**
-   * Real aerial photo of the CBD and waterfront (Auckland, a lazily loaded ≈ 270 kB / 630 kB download on
-   * the medium / high tier: terrainDetail 1 → 2048², 2 → 4096²). Low never downloads it.
+   * Real aerial photo of the CBD and waterfront, plus the rest of the Devonport peninsula and the gulf islands
+   * (Auckland, lazily loaded: ≈ 270 + 260 kB on the medium tier, 630 + 590 kB on high: terrainDetail 1 → 2048²
+   * and the 2048-wide outer atlas, 2 → 4096² and the 4096-wide one). Low never downloads it.
    */
   aerialPhoto: boolean;
   /** Number of cloud billboards/puffs. */
@@ -356,6 +357,6 @@ export interface Settings {
   missileCam: 'off' | 'compact' | 'dynamic';
   /** HD terrain on the high quality tier (see QualitySettings.hdTerrain). Off: procedural detail, no download. */
   hdTerrain: boolean;
-  /** Aerial photo of the CBD and waterfront on the medium / high tier (see QualitySettings.aerialPhoto). Off: procedural ground, no download. */
+  /** Aerial photo of the CBD, the waterfront, Devonport and the gulf islands on the medium / high tier (see QualitySettings.aerialPhoto). Off: procedural ground, no download. */
   aerialPhoto: boolean;
 }
