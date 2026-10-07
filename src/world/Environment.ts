@@ -37,7 +37,7 @@ import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
-import { AERIAL_FEATHER, AERIAL_RECT, aerialGrade, imageMeanLinear, loadAucklandAerial } from './terrain/theaters/aucklandAerial';
+import { AERIAL_FEATHER, AERIAL_OUTER, AERIAL_RECT, aerialGrade, aerialOuterUv, imageAlphaMask, imageMeanLinear, loadAucklandAerial, loadAucklandAerialOuter } from './terrain/theaters/aucklandAerial';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './terrain/urbanColor';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
 import { loadAucklandBuildings } from './scenery/aucklandBuildings';
@@ -90,6 +90,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // The CBD / waterfront aerial photo (medium: 2048², high: 4096²; low never requests it): decoded off
   // the main thread while the terrain generates, needed only for the GPU objects below.
   const aerialLoad = cfg.aerial ? loadAucklandAerial(cfg.aerial) : null;
+  // … and the outer photo (#120: the rest of Devonport, the gulf islands), the same tiers
+  const aerialOuterLoad = cfg.aerial ? loadAucklandAerialOuter(cfg.aerial) : null;
   // The real land use (#122, medium and high only: its grid is 12.5 MB on the GPU)
   const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
   await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad]);
@@ -238,9 +240,10 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   dummyTex.needsUpdate = true;
   let aerial: AerialPhotoInfo | null = null;
   const aerialImage = aerialLoad ? await aerialLoad : null;
-  if (aerialImage) {
-    const t = new Texture(aerialImage);
-    // row 0 is the square's north edge (z0) at v = 0; the alpha channel is a mask, not coverage
+  const aerialOuterImage = aerialOuterLoad ? await aerialOuterLoad : null;
+  const photoTexture = (img: ImageBitmap | HTMLImageElement) => {
+    const t = new Texture(img);
+    // row 0 is the north edge (z0) at v = 0; the alpha channel is a mask, not coverage
     t.flipY = false;
     t.premultiplyAlpha = false;
     t.colorSpace = SRGBColorSpace;
@@ -250,13 +253,24 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     t.generateMipmaps = true;
     t.anisotropy = Math.min(maxAniso, cfg.anisotropy);
     t.needsUpdate = true;
+    return t;
+  };
+  if (aerialImage) {
+    const t = photoTexture(aerialImage);
     // graded toward the procedural suburbs it fades into, fully from dawn on (#61)
     const st = terrainStyle(opts.theater);
     const leafy = suburbFarAlbedo(st, LEAFY_MIX);
     const bare = suburbFarAlbedo(st, BARE_MIX);
     const target: [number, number, number] = [(leafy.r + bare.r) / 2, (leafy.g + bare.g) / 2, (leafy.b + bare.b) / 2];
     const grade = aerialGrade(imageMeanLinear(aerialImage), target, opts.timeOfDay);
-    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade, houseRadius: cfg.houseRadius };
+    // the outer photo (#120) only with the square: it shares its grade, and its Devonport boxes continue it
+    let outer: AerialPhotoInfo['outer'] = null;
+    if (aerialOuterImage && cfg.aerial) {
+      const uv = aerialOuterUv(cfg.aerial);
+      const m = imageAlphaMask(aerialOuterImage);
+      outer = { texture: photoTexture(aerialOuterImage), boxes: AERIAL_OUTER, uv, cover: m ? { ...m, uv } : null };
+    }
+    aerial = { texture: t, x0: AERIAL_RECT.x0, z0: AERIAL_RECT.z0, size: AERIAL_RECT.size, feather: AERIAL_FEATHER, grade, houseRadius: cfg.houseRadius, outer };
   }
   const cloudLayer = createCloudLayerTexture();
 
@@ -434,6 +448,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
       cloudLayer.dispose();
       coast?.texture.dispose();
       aerial?.texture.dispose();
+      aerial?.outer?.texture.dispose();
       dummyTex.dispose();
     },
   };

@@ -15,7 +15,7 @@ import { COAST_MASK_RANGE } from './coastline';
 import { FOOTPATH } from '../scenery/cbdStreets';
 import { FRONT_BAND, FRONT_DEPTH, FRONT_FOOTPATH, FRONT_MAX, FRONT_TEX_W, SIDE_STREET_COS, SIDE_STREET_GAP } from '../scenery/frontage';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
-import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX } from './theaters/aucklandAerial';
+import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, MAX_AERIAL_BOXES } from './theaters/aucklandAerial';
 import { LU_CEMETERY, LU_COMMERCIAL, LU_FARMLAND, LU_GOLF, LU_HOSPITAL, LU_INDUSTRIAL, LU_PARK, LU_PITCH, LU_SCHOOL, LU_VINEYARD } from '../scenery/aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint } from '../scenery/landUseLots';
 
@@ -180,6 +180,11 @@ uniform vec4 uConeBox; // xz bounds of all cones (min x, min z, max x, max z)
 uniform sampler2D uAerial; // aerial photo (aucklandAerial.ts): sRGB albedo, alpha = land / deck mask
 uniform vec4 uAerialRect; // x0, z0, 1/size, edge feather (m); 1/size 0 = none
 uniform vec4 uAerialGrade; // colour grade toward the procedural palette: rgb gain, strength
+uniform sampler2D uAerialOuter; // the outer photo's atlas (#120: Devonport, the gulf islands), same encoding
+uniform vec4 uAerialBox[${MAX_AERIAL_BOXES}]; // its boxes: x0, z0, 1/width, 1/height (m); 1/width 0 = unused
+uniform vec4 uAerialBoxUv[${MAX_AERIAL_BOXES}]; // where each lies in the atlas: u0, v0, u size, v size
+uniform float uAerialBoxFeather[${MAX_AERIAL_BOXES}]; // fade at each box's edge (m)
+uniform vec4 uAerialOuterBounds; // all boxes: min x, min z, max x, max z (m)
 uniform sampler2D uLotMask; // lots cleared along the road / rail ribbons (lotMask.ts): 1 bit per cell, 8 × 4 cells per texel
 uniform vec4 uLotMaskRect; // x0, z0, cell (m), texels across; texels across 0 = none
 uniform float uLotMaskRows; // texels down
@@ -268,14 +273,39 @@ vec4 streetMap(vec2 wp) {
   return vec4((s.r * 255.0 - 128.0) * 0.25, (s.g * 255.0 - 128.0) * 0.25, s.b, s.a);
 }
 
-// Aerial photo: rgb = albedo (linear), a = weight (the photo's land mask × the fade at the square's edge).
+// Aerial photo: rgb = albedo (linear), a = weight (the photo's land mask × the fade at its edge). The square
+// (uAerial) and the outer boxes (uAerialOuter, #120) are summed by weight: where two overlap by their feather
+// (the Devonport boxes and the square) the fades cross over and the weights add up to ≥ 1, so no edge shows.
+// The outer atlas is sampled with explicit gradients (the boxes are taken in non-uniform control flow).
 vec4 aerialPhoto(vec2 wp) {
-  if (uAerialRect.z <= 0.0) return vec4(0.0);
-  vec2 uv = (wp - uAerialRect.xy) * uAerialRect.z;
-  float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
-  if (e <= 0.0) return vec4(0.0);
-  vec4 p = texture2D(uAerial, uv);
-  return vec4(p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)));
+  vec2 gx = dFdx(wp);
+  vec2 gy = dFdy(wp);
+  vec4 acc = vec4(0.0);
+  if (uAerialRect.z > 0.0) {
+    vec2 uv = (wp - uAerialRect.xy) * uAerialRect.z;
+    float e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+    if (e > 0.0) {
+      vec4 p = texture2D(uAerial, uv);
+      float w = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w));
+      acc = vec4(p.rgb * w, w);
+    }
+  }
+  if (acc.a < 1.0 && wp.x > uAerialOuterBounds.x && wp.y > uAerialOuterBounds.y && wp.x < uAerialOuterBounds.z && wp.y < uAerialOuterBounds.w) {
+    for (int i = 0; i < ${MAX_AERIAL_BOXES}; i++) {
+      vec4 b = uAerialBox[i];
+      if (b.z <= 0.0) break;
+      vec2 t = (wp - b.xy) * b.zw;
+      if (t.x <= 0.0 || t.y <= 0.0 || t.x >= 1.0 || t.y >= 1.0) continue;
+      float e = min(min(t.x, 1.0 - t.x) / b.z, min(t.y, 1.0 - t.y) / b.w);
+      vec4 a = uAerialBoxUv[i];
+      vec2 k = b.zw * a.zw;
+      vec4 p = textureGrad(uAerialOuter, a.xy + t * a.zw, gx * k, gy * k);
+      float w = p.a * smoothstep(0.0, 1.0, e / uAerialBoxFeather[i]);
+      acc += vec4(p.rgb * w, w);
+    }
+  }
+  if (acc.a <= 0.0) return vec4(0.0);
+  return vec4(acc.rgb / acc.a * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), min(acc.a, 1.0));
 }
 
 // The bit of a cell mask (lotMask.ts LotMask.masked()) at wp: 1 bit per cell, 8 × 4 cells per RGBA8 texel.

@@ -118,6 +118,8 @@ export class Scenery {
     this.treeRadius = o.cfg.treeRadius;
     this.houseRadius = o.cfg.houseRadius;
     const hf = o.hf;
+    // the outer photo's alpha (#120: Devonport, the gulf islands) for aerialCovers; null: the square alone
+    const aerialCover = o.aerial?.outer?.cover ?? null;
     const height = (x: number, z: number) => hf.meshHeightAt(x, z);
     const detail = o.quality.sceneryDensity;
     const buildingMat = createBuildingMaterial(o.atmo);
@@ -289,7 +291,7 @@ export class Scenery {
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
       // (nor on an arterial's frontage, whose shops and houses are the lots')
       const front = this.frontage;
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z));
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z, aerialCover) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z));
       // the Tāmaki Drive waterfront (tamakiDrive.ts: paths, seawall, railings, lamps) in the centres mesh; its trees
       // join the tree scatter below. The road ribbon stands on its raised ground (the Hobson Bay causeway is sea in the
       // terrain) and leaves the lamps to the measured ones there
@@ -485,7 +487,7 @@ export class Scenery {
     const sites = siteBlocker();
     // (the hero neighbourhoods grow their measured canopy under the photo too: TreeSource.nbTree)
     const nbs = aucklandNeighbourhoods();
-    const onSite = o.aerial ? (x: number, z: number, m: number) => (aerialCovers(x, z) && !neighbourhoodAt(x, z, nbs)) || (sites?.(x, z, m) ?? false) : sites;
+    const onSite = o.aerial ? (x: number, z: number, m: number) => (aerialCovers(x, z, aerialCover) && !neighbourhoodAt(x, z, nbs)) || (sites?.(x, z, m) ?? false) : sites;
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
     this.trees = new TileScatter(

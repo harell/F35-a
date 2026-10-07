@@ -43,6 +43,7 @@ import { SHED_ROOFS } from '../scenery/landUseLots';
 import { FRONT_TEX_W, type FrontageMap } from '../scenery/frontage';
 import type { CbdStreets } from '../scenery/cbdStreets';
 import type { LotMask } from '../scenery/lotMask';
+import { MAX_AERIAL_BOXES, type AerialBox, type AerialOuterCover } from './theaters/aucklandAerial';
 
 export interface TerrainStyle {
   rockColor: Color;
@@ -130,6 +131,17 @@ export interface AerialPhotoInfo {
   grade?: readonly [number, number, number, number];
   /** The procedural houses' scatter radius (m, config.ts): the photo's low-sun light fades with them. */
   houseRadius?: number;
+  /** The outer photo (#120: Devonport, the gulf islands): its atlas, its boxes (aucklandAerial.ts AERIAL_OUTER) and where each lies in the atlas. */
+  outer?: AerialOuterInfo | null;
+}
+
+/** An atlas of photo boxes (aucklandAerial.ts AERIAL_OUTER); `cover` is its alpha read back for the scatters. */
+export interface AerialOuterInfo {
+  texture: Texture;
+  boxes: readonly AerialBox[];
+  /** [u0, v0, u1, v1] of each box in the atlas (v = 0 at the image's top row). */
+  uv: readonly (readonly [number, number, number, number])[];
+  cover?: AerialOuterCover | null;
 }
 
 const MORPH_START = 0.68;
@@ -343,6 +355,7 @@ export class TerrainRenderer {
         ...noFieldUniforms(o.noFields ?? []),
         ...coneUniforms(o.style.cones ?? []),
         ...aerialUniforms(o.aerial ?? null, o.dummy),
+        ...aerialOuterUniforms(o.aerial?.outer ?? null, o.dummy),
         // set by setLotMask() once the scenery has built the road network
         uLotMask: { value: o.dummy },
         uLotMaskRect: { value: new Vector4(0, 0, 1, 0) },
@@ -644,6 +657,35 @@ export function aerialUniforms(
     uAerialGrade: { value: new Vector4(...(a?.grade ?? [1, 1, 1, 0])) },
     uAerialHouseR: { value: a?.houseRadius ?? 0 },
   };
+}
+
+/** Uniforms of the terrain shader's outer photo boxes (#120); none (all boxes unused) without it. */
+export function aerialOuterUniforms(
+  o: AerialOuterInfo | null,
+  dummy: Texture,
+): {
+  uAerialOuter: { value: Texture };
+  uAerialBox: { value: Vector4[] };
+  uAerialBoxUv: { value: Vector4[] };
+  uAerialBoxFeather: { value: number[] };
+  uAerialOuterBounds: { value: Vector4 };
+} {
+  const box: Vector4[] = [];
+  const uv: Vector4[] = [];
+  const feather: number[] = [];
+  const bounds = new Vector4(0, 0, 0, 0);
+  if (o && o.boxes.length > MAX_AERIAL_BOXES) throw new Error(`aerial: ${o.boxes.length} boxes, the shader takes ${MAX_AERIAL_BOXES}`);
+  for (let i = 0; i < MAX_AERIAL_BOXES; i++) {
+    const b = o?.boxes[i];
+    const u = o?.uv[i];
+    box.push(b && u ? new Vector4(b.x0, b.z0, 1 / b.w, 1 / b.h) : new Vector4(0, 0, 0, 0));
+    uv.push(b && u ? new Vector4(u[0], u[1], u[2] - u[0], u[3] - u[1]) : new Vector4(0, 0, 0, 0));
+    feather.push(b ? b.feather : 1);
+  }
+  if (o && o.boxes.length) {
+    bounds.set(Math.min(...o.boxes.map((b) => b.x0)), Math.min(...o.boxes.map((b) => b.z0)), Math.max(...o.boxes.map((b) => b.x0 + b.w)), Math.max(...o.boxes.map((b) => b.z0 + b.h)));
+  }
+  return { uAerialOuter: { value: o ? o.texture : dummy }, uAerialBox: { value: box }, uAerialBoxUv: { value: uv }, uAerialBoxFeather: { value: feather }, uAerialOuterBounds: { value: bounds } };
 }
 
 /** Uniforms of COAST_GLSL (shared by terrain and water). */

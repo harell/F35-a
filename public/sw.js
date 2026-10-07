@@ -6,7 +6,7 @@
  *  - install: precache '/', index.html, the manifest and icons, then read index.html to discover the
  *    hashed bundle files (Vite writes them there) and precache those; voice clips are precached if
  *    present (missing clips are skipped). Large optional assets only some devices use (ON_DEMAND: the
- *    high tier's HD terrain, the medium / high tier's aerial photo) are never precached; they are
+ *    high tier's HD terrain, the medium / high tier's aerial photos) are never precached; they are
  *    cached on first use like other hashed files
  *  - navigation requests: network-first (fresh deploys win), falling back to the cached shell
  *  - hashed bundle files (assets/*-<hash>.*): cache-first, filled on demand (the URL changes with the content)
@@ -46,10 +46,11 @@ const VOICES = [
 ];
 
 /**
- * Large optional assets only some tiers use (the HD terrain: high; the aerial photo: 2048² medium,
- * 4096² high): never precached, so a device downloads only what its tier asks for (cached on first use).
+ * Large optional assets only some tiers use (the HD terrain: high; the aerial photo and its outer atlas of
+ * Devonport and the gulf islands: 2048 medium, 4096 high): never precached, so a device downloads only what its
+ * tier asks for (cached on first use).
  */
-const ON_DEMAND = /\/(?:auckland-linz-hd-[\w-]+\.bin|auckland-aerial-\d+-[\w-]+\.webp)$/;
+const ON_DEMAND = /\/(?:auckland-linz-hd-[\w-]+\.bin|auckland-aerial-(?:outer-)?\d+-[\w-]+\.webp)$/;
 
 const scopeUrl = (p) => new URL(p, self.registration.scope).href;
 
