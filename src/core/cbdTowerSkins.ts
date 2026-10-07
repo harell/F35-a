@@ -546,6 +546,159 @@ export const CBD_TOWER_SKINS: readonly TowerSkin[] = [
       { face: 109, t: [-10, 10], h: [20, 76], colour: 0xbfc2c9, finish: 'none' },
     ],
   },
+  // ── #213 Tier B, batch 2 (rows 26–36) ──
+  {
+    // the AIG Building: dark glass bays between pale pilasters on the long faces; pale narrow ends, each with two
+    // slots of dark glass
+    n: 26,
+    box: { x: 494.78, z: -121.6, face: 9 },
+    dy: 3.4,
+    zones: [
+      { h: ALL, colour: 0x2f3c60, finish: 'glass' },
+      ...[-14, -7, 0, 7, 14].flatMap((t) => [
+        { face: 9, t: [t - 0.8, t + 0.8] as const, h: [0, 76] as const, colour: 0xaab0be, finish: 'none' as const },
+        { face: 189, t: [t - 0.8, t + 0.8] as const, h: [0, 76] as const, colour: 0xaab0be, finish: 'none' as const },
+      ]),
+      { face: 99, colour: 0xbcc0ca, h: ALL, finish: 'none' },
+      { face: 279, colour: 0xbcc0ca, h: ALL, finish: 'none' },
+      { face: 99, t: [-3.5, -1], h: [5, 73], colour: 0x2f3c60, finish: 'glass' },
+      { face: 99, t: [1, 3.5], h: [5, 73], colour: 0x2f3c60, finish: 'glass' },
+      { face: 279, t: [-3.5, -1], h: [5, 73], colour: 0x2f3c60, finish: 'glass' },
+      { face: 279, t: [1, 3.5], h: [5, 73], colour: 0x2f3c60, finish: 'glass' },
+    ],
+  },
+  {
+    // the Crowne Plaza: pale punched walls over the car-park podium, a stack of dark windows up the north end
+    n: 27,
+    box: { x: 91.48, z: 143.8, face: 20 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xd5d2cb, finish: 'punched' },
+      { face: 20, t: [-10, -1], h: [30, 78], colour: 0x4b5570, finish: 'glass' },
+    ],
+  },
+  {
+    // the Deloitte Centre (1 Queen St): dark blue glass over a lighter grid base, the Deloitte name at the top of the
+    // long faces
+    n: 28,
+    box: { x: 382.02, z: -565.64, face: 18 },
+    dy: 5,
+    zones: [
+      { h: ALL, colour: 0x37466a, finish: 'glass' },
+      { h: [0, 34], colour: 0x6f7890, finish: 'glass' },
+    ],
+    signs: [
+      { face: 18, t: -21, h: 66, w: 12, logo: 'deloitte' },
+      { face: 198, t: 17, h: 66, w: 12, logo: 'deloitte' },
+    ],
+  },
+  {
+    // Chorus House: salmon precast with punched windows, a full-height slot of dark glass up the north face under an
+    // arch; Rydges' pale glass block to the east and west with its name at the top
+    n: 29,
+    box: { x: 45.67, z: -166.22, face: 20 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xc9a59c, finish: 'punched' },
+      { face: 20, t: [-4, 4], h: [25, 73], colour: 0x3d4560, finish: 'glass' },
+      { face: 110, t: [-35, -14], h: [0, 60], colour: 0xa8b0bf, finish: 'glass' },
+      { face: 290, t: [14, 35], h: [0, 60], colour: 0xa8b0bf, finish: 'glass' },
+      { face: 200, t: [-5, 25], h: [0, 58], colour: 0xa8b0bf, finish: 'glass' },
+      { h: [73, Infinity], colour: 0xc9a59c, finish: 'none' },
+    ],
+    signs: [
+      { face: 110, t: -27, h: 57.5, w: 9, logo: 'rydges' },
+      { face: 290, t: 22, h: 57, w: 9, logo: 'rydges' },
+    ],
+  },
+  {
+    // the SkyCity Grand Hotel: a grid of windows with salmon balcony bands on the east, pale blank narrow ends, the
+    // lift tower up the west face with the "sky" disc at its top
+    n: 30,
+    box: { x: 52.45, z: 108.25, face: 19 },
+    dy: 2.5,
+    zones: [
+      { h: ALL, colour: 0xc8c4c4, finish: 'punched' },
+      { face: 109, h: [33, Infinity], colour: 0xcaa8a2, finish: 'bands' },
+      { face: 19, h: [38, Infinity], colour: 0xdedbd6, finish: 'none' },
+      { face: 199, h: [38, Infinity], colour: 0xdedbd6, finish: 'none' },
+      { face: 289, t: [19, 27], h: [30, Infinity], colour: 0xa2a8b8, finish: 'none' },
+    ],
+    signs: [{ face: 289, t: 23, h: 75, w: 5, logo: 'skycity' }],
+  },
+  {
+    // Barclay Suites: blank pale narrow ends, a grid of windows on the long faces
+    n: 31,
+    box: { x: 184.85, z: -127.04, face: 18 },
+    dy: 0.5,
+    zones: [
+      { h: ALL, colour: 0x9ea6b8, finish: 'punched' },
+      { face: 18, h: ALL, colour: 0xc9ccd4, finish: 'none' },
+      { face: 198, h: ALL, colour: 0xc9ccd4, finish: 'none' },
+    ],
+  },
+  {
+    // the JW Marriott block: dark glass, a white core strip up the north face, a pinkish grid of windows on part of
+    // the east face
+    n: 32,
+    box: { x: 264.86, z: -318.76, face: 20 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0x404d6e, finish: 'glass' },
+      { face: 20, t: [-10, 0], h: [0, 73], colour: 0xd0d2d8, finish: 'none' },
+      { face: 110, t: [5, 40], h: [8, 70], colour: 0xb9aba2, finish: 'punched' },
+    ],
+  },
+  {
+    // Four Points by Sheraton: white slab bands over dark glass, a white grid round the top floors
+    n: 33,
+    box: { x: 126.68, z: 580.48, face: 82 },
+    dy: 0.5,
+    zones: [
+      { h: ALL, colour: 0xd9dbdf, finish: 'bands' },
+      { h: [55, Infinity], colour: 0xe2e3e6, finish: 'punched' },
+    ],
+  },
+  {
+    // City Gardens Apartments: dark balcony bands, a pale core strip up the east and west faces
+    n: 34,
+    box: { x: 192.4, z: -86.83, face: 18 },
+    dy: 2,
+    zones: [
+      { h: ALL, colour: 0x5d6680, finish: 'bands' },
+      { face: 108, t: [-1, 5], h: [20, 70], colour: 0xb9aeb6, finish: 'none' },
+      { face: 288, t: [-5, 4], h: [20, 72], colour: 0xb9aeb6, finish: 'none' },
+    ],
+  },
+  {
+    // West Plaza: a white frame; dark window strips up the narrow ends, two dark window blocks on the south face, a
+    // window grid on the north
+    n: 35,
+    box: { x: 234.11, z: -448.53, face: 87 },
+    dy: -2,
+    zones: [
+      { h: ALL, colour: 0xe5e6e8, finish: 'none' },
+      { face: 87, t: [-7, 6], h: [5, 72], colour: 0x4a5068, finish: 'glass' },
+      { face: 267, t: [-6, 3], h: [5, 72], colour: 0x4a5068, finish: 'glass' },
+      { face: 177, t: [-21, -10], h: [10, 72], colour: 0x4a5068, finish: 'glass' },
+      { face: 177, t: [3, 17], h: [10, 72], colour: 0x4a5068, finish: 'glass' },
+      { face: 357, t: [-20, 17], h: [5, 72], colour: 0xb8b7b8, finish: 'punched' },
+    ],
+  },
+  {
+    // Queens Residences: dark glass with tall white panels on the long faces, a white balcony grid on the north-east
+    // end, the sloping roof (the kit's crown)
+    n: 36,
+    box: { x: 179.63, z: 528.56, face: 63 },
+    dy: -2,
+    zones: [
+      { h: ALL, colour: 0x4a5470, finish: 'glass' },
+      { face: 63, h: ALL, colour: 0xd8d7d3, finish: 'bands' },
+      { face: 153, t: [-20, -14], h: [10, 65], colour: 0xd4d6dc, finish: 'none' },
+      { face: 153, t: [6, 16], h: [10, 65], colour: 0xd4d6dc, finish: 'none' },
+      { face: 333, t: [-24, -14], h: [10, 70], colour: 0xd4d6dc, finish: 'none' },
+    ],
+  },
 ];
 
 /** The skin of a kit tower (by its CBD_TOWERS row), if it has one. */
