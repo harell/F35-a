@@ -54,6 +54,9 @@ export function scatterKeep(ds: number, R: number): number {
   return ds < R * 0.35 ? 1 : Math.max(0.22, 1 - ((ds - R * 0.35) / (R * 0.65)) * 0.78);
 }
 
+/** How far a fitCapacity scatter widens the instances it keeps (across, not up). */
+const FIT_WIDEN = 1.6;
+
 const _m = new Matrix4();
 const _q = new Quaternion();
 const _p = new Vector3();
@@ -80,6 +83,13 @@ export class TileScatter {
     private readonly tileSize: number,
     private readonly radius: number,
     private readonly tilesPerFrame = 2,
+    /**
+     * When the tiles in range hold more instances than a mesh's capacity, thin them all evenly (the rank threshold
+     * scaled down) instead of dropping the farthest tiles: a forest then thins out round the camera rather than ending
+     * in a square of the nearest tiles (the real canopy over a whole island, #123), and the instances it keeps widen by
+     * up to FIT_WIDEN to keep some of the cover. The trees set it; the houses don't.
+     */
+    private readonly fitCapacity = false,
   ) {
     for (const s of specs) {
       const m = new InstancedMesh(s.geometry, s.material, s.capacity);
@@ -164,16 +174,29 @@ export class TileScatter {
       const auxAttr = spec.aux ? (spec.geometry.getAttribute(spec.aux) as InstancedBufferAttribute) : null;
       const aux = auxAttr ? (auxAttr.array as Float32Array) : null;
       let n = 0;
+      let fit = 1;
+      if (this.fitCapacity) {
+        let want = 0;
+        for (const { t, d } of list) {
+          const keep = scatterKeep(Math.sqrt(d * d + agl2), R);
+          if (keep <= 0) continue;
+          const arr = t.inst.data[spec.kind];
+          for (let i = 10; i < arr.length; i += REC) if (arr[i] <= keep) want++;
+        }
+        if (want > spec.capacity) fit = spec.capacity / want;
+      }
+      // the crowns left widen to keep part of the cover the thinned ones gave (up to FIT_WIDEN ×)
+      const widen = Math.min(FIT_WIDEN, 1 / Math.sqrt(fit));
       for (const { t, d } of list) {
         // rank-based thinning with slant range: keep everything near, ~22 % at the edge, none beyond
-        const keep = scatterKeep(Math.sqrt(d * d + agl2), R);
+        const keep = scatterKeep(Math.sqrt(d * d + agl2), R) * fit;
         if (keep <= 0) continue;
         const arr = t.inst.data[spec.kind];
         for (let i = 0; i < arr.length && n < spec.capacity; i += REC) {
           if (arr[i + 10] > keep) continue;
           _p.set(arr[i], arr[i + 1], arr[i + 2]);
           _q.setFromAxisAngle(_up, arr[i + 3]);
-          _s.set(arr[i + 4], arr[i + 5], arr[i + 6]);
+          _s.set(arr[i + 4] * widen, arr[i + 5], arr[i + 6] * widen);
           _m.compose(_p, _q, _s);
           _m.toArray(mat, n * 16);
           if (spec.color) {

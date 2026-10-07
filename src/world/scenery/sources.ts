@@ -11,6 +11,7 @@ import type { TheaterId } from '../../core/types';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { VegetationField } from '../terrain/vegetation';
 import { TREE_BROADLEAF, TREE_CONIFER, TREE_PALM } from '../terrain/vegetation';
+import { MAT_PINE } from '../terrain/types';
 import { hash2 } from '../terrain/noise';
 import type { ScatterSource, TileInstances } from './scatter';
 import type { LotMask } from './lotMask';
@@ -200,8 +201,9 @@ export class TreeSource implements ScatterSource {
       const mi = Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell);
       const mat = hf.mat[Math.max(0, Math.min(hf.mat.length - 1, mi))];
       const urban = this.cmap.urban(x, z);
+      // conifers in the pine plantations and the gardens, palms in the gardens; the bush is broadleaf
       let kind = this.veg.species(gh, mat, r, x, z);
-      if (kind === TREE_PALM && urban <= 0.05) kind = TREE_BROADLEAF;
+      if (urban <= 0.05 && (kind === TREE_PALM || (kind === TREE_CONIFER && mat !== MAT_PINE))) kind = TREE_BROADLEAF;
       const ratio = kind === TREE_CONIFER ? 0.55 : kind === TREE_PALM ? 0.75 : 0.95;
       // crowns fall where they will, so some overlap: the cover their union reaches is 1 − e^(−crown area per m²)
       const want = -Math.log(1 - Math.min(share, CANOPY_MAX_SHARE)) * cell;
@@ -222,7 +224,8 @@ export class TreeSource implements ScatterSource {
         if (onStreet(x, z, this.cbd, this.dist)) continue;
         if (onProceduralHouse(x, z, this.cmap, this.cbd, ct.lotMask, 1, this.dist)) continue;
       }
-      _c.setScalar(0.8 + 0.3 * hash2(gx, gz, seed + 34));
+      // the bush darker than the gardens' trees (the photo's crowns under them are a deep green)
+      _c.setScalar((urban <= 0.05 ? 0.55 : 0.8) + 0.25 * hash2(gx, gz, seed + 34));
       out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, r * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 0);
       return;
     }

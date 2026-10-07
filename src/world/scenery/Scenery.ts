@@ -518,6 +518,7 @@ export class Scenery {
       400,
       o.cfg.treeRadius,
       2,
+      true,
     );
     for (const m of this.trees.meshes) this.group.add(m);
 
