@@ -429,3 +429,40 @@ How it works (the details and every threshold are in `houses.py`'s header):
 Motutapu 108, Motuihe 9, Rakino 212; 73 of them new since 2017 from the LiDAR), 170 over 600 m² left for #124, 632
 gone since 2017. 143.6 kB of houses raw (8.40 B a house) + 6.2 kB of coverage; 129.8 kB gzip (7.60 B a house; the
 houses alone 7.32 B).
+
+## Real tree canopy (#123)
+
+`canopy.py` and `canopy.ts` bake the real tree canopy of the suburbs and the gulf islands into
+`src/world/terrain/data/auckland-canopy.bin` (213 kB gzip; medium and high tiers, loaded with the land use by
+`src/world/terrain/theaters/aucklandCanopy.ts`). Same licence and attribution.
+
+| Product | Source | Used for |
+|---|---|---|
+| Auckland Part 1 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-1_2024/{dsm,dem}_1m/2193/`, 20 sheets (`PART1_SHEETS`: BA31 0303–0305, 0403–0405, 0503–0505; BA32 0301, 0302, 0401, 0402, 0404, 0501, 0502; BB31 0105; BB32 0101, 0102, 0201), gaps filled from Part 2 | canopy height (DSM − DEM): Devonport, the North Shore to Takapuna, the CBD, the isthmus, Whenuapai → Māngere and the airport |
+| Auckland Part 2 LiDAR 1m DSM / DEM (2024) | `auckland-part-2_2024`, the sheets under the island boxes of #120's photo (18) | Rangitoto, Motutapu, Browns Island, Motuihe, Rakino, Waiheke |
+| NZ Building Outlines | LDS layer 101290 (WFS per sheet, `propertyName=shape`) | buildings out of the canopy (buffered 1 m) |
+| NZ Suburbs and Localities | LDS layer 113764 | the test areas only (Mount Albert, Devonport, Māngere, Hobsonville; Rangitoto, Motutapu, Waiheke Island) |
+
+```sh
+export LINZ_API_KEY=…                                  # free key from https://data.linz.govt.nz (never commit it)
+python3 tools/linz/canopy.py fetch /home/user/work/canopy   # sheets (≈ 2 GB, into <work>/../lidar, shared with houses.py), outlines, areas
+python3 tools/linz/canopy.py bake /home/user/work/canopy    # ≈ 50 min on 3 processes; per-sheet results cached in <work>/sheets
+npx vite-node tools/linz/canopy.ts /home/user/work/canopy   # → auckland-canopy.bin, tests/fixtures/linz-canopy-areas.json
+```
+
+How it works:
+
+- **Tree pixel**: DEM ≥ 1 m (keeps the sea, beaches, mangroves and boats out), CHM ≥ 3 m, not inside a LINZ outline + 1 m,
+  not one of #121's LiDAR-only houses (`houses.json`) and, outside #121's areas, not a building since 2017 by the CBD
+  bake's test (smooth at 1 m, compact and straight-edged, 30–2,500 m²: without the cap pōhutukawa stands on Rangitoto
+  and pine blocks on Waiheke went as "buildings"). A 2 × 2 opening and a 3-pixel minimum drop wires and poles. Hedges,
+  sheds and cranes can still count; at 32 m they average out.
+- **Grid**: tree and land pixels counted per 16 m cell of the land-use lattice (game XZ through a per-sheet quadratic fit of
+  NZTM → `geoToWorld`, a few cm off), summed into 32 m cells: share = tree / land, 16 levels; a cell is covered when half its
+  pixels are LiDAR of a covered sheet or island box. Heights: the trees' 75th percentile per 128 m. 776 km² covered.
+- **Size**: an adaptive binary range coder (LZMA's) with the left and upper neighbours as context. 16 m cells were ≈ 640 kB
+  at 16 levels (≈ 290 kB at 4), over the issue's 100–250 kB estimate, so the grid ships at 32 m: 194 kB of shares, 19 kB of
+  heights. Decoding takes ≈ 0.1 s (desktop).
+- **LiDAR canopy of the test areas** (1 m, the polygons themselves): Mount Albert 18.2 %, Devonport 20.8 %, Māngere 11.1 %,
+  Hobsonville 11.9 %; Rangitoto 58.1 %, Motutapu 10.3 %, Waiheke Island 52.6 %. `tests/world-canopy.test.ts` checks the
+  grid within 2 points and the scatter's crowns within 5 points of these.

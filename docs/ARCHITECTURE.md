@@ -205,6 +205,22 @@ turns it into lot-mask cells joined to `Scenery.siteMask`, so the procedural lot
 procedural and frontage houses and the centres' blocks keep off it on every tier, by day and by night. Without the file
 the suburbs there are procedural again (and the photo keeps them off on medium and high, as before).
 
+**Real tree canopy (#123).** `src/world/terrain/theaters/aucklandCanopy.ts` loads `auckland-canopy.bin` (baked by
+`tools/linz/canopy.py` + `canopy.ts` from the 2024 LiDAR: DSM − DEM ≥ 3 m, the LINZ outlines buffered 1 m and the
+buildings since 2017 taken out) on the medium and high tiers, with the land use: the share of each 32 m cell's land under
+trees (16 levels, on the land-use lattice) and the trees' 75th-percentile height per 64 m, over Devonport, the North
+Shore to Takapuna, the CBD, the isthmus and the flight corridor (20 Part 1 sheets) and the island boxes of the outer photo
+(Part 2). Where it covers, `TreeSource` grows its trees by it (`canopyTree`: a 14 m point takes a tree with probability
+−ln(1 − share) · 196 m² / crown area, crowns sized from the measured height and widened in a closed canopy) instead of the
+Topo50 cover and the even garden trees, **on the photo too**: the photo's blocker keeps only the procedural trees off, so
+Rangitoto, the islands' bush and Devonport's gardens get 3D trees standing on their photographed crowns, clear of the real
+houses (#121), the road ribbons, the landmark sites and, in the procedural suburbs, the painted streets and houses. The
+terrain shader reads the share from a pyramid (32–256 m box averages, `canopyPyramid`) stored in extra rows of the land-use
+texture (the fragment shader has no sampler unit left): the suburbs' far-field albedo is `OPEN_MIX` (urbanColor.ts) mixed
+with the canopy colour by the share, the lot-level garden trees follow it, and on open ground the forest tone does; the
+grid's edge blends into the procedural mix. Without the file (low tier, offline) the Topo50 cover and the garden-tree
+rule stay. Gameplay never reads it.
+
 **Photo roofs (#140).** The photo is a standard orthophoto, not a true one: a roof h m up is drawn displaced from its
 footprint by h × the camera's lean there (0.07 m per metre typically in the CBD, the mosaic switching frame to frame).
 `tools/linz/roofs.py` registers every LINZ building the game draws on the photo's 0.3 m source tiles (edge correlation of
