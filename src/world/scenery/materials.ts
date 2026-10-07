@@ -103,10 +103,26 @@ varying vec4 vRoof;
 attribute vec4 aFacade;
 varying vec4 vFacade;
 #endif
+#ifdef HOUSES
+// real houses (#121, sources.ts HouseSource): 1 + the roof's rise (m) above the eave; below 1 the archetype's own roof
+attribute float aRise;
+#endif
 ${commonVertex}
 void main() {
   mat4 m = worldMatrix();
-  vec4 w = m * vec4(position, 1.0);
+  vec3 pos = position;
+  vec3 nrm = normal;
+  #ifdef HOUSES
+    if (aRise > 0.75) {
+      // the gable's ridge (local y > 1) at the measured rise, its slopes' normals to match (the roof is 1.1 walls wide)
+      float sx = length(m[0].xyz);
+      float sy = max(length(m[1].xyz), 0.01);
+      float rise = aRise - 1.0;
+      if (pos.y > 1.001) pos.y = 1.0 + rise / sy;
+      if (abs(nrm.x) > 0.05 && nrm.y > 0.05) nrm = vec3(sign(nrm.x) * rise / max(sx, 0.01), 0.55 * sx / sy, 0.0);
+    }
+  #endif
+  vec4 w = m * vec4(pos, 1.0);
   vWorld = w.xyz;
   #ifdef ROOFS
     vRoof = vec4(aRoof.xy * ${ROOF_Q.toFixed(4)}, aRoof.z * ${ROOF_TOP_Q.toFixed(4)} - w.y, aRoof.w);
@@ -114,7 +130,7 @@ void main() {
   #ifdef FACADES
     vFacade = vec4(w.y - aFacade.x * ${FACADE_BASE_Q.toFixed(4)}, aFacade.y * ${FACADE_STOREY_Q.toFixed(4)}, aFacade.z / 32767.0, aFacade.w);
   #endif
-  vNormal = normalize(mat3(m) * normal);
+  vNormal = normalize(mat3(m) * nrm);
   vColor = vertexColor();
   #ifdef HOUSES
     // walls: painted weatherboard / render tint per instance (the instance colour is the roof's)
@@ -632,10 +648,26 @@ export function createLogoMaterial(atmo: AtmosphereUniforms, map: Texture): Shad
 }
 
 const foliageVertex = /* glsl */ `
+#ifdef HOUSES
+// real houses (#121, sources.ts HouseSource): 1 + the roof's rise (m) above the eave; below 1 the archetype's own roof
+attribute float aRise;
+#endif
 ${commonVertex}
 void main() {
   mat4 m = worldMatrix();
-  vec4 w = m * vec4(position, 1.0);
+  vec3 pos = position;
+  vec3 nrm = normal;
+  #ifdef HOUSES
+    if (aRise > 0.75) {
+      // the gable's ridge (local y > 1) at the measured rise, its slopes' normals to match (the roof is 1.1 walls wide)
+      float sx = length(m[0].xyz);
+      float sy = max(length(m[1].xyz), 0.01);
+      float rise = aRise - 1.0;
+      if (pos.y > 1.001) pos.y = 1.0 + rise / sy;
+      if (abs(nrm.x) > 0.05 && nrm.y > 0.05) nrm = vec3(sign(nrm.x) * rise / max(sx, 0.01), 0.55 * sx / sy, 0.0);
+    }
+  #endif
+  vec4 w = m * vec4(pos, 1.0);
   vWorld = w.xyz;
   vNormal = normalize(mat3(m) * normal);
   vColor = vertexColor();

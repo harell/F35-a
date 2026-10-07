@@ -46,6 +46,7 @@ import { loadAucklandOsm } from './scenery/aucklandOsm';
 import { aucklandLandUse, loadAucklandLandUse } from './scenery/aucklandLandUse';
 import { loadAucklandPort } from './scenery/aucklandPort';
 import { loadAucklandNeighbourhoods } from './scenery/aucklandNeighbourhoods';
+import { loadAucklandHouses } from './scenery/aucklandHouses';
 import { loadAucklandDomain } from './scenery/aucklandDomain';
 import { loadTamakiDrive } from './scenery/tamakiDriveData';
 import { runwaysOf } from '../core/airfields';
@@ -96,7 +97,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const aerialOuterLoad = cfg.aerial ? loadAucklandAerialOuter(cfg.aerial, renderer) : null;
   // The real land use (#122, medium and high only: its grid is 12.5 MB on the GPU)
   const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
-  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad]);
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandHouses(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad]);
   const landUse = cfg.landUse ? aucklandLandUse() : null;
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);

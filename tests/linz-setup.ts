@@ -4,7 +4,8 @@
  * auckland-buildings.bin: CBD buildings) and the OpenStreetMap layers (src/world/scenery/data/auckland-osm.bin:
  * airfield layouts), the Ports of Auckland container stacks (auckland-port.bin) and the hero neighbourhoods
  * (auckland-neighbourhoods.bin: Herne Bay, Westhaven, Mission Bay, the flight corridor's suburbs), the Auckland Domain
- * (auckland-domain.bin: its park, buildings and trees) and the Tāmaki Drive waterfront (tamaki-drive.bin) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
+ * (auckland-domain.bin: its park, buildings and trees), the Tāmaki Drive waterfront (tamaki-drive.bin) and the real houses
+ * of Devonport and the gulf islands (auckland-houses.bin, #121) for every test, as the game does in the browser (loadAucklandLinz / loadAucklandRoads /
  * loadAucklandBuildings / loadAucklandOsm). Tests of the hand-traced fallbacks clear them with
  * setAucklandLinz(null) / setAucklandRoads(null) / setAucklandBuildings(null) / setAucklandOsm(null).
  */
@@ -14,6 +15,7 @@ import { setAucklandBuildings } from '../src/world/scenery/aucklandBuildings';
 import { setAucklandOsm } from '../src/world/scenery/aucklandOsm';
 import { setAucklandPort } from '../src/world/scenery/aucklandPort';
 import { setAucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
+import { setAucklandHouses } from '../src/world/scenery/aucklandHouses';
 import { setAucklandDomain } from '../src/world/scenery/aucklandDomain';
 import { setTamakiDrive } from '../src/world/scenery/tamakiDriveData';
 
@@ -58,3 +60,7 @@ setAucklandDomain(DOMAIN_BYTES);
 export const TAMAKI_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/scenery/data/tamaki-drive.bin', import.meta.url)));
 export const TAMAKI_BYTES = new Uint8Array(zlib.gunzipSync(TAMAKI_GZ));
 setTamakiDrive(TAMAKI_BYTES);
+
+export const HOUSES_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/terrain/data/auckland-houses.bin', import.meta.url)));
+export const HOUSES_BYTES = new Uint8Array(zlib.gunzipSync(HOUSES_GZ));
+setAucklandHouses(HOUSES_BYTES);

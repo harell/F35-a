@@ -387,3 +387,60 @@ by day where it fully covers (at night they still run for their lamps and lit wi
 a trace of the shore band and a faint fine grain under 1.3 km. The wharf decks (`akl-waterfront`) and the naval base
 (`akl-sites`) take it on their upward faces. No scattered houses or trees and no procedural suburb-centre blocks
 stand where its fade is over ½. `e2e/aerial-shots.mjs` renders the before / after views.
+
+# Real suburbs 2/9: real houses on Devonport, Waiheke and the gulf islands (#121)
+
+`houses.py` and `houses.ts` bake the houses under #120's photo of the Devonport peninsula and the gulf islands into
+`src/world/terrain/data/auckland-houses.bin` (≈ 130 kB gzip, every tier), decoded by `src/world/scenery/aucklandHouses.ts`
+and drawn by the house scatter (`HouseSource`) through its instanced house and apartment archetypes. Same licence and
+attribution as above.
+
+| Product | Source | Used for |
+|---|---|---|
+| NZ Building Outlines | LDS layer 101290 (WFS, `LINZ_API_KEY`), one request per area box | footprints → rectangles |
+| Auckland Part 1 and Part 2 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-{1,2}_2024/{dsm,dem}_1m/2193/`, whole sheets (25 per product, ≈ 900 MB in all) | eave, roof pitch, gone since 2017, new since 2017 |
+| Auckland 0.075m Urban Aerial Photos (2024-2025) | the mosaics `aerial.py` caches (0.6 m over Devonport, 2.4 m over the islands) | roof colours, the houses' registration on the photo |
+
+```sh
+pip install numpy scipy rasterio pyproj shapely pillow
+python3 tools/linz/aerial.py <aerial work> outer                    # (#120) the photo mosaics, if not cached
+LINZ_API_KEY=… python3 tools/linz/houses.py <work> <aerial work> fetch   # the LiDAR sheets → <work>/../lidar
+LINZ_API_KEY=… python3 tools/linz/houses.py <work> <aerial work>         # → <work>/houses.json, house-spotchecks.json (≈ 3 min)
+npx vite-node tools/linz/houses.ts <work>                           # → auckland-houses.bin, tests/fixtures/linz-house-spotchecks.json
+```
+
+How it works (the details and every threshold are in `houses.py`'s header):
+
+- **Areas**: every outline whose centre the photo covers (its summed weight over ½: `aerialCovers`): the North Shore side
+  of the harbour inside the city square and the two Devonport boxes (Devonport, Stanley Bay, Cheltenham, Narrow Neck,
+  Bayswater, Belmont, Northcote Point at the square's edge), and the land of the island boxes (Waiheke with Pakatoa
+  and Rotoroa, Rangitoto, Motutapu, Motuihe, Rakino; Browns Island has no outlines). Outlines over 600 m² (schools,
+  halls, shops, apartment blocks: #124's) and under 20 m² are left out.
+- **Rectangles, not polygons**: each outline becomes the rectangle along its dominant edge direction with its centroid,
+  its second moments along both axes and its area (an L-shaped villa gets the rectangle of its mass), drawn through the
+  scatter's instanced archetypes, so no polygon is extruded and no draw call is added.
+- **Roofs**: on the nDSM inside the outline shrunk 0.7 m, h = eave + pitch · d for a gable along either axis, a hip over
+  the rectangle and a hip along the outline itself (d = the distance to its nearest edge), least squares refitted
+  without outliers; pitched when clearly better than flat, else a roof whose heights spread over a metre runs from its
+  p15 to its p90. In the game every pitched roof is a gable along the ridge direction (the house archetype; the ridge's
+  rise is per instance); a flat roof with its eave at 8 m or more is an apartment block.
+- **2017 vs 2024**: an outline with less than 2 m standing on most of it in 2024 is dropped (gone); buildings since are
+  taken from the LiDAR where 2.5–15 m stands outside every outline, smooth (a roof, not a canopy), not green in the
+  photo, compact and straight-edged, 40–600 m², and fits a roof plane to 0.35 m RMS (pohutukawa crowns read smooth
+  at 1 m; the photo's colour and the plane fit keep them out).
+- **On the photo's roofs**: the 2024 photo is a standard orthophoto (a roof drawn displaced from its footprint by its
+  height × the camera's lean) and the 2017 outlines carry their own photos' lean, so the houses are moved by the
+  photo-vs-outline offset measured every 400 m where the outlines are dense (the photo's luminance gradient
+  cross-correlated with the outlines' edges over a 300 m window, #120's alignment method). Devonport: 50 cells, median
+  +0.35 m east, +0.30 m north; Waiheke: 79 cells; the small islands are too sparse to measure and stay as traced.
+- **Coverage**: the land under those photo boxes (32 m cells) ships with the houses; there the procedural lots, streets,
+  houses, frontage lots and centres' blocks step aside on every tier (`houseCoverage` → `Scenery.siteMask`).
+- **Spot checks**: 20 random Devonport houses (60–400 m²); the photo's roof under each is the outline moved by the
+  photo-vs-outline offset of a 100 m window round it (one house alone registers badly: a gable's lit and shaded slopes
+  make an edge half a roof away). `tests/world-houses.test.ts` checks the baked centres within 2 m of it (2026-10-07:
+  median 0.37 m, max 1.57 m) and the ridges within 2 m of the LiDAR roof's p95.
+
+2026-10-07: 22,712 outlines in the area boxes; 17,088 houses baked (Devonport 8,314, Waiheke 8,453, Rangitoto and
+Motutapu 108, Motuihe 9, Rakino 212; 73 of them new since 2017 from the LiDAR), 170 over 600 m² left for #124, 632
+gone since 2017. 143.6 kB of houses raw (8.40 B a house) + 6.2 kB of coverage; 129.8 kB gzip (7.60 B a house; the
+houses alone 7.32 B).

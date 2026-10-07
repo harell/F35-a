@@ -70,7 +70,7 @@ describe('suburbs visible from altitude (no hard 1,500 m cut)', () => {
   class Grid implements ScatterSource {
     readonly kinds = 1;
     generate(x0: number, z0: number, size: number, out: TileInstances): void {
-      for (let z = z0 + 10; z < z0 + size; z += 20) for (let x = x0 + 10; x < x0 + size; x += 20) out.data[0].push(x, 0, z, 0, 1, 1, 1, 1, 1, 1, ((x * 0.37 + z * 0.71) % 1 + 1) % 1);
+      for (let z = z0 + 10; z < z0 + size; z += 20) for (let x = x0 + 10; x < x0 + size; x += 20) out.data[0].push(x, 0, z, 0, 1, 1, 1, 1, 1, 1, ((x * 0.37 + z * 0.71) % 1 + 1) % 1, 0);
     }
   }
   const make = () => new TileScatter(new Grid(), [{ geometry: new BoxGeometry(), material: new MeshBasicMaterial(), capacity: 60_000, kind: 0 }], 300, 2400, 50);
@@ -98,7 +98,7 @@ describe('suburbs visible from altitude (no hard 1,500 m cut)', () => {
     for (let dz = -600; dz <= 600; dz += 300) for (let dx = -600; dx <= 600; dx += 300) src.generate(p.x + dx, p.z + dz, 300, out);
     let n = 0;
     for (const arr of out.data)
-      for (let i = 0; i < arr.length; i += 11) {
+      for (let i = 0; i < arr.length; i += 12) {
         n++;
         expect(roads.edgeDistance(arr[i], arr[i + 2])).toBeGreaterThan(5);
       }
@@ -119,7 +119,7 @@ describe('street trees', () => {
         const out = { data: [[], [], []] as number[][] };
         src.generate(tx, tz, 400, out);
         for (const arr of out.data)
-          for (let i = 0; i < arr.length; i += 11) {
+          for (let i = 0; i < arr.length; i += 12) {
             if (cmap.urban(arr[i], arr[i + 2]) <= 0.05) continue;
             n++;
             expect(onStreet(arr[i], arr[i + 2], AKL_CBD_GRID, scratch)).toBe(false);
