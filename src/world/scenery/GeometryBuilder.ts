@@ -36,6 +36,7 @@ export const WIN_CURTAIN = 8; // tower curtain-wall glass: 1.5 m mullions, a dar
 export const WIN_BANDS = 9; // ribbon windows between precast bands, 3.6 m storeys (the CBD tower kit)
 export const WIN_FLOOD = 10; // plain stone walls, floodlit warm white at night (the War Memorial Museum)
 export const WIN_HERITAGE = 11; // dressed stone with punched windows on 3.7 m bays and 3.9 m storeys, floodlit with its windows lit at night (the Chief Post Office)
+export const WIN_EMPTY = 12; // tower curtain-wall glass as WIN_CURTAIN with no floor lit at night (an empty or unfinished tower: Seascape)
 
 /**
  * Photo roofs (#140, the `aRoof` attribute: createBuildingMaterial's `roofs`): a prism's roof takes the aerial photo

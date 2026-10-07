@@ -5,10 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BufferAttribute, BufferGeometry } from 'three';
-import { CBD_TOWER_SKINS } from '../src/core/cbdTowerSkins';
+import { CBD_TOWER_SKINS, type TowerSkin } from '../src/core/cbdTowerSkins';
 import { KIT_TOWERS } from '../src/world/scenery/aucklandBuildings';
 import { GeometryBuilder, WIN_BANDS, WIN_CURTAIN } from '../src/world/scenery/GeometryBuilder';
-import { addTowerSigns, emptySigns, outerWall, paintedWalls, skinParts, towerSignGeometry } from '../src/world/scenery/towerSkins';
+import { addTowerSigns, buildBraces, emptySigns, outerWall, paintedWalls, skinParts, towerSignGeometry } from '../src/world/scenery/towerSkins';
+import { ATLAS_H, ATLAS_USED, logoSlot, SIGN_LOGOS } from '../src/world/scenery/towerLogos';
 import { CbdCollapseVisual, RUBBLE_HEIGHT } from '../src/world/scenery/cbdCollapse';
 import { buildingCollapseTime } from '../src/sim/buildings';
 
@@ -74,6 +75,53 @@ describe('CBD tower skins', () => {
       addTowerSigns(d, 0, s, parts, 0);
       expect(d.pos.length / 12, t.name).toBe((s.signs ?? []).length);
     }
+  });
+
+  it('every brace and drawn line lands on its own face of its tower', () => {
+    for (const s of CBD_TOWER_SKINS) {
+      if (!s.braces?.length && !s.lines?.length) continue;
+      const t = tower(s.n);
+      const parts = skinParts(t.parts.filter((p) => p.kind !== 'spire') as never, 0);
+      for (const ln of [...(s.braces ?? []), ...(s.lines ?? [])]) {
+        const only = { ...s, braces: 'node' in ln ? [ln] : [], lines: 'pts' in ln ? [ln] : [] } as TowerSkin;
+        const B = new GeometryBuilder();
+        buildBraces(B, only, parts, 0);
+        expect(B.triangleCount, `${t.name} ${'pts' in ln ? 'line' : 'brace'} on ${ln.face}°`).toBeGreaterThan(0);
+        // every beam stands within 7 m of the box face it was drawn on
+        const geo = B.build()!;
+        const pos = geo.getAttribute('position');
+        const k = Math.round(((((ln.face - s.box.face) % 360) + 360) % 360) / 90) % 4;
+        const a = ((s.box.face + 90 * k) * Math.PI) / 180;
+        const nx = Math.sin(a), nz = -Math.cos(a);
+        let far = -Infinity;
+        for (const p of parts) for (let i = 0; i < p.ring.length; i += 2) far = Math.max(far, (p.ring[i] - s.box.x) * nx + (p.ring[i + 1] - s.box.z) * nz);
+        for (let i = 0; i < pos.count; i++) {
+          const out = (pos.getX(i) - s.box.x) * nx + (pos.getZ(i) - s.box.z) * nz;
+          expect(out, t.name).toBeGreaterThan(far - 7.5);
+        }
+      }
+    }
+  });
+
+  it('every sign has a cell in the logo atlas, its night look in the bottom half', () => {
+    expect(ATLAS_USED).toBeLessThanOrEqual(ATLAS_H / 2);
+    const used = new Set(CBD_TOWER_SKINS.flatMap((s) => (s.signs ?? []).map((g) => g.logo)));
+    for (const logo of used) expect(SIGN_LOGOS, logo).toContain(logo);
+    const cells = SIGN_LOGOS.map((l) => logoSlot(l));
+    for (const c of cells) {
+      expect(c.u0).toBeGreaterThanOrEqual(0);
+      expect(c.u1).toBeLessThanOrEqual(1);
+      // the day look in the top half (v 0.5–1), so its night look 0.5 lower stays inside the texture
+      expect(c.v0).toBeGreaterThanOrEqual(0.5);
+      expect(c.v1).toBeLessThanOrEqual(1);
+      expect((c.u1 - c.u0) / (c.v1 - c.v0) / 2).toBeCloseTo(c.aspect, 0);
+    }
+    // no two cells overlap
+    for (let i = 0; i < cells.length; i++)
+      for (let j = i + 1; j < cells.length; j++) {
+        const a = cells[i], b = cells[j];
+        expect(a.u1 <= b.u0 || b.u1 <= a.u0 || a.v1 <= b.v0 || b.v1 <= a.v0, `${SIGN_LOGOS[i]} / ${SIGN_LOGOS[j]}`).toBe(true);
+      }
   });
 
   it('a tower’s signs come down with it', () => {

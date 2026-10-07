@@ -274,7 +274,7 @@ void main() {
       vec3 mid = mix(avg, avg * blockLit * blockCol / ${v3(LIT_WINDOW_MEAN)}, detail2);
       emissive += uNight * mix(mid, warm * win * lit * glowK, detail) * (1.0 - photoW);
     }
-  } else if (vWin > 10.5) {
+  } else if (vWin > 10.5 && vWin < 11.5) {
     // dressed stone with punched windows (aWin 11, the Chief Post Office): a 1.5 m × 2.3 m window with a round head in
     // each 3.7 m bay of a 3.9 m storey, the average once a storey is a few pixels; at night the stone floodlit as aWin
     // 10 and two windows in three lit warm
@@ -304,9 +304,10 @@ void main() {
     if (uNight > 0.0 && abs(N.y) < 0.5) emissive += uNight * base * vec3(1.0, 0.92, 0.78) * 0.55;
   } else if (vWin > 7.5 && abs(N.y) < 0.5) {
     // the CBD tower kit's facades (core/cbdTowers.ts): aWin 8 curtain-wall glass on a 1.5 m × 3.8 m storey grid with a dark
-    // spandrel at each slab; aWin 9 ribbon windows between precast bands (1.5 m band, 2.1 m glass, mullions every 1.8 m).
-    // Both blend to their average once a storey is a few pixels; at night office floors lit as the office grid (window LOD)
-    bool curtain = vWin < 8.5;
+    // spandrel at each slab; aWin 9 ribbon windows between precast bands (1.5 m band, 2.1 m glass, mullions every 1.8 m);
+    // aWin 12 the curtain wall of an empty tower (Seascape: no floor lit at night). They blend to their average once a
+    // storey is a few pixels; at night office floors lit as the office grid (window LOD)
+    bool curtain = vWin < 8.5 || vWin > 11.5;
     vec2 t = normalize(vec2(-N.z, N.x) + 1e-5);
     vec2 cell = curtain ? vec2(1.5, 3.8) : vec2(1.8, 3.6);
     vec2 g = vec2(dot(vWorld.xz, t), vWorld.y) / cell;
@@ -336,7 +337,7 @@ void main() {
       base = mix(avg, face, detail);
       spec += sky * mix(${GLASS_REFLECT.window[0].toFixed(2)}, ${GLASS_REFLECT.window[1].toFixed(2)}, glassFresnel(N)) * mix(0.5, (1.0 - mull) * (1.0 - band), detail);
     }
-    if (uNight > 0.0) {
+    if (uNight > 0.0 && vWin < 11.5) {
       vec2 id = floor(g);
       float hsh = hash12(id + floor(vWorld.xz / 37.0) * 7.0);
       float lit = step(hsh, ${WINDOW_STYLES.office.lit.toFixed(3)}) * (1.0 - band);
@@ -608,20 +609,22 @@ varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec2 vUv;
 void main() {
-  vec4 t = texture2D(uMap, vUv);
-  if (t.a < 0.5) discard;
-  // the logo's own colours, lit by day and glowing at night (backlit letters)
-  vec3 base = t.rgb;
-  vec3 col = atmoNight(atmoDiffuse(base, normalize(vNormal), 1.0));
+  // the atlas holds each sign's day look and, 0.5 lower in v, its night look (which letters are lit, in what colour)
+  vec4 d = texture2D(uMap, vUv);
+  vec4 n = texture2D(uMap, vUv - vec2(0.0, 0.5));
+  if (mix(d.a, n.a, step(0.5, uNight)) < 0.5) discard;
+  // the day colours lit by the sun, the night colours glowing (backlit letters)
+  vec3 col = atmoNight(atmoDiffuse(d.rgb, normalize(vNormal), 1.0));
   col = atmoApplyFog(col, vWorld);
-  col += base * (0.1 + 1.3 * uNight) * (1.0 - atmoFogFactor(distance(vWorld, uCamPos) * 0.45, uCamPos.y, vWorld.y));
+  col += mix(d.rgb * 0.1, n.rgb * 1.4, uNight) * (1.0 - atmoFogFactor(distance(vWorld, uCamPos) * 0.45, uCamPos.y, vWorld.y));
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
 `;
 
-/** The CBD towers' crown signs (towerSkins.ts): a full-colour logo atlas, alpha-tested, lit by day and glowing at night. */
+/** The CBD towers' crown signs (towerLogos.ts): a full-colour logo atlas with a day and a night half, alpha-tested, lit by
+ * day and glowing at night. */
 export function createLogoMaterial(atmo: AtmosphereUniforms, map: Texture): ShaderMaterial {
   return new ShaderMaterial({
     name: 'WorldLogo',

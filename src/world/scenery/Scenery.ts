@@ -39,7 +39,8 @@ import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhood
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createLogoMaterial, createRoadMaterial, createSignMaterial } from './materials';
-import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
+import { towerSignGeometry } from './towerSkins';
+import { createTowerLogoTexture } from './towerLogos';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';

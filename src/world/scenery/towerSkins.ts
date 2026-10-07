@@ -1,14 +1,15 @@
 /**
  * The CBD tower kit's skins (core/cbdTowerSkins.ts) in the scenery: walls painted by zone (by face and height, split
  * where a zone starts or ends, so the facade shaders' world-anchored patterns run on across the joins), bracing as
- * beams on the outermost wall of each face, and the crown signs as one small mesh with a logo atlas (canvas texture,
- * createLogoMaterial). Built from the same terraces the sim collides with.
+ * beams on the outermost wall of each face (and so are drawn lines: the Pacifica's white twist), and the crown signs as
+ * one small mesh with the logo atlas (towerLogos.ts, createLogoMaterial). Built from the same terraces the sim collides with.
  */
-import { BufferAttribute, BufferGeometry, CanvasTexture, SRGBColorSpace } from 'three';
-import type { SkinFinish, SkinLogo, SkinZone, TowerSkin } from '../../core/cbdTowerSkins';
-import { GeometryBuilder, IDENT_FRAME, WIN_BANDS, WIN_CURTAIN, WIN_FLOOD, WIN_GLOW, WIN_HERITAGE, WIN_NONE, WIN_OFFICE } from './GeometryBuilder';
+import { BufferAttribute, BufferGeometry } from 'three';
+import type { SkinFinish, SkinZone, TowerSkin } from '../../core/cbdTowerSkins';
+import { logoSlot } from './towerLogos';
+import { GeometryBuilder, IDENT_FRAME, WIN_BANDS, WIN_CURTAIN, WIN_EMPTY, WIN_FLOOD, WIN_GLOW, WIN_HERITAGE, WIN_NONE, WIN_OFFICE } from './GeometryBuilder';
 
-const FINISH_WIN: Record<SkinFinish, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, plain: WIN_FLOOD, glow: WIN_GLOW, none: WIN_NONE, stone: WIN_HERITAGE };
+const FINISH_WIN: Record<SkinFinish, number> = { glass: WIN_CURTAIN, bands: WIN_BANDS, punched: WIN_OFFICE, plain: WIN_FLOOD, glow: WIN_GLOW, none: WIN_NONE, stone: WIN_HERITAGE, dark: WIN_EMPTY };
 
 export function finishWin(f: SkinFinish): number {
   return FINISH_WIN[f];
@@ -177,71 +178,115 @@ function facePoint(skin: TowerSkin, k: number, t: number, s: number): [number, n
   return [skin.box.x + rx * t + nx * s, skin.box.z + rz * t + nz * s];
 }
 
-/** The skin's bracing as beams 0.5 m proud of the outermost wall, in pieces of about 3 m that follow it. */
+/**
+ * Segments (t, h → t, h in mesh m) on face k as beams 0.5 m proud of the outermost wall (or, `ribbon`, flat strips
+ * 0.3 m proud: drawn lines), following it in steps of about 3 m and merged into one member wherever the wall is one
+ * plane, clipped to [hMin, hMax]: only on the face itself (a wall set far back is another face's), and broken where
+ * the wall steps.
+ */
+function faceBeams(
+  B: GeometryBuilder,
+  skin: TowerSkin,
+  parts: readonly SkinPart[],
+  g: number,
+  k: number,
+  half: number,
+  segs: readonly (readonly [number, number, number, number])[],
+  hMin: number,
+  hMax: number,
+  width: number,
+  colour: number,
+  ribbon = false,
+): void {
+  const yOf = (h: number) => g + h + skin.dy;
+  const { nx, nz } = faceAxes(skin, k);
+  type P = [number, number, number, number];
+  // one member from a to b: a box beam, or a flat ribbon facing out (a drawn line: 2 triangles, not 8)
+  const member = (a: P, b: P) => {
+    if (a === b) return;
+    if (!ribbon) {
+      B.beam(IDENT_FRAME, a[0], a[1], a[2], b[0], b[1], b[2], width, colour);
+      return;
+    }
+    // across the line in the wall's plane: (b − a) × n
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    let sx = dy * nz, sy = dz * nx - dx * nz, sz = -dy * nx;
+    const l = Math.hypot(sx, sy, sz) || 1;
+    sx *= width / 2 / l;
+    sy *= width / 2 / l;
+    sz *= width / 2 / l;
+    const q = [a[0] - sx, a[1] - sy, a[2] - sz, b[0] - sx, b[1] - sy, b[2] - sz, b[0] + sx, b[1] + sy, b[2] + sz, a[0] + sx, a[1] + sy, a[2] + sz];
+    // facing out: (p1 − p0) × (p3 − p0) along +n
+    const ux = q[3] - q[0], uy = q[4] - q[1], uz = q[5] - q[2], vx = q[9] - q[0], vy = q[10] - q[1], vz = q[11] - q[2];
+    const out = (uy * vz - uz * vy) * nx + (ux * vy - uy * vx) * nz;
+    B.quad(IDENT_FRAME, out >= 0 ? q : [...q.slice(9, 12), ...q.slice(6, 9), ...q.slice(3, 6), ...q.slice(0, 3)], colour);
+  };
+  for (const [ta, ha, tb, hb] of segs) {
+    const c0 = Math.max(hMin, Math.min(ha, hb)), c1 = Math.min(hMax, Math.max(ha, hb));
+    if (c1 < c0 || (c1 === c0 && ha !== hb)) continue;
+    const at = (h: number) => ta + ((tb - ta) * (h - ha)) / (hb - ha || 1);
+    const flat = ha === hb;
+    const pieces = Math.max(1, Math.ceil((flat ? Math.abs(tb - ta) : Math.hypot(at(c1) - at(c0), c1 - c0)) / 3));
+    // walk the segment in ~3 m steps on the outermost wall; pieces on one wall plane merge into one member
+    let start: P | null = null;
+    let last: P | null = null;
+    for (let i = 0; i <= pieces; i++) {
+      const h = flat ? c0 : c0 + ((c1 - c0) * i) / pieces;
+      const t = flat ? ta + ((tb - ta) * i) / pieces : at(h);
+      const y = yOf(h);
+      const s = outerWall(skin, parts, k, t, y);
+      let p: P | null = null;
+      if (s !== null && s >= half - 6) {
+        const [x, z] = facePoint(skin, k, t, s + (ribbon ? 0.3 : 0.5));
+        p = [x, y, z, s];
+      }
+      if (!p || !last || Math.abs(p[3] - last[3]) >= 1.5) {
+        // a break: off the face, or where the wall steps
+        if (start && last) member(start, last);
+        start = last = p;
+        continue;
+      }
+      if (Math.abs(p[3] - start![3]) < 0.05 && Math.abs(last[3] - start![3]) < 0.05) {
+        last = p;
+        continue;
+      }
+      member(start!, last);
+      if (Math.abs(p[3] - last[3]) >= 0.05) {
+        member(last, p);
+        start = last = p;
+      } else {
+        start = last;
+        last = p;
+      }
+    }
+    if (start && last) member(start, last);
+  }
+}
+
+/** The skin's bracing (an X per module and the mullion where they cross) and its drawn lines, as beams on the walls. */
 export function buildBraces(B: GeometryBuilder, skin: TowerSkin, parts: readonly SkinPart[], g: number): void {
   const half = [0, 1, 2, 3].map((k) => boxHalf(skin, parts, k));
   for (const br of skin.braces ?? []) {
     const k = faceOf(skin, br.face);
     const [t0, t1] = br.t;
-    const yOf = (h: number) => g + h + skin.dy;
-    // an X per module: two diagonals from edge to edge between nodes a module apart
     const segs: [number, number, number, number][] = [];
     const first = br.node - Math.ceil((br.node - br.h[0]) / br.module) * br.module;
     for (let h = first; h < br.h[1]; h += br.module) {
       segs.push([t0, h, t1, h + br.module]);
       segs.push([t1, h, t0, h + br.module]);
     }
-    // the mullion where the X's cross
-    segs.push([(t0 + t1) / 2, br.h[0], (t0 + t1) / 2, br.h[1]]);
-    for (const [ta, ha, tb, hb] of segs) {
-      // clip to the band's heights
-      const c0 = Math.max(br.h[0], Math.min(ha, hb)), c1 = Math.min(br.h[1], Math.max(ha, hb));
-      if (c1 <= c0) continue;
-      const at = (h: number) => ta + ((tb - ta) * (h - ha)) / (hb - ha || 1);
-      const pieces = Math.max(1, Math.ceil(Math.hypot(at(c1) - at(c0), c1 - c0) / 3));
-      let prev: [number, number, number, number] | null = null;
-      for (let i = 0; i <= pieces; i++) {
-        const h = ha === hb ? c0 : c0 + ((c1 - c0) * i) / pieces;
-        const t = ha === hb ? ta + ((tb - ta) * i) / pieces : at(h);
-        const y = yOf(h);
-        const s = outerWall(skin, parts, k, t, y);
-        // only on the face itself (a wall set far back is another face's), and broken where the wall steps
-        if (s === null || s < half[k] - 6) {
-          prev = null;
-          continue;
-        }
-        const [x, z] = facePoint(skin, k, t, s + 0.5);
-        if (prev && Math.abs(prev[3] - s) < 1.5) B.beam(IDENT_FRAME, prev[0], prev[1], prev[2], x, y, z, br.width, br.colour);
-        prev = [x, y, z, s];
-      }
-    }
+    if (!br.noMullion) segs.push([(t0 + t1) / 2, br.h[0], (t0 + t1) / 2, br.h[1]]);
+    faceBeams(B, skin, parts, g, k, half[k], segs, br.h[0], br.h[1], br.width, br.colour);
+  }
+  for (const ln of skin.lines ?? []) {
+    const k = faceOf(skin, ln.face);
+    const segs: [number, number, number, number][] = [];
+    for (let i = 0; i + 3 < ln.pts.length; i += 2) segs.push([ln.pts[i], ln.pts[i + 1], ln.pts[i + 2], ln.pts[i + 3]]);
+    faceBeams(B, skin, parts, g, k, half[k], segs, -Infinity, Infinity, ln.width, ln.colour, true);
   }
 }
 
 /* ───────────────────────────── Signs ───────────────────────────── */
-
-/** A logo's place in the atlas (uv, v up) and its width : height. */
-interface AtlasSlot {
-  u0: number;
-  v0: number;
-  u1: number;
-  v1: number;
-  aspect: number;
-}
-
-const ATLAS = 1024;
-const ROW = 160;
-const LOGO_ASPECT: Record<SkinLogo, number> = { hsbc: 3.3, anz: 2.8, vero: 3.2, pwc: 1.6, qbe: 3.4, waitemata: 5 };
-const LOGOS = Object.keys(LOGO_ASPECT) as SkinLogo[];
-
-function slot(logo: SkinLogo): AtlasSlot {
-  const row = LOGOS.indexOf(logo);
-  const aspect = LOGO_ASPECT[logo];
-  const w = Math.min(ATLAS, Math.round(ROW * aspect));
-  const top = row * ROW;
-  // a pixel's margin keeps the mips of the next row out
-  return { u0: 1 / ATLAS, u1: (w - 1) / ATLAS, v0: 1 - (top + ROW - 1) / ATLAS, v1: 1 - (top + 1) / ATLAS, aspect };
-}
 
 /** Sign geometry (world positions, normals, uv) of the skinned towers, and each sign's vertex range by building. */
 export interface TowerSignData {
@@ -262,7 +307,7 @@ export function addTowerSigns(out: TowerSignData, building: number, skin: TowerS
   const v0 = out.pos.length / 3;
   for (const s of skin.signs ?? []) {
     const k = faceOf(skin, s.face);
-    const sl = slot(s.logo);
+    const sl = logoSlot(s.logo);
     const h = s.w / sl.aspect;
     const y = g + s.h + skin.dy;
     // in front of the wall across its whole width (a terrace standing proud of its middle would cut it)
@@ -295,142 +340,6 @@ export function towerSignGeometry(d: TowerSignData): BufferGeometry | null {
   geo.setIndex(d.idx);
   geo.computeBoundingSphere();
   return geo;
-}
-
-/**
- * The logo atlas: each sign drawn as text with a simple stand-in mark, in full colour on a clear ground (alpha-tested
- * by createLogoMaterial), one row of ROW px each.
- */
-export function drawTowerLogos(canvas: HTMLCanvasElement): void {
-  const c = canvas.getContext('2d')!;
-  c.clearRect(0, 0, canvas.width, canvas.height);
-  const font = (px: number, weight = 'bold') => `${weight} ${Math.round(px)}px "Helvetica Neue", Arial, sans-serif`;
-  const text = (s: string, x: number, y: number, size: number, room: number, fill: string, weight = 'bold') => {
-    c.font = font(size, weight);
-    c.fillStyle = fill;
-    c.textBaseline = 'middle';
-    const tw = c.measureText(s).width;
-    c.save();
-    c.translate(x, y);
-    c.scale(Math.min(1, room / tw), 1);
-    c.fillText(s, 0, 0);
-    c.restore();
-  };
-  for (const logo of LOGOS) {
-    const top = LOGOS.indexOf(logo) * ROW;
-    const w = Math.round(ROW * LOGO_ASPECT[logo]);
-    const H = ROW;
-    const mid = top + H / 2;
-    c.save();
-    switch (logo) {
-      case 'hsbc': {
-        // a red and white hexagon (two red wedges each side of a white bow tie), black letters
-        const r = H * 0.42;
-        const hx = H * 0.55;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.moveTo(hx - r * 1.3, mid);
-        c.lineTo(hx - r * 0.65, mid - r);
-        c.lineTo(hx + r * 0.65, mid - r);
-        c.lineTo(hx + r * 1.3, mid);
-        c.lineTo(hx + r * 0.65, mid + r);
-        c.lineTo(hx - r * 0.65, mid + r);
-        c.closePath();
-        c.fill();
-        c.fillStyle = '#db0011';
-        for (const s of [-1, 1]) {
-          c.beginPath();
-          c.moveTo(hx + s * r * 1.3, mid);
-          c.lineTo(hx + s * r * 0.65, mid - r);
-          c.lineTo(hx, mid);
-          c.lineTo(hx + s * r * 0.65, mid + r);
-          c.closePath();
-          c.fill();
-          c.beginPath();
-          c.moveTo(hx - r * 0.65, mid + s * r);
-          c.lineTo(hx + r * 0.65, mid + s * r);
-          c.lineTo(hx, mid);
-          c.closePath();
-          c.fill();
-        }
-        text('HSBC', H * 1.25, mid + H * 0.03, H * 0.62, w - H * 1.35, '#1a1a1a');
-        break;
-      }
-      case 'anz': {
-        // white letters and a round figure mark, for the blue crown box
-        text('ANZ', H * 0.08, mid + H * 0.03, H * 0.8, w - H * 1.1, '#ffffff', '900');
-        const mx = w - H * 0.55;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.arc(mx, mid - H * 0.2, H * 0.13, 0, Math.PI * 2);
-        c.fill();
-        c.beginPath();
-        c.ellipse(mx, mid + H * 0.17, H * 0.3, H * 0.2, 0, Math.PI, 0);
-        c.fill();
-        break;
-      }
-      case 'vero':
-        // lower-case red letters and a tick
-        text('vero', H * 0.05, mid, H * 0.95, w - H * 0.7, '#d8436f', '600');
-        c.strokeStyle = '#d8436f';
-        c.lineWidth = H * 0.08;
-        c.beginPath();
-        c.moveTo(w - H * 0.55, mid - H * 0.25);
-        c.lineTo(w - H * 0.38, mid + H * 0.2);
-        c.lineTo(w - H * 0.12, mid - H * 0.4);
-        c.stroke();
-        break;
-      case 'pwc': {
-        // stacked warm blocks over pale letters
-        const cols = ['#ffb600', '#eb8c00', '#e0301e', '#d93954'];
-        cols.forEach((col, i) => {
-          c.fillStyle = col;
-          c.fillRect(w * (0.42 + i * 0.07), top + H * (0.06 + i * 0.07), w * 0.36, H * 0.13);
-        });
-        text('pwc', w * 0.08, top + H * 0.7, H * 0.5, w * 0.84, '#f4f4f2');
-        break;
-      }
-      case 'qbe':
-        // a blue disc and white letters, for the dark crown
-        c.fillStyle = '#2e9be6';
-        c.beginPath();
-        c.arc(H * 0.45, mid, H * 0.36, 0, Math.PI * 2);
-        c.fill();
-        text('QBE', H * 1.0, mid + H * 0.03, H * 0.75, w - H * 1.05, '#ffffff', '900');
-        break;
-      case 'waitemata': {
-        // the station's name in white beside a yellow roundel with a dark train front (a stand-in for the transport
-        // mark), over the Glasshouse's canopy
-        const r = H * 0.36;
-        const cx = H * 0.45;
-        c.fillStyle = '#ffd200';
-        c.beginPath();
-        c.arc(cx, mid, r, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = '#1d1d1b';
-        c.fillRect(cx - r * 0.42, mid - r * 0.55, r * 0.84, r * 0.85);
-        c.fillRect(cx - r * 0.5, mid + r * 0.42, r * 0.22, r * 0.2);
-        c.fillRect(cx + r * 0.28, mid + r * 0.42, r * 0.22, r * 0.2);
-        c.fillStyle = '#ffd200';
-        c.fillRect(cx - r * 0.3, mid - r * 0.42, r * 0.6, r * 0.32);
-        text('Waitematā', H * 1.0, mid + H * 0.03, H * 0.62, w - H * 1.05, '#ffffff', '600');
-        break;
-      }
-    }
-    c.restore();
-  }
-}
-
-/** The logo atlas texture (browser only). */
-export function createTowerLogoTexture(anisotropy: number): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = ATLAS;
-  canvas.height = ATLAS;
-  drawTowerLogos(canvas);
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = anisotropy;
-  return tex;
 }
 
 /** The parts of a kit tower as the skin sees them (world roofs), for placing braces and signs. */
