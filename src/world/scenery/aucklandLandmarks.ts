@@ -9,7 +9,7 @@
  * (CC BY 4.0), split into levels as the CBD's are (aucklandBuildings.ts); and the outlines over 600 m² in #121's areas
  * (Devonport, the gulf islands: kind 'other'), which its house scatter leaves out. Platforms are slabs beside the
  * game's own railway ribbons (aucklandRailPaths), where the bake moved each OSM platform (and the canopies over it).
- * The buildings join the LINZ building list (applyLandmarks: the scenery builds them, the sim knows the tall ones);
+ * The buildings join the LINZ building list (aucklandBuildings: the scenery builds them; the sim leaves them out);
  * the sites keep the procedural street grid, lots and sheds off (siteRings), their footprints the trees and houses.
  * When the file is missing nothing changes (the procedural suburbs).
  *
@@ -256,8 +256,8 @@ export function decodeLandmarks(bytes: Uint8Array): Landmarks {
 
 /**
  * The landmark buildings as LINZ buildings (aucklandBuildings.ts), named after their site, tagged with their kind: the
- * scenery gives them their kind's facade and a mesh per area (Scenery: frustum-culled), the sim the tall ones as
- * solids that stand (sim/buildings.ts).
+ * scenery gives them their kind's facade and a mesh per area (Scenery: frustum-culled); the sim's building index
+ * leaves them out (sim/buildings.ts).
  */
 export function landmarkBuildings(d: Landmarks | null): Building[] {
   if (!d) return [];

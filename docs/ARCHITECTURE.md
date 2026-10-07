@@ -235,8 +235,9 @@ that #121 leaves out on Devonport and the islands) on every tier. `aucklandBuild
 (`Building.landmark`: kind, site; named after the site), so `buildCBD` extrudes them with their kind's facade
 (`landmarkFacade`: hospitals white with many windows, malls blank with a lit signage band, stations, schools brick and
 weatherboard; a platform canopy is a roof slab) into one mesh per 8 km square (`LANDMARK_TILE`, through the
-`houseBuilder` callback; facades, no photo roofs), hidden beyond `LANDMARK_FAR` of the camera; the sim knows the tall
-ones as solids that stand (`fixed`), and the hospital rooftop helipads (#125) now sit on their roofs. The site outlines
+`houseBuilder` callback; facades, no photo roofs), hidden beyond `LANDMARK_FAR` of the camera; they are scenery only
+(`buildBuildingGeometry` skips them: as solids the mission bot flew into a hospital tower), and the hospital rooftop
+helipads (#125) now sit on their roofs. The site outlines
 join `siteRings()` (no procedural street grid, lots, sheds or centre blocks on them), the footprints and platforms
 `siteBlocker()` (`landmarkCovers`: no tree or house, procedural or #121's, on them). At night a hospital's windows are
 lit (`buildFacadeLightPoints` with a 55 % share), a mall's car park has lamps. Without the file nothing changes.

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { aucklandLandmarks, decodeLandmarks, encodeLandmarks, landmarkCovers, LANDMARK_KINDS, ringDistance, setAucklandLandmarks } from '../src/world/scenery/aucklandLandmarks';
-import { aucklandBuildings, ringArea, roofHeight } from '../src/world/scenery/aucklandBuildings';
+import { aucklandBuildings, ringArea, ringCentroid, roofHeight } from '../src/world/scenery/aucklandBuildings';
 import { aucklandHouses } from '../src/world/scenery/aucklandHouses';
 import { aucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
 import { aucklandRailPaths } from '../src/world/scenery/motorways';
@@ -111,12 +111,18 @@ describe('landmark data (auckland-landmarks.bin)', () => {
       // each slab is long and narrow, and lies along a ribbon: within its half-width plus the platform's width
       const area = Math.abs(ringArea(p.ring));
       expect(area).toBeGreaterThan(50);
+      // its middle beside the formation (a side platform's middle half its width + 0.4 m out, ≤ 7.4 m, a little more on a curve) or on it (an
+      // island); its ends within 30 m of a ribbon (a curved platform, one past the end of a LINZ line; Paerātā's, opened
+      // in 2025, lies at 10° to the Topo50 line: its far end 25 m off)
+      const [cx, cz] = ringCentroid(p.ring);
+      const mid = railAt(cx, cz);
+      expect(mid.d - mid.width / 2).toBeLessThan(8);
       let off = 0;
       for (let i = 0; i < p.ring.length; i += 2) {
         const r = railAt(p.ring[i], p.ring[i + 1]);
         off = Math.max(off, r.d - r.width / 2);
       }
-      expect(off).toBeLessThan(15);
+      expect(off).toBeLessThan(30);
     }
   });
 
@@ -175,11 +181,9 @@ describe('landmark buildings in the world', () => {
     expect(stats.prisms.filter((p) => p.landmark === 'hospital').length).toBeGreaterThan(150);
   });
 
-  it('are solids that stand when hit (the tall ones: hospital towers)', () => {
+  it('are scenery only: not in the sim\'s building index (the AI and the mission bot don\'t steer round them)', () => {
     const g = buildBuildingGeometry(() => 0, 40)!;
-    const tall = g.buildings.filter((b) => b.name === 'Auckland City Hospital');
-    expect(tall.length).toBeGreaterThan(0);
-    for (const b of tall) expect(b.fixed).toBe(true);
+    expect(g.buildings.some((b) => b.name === 'Auckland City Hospital')).toBe(false);
   });
 
   it('fall back to nothing without the file', () => {
