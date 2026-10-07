@@ -35,6 +35,7 @@ import { GLASSHOUSE } from '../../core/britomart';
 import { SCENE_OUTLINES, SCENE_TERRACES, type SceneTerraceKind } from '../../core/sceneApartments';
 import buildingsUrl from '../terrain/data/auckland-buildings.bin?url';
 import { aucklandNeighbourhoods, aucklandNeighbourhoodsVersion, type Neighbourhood } from './aucklandNeighbourhoods';
+import { aucklandLandmarks, aucklandLandmarksVersion, landmarkBuildings, type LandmarkTag } from './aucklandLandmarks';
 import { pitchedHeight, ridgeHeight, type PitchedRoof } from './pitchedRoof';
 import { fetchMaybeGzip } from '../terrain/theaters/aucklandLinz';
 
@@ -109,6 +110,8 @@ export interface Building {
   roof?: RoofPhoto;
   /** Its OpenStreetMap tags (#141): use, material, storeys, colour; none = untagged. */
   osm?: BuildingTags;
+  /** A landmark site's building outside the CBD (#124, aucklandLandmarks.ts): its kind and site; `name` is the site's. */
+  landmark?: LandmarkTag;
 }
 
 /** OSM `building` uses (tools/linz/facades.py USES): BuildingTags.use − 1 indexes this. */
@@ -155,14 +158,15 @@ let merged: Building[] | null = null;
 let mergedKey = '';
 
 /**
- * Decoded buildings with the hero neighbourhoods' swapped in (applyNeighbourhoods), or null when the LINZ buildings
- * have not been (or could not be) loaded.
+ * Decoded buildings with the landmark sites' appended (#124, aucklandLandmarks.ts: hospitals, stations, malls, schools
+ * outside the CBD) and the hero neighbourhoods' swapped in (applyNeighbourhoods), or null when the LINZ buildings have
+ * not been (or could not be) loaded.
  */
 export function aucklandBuildings(): Building[] | null {
   if (!current) return null;
-  const key = `${version}:${aucklandNeighbourhoodsVersion()}`;
+  const key = `${version}:${aucklandNeighbourhoodsVersion()}:${aucklandLandmarksVersion()}`;
   if (key !== mergedKey) {
-    merged = applyNeighbourhoods(current, aucklandNeighbourhoods());
+    merged = applyNeighbourhoods([...current, ...landmarkBuildings(aucklandLandmarks())], aucklandNeighbourhoods());
     mergedKey = key;
   }
   return merged;
@@ -170,7 +174,7 @@ export function aucklandBuildings(): Building[] | null {
 
 /** Changes whenever the installed data changes (cache key for derived data). */
 export function aucklandBuildingsVersion(): number {
-  return version * 4096 + aucklandNeighbourhoodsVersion();
+  return (version * 4096 + aucklandNeighbourhoodsVersion()) * 4096 + aucklandLandmarksVersion();
 }
 
 /** Install decompressed bytes (null clears → procedural fallback). Throws on malformed data. */

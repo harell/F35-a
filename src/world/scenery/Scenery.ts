@@ -3,7 +3,7 @@
  * meshes (one draw call per feature), textured ground decals (runways, taxiways, aprons), a single
  * Points object for all night lights, and camera-local instanced scatters for trees and houses.
  */
-import { Color, Group, Mesh, type BufferGeometry, type Camera, type PerspectiveCamera, type ShaderMaterial, type Texture, type Vector3 } from 'three';
+import { Color, Group, Mesh, type BufferGeometry, type Object3D, type Camera, type PerspectiveCamera, type ShaderMaterial, type Texture, type Vector3 } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
 import type { QualitySettings, TheaterId } from '../../core/types';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
@@ -32,7 +32,8 @@ import { BridgeCollapseVisual } from './bridgeCollapse';
 import { MUSEUM } from '../../core/museum';
 import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
-import { aucklandBuildings } from './aucklandBuildings';
+import { aucklandBuildings, type Building } from './aucklandBuildings';
+import { aucklandLandmarks, buildMallLamps, buildPlatforms, LANDMARK_FAR, LANDMARK_TILE } from './aucklandLandmarks';
 import { LotMask, maskFromRings, urbanBounds } from './lotMask';
 import { FRONT_BAND, FrontageMap } from './frontage';
 import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
@@ -113,6 +114,8 @@ export class Scenery {
   /** The Harbour Bridge's spans falling into the harbour (Auckland). */
   bridgeCollapse: BridgeCollapseVisual | null = null;
   cbdStats: CbdStats | null = null;
+  /** The landmark meshes (#124), one per LANDMARK_TILE square: hidden beyond LANDMARK_FAR of the camera. */
+  private readonly landmarkTiles: { mesh: Object3D; x0: number; z0: number }[] = [];
   /** The Tāmaki Drive waterfront's measured trees (tamakiDrive.ts), grown by the tree scatter. */
   private tamakiTrees: MeasuredTrees | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
@@ -244,8 +247,34 @@ export class Scenery {
       const apart = new Map<string, GeometryBuilder>();
       for (const n of buildings && cbd.streets ? aucklandNeighbourhoods() ?? [] : [])
         if (!cbd.streets!.inRegion(n.footprint[0], n.footprint[1])) apart.set(n.name, new GeometryBuilder());
-      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings, (b) => (b.area !== undefined ? apart.get(b.area) ?? null : null));
+      // the landmark sites' buildings (#124: hospitals, stations, malls, schools; aucklandLandmarks.ts) and the platforms
+      // along the railway ribbons: one mesh per LANDMARK_TILE square, frustum-culled, with the CBD's facades (no photo roofs)
+      const tiles = new Map<string, GeometryBuilder>();
+      const tileOf = (x: number, z: number) => {
+        const k = `${Math.floor(x / LANDMARK_TILE)}_${Math.floor(z / LANDMARK_TILE)}`;
+        let t = tiles.get(k);
+        if (!t) {
+          tiles.set(k, (t = new GeometryBuilder()));
+          t.enableFacades();
+        }
+        return t;
+      };
+      const houseBuilder = (b: Building) => (b.area !== undefined ? apart.get(b.area) ?? null : b.landmark ? tileOf(b.prisms[0].cx, b.prisms[0].cz) : null);
+      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings, houseBuilder);
       for (const [name, b] of apart) addMesh(b, `akl-nb-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      const landmarks = buildings ? aucklandLandmarks() : null;
+      if (landmarks) {
+        if (rails.length) buildPlatforms(landmarks, height, tileOf);
+        if (o.lights > 0.01) buildMallLamps(landmarks, lights, height, roads);
+        const lmMat = createBuildingMaterial(o.atmo, { facades: true });
+        this.materials.push(lmMat);
+        for (const [k, b] of tiles) {
+          const g = addMesh(b, `akl-landmarks-${k}`, lmMat);
+          const [i, j] = k.split('_').map(Number);
+          const mesh = this.group.children[this.group.children.length - 1];
+          if (g) this.landmarkTiles.push({ mesh, x0: i * LANDMARK_TILE, z0: j * LANDMARK_TILE });
+        }
+      }
       // the hero landmarks in the CBD mesh collapse when the player's jet flies into one (sim/buildings.ts):
       // their vertex and night-light ranges
       const heroes: HeroCollapseRange[] = [];
@@ -305,7 +334,9 @@ export class Scenery {
       // (nor where the real houses stand)
       const cover = this.houseCover;
       const realCovers = (x: number, z: number) => cover?.masked(x, z) ?? false;
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z, aerialCover) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z));
+      // (nor on a landmark site, #124: its real buildings stand there)
+      const onSite = (x: number, z: number) => site?.masked(x, z) ?? false;
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z, aerialCover) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z) || onSite(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z) || onSite(x, z));
       // the Tāmaki Drive waterfront (tamakiDrive.ts: paths, seawall, railings, lamps) in the centres mesh; its trees
       // join the tree scatter below. The road ribbon stands on its raised ground (the Hobson Bay causeway is sea in the
       // terrain) and leaves the lamps to the measured ones there
@@ -443,7 +474,13 @@ export class Scenery {
       // (none inside the CBD region or a hero neighbourhood, which have their facade lights, nor under Spark Arena's roof)
       const nbs = real ? aucklandNeighbourhoods() : null;
       buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z) || westfieldCovers(x, z) || neighbourhoodAt(x, z, nbs) !== null);
-      if (real) buildFacadeLightPoints(real, o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
+      if (real) {
+        // the CBD's lit windows; a hospital's are lit all night (#124), a few of a station's, none of a school's or a mall's
+        const tier = o.quality.level === 'low' ? 0.5 : o.quality.level === 'medium' ? 1 : 1.7;
+        buildFacadeLightPoints(real.filter((p) => !p.landmark), o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
+        buildFacadeLightPoints(real.filter((p) => p.landmark === 'hospital'), o.seed + 1, Math.round(2500 * tier), city, 0.55);
+        buildFacadeLightPoints(real.filter((p) => p.landmark === 'station' || p.landmark === 'other'), o.seed + 2, Math.round(600 * tier), city);
+      }
       const cityMat = createLightsMaterial(o.atmo);
       cityMat.uniforms.uIntensity.value = o.lights;
       cityMat.uniforms.uNearFade.value = 1600;
@@ -553,6 +590,12 @@ export class Scenery {
    * once the camera is higher than their radius.
    */
   update(camPos: Vector3, agl: number): void {
+    // the landmark tiles past LANDMARK_FAR (horizontally, to the square's nearest point) are a pixel or two: not drawn
+    for (const t of this.landmarkTiles) {
+      const dx = Math.max(t.x0 - camPos.x, 0, camPos.x - t.x0 - LANDMARK_TILE);
+      const dz = Math.max(t.z0 - camPos.z, 0, camPos.z - t.z0 - LANDMARK_TILE);
+      t.mesh.visible = dx * dx + dz * dz < LANDMARK_FAR * LANDMARK_FAR;
+    }
     if (this.trees) {
       this.trees.visible = agl < this.treeRadius;
       if (this.trees.visible) this.trees.update(camPos, agl);

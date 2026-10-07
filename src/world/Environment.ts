@@ -47,6 +47,7 @@ import { aucklandLandUse, loadAucklandLandUse } from './scenery/aucklandLandUse'
 import { loadAucklandPort } from './scenery/aucklandPort';
 import { loadAucklandNeighbourhoods } from './scenery/aucklandNeighbourhoods';
 import { loadAucklandHouses } from './scenery/aucklandHouses';
+import { loadAucklandLandmarks } from './scenery/aucklandLandmarks';
 import { loadAucklandDomain } from './scenery/aucklandDomain';
 import { loadTamakiDrive } from './scenery/tamakiDriveData';
 import { runwaysOf } from '../core/airfields';
@@ -98,7 +99,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
   // … and the real tree canopy (#123, the same tiers: its shader grid rides in the land use's texture)
   const canopyLoad = cfg.landUse ? loadAucklandCanopy() : Promise.resolve(false);
-  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandHouses(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad, canopyLoad]);
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandHouses(), loadAucklandLandmarks(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad, canopyLoad]);
   const landUse = cfg.landUse ? aucklandLandUse() : null;
   const canopy = cfg.landUse ? aucklandCanopy() : null;
   // (the real airfields level their OSM outlines: resolved once the layer is in)

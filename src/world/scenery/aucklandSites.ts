@@ -16,6 +16,7 @@
  *
  * Without the file, auckland.ts keeps its hand-placed port and marinas; the Wiri tanks still stand.
  */
+import { landmarkCovers, landmarkSiteRings } from './aucklandLandmarks';
 import { aucklandDomain } from './aucklandDomain';
 import { Color } from 'three';
 import { AKL } from '../../core/auckland';
@@ -175,7 +176,8 @@ export function siteBlocker(): (x: number, z: number, margin: number) => boolean
   const s = siteLayout();
   const pad = ringOf(Float32Array.from(wiriHardstand(s)));
   const rings = s ? [...s.port, ...(s.naval ? [s.naval] : []), pad, ...s.stadiums.map((st) => st.outline)] : [pad];
-  return (x, z) => sparkArenaCovers(x, z, 15) || rings.some((r) => inRing(r, x, z));
+  // (and the landmark sites' buildings and platforms, #124: within the margin of their footprints)
+  return (x, z, m) => sparkArenaCovers(x, z, 15) || rings.some((r) => inRing(r, x, z)) || landmarkCovers(x, z, m);
 }
 
 /**
@@ -184,7 +186,7 @@ export function siteBlocker(): (x: number, z: number, margin: number) => boolean
  * landmark stands, and the hero neighbourhoods' footprints: Mission Bay lies outside the real-streets region, so its
  * measured houses would otherwise stand on painted grid lots (its LINZ streets are ribbons: tools/linz/neighbourhoodStreets.ts;
  * inside the region, Herne Bay's and Westhaven's change nothing), the Auckland Domain's park (its buildings and trees
- * are measured: aucklandDomain.ts) and the Tāmaki Drive waterfront's strip. The port and the
+ * are measured: aucklandDomain.ts), the Tāmaki Drive waterfront's strip and the landmark sites outside the CBD (#124). The port and the
  * naval base are not here: they lie in the real-streets region or under the aerial photo, which never paint the grid.
  */
 export function siteRings(): Float32Array[] {
@@ -197,6 +199,8 @@ export function siteRings(): Float32Array[] {
     ...(aucklandDomain() ? [aucklandDomain()!.park] : []),
     // the Tāmaki Drive waterfront (its paths, verges and trees: tamakiDrive.ts), in short pieces
     ...tamakiDriveRings(),
+    // the landmark sites (#124: hospitals, malls, stations, schools; aucklandLandmarks.ts): their real buildings stand there
+    ...landmarkSiteRings(),
   ];
 }
 
