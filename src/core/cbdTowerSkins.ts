@@ -699,6 +699,151 @@ export const CBD_TOWER_SKINS: readonly TowerSkin[] = [
       { face: 333, t: [-24, -14], h: [10, 70], colour: 0xd4d6dc, finish: 'none' },
     ],
   },
+  // ── #213 Tier B, batch 3 (rows 37–47) ──
+  {
+    // The CAB: balcony bands on the long faces, blank narrow ends (white on the north, grey on the south)
+    n: 37,
+    box: { x: -20.26, z: 479.67, face: 19 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xd2d5dc, finish: 'bands' },
+      { face: 19, h: ALL, colour: 0xe8e8e6, finish: 'none' },
+      { face: 19, t: [-6, -2], h: [10, 70], colour: 0xc9cbd0, finish: 'bands' },
+      { face: 199, h: ALL, colour: 0xbcc0cc, finish: 'none' },
+    ],
+  },
+  {
+    // the AA Centre: white precast pilasters over dark glass, a pale lift strip up the south face, the yellow AA
+    // square at the top of the north, east and west faces
+    n: 38,
+    box: { x: 68.71, z: 33.28, face: 19 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xe0e1e2, finish: 'punched' },
+      { face: 199, h: ALL, colour: 0x48526e, finish: 'glass' },
+      { face: 199, t: [1, 6], h: [35, 70], colour: 0xd6d8dc, finish: 'none' },
+      { h: [62, Infinity], colour: 0xe6e7e8, finish: 'none' },
+    ],
+    signs: [
+      { face: 19, t: -13, h: 66, w: 3.5, logo: 'aa' },
+      { face: 109, t: -11, h: 66, w: 3.5, logo: 'aa' },
+      { face: 289, t: 5, h: 66, w: 3.5, logo: 'aa' },
+    ],
+  },
+  {
+    // 2 Wakefield St (AUT): a white grid over dark windows, the blue-glass rooftop box with AUT on its north-west face
+    n: 39,
+    box: { x: 212.73, z: 438.27, face: 63 },
+    dy: 1,
+    zones: [
+      { h: ALL, colour: 0xdcdde0, finish: 'punched' },
+      { h: [61, Infinity], colour: 0x5a6f9a, finish: 'glass' },
+    ],
+    signs: [{ face: 333, t: 0, h: 66, w: 8, logo: 'aut' }],
+  },
+  {
+    // Jarden House (21 Queen St; "Commercial Bay (eastern block)" in the kit): green-teal glass under the white
+    // lattice screen round its crown, the Jarden name on its east and south faces
+    n: 40,
+    box: { x: 381.68, z: -482.5, face: 18 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0x4b7377, finish: 'glass' },
+      { h: [60, Infinity], colour: 0xdde0e0, finish: 'none' },
+    ],
+    signs: [
+      { face: 108, t: 0, h: 65.5, w: 14, logo: 'jarden' },
+      { face: 198, t: 1, h: 65.5, w: 14, logo: 'jarden' },
+    ],
+  },
+  {
+    // Fifty Albert: finished in 2024 (the 2023 mesh has it at 40 m); faceted silver panels and blue glass along
+    // Albert St (Mapillary, July 2025)
+    n: 41,
+    box: { x: 236.56, z: -217.9, face: 20 },
+    dy: 0,
+    zones: [{ h: ALL, colour: 0xb4bcc8, finish: 'glass' }],
+  },
+  {
+    // the Tower Centre (45 Queen St), now NZX's: dark glass on a grid between white corner pilasters, the blue crown
+    // band with NZX and its chevrons on every face
+    n: 42,
+    box: { x: 351.99, z: -400.34, face: 61 },
+    dy: 4,
+    zones: [
+      { h: ALL, colour: 0x3e4766, finish: 'glass' },
+      { t: [-17, -15.5], h: [0, 56], colour: 0xdfe1e4, finish: 'none' },
+      { t: [15.5, 17], h: [0, 56], colour: 0xdfe1e4, finish: 'none' },
+      { h: [56, Infinity], colour: 0x1f3f8a, finish: 'none' },
+    ],
+    signs: [
+      { face: 61, t: -1, h: 60.5, w: 13, logo: 'nzx' },
+      { face: 151, t: -1, h: 60.5, w: 13, logo: 'nzx' },
+      { face: 241, t: -1, h: 60.5, w: 13, logo: 'nzx' },
+      { face: 331, t: -1, h: 60.5, w: 13, logo: 'nzx' },
+    ],
+  },
+  {
+    // the Telco Building: dark glass, pale floor bands up the top of the north face, a plant box on the roof
+    n: 43,
+    box: { x: 76.54, z: -93.42, face: 20 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0x46506e, finish: 'glass' },
+      { face: 20, h: [38, 63], colour: 0xc9c7c3, finish: 'bands' },
+    ],
+  },
+  {
+    // the Shortland Centre: dark glass, pale bands over the top floors, a brown frame grid up the north face
+    n: 44,
+    box: { x: 537.47, z: -114.27, face: 85 },
+    dy: 1,
+    zones: [
+      { h: ALL, colour: 0x3a4566, finish: 'glass' },
+      { h: [44, 58], colour: 0xa9aab0, finish: 'bands' },
+      { face: 355, h: [20, 58], colour: 0xa58f87, finish: 'bands' },
+    ],
+  },
+  {
+    // Waipārūrū Hall: wings of grey-mauve punched walls, pale vertical fins at the west end, a terracotta stair tower
+    // on the north-east end and dark brick on the east wing (the box centred in the east wing: the middle of the
+    // shaft box is the open court between the wings)
+    n: 45,
+    box: { x: 404.92, z: 1015.33, face: 43 },
+    dy: -3,
+    zones: [
+      { h: ALL, colour: 0xa79fa6, finish: 'punched' },
+      { face: 43, t: [-8, -2], h: [0, 58], colour: 0xd07c62, finish: 'none' },
+      { face: 133, t: [-85, -60], h: [0, 58], colour: 0xc9cbd3, finish: 'bands' },
+      { face: 133, t: [0, 27], h: [0, 62], colour: 0x8e5f63, finish: 'punched' },
+      { face: 313, t: [-30, -5], h: [0, 62], colour: 0xc9cbd3, finish: 'bands' },
+    ],
+  },
+  {
+    // SO/ Auckland: dark glass under white balcony slabs, a full-height white panel on the north face with SO/ at
+    // its top (the Pacifica photo)
+    n: 46,
+    box: { x: 567.37, z: -334.6, face: 19 },
+    dy: 0.5,
+    zones: [
+      { h: ALL, colour: 0xd8dadd, finish: 'bands' },
+      { face: 199, h: ALL, colour: 0x4b5874, finish: 'glass' },
+      { face: 19, t: [-3, 9], h: ALL, colour: 0xeeeeec, finish: 'none' },
+    ],
+    signs: [{ face: 19, t: 3, h: 59, w: 6, logo: 'so' }],
+  },
+  {
+    // the Wiltshire on Victoria: pale walls with a column of balconies, blank pale strips up the north-east and
+    // south-east faces
+    n: 47,
+    box: { x: -2.08, z: -65.44, face: 54 },
+    dy: 0.5,
+    zones: [
+      { h: ALL, colour: 0xd6d3d2, finish: 'bands' },
+      { face: 144, t: [-4, 4], h: [25, 60], colour: 0xdedcdb, finish: 'none' },
+      { face: 54, t: [-12, -2], h: [10, 62], colour: 0xdedcdb, finish: 'none' },
+    ],
+  },
 ];
 
 /** The skin of a kit tower (by its CBD_TOWERS row), if it has one. */
