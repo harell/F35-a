@@ -48,6 +48,8 @@ import { aucklandLandUse, loadAucklandLandUse } from './scenery/aucklandLandUse'
 import { loadAucklandPort } from './scenery/aucklandPort';
 import { loadAucklandNeighbourhoods } from './scenery/aucklandNeighbourhoods';
 import { loadAucklandHouses } from './scenery/aucklandHouses';
+import { createCorridorHouses } from './scenery/corridorTiles';
+import type { CorridorHouses, CorridorStats } from './scenery/corridorHouses';
 import { loadAucklandLandmarks } from './scenery/aucklandLandmarks';
 import { loadAucklandDomain } from './scenery/aucklandDomain';
 import { loadTamakiDrive } from './scenery/tamakiDriveData';
@@ -69,7 +71,9 @@ import type { EnvironmentOptions } from '../core/contracts';
 /** Extra (non-contract) surface for dev tools / other world code. */
 export interface EnvironmentInternals extends EnvironmentApi {
   readonly heightfield: Heightfield;
-  readonly stats: () => { patches: number; genMs: number; bakeMs: number; workers: number; timings: Record<string, number>; instances: number; meshes: number; lights: number; idle: boolean };
+  readonly stats: () => { patches: number; genMs: number; bakeMs: number; workers: number; timings: Record<string, number>; instances: number; meshes: number; lights: number; idle: boolean; corridor?: CorridorStats | null };
+  /** The corridor's streamed real houses (#126; Auckland, null without): the test hooks read it (`__f35.corridor()`). */
+  readonly corridor?: CorridorHouses | null;
 }
 
 export const createEnvironment: CreateEnvironment = async (scene, renderer, opts) => {
@@ -356,11 +360,18 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     aerial,
     landUse,
     canopy,
+    // the corridor's real houses and streets (#126), streamed as the house scatter reaches them
+    corridor: opts.theater === 'auckland' ? createCorridorHouses(cfg.houseRadius) : null,
   });
   scene.add(scenery.group);
   // the terrain leaves the lots along the road and railway ribbons unbuilt, as the scenery's houses do
   terrain.setLotMask(scenery.lotMask);
   terrain.setSiteMask(scenery.siteMask);
+  // the corridor's loaded tiles (#126): no procedural lots or streets under them, re-read as they come and go
+  if (scenery.corridor) {
+    terrain.setHouseMask(scenery.corridor.cover, cfg.houseRadius);
+    scenery.onCorridorCover = (r0, r1) => terrain.updateHouseMask(r0, r1);
+  }
   terrain.setFrontage(scenery.frontage);
   terrain.setLandUse(landUse, canopy);
   let reflections: LightReflections | null = null;
@@ -419,7 +430,8 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     // …but a PiP shot of the Sky Tower being hit or falling keeps the tower itself
     targetCamLandmarks: scenery.skyTower ? [scenery.skyTower.group] : [],
     heightfield: hf,
-    stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle }),
+    corridor: scenery.corridor,
+    stats: () => ({ patches: terrain.lastPatchCount, genMs, bakeMs, workers: workerCount, timings, instances: scenery.instanceCount, meshes: scenery.stats.meshes, lights: scenery.stats.lights, idle: scenery.idle, corridor: scenery.corridor ? { ...scenery.corridor.stats } : null }),
 
     update(ctx: FrameContext) {
       if (!ctx.paused) {

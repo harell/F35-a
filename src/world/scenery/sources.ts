@@ -23,6 +23,7 @@ import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lot
 import { LU_COMMERCIAL, LU_INDUSTRIAL, LU_PITCH, LU_SCHOOL, landUseAt, luOpen, luSheds, type LandUse } from './aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint, shedHeight, shedRoofOf } from './landUseLots';
 import { housesCover, housesIn, type RealHouses } from './aucklandHouses';
+import type { CorridorHouses } from './corridorHouses';
 import { canopyAt as realCanopyAt, canopyHeightAt, type Canopy } from '../terrain/theaters/aucklandCanopy';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
@@ -156,21 +157,34 @@ export class TreeSource implements ScatterSource {
     private readonly measured: MeasuredTrees | null = null,
     /** The real tree canopy (#123): where its grid covers, the trees follow it instead of the Topo50 cover. */
     private readonly canopy: CanopyTrees | null = null,
+    /**
+     * The corridor's streamed real houses (#126, corridorHouses.ts): where a loaded tile covers, the trees keep off its
+     * houses (and its street ribbons: `blocked`) instead of the procedural grid's painted houses and streets.
+     */
+    private readonly stream: CorridorHouses | null = null,
   ) {}
 
   private readonly realIdx: number[] = [];
+  private readonly realFiles: RealHouses[] = [];
 
-  /** Within `margin` m of a real house (#121: an oriented rectangle). */
+  /** Within `margin` m of a real house (#121, and the corridor's loaded tiles, #126: an oriented rectangle). */
   private onRealHouse(x: number, z: number, margin: number): boolean {
-    const h = this.canopy?.houses;
-    if (!h) return false;
-    this.realIdx.length = 0;
-    for (const k of housesIn(h, x - 16, z - 16, x + 16, z + 16, this.realIdx)) {
-      const dx = x - h.x[k];
-      const dz = z - h.z[k];
-      const c = Math.cos(h.dir[k]);
-      const s = Math.sin(h.dir[k]);
-      if (Math.abs(dx * c + dz * s) < h.d[k] / 2 + margin && Math.abs(-dx * s + dz * c) < h.w[k] / 2 + margin) return true;
+    const files = this.realFiles;
+    files.length = 0;
+    if (this.canopy?.houses) files.push(this.canopy.houses);
+    // (#121's houses are under 600 m², ≤ 16 m from their centre to a corner + margin; the corridor's pieces of a big
+    // building up to 63 m a side, ≤ 46 m)
+    this.stream?.filesIn(x - 46, z - 46, x + 46, z + 46, files);
+    for (const h of files) {
+      this.realIdx.length = 0;
+      const r = h === this.canopy?.houses ? 16 : 46;
+      for (const k of housesIn(h, x - r, z - r, x + r, z + r, this.realIdx)) {
+        const dx = x - h.x[k];
+        const dz = z - h.z[k];
+        const c = Math.cos(h.dir[k]);
+        const s = Math.sin(h.dir[k]);
+        if (Math.abs(dx * c + dz * s) < h.d[k] / 2 + margin && Math.abs(-dx * s + dz * c) < h.w[k] / 2 + margin) return true;
+      }
     }
     return false;
   }
@@ -220,7 +234,7 @@ export class TreeSource implements ScatterSource {
       if (st && st.regionSD(x, z) > -2 && (st.park(x, z) < 0.6 || st.streetSD(x, z) < 2)) continue;
       if (this.onRealHouse(x, z, 1)) continue;
       // the procedural suburbs' painted streets and houses (none where the real houses are the truth)
-      if (urban > 0.05 && !(ct.houses && housesCover(ct.houses, x, z))) {
+      if (urban > 0.05 && !(ct.houses && housesCover(ct.houses, x, z)) && !this.stream?.covers(x, z)) {
         if (onStreet(x, z, this.cbd, this.dist)) continue;
         if (onProceduralHouse(x, z, this.cmap, this.cbd, ct.lotMask, 1, this.dist)) continue;
       }
@@ -408,8 +422,10 @@ export class TreeSource implements ScatterSource {
         const gh = hf.heightAt(x, z);
         if (gh < 0.6) continue;
         if (this.blocked && this.blocked(x, z, 3)) continue;
-        // garden / street trees stay off the painted streets and arterials
-        if (urban > 0.05 && onStreet(x, z, this.cbd, this.dist)) continue;
+        // garden / street trees stay off the painted streets and arterials; where the corridor's real houses stand
+        // (#126), off them instead (their streets are ribbons: `blocked`)
+        if (urban > 0.05 && !this.stream?.covers(x, z) && onStreet(x, z, this.cbd, this.dist)) continue;
+        if (this.stream?.tiles.size && this.onRealHouse(x, z, 1)) continue;
         if (urban > 0.05 && this.landUse) {
           const c = landUseAt(this.landUse, x, z);
           if (c === LU_PITCH || c === LU_SCHOOL || ((c === LU_COMMERCIAL || c === LU_INDUSTRIAL) && h1 > 0.2)) continue;
@@ -483,6 +499,11 @@ export class HouseSource implements ScatterSource {
      */
     private readonly real: RealHouses | null = null,
     private readonly realBlocked: ((x: number, z: number, margin: number) => boolean) | null = null,
+    /**
+     * The corridor's streamed real houses (#126, corridorHouses.ts): a loaded tile's houses are drawn like #121's, and
+     * where its coverage is set no procedural, frontage or shed lot is built (until it loads, and offline, they are).
+     */
+    private readonly stream: CorridorHouses | null = null,
   ) {
     this.kinds = landUse ? 3 : 2;
   }
@@ -490,6 +511,7 @@ export class HouseSource implements ScatterSource {
 
   private readonly front: FrontHouse[] = [];
   private readonly realIdx: number[] = [];
+  private readonly realFiles: RealHouses[] = [];
 
   /**
    * The real houses in the tile: a gable along the measured ridge (the house archetype, its roof's rise per instance:
@@ -498,8 +520,9 @@ export class HouseSource implements ScatterSource {
    * They stand from the lowest ground under their corners (no floating downhill side), their eave at the measured
    * height over the ground at their centre.
    */
-  private realTile(x0: number, z0: number, size: number, out: TileInstances): void {
-    const h = this.real!;
+  private realTile(h: RealHouses, x0: number, z0: number, size: number, out: TileInstances): void {
+    // (each corridor tile's houses rank apart from another's: their indices start at 0 in every tile)
+    const salt = h === this.real ? 0 : 1 + Math.abs(Math.round(h.cover.x0 / 64) * 7919 + Math.round(h.cover.z0 / 64) * 104729) % 65521;
     this.realIdx.length = 0;
     const idx = housesIn(h, x0, z0, x0 + size, z0 + size, this.realIdx);
     for (const k of idx) {
@@ -513,7 +536,7 @@ export class HouseSource implements ScatterSource {
       base = Math.max(base, 0.2);
       const yaw = Math.atan2(c, sn); // local +Z (the archetype's ridge) along (c, sn)
       _c.setHex(h.color[k]);
-      const rank = hash2(k & 0xffff, k >> 16, 121);
+      const rank = hash2(k & 0xffff, (k >> 16) + salt, 121);
       const wall = h.eave[k] + Math.max(0, gc - base) + 0.3;
       if (h.rise[k] < 0.3 && h.eave[k] >= REAL_APARTMENT_EAVE)
         out.data[APARTMENT].push(x, base - 0.3, z, yaw, h.w[k], wall, h.d[k], _c.r, _c.g, _c.b, rank, REAL_FLAG);
@@ -522,7 +545,12 @@ export class HouseSource implements ScatterSource {
   }
 
   generate(x0: number, z0: number, size: number, out: TileInstances): void {
-    if (this.real) this.realTile(x0, z0, size, out);
+    const files = this.realFiles;
+    files.length = 0;
+    if (this.real) files.push(this.real);
+    this.stream?.filesIn(x0, z0, x0 + size, z0 + size, files);
+    for (const h of files) this.realTile(h, x0, z0, size, out);
+    const stream = this.stream;
     // Districts overlapping the tile (sampled on a 3×3 grid)
     const seen: District[] = [];
     for (let j = 0; j <= 2; j++)
@@ -538,6 +566,7 @@ export class HouseSource implements ScatterSource {
         if (gh < 1) continue;
         if (this.blocked && this.blocked(h.x, h.z, 4)) continue;
         if (this.landUse && luOpen(landUseAt(this.landUse, h.x, h.z))) continue;
+        if (stream?.covers(h.x, h.z)) continue;
         out.data[h.kind === FRONT_HOUSE ? HOUSE : APARTMENT].push(h.x, gh - 0.8, h.z, h.yaw, h.w, h.h + 0.8, h.d, 1, 1, 1, h.lh, 0);
       }
     }
@@ -580,6 +609,7 @@ export class HouseSource implements ScatterSource {
               const uh = lotHash(d, lx, lz);
               if (cu === LU_SCHOOL && uh >= SCHOOL_BUILT) continue;
               if (this.lotMask?.masked(ucx, ucz)) continue;
+              if (stream?.covers(ucx, ucz)) continue;
               const fp = shedFootprint(cu);
               const gh = this.groundAt(ucx, ucz);
               if (gh < 1) continue;
@@ -597,6 +627,8 @@ export class HouseSource implements ScatterSource {
           if (lh >= 0.8 + 0.2 * dens) continue;
           // the corridor along a road or railway ribbon (lotMask.ts; tested at the lot centre, as the shader does)
           if (this.lotMask?.masked(cwx, cwz)) continue;
+          // the corridor's loaded real houses (#126; tested at the lot centre, as the shader does)
+          if (stream?.covers(cwx, cwz)) continue;
           const apt = dens > 0.9;
           const fp = houseFootprint(lh, lz, apt);
           const [wx, wz] = toWorld(d, (lx + fp.cx) * lotW, (lz + fp.cz) * lotD);

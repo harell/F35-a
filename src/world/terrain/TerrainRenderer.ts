@@ -154,6 +154,12 @@ export class TerrainRenderer {
   readonly streetTexture: DataTexture | null;
   private lotMaskTexture: DataTexture | null = null;
   private siteMaskTexture: DataTexture | null = null;
+  private siteMask: LotMask | null = null;
+  private houseMask: LotMask | null = null;
+  /** The site mask's texture data: its rows, then the house mask's (houseRow0 on). */
+  private siteData: Uint8Array | null = null;
+  private siteW = 1;
+  private houseRow0 = 0;
   private landUseTexture: DataTexture | null = null;
   private angleTexture: DataTexture | null = null;
   private frontTextures: DataTexture[] = [];
@@ -366,6 +372,11 @@ export class TerrainRenderer {
         uSiteMask: { value: o.dummy },
         uSiteMaskRect: { value: new Vector4(0, 0, 1, 0) },
         uSiteMaskRows: { value: 1 },
+        uSiteMaskSize: { value: new Vector2(1, 1) },
+        // set by setHouseMask() with the scenery (#126: the corridor's loaded real houses), rows below the site mask's
+        uHouseMaskRect: { value: new Vector4(0, 0, 1, 0) },
+        uHouseMaskRows: { value: new Vector2(1, 0) },
+        uRealHouseR: { value: 0 },
         // the districts an arterial runs through turn their grid to it (urbanGrid.ts districtAngles)
         uDistAngles: { value: o.dummy },
         uDistAngleRect: { value: new Vector4(0, 0, 0, 0) },
@@ -522,8 +533,75 @@ export class TerrainRenderer {
 
   /** Stop the procedural streets and lots on the landmarks' sites (Scenery.siteMask); null = none. */
   setSiteMask(mask: LotMask | null): void {
+    this.siteMask = mask;
+    this.installSiteMasks();
+  }
+
+  /**
+   * Stop the procedural streets and lots where the corridor's loaded real houses stand (#126, Scenery.corridor.cover,
+   * changed as tiles stream in: updateHouseMask), the ground fading to the suburbs' far average beyond `radius` (the
+   * house scatter's: where the 3D houses thin out); null = none. Its rows ride below the site mask's in one texture
+   * (the fragment shader has no sampler unit to spare).
+   */
+  setHouseMask(mask: LotMask | null, radius = 0): void {
+    this.houseMask = mask;
+    this.material.uniforms.uRealHouseR.value = mask ? radius : 0;
+    this.installSiteMasks();
+  }
+
+  /** Upload the house mask's texel rows [r0, r1) again (a corridor tile came or went). */
+  updateHouseMask(r0: number, r1: number): void {
+    const m = this.houseMask;
+    const d = this.siteData;
+    const t = this.siteMaskTexture;
+    if (!m || !d || !t) return;
+    const W = this.siteW;
+    r0 = Math.max(0, r0);
+    r1 = Math.min(m.texH, r1);
+    for (let r = r0; r < r1; r++) {
+      const at = ((this.houseRow0 + r) * W) * 4;
+      d.set(m.data.subarray(r * m.texW * 4, (r + 1) * m.texW * 4), at);
+      t.addUpdateRange(at, m.texW * 4);
+    }
+    if (r1 > r0) t.needsUpdate = true;
+  }
+
+  private installSiteMasks(): void {
     this.siteMaskTexture?.dispose();
-    this.siteMaskTexture = this.installMask(mask, 'uSiteMask');
+    this.siteMaskTexture = null;
+    this.siteData = null;
+    const u = this.material.uniforms;
+    const site = this.siteMask;
+    const house = this.houseMask;
+    u.uSiteMaskRect.value.set(0, 0, 1, 0);
+    u.uHouseMaskRect.value.set(0, 0, 1, 0);
+    if (!site && !house) return;
+    const W = Math.max(site?.texW ?? 1, house?.texW ?? 1);
+    const siteRows = site?.texH ?? 0;
+    const H = siteRows + (house?.texH ?? 0);
+    const data = new Uint8Array(W * H * 4);
+    if (site) for (let r = 0; r < site.texH; r++) data.set(site.data.subarray(r * site.texW * 4, (r + 1) * site.texW * 4), r * W * 4);
+    if (house) for (let r = 0; r < house.texH; r++) data.set(house.data.subarray(r * house.texW * 4, (r + 1) * house.texW * 4), (siteRows + r) * W * 4);
+    const t = new DataTexture(data, W, H, RGBAFormat, UnsignedByteType);
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = NearestFilter;
+    t.minFilter = NearestFilter;
+    t.generateMipmaps = false;
+    t.needsUpdate = true;
+    this.siteMaskTexture = t;
+    this.siteData = data;
+    this.siteW = W;
+    this.houseRow0 = siteRows;
+    u.uSiteMask.value = t;
+    u.uSiteMaskSize.value.set(W, H);
+    if (site) {
+      u.uSiteMaskRect.value.set(site.x0, site.z0, site.cell, site.texW);
+      u.uSiteMaskRows.value = site.texH;
+    }
+    if (house) {
+      u.uHouseMaskRect.value.set(house.x0, house.z0, house.cell, house.texW);
+      u.uHouseMaskRows.value.set(house.texH, siteRows);
+    }
   }
 
   /**
@@ -582,7 +660,7 @@ export class TerrainRenderer {
     u.uFrontRows.value = map.rows;
   }
 
-  private installMask(mask: LotMask | null, name: 'uLotMask' | 'uSiteMask'): DataTexture | null {
+  private installMask(mask: LotMask | null, name: 'uLotMask'): DataTexture | null {
     const u = this.material.uniforms;
     if (!mask) {
       u[`${name}Rect`].value.set(0, 0, 1, 0);

@@ -48,8 +48,9 @@ describe('landmark sites stop the procedural grid', () => {
 
   it('the shader stops its streets, lots and lamps on a site', () => {
     expect(terrainFragmentShader).toContain('float siteMasked(vec2 wp)');
-    expect(terrainFragmentShader).toContain('float park = max(step(0.975 - dens * 0.03, bh), site);');
-    expect(terrainFragmentShader).toContain('* (1.0 - site);');
+    expect(terrainFragmentShader).toContain('float park = max(step(0.975 - dens * 0.03, bh) * (1.0 - real), site);');
+    // (the streets stop on a site and where the corridor's real houses stand, #126)
+    expect(terrainFragmentShader).toContain('* (1.0 - max(site, real))');
   });
 });
 

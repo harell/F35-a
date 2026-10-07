@@ -6,8 +6,9 @@
  *  - install: precache '/', index.html, the manifest and icons, then read index.html to discover the
  *    hashed bundle files (Vite writes them there) and precache those; voice clips are precached if
  *    present (missing clips are skipped). Large optional assets only some devices use (ON_DEMAND: the
- *    high tier's HD terrain, the medium / high tier's aerial photos) are never precached; they are
- *    cached on first use like other hashed files
+ *    high tier's HD terrain, the medium / high tier's aerial photos, the corridor's streamed house tiles) are never
+ *    precached; they are cached on first use like other hashed files (the corridor's tiles in a cache of their own,
+ *    "f35a-tiles-<VERSION>", so a long flight's tiles never push the photos and the HD terrain out of the runtime cache)
  *  - navigation requests: network-first (fresh deploys win), falling back to the cached shell
  *  - hashed bundle files (assets/*-<hash>.*): cache-first, filled on demand (the URL changes with the content)
  *  - un-hashed public files (audio/…, textures/…, icons/…, the manifest): stale-while-revalidate — served
@@ -23,6 +24,9 @@ const PREFIX = 'f35a-';
 const PRECACHE = `${PREFIX}precache-${VERSION}`;
 const RUNTIME = `${PREFIX}runtime-${VERSION}`;
 const RUNTIME_MAX_ENTRIES = 160;
+const TILES = `${PREFIX}tiles-${VERSION}`;
+/** The corridor's tiles (#126): ≈ 150, a few MB in all; room for every one of them. */
+const TILES_MAX_ENTRIES = 400;
 
 const CORE = [
   './',
@@ -48,11 +52,14 @@ const VOICES = [
 /**
  * Large optional assets only some tiers use (the HD terrain: high; the aerial photo and its outer atlas of
  * Devonport and the gulf islands: 2048 medium, 4096 high, the high tier's atlas a KTX2 file with its alpha cover
- * beside it and three.js's Basis transcoder to read it): never precached, so a device downloads only what its
- * tier asks for (cached on first use).
+ * beside it and three.js's Basis transcoder to read it), and the corridor's real houses and streets (#126: one tile
+ * of 2 km, akl-corridor-<i>_<j>, fetched as the jet's house scatter reaches it): never precached, so a device
+ * downloads only what its tier and its flights ask for (cached on first use).
  */
 const ON_DEMAND =
-  /\/(?:auckland-linz-hd-[\w-]+\.bin|auckland-aerial-(?:outer-)?\d+-[\w-]+\.(?:webp|ktx2)|auckland-aerial-outer-cover-[\w-]+\.png|basis_transcoder-[\w-]+\.(?:js|wasm))$/;
+  /\/(?:auckland-linz-hd-[\w-]+\.bin|auckland-aerial-(?:outer-)?\d+-[\w-]+\.(?:webp|ktx2)|auckland-aerial-outer-cover-[\w-]+\.png|basis_transcoder-[\w-]+\.(?:js|wasm)|akl-corridor-[\w-]+\.bin)$/;
+/** The corridor's streamed tiles (in their own cache). */
+const TILE = /\/akl-corridor-[\w-]+\.bin$/;
 
 const scopeUrl = (p) => new URL(p, self.registration.scope).href;
 
@@ -121,7 +128,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      const keep = new Set([PRECACHE, RUNTIME]);
+      const keep = new Set([PRECACHE, RUNTIME, TILES]);
       for (const key of await caches.keys()) if (key.startsWith(PREFIX) && !keep.has(key)) await caches.delete(key);
       if (self.registration.navigationPreload) {
         try {
@@ -139,10 +146,10 @@ self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
-async function trimRuntime() {
-  const cache = await caches.open(RUNTIME);
+async function trimRuntime(name = RUNTIME, max = RUNTIME_MAX_ENTRIES) {
+  const cache = await caches.open(name);
   const keys = await cache.keys();
-  for (let i = 0; i < keys.length - RUNTIME_MAX_ENTRIES; i++) await cache.delete(keys[i]);
+  for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
 }
 
 async function networkFirstNavigation(event) {
@@ -198,7 +205,7 @@ async function staleWhileRevalidate(event) {
   return (await refresh) || Response.error();
 }
 
-async function cacheFirst(req) {
+async function cacheFirst(req, name = RUNTIME, max = RUNTIME_MAX_ENTRIES) {
   const hit = await caches.match(req);
   if (hit) return hit;
   const res = await fetch(req);
@@ -206,9 +213,9 @@ async function cacheFirst(req) {
   if (res.ok && res.status === 200 && res.type === 'basic') {
     const copy = res.clone();
     caches
-      .open(RUNTIME)
+      .open(name)
       .then((c) => c.put(req, copy))
-      .then(trimRuntime)
+      .then(() => trimRuntime(name, max))
       .catch(() => undefined);
   }
   return res;
@@ -228,6 +235,10 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.endsWith('/sw.js') || url.pathname.includes('/@vite') || url.pathname.includes('/node_modules/')) return;
   if (isUnhashed(url)) {
     event.respondWith(staleWhileRevalidate(event));
+    return;
+  }
+  if (TILE.test(url.pathname)) {
+    event.respondWith(cacheFirst(req, TILES, TILES_MAX_ENTRIES));
     return;
   }
   event.respondWith(cacheFirst(req));

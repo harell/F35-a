@@ -1050,6 +1050,8 @@ export function buildCentres(
   cbd: CbdGrid,
   roads: RoadNetwork | null,
   skip: ((x: number, z: number) => boolean) | null = null,
+  /** Each block's centre and vertex range [x, z, v0, v1, …] (#126: hidden where the corridor's real houses load). */
+  blocks: number[] | null = null,
 ): number {
   const rnd = mulberry32(777);
   let n = 0;
@@ -1087,6 +1089,7 @@ export function buildCentres(
             if (height(wx, wz) < 1.5 || (roads && roads.near(wx, wz, 10)) || skip?.(wx, wz)) continue;
             const g = height(wx, wz) - 2;
             const fr = frameFromHeading(wx, g, wz, d.angle);
+            const v0 = B.vertexCount;
             const bw = w - 2 - rnd() * 4;
             const bd = (c.industrial ? z1 - z0 : (z1 - z0) / 2) - 3 - rnd() * 5;
             if (c.industrial) {
@@ -1100,6 +1103,7 @@ export function buildCentres(
               if (detail > 0.5 && h > 10 && rnd() < 0.4) B.box(fr, bw * 0.2, h, 0, bw * 0.3, 2.5, bd * 0.3, 0x8a8a88, 0x6a6a68);
               if (h > 45) lights.add(wx, g + h + 3, wz, 0xff2a18, 3, rnd());
             }
+            blocks?.push(wx, wz, v0, B.vertexCount);
             n++;
           }
         }

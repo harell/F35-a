@@ -192,6 +192,10 @@ uniform float uLotMaskRows; // texels down
 uniform sampler2D uSiteMask; // landmark sites (stadium grounds, the oil terminal…): no procedural streets or lots; same layout
 uniform vec4 uSiteMaskRect;
 uniform float uSiteMaskRows;
+uniform vec2 uSiteMaskSize; // the texture's texels across, down: the site rows, then the house mask's (no sampler to spare)
+uniform vec4 uHouseMaskRect; // the corridor's loaded real houses (#126, corridorHouses.ts): x0, z0, cell, texels across
+uniform vec2 uHouseMaskRows; // its texels down, its first row in uSiteMask
+uniform float uRealHouseR; // the house scatter's radius (m): how far the real houses are drawn; 0 = none
 uniform sampler2D uDistAngles; // street grid angle of the districts an arterial runs through (urbanGrid.ts DistrictAngles)
 uniform vec4 uDistAngleRect; // cell index of texel (0, 0), texels across, down; across 0 = none
 uniform sampler2D uFrontCells; // road frontage (frontage.ts): candidate segments per cell (RGBA8 start, count)
@@ -312,23 +316,33 @@ vec4 aerialPhoto(vec2 wp) {
   return vec4(acc.rgb / acc.a * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), min(acc.a, 1.0));
 }
 
-// The bit of a cell mask (lotMask.ts LotMask.masked()) at wp: 1 bit per cell, 8 × 4 cells per RGBA8 texel.
-float maskBit(sampler2D tex, vec4 rect, float rows, vec2 wp) {
+// The bit of a cell mask (lotMask.ts LotMask.masked()) at wp: 1 bit per cell, 8 × 4 cells per RGBA8 texel; the mask's
+// rows start at row0 of a texture of size texels.
+float maskBitIn(sampler2D tex, vec4 rect, float rows, float row0, vec2 size, vec2 wp) {
   if (rect.w <= 0.0) return 0.0;
   vec2 g = floor((wp - rect.xy) / rect.z);
   vec2 t = floor(g / vec2(8.0, 4.0));
-  vec2 size = vec2(rect.w, rows);
-  if (t.x < 0.0 || t.y < 0.0 || t.x >= size.x || t.y >= size.y) return 0.0;
-  vec4 v = floor(texture2D(tex, (t + 0.5) / size) * 255.0 + 0.5);
+  if (t.x < 0.0 || t.y < 0.0 || t.x >= rect.w || t.y >= rows) return 0.0;
+  vec4 v = floor(texture2D(tex, (t + vec2(0.5, row0 + 0.5)) / size) * 255.0 + 0.5);
   vec2 f = g - t * vec2(8.0, 4.0);
   float byte = dot(v, vec4(equal(vec4(f.y), vec4(0.0, 1.0, 2.0, 3.0))));
   return mod(floor(byte / exp2(f.x)), 2.0);
 }
+float maskBit(sampler2D tex, vec4 rect, float rows, vec2 wp) { return maskBitIn(tex, rect, rows, 0.0, vec2(rect.w, rows), wp); }
 // 1 when a lot centred at wp is cleared for a road or railway corridor.
 float lotMasked(vec2 wp) { return maskBit(uLotMask, uLotMaskRect, uLotMaskRows, wp); }
 // 1 on a landmark's site (aucklandSites.ts siteRings: a stadium's grounds, the oil terminal): the procedural grid
 // stops there, so a 3D landmark never stands on painted streets and houses; its real streets are ribbons around it.
-float siteMasked(vec2 wp) { return maskBit(uSiteMask, uSiteMaskRect, uSiteMaskRows, wp); }
+float siteMasked(vec2 wp) { return maskBitIn(uSiteMask, uSiteMaskRect, uSiteMaskRows, 0.0, uSiteMaskSize, wp); }
+// 1 where a loaded tile of the corridor's real houses (#126) covers: no procedural lots, sheds or streets there.
+float houseMasked(vec2 wp) { return maskBitIn(uSiteMask, uHouseMaskRect, uHouseMaskRows.x, uHouseMaskRows.y, uSiteMaskSize, wp); }
+// Share of the real houses drawn at slant range ds (scatter.ts scatterKeep, as aerialHouseShare()); 0 without them.
+float realHouseShare(float ds) {
+  float R = uRealHouseR;
+  if (R <= 0.0) return 0.0;
+  float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);
+  return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds));
+}
 
 // Real land-use class at wp (aucklandLandUse.ts landUseAt() is the same lookup); -1 without the grid, 0 = none.
 float landUseAt(vec2 wp) {
@@ -612,7 +626,7 @@ vec3 cbdPattern(vec2 wp, float mpp, vec4 sm, out vec3 emissive) {
 //  mid  (8–40 m/px): one mixed colour per lot + coverage-weighted street lines
 //  far  (> 16 m/px): fading into area-weighted roofs + canopy + paving (reads as city, not green fields)
 // At night: street lamps along the roads, glowing windows, and a far-field average glow.
-vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 emissive) {
+vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, out vec3 emissive) {
   const vec2 BLOCK = vec2(105.0, 76.0);
   const vec2 LOT = vec2(17.5, 38.0);
   // CBD region: Auckland's real streets (the whole region is built up, whatever the colour map says)
@@ -627,7 +641,12 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec2 bid = floor(p / BLOCK);
   float bh = hash12(bid + dist.z * 91.0);
   float site = mpp < 120.0 ? siteMasked(wp) : 0.0;
-  float park = max(step(0.975 - dens * 0.03, bh), site);
+  // the corridor's real houses (#126): where a loaded tile covers, no procedural lots, sheds or streets (its streets
+  // are ribbons); the ground is gardens where its 3D houses are drawn and the suburbs' far average where they thin out
+  float real = mpp < 120.0 ? houseMasked(wp) : 0.0;
+  float realFar = real * (1.0 - realHouseShare(ds));
+  // (the grid's random park blocks too: the real land use has the parks there)
+  float park = max(step(0.975 - dens * 0.03, bh) * (1.0 - real), site);
   vec2 lid = floor(p / LOT);
   vec2 lf = fract(p / LOT);
   float lh = hash12(lid + 17.0 + dist.z * 13.0);
@@ -635,6 +654,8 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
   // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
   if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
+  // (and at the lot centre, as HouseSource tests it, none on the corridor's real houses)
+  if (built > 0.0 && real > 0.0) built *= 1.0 - houseMasked(dist.xy + (lid + 0.5) * LOT * R);
   // Real land use (#122, landUseLots.ts; HouseSource does the same): the pixel's class decides the ground (open
   // ground: its own look and no streets; school and hospital grounds: no through streets), the lot centre's class
   // whether a house stands, and the class at the centre of a unit of ${UNIT_LOTS} lots whether it holds a shed round a car
@@ -663,6 +684,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
       field = luU == ${f1(LU_SCHOOL)} ? 1.0 - shed : 0.0;
       shed *= 1.0 - park;
       if (shed > 0.0 && mpp < 40.0) shed *= 1.0 - lotMasked(uc);
+      if (shed > 0.0 && real > 0.0) shed *= 1.0 - houseMasked(uc);
     } else if (built > 0.0) {
       built *= 1.0 - luOpen(landUseAt(dist.xy + (lid + 0.5) * LOT * R));
     }
@@ -677,7 +699,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   // District borders are ordinary streets where two grid orientations meet (no arterial width,
   // lane marks or extra lamps: painted on every jittered Voronoi border those read as cracked
   // paving from altitude). Real arterials are road ribbons (motorways.ts ARTERIALS).
-  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w)) * (1.0 - site) * (1.0 - max(open, campus));
+  road = max(road, 1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, dist.w)) * (1.0 - max(site, real)) * (1.0 - max(open, campus));
   // Along an arterial: its frontage lots (frontage.ts) facing it across a footpath, instead of the grid. Only the
   // grid streets that meet it square enough carry on through the band to the kerb (side streets); the lot frame
   // replaces the grid's (x along the road, y back from the footpath: a row-0 lot, its street in front).
@@ -693,7 +715,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     front = 1.0;
     vec2 uL = R * fRoad.xy;
     roadD = min(abs(uL.y) < ${SIDE_STREET_COS.toFixed(2)} ? edgeDist(vec2(p.x, 0.5 * BLOCK.y), BLOCK) : 1e3, abs(uL.x) < ${SIDE_STREET_COS.toFixed(2)} ? edgeDist(vec2(0.5 * BLOCK.x, p.y), BLOCK) : 1e3);
-    road = (1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, roadD)) * (1.0 - site);
+    road = (1.0 - smoothstep(3.6 - aa * 0.5, 3.6 + aa * 0.5, roadD)) * (1.0 - max(site, real));
     // the carriageway (under the ribbon) and the footpath along the kerb
     road = max(road, 1.0 - smoothstep(-aa * 0.5, aa * 0.5, fRoad.w));
     frontFoot = 1.0 - smoothstep(${FRONT_FOOTPATH.toFixed(2)} - aa * 0.5, ${FRONT_FOOTPATH.toFixed(2)} + aa * 0.5, fRoad.w);
@@ -704,7 +726,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     lid = vec2(fLot.w, 0.0);
     lf = vec2(fLot.x / fLot.z, fLot.y / ${FRONT_DEPTH.toFixed(2)});
     lh = hash12(vec2(fLot.w + 17.0, fId.x + 101.0));
-    built = step(0.5, fId.y) * (1.0 - open);
+    built = step(0.5, fId.y) * (1.0 - open) * (1.0 - real);
     apt = step(1.5, fId.y);
     shop = step(2.5, fId.y);
     park = max(site, open);
@@ -739,6 +761,8 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec2 ss = shedSize(luU);
   vec3 shedRoofC = shedRoof(uh);
   vec3 yard = mix(asphalt * 1.6, paving * 0.9, 0.35);
+  // the corridor's real buildings on commercial and industrial land (#126) stand in yards and car parks, not lawns
+  if (real > 0.0 && luP >= 0.0 && luSheds(luP) > 0.5) grass = mix(grass, yard * (0.9 + 0.2 * bh), real);
   vec3 shedAvg = mix(yard, shedRoofC, ss.x * ss.y);
   far = mix(far, shedAvg, max(shed, luSheds(luU) * (1.0 - park)) * luFar);
   // Mid range (≈ 8–40 m/px): one colour per lot on the real lot grid (roof share, lawn and garden
@@ -752,9 +776,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   lotCol = mix(lotCol, openCol, max(open, field));
   lotCol = mix(lotCol, shedAvg, shed);
   float w = max(mpp, 1.0);
-  float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0) * (1.0 - site) * (1.0 - max(open, campus));
+  float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0) * (1.0 - max(site, real)) * (1.0 - max(open, campus));
   vec3 mid = mix(lotCol, mix(asphalt, paving, 0.35), roadCov * 0.9);
-  vec3 col = mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp));
+  vec3 col = mix(mix(mid, far, 0.4), far, max(smoothstep(16.0, 40.0, mpp), realFar));
   if (mpp < 8.0) {
     float h2 = fract(lh * 37.1);
     float h3 = fract(lh * 71.7);
@@ -835,10 +859,10 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
       near = mix(near, shedNear, shed);
     }
     // footpaths, kerbs and streets (lane marks on arterials)
-    float foot = max((1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD)) * (1.0 - site), frontFoot);
+    float foot = max((1.0 - smoothstep(5.3 - aa * 0.5, 5.3 + aa * 0.5, roadD)) * (1.0 - max(site, real)), frontFoot);
     near = mix(near, paving * 1.15, foot * (1.0 - tree));
     near = mix(near, asphalt, road);
-    col = mix(near, col, smoothstep(4.5, 8.0, mpp));
+    col = mix(near, col, max(smoothstep(4.5, 8.0, mpp), realFar));
   }
 
   emissive = vec3(0.0);
@@ -851,7 +875,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
     float nearLamps = road * 0.8 * lampDot * (1.0 - smoothstep(6.0, 18.0, mpp));
     float glowLots = built * step(lh, 0.45) * (1.0 - smoothstep(4.0, 12.0, mpp)) * 0.05;
     float avgLamps = ${NIGHT_GLOW.suburbLamps.toFixed(3)} * (0.6 + 0.8 * bh) * (0.6 + 0.5 * dens);
-    float lamps = mix(nearLamps * 1.6, avgLamps, smoothstep(3.0, 18.0, mpp));
+    float lamps = mix(nearLamps * 1.6, avgLamps, max(smoothstep(3.0, 18.0, mpp), realFar));
     vec3 lampCol = mix(vec3(1.0, 0.58, 0.22), vec3(1.0, 0.86, 0.66), step(0.55, fract(dist.z * 17.0)));
     emissive = (lampCol * lamps + vec3(1.0, 0.72, 0.42) * (glowLots + ${NIGHT_GLOW.haze.toFixed(3)} * dens * smoothstep(4.0, 12.0, mpp))) * uNight * clamp(dens * 2.5, 0.0, 1.0);
   }
@@ -1004,7 +1028,7 @@ void main() {
     if (og > 0.0) albedo = mix(albedo, openGround(albedo, wp, luN, mpp), og * natural * (1.0 - smoothstep(40.0, 60.0, mpp)));
   }
   vec3 emissive = vec3(0.0);
-  if (urban > 0.01 && !photoFull) albedo = urbanPattern(albedo, wp, urban, mpp, sm, emissive);
+  if (urban > 0.01 && !photoFull) albedo = urbanPattern(albedo, wp, urban, mpp, sm, dist, emissive);
 
   float rockW = smoothstep(uRockSlope, uRockSlope + 0.09, slope + (dA.b - 0.5) * 0.12 + (dB.g - 0.5) * 0.05 * nearB) * natural;
   vec3 rock = uRockColor * (0.68 + 0.6 * mix(dA.b, dB.b, nearB * 0.7));

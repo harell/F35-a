@@ -30,6 +30,8 @@ interface Tile {
   tz: number;
   inst: TileInstances;
   lastUsed: number;
+  /** Its source's data changed (invalidate): drawn as it was until generated again. */
+  stale?: boolean;
 }
 
 export interface ScatterMeshSpec {
@@ -131,7 +133,7 @@ export class TileScatter {
           if (d > this.radius + ts * 0.71) continue;
           const t = this.tiles.get(this.key(tx + i, tz + j));
           if (t) t.lastUsed = this.frame;
-          else this.pending.push({ tx: tx + i, tz: tz + j, d });
+          if (!t || t.stale) this.pending.push({ tx: tx + i, tz: tz + j, d });
         }
       this.pending.sort((a, b) => b.d - a.d); // pop() nearest first
       // Evict tiles far outside the radius
@@ -230,9 +232,30 @@ export class TileScatter {
     }
   }
 
+  /**
+   * Drop the cached tiles overlapping [x0, x1) × [z0, z1) (the source's data there changed: a streamed tile of the
+   * corridor's real houses came or went, #126); the next updates generate them again, nearest first, each drawn as it
+   * was until then (no gap while they regenerate).
+   */
+  invalidate(x0: number, z0: number, x1: number, z1: number): void {
+    const ts = this.tileSize;
+    let any = false;
+    for (const t of this.tiles.values()) {
+      if (t.tx * ts >= x1 || (t.tx + 1) * ts <= x0 || t.tz * ts >= z1 || (t.tz + 1) * ts <= z0) continue;
+      t.stale = true;
+      any = true;
+    }
+    if (any) {
+      // (re-list the tiles in range on the next update)
+      this.lastTx = Number.NaN;
+      this.lastTz = Number.NaN;
+    }
+  }
+
   /** True when no tiles are pending and instances are packed. */
   get idle(): boolean {
-    return this.pending.length === 0 && !this.dirty;
+    // (an invalidate() between two updates re-lists the tiles on the next one: not idle until then)
+    return this.pending.length === 0 && !this.dirty && !Number.isNaN(this.lastTx);
   }
 
   get instanceCount(): number {
