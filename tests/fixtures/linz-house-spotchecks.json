@@ -1,0 +1,182 @@
+[
+ {
+  "id": 3832189,
+  "x": 3271.55,
+  "z": -3930.29,
+  "ridge": 4.24,
+  "photo": "devonport_north",
+  "house": 11061,
+  "offsetFromOutline": 0.69
+ },
+ {
+  "id": 3842687,
+  "x": 1262.54,
+  "z": -2495.62,
+  "ridge": 7.22,
+  "photo": "city",
+  "house": 14678,
+  "offsetFromOutline": 1.88
+ },
+ {
+  "id": 3901093,
+  "x": 2681.07,
+  "z": -2295.52,
+  "ridge": 5.61,
+  "photo": "city",
+  "house": 15902,
+  "offsetFromOutline": 1.12
+ },
+ {
+  "id": 3839041,
+  "x": 2504.51,
+  "z": -4511.86,
+  "ridge": 7.12,
+  "photo": "devonport_north",
+  "house": 9202,
+  "offsetFromOutline": 2.05
+ },
+ {
+  "id": 3880964,
+  "x": 2688.76,
+  "z": -4329.87,
+  "ridge": 4.18,
+  "photo": "devonport_north",
+  "house": 9755,
+  "offsetFromOutline": 1.37
+ },
+ {
+  "id": 3843470,
+  "x": 1776.97,
+  "z": -2463.29,
+  "ridge": 7.9,
+  "photo": "city",
+  "house": 14754,
+  "offsetFromOutline": 0.75
+ },
+ {
+  "id": 3852473,
+  "x": 3911.17,
+  "z": -2935.86,
+  "ridge": 5.12,
+  "photo": "devonport_north",
+  "house": 13746,
+  "offsetFromOutline": 0.61
+ },
+ {
+  "id": 3851132,
+  "x": 3290.28,
+  "z": -2778.13,
+  "ridge": 7.29,
+  "photo": "devonport_north",
+  "house": 14006,
+  "offsetFromOutline": 1.46
+ },
+ {
+  "id": 3799681,
+  "x": 819.63,
+  "z": -3535.79,
+  "ridge": 5.52,
+  "photo": "devonport_north",
+  "house": 12345,
+  "offsetFromOutline": 0.89
+ },
+ {
+  "id": 3808393,
+  "x": 2275.42,
+  "z": -3388.94,
+  "ridge": 5.59,
+  "photo": "devonport_north",
+  "house": 12803,
+  "offsetFromOutline": 0.57
+ },
+ {
+  "id": 3880695,
+  "x": 2937.72,
+  "z": -4305.82,
+  "ridge": 5.1,
+  "photo": "devonport_north",
+  "house": 9797,
+  "offsetFromOutline": 1.18
+ },
+ {
+  "id": 3813178,
+  "x": 1118.06,
+  "z": -5249.94,
+  "ridge": 5.42,
+  "photo": "devonport_north",
+  "house": 7193,
+  "offsetFromOutline": 0.65
+ },
+ {
+  "id": 3852825,
+  "x": 3247.68,
+  "z": -2990.66,
+  "ridge": 6.26,
+  "photo": "devonport_north",
+  "house": 13307,
+  "offsetFromOutline": 1.43
+ },
+ {
+  "id": 3799738,
+  "x": 876.56,
+  "z": -3701.86,
+  "ridge": 3.59,
+  "photo": "devonport_north",
+  "house": 11806,
+  "offsetFromOutline": 0.91
+ },
+ {
+  "id": 3852021,
+  "x": 3790.48,
+  "z": -2454.87,
+  "ridge": 7.21,
+  "photo": "devonport_east",
+  "house": 15055,
+  "offsetFromOutline": 0.36
+ },
+ {
+  "id": 3802486,
+  "x": 3529.39,
+  "z": -2046,
+  "ridge": 6.78,
+  "photo": "devonport_east",
+  "house": 16773,
+  "offsetFromOutline": 1.5
+ },
+ {
+  "id": 3813657,
+  "x": 1816.98,
+  "z": -4633.91,
+  "ridge": 5.52,
+  "photo": "devonport_north",
+  "house": 8790,
+  "offsetFromOutline": 1.19
+ },
+ {
+  "id": 3852290,
+  "x": 2966.38,
+  "z": -2879.35,
+  "ridge": 6.07,
+  "photo": "devonport_north",
+  "house": 13556,
+  "offsetFromOutline": 1.38
+ },
+ {
+  "id": 3839284,
+  "x": 2123.54,
+  "z": -4603.63,
+  "ridge": 6.86,
+  "photo": "devonport_north",
+  "house": 9120,
+  "offsetFromOutline": 1.16
+ },
+ {
+  "id": 3802568,
+  "x": 3470.26,
+  "z": -2225.92,
+  "ridge": 6.21,
+  "photo": "devonport_east",
+  "house": 16041,
+  "offsetFromOutline": 1.38
+ }
+]
