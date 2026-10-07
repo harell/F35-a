@@ -283,8 +283,9 @@ database for these tags).
 `src/world/terrain/data/auckland-aerial-2048.webp` (≈ 274 KiB, medium tier) and `auckland-aerial-4096.webp`
 (≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`, and (#120) the outer atlas of the rest
 of the Devonport peninsula and the gulf islands, `auckland-aerial-outer-2048.webp` (≈ 272 KiB, medium) and
-`auckland-aerial-outer-4096.webp` (≈ 599 KiB, high) with its layout `auckland-aerial-outer.json`. Same licence and
-attribution as above.
+`auckland-aerial-outer-4096.ktx2` (≈ 2.5 MiB, high; GPU-compressed, its alpha beside it in
+`auckland-aerial-outer-cover.png`, 28 KiB) with its layout `auckland-aerial-outer.json`. Same licence and attribution
+as above.
 
 | Product | Source | Used for |
 |---|---|---|
@@ -295,7 +296,12 @@ pip install numpy scipy rasterio pyproj pillow
 python3 tools/linz/aerial.py <work> city     # the square: both .webp files, its alignment report (runs aerial-mask.ts)
 python3 tools/linz/aerial.py <work> outer    # the outer atlas (Devonport, the islands), its seam and alignment reports
 python3 tools/linz/aerial.py <work> align    # the outer boxes' seam and alignment reports again (needs LINZ_API_KEY)
+python3 tools/linz/aerial.py <work> outer-ktx2 [atlas.png]   # the high tier's KTX2 + cover again from a saved atlas
 ```
+
+The high tier's outer atlas is encoded with the Basis Universal CLI (`basisu`, github.com/BinomialLLC/basis_universal,
+built with cmake; `$BASISU` or on the PATH). `outer` saves the atlas as `<work>/aerial-outer-4096.png`, so `outer-ktx2`
+can re-encode it alone.
 
 `aerial-mask.ts <out.bin> <x0> <z0> <cols> <rows> <cell>` writes the coastline / OSM deck / CBD street / land masks on
 any photo grid (aerial.py runs it per box and caches it). The first run reads every item of the STAC collection
@@ -351,6 +357,15 @@ filtering and the first mips never mix in a neighbour:
   memory with mips); the islands at 5 m on medium would have needed a 4096-wide atlas too (≈ 100 MB on a phone), so the
   medium tier has them at 10 m (2048 × 3362, 37 MB): Rangitoto's lava and bush patches and Waiheke's vineyard blocks
   still show at 10 m, its vine rows don't at either.
+- **High tier as KTX2 (ETC1S).** Measured on the 4096 atlas, against its WebP: GPU memory ≈ 140 → 35 MB (it stays
+  in the GPU's block format: BC7 on desktops, ASTC / ETC2 on phones, 1 byte a pixel, alpha included), load
+  1.8–2.8 s → 0.6–0.8 s and main-thread upload with mips 0.35–1.3 s → ≈ 90 ms (headless Chromium on SwiftShader, so
+  CPU-bound; the transcode runs in a worker), for a download of ≈ 2.5 MiB instead of 0.6 (plus three.js's Basis
+  transcoder, ≈ 245 KiB gzip, once). Quality on land: 36.8 dB PSNR against the WebP; up close it loses some local
+  colour (red roofs duller, a blue tinge in shadow), at the heights players see it from it reads the same, and it is
+  still sharper than the medium atlas at the same GPU memory. UASTC looked closer to the WebP but weighed 10.5 MiB.
+  The medium tier stays WebP: 35 MB is fine there and ETC1S would almost triple its download. A block-compressed
+  atlas needs sides that are multiples of 4 (the medium one, 3362 px tall, rendered black as KTX2).
 - **Grade.** The city square's exposure for every box (the islands' own would be ×1.1–2.2 brighter: bush is darker than
   a suburb), so the islands sit in the same light as the city.
 - **Alignment.** The plain cross-correlation of the photo's water against the coastline (the square's check) does not

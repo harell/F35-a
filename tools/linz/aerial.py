@@ -3,12 +3,15 @@ Open data 4 (#6, #120): bake the LINZ Auckland 0.075 m Urban Aerial Photos (2024
 photos (src/world/terrain/data/):
 
     python3 aerial.py <work> [city|outer|all|align]     (default: all; align: the outer boxes' alignment report again)
+    python3 aerial.py <work> outer-ktx2 [atlas.png]      (the high tier's KTX2 and cover again, from a saved atlas)
 
 city   the square over the CBD / waterfront (AERIAL_RECT in src/world/terrain/theaters/aucklandAerial.ts):
        auckland-aerial-{2048,4096}.webp, 2.5 / 1.25 m per pixel (medium / high tier).
 outer  one atlas per tier of the rectangles in OUTER below (#120): the rest of the Devonport peninsula at the
        square's resolution and the gulf islands (Rangitoto, Motutapu, Rakino, Motuihe, Browns Island, Waiheke with
-       Pakatoa and Rotoroa) at a coarser one: auckland-aerial-outer-{2048,4096}.webp (2048 / 4096 px wide) and their
+       Pakatoa and Rotoroa) at a coarser one: auckland-aerial-outer-2048.webp and auckland-aerial-outer-4096.ktx2
+       (2048 / 4096 px wide; the high tier as GPU-compressed KTX2, see OUTER_KTX2, with its alpha beside it in
+       auckland-aerial-outer-cover.png) and their
        layout, auckland-aerial-outer.json (read by aucklandAerial.ts; each rectangle's world box and where it sits in
        each tier's atlas).
 
@@ -30,8 +33,8 @@ Steps, per rectangle:
    (push-pull) so it costs ~nothing and filtering at the shore never pulls in sea colour.
 6. Alignment report: cross-correlation of the photo's water against the LINZ coastline (sub-pixel peak); for the
    square also its dark asphalt against the LINZ CBD carriageways.
-7. WebP. The atlas rectangles carry an apron of real photo (APRON px at the high tier) round their box, so
-   bilinear filtering and the first mip levels never mix in a neighbour.
+7. WebP (the outer atlas's high tier: KTX2, OUTER_KTX2). The atlas rectangles carry an apron of real photo (APRON px
+   at the high tier) round their box, so bilinear filtering and the first mip levels never mix in a neighbour.
 
 pip install numpy scipy rasterio pyproj pillow
 """
@@ -67,6 +70,15 @@ CITY = dict(name='city', x0=-1536, z0=-3072, w=5120, h=5120, px=1.25, ov=8)
 X0C, Z0C = CITY['x0'], CITY['z0']
 # 2048 / 4096 WebP quality (the photo is 45 % open water, padded flat)
 QUALITY = {2048: 62, 4096: 42}
+# Tiers whose outer atlas ships as KTX2 (Basis Universal ETC1S, sRGB, with mipmaps) instead of WebP: transcoded to the
+# GPU's own block format at load (BC7 / ASTC / ETC2 / BC3: 1 byte a pixel), the high tier's 27.5 Mpx atlas takes
+# ~35 MB of GPU memory instead of ~140 MB as RGBA8 with mips, for a ~4x larger download. Needs the basisu CLI
+# (github.com/BinomialLLC/basis_universal; $BASISU or on the PATH). The medium tier stays WebP (35 MB is fine there).
+OUTER_KTX2 = {4096}
+BASISU = os.environ.get('BASISU', 'basisu')
+# Width (px) of the outer atlas's alpha copy the KTX2 tiers ship beside it (auckland-aerial-outer-cover.png): the
+# scatters read it at load (aucklandAerial.ts imageAlphaMask), as they read the WebP's alpha on the medium tier.
+COVER_W = 512
 
 # The outer atlas (#120). Boxes in game XZ (m; x0, z0 = north-west corner): the islands' on multiples of 10 m, the
 # Devonport boxes on the city square's pixel lattice (x0 + 1536, z0 + 3072 multiples of 2.5 m), so their pixels are
@@ -368,6 +380,43 @@ def align_coast(name, photo, coast_sd, px, reach=40.0):
     return dx, dz
 
 
+def ktx2(img, path):
+    """Encode an RGBA atlas to KTX2 (ETC1S at its best quality, sRGB, mipmaps with clamped borders)."""
+    tmp = path + '.png'
+    img.save(tmp)
+    try:
+        subprocess.run([BASISU, '-etc1s', '-quality', '100', '-mipmap', '-srgb', '-mip_clamp', '-ktx2', '-file', tmp, '-output_file', path],
+                       check=True, stdout=subprocess.DEVNULL)
+    finally:
+        os.remove(tmp)
+    return open(path, 'rb').read()
+
+
+def cover(img):
+    """The atlas's alpha box-filtered to COVER_W columns, as the alpha of an otherwise black PNG."""
+    w = COVER_W
+    h = max(1, int(img.size[1] * w / img.size[0] + 0.5))  # as Math.round
+    a = img.getchannel('A').resize((w, h), Image.Resampling.BOX)
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    out.putalpha(a)
+    b = io.BytesIO()
+    out.save(b, 'PNG', optimize=True)
+    return b.getvalue()
+
+
+def write_outer_ktx2(atlas, size, work=None):
+    """The KTX2 atlas and its alpha cover of a tier in OUTER_KTX2 (and the atlas itself in <work>, to re-encode)."""
+    assert atlas.size[0] % 4 == 0 and atlas.size[1] % 4 == 0, 'block-compressed textures need sides that are multiples of 4'
+    if work:
+        atlas.save(os.path.join(work, f'aerial-outer-{size}.png'))
+    path = os.path.join(OUT_DIR, f'auckland-aerial-outer-{size}.ktx2')
+    data = ktx2(atlas, path)
+    c = cover(atlas)
+    open(os.path.join(OUT_DIR, 'auckland-aerial-outer-cover.png'), 'wb').write(c)
+    print(f'auckland-aerial-outer-cover.png: {COVER_W} px wide, {len(c) / 1024:.0f} KiB', flush=True)
+    return path, data
+
+
 def webp(img, q):
     b = io.BytesIO()
     img.save(b, 'WEBP', quality=q, method=6, alpha_quality=100, exact=False)
@@ -601,14 +650,19 @@ def bake_outer(work):
             atlas.paste(im, (x // f, y // f))
             a = APRON // f
             boxes.append([x // f + a, y // f + a, x // f + im.size[0] - a, y // f + im.size[1] - a])
-        data = webp(atlas, q)
-        path = os.path.join(OUT_DIR, f'auckland-aerial-outer-{size}.webp')
-        open(path, 'wb').write(data)
+        if size in OUTER_KTX2:
+            path, data = write_outer_ktx2(atlas, size, work)
+            gpu, fmt = 1, 'ETC1S'
+        else:
+            data = webp(atlas, q)
+            path = os.path.join(OUT_DIR, f'auckland-aerial-outer-{size}.webp')
+            open(path, 'wb').write(data)
+            gpu, fmt = 4, f'q{q}'
         if size == 4096:
             atlas.convert('RGB').resize((atlas.size[0] // 4, atlas.size[1] // 4)).save(os.path.join(work, 'aerial-outer-preview.jpg'), quality=85)
         manifest['tiers'][str(size)] = {'width': atlas.size[0], 'height': atlas.size[1], 'boxes': boxes}
         mpx = atlas.size[0] * atlas.size[1] / 1e6
-        print(f'{os.path.basename(path)}: {atlas.size[0]}x{atlas.size[1]} ({mpx:.1f} Mpx, {mpx * 4 * 4 / 3:.0f} MB on the GPU with mips), q{q}, {len(data) / 1024:.0f} KiB', flush=True)
+        print(f'{os.path.basename(path)}: {atlas.size[0]}x{atlas.size[1]} ({mpx:.1f} Mpx, {mpx * gpu * 4 / 3:.0f} MB on the GPU with mips), {fmt}, {len(data) / 1024:.0f} KiB', flush=True)
         for r, b in zip(OUTER, boxes):
             print(f'  {r["name"]}: {r["w"] / (b[2] - b[0]):.2f} m/px, {b[2] - b[0]}x{b[3] - b[1]} at {b[0]},{b[1]}', flush=True)
     path = os.path.join(OUT_DIR, 'auckland-aerial-outer.json')
@@ -627,6 +681,12 @@ def main():
         bake_city(work)
     if what in ('outer', 'all'):
         bake_outer(work)
+    if what == 'outer-ktx2':  # re-encode the KTX2 tiers from a saved atlas (<work>/aerial-outer-<size>.png by default)
+        for size in OUTER_KTX2:
+            src = sys.argv[3] if len(sys.argv) > 3 else os.path.join(work, f'aerial-outer-{size}.png')
+            atlas = Image.open(src).convert('RGBA')
+            path, data = write_outer_ktx2(atlas, size)
+            print(f'{os.path.basename(path)}: {atlas.size[0]}x{atlas.size[1]} from {src}, {len(data) / 1024:.0f} KiB', flush=True)
     if what == 'align':  # (bake_outer ends with it too)
         seam_check(work)
         align_outer(work)

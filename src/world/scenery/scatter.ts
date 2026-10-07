@@ -55,7 +55,7 @@ export function scatterKeep(ds: number, R: number): number {
 }
 
 /** How far a fitCapacity scatter widens the instances it keeps (across, not up). */
-const FIT_WIDEN = 1.6;
+const FIT_WIDEN = 2.2;
 
 const _m = new Matrix4();
 const _q = new Quaternion();

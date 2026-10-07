@@ -226,7 +226,8 @@ export class TreeSource implements ScatterSource {
       }
       // the bush darker than the gardens' trees (the photo's crowns under them are a deep green)
       _c.setScalar((urban <= 0.05 ? 0.55 : 0.8) + 0.25 * hash2(gx, gz, seed + 34));
-      out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, r * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 0);
+      // aux: a real canopy tree (1 + a shade in [0, 1)): on the photo it takes the photo's colour (materials.ts foliage)
+      out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, r * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 1 + 0.999 * hash2(gx, gz, seed + 35));
       return;
     }
   }

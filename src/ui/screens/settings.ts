@@ -278,7 +278,7 @@ export function showSettings(host: UiHost, input: Settings, toast: (t: string) =
       page.appendChild(
         settingRow(
           'Aerial photo',
-          'Medium and high quality: real aerial photo of the CBD, the waterfront, Devonport and the gulf islands (≈ 0.5 / 1.2 MB download, cached)',
+          'Medium and high quality: real aerial photo of the CBD, the waterfront, Devonport and the gulf islands (≈ 0.5 / 3.6 MB download, cached)',
           toggle(s.aerialPhoto, (v) => (s.aerialPhoto = v), 'Aerial photo'),
         ),
       );

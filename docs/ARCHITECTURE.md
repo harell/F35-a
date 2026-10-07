@@ -179,7 +179,9 @@ suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it
 procedural ground stays. **The outer photo (#120)** continues it over the rest of the Devonport peninsula (same
 resolution) and over the gulf islands' land (Rangitoto, Motutapu, Rakino, Motuihe, Browns Island, Waiheke; 5 m on
 high, 10 m on medium): boxes packed into one atlas per tier (`AERIAL_OUTER` from `auckland-aerial-outer.json`,
-`auckland-aerial-outer-<2048|4096>.webp`), loaded with the square (and only with it: it takes the square's grade).
+`auckland-aerial-outer-2048.webp`; on high `auckland-aerial-outer-4096.ktx2`, GPU-compressed ETC1S that three.js's
+`KTX2Loader` transcodes in a worker to the GPU's block format, ≈ 35 MB instead of ≈ 140 MB, with its alpha in
+`auckland-aerial-outer-cover.png`), loaded with the square (and only with it: it takes the square's grade).
 The terrain shader's `aerialPhoto()` sums the square's weight and every box's (alpha × the box's own edge fade,
 sampled with `textureGrad`); the Devonport boxes overlap the square by their 320 m feather so the fades cross over.
 The scatters keep off where that sum is over ½ (`aerialCovers(x, z, cover)`, the outer alpha read back once at load
@@ -214,7 +216,12 @@ Shore to Takapuna, the CBD, the isthmus and the flight corridor (20 Part 1 sheet
 −ln(1 − share) · 196 m² / crown area, crowns sized from the measured height and widened in a closed canopy) instead of the
 Topo50 cover and the even garden trees, **on the photo too**: the photo's blocker keeps only the procedural trees off, so
 Rangitoto, the islands' bush and Devonport's gardens get 3D trees standing on their photographed crowns, clear of the real
-houses (#121), the road ribbons, the landmark sites and, in the procedural suburbs, the painted streets and houses. The
+houses (#121), the road ribbons, the landmark sites and, in the procedural suburbs, the painted streets and houses. On
+the photo a canopy tree (record aux ≥ 1, the `aPhoto` attribute) takes the photo's colour at its trunk in the foliage
+vertex shader (`treePhoto`, a ≈ 12 m mip of the square or the outer atlas), so its crown sits in the photographed forest
+instead of on it. With the canopy the broadleaf mesh gets twice the tier's tree budget, and the tree scatter is
+`fitCapacity`: over budget it thins every tile evenly and widens the crowns it keeps (up to 2.2×), so a forest over a
+whole island stays a forest instead of ending in a square of the nearest tiles. The
 terrain shader reads the share from a pyramid (32–256 m box averages, `canopyPyramid`) stored in extra rows of the land-use
 texture (the fragment shader has no sampler unit left): the suburbs' far-field albedo is `OPEN_MIX` (urbanColor.ts) mixed
 with the canopy colour by the share, the lot-level garden trees follow it, and on open ground the forest tone does; the
