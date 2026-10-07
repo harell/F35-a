@@ -20,6 +20,7 @@ const SECTIONS: { title: string; items: [string, string][] }[] = [
     title: 'Technology',
     items: [
       ['three.js', 'WebGL 3D engine by Ricardo Cabello (mrdoob) and contributors — MIT licence.'],
+      ['Basis Universal', 'GPU texture transcoder by Binomial LLC, shipped with three.js, for the high tier\'s aerial photo — Apache 2.0 licence.'],
       ['Web Audio API', 'Engine, weapons, RWR tones and warnings synthesised in real time.'],
       ['Voices', 'Cockpit “Betty”, radio and AWACS voices generated offline with espeak-ng (GPL-3.0 tool; generated clips).'],
       ['B612 Mono', 'Cockpit display typeface by the B612 Project (Airbus / ENAC) — SIL Open Font License 1.1.'],

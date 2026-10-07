@@ -1,7 +1,8 @@
 /**
  * Open data 4 (#6): the CBD / waterfront aerial photo (src/world/terrain/theaters/aucklandAerial.ts,
  * src/world/terrain/data/auckland-aerial-{2048,4096}.webp baked by tools/linz/aerial.py), and its outer atlas
- * (#120: the rest of the Devonport peninsula and the gulf islands, auckland-aerial-outer-{2048,4096}.webp and
+ * (#120: the rest of the Devonport peninsula and the gulf islands, auckland-aerial-outer-2048.webp, the high tier's
+ * GPU-compressed auckland-aerial-outer-4096.ktx2 with its alpha in auckland-aerial-outer-cover.png, and
  * auckland-aerial-outer.json).
  */
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import { worldConfig } from '../src/world/config';
 import {
   AERIAL_FEATHER,
   AERIAL_OUTER,
+  AERIAL_OUTER_COVER_URL,
   AERIAL_OUTER_URLS,
   AERIAL_RECT,
   AERIAL_URLS,
@@ -18,6 +20,7 @@ import {
   aerialBoxWeight,
   aerialCovers,
   aerialEdgeWeight,
+  aerialOuterKtx2,
   aerialOuterSize,
   aerialOuterUv,
   aerialWeight,
@@ -54,10 +57,41 @@ function webpInfo(b: Uint8Array): { width: number; height: number; alpha: boolea
   return { width: (b[26] | (b[27] << 8)) & 0x3fff, height: (b[28] | (b[29] << 8)) & 0x3fff, alpha: false };
 }
 
-/** Download budgets of the outer atlas (KiB): measured + ~10 %. */
-const OUTER_KIB = { 2048: 290, 4096: 650 } as const;
+/** KTX2 header (khronos.org/ktx): size, mip levels, supercompression, the DFD's colour model and transfer, the levels' bytes. */
+function ktx2Info(b: Uint8Array) {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const u32 = (o: number) => v.getUint32(o, true);
+  expect([...b.slice(0, 12)]).toEqual([0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const dfd = u32(48);
+  const blockSize = v.getUint16(dfd + 4 + 6, true);
+  const levels = u32(40);
+  let bytes = 0;
+  for (let i = 0; i < levels; i++) bytes += Number(v.getBigUint64(80 + 24 * i + 8, true));
+  return {
+    vkFormat: u32(12),
+    width: u32(20),
+    height: u32(24),
+    levels,
+    supercompression: u32(44),
+    colorModel: b[dfd + 4 + 8],
+    transfer: b[dfd + 4 + 10],
+    samples: (blockSize - 24) / 16,
+    bytes,
+  };
+}
+
+/** Width, height and colour type of a PNG (IHDR). */
+function pngInfo(b: Uint8Array): { width: number; height: number; colorType: number } {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  expect([...b.slice(1, 4)].map((c) => String.fromCharCode(c)).join('')).toBe('PNG');
+  return { width: v.getUint32(16), height: v.getUint32(20), colorType: b[25] };
+}
+
+/** Download budgets of the outer atlas (KiB): measured + ~10 %. The high tier's is KTX2 (ETC1S), ~4x the WebP. */
+const OUTER_KIB = { 2048: 290, 4096: 2860 } as const;
 const file = (size: number) => new Uint8Array(fs.readFileSync(new URL(`../src/world/terrain/data/auckland-aerial-${size}.webp`, import.meta.url)));
-const outerFile = (size: number) => new Uint8Array(fs.readFileSync(new URL(`../src/world/terrain/data/auckland-aerial-outer-${size}.webp`, import.meta.url)));
+const dataFile = (name: string) => new Uint8Array(fs.readFileSync(new URL(`../src/world/terrain/data/${name}`, import.meta.url)));
+const outerFile = (size: number) => dataFile(`auckland-aerial-outer-${size}.${aerialOuterKtx2(size as 2048 | 4096) ? 'ktx2' : 'webp'}`);
 
 describe('aerial photo files', () => {
   it.each([
@@ -72,14 +106,46 @@ describe('aerial photo files', () => {
 });
 
 describe('outer photo atlas (#120)', () => {
-  it.each([
-    [2048, OUTER_KIB[2048]],
-    [4096, OUTER_KIB[4096]],
-  ] as const)('%i: RGBA WebP of the layout\'s size, within its download budget (≤ %i KiB)', (size, kib) => {
-    const b = outerFile(size);
-    expect(webpInfo(b)).toEqual({ ...aerialOuterSize(size), alpha: true });
-    expect(aerialOuterSize(size).width).toBe(size);
-    expect(b.length / 1024).toBeLessThanOrEqual(kib);
+  it('2048: RGBA WebP of the layout\'s size, within its download budget', () => {
+    expect(aerialOuterKtx2(2048)).toBe(false);
+    const b = outerFile(2048);
+    expect(webpInfo(b)).toEqual({ ...aerialOuterSize(2048), alpha: true });
+    expect(aerialOuterSize(2048).width).toBe(2048);
+    expect(b.length / 1024).toBeLessThanOrEqual(OUTER_KIB[2048]);
+  });
+
+  it('4096: KTX2 (sRGB ETC1S with alpha and every mip) of the layout\'s size, ~35 MB on the GPU instead of ~140 MB', () => {
+    expect(aerialOuterKtx2(4096)).toBe(true);
+    expect(AERIAL_OUTER_URLS[4096]).toMatch(/\.ktx2$/);
+    const b = outerFile(4096);
+    const k = ktx2Info(b);
+    const { width, height } = aerialOuterSize(4096);
+    expect([k.width, k.height]).toEqual([width, height]);
+    expect(width).toBe(4096);
+    // block formats need sides that are multiples of 4 (a 3362-px side rendered black)
+    expect(width % 4).toBe(0);
+    expect(height % 4).toBe(0);
+    // Basis Universal (vkFormat undefined), BasisLZ supercompression, colour model ETC1S, sRGB, RGB + alpha slices
+    expect(k.vkFormat).toBe(0);
+    expect(k.supercompression).toBe(1);
+    expect(k.colorModel).toBe(163);
+    expect(k.transfer).toBe(2);
+    expect(k.samples).toBe(2);
+    expect(k.levels).toBe(Math.floor(Math.log2(Math.max(width, height))) + 1);
+    expect(b.length / 1024).toBeLessThanOrEqual(OUTER_KIB[4096]);
+    // on the GPU: every format it transcodes to (BC7, ASTC 4x4, ETC2, BC3) is 16 bytes a 4x4 block
+    let gpu = 0;
+    for (let i = 0; i < k.levels; i++) gpu += Math.ceil(Math.max(1, width >> i) / 4) * Math.ceil(Math.max(1, height >> i) / 4) * 16;
+    expect(gpu / 2 ** 20).toBeLessThan(36);
+    expect(((width * height * 4 * 4) / 3 / 2 ** 20) / (gpu / 2 ** 20)).toBeGreaterThan(3.9);
+  });
+
+  it('the KTX2 atlas\'s alpha ships beside it: a 512-px-wide RGBA PNG of the atlas\'s shape', () => {
+    expect(AERIAL_OUTER_COVER_URL).toMatch(/auckland-aerial-outer-cover.*\.png$/);
+    const b = dataFile('auckland-aerial-outer-cover.png');
+    const { width, height } = aerialOuterSize(4096);
+    expect(pngInfo(b)).toEqual({ width: 512, height: Math.round((height * 512) / width), colorType: 6 });
+    expect(b.length / 1024).toBeLessThanOrEqual(32);
   });
 
   it('every box lies inside the atlas without overlapping another, at its tier\'s resolution', () => {
@@ -294,10 +360,11 @@ describe('aerial photo download scope', () => {
       }) as typeof fetch;
       const bitmap = { width: 2048, height: 100 };
       (globalThis as { createImageBitmap?: unknown }).createImageBitmap = async () => bitmap;
-      expect(await loadAucklandAerialOuter(2048)).toBe(bitmap);
-      expect(await loadAucklandAerialOuter(2048)).toBe(bitmap);
+      const photo = await loadAucklandAerialOuter(2048);
+      expect(photo).toEqual({ image: bitmap });
+      expect(await loadAucklandAerialOuter(2048)).toBe(photo);
       expect(calls).toEqual([AERIAL_OUTER_URLS[2048]]);
-      expect(aucklandAerialOuter(2048)).toBe(bitmap);
+      expect(aucklandAerialOuter(2048)).toBe(photo);
       expect(aucklandAerialOuter(4096)).toBeNull();
       expect(await loadAucklandAerialOuter(0)).toBeNull();
 
@@ -312,6 +379,30 @@ describe('aerial photo download scope', () => {
       }
       expect(aucklandAerialOuter(4096)).toBeNull();
     });
+
+    it('the KTX2 atlas needs the renderer to transcode for, and a failed download leaves the square', async () => {
+      const calls: string[] = [];
+      globalThis.fetch = (async (u: string) => {
+        calls.push(String(u));
+        return new Response('nope', { status: 404 });
+      }) as typeof fetch;
+      const warns: unknown[] = [];
+      const warn = console.warn;
+      console.warn = (...a: unknown[]) => warns.push(a[0]);
+      try {
+        // no renderer: nothing fetched
+        expect(await loadAucklandAerialOuter(4096)).toBeNull();
+        expect(calls).toEqual([]);
+        // with one, the atlas and its cover are fetched; a 404 on the atlas fails the whole photo
+        const renderer = {} as Parameters<typeof loadAucklandAerialOuter>[1];
+        expect(await loadAucklandAerialOuter(4096, renderer)).toBeNull();
+        expect(calls.sort()).toEqual([AERIAL_OUTER_COVER_URL, AERIAL_OUTER_URLS[4096]].sort());
+      } finally {
+        console.warn = warn;
+      }
+      expect(warns.length).toBeGreaterThan(0);
+      expect(aucklandAerialOuter(4096)).toBeNull();
+    });
   });
 
   it('the service worker never precaches either size (other lazily referenced assets still are)', () => {
@@ -320,7 +411,7 @@ describe('aerial photo download scope', () => {
       location: { origin: 'https://example.com' },
     }) as { referencedAssets: (c: string, u: string) => string[] };
     const code =
-      'a=new URL(`auckland-aerial-2048-Bx_9-k2Q.webp`,import.meta.url).href;b=new URL("auckland-aerial-4096-a1B2c3D4.webp",import.meta.url);c=new URL(`auckland-roads-C8f2.bin`,import.meta.url);d=new URL(`auckland-aerial-outer-2048-Zz9_x.webp`,import.meta.url);e=new URL(`auckland-aerial-outer-4096-Qq1.webp`,import.meta.url)';
+      'a=new URL(`auckland-aerial-2048-Bx_9-k2Q.webp`,import.meta.url).href;b=new URL("auckland-aerial-4096-a1B2c3D4.webp",import.meta.url);c=new URL(`auckland-roads-C8f2.bin`,import.meta.url);d=new URL(`auckland-aerial-outer-2048-Zz9_x.webp`,import.meta.url);e=new URL(`auckland-aerial-outer-4096-Qq1.ktx2`,import.meta.url);f=new URL(`auckland-aerial-outer-cover-Xy7.png`,import.meta.url);g=new URL("basis_transcoder-Ab3_c.wasm",import.meta.url);h=new URL(`basis_transcoder-Dd4.js`,import.meta.url)';
     expect(helpers.referencedAssets(code, 'https://example.com/game/assets/index-abc.js')).toEqual(['https://example.com/game/assets/auckland-roads-C8f2.bin']);
   });
 });

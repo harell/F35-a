@@ -47,10 +47,12 @@ const VOICES = [
 
 /**
  * Large optional assets only some tiers use (the HD terrain: high; the aerial photo and its outer atlas of
- * Devonport and the gulf islands: 2048 medium, 4096 high): never precached, so a device downloads only what its
+ * Devonport and the gulf islands: 2048 medium, 4096 high, the high tier's atlas a KTX2 file with its alpha cover
+ * beside it and three.js's Basis transcoder to read it): never precached, so a device downloads only what its
  * tier asks for (cached on first use).
  */
-const ON_DEMAND = /\/(?:auckland-linz-hd-[\w-]+\.bin|auckland-aerial-(?:outer-)?\d+-[\w-]+\.webp)$/;
+const ON_DEMAND =
+  /\/(?:auckland-linz-hd-[\w-]+\.bin|auckland-aerial-(?:outer-)?\d+-[\w-]+\.(?:webp|ktx2)|auckland-aerial-outer-cover-[\w-]+\.png|basis_transcoder-[\w-]+\.(?:js|wasm))$/;
 
 const scopeUrl = (p) => new URL(p, self.registration.scope).href;
 
