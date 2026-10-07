@@ -27,6 +27,8 @@ export type MissionResultExt = MissionResult & {
   civilianHeliKills?: number;
   /** Of which civil trains (AT passenger sets, KiwiRail freight). */
   civilianTrainKills?: number;
+  /** Of which named superyachts (#145), by name ("Koru"). */
+  civilianYachts?: string[];
   /** Protect objectives with a debrief tally: how many of the group survived ("Fuel tanks saved 7/9"). */
   saved?: { label: string; saved: number; total: number }[];
   /** Free flight: what the sightseer did (tour stops, distance, highest and lowest pass), shown instead of the combat stats. */

@@ -13,7 +13,7 @@
  */
 import type { GameEventMap } from '../../core/events';
 import { AircraftEntity, type AnyEntity } from '../../sim/entities';
-import { vesselNoun } from '../../sim/civil/vessels';
+import { isSuperyacht, vesselNoun } from '../../sim/civil/vessels';
 import { aircraftHudName, killHudText } from './names';
 import type { MissionState } from './state';
 
@@ -156,11 +156,20 @@ export class Callouts {
 
     // neutral civil traffic: never a kill — a player shoot-down is a civilian loss
     if (entity.team === 'neutral') {
-      const ship = entity.kind === 'ground' && entity.type === 'ship';
+      const yacht = isSuperyacht(entity);
+      const ship = entity.kind === 'ground' && entity.type === 'ship' && !yacht;
       const heli = entity.kind === 'aircraft' && !!entity.heli;
       const train = entity.kind === 'ground' && entity.type === 'train';
       const who = entity.kind === 'aircraft' ? entity.callsign : entity.name;
-      const down = ship ? 'CIVILIAN SHIP DESTROYED' : train ? 'CIVILIAN TRAIN HIT' : heli ? 'CIVILIAN HELICOPTER DOWN' : 'CIVILIAN AIRLINER DOWN';
+      const down = yacht
+        ? 'CIVILIAN YACHT DESTROYED'
+        : ship
+          ? 'CIVILIAN SHIP DESTROYED'
+          : train
+            ? 'CIVILIAN TRAIN HIT'
+            : heli
+              ? 'CIVILIAN HELICOPTER DOWN'
+              : 'CIVILIAN AIRLINER DOWN';
       if (byPlayer) {
         // free flight: nothing counts against the player
         if (running && !s.script.freeFlight) {
@@ -168,6 +177,7 @@ export class Callouts {
           if (ship) s.civilianShipKills++;
           if (heli) s.civilianHeliKills++;
           if (train) s.civilianTrainKills++;
+          if (yacht) s.civilianYachts.push(who);
         }
         if (s.script.freeFlight) {
           // free flight: no scolding, just a dry word from Darkstar
@@ -179,13 +189,16 @@ export class Callouts {
         } else if (ship) {
           s.hud('CIVILIAN SHIP DESTROYED', 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian vessel ${who}!`, priority: 4 });
+        } else if (yacht) {
+          s.hud(down, 'bad', 3.5);
+          s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just hit the civilian yacht ${who}!`, priority: 4 });
         } else {
           s.hud(down, 'bad', 3.5);
           s.radio.push({ from: s.awacsCallsign, text: `Check fire, check fire! ${s.callsign}, you just shot down civilian ${who}!`, priority: 4 });
         }
       } else if (p.alive && entity.position.distanceTo(p.position) < 40_000) {
         // (not 'CIVIL SHIP … DESTROYED': read as if the player had sunk her — playtest 1.4-i)
-        s.hud(ship ? `${who.toUpperCase()} SUNK` : train ? 'CIVIL TRAIN HIT' : `CIVIL ${who} DOWN`, 'bad', 2.5);
+        s.hud(ship || yacht ? `${who.toUpperCase()} SUNK` : train ? 'CIVIL TRAIN HIT' : `CIVIL ${who} DOWN`, 'bad', 2.5);
       }
       return;
     }

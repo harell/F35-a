@@ -20,6 +20,7 @@ import { aucklandDomain } from './aucklandDomain';
 import { Color } from 'three';
 import { AKL } from '../../core/auckland';
 import { WIRI_TANKS } from '../../core/sites';
+import { inSuperyachtBerth } from '../../core/superyachts';
 import { sparkArenaCovers } from '../../core/sparkArena';
 import { EDEN_PARK_STANDS } from '../../core/edenPark';
 import { CONTAINER_TIER, PORT_CRANES, PORT_MASTS, type PortCrane } from '../../core/portOfAuckland';
@@ -571,7 +572,8 @@ interface Boat {
 
 /**
  * Yachts alongside the pontoons: on a 4 m grid of the water within 1.5–6 m of a pontoon edge, each
- * hull parallel to its nearest edge (a finger berth), never overlapping another or a pontoon.
+ * hull parallel to its nearest edge (a finger berth), never overlapping another, a pontoon or a named superyacht's
+ * berth (SUPERYACHT_BERTHS, #145).
  * Returns the number of boats.
  */
 function berthYachts(B: GeometryBuilder, isWater: (x: number, z: number) => boolean, detail: number, pontoons: Ring[], max: number, rnd: () => number): number {
@@ -654,7 +656,7 @@ function berthYachts(B: GeometryBuilder, isWater: (x: number, z: number) => bool
         const b: Boat = { x, z, ux: nb[1], uz: nb[2], L, W };
         const ends: [number, number][] = [];
         for (const sl of [-0.5, 0.5]) for (const sw of [-0.5, 0.5]) ends.push([x + b.ux * L * sl - b.uz * W * sw, z + b.uz * L * sl + b.ux * W * sw]);
-        if (ends.some(([ex, ez]) => onPontoon(ex, ez) || !isWater(ex, ez)) || clash(b)) continue;
+        if (ends.some(([ex, ez]) => onPontoon(ex, ez) || !isWater(ex, ez) || inSuperyachtBerth(ex, ez, 3)) || clash(b)) continue;
         boats.push(b);
         const k = key(Math.floor(x / CELL), Math.floor(z / CELL));
         const l = boatGrid.get(k);
