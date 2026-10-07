@@ -221,6 +221,19 @@ with the canopy colour by the share, the lot-level garden trees follow it, and o
 grid's edge blends into the procedural mix. Without the file (low tier, offline) the Topo50 cover and the garden-tree
 rule stay. Gameplay never reads it.
 
+**Landmark buildings (#124).** `src/world/scenery/aucklandLandmarks.ts` loads `auckland-landmarks.bin` (baked by
+`tools/linz/landmark-buildings.py` + `.ts`: OSM hospital, mall, station and school sites, the LINZ outlines inside them
+with their 2024 LiDAR roof levels, the station platforms moved beside the railway ribbons, and the outlines over 600 m²
+that #121 leaves out on Devonport and the islands) on every tier. `aucklandBuildings()` appends them to the LINZ list
+(`Building.landmark`: kind, site; named after the site), so `buildCBD` extrudes them with their kind's facade
+(`landmarkFacade`: hospitals white with many windows, malls blank with a lit signage band, stations, schools brick and
+weatherboard; a platform canopy is a roof slab) into one mesh per 8 km square (`LANDMARK_TILE`, through the
+`houseBuilder` callback; facades, no photo roofs), hidden beyond `LANDMARK_FAR` of the camera; the sim knows the tall
+ones as solids that stand (`fixed`), and the hospital rooftop helipads (#125) now sit on their roofs. The site outlines
+join `siteRings()` (no procedural street grid, lots, sheds or centre blocks on them), the footprints and platforms
+`siteBlocker()` (`landmarkCovers`: no tree or house, procedural or #121's, on them). At night a hospital's windows are
+lit (`buildFacadeLightPoints` with a 55 % share), a mall's car park has lamps. Without the file nothing changes.
+
 **Photo roofs (#140).** The photo is a standard orthophoto, not a true one: a roof h m up is drawn displaced from its
 footprint by h × the camera's lean there (0.07 m per metre typically in the CBD, the mosaic switching frame to frame).
 `tools/linz/roofs.py` registers every LINZ building the game draws on the photo's 0.3 m source tiles (edge correlation of

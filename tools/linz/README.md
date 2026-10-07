@@ -466,3 +466,51 @@ How it works:
 - **LiDAR canopy of the test areas** (1 m, the polygons themselves): Mount Albert 18.2 %, Devonport 20.8 %, Māngere 11.1 %,
   Hobsonville 11.9 %; Rangitoto 58.1 %, Motutapu 10.3 %, Waiheke Island 52.6 %. `tests/world-canopy.test.ts` checks the
   grid within 2 points and the scatter's crowns within 5 points of these.
+
+# Real suburbs 5/9: landmark buildings — hospitals, stations, malls, schools (#124)
+
+`landmark-buildings.py` and `landmark-buildings.ts` bake the big buildings people navigate by outside the CBD into
+`src/world/terrain/data/auckland-landmarks.bin` (≈ 175 kB gzip, every tier; `src/world/scenery/aucklandLandmarks.ts`).
+LINZ data: same licence and attribution as above. The sites are © OpenStreetMap contributors (ODbL 1.0): the file is a
+derivative database, available under the ODbL, and these two scripts plus the Overpass queries in the Python file are
+how to rebuild it (the Overpass timestamps are printed by the bake and kept in `<work>/osm-<kind>.json`).
+
+| Product | Source | Used for |
+|---|---|---|
+| Sites | OpenStreetMap via Overpass (`maps.mail.ru` mirror; overpass-api.de and kumi refused the container): `amenity=hospital`, `shop=mall`, `railway=station`, `railway=platform`, `amenity=school` in the world box, `out body geom` (relations assembled from their member ways) | which outlines are a landmark's, the platforms, the site outlines (no procedural grid, lots or sheds there) |
+| NZ Building Outlines | LDS layer 101290, WFS per site box (+30 m) | footprints |
+| Auckland Part 1 / Part 2 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-{1,2}_2024/`, a window per site: the sheets cached by `houses.py` / `canopy.py` in `<work>/../lidar`, others over HTTP (COG range reads; no sheet downloaded) | roof levels, buildings since 2017 |
+
+```sh
+export LINZ_API_KEY=…
+python3 tools/linz/landmark-buildings.py fetch /home/user/work/landmarks   # Overpass (5 queries) + 611 WFS requests, ≈ 3 min
+python3 tools/linz/landmark-buildings.py bake /home/user/work/landmarks    # ≈ 90 s with the 20 + 18 sheets cached
+npx vite-node tools/linz/landmark-buildings.ts /home/user/work/landmarks [preview.svg]   # → auckland-landmarks.bin, tests/fixtures/landmark-spotchecks.json
+```
+
+Selection (2026-10-07 inputs): hospitals over 2 ha plus the priority list (Auckland City, Middlemore, North Shore,
+Waitākere, Greenlane: checked by hand against the OSM names; the bake stops if one is missing) → 16 sites; malls over
+7,000 m² plus Sylvia Park, Westfield St Lukes / Newmarket / Albany / Manukau City, LynnMall and NorthWest (Westgate) → 33;
+all 44 `railway=station`s but MOTAT's tram stops, with the 77 above-ground platforms within 300 m (layer −1, an open
+cutting, kept; underground and the depot's cleaning platforms left out); schools over 2,000 m² → 518. A building
+belongs to the first site that holds its outline's representative point (hospitals, malls, stations, schools); an
+outline #121 ships as a house (`houses.json` ids) is left to #121, and every outline over #121's 600 m² in its areas is
+taken here as kind `other`. Heights: the CBD bake's level split (`buildings.py`) with a 5 m step; outlines standing on
+less than ¾ of their area (a wing demolished since 2017) or round an open court of 40 m² are cut to what stands, their
+courtyards split out. The `.ts` step leaves out what the game models already (the CBD region, the hero neighbourhoods,
+Westfield Newmarket, Spark Arena, the Domain, aerodromes, the water), moves each platform across the railway ribbon
+(beside the formation, or onto its centre line for an island platform; ≤ 16 m) with its canopies, drops 7 station
+outlines standing on the ribbon (footbridges, concourses), simplifies the schools' outlines by 0.9 m and quantises
+vertices to 0.5 m.
+
+| Kind | Sites | Buildings | gzip alone |
+|---|---|---|---|
+| hospital | 16 (+1 second part of Middlemore) | 217 | 10 kB |
+| mall | 29 | 66 | 8 kB |
+| station | 43, 75 platforms | 121 (56 canopies) | 7 kB |
+| school | 509 | 5,124 | 146 kB |
+| other (#121's areas) | 62 tiles | 171 | 10 kB |
+
+Spot checks (the ±5 m test, `tests/world-landmark-buildings.test.ts`): the highest smooth roof of every priority
+hospital and mall (all 11 within 3.1 m; Auckland City Hospital 56.8 m LiDAR / 56.5 m baked) and two random one-level
+outlines over 400 m² per site: 959 of 965 within 5 m, the rest pitched halls whose flat roof stands at the ridge (≤ 8.6 m).

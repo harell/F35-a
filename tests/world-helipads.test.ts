@@ -96,10 +96,10 @@ describe('helipad scenery', () => {
     expect(g.getAttribute('position').count).toBe(n * 4);
     // the rooftop pad is drawn at its LiDAR roof
     expect(padSurface(ach, flat, roofAt(ach.x, ach.z)).at(ach.x, ach.z)).toBeCloseTo(ach.height + 0.25, 5);
-    // The game models no building under it yet (the LINZ CBD buildings stop short of Grafton; #124 adds the
-    // hospitals): it stands on a block from the ground up to the pad instead of floating, as do the other rooftop pads
-    // on land the game draws no building under
-    expect(roofAt(ach.x, ach.z)).toBeNull();
+    // Auckland City Hospital is a landmark building (#124, aucklandLandmarks.ts): the pad sits on its modelled roof (its
+    // LiDAR roof, within a few metres of the pad's), not on a block; the other rooftop pads on land the game draws no
+    // building under stand on a block from the ground up to the pad instead of floating
+    expect(roofAt(ach.x, ach.z)).not.toBeNull();
     const B = new GeometryBuilder();
     const decks = buildHelipadDecks(B, flat, roofAt);
     const unseated = HELIPADS.filter((h) => h.roof && roofAt(h.x, h.z) === null && h.height - 4 >= 2);

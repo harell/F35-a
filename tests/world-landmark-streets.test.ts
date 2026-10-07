@@ -14,15 +14,18 @@ import { AKL } from '../src/core/auckland';
 import { WESTFIELD_CENTRE, WESTFIELD_PRISMS } from '../src/core/westfieldNewmarket';
 import { aucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
 import { tamakiDriveRings } from '../src/world/scenery/tamakiDriveData';
+import { landmarkSiteRings } from '../src/world/scenery/aucklandLandmarks';
 
 const rings = siteRings();
+// (the landmark sites near Eden Park, #124)
+const lmRings = landmarkSiteRings().filter((q) => Math.abs(q[0] - AKL.eden_park.x) < 1500 && Math.abs(q[1] - AKL.eden_park.z) < 1500);
 const mask = maskFromRings(rings, 8)!;
 const st = aucklandStreets() as CbdStreets;
 const eden = siteLayout()!.stadiums.find((s) => pointInRing(s.outline.pts, AKL.eden_park.x, AKL.eden_park.z))!;
 
 describe('landmark sites stop the procedural grid', () => {
   it('every stadium, the oil terminal, Westfield Newmarket, the hero neighbourhoods, the Auckland Domain and the Tāmaki Drive waterfront are sites; the mask covers each one and a street width round it', () => {
-    expect(rings.length).toBe(siteLayout()!.stadiums.length + 1 + WESTFIELD_PRISMS.length + aucklandNeighbourhoods()!.length + 1 + tamakiDriveRings().length);
+    expect(rings.length).toBe(siteLayout()!.stadiums.length + 1 + WESTFIELD_PRISMS.length + aucklandNeighbourhoods()!.length + 1 + tamakiDriveRings().length + landmarkSiteRings().length);
     expect(mask.masked(AKL.domain.x, AKL.domain.z)).toBe(true);
     expect(mask.masked(WESTFIELD_CENTRE.x + 20, WESTFIELD_CENTRE.z - 60)).toBe(true);
     expect(eden).toBeTruthy();
@@ -36,7 +39,8 @@ describe('landmark sites stop the procedural grid', () => {
       for (let x = AKL.eden_park.x - 400; x < AKL.eden_park.x + 400; x += 6) {
         const d = distToPath(r, x, z, true);
         if (pointInRing(r, x, z)) inside += mask.masked(x, z) ? 1 : 0;
-        else if (d > 8 + 12 * Math.SQRT2) outside += mask.masked(x, z) ? 1 : 0;
+        // (the schools round Eden Park are landmark sites of their own, #124)
+        else if (d > 8 + 12 * Math.SQRT2 && !lmRings.some((q) => pointInRing(q, x, z) || distToPath(q, x, z, true) <= 8 + 12 * Math.SQRT2)) outside += mask.masked(x, z) ? 1 : 0;
       }
     expect(inside).toBeGreaterThan(100);
     expect(outside).toBe(0);
