@@ -643,8 +643,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   vec2 bid = floor(p / BLOCK);
   float bh = hash12(bid + dist.z * 91.0);
   float site = mpp < 120.0 ? siteMasked(wp) : 0.0;
-  // the corridor's real houses (#126): where a loaded tile covers, no procedural lots, sheds or streets (its streets
-  // are ribbons); the ground is gardens where its 3D houses are drawn and the suburbs' far average where they thin out
+  // the corridor's real houses (#126): where a loaded tile covers, no procedural streets (its streets are ribbons), and
+  // no procedural lots or sheds where its 3D houses are drawn (gardens round them); where they thin out and past the
+  // scatter's reach the lots' roofs come back as the mid-range mosaic and the far average, so the suburb still reads
   float real = mpp < 120.0 ? houseMasked(wp) : 0.0;
   float realFar = real * (1.0 - realHouseShare(ds));
   // (the grid's random park blocks too: the real land use has the parks there)
@@ -656,8 +657,9 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
   // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
   if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
-  // (and at the lot centre, as HouseSource tests it, none on the corridor's real houses)
-  if (built > 0.0 && real > 0.0) built *= 1.0 - houseMasked(dist.xy + (lid + 0.5) * LOT * R);
+  // (and at the lot centre, as HouseSource tests it, none on the corridor's real houses where they are drawn; past them
+  // the lots' roofs come back as the mid-range mosaic, without the grid's streets: a built-up suburb, not bare ground)
+  if (built > 0.0 && real > 0.0) built *= 1.0 - houseMasked(dist.xy + (lid + 0.5) * LOT * R) * (1.0 - realFar);
   // Real land use (#122, landUseLots.ts; HouseSource does the same): the pixel's class decides the ground (open
   // ground: its own look and no streets; school and hospital grounds: no through streets), the lot centre's class
   // whether a house stands, and the class at the centre of a unit of ${UNIT_LOTS} lots whether it holds a shed round a car
@@ -686,7 +688,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
       field = luU == ${f1(LU_SCHOOL)} ? 1.0 - shed : 0.0;
       shed *= 1.0 - park;
       if (shed > 0.0 && mpp < 40.0) shed *= 1.0 - lotMasked(uc);
-      if (shed > 0.0 && real > 0.0) shed *= 1.0 - houseMasked(uc);
+      if (shed > 0.0 && real > 0.0) shed *= 1.0 - houseMasked(uc) * (1.0 - realFar);
     } else if (built > 0.0) {
       built *= 1.0 - luOpen(landUseAt(dist.xy + (lid + 0.5) * LOT * R));
     }
@@ -780,7 +782,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   float w = max(mpp, 1.0);
   float roadCov = 7.2 / max(w, 7.2) * clamp((w * 0.5 + 3.6 - roadD) / min(w, 7.2), 0.0, 1.0) * (1.0 - max(site, real)) * (1.0 - max(open, campus));
   vec3 mid = mix(lotCol, mix(asphalt, paving, 0.35), roadCov * 0.9);
-  vec3 col = mix(mix(mid, far, 0.4), far, max(smoothstep(16.0, 40.0, mpp), realFar));
+  vec3 col = mix(mix(mid, far, 0.4), far, smoothstep(16.0, 40.0, mpp));
   if (mpp < 8.0) {
     float h2 = fract(lh * 37.1);
     float h3 = fract(lh * 71.7);

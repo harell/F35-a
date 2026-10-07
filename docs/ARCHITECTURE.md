@@ -248,7 +248,8 @@ drops them past radius + 6 km. A tile's arrival: its houses join `HouseSource` (
 (their vertex ranges collapsed in `akl-centres`), and the terrain shader reads the cells from rows below the site mask's
 in the same texture (`setHouseMask` / `updateHouseMask`: no sampler unit to spare) and paints no procedural lots, sheds
 or streets there; its ground is gardens where the 3D houses are drawn and fades to the suburbs' far average as they
-thin out (`realHouseShare`, the scatter's curve). Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
+thin out (`realHouseShare`, the scatter's curve) and past where the scatter's capacity runs out (`TileScatter.reach`:
+a dense real suburb fills the medium tier's 3,600 houses within about a kilometre). Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
 tiles come and go: +1 draw call) and the trees keep off them. The scatter tiles under a changed tile regenerate
 (`TileScatter.invalidate`), drawn as they were until then. The service worker never precaches the tiles and keeps them
 in a cache of their own (`f35a-tiles-<VERSION>`). Until a tile has loaded, offline, and without the files, the
