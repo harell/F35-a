@@ -168,7 +168,7 @@ Harbour Bridge piers (`BRIDGE_PIERS_T`, which also set the fly-under span) are s
 `tests/world-sites.test.ts` checks against it. Without the file the hand-placed port and marinas come back, and the
 Wiri tanks still stand.
 
-## Aerial photo (LINZ, CBD and waterfront)
+## Aerial photo (LINZ, CBD and waterfront; Devonport and the gulf islands)
 
 `src/world/terrain/theaters/aucklandAerial.ts` loads the LINZ 2024 aerial photo of a 5.12 km square over the CBD,
 the waterfront and Devonport (`AERIAL_RECT`; baked by `tools/linz/aerial.py`): 2048² on the medium tier, 4096² on
@@ -176,7 +176,16 @@ high, never on low (`worldConfig().aerial`, the *Aerial photo* setting, `?aerial
 OSM wharf decks. The terrain shader replaces its procedural ground colour with it (fading out at the square's edge),
 the wharf decks and the naval base take it on their top faces, so do the CBD's LINZ buildings (below), and the house / tree scatter and the procedural
 suburb centres keep off it (`aerialCovers`). Gameplay never reads it. Without it (download failed, low tier) the
-procedural ground stays. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
+procedural ground stays. **The outer photo (#120)** continues it over the rest of the Devonport peninsula (same
+resolution) and over the gulf islands' land (Rangitoto, Motutapu, Rakino, Motuihe, Browns Island, Waiheke; 5 m on
+high, 10 m on medium): boxes packed into one atlas per tier (`AERIAL_OUTER` from `auckland-aerial-outer.json`,
+`auckland-aerial-outer-2048.webp`; on high `auckland-aerial-outer-4096.ktx2`, GPU-compressed ETC1S that three.js's
+`KTX2Loader` transcodes in a worker to the GPU's block format, ≈ 35 MB instead of ≈ 140 MB, with its alpha in
+`auckland-aerial-outer-cover.png`), loaded with the square (and only with it: it takes the square's grade).
+The terrain shader's `aerialPhoto()` sums the square's weight and every box's (alpha × the box's own edge fade,
+sampled with `textureGrad`); the Devonport boxes overlap the square by their 320 m feather so the fades cross over.
+The scatters keep off where that sum is over ½ (`aerialCovers(x, z, cover)`, the outer alpha read back once at load
+through a 512-wide canvas: `imageAlphaMask`). The photo-topped building material still reads the square only. Its colours are graded toward the procedural suburbs it fades into (`aerialGrade`: the
 photo's land average measured at load, scaled onto the suburbs' far albedo), fully at dawn, dusk and night, a trace by
 day. That matches the average albedo; two lighting terms do the rest. Under a low sun (dawn, dusk) the photo also
 takes the light of a 28° roof facing the sun on 80 % of its area (`aerialLowSun`, `AERIAL_LIGHT_GLSL`, on the terrain
@@ -187,6 +196,79 @@ thinning with slant range (`aerialHouseShare`, the same curve as `scatterKeep` i
 At night the procedural ground still runs under the photo for its lamps and lit windows, and the photo gives half its
 colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
 sit on the warmer procedural colour instead of a cool grey square.
+
+**Real houses under the photo (#121).** Where the photo covers the Devonport peninsula and the gulf islands, the house
+scatter draws the real houses instead (`src/world/scenery/aucklandHouses.ts`, `auckland-houses.bin`, ≈ 17,000 houses at
+8 bytes each, baked by `tools/linz/houses.py` + `houses.ts`): each LINZ outline up to 600 m² as an oriented rectangle with
+its LiDAR eave, ridge rise and photo roof colour, through the same instanced house and apartment archetypes
+(`HouseSource`; the roof's rise rides in the record's `aux` slot to the `aRise` attribute of the `HOUSES` shader), so no
+draw call is added. The file also carries its coverage (the land under those photo boxes, 32 m cells); `houseCoverage`
+turns it into lot-mask cells joined to `Scenery.siteMask`, so the procedural lots and streets (terrain shader), the
+procedural and frontage houses and the centres' blocks keep off it on every tier, by day and by night. Without the file
+the suburbs there are procedural again (and the photo keeps them off on medium and high, as before).
+
+**Real tree canopy (#123).** `src/world/terrain/theaters/aucklandCanopy.ts` loads `auckland-canopy.bin` (baked by
+`tools/linz/canopy.py` + `canopy.ts` from the 2024 LiDAR: DSM − DEM ≥ 3 m, the LINZ outlines buffered 1 m and the
+buildings since 2017 taken out) on the medium and high tiers, with the land use: the share of each 32 m cell's land under
+trees (16 levels, on the land-use lattice) and the trees' 75th-percentile height per 128 m, over Devonport, the North
+Shore to Takapuna, the CBD, the isthmus and the flight corridor (20 Part 1 sheets) and the island boxes of the outer photo
+(Part 2). Where it covers, `TreeSource` grows its trees by it (`canopyTree`: a 14 m point takes a tree with probability
+−ln(1 − share) · 196 m² / crown area, crowns sized from the measured height and widened in a closed canopy) instead of the
+Topo50 cover and the even garden trees, **on the photo too**: the photo's blocker keeps only the procedural trees off, so
+Rangitoto, the islands' bush and Devonport's gardens get 3D trees standing on their photographed crowns, clear of the real
+houses (#121), the road ribbons, the landmark sites and, in the procedural suburbs, the painted streets and houses. On
+the photo a canopy tree (record aux ≥ 1, the `aPhoto` attribute) takes the photo's colour at its trunk in the foliage
+vertex shader (`treePhoto`, a ≈ 12 m mip of the square or the outer atlas), so its crown sits in the photographed forest
+instead of on it. With the canopy the broadleaf mesh gets twice the tier's tree budget, and the tree scatter is
+`fitCapacity`: over budget it thins every tile evenly and widens the crowns it keeps (up to 2.2×), so a forest over a
+whole island stays a forest instead of ending in a square of the nearest tiles. The
+terrain shader reads the share from a pyramid (32–256 m box averages, `canopyPyramid`) stored in extra rows of the land-use
+texture (the fragment shader has no sampler unit left): the suburbs' far-field albedo is `OPEN_MIX` (urbanColor.ts) mixed
+with the canopy colour by the share, the lot-level garden trees follow it, and on open ground the forest tone does; the
+grid's edge blends into the procedural mix. Without the file (low tier, offline) the Topo50 cover and the garden-tree
+rule stay. Gameplay never reads it.
+
+**Island and Devonport roads (#127).** Where the real houses stand (#121's coverage: the Devonport peninsula and the
+gulf islands) every LINZ road is a ribbon (`ROAD_LOCAL` in `auckland-roads.bin`, baked by `tools/linz/islandRoads.ts`:
+the address road sections with the Topo50 surface, and Topo50 for the islands' roads with no addresses), sealed or
+unsealed, 4.5–9 m wide. They join `RoadNetwork`, so the procedural and real houses, the trees and the canopy keep off
+them, and are drawn as one unlit mesh (`akl-local-roads`, two vertices across, the sealed or gravel half of
+`createLocalRoadTexture`; no lamp posts, no frontage lots, low over causeways). On the low tier (no photo) they are the
+streets of the covered land, which #121 left as plain garden ground. Without the data file nothing changes.
+
+**The corridor's real houses and streets, streamed (#126).** From Whenuapai to Auckland Airport (the box of epic #119's
+count inside the 2024 LiDAR Part 1 sheets: ≈ 286,000 houses) the real houses and their LINZ streets ship as 136 tiles of
+2,048 m (`src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin`, ≈ 2.4 MB gzip in all, baked by
+`tools/linz/corridor-houses.py` + `.ts`; #121's record format, #127's local road ribbons) and a bundled manifest
+(`corridor.json`: tiles, bytes, the shared roof palette). `CorridorHouses` (`corridorHouses.ts`, built by
+`createCorridorHouses` in `corridorTiles.ts` from the Environment) fetches the tiles whose square comes within the house
+scatter's radius + 1.5 km of the camera, nearest first, two at a time, while the houses are drawn (`Scenery.update`), and
+drops them past radius + 6 km. A tile's arrival: its houses join `HouseSource` (and the trees keep off them), its coverage
+(32 m cells) is set in `cover`, under which no procedural, frontage or shed lot is built, the town centres' blocks hide
+(their vertex ranges collapsed in `akl-centres`), and the terrain shader reads the cells from rows below the site mask's
+in the same texture (`setHouseMask` / `updateHouseMask`: no sampler unit to spare) and paints no procedural
+streets there, nor lots where the 3D houses are drawn (gardens round them); as they thin out (`realHouseShare`, the
+scatter's curve) and past where the scatter's capacity runs out (`TileScatter.reach`: a dense real suburb fills the
+medium tier's 3,600 houses within about a kilometre) the lots' roofs come back as the mid-range mosaic and the far
+average, without the grid's streets. Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
+tiles come and go: +1 draw call) and the trees keep off them. The scatter tiles under a changed tile regenerate
+(`TileScatter.invalidate`), drawn as they were until then. The service worker never precaches the tiles and keeps them
+in a cache of their own (`f35a-tiles-<VERSION>`). Until a tile has loaded, offline, and without the files, the
+procedural suburbs stay.
+
+**Landmark buildings (#124).** `src/world/scenery/aucklandLandmarks.ts` loads `auckland-landmarks.bin` (baked by
+`tools/linz/landmark-buildings.py` + `.ts`: OSM hospital, mall, station and school sites, the LINZ outlines inside them
+with their 2024 LiDAR roof levels, the station platforms moved beside the railway ribbons, and the outlines over 600 m²
+that #121 leaves out on Devonport and the islands) on every tier. `aucklandBuildings()` appends them to the LINZ list
+(`Building.landmark`: kind, site; named after the site), so `buildCBD` extrudes them with their kind's facade
+(`landmarkFacade`: hospitals white with many windows, malls blank with a lit signage band, stations, schools brick and
+weatherboard; a platform canopy is a roof slab) into one mesh per 8 km square (`LANDMARK_TILE`, through the
+`houseBuilder` callback; facades, no photo roofs), hidden beyond `LANDMARK_FAR` of the camera; they are scenery only
+(`buildBuildingGeometry` skips them: as solids the mission bot flew into a hospital tower), and the hospital rooftop
+helipads (#125) now sit on their roofs. The site outlines
+join `siteRings()` (no procedural street grid, lots, sheds or centre blocks on them), the footprints and platforms
+`siteBlocker()` (`landmarkCovers`: no tree or house, procedural or #121's, on them). At night a hospital's windows are
+lit (`buildFacadeLightPoints` with a 55 % share), a mall's car park has lamps. Without the file nothing changes.
 
 **Photo roofs (#140).** The photo is a standard orthophoto, not a true one: a roof h m up is drawn displaced from its
 footprint by h × the camera's lean there (0.07 m per metre typically in the CBD, the mosaic switching frame to frame).

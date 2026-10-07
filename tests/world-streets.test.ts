@@ -332,7 +332,7 @@ describe('CBD buildings on the real streets (procedural towers: the fallback wit
       const src = new HouseSource(hf, cmap, height, cbd, (x, z, mm) => roads.near(x, z, mm));
       let n = 0;
       for (const arr of tiles((x, z, out) => src.generate(x, z, 300, out), 2))
-        for (let i = 0; i < arr.length; i += 11) {
+        for (let i = 0; i < arr.length; i += 12) {
           n++;
           expect(st.inRegion(arr[i], arr[i + 2])).toBe(false);
           // ≥ 5 m clear of the street the procedural grid paints along the region border
@@ -347,7 +347,7 @@ describe('CBD buildings on the real streets (procedural towers: the fallback wit
       const src = new TreeSource(hf, cmap, veg, 'auckland', 1840, 14, (x, z, mm) => roads.near(x, z, mm), cbd);
       let inPark = 0;
       for (const arr of tiles((x, z, out) => src.generate(x, z, 300, out), 3))
-        for (let i = 0; i < arr.length; i += 11) {
+        for (let i = 0; i < arr.length; i += 12) {
           if (!st.inRegion(arr[i], arr[i + 2])) continue;
           expect(st.park(arr[i], arr[i + 2])).toBeGreaterThanOrEqual(0.6);
           expect(st.kerbDistance(arr[i], arr[i + 2])).toBeGreaterThan(0);

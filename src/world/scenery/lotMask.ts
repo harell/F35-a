@@ -62,6 +62,12 @@ export class LotMask {
     this.set(i, j);
   }
 
+  /** Clear a cell (a streamed tile of the corridor's real houses unloaded, #126). */
+  unmark(i: number, j: number): void {
+    if (i < 0 || j < 0 || i >= this.texW * 8 || j >= this.texH * 4) return;
+    this.data[((j >> 2) * this.texW + (i >> 3)) * 4 + (j & 3)] &= ~(1 << (i & 7));
+  }
+
   private set(i: number, j: number): void {
     this.data[((j >> 2) * this.texW + (i >> 3)) * 4 + (j & 3)] |= 1 << (i & 7);
   }

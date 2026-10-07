@@ -8,7 +8,9 @@
  *  - NZ Addresses: Road Sections (layer 123109, the most accurate centrelines in the cities):
  *    every section in the CBD box, every motorway / state-highway section in the theatre, and the
  *    main arterials by name;
- *  - NZ Tunnel Centrelines (Topo, 1:50k, layer 50366): Victoria Park and Waterview tunnels.
+ *  - NZ Tunnel Centrelines (Topo, 1:50k, layer 50366): Victoria Park and Waterview tunnels;
+ *  - every section on the gulf islands and the Devonport peninsula, with the Topo50 road centrelines' surface
+ *    (layer 50329): islandRoads.ts (#127).
  * Reprojected with the game's own geoToWorld (WGS84 requested from the WFS; NZGD2000 ≈ WGS84 to < 1 m).
  *
  * The CBD region polygon is traced along the real road graph (shortest paths along the SH1 / SH16
@@ -27,6 +29,7 @@ import { worldToGeo } from '../../src/core/auckland';
 import { WESTFIELD_PRISMS } from '../../src/core/westfieldNewmarket';
 import { chain, densify, dirAt, fetchWfs, keyOf, lines, polyDist, runs, segDist, simplify, type Feature, type Pt } from './polyline';
 import { neighbourhoodStreets } from './neighbourhoodStreets';
+import { islandRoads } from './islandRoads';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const WORK = process.argv[2] ?? path.join(os.tmpdir(), 'f35-linz-roads');
@@ -518,6 +521,9 @@ out.push(...landmarkStreets);
 
 // ── Streets of the hero neighbourhoods outside the region (Mission Bay: neighbourhoodStreets.ts) ──
 out.push(...neighbourhoodStreets(WORK, regionPts, out));
+
+// ── Local roads of the gulf islands and the Devonport peninsula, where the real houses stand (#127: islandRoads.ts) ──
+out.push(...islandRoads(WORK, inRegion, out, (x, z) => isLand([x, z])));
 
 // ── Write ──
 // the railways (tools/linz/railways.ts) share the file: keep the ones already baked

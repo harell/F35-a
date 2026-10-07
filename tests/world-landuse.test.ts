@@ -26,6 +26,7 @@ import { allFeatures } from '../src/world/scenery/Scenery';
 import { bakeColorRows } from '../src/world/terrain/bake';
 import { reduceView } from '../src/world/terrain/parallel';
 import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, SHED } from '../src/world/scenery/sources';
+import { REC } from '../src/world/scenery/scatter';
 import { AKL_CBD_GRID, worldConfig } from '../src/world/config';
 import { QUALITY_PRESETS } from '../src/core/data';
 import { geoToWorld } from '../src/core/auckland';
@@ -163,17 +164,17 @@ describe('terrain and scatter on the real land use', () => {
     let houses = 0;
     let onOpen = 0;
     for (const kind of [HOUSE, APARTMENT])
-      for (let i = 0; i < out.data[kind].length; i += 11) {
+      for (let i = 0; i < out.data[kind].length; i += REC) {
         houses++;
         if (luOpen(landUseAt(lu, out.data[kind][i], out.data[kind][i + 2]))) onOpen++;
       }
-    const sheds = out.data[SHED].length / 11;
+    const sheds = out.data[SHED].length / REC;
     expect(houses).toBeGreaterThan(500);
     // a house's centre sits up to ≈ 6 m off its lot's centre, which decides: a few straddle a park's edge
     expect(onOpen / houses).toBeLessThan(0.03);
     expect(sheds).toBeGreaterThan(20);
     let industrial = 0;
-    for (let i = 0; i < out.data[SHED].length; i += 11) {
+    for (let i = 0; i < out.data[SHED].length; i += REC) {
       const cl = landUseAt(lu, out.data[SHED][i], out.data[SHED][i + 2]);
       expect(luSheds(cl) || cl === LU_SCHOOL).toBe(true);
       if (cl === LU_INDUSTRIAL) industrial++;
