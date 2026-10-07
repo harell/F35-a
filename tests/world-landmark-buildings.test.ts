@@ -3,7 +3,7 @@
  * malls, schools — from OSM sites, LINZ outlines and the 2024 LiDAR (aucklandLandmarks.ts).
  */
 import { describe, expect, it } from 'vitest';
-import { aucklandLandmarks, decodeLandmarks, encodeLandmarks, landmarkCovers, LANDMARK_KINDS, ringDistance, setAucklandLandmarks } from '../src/world/scenery/aucklandLandmarks';
+import { aucklandLandmarks, buildMallLamps, decodeLandmarks, encodeLandmarks, landmarkCovers, LANDMARK_KINDS, ringDistance, setAucklandLandmarks } from '../src/world/scenery/aucklandLandmarks';
 import { aucklandBuildings, ringArea, ringCentroid, roofHeight } from '../src/world/scenery/aucklandBuildings';
 import { aucklandHouses } from '../src/world/scenery/aucklandHouses';
 import { aucklandNeighbourhoods } from '../src/world/scenery/aucklandNeighbourhoods';
@@ -184,6 +184,16 @@ describe('landmark buildings in the world', () => {
   it('are scenery only: not in the sim\'s building index (the AI and the mission bot don\'t steer round them)', () => {
     const g = buildBuildingGeometry(() => 0, 40)!;
     expect(g.buildings.some((b) => b.name === 'Auckland City Hospital')).toBe(false);
+  });
+
+  it('light the malls\' car parks at night, off the buildings', () => {
+    const lights = new LightList();
+    const n = buildMallLamps(d, lights, () => 5, null);
+    expect(n).toBeGreaterThan(300);
+    lights.forEach((x, y, z) => {
+      expect(y).toBe(14);
+      expect(landmarkCovers(x, z, 7)).toBe(false);
+    });
   });
 
   it('fall back to nothing without the file', () => {

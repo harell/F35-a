@@ -276,7 +276,7 @@ export function landmarkSiteRings(d: Landmarks | null = current): Float32Array[]
 
 /** Bucket grid (CELL m) of the landmark footprints and platforms, for `landmarkCovers`. */
 const CELL = 64;
-let covers: { key: Map<number, Float32Array[]> } | null = null;
+let covers: { key: Map<number, { r: Float32Array; b: [number, number, number, number] }[]> } | null = null;
 const cellKey = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
 
 function bounds(r: ArrayLike<number>): [number, number, number, number] {
@@ -298,16 +298,17 @@ export function landmarkCovers(x: number, z: number, margin = 0): boolean {
   const d = current;
   if (!d) return false;
   if (!covers) {
-    const key = new Map<number, Float32Array[]>();
+    const key = new Map<number, { r: Float32Array; b: [number, number, number, number] }[]>();
     const add = (r: Float32Array) => {
-      const [x0, x1, z0, z1] = bounds(r);
+      const b = bounds(r);
+      const [x0, x1, z0, z1] = b;
       // (a margin of up to 24 m reaches into the next cell: index the ring there too)
       for (let j = Math.floor((z0 - 24) / CELL); j <= Math.floor((z1 + 24) / CELL); j++)
         for (let i = Math.floor((x0 - 24) / CELL); i <= Math.floor((x1 + 24) / CELL); i++) {
           const k = cellKey(i, j);
           const l = key.get(k);
-          if (l) l.push(r);
-          else key.set(k, [r]);
+          if (l) l.push({ r, b });
+          else key.set(k, [{ r, b }]);
         }
     };
     for (const b of d.buildings) for (const p of b.prisms) add(p.ring);
@@ -317,7 +318,8 @@ export function landmarkCovers(x: number, z: number, margin = 0): boolean {
   const l = covers.key.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));
   if (!l) return false;
   const m = Math.min(24, margin);
-  for (const r of l) if (ringDistance(r, x, z) <= m) return true;
+  // (the ring's box first: most queries are clear of every footprint in their cell)
+  for (const { r, b } of l) if (x >= b[0] - m && x <= b[1] + m && z >= b[2] - m && z <= b[3] + m && ringDistance(r, x, z) <= m) return true;
   return false;
 }
 
@@ -376,19 +378,22 @@ export function buildPlatforms(d: Landmarks, height: HeightFn, tileOf: (x: numbe
 }
 
 /**
- * Car-park lamps of the malls (#124): on a 36 m lattice inside each mall's site, off its buildings (8 m), the roads and
- * the water, 9 m up, LED white. At most MALL_LAMPS a mall.
+ * Car-park lamps of the malls (#124): on a 36 m lattice over each mall's site and MALL_LAMP_REACH m round it (an OSM mall
+ * is often its building's outline alone, its car parks outside), off its buildings and every landmark's (8 m), the roads
+ * and the water, 9 m up, LED white. At most MALL_LAMPS a mall.
  */
+const MALL_LAMP_REACH = 45;
 const MALL_LAMPS = 60;
 export function buildMallLamps(d: Landmarks, lights: LightList, height: HeightFn, roads: { near(x: number, z: number, m: number): boolean } | null): number {
   let n = 0;
   for (const s of d.sites) {
     if (s.kind !== 'mall') continue;
     const [x0, x1, z0, z1] = bounds(s.ring);
+    const R = MALL_LAMP_REACH;
     let k = 0;
-    for (let z = z0 + 18; z < z1 && k < MALL_LAMPS; z += 36)
-      for (let x = x0 + 18; x < x1 && k < MALL_LAMPS; x += 36) {
-        if (ringDistance(s.ring, x, z) > -4 || landmarkCovers(x, z, 8) || roads?.near(x, z, 4)) continue;
+    for (let z = z0 - R + 18; z < z1 + R && k < MALL_LAMPS; z += 36)
+      for (let x = x0 - R + 18; x < x1 + R && k < MALL_LAMPS; x += 36) {
+        if (ringDistance(s.ring, x, z) > R || landmarkCovers(x, z, 8) || roads?.near(x, z, 4)) continue;
         const g = height(x, z);
         if (g < 0.5) continue;
         lights.add(x, g + 9, z, 0xf4f1e6, 3.2);
