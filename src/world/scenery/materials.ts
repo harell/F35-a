@@ -299,7 +299,7 @@ void main() {
         emissive += uNight * vec3(1.0, 0.72, 0.4) * 1.4 * mix(0.2 * 0.66, win * lit, detail);
       }
     }
-  } else if (vWin > 9.5) {
+  } else if (vWin > 9.5 && vWin < 10.5) {
     // floodlit stone (aWin 10, the War Memorial Museum): plain walls by day, washed warm white by floodlights at night
     if (uNight > 0.0 && abs(N.y) < 0.5) emissive += uNight * base * vec3(1.0, 0.92, 0.78) * 0.55;
   } else if (vWin > 7.5 && abs(N.y) < 0.5) {
