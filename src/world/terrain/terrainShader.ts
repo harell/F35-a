@@ -18,6 +18,7 @@ import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
 import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, MAX_AERIAL_BOXES } from './theaters/aucklandAerial';
 import { LU_CEMETERY, LU_COMMERCIAL, LU_FARMLAND, LU_GOLF, LU_HOSPITAL, LU_INDUSTRIAL, LU_PARK, LU_PITCH, LU_SCHOOL, LU_VINEYARD } from '../scenery/aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint } from '../scenery/landUseLots';
+import { CANOPY_GPU_LEVELS, CANOPY_GPU_NONE } from './theaters/aucklandCanopy';
 
 const f1 = (v: number) => v.toFixed(1);
 const fp = (c: number) => shedFootprint(c);
@@ -202,6 +203,9 @@ uniform sampler2D uFrontFlags; // R8, one per lot: 0 empty, 1 house, 2 apartment
 uniform sampler2D uLandUse; // real land use (aucklandLandUse.ts): 4-bit classes, 4 × 2 cells per RGBA8 texel
 uniform vec4 uLandUseRect; // x0, z0, 1/cell, texels across; across 0 = none
 uniform float uLandUseRows; // texels down
+uniform vec4 uCanopyLv[${CANOPY_GPU_LEVELS}]; // the real canopy's pyramid in uLandUse's rows below the land use (aucklandCanopy.ts canopyPyramid): cell (m), cols, rows, byte offset; cell 0 = none
+uniform vec4 uCanopyGrid; // its corner x0, z0 (m), its first texel row, the texture's width (texels)
+uniform vec3 uSuburbOpen; // far-field albedo of a suburb's ground without its trees (urbanColor.ts OPEN_MIX)
 uniform vec3 uShedRoofs[${SHED_ROOFS.length}]; // landUseLots.ts SHED_ROOFS
 varying vec3 vWorld;
 varying vec2 vUv;
@@ -337,6 +341,46 @@ float landUseAt(vec2 wp) {
   float b = f.y < 0.5 ? (f.x < 1.5 ? v.r : v.g) : (f.x < 1.5 ? v.b : v.a);
   return mod(f.x, 2.0) < 0.5 ? mod(b, 16.0) : floor(b / 16.0);
 }
+// The real tree canopy (#123): byte b of the pyramid (four to a texel, row by row from uCanopyGrid.z).
+float canopyByte(int b) {
+  int t = b >> 2;
+  int w = int(uCanopyGrid.w);
+  vec4 v = texelFetch(uLandUse, ivec2(t % w, int(uCanopyGrid.z) + t / w), 0);
+  int c = b & 3;
+  return floor((c == 0 ? v.r : c == 1 ? v.g : c == 2 ? v.b : v.a) * 255.0 + 0.5);
+}
+// One pyramid level, bilinear over its covered cells: x = share of the land under trees, y = the covered weight.
+vec2 canopyLevel(vec2 wp, vec4 L) {
+  vec2 g = (wp - uCanopyGrid.xy) / L.x - 0.5;
+  vec2 i0 = floor(g);
+  vec2 f = g - i0;
+  float sw = 0.0;
+  float ss = 0.0;
+  for (int k = 0; k < 4; k++) {
+    vec2 o = vec2(float(k & 1), float(k >> 1));
+    vec2 c = i0 + o;
+    if (c.x < 0.0 || c.y < 0.0 || c.x >= L.y || c.y >= L.z) continue;
+    float v = canopyByte(int(L.w) + int(c.y) * int(L.y) + int(c.x));
+    if (v > ${(CANOPY_GPU_NONE - 0.5).toFixed(1)}) continue;
+    vec2 ww = mix(1.0 - f, f, o);
+    sw += ww.x * ww.y;
+    ss += ww.x * ww.y * v * (1.0 / 250.0);
+  }
+  return vec2(sw > 0.0 ? ss / sw : 0.0, sw);
+}
+// The real canopy at wp (aucklandCanopy.ts): x = the share of the land under trees, y = how far the grid covers there
+// (1 inside, fading to 0 across its edge); the level whose cells are about a pixel's footprint (32 m … 256 m).
+vec2 canopyShare(vec2 wp, float mpp) {
+  vec4 L0 = uCanopyLv[0];
+  if (L0.x <= 0.0) return vec2(0.0);
+  vec2 g = (wp - uCanopyGrid.xy) / L0.x;
+  if (g.x < -1.0 || g.y < -1.0 || g.x > L0.y + 1.0 || g.y > L0.z + 1.0) return vec2(0.0);
+  float lv = clamp(ceil(log2(max(mpp, 1.0) / L0.x)), 0.0, ${(CANOPY_GPU_LEVELS - 1).toFixed(1)});
+  return canopyLevel(wp, lv < 0.5 ? L0 : lv < 1.5 ? uCanopyLv[1] : lv < 2.5 ? uCanopyLv[2] : uCanopyLv[3]);
+}
+// The real canopy at this pixel (main() sets it before the ground patterns read it).
+vec2 gCanopy = vec2(0.0);
+
 // Open ground (aucklandLandUse.ts luOpen): parks, pitches, golf, cemeteries, vineyards, farmland.
 float luOpen(float c) {
   return (c == ${f1(LU_PARK)} || c == ${f1(LU_PITCH)} || c == ${f1(LU_GOLF)} || c == ${f1(LU_CEMETERY)} || c == ${f1(LU_VINEYARD)} || c == ${f1(LU_FARMLAND)}) ? 1.0 : 0.0;
@@ -676,13 +720,14 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, out vec3 e
   vec3 grass = uGarden * (0.84 + 0.24 * bh) * mix(vec3(1.0), lawnH < 0.25 ? vec3(1.12, 1.0, 0.72) : vec3(0.86, 0.9, 0.86), step(0.25, abs(lawnH - 0.5) * 2.0));
   // leafy and bare neighbourhoods (≈ 500 m scale)
   float leafy = smoothstep(0.2, 0.8, texture2D(uDetail, wp * (1.0 / 1730.0)).a);
-  // Auckland canopy cover ≈ 30-45 % (leafy isthmus suburbs at the top end), less in the densest parts
-  float treeFrac = mix(0.3, 0.46, leafy) * (1.0 - 0.3 * dens) * (1.0 - aptFar * 0.6);
+  // Auckland canopy cover ≈ 30-45 % (leafy isthmus suburbs at the top end), less in the densest parts; where the
+  // real canopy's grid covers (#123), its share instead
+  float treeFrac = mix(mix(0.3, 0.46, leafy) * (1.0 - 0.3 * dens) * (1.0 - aptFar * 0.6), gCanopy.x, gCanopy.y);
   vec3 flatAvg = vec3(0.3, 0.29, 0.27);
   // Far: grey-green area average (canopy, NZ roofs, lawns, streets; precomputed on the CPU from the
-  // palette), leafier / barer by neighbourhood, plus a per-block canopy / roof mottle (≈ 100 m) that
-  // keeps a city grain at combat altitude and fades out before it would alias.
-  vec3 far = mix(uSuburbBare, uSuburbLeafy, leafy);
+  // palette), leafier / barer by neighbourhood (or by the real canopy's share), plus a per-block canopy / roof
+  // mottle (≈ 100 m) that keeps a city grain at combat altitude and fades out before it would alias.
+  vec3 far = mix(mix(uSuburbBare, uSuburbLeafy, leafy), mix(uSuburbOpen, uCanopy, gCanopy.x), gCanopy.y);
   far = mix(far, uCanopy * 1.25, (bh - 0.5) * 0.45 * (1.0 - smoothstep(40.0, 160.0, mpp)));
   vec3 cbdFar = flatAvg * 0.6 + uCanopy * treeFrac + mix(asphalt, paving, 0.5) * 0.25;
   far = mix(far, cbdFar, aptFar);
@@ -929,6 +974,9 @@ void main() {
   // camera, lit the ground like a carpet.
   vec4 photo = aerialPhoto(wp);
   bool photoFull = photo.a > 0.99 && uNight <= 0.0;
+  // the real tree canopy (#123): the suburbs' far-field mix and the forest tone follow its share where it covers
+  gCanopy = photoFull ? vec2(0.0) : canopyShare(wp, mpp);
+  if (sm.y <= 0.0) forest = mix(forest, gCanopy.x, gCanopy.y * (1.0 - urban));
 
   // Past the heightfield the (clamped) colour map would streak: fade to a flat outside colour.
   float outside = smoothstep(uOutside - 3000.0, uOutside, max(abs(wp.x), abs(wp.y)));

@@ -36,7 +36,8 @@ import {
 import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
-import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
+import { BARE_MIX, LEAFY_MIX, OPEN_MIX, suburbFarAlbedo } from './urbanColor';
+import { CANOPY_GPU_LEVELS, canopyPyramid, type Canopy } from './theaters/aucklandCanopy';
 import { districtAngles, type CbdGrid } from '../scenery/urbanGrid';
 import type { LandUse } from '../scenery/aucklandLandUse';
 import { SHED_ROOFS } from '../scenery/landUseLots';
@@ -341,6 +342,7 @@ export class TerrainRenderer {
         uCanopy: { value: o.style.canopy },
         uSuburbLeafy: { value: suburbFarAlbedo(o.style, LEAFY_MIX) },
         uSuburbBare: { value: suburbFarAlbedo(o.style, BARE_MIX) },
+        uSuburbOpen: { value: suburbFarAlbedo(o.style, OPEN_MIX) },
         uSand: { value: o.style.sand },
         uBlackSand: { value: o.style.blackSand },
         uShoreRock: { value: o.style.shoreRock },
@@ -378,6 +380,9 @@ export class TerrainRenderer {
         uLandUse: { value: o.dummy },
         uLandUseRect: { value: new Vector4(0, 0, 1, 0) },
         uLandUseRows: { value: 1 },
+        // … and the real tree canopy's pyramid in the same texture (#123)
+        uCanopyLv: { value: Array.from({ length: CANOPY_GPU_LEVELS }, () => new Vector4(0, 0, 0, 0)) },
+        uCanopyGrid: { value: new Vector4(0, 0, 0, 1) },
         uShedRoofs: { value: SHED_ROOFS.map((h) => new Color(h)) },
       },
     });
@@ -521,19 +526,38 @@ export class TerrainRenderer {
     this.siteMaskTexture = this.installMask(mask, 'uSiteMask');
   }
 
-  /** Paint the real land use (scenery/aucklandLandUse.ts: parks, pitches, sheds and car parks…); null = none. */
-  setLandUse(lu: LandUse | null): void {
+  /**
+   * Paint the real land use (scenery/aucklandLandUse.ts: parks, pitches, sheds and car parks…) and follow the real tree
+   * canopy (#123, aucklandCanopy.ts: its shader pyramid in the rows below the land use, one texture: the fragment
+   * shader has no sampler unit to spare); null = none.
+   */
+  setLandUse(lu: LandUse | null, canopy: Canopy | null = null): void {
     this.landUseTexture?.dispose();
     this.landUseTexture = null;
     const u = this.material.uniforms;
-    if (!lu) {
-      u.uLandUseRect.value.set(0, 0, 1, 0);
-      return;
+    u.uLandUseRect.value.set(0, 0, 1, 0);
+    for (const v of u.uCanopyLv.value as Vector4[]) v.set(0, 0, 0, 0);
+    if (!lu && !canopy) return;
+    const texW = lu ? lu.texW : 1024;
+    let data = lu ? lu.data : new Uint8Array(0);
+    let texH = lu ? lu.texH : 0;
+    if (canopy) {
+      const pyr = canopyPyramid(canopy);
+      const rows = Math.ceil(pyr.bytes.length / (texW * 4));
+      const d = new Uint8Array(texW * (texH + rows) * 4);
+      d.set(data);
+      d.set(pyr.bytes, texH * texW * 4);
+      pyr.levels.forEach((l, i) => (u.uCanopyLv.value as Vector4[])[i].set(l.cell, l.cols, l.rows, l.offset));
+      u.uCanopyGrid.value.set(canopy.x0, canopy.z0, texH, texW);
+      data = d;
+      texH += rows;
     }
-    this.landUseTexture = dataTexture(lu.data, lu.texW, lu.texH, RGBAFormat, UnsignedByteType);
+    this.landUseTexture = dataTexture(data, texW, texH, RGBAFormat, UnsignedByteType);
     u.uLandUse.value = this.landUseTexture;
-    u.uLandUseRect.value.set(lu.x0, lu.z0, 1 / lu.cell, lu.texW);
-    u.uLandUseRows.value = lu.texH;
+    if (lu) {
+      u.uLandUseRect.value.set(lu.x0, lu.z0, 1 / lu.cell, lu.texW);
+      u.uLandUseRows.value = lu.texH;
+    }
   }
 
   /** Paint the lots along the arterials (frontage.ts, built with the scenery); null = none. */

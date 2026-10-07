@@ -44,7 +44,8 @@ import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
 import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
-import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource, type MeasuredTrees } from './sources';
+import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource, type CanopyTrees, type MeasuredTrees } from './sources';
+import type { Canopy } from '../terrain/theaters/aucklandCanopy';
 import { buildTamakiDrive, tamakiCovers, tamakiGround, tamakiTrees } from './tamakiDrive';
 import { tamakiDrive } from './tamakiDriveData';
 import type { LandUse } from './aucklandLandUse';
@@ -76,6 +77,8 @@ export interface SceneryOptions {
   aerial?: AerialPhotoInfo | null;
   /** The real land use (#122, medium and high tiers): houses off open ground, sheds on commercial land. */
   landUse?: LandUse | null;
+  /** The real tree canopy (#123, medium and high tiers): where it covers, the trees follow it, on the photo too. */
+  canopy?: Canopy | null;
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + Auckland's built-ins). */
@@ -501,8 +504,12 @@ export class Scenery {
     const onSite = o.aerial ? (x: number, z: number, m: number) => (aerialCovers(x, z, aerialCover) && !neighbourhoodAt(x, z, nbs)) || (sites?.(x, z, m) ?? false) : sites;
     const offRoad =
       roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
+    // the road ribbons and the landmark sites, not the photo: the real houses (#121) and the real canopy (#123) stand on it
+    const roadsOrSites = roadsRef || sites ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (sites?.(x, z, m) ?? false) : null;
+    const realHouses = o.theater === 'auckland' ? aucklandHouses() : null;
+    const canopy: CanopyTrees | null = o.canopy ? { grid: o.canopy, blocked: roadsOrSites, houses: realHouses, lotMask: joinMasks(this.lotMask, this.siteMask) } : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, o.theater === 'auckland' ? aucklandDomain() : null, this.tamakiTrees),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, o.theater === 'auckland' ? aucklandDomain() : null, this.tamakiTrees, canopy),
       [
         { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
         { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
@@ -524,8 +531,8 @@ export class Scenery {
       new HouseSource(
         hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null,
         // the real houses (#121) stand under the photo too: only the road ribbons and the landmark sites keep them off
-        o.theater === 'auckland' ? aucklandHouses() : null,
-        roadsRef || sites ? (x, z, m) => (roadsRef?.near(x, z, m) ?? false) || (sites?.(x, z, m) ?? false) : null,
+        realHouses,
+        roadsOrSites,
       ),
       [
         { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn, aux: 'aRise' },

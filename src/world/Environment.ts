@@ -37,6 +37,7 @@ import { LightReflections } from './scenery/nightLights';
 import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
+import { aucklandCanopy, loadAucklandCanopy } from './terrain/theaters/aucklandCanopy';
 import { AERIAL_FEATHER, AERIAL_OUTER, AERIAL_RECT, aerialGrade, aerialOuterUv, imageAlphaMask, imageMeanLinear, loadAucklandAerial, loadAucklandAerialOuter } from './terrain/theaters/aucklandAerial';
 import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './terrain/urbanColor';
 import { loadAucklandRoads } from './scenery/aucklandRoads';
@@ -95,8 +96,11 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const aerialOuterLoad = cfg.aerial ? loadAucklandAerialOuter(cfg.aerial) : null;
   // The real land use (#122, medium and high only: its grid is 12.5 MB on the GPU)
   const landUseLoad = cfg.landUse ? loadAucklandLandUse() : Promise.resolve(false);
-  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandHouses(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad]);
+  // … and the real tree canopy (#123, the same tiers: its shader grid rides in the land use's texture)
+  const canopyLoad = cfg.landUse ? loadAucklandCanopy() : Promise.resolve(false);
+  await Promise.all([loadAucklandLinz(), loadAucklandRoads(), loadAucklandBuildings(), loadAucklandOsm(), loadAucklandPort(), loadAucklandNeighbourhoods(), loadAucklandHouses(), loadAucklandDomain(), loadTamakiDrive(), landUseLoad, canopyLoad]);
   const landUse = cfg.landUse ? aucklandLandUse() : null;
+  const canopy = cfg.landUse ? aucklandCanopy() : null;
   // (the real airfields level their OSM outlines: resolved once the layer is in)
   const features = allFeatures(opts.theater, opts.features);
   const spec = { theater: opts.theater, seed: opts.seed, resolution: cfg.hfResolution, features, pads: opts.pads, hdTerrain: cfg.hdTerrain, landUse: !!landUse };
@@ -337,13 +341,14 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     lights: preset.lights,
     aerial,
     landUse,
+    canopy,
   });
   scene.add(scenery.group);
   // the terrain leaves the lots along the road and railway ribbons unbuilt, as the scenery's houses do
   terrain.setLotMask(scenery.lotMask);
   terrain.setSiteMask(scenery.siteMask);
   terrain.setFrontage(scenery.frontage);
-  terrain.setLandUse(landUse);
+  terrain.setLandUse(landUse, canopy);
   let reflections: LightReflections | null = null;
   if (scenery.reflectionSources.length) {
     reflections = new LightReflections(atmo, scenery.reflectionSources, water.normalMapUniform, coastUniforms(coast, dummyTex));

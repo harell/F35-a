@@ -64,3 +64,8 @@ setTamakiDrive(TAMAKI_BYTES);
 export const HOUSES_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/terrain/data/auckland-houses.bin', import.meta.url)));
 export const HOUSES_BYTES = new Uint8Array(zlib.gunzipSync(HOUSES_GZ));
 setAucklandHouses(HOUSES_BYTES);
+
+// The real tree canopy (#123) is not installed for every test (its decode takes a moment): tests/world-canopy.test.ts
+// decodes it from these bytes.
+export const CANOPY_GZ = new Uint8Array(fs.readFileSync(new URL('../src/world/terrain/data/auckland-canopy.bin', import.meta.url)));
+export const canopyBytes = (): Uint8Array => new Uint8Array(zlib.gunzipSync(CANOPY_GZ));

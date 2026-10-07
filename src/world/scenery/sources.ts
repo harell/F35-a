@@ -21,7 +21,8 @@ import type { AucklandDomain, DomainTree } from './aucklandDomain';
 import { BLOCK_D, BLOCK_W, LOTS_X, LOTS_Z, ROAD_HALF, blockHash, districtAt, lotHash, toLocal, toWorld, type CbdGrid, type District } from './urbanGrid';
 import { LU_COMMERCIAL, LU_INDUSTRIAL, LU_PITCH, LU_SCHOOL, landUseAt, luOpen, luSheds, type LandUse } from './aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint, shedHeight, shedRoofOf } from './landUseLots';
-import { housesIn, type RealHouses } from './aucklandHouses';
+import { housesCover, housesIn, type RealHouses } from './aucklandHouses';
+import { canopyAt as realCanopyAt, canopyHeightAt, type Canopy } from '../terrain/theaters/aucklandCanopy';
 
 /** Bilinear lookups into the baked colour map's alpha: forest (A < 128) / urban (A ≥ 128). */
 export class ColorMapSampler {
@@ -77,6 +78,55 @@ export function onStreet(x: number, z: number, cbd: CbdGrid | null, scratch: Dis
   return Math.min(fx, BLOCK_W - fx, fz, BLOCK_D - fz) < ROAD_HALF + 2;
 }
 
+/**
+ * The real tree canopy (#123, aucklandCanopy.ts) and what keeps its trees' trunks clear. Where the grid covers, it
+ * decides the trees (on the aerial photo too: the photo's own trees get 3D trees standing on them).
+ */
+export interface CanopyTrees {
+  grid: Canopy;
+  /** The road ribbons and the landmark sites (not the photo). */
+  blocked: ((x: number, z: number, margin: number) => boolean) | null;
+  /** The real houses (#121): no trunk inside one. */
+  houses: RealHouses | null;
+  /** Lots cleared along the ribbons and on the sites (no procedural house stands there). */
+  lotMask: Pick<LotMask, 'masked'> | null;
+}
+
+/** Where the canopy grid is: the share (0 … 1) the trees there follow, or −1 (the Topo50 cover and the gardens rule). */
+export function canopyShareAt(c: CanopyTrees | null, x: number, z: number): number {
+  return c ? realCanopyAt(c.grid, x, z) : -1;
+}
+
+/** A closed canopy's crowns widen up to this × their height (a pōhutukawa is wider than tall). */
+const CANOPY_MAX_WIDEN = 2.2;
+/** The share the crowns' overlap correction saturates at. */
+const CANOPY_MAX_SHARE = 0.9;
+
+const LOT_W = BLOCK_W / LOTS_X;
+const LOT_D = BLOCK_D / LOTS_Z;
+
+/**
+ * True when (x, z) lies within `margin` m of a procedural house of the scatter (HouseSource's lot rule: the built lots
+ * of the urban colour map, off the park blocks and the masked lots; the land-use sheds and the frontage lots are left
+ * out). A tree of the real canopy does not grow through one.
+ */
+export function onProceduralHouse(x: number, z: number, cmap: ColorMapSampler, cbd: CbdGrid | null, masked: Pick<LotMask, 'masked'> | null, margin: number, scratch: District): boolean {
+  const d = districtAt(x, z, undefined, scratch, cbd);
+  if (d.real || d.border < 9) return false;
+  const [px, pz] = toLocal(d, x, z);
+  const lx = Math.floor(px / LOT_W);
+  const lz = Math.floor(pz / LOT_D);
+  const [cwx, cwz] = toWorld(d, (lx + 0.5) * LOT_W, (lz + 0.5) * LOT_D);
+  const dens = cmap.urban(cwx, cwz);
+  if (dens < 0.08) return false;
+  if (blockHash(d, Math.floor(lx / LOTS_X), Math.floor(lz / LOTS_Z)) >= 0.975 - dens * 0.03) return false;
+  const lh = lotHash(d, lx, lz);
+  if (lh >= 0.8 + 0.2 * dens) return false;
+  if (masked?.masked(cwx, cwz)) return false;
+  const fp = houseFootprint(lh, lz, dens > 0.9);
+  return Math.abs((px / LOT_W - lx - fp.cx) * LOT_W) < (fp.sx * LOT_W) / 2 + margin && Math.abs((pz / LOT_D - lz - fp.cz) * LOT_D) < (fp.sz * LOT_D) / 2 + margin;
+}
+
 /** Trees measured one by one on a site of their own (tamakiDrive.ts tamakiTrees: [x, y, z, width, height, palm, shade] each). */
 export interface MeasuredTrees {
   trees: Float32Array;
@@ -103,7 +153,80 @@ export class TreeSource implements ScatterSource {
     private readonly domain: AucklandDomain | null = null,
     /** Measured trees standing on a strip of their own (the Tāmaki Drive waterfront): no others grow there. */
     private readonly measured: MeasuredTrees | null = null,
+    /** The real tree canopy (#123): where its grid covers, the trees follow it instead of the Topo50 cover. */
+    private readonly canopy: CanopyTrees | null = null,
   ) {}
+
+  private readonly realIdx: number[] = [];
+
+  /** Within `margin` m of a real house (#121: an oriented rectangle). */
+  private onRealHouse(x: number, z: number, margin: number): boolean {
+    const h = this.canopy?.houses;
+    if (!h) return false;
+    this.realIdx.length = 0;
+    for (const k of housesIn(h, x - 16, z - 16, x + 16, z + 16, this.realIdx)) {
+      const dx = x - h.x[k];
+      const dz = z - h.z[k];
+      const c = Math.cos(h.dir[k]);
+      const s = Math.sin(h.dir[k]);
+      if (Math.abs(dx * c + dz * s) < h.d[k] / 2 + margin && Math.abs(-dx * s + dz * c) < h.w[k] / 2 + margin) return true;
+    }
+    return false;
+  }
+
+  /**
+   * A tree of the real canopy (#123) for the grid point (gx, gz), or none: the cell's share of land under trees and the
+   * trees' measured height decide it, as nbTree does for the hero neighbourhoods (a 14 m point stands for 196 m², so it
+   * takes a tree with probability −ln(1 − share) · 196 / crown area, the overlap of crowns put down at random allowed
+   * for, the crowns widened up to CANOPY_MAX_WIDEN × the height where that would exceed one: a closed canopy). Its trunk keeps off the road ribbons, the landmark sites, the real and the procedural
+   * houses and the painted streets; a point blocked there tries two more spots in its square, so the canopy stays near
+   * its share round them. Palms only in gardens (the bush and the islands' pōhutukawa forest are broadleaf).
+   */
+  private canopyTree(share: number, gx: number, gz: number, out: TileInstances): void {
+    if (share <= 0) return;
+    const ct = this.canopy!;
+    const seed = this.seed;
+    const sp = this.spacing;
+    const top = canopyHeightAt(ct.grid, (gx + 0.5) * sp, (gz + 0.5) * sp);
+    const r = hash2(gx, gz, seed + 33);
+    const s = Math.max(3, (top >= 3 ? top : 9) * (0.7 + 0.45 * hash2(gx, gz, seed + 32)));
+    const cell = sp * sp;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const x = (gx + 0.1 + 0.8 * hash2(gx, gz, seed + 40 + attempt * 2)) * sp;
+      const z = (gz + 0.1 + 0.8 * hash2(gx, gz, seed + 41 + attempt * 2)) * sp;
+      const hf = this.hf;
+      const gh = hf.heightAt(x, z);
+      if (gh < 0.6) return;
+      const mi = Math.round((z - hf.origin) / hf.cell) * hf.n + Math.round((x - hf.origin) / hf.cell);
+      const mat = hf.mat[Math.max(0, Math.min(hf.mat.length - 1, mi))];
+      const urban = this.cmap.urban(x, z);
+      let kind = this.veg.species(gh, mat, r, x, z);
+      if (kind === TREE_PALM && urban <= 0.05) kind = TREE_BROADLEAF;
+      const ratio = kind === TREE_CONIFER ? 0.55 : kind === TREE_PALM ? 0.75 : 0.95;
+      // crowns fall where they will, so some overlap: the cover their union reaches is 1 − e^(−crown area per m²)
+      const want = -Math.log(1 - Math.min(share, CANOPY_MAX_SHARE)) * cell;
+      let w = s * ratio;
+      let p = want / (Math.PI * (w / 2) ** 2);
+      if (p > 1) {
+        w = Math.min(s * CANOPY_MAX_WIDEN, 2 * Math.sqrt(want / Math.PI));
+        p = Math.min(1, want / (Math.PI * (w / 2) ** 2));
+      }
+      if (attempt === 0 && hash2(gx, gz, seed + 31) > p) return;
+      if (ct.blocked?.(x, z, 1.5)) continue;
+      const st = this.cbd?.streets;
+      // CBD (real streets): its blocks are built up (buildCBD), trees only in the parks
+      if (st && st.regionSD(x, z) > -2 && (st.park(x, z) < 0.6 || st.streetSD(x, z) < 2)) continue;
+      if (this.onRealHouse(x, z, 1)) continue;
+      // the procedural suburbs' painted streets and houses (none where the real houses are the truth)
+      if (urban > 0.05 && !(ct.houses && housesCover(ct.houses, x, z))) {
+        if (onStreet(x, z, this.cbd, this.dist)) continue;
+        if (onProceduralHouse(x, z, this.cmap, this.cbd, ct.lotMask, 1, this.dist)) continue;
+      }
+      _c.setScalar(0.8 + 0.3 * hash2(gx, gz, seed + 34));
+      out.data[kind].push(x, hf.meshHeightAt(x, z) - 0.3, z, r * 40, w, s, w, _c.r, _c.g, _c.b, hash2(gx, gz, seed + 4), 0);
+      return;
+    }
+  }
 
   /** The Domain's trees in 50 m buckets, its park's box, and its trees' mean colour (the shade reference). */
   private domainIndex: { cells: Map<number, DomainTree[]>; box: [number, number, number, number]; mean: [number, number, number] } | null = null;
@@ -266,6 +389,11 @@ export class TreeSource implements ScatterSource {
         const nb = this.nbs ? neighbourhoodAt(x, z, this.nbs) : null;
         if (nb) {
           this.nbTree(nb, x, z, gx, gz, out);
+          continue;
+        }
+        const cs = canopyShareAt(this.canopy, x, z);
+        if (cs >= 0) {
+          this.canopyTree(cs, gx, gz, out);
           continue;
         }
         let dens = this.cmap.forest(x, z);
