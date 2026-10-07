@@ -138,7 +138,7 @@ describe('arterial frontage (frontage.ts)', () => {
     let n = 0;
     let inBand = 0;
     for (const recs of out.data)
-      for (let i = 0; i < recs.length; i += 11) {
+      for (let i = 0; i < recs.length; i += 12) {
         n++;
         for (const [cx, cz] of corners(recs[i], recs[i + 2], recs[i + 3], recs[i + 4], recs[i + 6])) {
           const hit = map.at(cx, cz);

@@ -130,7 +130,7 @@ describe('the Auckland Domain (measured)', () => {
     let inPark = 0;
     let ours = 0;
     for (const a of out.data)
-      for (let i = 0; i < a.length; i += 11) {
+      for (let i = 0; i < a.length; i += 12) {
         const key = `${a[i]},${a[i + 2]}`;
         if (measured.has(key)) {
           ours++;

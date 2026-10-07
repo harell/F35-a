@@ -307,7 +307,7 @@ describe('gardens, trees and the marina', () => {
     const [x0, z0] = [hb.canopy.x0, hb.canopy.z0];
     for (let z = z0; z < z0 + hb.canopy.nz * hb.canopy.cell; z += 280) for (let x = x0; x < x0 + hb.canopy.nx * hb.canopy.cell; x += 280) src.generate(x, z, 280, out);
     const recs: number[][] = [];
-    for (const a of out.data) for (let i = 0; i < a.length; i += 11) recs.push(a.slice(i, i + 11));
+    for (const a of out.data) for (let i = 0; i < a.length; i += 12) recs.push(a.slice(i, i + 12));
     const inHb = recs.filter((r) => neighbourhoodAt(r[0], r[2]) === hb);
     expect(inHb.length).toBeGreaterThan(1500);
     const rings = hb.buildings.flatMap((b) => b.map((p) => p.ring));

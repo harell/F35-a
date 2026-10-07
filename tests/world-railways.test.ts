@@ -148,7 +148,7 @@ describe('houses and trees keep off the tracks', () => {
       const out = { data: [[], []] as number[][] };
       for (let dz = -450; dz <= 450; dz += 300) for (let dx = -450; dx <= 450; dx += 300) src.generate(p.x + dx, p.z + dz, 300, out);
       for (const arr of out.data)
-        for (let i = 0; i < arr.length; i += 11) {
+        for (let i = 0; i < arr.length; i += 12) {
           n++;
           expect(rails.edgeDistance(arr[i], arr[i + 2])).toBeGreaterThan(5);
         }
@@ -169,7 +169,7 @@ describe('houses and trees keep off the tracks', () => {
       const out = { data: [[], [], []] as number[][] };
       for (let dz = -400; dz <= 400; dz += 400) for (let dx = -400; dx <= 400; dx += 400) src.generate(p.x + dx, p.z + dz, 400, out);
       for (const arr of out.data)
-        for (let i = 0; i < arr.length; i += 11) {
+        for (let i = 0; i < arr.length; i += 12) {
           n++;
           expect(rails.edgeDistance(arr[i], arr[i + 2])).toBeGreaterThan(0);
         }
@@ -184,7 +184,7 @@ describe('houses and trees keep off the tracks', () => {
     for (const p of along) {
       const out = { data: [[], []] as number[][] };
       for (let dz = -450; dz <= 450; dz += 300) for (let dx = -450; dx <= 450; dx += 300) src.generate(p.x + dx, p.z + dz, 300, out);
-      for (const arr of out.data) for (let i = 0; i < arr.length; i += 11) if (rails.edgeDistance(arr[i], arr[i + 2]) < 0) onTrack++;
+      for (const arr of out.data) for (let i = 0; i < arr.length; i += 12) if (rails.edgeDistance(arr[i], arr[i + 2]) < 0) onTrack++;
     }
     expect(onTrack).toBeGreaterThan(0);
   });

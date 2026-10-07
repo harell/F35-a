@@ -36,6 +36,7 @@ import { aucklandBuildings } from './aucklandBuildings';
 import { LotMask, maskFromRings, urbanBounds } from './lotMask';
 import { FRONT_BAND, FrontageMap } from './frontage';
 import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
+import { aucklandHouses, houseCoverage, unionMasks } from './aucklandHouses';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createLogoMaterial, createRoadMaterial, createSignMaterial } from './materials';
@@ -96,8 +97,10 @@ export class Scenery {
   roads: RoadNetwork | null = null;
   /** Lots left unbuilt along the road and railway ribbons (Auckland); the terrain shader takes it too. */
   lotMask: LotMask | null = null;
-  /** Landmark sites (stadium grounds, the oil terminal) where the procedural street grid stops (terrain shader, houses). */
+  /** Landmark sites (stadium grounds, the oil terminal) and the real houses' coverage, where the procedural street grid stops (terrain shader, houses). */
   siteMask: LotMask | null = null;
+  /** Where the real houses stand (#121, aucklandHouses.ts houseCoverage); part of siteMask. */
+  houseCover: LotMask | null = null;
   /** The lots lining the arterials, facing them (frontage.ts): the 3D houses here, the terrain paints them. */
   frontage: FrontageMap | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
@@ -202,6 +205,11 @@ export class Scenery {
       this.roads = roads;
       // no painted streets or houses through a stadium (its stands are 3D): its site plus a street's width
       this.siteMask = maskFromRings(siteRings(), 8);
+      // nor round the real houses of Devonport and the gulf islands (#121: aucklandHouses.ts, drawn by the house
+      // scatter): the procedural lots, houses, frontage lots and centres' blocks step aside where they stand
+      const real = aucklandHouses();
+      this.houseCover = real ? houseCoverage(real) : null;
+      this.siteMask = unionMasks(this.siteMask, this.houseCover);
       // the arterials' frontage: a row of lots facing the road along both sides (frontage.ts)
       const site = this.siteMask;
       const region = o.style.cbd?.streets ?? null;
@@ -291,7 +299,10 @@ export class Scenery {
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
       // (nor on an arterial's frontage, whose shops and houses are the lots')
       const front = this.frontage;
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z, aerialCover) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z));
+      // (nor where the real houses stand)
+      const cover = this.houseCover;
+      const realCovers = (x: number, z: number) => cover?.masked(x, z) ?? false;
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z, aerialCover) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z));
       // the Tāmaki Drive waterfront (tamakiDrive.ts: paths, seawall, railings, lamps) in the centres mesh; its trees
       // join the tree scatter below. The road ribbon stands on its raised ground (the Hobson Bay causeway is sea in the
       // terrain) and leaves the lamps to the measured ones there
@@ -510,11 +521,16 @@ export class Scenery {
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null),
+      new HouseSource(
+        hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null,
+        // the real houses (#121) stand under the photo too: only the road ribbons and the landmark sites keep them off
+        o.theater === 'auckland' ? aucklandHouses() : null,
+        roadsRef || sites ? (x, z, m) => (roadsRef?.near(x, z, m) ?? false) || (sites?.(x, z, m) ?? false) : null,
+      ),
       [
-        { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
-        { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
-        ...(o.landUse ? [{ geometry: houseGeoms[2], material: houseMat, capacity: Math.round(hc / 6), kind: SHED, color: shedColorFn() }] : []),
+        { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn, aux: 'aRise' },
+        { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn, aux: 'aRise' },
+        ...(o.landUse ? [{ geometry: houseGeoms[2], material: houseMat, capacity: Math.round(hc / 6), kind: SHED, color: shedColorFn(), aux: 'aRise' }] : []),
       ],
       300,
       o.cfg.houseRadius,

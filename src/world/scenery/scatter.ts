@@ -7,11 +7,15 @@
 import { Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Quaternion, Vector3, type BufferGeometry, type Material } from 'three';
 
 export interface TileInstances {
-  /** Per archetype: packed [x, y, z, yaw, sx, sy, sz, r, g, b, rank] records. */
+  /** Per archetype: packed [x, y, z, yaw, sx, sy, sz, r, g, b, rank, aux] records. */
   data: number[][];
 }
 
-export const REC = 11;
+/**
+ * Floats a record takes. `aux` (the last) is free for the source: the house scatter's real houses (#121) carry their
+ * roof's rise there (sources.ts HouseSource), fed to the shader as a per-instance attribute (ScatterMeshSpec.aux).
+ */
+export const REC = 12;
 
 export interface ScatterSource {
   /** Number of archetypes this source emits. */
@@ -36,6 +40,8 @@ export interface ScatterMeshSpec {
   kind: number;
   /** Instance colour slot: 0 = record colour, 1 = secondary colour function. */
   color?: (rec: number[], i: number, out: Color) => void;
+  /** Name of a per-instance float attribute set on the geometry from each record's `aux` (none when omitted). */
+  aux?: string;
 }
 
 /**
@@ -78,6 +84,7 @@ export class TileScatter {
     for (const s of specs) {
       const m = new InstancedMesh(s.geometry, s.material, s.capacity);
       m.instanceColor = new InstancedBufferAttribute(new Float32Array(s.capacity * 3), 3);
+      if (s.aux) s.geometry.setAttribute(s.aux, new InstancedBufferAttribute(new Float32Array(s.capacity), 1));
       m.count = 0;
       m.frustumCulled = false;
       m.matrixAutoUpdate = false;
@@ -154,6 +161,8 @@ export class TileScatter {
       const mesh = this.meshes[si];
       const mat = mesh.instanceMatrix.array as Float32Array;
       const col = mesh.instanceColor!.array as Float32Array;
+      const auxAttr = spec.aux ? (spec.geometry.getAttribute(spec.aux) as InstancedBufferAttribute) : null;
+      const aux = auxAttr ? (auxAttr.array as Float32Array) : null;
       let n = 0;
       for (const { t, d } of list) {
         // rank-based thinning with slant range: keep everything near, ~22 % at the edge, none beyond
@@ -178,6 +187,7 @@ export class TileScatter {
             col[n * 3 + 1] = arr[i + 8];
             col[n * 3 + 2] = arr[i + 9];
           }
+          if (aux) aux[n] = arr[i + 11];
           n++;
         }
         if (n >= spec.capacity) break;
@@ -189,6 +199,11 @@ export class TileScatter {
       mesh.instanceColor!.clearUpdateRanges();
       mesh.instanceColor!.addUpdateRange(0, n * 3);
       mesh.instanceColor!.needsUpdate = true;
+      if (auxAttr) {
+        auxAttr.clearUpdateRanges();
+        auxAttr.addUpdateRange(0, n);
+        auxAttr.needsUpdate = true;
+      }
     }
   }
 

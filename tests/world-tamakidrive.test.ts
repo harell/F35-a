@@ -220,7 +220,7 @@ describe('Tāmaki Drive in the world', () => {
     for (let i = 0; i < trees.length; i += 7) if (inBox(trees[i], trees[i + 2])) measured.add(`${trees[i].toFixed(2)},${trees[i + 2].toFixed(2)}`);
     let ours = 0, others = 0, palms = 0;
     out.data.forEach((arr, kind) => {
-      for (let i = 0; i < arr.length; i += 11) {
+      for (let i = 0; i < arr.length; i += 12) {
         const key = `${arr[i].toFixed(2)},${arr[i + 2].toFixed(2)}`;
         if (measured.has(key)) {
           ours++;

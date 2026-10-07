@@ -107,10 +107,10 @@ describe('the suburbs leave a corridor along the road and railway ribbons (#61 i
     for (let dz = -600; dz < 600; dz += 300) for (let dx = -600; dx < 600; dx += 300) src.generate(x + dx, z + dz, 300, out);
     return [...out.data[0], ...out.data[1]];
   }
-  /** Houses (records of 11) whose footprint reaches onto a ribbon. */
+  /** Houses (records of 12) whose footprint reaches onto a ribbon. */
   function onRibbon(recs: number[]): number {
     let n = 0;
-    for (let i = 0; i < recs.length; i += 11) if (network.edgeDistance(recs[i], recs[i + 2]) < Math.hypot(recs[i + 4], recs[i + 6]) / 2) n++;
+    for (let i = 0; i < recs.length; i += 12) if (network.edgeDistance(recs[i], recs[i + 2]) < Math.hypot(recs[i + 4], recs[i + 6]) / 2) n++;
     return n;
   }
 
@@ -124,7 +124,7 @@ describe('the suburbs leave a corridor along the road and railway ribbons (#61 i
   it('no painted or 3D house reaches onto a motorway, arterial or railway ribbon', () => {
     for (const [name, x, z] of places) {
       const recs = paintedHouses(x, z, mask);
-      expect(recs.length / 11, name).toBeGreaterThan(100);
+      expect(recs.length / 12, name).toBeGreaterThan(100);
       expect(onRibbon(recs), name).toBe(0);
     }
   });
