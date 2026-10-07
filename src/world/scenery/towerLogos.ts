@@ -220,6 +220,138 @@ const LOGOS: Record<SkinLogo, LogoDef> = {
       text(c, 'EXPRESS', w * 0.07, H * 0.72, H * 0.3, w * 0.86, '#ffffff', 'bold');
     },
   },
+  sap: {
+    // white letters on a blue panel cut on a slant at its right (lit at night)
+    aspect: 2,
+    draw: (c, w, H) => {
+      const g = c.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#2fa7e8');
+      g.addColorStop(1, '#0a5fb4');
+      c.fillStyle = g;
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(w, 0);
+      c.lineTo(w * 0.62, H);
+      c.lineTo(0, H);
+      c.closePath();
+      c.fill();
+      text(c, 'SAP', w * 0.06, H * 0.53, H * 0.66, w * 0.56, '#ffffff', 'bold');
+    },
+  },
+  aon: {
+    // silver-white capitals on the dark crown glass (lit white at night)
+    aspect: 2.6,
+    draw: word('AON', { ink: '#dde5ec', night: '#f4f6f8', weight: '900', size: 0.9, fill: true }),
+  },
+  huawei: {
+    // the red petal mark and the name in red (lit red at night)
+    aspect: 3.4,
+    draw: word('HUAWEI', {
+      ink: '#d7262f',
+      weight: 'bold',
+      size: 0.62,
+      markW: 0.95,
+      mark: (c, x, mid, H) => {
+        c.fillStyle = '#e1262f';
+        for (let i = 0; i < 8; i++) {
+          const a = Math.PI * (0.06 + (0.88 * i) / 7);
+          c.save();
+          c.translate(x + H * 0.42, mid + H * 0.22);
+          c.rotate(-a + Math.PI / 2);
+          c.beginPath();
+          c.ellipse(0, -H * 0.24, H * 0.07, H * 0.24, 0, 0, Math.PI * 2);
+          c.fill();
+          c.restore();
+        }
+      },
+    }),
+  },
+  deloitte: {
+    // the white name and its green dot on the dark glass (lit at night)
+    aspect: 4.2,
+    draw: (c, w, H) => {
+      text(c, 'Deloitte', H * 0.05, H * 0.5, H * 0.82, w - H * 0.45, '#ffffff', 'bold');
+      c.fillStyle = '#86bc25';
+      c.beginPath();
+      c.arc(w - H * 0.2, H * 0.72, H * 0.11, 0, Math.PI * 2);
+      c.fill();
+    },
+  },
+  rydges: {
+    // dark capitals on a white panel (the panel lit at night)
+    aspect: 4,
+    draw: word('RYDGES', { ink: '#2d2a28', plate: '#f2f1ed', plateNight: '#fffdf4', weight: 'bold', size: 0.66, fill: true }),
+  },
+  skycity: {
+    // a dark disc with the white "sky" of SkyCity, at the top of the lift tower (lit at night)
+    aspect: 1,
+    draw: (c, w, H) => {
+      c.fillStyle = '#1e2430';
+      c.beginPath();
+      c.arc(w / 2, H / 2, H * 0.47, 0, Math.PI * 2);
+      c.fill();
+      text(c, 'sky', w * 0.2, H * 0.5, H * 0.42, w * 0.6, '#ffffff', 'bold');
+    },
+  },
+  aa: {
+    // the yellow AA square with black letters (lit at night)
+    aspect: 1,
+    draw: (c, w, H) => {
+      c.fillStyle = '#ffd400';
+      c.fillRect(w * 0.04, H * 0.04, w * 0.92, H * 0.92);
+      text(c, 'AA', w * 0.16, H * 0.54, H * 0.6, w * 0.68, '#111111', '900');
+    },
+  },
+  aut: {
+    // pale capitals on the blue-glass rooftop box (lit white at night)
+    aspect: 2.4,
+    draw: word('AUT', { ink: '#e9eef4', night: '#ffffff', weight: '900', size: 0.88, fill: true }),
+  },
+  jarden: {
+    // navy capitals and a ring on the white crown screen (lit at night)
+    aspect: 4.6,
+    draw: word('JARDEN', {
+      ink: '#14284b',
+      weight: 'bold',
+      size: 0.66,
+      fill: true,
+      markW: 0.9,
+      mark: (c, x, mid, H) => {
+        c.strokeStyle = '#14284b';
+        c.lineWidth = H * 0.1;
+        c.beginPath();
+        c.arc(x + H * 0.36, mid, H * 0.26, 0, Math.PI * 2);
+        c.stroke();
+      },
+    }),
+  },
+  nzx: {
+    // white capitals on the blue crown band with the blue and white chevrons of the X (lit at night)
+    aspect: 3.4,
+    draw: (c, w, H) => {
+      c.fillStyle = '#1f3f8a';
+      c.fillRect(0, 0, w, H);
+      text(c, 'NZX', H * 0.15, H * 0.53, H * 0.74, w * 0.6, '#ffffff', '900');
+      for (const [i, col] of ['#2aa0e6', '#ffffff'].entries()) {
+        c.fillStyle = col;
+        c.beginPath();
+        const x0 = w * (0.7 + i * 0.12);
+        c.moveTo(x0, H * 0.12);
+        c.lineTo(x0 + H * 0.28, H * 0.5);
+        c.lineTo(x0, H * 0.88);
+        c.lineTo(x0 + H * 0.14, H * 0.88);
+        c.lineTo(x0 + H * 0.42, H * 0.5);
+        c.lineTo(x0 + H * 0.14, H * 0.12);
+        c.closePath();
+        c.fill();
+      }
+    },
+  },
+  so: {
+    // the hotel's "SO/" in charcoal at the top of its white panel (lit white at night, guessed)
+    aspect: 1.8,
+    draw: word('SO/', { ink: '#2a2a2c', night: '#f6f6f2', weight: '300', size: 0.86, fill: true }),
+  },
   quaywest: {
     // spaced serif capitals in deep red on the white wave crown (lit red at night, guessed)
     aspect: 5.5,

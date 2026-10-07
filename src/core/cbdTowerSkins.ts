@@ -17,7 +17,7 @@
 export type SkinFinish = 'glass' | 'bands' | 'punched' | 'plain' | 'glow' | 'none' | 'stone' | 'dark';
 
 /** The signs drawn in the logo atlas (world/scenery/towerLogos.ts). */
-export type SkinLogo = 'hsbc' | 'anz' | 'vero' | 'pwc' | 'qbe' | 'waitemata' | 'voco' | 'hiexpress' | 'quaywest';
+export type SkinLogo = 'hsbc' | 'anz' | 'vero' | 'pwc' | 'qbe' | 'waitemata' | 'voco' | 'hiexpress' | 'quaywest' | 'sap' | 'aon' | 'huawei' | 'deloitte' | 'rydges' | 'skycity' | 'aa' | 'aut' | 'jarden' | 'nzx' | 'so';
 
 /** A painted zone of the walls. Later zones win. */
 export interface SkinZone {
@@ -399,6 +399,151 @@ export const CBD_TOWER_SKINS: readonly TowerSkin[] = [
     signs: [
       { face: 18, t: -1, h: 107.5, w: 13, logo: 'quaywest' },
       { face: 198, t: -4, h: 107.5, w: 13, logo: 'quaywest' },
+    ],
+  },
+  // ── #213 Tier B, batch 1 (rows 15–25): mesh elevations, one Mapillary sheet, signs from photos ──
+  {
+    // 205 Queen: twin shafts of dark blue glass, a paler glass crown over the top floors
+    n: 15,
+    box: { x: 220.02, z: 84.49, face: 84 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0x3f4a68, finish: 'glass' },
+      { h: [92, Infinity], colour: 0x7f8ea6, finish: 'glass' },
+    ],
+  },
+  {
+    // the SAP Tower: dark glass, slender pale fins up the long north face, a louvred crown band; the SAP panel at the
+    // top of the west face (the Sky Tower photo)
+    n: 16,
+    box: { x: 289.58, z: -158.13, face: 18 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0x3f476b, finish: 'glass' },
+      { h: [86, Infinity], colour: 0x6b6470, finish: 'bands' },
+    ],
+    lines: [-20, -12, -6, 7, 13, 19].map((t) => ({ face: 18, pts: [t, 28, t, 86], colour: 0xd8d0c8, width: 0.6 })),
+    signs: [{ face: 288, t: 4, h: 94, w: 7, logo: 'sap' }],
+  },
+  {
+    // Shortland & Fort (88 Shortland St): blue glass crossed by one long white diagonal on each face, from a low
+    // corner to the top of the middle, under a pale band and a dark parapet
+    n: 17,
+    box: { x: 671.34, z: -223.07, face: 60 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0x3e6286, finish: 'glass' },
+      { face: 60, h: ALL, colour: 0x5b8fa3, finish: 'glass' },
+      { h: [80, 89], colour: 0xa4acb5, finish: 'bands' },
+      { h: [89, Infinity], colour: 0x34445e, finish: 'glass' },
+    ],
+    lines: [
+      { face: 60, pts: [-10.5, 17, -0.5, 89, 22, 89], colour: 0xe8eaea, width: 0.8 },
+      { face: 150, pts: [8, 13, -4, 89], colour: 0xe8eaea, width: 0.8 },
+      { face: 240, pts: [-11, 17, 1, 89], colour: 0xe8eaea, width: 0.8 },
+      { face: 330, pts: [9, 23, -5, 89], colour: 0xe8eaea, width: 0.8 },
+    ],
+  },
+  {
+    // Precinct Apartments: white balcony bands, a grey core strip up the south face
+    n: 18,
+    box: { x: 353.81, z: 144.97, face: 14 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xe2e1dc, finish: 'bands' },
+      { face: 194, h: [25, Infinity], colour: 0x9aa0ad, finish: 'bands' },
+      { face: 194, t: [0, 5], h: [25, 95], colour: 0xbdc0c8, finish: 'none' },
+    ],
+  },
+  {
+    // the Aon Centre: dark glass on pale mullions, a pale strip up the north face, the silver AON on every face
+    n: 19,
+    box: { x: 249.96, z: -519.84, face: 19 },
+    dy: 3,
+    zones: [
+      { h: ALL, colour: 0x444f72, finish: 'glass' },
+      { face: 19, t: [-16, -10], h: [10, 80], colour: 0xb9bcc3, finish: 'bands' },
+    ],
+    signs: [
+      { face: 19, t: -2, h: 83, w: 9, logo: 'aon' },
+      { face: 109, t: 0, h: 83, w: 9, logo: 'aon' },
+      { face: 199, t: 2, h: 83, w: 9, logo: 'aon' },
+      { face: 289, t: 0, h: 83, w: 9, logo: 'aon' },
+    ],
+  },
+  {
+    // the Crombie Lockwood Tower (191 Queen St): a white precast grid over dark windows, a dark glass crown box, a
+    // full-height dark glass strip up the middle of the south face (its sign isn't legible in the mesh: none)
+    n: 20,
+    box: { x: 257.9, z: 7.94, face: 21 },
+    dy: 1.5,
+    zones: [
+      { h: ALL, colour: 0xd8dadb, finish: 'punched' },
+      { face: 201, t: [-6, 6], h: [55, Infinity], colour: 0x475a7b, finish: 'glass' },
+      { h: [78, Infinity], colour: 0x475a7b, finish: 'glass' },
+    ],
+  },
+  {
+    // the Huawei Centre: warm beige precast with dark window bands, a glass rooftop box, the red petal and name at
+    // the top of the north, east and west faces
+    n: 21,
+    box: { x: 128.17, z: 108.34, face: 19 },
+    dy: 0.5,
+    zones: [
+      { h: ALL, colour: 0xd6c9b4, finish: 'bands' },
+      { face: 199, h: ALL, colour: 0xa69c94, finish: 'bands' },
+      { h: [88, Infinity], colour: 0xb7c3d0, finish: 'glass' },
+    ],
+    signs: [
+      { face: 19, t: -4, h: 85.5, w: 9, logo: 'huawei' },
+      { face: 109, t: -3, h: 85.5, w: 8, logo: 'huawei' },
+      { face: 289, t: -2, h: 85.5, w: 8, logo: 'huawei' },
+    ],
+  },
+  {
+    // Campbell House: white balcony bands, a column of coloured balcony panels up the north face
+    n: 22,
+    box: { x: 282.51, z: 415.26, face: 82 },
+    dy: -3,
+    zones: [
+      { h: ALL, colour: 0xdcdedf, finish: 'bands' },
+      { face: 352, t: [0, 3], h: [5, 50], colour: 0xe0a84c, finish: 'none' },
+    ],
+  },
+  {
+    // 80 Queen St: dark blue glass, the Deloitte name at the top of the north and south faces (Deloitte's offices
+    // until 2024, still on the crown in the 2023 mesh)
+    n: 23,
+    box: { x: 391.55, z: -257.56, face: 16 },
+    dy: -1,
+    zones: [
+      { h: ALL, colour: 0x354563, finish: 'glass' },
+      { face: 16, h: ALL, colour: 0x506a80, finish: 'glass' },
+    ],
+    signs: [
+      { face: 16, t: 7, h: 84, w: 14, logo: 'deloitte' },
+      { face: 196, t: -8, h: 84, w: 14, logo: 'deloitte' },
+    ],
+  },
+  {
+    // CityLife: cream walls with punched windows over a dark glass base, the dark glass crown of arched windows
+    n: 24,
+    box: { x: 244.2, z: -75.39, face: 16 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xd6d0c4, finish: 'punched' },
+      { h: [0, 20], colour: 0x4b5670, finish: 'glass' },
+      { h: [70, Infinity], colour: 0x56607a, finish: 'glass' },
+    ],
+  },
+  {
+    // Victoria Residences: a white balcony grid on dark glass, a blank pale party wall on the east
+    n: 25,
+    box: { x: 62.55, z: -44.89, face: 19 },
+    dy: 0,
+    zones: [
+      { h: ALL, colour: 0xd9dade, finish: 'bands' },
+      { face: 109, t: [-10, 10], h: [20, 76], colour: 0xbfc2c9, finish: 'none' },
     ],
   },
 ];
