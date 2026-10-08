@@ -138,7 +138,7 @@ export interface MissionBotOptions {
   reaction?: number;
   /** Go home when Winchester or bingo (default true). */
   rtb?: boolean;
-  /** Defend against SAM rounds (default true). false: a probe of a pilot who ignores the warning (t04's drills). */
+  /** Defend against SAM rounds (default true). false: a probe of a pilot who ignores the warning (t05's drills). */
   defend?: boolean;
 }
 
@@ -165,7 +165,7 @@ export class MissionBot {
   /** Base of the mission's cloud deck (m MSL), null in clear or scattered weather. */
   private readonly deck: number | null;
   /**
-   * A missile-defence lesson (script.defenceCoach, t04): the bot flies it as taught — the steering cue
+   * A missile-defence lesson (script.defenceCoach, t05): the bot flies it as taught — the steering cue
    * at its own height (low when the drill says low), and against a SAM round the defence the lesson
    * teaches (studentDefence), not the campaign bot's (samDefence).
    */
@@ -255,7 +255,7 @@ export class MissionBot {
    * SDB-class glide bombs (StormBreaker): with one already on its way to a target the next is
    * preferred, so they are rippled onto the targets like a human does instead of one 2-minute glide
    * at a time (issue #65: StormBreaker runs over 600 s). Not JDAMs (a JDAM rippled from inside the
-   * run-in overflew its target in t05).
+   * run-in overflew its target in t06).
    * Fast boats (a swarm on a clock, IRGC g02) are bombed one bomb per boat, rippled: a boat with our
    * bomb already on the way is left to it while another one is free, and the shortest clock goes
    * first (suicide boats, then missile boats, then the rest), as the briefing tells a human.
@@ -506,7 +506,7 @@ export class MissionBot {
   }
 
   /**
-   * SAM defence as taught in T05: beam it (turn 90° to the launching site's radar), descend into
+   * SAM defence as taught in T06: beam it (turn 90° to the launching site's radar), descend into
    * the ground clutter, CHAFF in the last seconds (FLARES against IR missiles), last-ditch break.
    */
   private samDefence(dt: number): void {
@@ -572,7 +572,7 @@ export class MissionBot {
   }
 
   /**
-   * The defence t04 teaches (measured with this bot, real flight model; stack/sam-defence-advice): beam
+   * The defence t05 teaches (measured with this bot, real flight model; stack/sam-defence-advice): beam
    * it, holding the drill's height (a low drill stays low), with one CMS press every 2.5 s from 6 s to
    * impact against a radar round, and late (the last 3 s) against a heat-seeker.
    */

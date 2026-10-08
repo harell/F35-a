@@ -217,11 +217,43 @@ export function disarm(ac: AircraftEntity): void {
   ac.chaff = 0;
 }
 
+/**
+ * A group placed relative to the player (AircraftGroupDef.relative): its definition in world
+ * coordinates, from the player's position and track now. Other groups are returned as they are.
+ */
+export function resolveRelative(s: MissionState, def: AircraftGroupDef): AircraftGroupDef {
+  const p = s.player;
+  if (def.relative !== 'player' || !p) return def;
+  const track = Math.atan2(p.velocity.x, -p.velocity.z);
+  const fx = Math.sin(track);
+  const fz = -Math.cos(track);
+  const rx = Math.cos(track);
+  const rz = Math.sin(track);
+  // local (x right, z behind) → world
+  const at = (x: number, z: number) => clampXZ(new Vector3(p.position.x + rx * x - fx * z, 0, p.position.z + rz * x - fz * z));
+  const pos = at(def.x, def.z);
+  const altitude = Math.max(p.position.y + def.altitude, s.world.terrain.surfaceHeightAt(pos.x, pos.z) + 150);
+  const out: AircraftGroupDef = { ...def, x: pos.x, z: pos.z, altitude, heading: (track / DEG + def.heading + 360) % 360, relative: undefined };
+  if (def.oneWay) {
+    const target = at(def.oneWay.targetX, def.oneWay.targetZ);
+    out.oneWay = {
+      ...def.oneWay,
+      targetX: target.x,
+      targetZ: target.z,
+      route: def.oneWay.route?.map((q) => {
+        const w = at(q.x, q.z);
+        return { x: w.x, z: w.z };
+      }),
+    };
+  }
+  return out;
+}
+
 /** Spawn every member of an aircraft group. */
 export function spawnAirGroup(s: MissionState, g: GroupRt): void {
-  const def = g.air!;
+  const def = resolveRelative(s, g.air!);
   if (def.oneWay) {
-    spawnOneWayGroup(s, g);
+    spawnOneWayGroup(s, g, def);
     return;
   }
   const world = s.world;
@@ -292,8 +324,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
  * the shared target point. Drones fly the designed geometry on every attempt (no retry jitter):
  * the route is the mission.
  */
-function spawnOneWayGroup(s: MissionState, g: GroupRt): void {
-  const def = g.air!;
+function spawnOneWayGroup(s: MissionState, g: GroupRt, def: AircraftGroupDef): void {
   const ow = def.oneWay!;
   const world = s.world;
   const n = g.expected;

@@ -9,7 +9,7 @@ The rule that matters most: make the first line of the description `Closes #N` (
 
 To run, play or inspect the game as an agent (jump to a mission, fast-forward, bot sweeps), read `.claude/skills/play-f35/SKILL.md` first.
 Operation Southern Cross (c01–c11) was deleted; old saves may still hold those ids, so never reuse them.
-Training ids match the lesson numbers players see (t01–t05), ordered by the campaign mission each prepares for (`MissionDef.lessons`). Until #271, `t03` was the SA-6 lesson (now `t05`); `progress.ts` migrates old saves once (`LESSON_IDS_VERSION`), so bump that version and add to `LESSON_ID_MOVES` if lesson ids ever move again.
+Training ids match the lesson numbers players see (t01–t06), ordered by the campaign mission each prepares for (`MissionDef.lessons`). Until #271, `t03` was the SA-6 lesson (now `t06`); `progress.ts` migrates old saves once (`LESSON_IDS_VERSION`), so bump that version and add to `LESSON_ID_MOVES` if lesson ids ever move again.
 To model a real building (a landmark, tower, stadium or mall) or a whole area (a neighbourhood or suburb) in 3D, read `.claude/skills/hero-building/SKILL.md` first: it has a hero procedure and an area procedure.
 Test shortcuts must stay out of the deployed game: gate them behind `TEST_HOOKS` (`src/core/data.ts`).
 

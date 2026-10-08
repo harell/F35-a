@@ -28,13 +28,14 @@ export interface ProgressExtras {
 }
 
 /**
- * Training-id scheme. 1: 't03' was the SA-6 lesson. 2 (#271): T03 Maritime Strike was added and the
- * SA-6 lesson became 't05', so ids match the lesson numbers players see. A save older than this has
+ * Training-id scheme. 1: 't03' was the SA-6 lesson. 2 (#271): lessons ordered by the campaign mission
+ * they prepare for (T03 Vertical Reversals, T04 Maritime Strike and T05 Gulf Defence came in) and the
+ * SA-6 lesson became 't06', so ids match the lesson numbers players see. A save older than this has
  * its ids moved once (LESSON_ID_MOVES) on load; every save is written stamped with this version, so a
  * new 't03' result is never moved again.
  */
 export const LESSON_IDS_VERSION = 2;
-const LESSON_ID_MOVES: Record<string, string> = { t03: 't05' };
+const LESSON_ID_MOVES: Record<string, string> = { t03: 't06' };
 type Ext = CampaignProgress & ProgressExtras;
 
 /**

@@ -528,7 +528,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
     case 'track': {
       // an empty launcher with nothing in flight reloads: a site whose track was broken (chaff, the
       // notch) while it guided its last rounds re-acquires straight into 'track' with none left, and
-      // without this sat there for good (found by t04's drills: a boat silent after four rounds)
+      // without this sat there for good (found by t05's drills: a boat silent after four rounds)
       if (s.missilesReady <= 0 && liveGuided(ctx, s) === 0) {
         s.state = 'reload';
         s.reloadTimer = data.reloadTime;

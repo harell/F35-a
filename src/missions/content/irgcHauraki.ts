@@ -89,7 +89,7 @@ export const G02: MissionDef = mission({
   allowedLoadouts: ['strike_maritime'],
   // Maritime Strike (the StormBreaker, AARGM-ER and gun on boats), then Gulf Defence: beating the
   // air-defence boats' missiles, where players got stuck (the debrief points there too)
-  lessons: ['t03', 't04'],
+  lessons: ['t04', 't05'],
   player: g02Start,
   // eight bombs for five to seven boats: the gun covers the spare boats (#77)
   gunAmmo: 360,

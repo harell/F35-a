@@ -1,5 +1,5 @@
 /**
- * F35-A — training lesson T4 "Gulf Defence": defending against missiles, drill by drill, with
+ * F35-A — training lesson T05 "Gulf Defence": defending against missiles, drill by drill, with
  * practice rounds (a hit does no damage) and the defence coach's call-outs (runtime/defenceCoach.ts).
  *
  * Built from the measured defence table (stack/sam-defence-advice; tests/missions-defencecoach.test.ts),
@@ -29,7 +29,7 @@ import { mission, site } from './common';
 const DS = 'DARKSTAR';
 
 /** The drills' boats and points (m). Boats in open water at least 1.5 km from any shore (LINZ coast). */
-export const T04 = {
+export const DEFENCE = {
   start: { x: -5000, z: -17000 },
   /** Drill 1: two boats, and the point beyond them reached above DENY_ALT. */
   b1: [{ x: 8000, z: -16000 }, { x: 9000, z: -17500 }],
@@ -55,10 +55,10 @@ export const LOW_AGL = 200;
 
 const done = (id: string) => ({ kind: 'objective', id, state: 'complete' }) as const;
 
-export const T04_DEF: MissionDef = mission({
-  id: 't04',
+export const T05_DEFENCE: MissionDef = mission({
+  id: 't05',
   kind: 'training',
-  index: 4,
+  index: 5,
   title: 'Gulf Defence',
   subtitle: 'Beat the air-defence boats’ missiles, drill by drill',
   timeOfDay: 'day',
@@ -72,7 +72,7 @@ export const T04_DEF: MissionDef = mission({
   allowedLoadouts: ['a2a_stealth'],
   // nothing to shoot today: the lesson is the defence
   gunAmmo: 0,
-  player: { x: T04.start.x, z: T04.start.z, altitude: 7600, heading: 90, speed: 240 },
+  player: { x: DEFENCE.start.x, z: DEFENCE.start.z, altitude: 7600, heading: 90, speed: 240 },
   script: {
     practiceRounds: true,
     defenceCoach: true,
@@ -82,16 +82,16 @@ export const T04_DEF: MissionDef = mission({
     groups: [],
     ground: [],
     sams: [
-      site('b1a', 'b1', 'ad_boat', T04.b1[0], { name: 'Range boat 1', noHarass: true }),
-      site('b1b', 'b1', 'ad_boat', T04.b1[1], { name: 'Range boat 2', noHarass: true }),
-      site('b2', 'b2', 'ad_boat', T04.b2, { name: 'Range boat 3', noHarass: true }),
-      site('b3', 'b3', 'ad_boat', T04.b3, { name: 'Range boat 4', noHarass: true }),
-      site('b4', 'b4', 'ad_boat', T04.b4, { name: 'Range boat 5', spawn: done('o_d3'), noHarass: true }),
-      site('ex1', 'exam', 'ad_boat', T04.exam[0], { name: 'Exam boat 1', spawn: done('o_d4'), noHarass: true }),
-      site('ex2', 'exam', 'ad_boat', T04.exam[1], { name: 'Exam boat 2', spawn: done('o_d4'), noHarass: true }),
+      site('b1a', 'b1', 'ad_boat', DEFENCE.b1[0], { name: 'Range boat 1', noHarass: true }),
+      site('b1b', 'b1', 'ad_boat', DEFENCE.b1[1], { name: 'Range boat 2', noHarass: true }),
+      site('b2', 'b2', 'ad_boat', DEFENCE.b2, { name: 'Range boat 3', noHarass: true }),
+      site('b3', 'b3', 'ad_boat', DEFENCE.b3, { name: 'Range boat 4', noHarass: true }),
+      site('b4', 'b4', 'ad_boat', DEFENCE.b4, { name: 'Range boat 5', spawn: done('o_d3'), noHarass: true }),
+      site('ex1', 'exam', 'ad_boat', DEFENCE.exam[0], { name: 'Exam boat 1', spawn: done('o_d4'), noHarass: true }),
+      site('ex2', 'exam', 'ad_boat', DEFENCE.exam[1], { name: 'Exam boat 2', spawn: done('o_d4'), noHarass: true }),
     ],
     objectives: [
-      { id: 'o_d1', kind: 'reach', x: T04.d1End.x, z: T04.d1End.z, radius: 3000, above: DENY_ALT, label: 'Drill 1: over the boats above 23,000 ft', primary: true },
+      { id: 'o_d1', kind: 'reach', x: DEFENCE.d1End.x, z: DEFENCE.d1End.z, radius: 3000, above: DENY_ALT, label: 'Drill 1: over the boats above 23,000 ft', primary: true },
       { id: 'o_d2', kind: 'missile_drill', groups: ['b2'], guidance: 'radar', defeat: 3, inARow: true, label: 'Drill 2: beam it + CMS, three missiles in a row', primary: true, activeAt: done('o_d1') },
       { id: 'o_d3', kind: 'missile_drill', groups: ['b3'], guidance: 'radar', defeat: 2, inARow: true, maxAgl: LOW_AGL, label: 'Drill 3: low first, two in a row below 650 ft', primary: true, activeAt: done('o_d2') },
       { id: 'o_d4', kind: 'missile_drill', groups: ['b4'], guidance: 'ir', defeat: 2, inARow: true, label: 'Drill 4: beat two heat-seekers in a row', primary: true, activeAt: done('o_d3') },
@@ -99,13 +99,13 @@ export const T04_DEF: MissionDef = mission({
       { id: 'o_clean', kind: 'missile_drill', groups: ['exam'], defeat: 2, maxHits: 0, label: 'Exam: defeat two missiles without a hit', primary: false, activeAt: done('o_d4') },
     ],
     waypoints: [
-      { id: 'wp_d1', label: 'Drill 1: high', kind: 'nav', x: T04.d1End.x, z: T04.d1End.z, altitude: 7600, radius: 3000, objective: 'o_d1' },
-      { id: 'wp_d2', label: 'Drill 2: boat', kind: 'target', x: T04.b2.x, z: T04.b2.z, altitude: 3000, objective: 'o_d2' },
-      { id: 'wp_d3ip', label: 'Drill 3: down to 500 ft', kind: 'ip', x: T04.d3Ip.x, z: T04.d3Ip.z, altitude: 150, radius: 2000 },
-      { id: 'wp_d3', label: 'Drill 3: boat, low', kind: 'target', x: T04.b3.x, z: T04.b3.z, altitude: 150, objective: 'o_d3' },
-      { id: 'wp_d4', label: 'Drill 4: 3–4 km off the boat', kind: 'target', x: T04.d4Pass.x, z: T04.d4Pass.z, altitude: 150, objective: 'o_d4' },
-      { id: 'wp_gate', label: 'Exam gate', kind: 'nav', x: T04.gate.x, z: T04.gate.z, altitude: 1500, radius: 2000 },
-      { id: 'wp_exit', label: 'Exam exit', kind: 'nav', x: T04.exit.x, z: T04.exit.z, altitude: 1500 },
+      { id: 'wp_d1', label: 'Drill 1: high', kind: 'nav', x: DEFENCE.d1End.x, z: DEFENCE.d1End.z, altitude: 7600, radius: 3000, objective: 'o_d1' },
+      { id: 'wp_d2', label: 'Drill 2: boat', kind: 'target', x: DEFENCE.b2.x, z: DEFENCE.b2.z, altitude: 3000, objective: 'o_d2' },
+      { id: 'wp_d3ip', label: 'Drill 3: down to 500 ft', kind: 'ip', x: DEFENCE.d3Ip.x, z: DEFENCE.d3Ip.z, altitude: 150, radius: 2000 },
+      { id: 'wp_d3', label: 'Drill 3: boat, low', kind: 'target', x: DEFENCE.b3.x, z: DEFENCE.b3.z, altitude: 150, objective: 'o_d3' },
+      { id: 'wp_d4', label: 'Drill 4: 3–4 km off the boat', kind: 'target', x: DEFENCE.d4Pass.x, z: DEFENCE.d4Pass.z, altitude: 150, objective: 'o_d4' },
+      { id: 'wp_gate', label: 'Exam gate', kind: 'nav', x: DEFENCE.gate.x, z: DEFENCE.gate.z, altitude: 1500, radius: 2000 },
+      { id: 'wp_exit', label: 'Exam exit', kind: 'nav', x: DEFENCE.exit.x, z: DEFENCE.exit.z, altitude: 1500 },
     ],
     triggers: [
       // range control tops the dispensers up: a held button still empties them in one engagement

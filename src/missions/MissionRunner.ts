@@ -46,10 +46,14 @@ import { SuperyachtTraffic } from './runtime/superyachts';
 import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
 import { SightseeingLog } from './runtime/sightseeing';
+import { updateManeuvers, type ManeuverId } from './runtime/maneuvers';
 import { FREE_FLIGHT_SPEED_FLOOR, setSpeedFloor } from '../sim/flight/FlightModel';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
+/** HUD call when a drill's manoeuvre is recognised. */
+const MANEUVER_CALL: Record<ManeuverId, string> = { loop: 'LOOP', immelmann: 'IMMELMANN' };
+const _up = new Vector3();
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
 const DEFAULT_AO = 38_000;
@@ -250,6 +254,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       updateGroupLead(s, g);
       assignGroundAttack(s, g);
     }
+    this.updateManeuvers();
     this.updateCommits();
     this.updateTriggers();
     // before the objectives: a 'bridge' objective completes on the pass that sets stats.bridge
@@ -404,6 +409,16 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
   }
 
+  /** The player's loops and Immelmanns (drills): counted for conditions, called on the HUD where an objective asks for one. */
+  private updateManeuvers(): void {
+    const s = this.s;
+    const p = s.player;
+    if (!p || !p.alive) return;
+    _up.set(0, 1, 0).applyQuaternion(p.quaternion);
+    const m = updateManeuvers(s.maneuvers, p.velocity, _up, s.time);
+    if (m && s.script.objectives.some((o) => o.kind === 'maneuver')) s.hud(MANEUVER_CALL[m], 'good', 2.5);
+  }
+
   /** Spawn a group now (trigger action), whatever its spawn condition. */
   private spawnGroupNow(id: string): void {
     const s = this.s;
@@ -461,6 +476,17 @@ class MissionRunnerImpl implements MissionRunnerApi {
       case 'spawn':
         this.spawnGroupNow(a.group);
         break;
+      case 'respawn': {
+        const g = s.groups.get(a.group);
+        if (!g?.air) break;
+        if (g.spawnedAt < 0) this.spawnGroupNow(a.group);
+        else if (!g.members.some((m) => m.alive)) {
+          g.members.length = 0;
+          g.leadId = undefined;
+          spawnAirGroup(s, g);
+        }
+        break;
+      }
       case 'retask':
         retaskGroup(s, a.group, a.task);
         break;

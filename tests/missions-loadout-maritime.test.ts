@@ -27,10 +27,10 @@ vi.setConfig({ testTimeout: 60_000 });
 installPath2D();
 
 const FULL = 'strike_maritime' as const;
-/** t05 (the strike lesson) as a mission that also lists the maritime load. */
+/** t06 (the strike lesson) as a mission that also lists the maritime load. */
 const offering = (): MissionDef => {
-  const t05 = missionById('t05')!;
-  return { ...t05, allowedLoadouts: [...t05.allowedLoadouts, FULL] };
+  const t06 = missionById('t06')!;
+  return { ...t06, allowedLoadouts: [...t06.allowedLoadouts, FULL] };
 };
 
 /** What the cockpit stores page (SMS) draws for this jet. */
@@ -57,15 +57,15 @@ describe('strike_maritime: the loadout', () => {
     expect(l.chaff).toBe(LOADOUTS.sead_stealth.chaff);
   });
 
-  it('only g02, its lesson T03 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
+  it('only g02, its lesson T04 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
     const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
     expect(instant.length).toBeGreaterThanOrEqual(4);
     expect(missionById('g02')!.allowedLoadouts).toContain(FULL);
     expect(missionById('ia_stroll_auckland')!.allowedLoadouts).toContain(FULL);
-    // T03 Maritime Strike teaches g02's weapons, so it flies g02's load
-    expect(missionById('t03')!.recommendedLoadout).toBe(FULL);
+    // T04 Maritime Strike teaches g02's weapons, so it flies g02's load
+    expect(missionById('t04')!.recommendedLoadout).toBe(FULL);
     for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
-      if (m.id === 'g02' || m.id === 't03') continue;
+      if (m.id === 'g02' || m.id === 't04') continue;
       expect(m.allowedLoadouts, m.id).not.toContain(FULL);
       expect(m.recommendedLoadout, m.id).not.toBe(FULL);
       expect(hangarLoadouts(m).cards, m.id).not.toContain(FULL);

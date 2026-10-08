@@ -1,5 +1,5 @@
 /**
- * F35-A — the defence coach (MissionScript.defenceCoach; the t04 lesson).
+ * F35-A — the defence coach (MissionScript.defenceCoach; the t05 lesson).
  *
  * Follows every missile fired at the player, from launch to its end, and samples what the player
  * did in its end game (the last ~8 s): beam (moving across the radar's line of sight), flying at it,

@@ -213,10 +213,10 @@ describe('campaigns', () => {
     expect(nextMissionLabel('g01')).toBe('Next mission');
     expect(nextMissionLabel('g03')).toBeNull();
     // training leads into the first playable campaign
-    expect(nextMissionAfter('t02')?.id).toBe('g01');
-    expect(nextMissionAfter('t03')?.id).toBe('t04');
+    expect(nextMissionAfter('t03')?.id).toBe('g01');
     expect(nextMissionAfter('t04')?.id).toBe('t05');
-    expect(nextMissionAfter('t05')?.id).toBe('g01');
+    expect(nextMissionAfter('t05')?.id).toBe('t06');
+    expect(nextMissionAfter('t06')?.id).toBe('g01');
     expect(IRGC().missions.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
   });
 

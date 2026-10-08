@@ -251,6 +251,13 @@ export function updateObjectives(s: MissionState, dt: number): void {
         }
         break;
       }
+      case 'maneuver': {
+        // only one flown after the objective opened counts
+        const n = s.maneuvers.counts[def.maneuver];
+        o.base ??= n;
+        if (n > o.base) setState(s, o, 'complete');
+        break;
+      }
     }
   }
   markObjectiveTargets(s);

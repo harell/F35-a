@@ -33,7 +33,7 @@ Parse the constraints. Free text is fine ("3 rounds, done by 5pm NZT").
 
 ## 1. Orient and scope (≤ 10 % of the budget)
 
-**What's in scope: what the player can play** (a campaign with `enabled: false` in `src/missions/index.ts` is not; the playable ones are `PLAYABLE_CAMPAIGNS`): the IRGC campaign (g01, g02), training (t01–t05) and Instant Action, including A Stroll in the Park. Shared code (HUD, weapons, AI, the bot) is still in scope; check it in playable missions.
+**What's in scope: what the player can play** (a campaign with `enabled: false` in `src/missions/index.ts` is not; the playable ones are `PLAYABLE_CAMPAIGNS`): the IRGC campaign (g01, g02), training (t01–t06) and Instant Action, including A Stroll in the Park. Shared code (HUD, weapons, AI, the bot) is still in scope; check it in playable missions.
 
 1. `npm ci` if `node_modules` is missing. Start the playtest server: `npx vite --config vite.e2e.config.ts --port 5190 &`.
 2. Find the last playtested SHA in `docs/playtests/README.md`. Read that run's file: findings, "not covered", time sinks.

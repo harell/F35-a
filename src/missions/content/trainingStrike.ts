@@ -1,13 +1,13 @@
 /**
- * F35-A — training lesson T03 "Maritime Strike": the air-to-ground weapons of g02 against boats on
+ * F35-A — training lesson T04 "Maritime Strike": the air-to-ground weapons of g02 against boats on
  * the Hauraki Gulf range, before g02 asks for them under a clock. Split out of the old SAMs & Strike
- * lesson (now T05, Live SAMs) so a player meets the release before the SA-6s.
+ * lesson (now T06, Live SAMs) so a player meets the release before the SA-6s.
  *   1. StormBreaker: two target boats sailing a loop; designate one (TGT), release from height the
  *      moment IN RANGE shows. The bomb tracks a moving boat; it glides slowly, so release early.
  *   2. AARGM-ER: an air-defence boat, its radar on. It fires practice rounds (a hit does no damage):
  *      the AARGM-ER homes on that radar, so fire it while the radar is on.
  *   3. Gun: one boat for a gun pass (asked for, not enforced: a StormBreaker sinks it too).
- * Every boat sails in open water at least 1.5 km from any shore (tests/missions-t03.test.ts).
+ * Every boat sails in open water at least 1.5 km from any shore (tests/missions-t04.test.ts).
  */
 import type { MissionDef } from '../../core/contracts';
 import { mission, site, target } from './common';
@@ -15,7 +15,7 @@ import { mission, site, target } from './common';
 const DS = 'DARKSTAR';
 
 /** The drills' boats (m): routes in the Gulf west of Motutapu and north of Rangitoto. */
-export const T03 = {
+export const STRIKE = {
   /**
    * Over the Waitematā, 14 km short of the first boats at 10,000 ft: out of a StormBreaker's reach
    * (~11.5 km from there). Turning away after a release heads back over the city, not off the AO.
@@ -44,10 +44,10 @@ const done = (id: string) => ({ kind: 'objective', id, state: 'complete' }) as c
 /** Fast boats at about 20 kt. */
 const BOAT_SPEED = 10;
 
-export const T03_DEF: MissionDef = mission({
-  id: 't03',
+export const T04_STRIKE: MissionDef = mission({
+  id: 't04',
   kind: 'training',
-  index: 3,
+  index: 4,
   title: 'Maritime Strike',
   subtitle: 'StormBreaker, AARGM-ER and gun against boats',
   timeOfDay: 'day',
@@ -59,7 +59,7 @@ export const T03_DEF: MissionDef = mission({
   ],
   recommendedLoadout: 'strike_maritime',
   allowedLoadouts: ['strike_maritime'],
-  player: { x: T03.start.x, z: T03.start.z, altitude: 3000, heading: 40, speed: 240 },
+  player: { x: STRIKE.start.x, z: STRIKE.start.z, altitude: 3000, heading: 40, speed: 240 },
   script: {
     practiceRounds: true,
     autoHints: true,
@@ -67,11 +67,11 @@ export const T03_DEF: MissionDef = mission({
     awacs: { initialPictureAt: -1, pictureInterval: 0 },
     groups: [],
     ground: [
-      target('sb1', 'd1', 'suicide_boat', T03.d1Path[0], { name: 'Range boat 1', path: [...T03.d1Path], speed: BOAT_SPEED, loop: true }),
-      target('sb2', 'd1', 'suicide_boat', { x: 8400, z: -21000 }, { name: 'Range boat 2', path: [...T03.d1Path.slice(2), ...T03.d1Path.slice(0, 2)], speed: BOAT_SPEED, loop: true }),
-      target('gb', 'd3', 'suicide_boat', T03.d3Path[0], { name: 'Range boat 4', path: [...T03.d3Path], speed: BOAT_SPEED, loop: true, spawn: done('o_d2') }),
+      target('sb1', 'd1', 'suicide_boat', STRIKE.d1Path[0], { name: 'Range boat 1', path: [...STRIKE.d1Path], speed: BOAT_SPEED, loop: true }),
+      target('sb2', 'd1', 'suicide_boat', { x: 8400, z: -21000 }, { name: 'Range boat 2', path: [...STRIKE.d1Path.slice(2), ...STRIKE.d1Path.slice(0, 2)], speed: BOAT_SPEED, loop: true }),
+      target('gb', 'd3', 'suicide_boat', STRIKE.d3Path[0], { name: 'Range boat 4', path: [...STRIKE.d3Path], speed: BOAT_SPEED, loop: true, spawn: done('o_d2') }),
     ],
-    sams: [site('ad', 'd2', 'ad_boat', T03.d2Path[0], { name: 'Range boat 3', path: [...T03.d2Path], speed: BOAT_SPEED, loop: true, noHarass: true, spawn: done('o_d1') })],
+    sams: [site('ad', 'd2', 'ad_boat', STRIKE.d2Path[0], { name: 'Range boat 3', path: [...STRIKE.d2Path], speed: BOAT_SPEED, loop: true, noHarass: true, spawn: done('o_d1') })],
     objectives: [
       { id: 'o_d1', kind: 'destroy', groups: ['d1'], label: 'Drill 1: sink both moving boats with StormBreakers', primary: true },
       { id: 'o_d2', kind: 'destroy', groups: ['d2'], label: 'Drill 2: AARGM-ER on the air-defence boat’s radar', primary: true, activeAt: done('o_d1') },
@@ -79,8 +79,8 @@ export const T03_DEF: MissionDef = mission({
     ],
     waypoints: [
       { id: 'wp_d1', label: 'Drill 1: boats', kind: 'target', x: 8400, z: -21000, objective: 'o_d1' },
-      { id: 'wp_d2', label: 'Drill 2: air-defence boat', kind: 'target', x: 4000, z: T03.d2Path[0].z, objective: 'o_d2' },
-      { id: 'wp_d3', label: 'Drill 3: gun boat', kind: 'target', x: -1750, z: T03.d3Path[0].z, altitude: 300, objective: 'o_d3' },
+      { id: 'wp_d2', label: 'Drill 2: air-defence boat', kind: 'target', x: 4000, z: STRIKE.d2Path[0].z, objective: 'o_d2' },
+      { id: 'wp_d3', label: 'Drill 3: gun boat', kind: 'target', x: -1750, z: STRIKE.d3Path[0].z, altitude: 300, objective: 'o_d3' },
     ],
     triggers: [
       {

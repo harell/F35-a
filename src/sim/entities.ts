@@ -492,7 +492,7 @@ export class SamSiteEntity implements Entity {
   closeCue?: { range: number; bayRange: number } | null;
   /**
    * The AD boat's long harassing shots (SamTypeData.harass, DifficultyParams.adBoatHarass) are off for
-   * this site: a training boat (t04) fires only inside its real envelope.
+   * this site: a training boat (t05) fires only inside its real envelope.
    */
   noHarass?: boolean;
   /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */

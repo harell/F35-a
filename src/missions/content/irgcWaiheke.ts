@@ -140,7 +140,7 @@ export const G03: MissionDef = mission({
   recommendedLoadout: 'sead_precision',
   allowedLoadouts: ['sead_precision'],
   // Live SAMs: the SA-6, terrain masking and the notch over land
-  lessons: ['t05'],
+  lessons: ['t06'],
   player: g03Start,
   timeLimit: G03_CLOCK,
   script: {

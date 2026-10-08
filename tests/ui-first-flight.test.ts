@@ -191,11 +191,11 @@ describe("T01's first hint is visible for its whole duration (4.2-c)", () => {
     expect(frames.filter((r) => r.obj).length).toBeGreaterThan(10);
   });
 
-  it('T01–T03, T05: the summary never flashes on and off with the hints or the radio, and every hint is drawn while it waits', { timeout: 120_000 }, () => {
-    for (const id of ['t01', 't02', 't03', 't05']) {
+  it('T01–T04, T06: the summary never flashes on and off with the hints or the radio, and every hint is drawn while it waits', { timeout: 120_000 }, () => {
+    for (const id of ['t01', 't02', 't04', 't06']) {
       const frames = flyLesson(id, 30);
       // once it shows, it stays up for a while: no frame-long flash between two radio calls, no blink
-      // at the start before the first hint arrives (review of #70: T02 at 12.52 s, T03 at 0.02 s)
+      // at the start before the first hint arrives (review of #70: T02 at 12.52 s, T04 at 0.02 s)
       for (const [a, b] of objectiveRuns(frames)) expect(b - a, `${id}: OBJECTIVES drawn only ${a.toFixed(2)}–${b.toFixed(2)} s`).toBeGreaterThan(1.5);
       expect(objectiveRuns(frames).length, `${id}: the summary never showed`).toBeGreaterThan(0);
       const hidden = frames.filter((r) => r.hint && !r.hintDrawn);

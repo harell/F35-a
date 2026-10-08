@@ -1,5 +1,5 @@
 /**
- * Practice rounds and the defence coach (MissionScript.practiceRounds / defenceCoach, the t04 lesson):
+ * Practice rounds and the defence coach (MissionScript.practiceRounds / defenceCoach, the t05 lesson):
  * a hit does no damage and is called out with its first fault; a defeat is called out with how; a
  * 'missile_drill' objective counts the defeats. The jet is steered by script (its velocity, turning at
  * up to 6 g) round an IRGC air-defence boat at Pilot. Measured on this geometry over 12 bearings: flying

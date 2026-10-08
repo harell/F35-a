@@ -67,7 +67,7 @@ describe('MissionDef.gunAmmo: launch', () => {
   it('a mission without it starts with the loadout\'s 180 rounds (unchanged)', () => {
     for (const [def, loadout] of [
       [byId('t02'), undefined],
-      [byId('t05'), undefined],
+      [byId('t06'), undefined],
       [byId('t02'), 'a2a_beast'],
     ] as const) {
       const h = harness(def, 'pilot', loadout);

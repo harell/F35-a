@@ -13,7 +13,7 @@
  * and in playtest 2026-10-02 r4:
  *  - 4.3-f (#69): the air-to-air PlayerBot (tests/ai-playerbot.ts) never fired its gun (0 of 180
  *    rounds in 6 gun-only runs on Pilot), so gun balance couldn't be measured.
- * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t05,ia_strike_auckland --loadout=sead_stealth
+ * Sweeps: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t06,ia_strike_auckland --loadout=sead_stealth
  */
 import { describe, expect, it } from 'vitest';
 import { Autopilot } from '../src/ai/pilot/Autopilot';
@@ -62,8 +62,8 @@ describe('1.1-m: Instant Action ids are reproducible', () => {
 });
 
 describe('1.1-k: the bot flies the GBU-53/B StormBreaker', () => {
-  it('t05 with sead_stealth: it releases StormBreakers and wins', { timeout: 60_000 }, () => {
-    const r = runPlaythrough('t05', 'pilot', 1, terrainFor('t05'), { loadout: 'sead_stealth', maxT: 400, log: true });
+  it('t06 with sead_stealth: it releases StormBreakers and wins', { timeout: 60_000 }, () => {
+    const r = runPlaythrough('t06', 'pilot', 1, terrainFor('t06'), { loadout: 'sead_stealth', maxT: 400, log: true });
     const drops = r.events.filter((l) => / LAUNCH gbu53 PLAYER /.test(l));
     expect(drops.length, r.objectives).toBeGreaterThan(0);
     expect(r.playerKills).toBeGreaterThan(0);

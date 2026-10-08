@@ -326,8 +326,8 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     const t02 = byId('t02');
     const all = [...t02.briefing, ...(t02.script.hints ?? []).map((x) => x.text)].join(' ');
     for (const k of [/TD box/, /30°/, /SHOOT/, /crank/i, /PITBULL/]) expect(all).toMatch(k);
-    const t05 = byId('t05');
-    const t3 = [...t05.briefing, ...(t05.script.hints ?? []).map((x) => x.text), ...t05.script.triggers.flatMap((tr) => tr.actions.map((a) => ('text' in a ? a.text : '')))].join(' ');
+    const t06 = byId('t06');
+    const t3 = [...t06.briefing, ...(t06.script.hints ?? []).map((x) => x.text), ...t06.script.triggers.flatMap((tr) => tr.actions.map((a) => ('text' in a ? a.text : '')))].join(' ');
     // (one CMS control drops chaff and flares together on every input: #62)
     for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /6 s to impact/i, /every (two or three|2–3) s/i, /300 ft/]) expect(t3).toMatch(k);
   });
