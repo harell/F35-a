@@ -227,7 +227,8 @@ export type InputCommand =
   | 'lookReset'
   | 'padlock' // jump to target view
   | 'missileCam'
-  | 'recenterTilt';
+  | 'recenterTilt'
+  | 'civilTraffic'; // show / hide civil traffic (CIV boxes)
 
 export interface InputApi {
   /** Player flight controls (throttle is a persistent lever, not spring-loaded). */

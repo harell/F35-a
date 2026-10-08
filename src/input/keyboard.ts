@@ -6,7 +6,7 @@
  *   Gun          Space            Weapon release   Enter / B          Flares + chaff   X
  *   Weapon       1 / N (cycle)    Target           T                  Camera           C (L = padlock, M = missile cam)
  *   Radar        V (EMCON)        Look reset       Home / Numpad5     Pause            P / Esc
- *   Speed brake  Z               Recenter tilt    K
+ *   Speed brake  Z               Recenter tilt    K                  Civil traffic  I (show / hide CIV)
  * Axes ramp smoothly (no bang-bang inputs) and return to centre faster than they deflect.
  */
 import type { InputCommand } from '../core/contracts';
@@ -26,6 +26,7 @@ const COMMAND_KEYS: Record<string, InputCommand> = {
   KeyL: 'padlock',
   KeyM: 'missileCam',
   KeyK: 'recenterTilt',
+  KeyI: 'civilTraffic',
 };
 
 /** Keys whose default browser action we suppress while flying. */
