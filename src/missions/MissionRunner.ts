@@ -38,6 +38,7 @@ import { attemptSeed, nextAttempt } from './runtime/variation';
 import { assignGroundAttack, buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { CivilTraffic } from './runtime/civil';
+import { DefenceCoach } from './runtime/defenceCoach';
 import { HelicopterTraffic } from './runtime/helicopters';
 import { CivilShipping } from './runtime/shipping';
 import { SuperyachtTraffic } from './runtime/superyachts';
@@ -76,6 +77,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly awacs: AwacsController;
   private readonly hints: HintSystem;
   private readonly callouts: Callouts;
+  /** Missile-defence call-outs and the drill log (script.defenceCoach). */
+  private readonly coach: DefenceCoach | null;
   private readonly winchester: WinchesterWatch;
   private readonly withdrawal: WithdrawalMonitor;
   /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
@@ -132,6 +135,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.withdrawal = new WithdrawalMonitor(this.s);
     this.hints = new HintSystem(this.s, this.winchester);
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
+    this.coach = def.script.defenceCoach ? new DefenceCoach(this.s) : null;
     const civilTraffic = def.theater === 'auckland' && deps.civilTraffic !== false;
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.helicopters = civilTraffic ? new HelicopterTraffic(this.s, deps.helicopters ?? 3) : null;
@@ -163,6 +167,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.disposed) return;
     s.disposed = true;
     this.callouts.detach();
+    this.coach?.detach();
     this.landmarks.detach();
     s.radio.clear();
     this.hints.clear();
@@ -203,6 +208,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.trains?.setup();
     this.landmarks.setup();
     this.callouts.attach();
+    this.coach?.attach();
     // ground-level steering for target waypoints without an explicit altitude
     for (const w of s.waypoints) {
       if (w.def.altitude === undefined && w.def.kind === 'target') w.wp.position.y = world.terrain.surfaceHeightAt(w.def.x, w.def.z);
@@ -244,6 +250,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.updateTriggers();
     // before the objectives: a 'bridge' objective completes on the pass that sets stats.bridge
     this.updateBridge();
+    this.coach?.update();
     updateObjectives(s, edt);
     this.updateWaypoints();
     this.updateBoundary(edt);

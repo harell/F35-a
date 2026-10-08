@@ -88,6 +88,10 @@ export class DamageSystem {
   /* ───────────────────────────── Aircraft ───────────────────────────── */
 
   private damageAircraft(ac: AircraftEntity, amount: number, attackerId: number | null, weapon: DamageWeapon, hitPoint?: Vector3): void {
+    if (ac.practiceRounds && weapon !== 'collision') {
+      this.host.events.emit('practice:hit', { target: ac, weapon, attackerId });
+      return;
+    }
     const d = this.host.difficulty;
     const isMunition = !NON_MUNITION.has(weapon);
     let dmg = amount;

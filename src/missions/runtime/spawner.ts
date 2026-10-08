@@ -203,6 +203,7 @@ export function spawnPlayer(s: MissionState, loadout: LoadoutId): AircraftEntity
   });
   // missions built around the gun carry more rounds than the loadout's 180 (MissionDef.gunAmmo)
   armMissionGun(ac, s.def, s.difficulty.id);
+  if (s.script.practiceRounds) ac.practiceRounds = true;
   s.player = ac;
   return ac;
 }

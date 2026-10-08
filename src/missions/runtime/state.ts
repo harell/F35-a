@@ -4,6 +4,7 @@
  *
  * Plain data + tiny helpers; all logic lives in the helper modules.
  */
+import type { MissileRecord } from './defenceCoach';
 import type { EventBus } from '../../core/events';
 import type { MissionDef, ObjectiveStatus, Waypoint } from '../../core/contracts';
 import type { Difficulty, DifficultyParams, Team } from '../../core/types';
@@ -57,6 +58,8 @@ export interface ObjectiveRt {
   aborted: boolean;
   /** Destroy: members credited as driven off rather than killed (reduced bonus). */
   drivenOff: number;
+  /** Sim time it became active (-1 = not yet). */
+  openedAt?: number;
 }
 
 export interface TriggerRt {
@@ -188,6 +191,8 @@ export class MissionState {
   readonly withdrawSince = new Map<number, number>();
   /** Debrief bookkeeping (tips / medals). */
   readonly stats: SortieStats = newSortieStats();
+  /** Every missile fired at the player and how it ended (runtime/defenceCoach.ts; only with `defenceCoach`). */
+  readonly missileLog: MissileRecord[] = [];
   /** The runner has been disposed (mission torn down): every update is a no-op. */
   disposed = false;
 

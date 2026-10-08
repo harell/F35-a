@@ -224,6 +224,12 @@ export function validateMission(def: MissionDef): string[] {
       case 'bridge':
         if (def.theater !== 'auckland') err(`${where} needs the Harbour Bridge (Auckland theatre)`);
         break;
+      case 'missile_drill':
+        if (!sc.defenceCoach) err(`${where} needs script.defenceCoach (the coach keeps the missile log it counts)`);
+        if (o.groups.length === 0) err(`${where} has no groups`);
+        o.groups.forEach((g) => checkGroup(g, where));
+        if (!(o.defeat >= 1)) err(`${where} defeat must be ≥ 1`);
+        break;
     }
   }
   // objectives about difficulty-gated groups must be gated at least as strictly

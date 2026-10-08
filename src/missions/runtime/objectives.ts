@@ -8,6 +8,7 @@ import { evalCondition } from './conditions';
 import { retaskGroup } from './spawner';
 import { aliveCount, deadCount, difficultyAtLeast, drivenOffCount, type MissionState, type ObjectiveRt } from './state';
 import { POINTS } from './scoring';
+import { drillRecords } from './defenceCoach';
 
 export function createObjectives(s: MissionState): void {
   for (const def of s.script.objectives) {
@@ -36,6 +37,7 @@ export function earnedBonus(o: ObjectiveRt): number {
 function setState(s: MissionState, o: ObjectiveRt, state: ObjectiveStatus['state'], announce = true): void {
   if (o.status.state === state) return;
   o.status.state = state;
+  if (state === 'active') o.openedAt = s.time;
   if (state === 'pending') return;
   s.events.emit('objective', { id: o.def.id, label: o.def.label, state });
   if (!announce) return;
@@ -219,6 +221,19 @@ export function updateObjectives(s: MissionState, dt: number): void {
         }
         st.progress = { done: Math.floor(Math.min(o.accum, def.seconds)), total: def.seconds };
         if (o.accum >= def.seconds) setState(s, o, 'complete');
+        break;
+      }
+      case 'missile_drill': {
+        const recs = drillRecords(s, def.groups, o.openedAt ?? 0, def.guidance);
+        let defeated = 0;
+        let hits = 0;
+        for (const r of recs) {
+          if (r.outcome === 'hit') hits++;
+          else if (r.outcome !== 'void' && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
+        }
+        st.progress = { done: Math.min(defeated, def.defeat), total: def.defeat };
+        if (def.maxHits !== undefined && hits > def.maxHits) setState(s, o, 'failed');
+        else if (defeated >= def.defeat) setState(s, o, 'complete');
         break;
       }
       case 'rtb': {

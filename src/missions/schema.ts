@@ -382,6 +382,13 @@ export type ObjectiveDef = ObjectiveBase &
     { kind: 'survive'; seconds: number; area?: { x: number; z: number; radius: number } }
     | /** Return to base: only becomes active when every other primary is complete. */
     { kind: 'rtb'; x: number; z: number; radius: number }
+    | /**
+       * A missile-defence drill (needs `defenceCoach`): completes once `defeat` missiles fired at the
+       * player by the sites of `groups` since it opened have been defeated (only `guidance` ones, and only
+       * with the jet below `maxAgl` m when the missile ended, when given). With `maxHits`, it fails
+       * once more hits than that land.
+       */
+    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number }
   );
 
 /* ───────────────────────────── Waypoints ───────────────────────────── */
@@ -505,6 +512,17 @@ export interface MissionScript {
    * down doesn't end the sortie.
    */
   freeFlight?: boolean;
+  /**
+   * Practice rounds (training): enemy weapons that hit the player do no damage, each hit is scored
+   * and called out instead (AircraftEntity.practiceRounds). Flying into the ground still ends it.
+   */
+  practiceRounds?: boolean;
+  /**
+   * The defence coach (runtime/defenceCoach.ts): after every missile fired at the player, a HUD
+   * call-out of how it ended and why (defeated by chaff, the notch…; hit because you ran, didn't
+   * beam, didn't press CMS…). It also keeps the log that 'missile_drill' objectives count.
+   */
+  defenceCoach?: boolean;
 }
 
 /** Empty script (helper for builders). */

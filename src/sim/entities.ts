@@ -190,6 +190,11 @@ export class AircraftEntity implements Entity {
   damage = { engine: 0, hydraulics: 0, fuelLeak: 0, fire: false, avionics: 0 };
   lastDamageTime = -999;
   lastAttackerId: number | null = null;
+  /**
+   * Practice rounds (training, MissionScript.practiceRounds): weapons that hit this jet do no damage;
+   * each hit is reported as 'practice:hit' instead. Flying into the ground still kills.
+   */
+  practiceRounds = false;
 
   loadout: LoadoutId | null = null;
   stores: StoreStation[] = [];
