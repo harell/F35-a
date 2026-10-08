@@ -200,12 +200,13 @@ describe('#64: the Harbour Bridge pays once in T01', () => {
 });
 
 describe('#64: training debrief', () => {
-  it("NEXT reads 'Next lesson' between lessons and 'Start the campaign' after the last (T04)", () => {
-    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04']);
+  it("NEXT reads 'Next lesson' into a lesson and 'Start the campaign' once g01's lessons are flown", () => {
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't04', 't03']);
     expect(nextMissionLabel('t01')).toBe('Next lesson');
-    expect(nextMissionLabel('t02')).toBe('Next lesson');
-    expect(nextMissionLabel('t03')).toBe('Next lesson');
-    expect(nextMissionLabel('t04')).toBe('Start the campaign');
+    // T02 is the last lesson g01 wants
+    expect(nextMissionLabel('t02')).toBe('Start the campaign');
+    expect(nextMissionLabel('t04')).toBe('Next lesson');
+    expect(nextMissionLabel('t03')).toBe('Start the campaign');
     for (const m of CAMPAIGN.slice(0, -1)) expect(nextMissionLabel(m.id), m.id).toBe('Next mission');
     expect(nextMissionLabel(CAMPAIGN[CAMPAIGN.length - 1].id)).toBeNull();
     expect(nextMissionLabel('ia_dogfight_auckland')).toBeNull();
@@ -282,7 +283,7 @@ describe('#64: training debrief', () => {
     }
   });
 
-  it('shot down by an air-defence boat: the defence tip, then Training 04 (not inside T04 itself)', () => {
+  it('shot down by an air-defence boat: the defence tip, then Training 03 Gulf Defence (not inside it)', () => {
     const downed = (id: string, weapon: string) => {
       const s = new MissionState(byId(id), { createAi: stubAi({ created: [], retasked: [] }), difficulty: DIFFICULTIES.recruit, events: new EventBus() });
       s.playerDied = true;
@@ -294,11 +295,11 @@ describe('#64: training debrief', () => {
     };
     const radar = downed('g02', 'm_9m330');
     expect(radar[0]).toMatch(/beam it/);
-    expect(radar.some((t) => /Training 04, Gulf Defence/.test(t))).toBe(true);
+    expect(radar.some((t) => /Training 03, Gulf Defence/.test(t))).toBe(true);
     const ir = downed('g02', 'm_igla');
     expect(ir[0]).toMatch(/turn hard across it/);
-    expect(ir.some((t) => /Training 04/.test(t))).toBe(true);
-    expect(downed('t04', 'm_9m330').some((t) => /Training 04/.test(t))).toBe(false);
+    expect(ir.some((t) => /Training 03/.test(t))).toBe(true);
+    expect(downed('t04', 'm_9m330').some((t) => /Training 03/.test(t))).toBe(false);
   });
 
   it('the time tip only shows over par', () => {

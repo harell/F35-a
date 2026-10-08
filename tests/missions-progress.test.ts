@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MissionResult } from '../src/core/contracts';
-import { PLAYABLE_CAMPAIGNS, TRAINING, loadProgress, nextMissionAfter, recordResult, saveProgress } from '../src/missions';
+import { PLAYABLE_CAMPAIGNS, TRAINING, lessonsFor, loadProgress, nextMissionAfter, nextMissionLabel, recordResult, saveProgress } from '../src/missions';
 import { PROGRESS_KEY, sanitizeProgress } from '../src/missions/progress';
 
 /** The first playable campaign's missions (the IRGC campaign: g01, g02). */
@@ -130,13 +130,40 @@ describe('campaign progress', () => {
     for (const m of CAMPAIGN) expect(done.unlocked).toContain(m.id);
   });
 
-  it('training lessons chain T01 → T02 → T03 → T04 → the first campaign mission', () => {
-    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04']);
-    expect(nextMissionAfter('t01')?.id).toBe('t02');
-    expect(nextMissionAfter('t02')?.id).toBe('t03');
-    expect(nextMissionAfter('t03')?.id).toBe('t04');
-    expect(nextMissionAfter('t04')?.id).toBe(PLAYABLE_CAMPAIGNS[0].missions[0].id);
-    // the campaign's first mission is always unlocked, so NEXT after T04 never hits a locked mission
+  it('training is ordered by the campaign mission each lesson prepares for', () => {
+    // ids are the order the lessons were written in; index is the order they are flown in
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't04', 't03']);
+    expect(TRAINING.map((m) => m.index)).toEqual([1, 2, 3, 4]);
+    expect(lessonsFor('g01').map((m) => m.id)).toEqual(['t01', 't02']);
+    expect(lessonsFor('g02').map((m) => m.id)).toEqual(['t01', 't02', 't04']);
+    expect(lessonsFor('g03').map((m) => m.id)).toEqual(['t01', 't02', 't04', 't03']);
+    // every lesson prepares for some campaign mission, and every campaign mission's lessons exist
+    const wanted = new Set(PLAYABLE_CAMPAIGNS[0].missions.flatMap((m) => m.lessons ?? []));
+    expect([...wanted].sort()).toEqual(TRAINING.map((m) => m.id).sort());
+    // a lesson comes before the lessons of any later campaign mission
+    const order = PLAYABLE_CAMPAIGNS[0].missions.flatMap((m) => m.lessons ?? []);
+    expect(order).toEqual(TRAINING.map((m) => m.id));
+  });
+
+  it("NEXT after a lesson: only the lessons the next campaign mission wants, then that mission", () => {
+    const won = { score: 1, grade: 'B' as const, difficulty: 'pilot' as const };
+    const fresh = loadProgress();
+    // a new pilot: T01 → T02 → g01, not through all of training first
+    expect(nextMissionAfter('t01', fresh)?.id).toBe('t02');
+    expect(nextMissionAfter('t02', { ...fresh, best: { t01: won, t02: won } })?.id).toBe('g01');
+    // T02 flown first: back to T01, which g01 also wants
+    expect(nextMissionAfter('t02', { ...fresh, best: { t02: won } })?.id).toBe('t01');
+    // g01 won: Gulf Defence leads straight into g02
+    const afterG01 = { ...fresh, best: { t01: won, t02: won, g01: won, t04: won } };
+    expect(nextMissionAfter('t04', afterG01)?.id).toBe('g02');
+    expect(nextMissionLabel('t04', afterG01)).toBe('Next mission');
+    // a lesson ahead of the campaign walks on in training order
+    expect(nextMissionAfter('t04', { ...fresh, best: { t04: won } })?.id).toBe('t03');
+    expect(nextMissionAfter('t03', { ...fresh, best: { t03: won } })?.id).toBe('g01');
+    // campaign won: the last lesson still leads somewhere sensible
+    const all = { ...fresh, best: Object.fromEntries(['t01', 't02', 't03', 't04', ...CAMPAIGN.map((m) => m.id)].map((id) => [id, won])) };
+    expect(nextMissionAfter('t03', all)?.id).toBe(CAMPAIGN[0].id);
+    // the campaign's first mission is always unlocked, so NEXT from a lesson never hits a locked mission
     expect(loadProgress().unlocked).toContain(CAMPAIGN[0].id);
     expect(nextMissionAfter('ia_dogfight_auckland')).toBeNull();
     expect(nextMissionAfter('nope')).toBeNull();

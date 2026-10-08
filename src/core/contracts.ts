@@ -314,6 +314,12 @@ export interface MissionDef {
    * else the easiest listed. Leave it out to keep the loadout's rounds.
    */
   gunAmmo?: number | Partial<Record<Difficulty, number>>;
+  /**
+   * Campaign missions: the training lessons that teach what this mission asks for that no earlier
+   * mission did (an earlier mission's lessons count too). The campaign nudge and a lesson's NEXT
+   * button send a player through these just before the mission, not through all of training up front.
+   */
+  lessons?: string[];
   /** Mission-specific script (spawns, objectives, triggers) — schema owned by src/missions/schema.ts. */
   script: MissionScript;
 }

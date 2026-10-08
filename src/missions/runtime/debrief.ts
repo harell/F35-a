@@ -137,7 +137,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     else if (w === 'gun') add('Guns kill: don’t let a bandit sit behind you — keep your speed up and turn into him.');
     // the IRGC Navy's air-defence boats (g02, g03): a lesson drills exactly that defence, with practice
     // rounds that can't hurt you (player feedback 2026-10-08: stuck at g02, unable to evade them)
-    if (samType === 'ad_boat' && s.def.id !== 't04') add('Training 04, Gulf Defence, drills the defence against these boats with practice rounds that can’t hurt you.');
+    if (samType === 'ad_boat' && s.def.id !== 't04') add('Training 03, Gulf Defence, drills the defence against these boats with practice rounds that can’t hurt you.');
   }
 
   if (!r.success && !died) {

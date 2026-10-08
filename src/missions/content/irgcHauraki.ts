@@ -87,6 +87,8 @@ export const G02: MissionDef = mission({
   // AARGM-ER for each air-defence boat's radar. No AMRAAM (nothing hostile flies), no GBU-31
   // (it can't hit a moving boat: #65's c08 trap).
   allowedLoadouts: ['strike_maritime'],
+  // Gulf Defence: beating the air-defence boats' missiles, where players got stuck (the debrief points there too)
+  lessons: ['t04'],
   player: g02Start,
   // eight bombs for five to seven boats: the gun covers the spare boats (#77)
   gunAmmo: 360,

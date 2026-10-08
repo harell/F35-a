@@ -1,9 +1,14 @@
 /**
- * F35-A — training missions (always unlocked, Auckland):
- *   T1 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB
- *   T2 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns
- *   T3 SAMs & strike — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM
- *   T4 Gulf Defence — missile defence drills against the IRGC air-defence boat, practice rounds (trainingDefence.ts)
+ * F35-A — training missions (always unlocked, Auckland), in the order the campaign needs them
+ * (MissionDef.lessons on each campaign mission), so a player flies only what the next mission asks for:
+ *   T01 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB            → g01
+ *   T02 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns     → g01
+ *   T03 Gulf Defence — missile defence drills against the IRGC air-defence boat (id 't04',
+ *       trainingDefence.ts)                                                                    → g02
+ *   T04 SAMs & strike — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM
+ *       (id 't03')                                                                             → g03
+ * The ids are the order the lessons were written in and stay put (saved progress is keyed by them);
+ * `index` is the order a player sees and flies them in.
  */
 import type { MissionDef } from '../../core/contracts';
 import { NEVER, P, flight, mission, site, target } from './common';
@@ -166,7 +171,8 @@ const depot = { x: 13000, z: -8900 };
 export const T03: MissionDef = mission({
   id: 't03',
   kind: 'training',
-  index: 3,
+  // lesson 4: the SA-6s and the SEAD of g03 (Gulf Defence comes first, for g02's air-defence boats)
+  index: 4,
   title: 'SAMs & Strike',
   subtitle: 'Survive a live SA-6 and JDAM a fuel depot',
   timeOfDay: 'day',
@@ -222,4 +228,5 @@ export const T03: MissionDef = mission({
   },
 });
 
-export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04_DEF];
+/** In `index` order: what the Training screen lists and the NEXT lesson button walks. */
+export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T04_DEF, T03];

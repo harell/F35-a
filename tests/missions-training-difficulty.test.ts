@@ -25,7 +25,7 @@ const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 describe('#68: training flies at Pilot whatever the setting', () => {
   it('every lesson flies at Pilot; campaign and Instant Action missions follow the setting', () => {
     expect(TRAINING_DIFFICULTY).toBe('pilot');
-    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04']);
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't04', 't03']);
     for (const m of TRAINING) {
       expect(fixedDifficulty(m)).toBe('pilot');
       for (const d of DIFFS) expect(missionDifficulty(m, d)).toBe('pilot');

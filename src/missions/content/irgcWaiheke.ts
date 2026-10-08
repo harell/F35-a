@@ -139,6 +139,8 @@ export const G03: MissionDef = mission({
   ],
   recommendedLoadout: 'sead_precision',
   allowedLoadouts: ['sead_precision'],
+  // SAMs & Strike: the SA-6, terrain masking and a precision release
+  lessons: ['t03'],
   player: g03Start,
   timeLimit: G03_CLOCK,
   script: {

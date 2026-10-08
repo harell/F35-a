@@ -9,7 +9,6 @@ import { loadSettings } from '../src/core/settings';
 import type { Settings } from '../src/core/types';
 import { MEDAL_LIST, TRAINING, failStreak, recordResult } from '../src/missions';
 import {
-  BASIC_TRAINING,
   DIFFICULTY_ORDER,
   RANKS,
   basicTrainingDone,
@@ -18,6 +17,7 @@ import {
   difficultyShort,
   dismissOnboarding,
   isFirstLaunch,
+  lessonsLeft,
   loadMedals,
   recordMedals,
   setDifficulty,
@@ -131,15 +131,26 @@ describe('onboarding', () => {
     delete g.localStorage;
     expect(isFirstLaunch()).toBe(false);
   });
-  it('campaign nudge shows until T01–T03 are all done', () => {
-    expect(BASIC_TRAINING.every((id) => TRAINING.some((m) => m.id === id))).toBe(true);
+  it('campaign nudge asks only for the lessons the next campaign mission wants', () => {
+    const won = { score: 1, grade: 'B' as const, difficulty: 'pilot' as const };
     const p = emptyProgress();
     expect(basicTrainingDone(p)).toBe(false);
-    p.best.t01 = { score: 1, grade: 'B', difficulty: 'pilot' };
-    p.best.t02 = { score: 1, grade: 'B', difficulty: 'pilot' };
-    expect(basicTrainingDone(p)).toBe(false);
-    p.best.t03 = { score: 1, grade: 'C', difficulty: 'recruit' };
+    expect(lessonsLeft(p)?.mission.id).toBe('g01');
+    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t01', 't02']);
+    p.best.t01 = won;
+    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t02']);
+    // T01 and T02 are all g01 needs: no SAM lessons before the first mission
+    p.best.t02 = won;
     expect(basicTrainingDone(p)).toBe(true);
+    // g01 won: Gulf Defence before g02
+    p.best.g01 = won;
+    expect(lessonsLeft(p)?.mission.id).toBe('g02');
+    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t04']);
+    p.best.t04 = won;
+    expect(basicTrainingDone(p)).toBe(true);
+    // g02 won: SAMs & Strike before g03
+    p.best.g02 = won;
+    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t03']);
   });
 });
 

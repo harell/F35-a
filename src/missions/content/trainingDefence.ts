@@ -58,7 +58,8 @@ const done = (id: string) => ({ kind: 'objective', id, state: 'complete' }) as c
 export const T04_DEF: MissionDef = mission({
   id: 't04',
   kind: 'training',
-  index: 4,
+  // lesson 3: g02's air-defence boats come before g03's SA-6s (training.ts)
+  index: 3,
   title: 'Gulf Defence',
   subtitle: 'Beat the air-defence boats’ missiles, drill by drill',
   timeOfDay: 'day',
