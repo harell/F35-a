@@ -257,7 +257,8 @@ export function updateObjectives(s: MissionState, dt: number): void {
 }
 
 /**
- * Flag the surface targets of the open primary objectives (`objective` on SAM sites and ground
+ * Flag the neutral members of protect objectives (`missionCivil`: shown with civil traffic hidden), and
+ * the surface targets of the open primary objectives (`objective` on SAM sites and ground
  * targets): the sim's A/G auto-designation and TGT cycling rank them above every other surface target,
  * so a strike boxes its target, not the Shilka on the way, and a SEAD sortie still boxes its SAM first.
  * "Open" = active, or pending with no activation condition (it goes active on the first evaluation:
@@ -269,6 +270,11 @@ export function markObjectiveTargets(s: MissionState): void {
   for (const e of w.ground) e.objective = false;
   for (const o of s.objectives) {
     const def = o.def;
+    // civil traffic we escort (g02's tanker) stays boxed with the player's civil traffic hidden
+    if (def.kind === 'protect') {
+      for (const m of s.groups.get(def.group)?.members ?? []) if ((m.kind === 'aircraft' || m.kind === 'ground') && m.team === 'neutral') m.missionCivil = true;
+      continue;
+    }
     const st = o.status.state;
     if (!def.primary || !(st === 'active' || (st === 'pending' && !def.activeAt))) continue;
     if (def.kind === 'destroy') {
