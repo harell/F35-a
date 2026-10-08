@@ -40,6 +40,7 @@ import type {
 } from '../core/contracts';
 import type { CameraMode, ControlInput, LoadoutId, QualityLevel, QualitySettings, Settings } from '../core/types';
 import type { SimWorld } from '../sim/api';
+import { civilHidden, type AircraftEntity } from '../sim/entities';
 import { createSimWorld } from '../sim/World';
 import { endDelay } from './outro';
 import { forceDestroy } from './forceDestroy';
@@ -594,6 +595,14 @@ export class Game {
         this.events.emit('hud:message', { text: p.radar.emitting ? 'RADAR ON' : 'EMCON — RADAR SILENT', duration: 1.5, tone: 'info' });
       }
     });
+    i.on('civilTraffic', () => {
+      const s = this.session;
+      const p = s?.world.player;
+      if (s && p?.alive && !this.paused) {
+        toggleCivilTraffic(p, s.world);
+        this.events.emit('hud:message', { text: p.civilShown ? 'CIV TRAFFIC SHOWN' : 'CIV TRAFFIC HIDDEN', duration: 1.5, tone: 'info' });
+      }
+    });
   }
 
   private bindEvents(): void {
@@ -1000,13 +1009,14 @@ export class Game {
         if (!c) return null;
         return portal === undefined || page === undefined ? c.pcdRead() : c.pcdPage(portal, page, zoom);
       },
-      command: (cmd: 'cycleWeapon' | 'cycleTarget' | 'radar') => {
+      command: (cmd: 'cycleWeapon' | 'cycleTarget' | 'radar' | 'civilTraffic') => {
         const s = this.session;
         const p = s?.world.player;
         if (!s || !p) return;
         if (cmd === 'cycleWeapon') s.world.combat.cycleWeapon(p, s.world);
         if (cmd === 'cycleTarget') s.world.combat.cycleTarget(p, s.world);
         if (cmd === 'radar') s.world.combat.setRadarEmitting(p, !p.radar.emitting, s.world);
+        if (cmd === 'civilTraffic') toggleCivilTraffic(p, s.world);
       },
       /** Open the pause menu; right after a fly() (or during a load) it opens once that mission is ready. */
       pause: () => {
@@ -1225,6 +1235,13 @@ export class Game {
       vec: (x: number, y: number, z: number) => new Vector3(x, y, z),
     } : null;
   }
+}
+
+/** Key I: show / hide civil traffic; hiding it drops a box on a now-hidden civil contact. */
+function toggleCivilTraffic(p: AircraftEntity, world: SimWorld): void {
+  p.civilShown = !p.civilShown;
+  const t = world.getEntity(p.radar.designatedId);
+  if (t && civilHidden(p, t)) world.combat.designate(p, null, world);
 }
 
 function nextFrame(): Promise<void> {
