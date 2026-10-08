@@ -3,9 +3,11 @@
  *   T1 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB
  *   T2 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns
  *   T3 SAMs & strike — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM
+ *   T4 Gulf Defence — missile defence drills against the IRGC air-defence boat, practice rounds (trainingDefence.ts)
  */
 import type { MissionDef } from '../../core/contracts';
 import { NEVER, P, flight, mission, site, target } from './common';
+import { T04_DEF } from './trainingDefence';
 
 const DS = 'DARKSTAR';
 const TOWER = 'Whenuapai Tower';
@@ -220,4 +222,4 @@ export const T03: MissionDef = mission({
   },
 });
 
-export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03];
+export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04_DEF];

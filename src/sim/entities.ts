@@ -488,6 +488,8 @@ export class SamSiteEntity implements Entity {
    * this site: a training boat (t04) fires only inside its real envelope.
    */
   noHarass?: boolean;
+  /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
+  holdFire?: boolean;
 
   constructor(
     readonly id: number,

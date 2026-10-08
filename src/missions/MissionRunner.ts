@@ -470,6 +470,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
         }
         break;
       }
+      case 'hold_fire': {
+        for (const m of s.groups.get(a.group)?.members ?? []) if (m.kind === 'sam') m.holdFire = true;
+        break;
+      }
       case 'reveal': {
         const g = s.groups.get(a.group);
         for (const m of g?.members ?? []) if (m.kind === 'sam' || m.kind === 'ground') m.known = true;

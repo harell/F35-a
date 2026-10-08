@@ -387,10 +387,11 @@ export type ObjectiveDef = ObjectiveBase &
     | /**
        * A missile-defence drill (needs `defenceCoach`): completes once `defeat` missiles fired at the
        * player by the sites of `groups` since it opened have been defeated (only `guidance` ones, and only
-       * with the jet below `maxAgl` m when the missile ended, when given). With `maxHits`, it fails
+       * with the jet below `maxAgl` m when the missile ended, when given). `inARow`: that many in a row,
+       * a hit starts the count again (luck alone rarely strings them together). With `maxHits`, it fails
        * once more hits than that land.
        */
-    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number }
+    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number; inARow?: boolean }
   );
 
 /* ───────────────────────────── Waypoints ───────────────────────────── */
@@ -431,6 +432,8 @@ export type Action =
   | { kind: 'picture' }
   /** Refill the player's flares and chaff to the loadout's load (a training range between drills, t04). */
   | { kind: 'refill_cms' }
+  /** The SAM sites of a group cease fire: they launch nothing more (missiles in flight fly on; t04's range boats). */
+  | { kind: 'hold_fire'; group: string }
   | { kind: 'end'; success: boolean; reason: string };
 
 export interface TriggerDef {

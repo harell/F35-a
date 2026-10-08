@@ -122,6 +122,7 @@ export function validateMission(def: MissionDef): string[] {
     switch (a.kind) {
       case 'spawn':
       case 'reveal':
+      case 'hold_fire':
         checkGroup(a.group, where);
         break;
       case 'retask':

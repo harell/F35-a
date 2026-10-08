@@ -224,13 +224,20 @@ export function updateObjectives(s: MissionState, dt: number): void {
         break;
       }
       case 'missile_drill': {
-        const recs = drillRecords(s, def.groups, o.openedAt ?? 0, def.guidance);
+        // (in the order they ended: a hit breaks an in-a-row streak)
+        const recs = drillRecords(s, def.groups, o.openedAt ?? 0, def.guidance).sort((a, b) => a.endT - b.endT);
         let defeated = 0;
         let hits = 0;
+        let best = 0;
         for (const r of recs) {
-          if (r.outcome === 'hit') hits++;
-          else if (isDrillDefeat(r) && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
+          if (r.outcome === 'hit') {
+            hits++;
+            if (def.inARow) defeated = 0;
+          } else if (isDrillDefeat(r) && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
+          best = Math.max(best, defeated);
         }
+        // (a streak that reached the mark counts even if a hit ended in the same tick)
+        if (def.inARow && best >= def.defeat) defeated = best;
         st.progress = { done: Math.min(defeated, def.defeat), total: def.defeat };
         if (def.maxHits !== undefined && hits > def.maxHits) setState(s, o, 'failed');
         else if (defeated >= def.defeat) setState(s, o, 'complete');
