@@ -23,7 +23,18 @@ export const PROGRESS_KEY = 'f35a.progress.v1';
 export interface ProgressExtras {
   failStreak?: Record<string, number>;
   skipped?: string[];
+  /** The training-id scheme the save was written in (LESSON_IDS_VERSION; absent = 1). */
+  lessonIds?: number;
 }
+
+/**
+ * Training-id scheme. 1: 't03' was the SA-6 lesson. 2 (#271): T03 Maritime Strike was added and the
+ * SA-6 lesson became 't05', so ids match the lesson numbers players see. A save older than this has
+ * its ids moved once (LESSON_ID_MOVES) on load; every save is written stamped with this version, so a
+ * new 't03' result is never moved again.
+ */
+export const LESSON_IDS_VERSION = 2;
+const LESSON_ID_MOVES: Record<string, string> = { t03: 't05' };
 type Ext = CampaignProgress & ProgressExtras;
 
 /**
@@ -89,12 +100,16 @@ export function sanitizeProgress(raw: unknown, campaigns: CampaignChains, traini
   const base = defaultProgress(campaigns, training);
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Partial<CampaignProgress>;
+  const ext = raw as ProgressExtras;
+  // an old save's lesson ids, moved to the current scheme (LESSON_IDS_VERSION)
+  const old = typeof ext.lessonIds !== 'number' || ext.lessonIds < LESSON_IDS_VERSION;
+  const idOf = (id: string): string => (old ? (LESSON_ID_MOVES[id] ?? id) : id);
   const unlocked = new Set<string>(base.unlocked);
-  if (Array.isArray(r.unlocked)) for (const id of r.unlocked) if (typeof id === 'string') unlocked.add(id);
+  if (Array.isArray(r.unlocked)) for (const id of r.unlocked) if (typeof id === 'string') unlocked.add(idOf(id));
   const best: CampaignProgress['best'] = {};
   if (r.best && typeof r.best === 'object') {
     for (const [id, b] of Object.entries(r.best)) {
-      if (b && typeof b.score === 'number' && typeof b.grade === 'string' && typeof b.difficulty === 'string') best[id] = { score: b.score, grade: b.grade, difficulty: (b.difficulty as string) === 'ace' ? 'veteran' : b.difficulty }; // Ace was removed
+      if (b && typeof b.score === 'number' && typeof b.grade === 'string' && typeof b.difficulty === 'string') best[idOf(id)] = { score: b.score, grade: b.grade, difficulty: (b.difficulty as string) === 'ace' ? 'veteran' : b.difficulty }; // Ace was removed
     }
   }
   const t = r.totals ?? base.totals;
@@ -103,13 +118,13 @@ export function sanitizeProgress(raw: unknown, campaigns: CampaignChains, traini
     unlocked: [...unlocked],
     best,
     totals: { missions: num(t.missions), airKills: num(t.airKills), groundKills: num(t.groundKills), deaths: num(t.deaths) },
+    lessonIds: LESSON_IDS_VERSION,
   };
-  const ext = raw as ProgressExtras;
   if (ext.failStreak && typeof ext.failStreak === 'object') {
     out.failStreak = {};
-    for (const [id, n] of Object.entries(ext.failStreak)) if (num(n) > 0) out.failStreak[id] = num(n);
+    for (const [id, n] of Object.entries(ext.failStreak)) if (num(n) > 0) out.failStreak[idOf(id)] = num(n);
   }
-  if (Array.isArray(ext.skipped)) out.skipped = ext.skipped.filter((id): id is string => typeof id === 'string');
+  if (Array.isArray(ext.skipped)) out.skipped = ext.skipped.filter((id): id is string => typeof id === 'string').map(idOf);
   // (an old save's `skyTowerDown` is not copied: the tower stands again)
   // a won or skipped mission unlocks the next one of its campaign: repairs saves made while c07 sat
   // between c06 and c08 (c07 and c12 were removed with rearming, issue #63)
@@ -140,7 +155,8 @@ export function saveProgressTo(p: CampaignProgress): void {
   const st = storage();
   if (!st) return;
   try {
-    st.setItem(PROGRESS_KEY, JSON.stringify(p));
+    // stamped with the id scheme it is written in, whatever object it came from
+    st.setItem(PROGRESS_KEY, JSON.stringify({ ...p, lessonIds: LESSON_IDS_VERSION }));
   } catch {
     /* quota / privacy mode */
   }

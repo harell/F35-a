@@ -14,11 +14,11 @@ const CAMPAIGN = CAMPAIGNS.flatMap((c) => c.missions);
 const ALL = [...CAMPAIGN, ...TRAINING];
 
 describe('missions: campaign & training content', () => {
-  it('has the IRGC campaign (3 missions) and 4 training missions in order; none is the finale while the campaign is built', () => {
+  it('has the IRGC campaign (3 missions) and 5 training missions in order; none is the finale while the campaign is built', () => {
     expect(CAMPAIGNS.map((c) => c.id)).toEqual(['irgc']);
     expect(CAMPAIGN.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
     expect(CAMPAIGN.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual([]);
-    expect(TRAINING).toHaveLength(4);
+    expect(TRAINING).toHaveLength(5);
     for (const c of CAMPAIGNS) {
       c.missions.forEach((m, i) => {
         expect(m.kind).toBe('campaign');

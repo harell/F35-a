@@ -191,8 +191,8 @@ describe("T01's first hint is visible for its whole duration (4.2-c)", () => {
     expect(frames.filter((r) => r.obj).length).toBeGreaterThan(10);
   });
 
-  it('T01–T03: the summary never flashes on and off with the hints or the radio, and every hint is drawn while it waits', { timeout: 120_000 }, () => {
-    for (const id of ['t01', 't02', 't03']) {
+  it('T01–T03, T05: the summary never flashes on and off with the hints or the radio, and every hint is drawn while it waits', { timeout: 120_000 }, () => {
+    for (const id of ['t01', 't02', 't03', 't05']) {
       const frames = flyLesson(id, 30);
       // once it shows, it stays up for a while: no frame-long flash between two radio calls, no blink
       // at the start before the first hint arrives (review of #70: T02 at 12.52 s, T03 at 0.02 s)

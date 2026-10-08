@@ -255,7 +255,7 @@ export class MissionBot {
    * SDB-class glide bombs (StormBreaker): with one already on its way to a target the next is
    * preferred, so they are rippled onto the targets like a human does instead of one 2-minute glide
    * at a time (issue #65: StormBreaker runs over 600 s). Not JDAMs (a JDAM rippled from inside the
-   * run-in overflew its target in t03).
+   * run-in overflew its target in t05).
    * Fast boats (a swarm on a clock, IRGC g02) are bombed one bomb per boat, rippled: a boat with our
    * bomb already on the way is left to it while another one is free, and the shortest clock goes
    * first (suicide boats, then missile boats, then the rest), as the briefing tells a human.
@@ -506,7 +506,7 @@ export class MissionBot {
   }
 
   /**
-   * SAM defence as taught in T03: beam it (turn 90° to the launching site's radar), descend into
+   * SAM defence as taught in T05: beam it (turn 90° to the launching site's radar), descend into
    * the ground clutter, CHAFF in the last seconds (FLARES against IR missiles), last-ditch break.
    */
   private samDefence(dt: number): void {

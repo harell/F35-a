@@ -29,7 +29,7 @@ function wrapWords(text: string, chars: number): string[] {
 describe('briefing intel map labels', () => {
   // the map is square, as tall as the briefing body (about 240 px at 844×390), or wide when enlarged
   const sizes: [number, number][] = [[240, 240], [260, 260], [300, 300], [360, 220], [800, 300]];
-  for (const id of ['t01', 't02', 't03', 'g01', 'g02', 'ia_dogfight_auckland', 'ia_sam_gauntlet_auckland', 'ia_strike_auckland', 'ia_defend_auckland']) {
+  for (const id of ['t01', 't02', 't03', 't05', 'g01', 'g02', 'ia_dogfight_auckland', 'ia_sam_gauntlet_auckland', 'ia_strike_auckland', 'ia_defend_auckland']) {
     it(`${id}: no label prints over another`, () => {
       const m = missionById(id)!;
       for (const [w, h] of sizes) {
@@ -60,10 +60,10 @@ describe('mission card subtitles', () => {
 });
 
 describe('countermeasures in the lessons', () => {
-  it('T03 teaches the CMS control, not chaff and flares as separate actions', () => {
-    const t03 = missionById('t03')!;
-    const texts = [...t03.briefing, ...(t03.script.hints ?? []).map((h) => h.text)];
-    for (const tr of t03.script.triggers ?? []) for (const a of tr.actions) if (a.kind === 'hint') texts.push(a.text);
+  it('T05 teaches the CMS control, not chaff and flares as separate actions', () => {
+    const t05 = missionById('t05')!;
+    const texts = [...t05.briefing, ...(t05.script.hints ?? []).map((h) => h.text)];
+    for (const tr of t05.script.triggers ?? []) for (const a of tr.actions) if (a.kind === 'hint') texts.push(a.text);
     const cm = texts.filter((t) => /chaff|flare|\bCMS\b/i.test(t));
     expect(cm.length).toBeGreaterThanOrEqual(3);
     for (const t of cm) {

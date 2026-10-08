@@ -1,6 +1,6 @@
 /**
  * MISSIONS — difficulty bands measured with the project's MissionBot (reviewer sweeps):
- *  - i2 / #57: no Pilot walls; the Pilot band (≥ 75 % over 6 seeds) in t03;
+ *  - i2 / #57: no Pilot walls; the Pilot band (≥ 75 % over 6 seeds) in t05;
  *  - #65: the bot ripples its StormBreakers instead of waiting out each one's long glide;
  *  - #58: a difficulty curve that only falls, in every campaign mission;
  *  - the IRGC missions' own bands (g01, g02).
@@ -44,7 +44,7 @@ describe('#65: the bot ripples its StormBreakers (playtest 2026-10-02, 2.2-h)', 
   // the bot used to keep one bomb in flight at a time (each glides 110–160 s): 12 of 36 runs of the
   // repro sweep took over 600 s (every Southern Cross c04 and c06 one). Now its releases come close
   // together: the second StormBreaker leaves long before the first one lands.
-  for (const id of ['t03', 'ia_strike_auckland']) {
+  for (const id of ['t05', 'ia_strike_auckland']) {
     it(`${id} with sead_stealth (4 StormBreakers) is won in under 600 s on Pilot (the bot ripples its bombs)`, { timeout: 300_000 }, async () => {
       for (const seed of [0, 1]) {
         // yield between runs: a worker blocked for long stretches can trip vitest's RPC timeout
@@ -89,9 +89,9 @@ async function winsYielding(id: string, diff: Difficulty, seeds: number[]): Prom
 }
 
 describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)', () => {
-  // the sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t03 --diffs=recruit,pilot --seeds=6
-  // (t03 was 2/6 on Pilot; Recruit 6/6)
-  for (const id of ['t03']) {
+  // the sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t05 --diffs=recruit,pilot --seeds=6
+  // (t05 was 2/6 on Pilot; Recruit 6/6)
+  for (const id of ['t05']) {
     for (const diff of ['recruit', 'pilot'] as const) {
       it(`${id} is won on ${diff} in ≥ 5 of 6 seeds`, { timeout: 300_000 }, async () => {
         const r = await winsYielding(id, diff, [0, 1, 2, 3, 4, 5]);
@@ -101,9 +101,9 @@ describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)
   }
 });
 
-describe('issue #57: t03 SAMs & Strike — the route keeps the SA-6 off the player', () => {
+describe('issue #57: t05 SAMs & Strike — the route keeps the SA-6 off the player', () => {
   it('every steering point before the target stays ≥ 14 km from the SA-6, the IP behind Rangitoto from it', () => {
-    const def = missionById('t03')!;
+    const def = missionById('t05')!;
     const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
     const route = def.script.waypoints.filter((w) => w.kind === 'nav' || w.kind === 'ip');
     expect(route.length).toBeGreaterThan(0);

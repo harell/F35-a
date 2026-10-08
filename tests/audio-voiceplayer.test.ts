@@ -204,7 +204,7 @@ describe('no MISSILE call after the missile hit (i2 reviewer: b_missile 0.1 s af
     expect(log.filter((l) => l.id === 'b_missile').length).toBe(before);
   });
 
-  it('a second missile still inbound keeps MISSILE going (t03 SA-6 salvo)', () => {
+  it('a second missile still inbound keeps MISSILE going (t05 SA-6 salvo)', () => {
     const { vp, log, step } = setup();
     vp.noteIncoming(new Int32Array([7, 8]), 2);
     for (let i = 0; i < 10; i++) step(0.05, ['missile']);

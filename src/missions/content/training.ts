@@ -1,18 +1,18 @@
 /**
  * F35-A — training missions (always unlocked, Auckland), in the order the campaign needs them
  * (MissionDef.lessons on each campaign mission), so a player flies only what the next mission asks for:
- *   T01 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB            → g01
- *   T02 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns     → g01
- *   T03 Gulf Defence — missile defence drills against the IRGC air-defence boat (id 't04',
- *       trainingDefence.ts)                                                                    → g02
- *   T04 SAMs & strike — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM
- *       (id 't03')                                                                             → g03
- * The ids are the order the lessons were written in and stay put (saved progress is keyed by them);
- * `index` is the order a player sees and flies them in.
+ *   T01 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB             → g01
+ *   T02 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns      → g01
+ *   T03 Maritime strike — StormBreaker on moving boats, AARGM-ER on a radar, gun (trainingStrike.ts) → g02
+ *   T04 Gulf Defence — missile defence drills against the IRGC air-defence boat (trainingDefence.ts) → g02
+ *   T05 Live SAMs — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM        → g03
+ * Ids match the numbers players see. Saves from before T03 Maritime Strike hold the SA-6 lesson as
+ * 't03': progress.ts moves it to 't05' once (LESSON_IDS_VERSION).
  */
 import type { MissionDef } from '../../core/contracts';
 import { NEVER, P, flight, mission, site, target } from './common';
 import { T04_DEF } from './trainingDefence';
+import { T03_DEF } from './trainingStrike';
 
 const DS = 'DARKSTAR';
 const TOWER = 'Whenuapai Tower';
@@ -162,18 +162,18 @@ export const T02: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── T3 — SAMs & strike ───────────────────────── */
+/* ───────────────────────── T5 — Live SAMs ───────────────────────── */
 
 const sa6 = P.rangSW;
 /** The fuel depot on Motutapu (centre of the two tanks). */
 const depot = { x: 13000, z: -8900 };
 
-export const T03: MissionDef = mission({
-  id: 't03',
+export const T05: MissionDef = mission({
+  // 't03' before T03 Maritime Strike (#271): old saves are migrated (progress.ts)
+  id: 't05',
   kind: 'training',
-  // lesson 4: the SA-6s and the SEAD of g03 (Gulf Defence comes first, for g02's air-defence boats)
-  index: 4,
-  title: 'SAMs & Strike',
+  index: 5,
+  title: 'Live SAMs',
   subtitle: 'Survive a live SA-6 and JDAM a fuel depot',
   timeOfDay: 'day',
   weather: 'clear',
@@ -229,4 +229,4 @@ export const T03: MissionDef = mission({
 });
 
 /** In `index` order: what the Training screen lists and the NEXT lesson button walks. */
-export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T04_DEF, T03];
+export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03_DEF, T04_DEF, T05];

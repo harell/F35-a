@@ -142,15 +142,16 @@ describe('onboarding', () => {
     // T01 and T02 are all g01 needs: no SAM lessons before the first mission
     p.best.t02 = won;
     expect(basicTrainingDone(p)).toBe(true);
-    // g01 won: Gulf Defence before g02
+    // g01 won: Maritime Strike and Gulf Defence before g02
     p.best.g01 = won;
     expect(lessonsLeft(p)?.mission.id).toBe('g02');
-    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t04']);
+    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t03', 't04']);
+    p.best.t03 = won;
     p.best.t04 = won;
     expect(basicTrainingDone(p)).toBe(true);
-    // g02 won: SAMs & Strike before g03
+    // g02 won: Live SAMs before g03
     p.best.g02 = won;
-    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t03']);
+    expect(lessonsLeft(p)?.lessons.map((m) => m.id)).toEqual(['t05']);
   });
 });
 
