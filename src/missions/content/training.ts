@@ -342,7 +342,7 @@ export const T04: MissionDef = mission({
     ],
     hints: [
       { id: 'h1', text: 'Drone ahead, head-on and 500 ft below. Let it pass under you: do not shoot yet', when: { kind: 'group_spawned', group: 'imm_drone' }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 8 },
-      { id: 'h2', text: 'IMMELMANN: once it is under you, count three. Then full AFTERBURNER, pull straight up; on your back at the top, roll upright', when: { kind: 'time', t: 11 }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 12 },
+      { id: 'h2', text: 'IMMELMANN: it passes under you, count three, full AFTERBURNER, pull up. Over the top: roll upright', when: { kind: 'time', t: 11 }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 12 },
       { id: 'h3', text: 'Next drill: straight and level above 2,000 ft, over 300 knots. The next drone appears right behind you', when: { kind: 'objective', id: 'o_kill1', state: 'complete' }, until: { kind: 'group_spawned', group: 'loop_drone' }, duration: 10 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Training drone inbound, head-on. Guns only. Pass it, then the Immelmann.', priority: 2 }],
