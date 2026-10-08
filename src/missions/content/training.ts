@@ -3,8 +3,12 @@
  *   T1 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB
  *   T2 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns
  *   T3 SAMs & strike — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM
+ *   T4 Vertical reversals — Shahed drills: an Immelmann after a head-on pass, a loop to get behind
+ *      a drone that is behind you, gun kills
  */
 import type { MissionDef } from '../../core/contracts';
+import { SHAHED_SPEED } from '../../sim/drone/oneWay';
+import type { Condition } from '../schema';
 import { NEVER, P, flight, mission, site, target } from './common';
 
 const DS = 'DARKSTAR';
@@ -220,4 +224,130 @@ export const T03: MissionDef = mission({
   },
 });
 
-export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03];
+/* ───────────────────────── T4 — Vertical reversals ───────────────────────── */
+
+const KT = 0.514444;
+/**
+ * Measured in the flight model (clean jet, 1,000 ft): a loop from 300 kt in afterburner takes
+ * ~26 s and ~880 m of height and comes out ~500 m on from where it started; from 200 kt it only
+ * goes round in afterburner (on MIL it hangs on its back at 73 kt). A half loop from 300 kt
+ * tops out ~850 m up at ~120 kt after ~14 s. In those 26 s a Shahed flies ~1.3 km: a drone
+ * ~200 m behind the jet when the loop starts is ~600 m ahead of it at the bottom, gun range.
+ */
+const T04_START = { x: 24000, z: -22000, altitude: 1500, heading: 270, speed: 350 * KT, fuel: 0.9 };
+/** Fast and high enough for the drill's next drone. */
+const T04_READY: Condition = {
+  kind: 'all',
+  of: [
+    { kind: 'player_speed', above: 280 * KT },
+    { kind: 'area', x: 0, z: 0, radius: 60_000, above: 700 },
+  ],
+};
+
+export const T04: MissionDef = mission({
+  id: 't04',
+  kind: 'training',
+  index: 4,
+  title: 'Vertical Reversals',
+  subtitle: 'Immelmann and loop vs Shahed drones — guns only',
+  timeOfDay: 'day',
+  weather: 'clear',
+  briefing: [
+    'Shaheds fly at 100 knots; you can barely fly that slowly. In Buzz Kill you will pass them head-on and overshoot them from behind. Turn round in the vertical instead: you stay over the drone\'s track and slow down at the top.',
+    'Drill 1, the Immelmann. A training Shahed comes at you head-on, 500 ft below. Let it pass under you and count three: that puts room between you. Then full afterburner and pull straight up. Over the top, on your back, roll upright. You come out about 1,200 m above it and 1,500 m behind it, slow and going its way. Throttle back, dive in behind it and gun it from 600 m.',
+    'Drill 2, the loop. A second drone appears 200 m behind you, going your way. Full afterburner, full back stick, wings level all the way round. The loop brings you back to where you started, and in those 25 seconds the drone flies under you: at the bottom it is about 600 m ahead. Throttle to idle and gun it.',
+    'Only the gun today. Below 300 knots the loop only goes round in afterburner. Kill the drones beyond 150 m: their warheads are live.',
+  ],
+  recommendedLoadout: 'clean',
+  allowedLoadouts: ['clean'],
+  gunAmmo: 400,
+  timeLimit: 720,
+  player: T04_START,
+  script: {
+    autoHints: false,
+    parTime: 300,
+    awacs: { initialPictureAt: -1, pictureInterval: 0 },
+    groups: [
+      // 3 km ahead, 150 m below and flying at the jet; its target lies 15 km behind the jet
+      flight('imm_drone', 'shahed136', 1, { x: 0, z: -3000 }, -150, 0, SHAHED_SPEED, 'bomber', {
+        relative: 'player',
+        fixedCount: true,
+        callsign: 'Drone',
+        noun: 'drones',
+        announce: false,
+        spawn: { kind: 'time', t: 3 },
+        oneWay: { targetX: 0, targetZ: 15_000 },
+      }),
+      // 200 m behind the jet, at its height and going its way; its target lies 15 km ahead
+      flight('loop_drone', 'shahed136', 1, { x: 0, z: 200 }, 0, 0, SHAHED_SPEED, 'bomber', {
+        relative: 'player',
+        fixedCount: true,
+        callsign: 'Drone',
+        firstNumber: 2,
+        noun: 'drones',
+        announce: false,
+        spawn: NEVER,
+        oneWay: { targetX: 0, targetZ: -15_000 },
+      }),
+    ],
+    objectives: [
+      { id: 'o_imm', kind: 'maneuver', maneuver: 'immelmann', label: 'Head-on pass, then an Immelmann', primary: true },
+      { id: 'o_kill1', kind: 'destroy', groups: ['imm_drone'], label: 'Gun the drone from behind', primary: true, activeAt: { kind: 'objective', id: 'o_imm', state: 'complete' } },
+      { id: 'o_loop', kind: 'maneuver', maneuver: 'loop', label: 'Drone behind you: loop', primary: true, activeAt: { kind: 'group_spawned', group: 'loop_drone' } },
+      { id: 'o_kill2', kind: 'destroy', groups: ['loop_drone'], label: 'Gun the second drone', primary: true, activeAt: { kind: 'objective', id: 'o_loop', state: 'complete' } },
+    ],
+    triggers: [
+      {
+        id: 't_imm_done',
+        when: { kind: 'objective', id: 'o_imm', state: 'complete' },
+        actions: [{ kind: 'hint', text: 'Good Immelmann. It is ahead and below, going your way: throttle back, dive in behind it, gun it at 600 m', duration: 9 }],
+      },
+      {
+        // shot down (or lost) before the Immelmann: a new drone, head-on again
+        id: 't_imm_retry',
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'imm_drone' }, { kind: 'not', of: { kind: 'objective', id: 'o_imm', state: 'complete' } }, T04_READY] },
+        delay: 3,
+        repeat: 5,
+        actions: [
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one does not count. Another drone, head-on. Pass it, then the Immelmann.' },
+          { kind: 'respawn', group: 'imm_drone' },
+        ],
+      },
+      {
+        id: 't_loop',
+        when: { kind: 'all', of: [{ kind: 'objective', id: 'o_kill1', state: 'complete' }, T04_READY] },
+        delay: 4,
+        actions: [
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Drone two, two hundred metres behind you. Loop now!', priority: 2 },
+          { kind: 'spawn', group: 'loop_drone' },
+          { kind: 'hint', text: 'It is BEHIND you: LOOP NOW. Full afterburner, full back stick, wings level all the way round', duration: 9 },
+        ],
+      },
+      {
+        id: 't_loop_done',
+        when: { kind: 'objective', id: 'o_loop', state: 'complete' },
+        actions: [{ kind: 'hint', text: 'It flew under you: now it is ahead. Throttle to IDLE and gun it at 600 m', duration: 9 }],
+      },
+      {
+        // shot down (or lost) before the loop: a new drone behind the jet
+        id: 't_loop_retry',
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'loop_drone' }, { kind: 'not', of: { kind: 'objective', id: 'o_loop', state: 'complete' } }, T04_READY] },
+        delay: 4,
+        repeat: 6,
+        actions: [
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one does not count. Another drone behind you. Loop!' },
+          { kind: 'respawn', group: 'loop_drone' },
+        ],
+      },
+    ],
+    hints: [
+      { id: 'h1', text: 'Drone ahead, head-on and 500 ft below. Let it pass under you: do not shoot yet', when: { kind: 'group_spawned', group: 'imm_drone' }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 8 },
+      { id: 'h2', text: 'IMMELMANN: once it is under you, count three. Then full AFTERBURNER, pull straight up; on your back at the top, roll upright', when: { kind: 'time', t: 11 }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 12 },
+      { id: 'h3', text: 'Next drill: straight and level above 2,000 ft, over 300 knots. The next drone appears right behind you', when: { kind: 'objective', id: 'o_kill1', state: 'complete' }, until: { kind: 'group_spawned', group: 'loop_drone' }, duration: 10 },
+    ],
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Training drone inbound, head-on. Guns only. Pass it, then the Immelmann.', priority: 2 }],
+    successText: 'Vertical reversals complete. Use them on the real swarm.',
+  },
+});
+
+export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04];

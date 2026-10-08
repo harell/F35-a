@@ -23,6 +23,7 @@ import type {
   WeaponId,
 } from '../core/types';
 import type { WaypointKind } from '../core/contracts';
+import type { ManeuverId } from './runtime/maneuvers';
 
 /** World XZ point (m). */
 export interface XZ {
@@ -90,6 +91,10 @@ export type Condition =
   | { kind: 'player_radar'; state: 'designated' | 'locked' }
   /** The player has this weapon selected (e.g. the GUN: down to the gun, or lining up a gun pass). */
   | { kind: 'player_weapon'; weapon: WeaponId }
+  /** The player's indicated airspeed (m/s) is above / below the given values. */
+  | { kind: 'player_speed'; above?: number; below?: number }
+  /** The player has flown at least `count` (default 1) of a vertical manoeuvre since the start (runtime/maneuvers.ts). */
+  | { kind: 'player_maneuver'; maneuver: ManeuverId; count?: number }
   | { kind: 'all'; of: Condition[] }
   | { kind: 'any'; of: Condition[] }
   | { kind: 'not'; of: Condition };
@@ -214,6 +219,13 @@ export interface AircraftGroupDef {
   enemyLoadout?: 'default' | 'strike';
   /** One-way attack drone group (type 'shahed136'): see OneWayDef. */
   oneWay?: OneWayDef;
+  /**
+   * 'player': the group is placed where the player is when it spawns (drills). `x`, `z` and the
+   * one-way target and route are then offsets in the player's frame along its flight path: +x to
+   * its right, −z ahead (+z behind), like the world's −Z north; `altitude` is metres above the
+   * player (kept clear of the ground) and `heading` degrees relative to the player's track.
+   */
+  relative?: 'player';
   /** Friendly 'wingman' only: standing orders (hold fire until the player fires, groups to leave alone). */
   orders?: WingmanOrders;
   /**
@@ -382,6 +394,8 @@ export type ObjectiveDef = ObjectiveBase &
     { kind: 'survive'; seconds: number; area?: { x: number; z: number; radius: number } }
     | /** Return to base: only becomes active when every other primary is complete. */
     { kind: 'rtb'; x: number; z: number; radius: number }
+    | /** Fly a vertical manoeuvre (loop / Immelmann) after the objective opens (runtime/maneuvers.ts). */
+    { kind: 'maneuver'; maneuver: ManeuverId }
   );
 
 /* ───────────────────────────── Waypoints ───────────────────────────── */
@@ -411,6 +425,12 @@ export type Action =
   /** Show a HUD hint for `duration` s (default 8). */
   | { kind: 'hint'; text: string; duration?: number }
   | { kind: 'spawn'; group: string }
+  /**
+   * Spawn an aircraft group again once none of its members is alive (a drill's next try): its
+   * members are replaced, so 'destroy' objectives and group conditions count the new ones.
+   * A group that has not spawned yet just spawns.
+   */
+  | { kind: 'respawn'; group: string }
   | { kind: 'retask'; group: string; task: TaskDef }
   /** Mark SAM sites of a group as known (TSD rings) — e.g. after an intel update. */
   | { kind: 'reveal'; group: string }
