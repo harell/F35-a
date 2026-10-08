@@ -41,6 +41,7 @@ import { spawnFloor } from '../src/missions/runtime/spawner';
 import { cloudBase } from '../src/core/weather';
 import { isSmallGround } from '../src/sim/weapons/small';
 
+const DEG = Math.PI / 180;
 const _h = new Vector3();
 const _q = new Vector3();
 
@@ -172,6 +173,13 @@ export class MissionBot {
   private readonly student: boolean;
   /** Student: extending away from the drill's boat before turning back in (an orbit draws no shot). */
   private extending = false;
+  /**
+   * A vertical-manoeuvre lesson (a 'maneuver' objective, t03): the bot flies the drill as taught,
+   * with the stick (full afterburner, full back stick; for an Immelmann, roll upright over the top),
+   * then guns the drone. `vStick` is the manoeuvre in progress.
+   */
+  private readonly vertical: boolean;
+  private vStick: { kind: 'loop' | 'immelmann'; phase: 'pull' | 'roll'; climbed: boolean; since: number } | null = null;
 
   constructor(
     private readonly runner: MissionRunnerApi,
@@ -183,6 +191,7 @@ export class MissionBot {
     this.agLoadout = this.agLeft() > 0;
     this.deck = cloudBase(runner.def.weather);
     this.student = !!runner.def.script.defenceCoach;
+    this.vertical = runner.def.script.objectives.some((o) => o.kind === 'maneuver');
     const h = homeBase(runner.def);
     this.home = new Vector3(h.x, 0, h.z);
     const wp = runner.currentWaypoint;
@@ -333,6 +342,7 @@ export class MissionBot {
     this.beamSide = 0;
     // 2. mission over: go home
     if (this.runner.state !== 'running') return this.nav(this.home, 2500, 'HOME', dt);
+    if (this.vertical) return this.verticalDrill(dt);
 
     const surface = ag > 0 ? this.surfaceTarget() : null;
     // surface objectives are ours only when we brought air-to-ground stores (else a package's job)
@@ -609,6 +619,75 @@ export class MissionBot {
       if (ir) p.input.flare = p.flares > 0;
       else p.input.chaff = p.chaff > 0;
       this.lastCm = w.time;
+    }
+  }
+
+  /**
+   * The vertical-reversal drills (t03), as the briefing teaches them: an open Immelmann objective —
+   * fly straight and hold fire while the head-on drone passes under, extend until it is ~700 m
+   * behind, then the Immelmann; an open loop objective — the drone is behind: loop at once; a drone
+   * to kill — the gun (the air-to-air bot's gun attack); otherwise straight and level, fast (the next
+   * drone only comes above 280 kt and 700 m).
+   */
+  private verticalDrill(dt: number): void {
+    const p = this.p;
+    const w = this.world;
+    if (this.vStick) return this.stickManeuver();
+    let open: 'loop' | 'immelmann' | null = null;
+    for (const st of this.runner.objectives) {
+      if (st.state !== 'active') continue;
+      const o = this.runner.def.script.objectives.find((x) => x.id === st.id);
+      if (o && o.kind === 'maneuver') open = o.maneuver;
+    }
+    let drone: AircraftEntity | null = null;
+    for (const a of w.aircraft) if (a.alive && isHostile(p.team, a.team) && (!drone || a.position.distanceTo(p.position) < drone.position.distanceTo(p.position))) drone = a;
+    _h.copy(p.velocity).setY(0).normalize();
+    const along = drone ? _q.subVectors(drone.position, p.position).dot(_h) : 0;
+    if (open === 'immelmann' && drone && along < -700) return this.startStick('immelmann');
+    if (open === 'loop' && drone) return this.startStick('loop');
+    if (!open && drone) {
+      this.air.opts.rtbWhenWinchester = false;
+      return this.fight('GUNS', dt);
+    }
+    // straight and level at 350 kt, 1,500 m; back towards the middle of the AO when far out
+    const far = Math.hypot(p.position.x, p.position.z) > 25_000;
+    _q.copy(p.position).addScaledVector(_h, 5_000);
+    this.nav(far ? new Vector3(0, 0, 0) : _q.clone(), 1_500, 'VLEVEL', dt, false, 300, 185);
+  }
+
+  private startStick(kind: 'loop' | 'immelmann'): void {
+    this.vStick = { kind, phase: 'pull', climbed: false, since: this.world.time };
+    this.stickManeuver();
+  }
+
+  /** Full afterburner, full back stick; an Immelmann rolls upright once over the top on its back. */
+  private stickManeuver(): void {
+    const p = this.p;
+    const s = this.vStick!;
+    this.mode = s.kind === 'loop' ? 'LOOP' : 'IMMELMANN';
+    this.clearTriggers();
+    const v = Math.max(1, p.velocity.length());
+    const gamma = Math.asin(p.velocity.y / v);
+    const upY = _q.set(0, 1, 0).applyQuaternion(p.quaternion).y;
+    if (gamma > 60 * DEG) s.climbed = true;
+    const inp = p.input;
+    inp.throttle = 1;
+    inp.yaw = 0;
+    let done = this.world.time - s.since > 45;
+    if (s.phase === 'pull') {
+      inp.pitch = 1;
+      inp.roll = 0;
+      if (s.kind === 'immelmann' && s.climbed && upY < -0.5 && gamma < 15 * DEG) s.phase = 'roll';
+      if (s.kind === 'loop' && s.climbed && Math.abs(gamma) < 15 * DEG && upY > 0.5) done = true;
+    } else {
+      inp.pitch = 0;
+      inp.roll = 1;
+      if (upY > 0.95) done = true;
+    }
+    if (done) {
+      inp.pitch = 0;
+      inp.roll = 0;
+      this.vStick = null;
     }
   }
 

@@ -5,11 +5,15 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { missionById, validateMission } from '../src/missions';
+import { missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { createManeuverTracker, updateManeuvers, type ManeuverId } from '../src/missions/runtime/maneuvers';
 import type { AircraftEntity } from '../src/sim/entities';
 import { initFlight } from '../src/sim/flight/FlightModel';
 import { flatLand, harness, killGroup, shieldPlayer, type Harness } from './missions-helpers';
+import { generateTerrain, runSync } from '../src/world/terrain/generate';
+import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
+import { allFeatures } from '../src/world/scenery/Scenery';
+import { runPlaythrough } from './missions-bot';
 
 const KT = 0.514444;
 const DEG = Math.PI / 180;
@@ -235,5 +239,31 @@ describe('t03 Vertical Reversals', () => {
     expect(second!.id).not.toBe(first.id);
     expect(obj(h, 'o_kill1')).toBe('pending');
     expect(h.runner.state).toBe('running');
+  });
+});
+
+describe('t03 Vertical Reversals, flown by the mission bot', () => {
+  it('on the real LINZ coast with the stick and the gun, no shortcuts: Immelmann, gun kill, loop, gun kill', { timeout: 300_000 }, () => {
+    const def = missionById('t03')!;
+    const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
+    let won = 0;
+    const log: string[] = [];
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      const r = runPlaythrough('t03', 'pilot', seed, terrain, { maxT: 720, log: true });
+      const at = (re: RegExp) => r.events.find((e) => re.test(e))?.trim().split(' ')[0] ?? '-';
+      log.push(`seed ${seed}: ${r.state}@${r.t}s immelmann@${at(/HUD IMMELMANN$/)} loop@${at(/HUD LOOP$/)}`);
+      if (r.state !== 'success') continue;
+      won++;
+      expect(r.alive, `seed ${seed}`).toBe(true);
+      // the manoeuvres were recognised by the mission's own detector, in the lesson's order
+      const imm = r.events.findIndex((e) => /HUD IMMELMANN$/.test(e));
+      const loop = r.events.findIndex((e) => /HUD LOOP$/.test(e));
+      expect(imm, `seed ${seed}: no Immelmann`).toBeGreaterThanOrEqual(0);
+      expect(loop, `seed ${seed}: no loop`).toBeGreaterThan(imm);
+      // both drones shot down by the player (the only weapon aboard is the gun)
+      expect(r.events.filter((e) => /DESTROYED Drone \d+ by PLAYER/.test(e)).length, `seed ${seed}`).toBeGreaterThanOrEqual(2);
+      expect(r.events.some((e) => /LAUNCH /.test(e) && /PLAYER/.test(e)), `seed ${seed}: a missile left the jet`).toBe(false);
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
   });
 });
