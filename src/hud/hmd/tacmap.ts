@@ -14,6 +14,7 @@ import { AKL } from '../../core/auckland';
 import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/aucklandLinz';
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
 import type { AnyEntity } from '../../sim/entities';
+import { civilHidden } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
 import { NumText, SAM_LABEL, groundLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
@@ -501,7 +502,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
 
   /* ground targets */
   for (const gt of world.ground) {
-    if (!gt.alive || gt.team === p.team || (!gt.known && !hasContact(f, gt.id))) continue;
+    if (!gt.alive || gt.team === p.team || civilHidden(p, gt) || (!gt.known && !hasContact(f, gt.id))) continue;
     tacProject(proj, gt.position.x, gt.position.z, pt);
     if (!onMap(pt.x, pt.y, R * 1.02)) continue;
     const r = 4 * u;
@@ -564,7 +565,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
   for (const c of p.radar.contacts) {
     if (c.team === p.team) continue;
     const e = world.getEntity(c.id);
-    if (!e || !e.alive || e.kind !== 'aircraft') continue;
+    if (!e || !e.alive || e.kind !== 'aircraft' || civilHidden(p, e)) continue;
     const col = e.team === 'neutral' ? pal.white : pal.danger; // civil traffic in white
     const stale = now - c.lastSeen > 1.5;
     const pos = stale ? c.position : e.position;
