@@ -38,29 +38,47 @@ const _w = new Vector3();
 export const AUTO_FLARE_RANGE = 4_000;
 /** Auto-CMDS: chaff when an enemy radar missile's time to impact drops below this (s). */
 export const AUTO_CHAFF_TTI = 8;
+/**
+ * Auto-CMDS against a SAM round: one salvo at each of these times to impact (s), each window shorter
+ * than a program's repeat (REPEAT) so it releases one salvo. A held program (as against an air-to-air
+ * missile) would spend ~26 of the 24 chaff on one round: the first SAM shot left none for the rest.
+ */
+export const AUTO_SAM_PULSES: readonly (readonly [number, number])[] = [
+  [4.5, 5],
+  [2, 2.5],
+];
 
 /**
  * Automatic countermeasure dispenser program for the human player on Recruit (the F-35's CMDS
  * can run automatic programs cued by the MAWS / RWR): a new pilot who does not defend yet still
  * gets flares against IR missiles inside 4 km and chaff against radar missiles in the last ~8 s.
- * Air-to-air missiles only (defeating SAMs stays a skill to learn). Returns bit 1 for flares, bit 2
- * for chaff.
+ * SAM rounds get two timed salvos each (AUTO_SAM_PULSES), chaff or flares by the round's guidance:
+ * a player was stuck at g02's air-defence boats on Recruit (feedback 2026-10-08). Defeating a SAM
+ * stays a skill: chaff alone is weak against a radar SAM, the beam does most of the work; the
+ * program only presses the button in time. Returns bit 1 for flares, bit 2 for chaff.
  */
 export function autoCms(ctx: CombatCtx, ac: AircraftEntity): number {
   if (!ac.isPlayer || ctx.world.difficulty.id !== 'recruit') return 0;
   let out = 0;
   for (const m of ctx.world.missiles) {
-    if (!m.alive || m.targetId !== ac.id || m.team === ac.team || !isCombatMissile(m) || m.trackBroken || m.cdef.category !== 'aam') continue;
+    if (!m.alive || m.targetId !== ac.id || m.team === ac.team || !isCombatMissile(m) || m.trackBroken) continue;
+    const sam = m.cdef.category === 'sam';
+    if (!sam && m.cdef.category !== 'aam') continue;
     const dx = m.position.x - ac.position.x;
     const dy = m.position.y - ac.position.y;
     const dz = m.position.z - ac.position.z;
     const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (m.cdef.guidance === 'ir') {
+    const ir = m.cdef.guidance === 'ir';
+    const radar = m.cdef.guidance === 'active_radar' || m.cdef.guidance === 'semi_active' || m.cdef.guidance === 'command';
+    if (!ir && !radar) continue;
+    const vc = d > 1 ? -((m.velocity.x - ac.velocity.x) * dx + (m.velocity.y - ac.velocity.y) * dy + (m.velocity.z - ac.velocity.z) * dz) / d : 0;
+    if (sam) {
+      if (vc <= 50) continue;
+      const tti = d / vc;
+      for (const [a, b] of AUTO_SAM_PULSES) if (tti > a && tti <= b) out |= ir ? 1 : 2;
+    } else if (ir) {
       if (d < AUTO_FLARE_RANGE) out |= 1;
-    } else if (m.cdef.guidance === 'active_radar' || m.cdef.guidance === 'semi_active' || m.cdef.guidance === 'command') {
-      const vc = d > 1 ? -((m.velocity.x - ac.velocity.x) * dx + (m.velocity.y - ac.velocity.y) * dy + (m.velocity.z - ac.velocity.z) * dz) / d : 0;
-      if (vc > 50 && d / vc < AUTO_CHAFF_TTI) out |= 2;
-    }
+    } else if (vc > 50 && d / vc < AUTO_CHAFF_TTI) out |= 2;
   }
   return out;
 }

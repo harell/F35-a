@@ -11,13 +11,19 @@ function setup(difficulty: Difficulty) {
 }
 
 describe('applyDamage — difficulty scaling', () => {
-  it('recruit: a single missile hit is never fatal from full health (3 hits to kill)', () => {
+  it('recruit: a single missile hit is never fatal from full health (3 hits to kill, a salvo is one)', () => {
     const { tw, player, enemy } = setup('recruit');
     tw.world.applyDamage(player, 400, enemy.id, 'r77');
     expect(player.alive).toBe(true);
     expect(player.health).toBeGreaterThan(55);
+    // a second round in the same salvo (inside playerMissileHitGrace) does nothing
+    const h1 = player.health;
+    tw.world.applyDamage(player, 400, enemy.id, 'r77');
+    expect(player.health).toBe(h1);
+    run(tw.world, 3.5);
     tw.world.applyDamage(player, 400, enemy.id, 'r77');
     expect(player.alive).toBe(true);
+    run(tw.world, 3.5);
     tw.world.applyDamage(player, 400, enemy.id, 'r77');
     expect(player.alive).toBe(false);
     expect(tw.of('player:down')).toEqual([{ reason: 'shot' }]);

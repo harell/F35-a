@@ -52,6 +52,9 @@ const _dir = new Vector3();
 const _local = new Vector3();
 
 export class DamageSystem {
+  /** When a missile last damaged the player (s; DifficultyParams.playerMissileHitGrace). */
+  private playerMissileHitAt = -Infinity;
+
   constructor(private readonly host: DamageHost) {}
 
   /** Entry point for SimWorld.applyDamage. */
@@ -95,6 +98,11 @@ export class DamageSystem {
         // A single missile can take at most ~1/N of the airframe, and never kills from full health.
         dmg = Math.min(dmg, (ac.maxHealth / hits) * 1.15);
         if (ac.health >= ac.maxHealth * 0.95) dmg = Math.min(dmg, ac.health - 5);
+      }
+      // a salvo counts as one hit: the rounds that follow the first within the grace do no damage
+      if (isMunition && d.playerMissileHitGrace) {
+        if (this.host.time - this.playerMissileHitAt < d.playerMissileHitGrace) return;
+        if (dmg > 0) this.playerMissileHitAt = this.host.time;
       }
     }
     if (!(dmg > 0)) return;
