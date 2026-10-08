@@ -238,6 +238,13 @@ export class AircraftEntity implements Entity {
   leaderId: number | null = null;
   /** Mission group this aircraft belongs to (for objectives). */
   groupId = '';
+  /**
+   * (player) Civil traffic shown: CIV boxes on the HMD, TSD and map, and TGT steps through it. Key I toggles
+   * it; the mission runner sets it at the start (off, on in free flight). See civilHidden().
+   */
+  civilShown = true;
+  /** Civil traffic a protect objective covers (kept by the mission runner): shown even with civilShown off. */
+  missionCivil = false;
 
   /** Stats */
   kills = 0;
@@ -527,6 +534,8 @@ export class GroundTargetEntity implements Entity {
   known = true;
   /** A target of an active primary objective (as on SamSiteEntity): A/G designation ranks it first. */
   objective = false;
+  /** Civil traffic a protect objective covers (g02's tanker): shown even with the player's civilShown off. */
+  missionCivil = false;
   /**
    * Civil merchant ship ('ship' type, neutral team): container ship or cruise liner. Its hull is a
    * capsule along the heading (sim/civil/vessels.ts), and one bomb / missile hit sinks it.
@@ -639,3 +648,12 @@ export interface Projectile {
 }
 
 export type AnyEntity = AircraftEntity | MissileEntity | SamSiteEntity | GroundTargetEntity | DecoyEntity;
+
+/**
+ * `e` is civil traffic the viewer has hidden (AircraftEntity.civilShown off): no box, no map symbol, and
+ * TGT skips it. Civil traffic a protect objective covers (`missionCivil`) is never hidden.
+ */
+export function civilHidden(viewer: AircraftEntity, e: AnyEntity): boolean {
+  if (e.team !== 'neutral' || viewer.civilShown) return false;
+  return !((e.kind === 'aircraft' || e.kind === 'ground') && e.missionCivil);
+}

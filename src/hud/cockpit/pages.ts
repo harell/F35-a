@@ -13,6 +13,7 @@ import type { FrameContext } from '../../core/contracts';
 import { BINGO_FRACTION } from '../../core/data';
 import { AB_DETENT } from '../../core/types';
 import type { AircraftEntity, StoreStation } from '../../sim/entities';
+import { civilHidden } from '../../sim/entities';
 import { AIRCRAFT_LABEL, WARNING_INFO, WEAPON_HUD, entityLabel, groupThousands, hmm } from '../hmd/format';
 import type { Pen } from '../hmd/pen';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from '../hmd/tsd';
@@ -215,7 +216,7 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   let lockLabel = '';
   for (const c of p.radar.contacts) {
     const e = ctx.world.getEntity(c.id);
-    if (!e || !e.alive || e.kind !== 'aircraft') continue;
+    if (!e || !e.alive || e.kind !== 'aircraft' || civilHidden(p, e)) continue;
     const dx = c.position.x - p.position.x;
     const dz = c.position.z - p.position.z;
     const r = Math.hypot(dx, dz);

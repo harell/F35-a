@@ -15,6 +15,7 @@ import { Vector3 } from 'three';
 import type { Team } from '../../core/types';
 import { forwardOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, GroundTargetEntity, SamSiteEntity } from '../entities';
+import { civilHidden } from '../entities';
 import type { AcCombatState, CombatCtx, TrackContact } from '../weapons/context';
 import { acState, CONTACT_MEMORY, playerTeam, SENSOR_DIV } from '../weapons/context';
 import { cmFactor, notchDepth, rollNotchNeed, stepNotch } from '../weapons/ew';
@@ -414,6 +415,11 @@ function candidates(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatState, scope
   return list.map((x) => x.c);
 }
 
+function hiddenCivil(ctx: CombatCtx, ac: AircraftEntity, id: number): boolean {
+  const e = ctx.world.getEntity(id);
+  return !!e && civilHidden(ac, e);
+}
+
 /** A missile `ac` launched is still flying at contact `id` (the contact is already engaged). */
 export function engagedBy(ctx: CombatCtx, ac: AircraftEntity, id: number): boolean {
   for (const m of ctx.world.missiles) if (m.alive && m.shooterId === ac.id && m.targetId === id) return true;
@@ -453,7 +459,8 @@ export function shootListStep(ctx: CombatCtx, ac: AircraftEntity, firedAt: numbe
  */
 export function cycleTarget(ctx: CombatCtx, ac: AircraftEntity): void {
   const st = acState(ac);
-  const scoped = candidates(ctx, ac, st, cycleScope(ac));
+  // hidden civil traffic (key I) is never stepped to
+  const scoped = candidates(ctx, ac, st, cycleScope(ac)).filter((c) => c.team !== 'neutral' || !hiddenCivil(ctx, ac, c.id));
   const hostile = scoped.filter((c) => c.team !== 'neutral');
   const all = hostile.length > 0 ? hostile : scoped;
   if (all.length === 0) return;
@@ -486,7 +493,7 @@ export function designateNearestTo(ctx: CombatCtx, ac: AircraftEntity, dir: Vect
   let best: TrackContact | null = null;
   let bestCos = Math.cos(0.5);
   for (const c of st.contacts.values()) {
-    if (c.team === ac.team) continue;
+    if (c.team === ac.team || (c.team === 'neutral' && hiddenCivil(ctx, ac, c.id))) continue;
     _rel.subVectors(c.position, ac.position);
     const d = _rel.length();
     if (d < 1) continue;

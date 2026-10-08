@@ -8,6 +8,7 @@
  */
 import { RAD, forwardOf, toNm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
+import { civilHidden } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
 import { acState } from '../../sim/weapons/context';
 import { MUNITIONS } from '../../sim/weapons/defs';
@@ -161,7 +162,7 @@ export function drawContacts(f: HudFrame): void {
   for (const c of p.radar.contacts) {
     if (c.id === tid) continue;
     const e = world.getEntity(c.id);
-    if (!e || !e.alive || e.team === p.team || e.kind !== 'aircraft') continue;
+    if (!e || !e.alive || e.team === p.team || e.kind !== 'aircraft' || civilHidden(p, e)) continue;
     const d = c.position.distanceToSquared(p.position);
     if (e.team === 'neutral') {
       if (d < c1) {
@@ -179,7 +180,7 @@ export function drawContacts(f: HudFrame): void {
   for (const c of p.radar.contacts) {
     if (c.id === tid) continue;
     const e = world.getEntity(c.id);
-    if (!e || !e.alive || e.team === p.team) continue;
+    if (!e || !e.alive || e.team === p.team || civilHidden(p, e)) continue;
     if (e.kind !== 'aircraft') continue; // ground / SAM tracks are drawn by drawGroundAndSams
     // civil traffic: white box, always labelled CIV so it is never mistaken for a bandit
     const civil = e.team === 'neutral';
@@ -264,7 +265,7 @@ export function drawGroundAndSams(f: HudFrame): void {
   let c1 = Infinity;
   let c2 = Infinity;
   for (const g of world.ground) {
-    if (!g.alive || g.team !== 'neutral' || g.id === tid || (!g.known && !hasContact(f, g.id))) continue;
+    if (!g.alive || g.team !== 'neutral' || g.id === tid || civilHidden(p, g) || (!g.known && !hasContact(f, g.id))) continue;
     const d = Math.hypot(g.position.x - px, g.position.z - pz);
     if (d < c1) {
       c2 = c1;
@@ -272,7 +273,7 @@ export function drawGroundAndSams(f: HudFrame): void {
     } else if (d < c2) c2 = d;
   }
   for (const g of world.ground) {
-    if (!g.alive || g.team === p.team || g.id === tid) continue;
+    if (!g.alive || g.team === p.team || g.id === tid || civilHidden(p, g)) continue;
     if (!g.known && !hasContact(f, g.id)) continue;
     const d = Math.hypot(g.position.x - px, g.position.z - pz);
     if (d > GROUND_RANGE) continue;

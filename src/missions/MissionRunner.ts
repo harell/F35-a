@@ -188,6 +188,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
     buildGroups(s);
     const p = spawnPlayer(s, loadout);
     for (const st of p.stores) this.storesAtStart.set(st.weapon, (this.storesAtStart.get(st.weapon) ?? 0) + st.count);
+    // civil traffic boxes (key I): off in a combat sortie, on for sightseeing; an escorted civil ship
+    // (missionCivil, markObjectiveTargets) shows either way
+    p.civilShown = !!s.script.freeFlight;
     // free flight starts on the gun: with a bomb selected the CCIP blinked PICKLE over the city
     // from the first frame (playtest r3, 3.1-b); WPN still reaches every store
     if (s.script.freeFlight) {
