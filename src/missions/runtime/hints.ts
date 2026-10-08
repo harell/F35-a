@@ -131,15 +131,20 @@ function agWeaponFor(p: AircraftEntity, t: AnyEntity): WeaponId | null {
 const AUTO: AutoHint[] = [
   {
     id: 'defend',
-    test(p) {
+    test(p, s) {
       if (p.incoming.length === 0) return null;
-      const ir = p.incoming[0].guidance === 'ir';
+      const inc = p.incoming[0];
+      const ir = inc.guidance === 'ir';
+      const m = s.world.getEntity(inc.missileId);
+      const shooter = m && m.kind === 'missile' ? s.world.getEntity(m.shooterId) : null;
       // short enough for one page: it must not page away while the missile flies
-      // measured against the SA-6, the Tor and the AD boat (2026-10-08): beam + chaff a few seconds apart
-      // is the defence, and a dive after the launch adds nothing to the beam. Against the boat's
-      // heat-seeker (real flight model, 48 rounds each): a hard turn across it + CMS late 3 hit, CMS
-      // alone 5, the turn alone 12, nothing 15, a break INTO it 29 (head-on, the end game's worst aspect)
-      return ir ? 'IR MISSILE! Beam it hard, AB off, CMS late' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
+      // A SAM's round, measured against the SA-6, the Tor and the AD boat (2026-10-08): beam + chaff a few
+      // seconds apart is the defence, and a dive after the launch adds nothing to the beam (the round
+      // arrives in ~10 s). Against the boat's heat-seeker (real flight model, 48 rounds each): a hard turn
+      // across it + CMS late 3 hit, CMS alone 5, the turn alone 12, nothing 15, a break INTO it 29 (head-on,
+      // the end game's worst aspect). A fighter's missile (not measured; a longer flight) keeps the old advice.
+      if (shooter && shooter.kind === 'sam') return ir ? 'IR MISSILE! Beam it hard, AB off, CMS late' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
+      return ir ? 'IR MISSILE! CMS, break into it, AB off' : 'MISSILE! Beam it 90°, dive, CMS late';
     },
   },
   {

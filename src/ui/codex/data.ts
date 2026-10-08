@@ -357,7 +357,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     kind: 'warning', id: 'missile', cat: 'thr', name: 'MISSILE', chip: 'MISSILE 6s', level: 'red', sound: 'missile', voice: 'b_missile', voiceText: 'Missile',
     line: 'A missile is coming at you, any type, within 15 km. Act now.',
     trigger: 'The jet\'s missile approach warning sees a missile heading for you. A red ring appears around your flight path marker, with an arrow per missile (orange means heat-seeker) and 1–3 chevrons as it closes. The seconds to impact count down.',
-    how: ['Radar missile: turn 90° to it (beam it) and drop chaff every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it doesn\'t. Running away doesn\'t: the missile is faster.', 'Heat-seeker (orange arrow): turn hard across it too (beam it), come out of afterburner and press CMS late, in the last 3 s: the flares and the turn together. Turning into it makes it worse.', 'Three chevrons means under 4 s to impact.'],
+    how: ['A SAM\'s radar missile: turn 90° to it (beam it) and press CMS every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it is too late. Running away doesn\'t: the missile is faster.', 'A SAM\'s heat-seeker (orange arrow; the air-defence boats): the same hard turn across it, afterburner off, CMS late, in the last 3 s. Turning into it makes it worse.', 'A fighter\'s missile flies longer: beam it and dive, chaff late; against its heat-seeker, flares and a hard break into it.', 'Three chevrons means under 4 s to impact.'],
     notes: ['This is the only warning for shoulder-fired missiles and for long-range fighter missiles in midcourse.', 'The tone sweeps down, and it speeds up as the missile gets closer.'],
   },
   {
