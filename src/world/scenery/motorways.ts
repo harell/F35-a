@@ -19,7 +19,7 @@
  */
 import { BufferAttribute, BufferGeometry } from 'three';
 import { geoToWorld } from '../../core/auckland';
-import { aucklandRoads, ROAD_ARTERIAL, ROAD_MOTORWAY, ROAD_RAIL, ROAD_STREET, type RoadData, type RoadLine } from './aucklandRoads';
+import { aucklandRoads, ROAD_ARTERIAL, ROAD_LOCAL, ROAD_MOTORWAY, ROAD_RAIL, ROAD_STREET, type RoadData, type RoadLine } from './aucklandRoads';
 import { frameFromHeading, type GeometryBuilder } from './GeometryBuilder';
 import type { HeightFn, LightList } from './builders';
 
@@ -118,7 +118,10 @@ export const HAND_ARTERIALS: MotorwayDef[] = [
 
 export interface RoadPath {
   name: string;
-  kind: 'motorway' | 'arterial' | 'rail';
+  /** 'local': the islands' and Devonport's roads (#127): unlit, no frontage, their own mesh and texture. */
+  kind: 'motorway' | 'arterial' | 'rail' | 'local';
+  /** A local road with no seal (gravel): the gravel half of the local-road texture. */
+  unsealed?: boolean;
   /** Ribbon width (m): both carriageways (hand-traced) or one carriageway (LINZ); a railway's formation. */
   width: number;
   /**
@@ -186,7 +189,8 @@ export function handRoadPaths(arterials = true): RoadPath[] {
 }
 
 /**
- * LINZ motorway carriageways (one ribbon each, half the motorway texture) and arterials. Real
+ * LINZ motorway carriageways (one ribbon each, half the motorway texture), arterials and (with the arterials) the local
+ * roads of the islands and Devonport (#127). Real
  * vertices are kept (no smoothing: the data already follows the curves), long segments split to
  * ≤ SAMPLE m so the ribbons follow the terrain.
  */
@@ -194,6 +198,10 @@ export function linzRoadPaths(d: RoadData, arterials = true): RoadPath[] {
   const out: RoadPath[] = [];
   for (const l of d.lines) {
     if (l.kind === ROAD_STREET || l.kind === ROAD_RAIL || (l.kind === ROAD_ARTERIAL && !arterials)) continue;
+    if (l.kind === ROAD_LOCAL) {
+      if (arterials) out.push({ ...linzPath(l, 'local', 0.5), unsealed: l.unsealed === true });
+      continue;
+    }
     const motorway = l.kind === ROAD_MOTORWAY;
     out.push(linzPath(l, motorway ? 'motorway' : 'arterial', motorway ? 0.5 : 1));
   }
@@ -217,6 +225,8 @@ const WET = 0.6;
  * motorway-height viaducts.
  */
 export const RAIL_CAUSEWAY_Y = 1.8;
+/** Lowest top (m above sea level) of a local road (#127) where the coastline puts it over water: a causeway. */
+const LOCAL_CAUSEWAY_Y = 1.2;
 /** A railway stretch over water deeper than this (m)… */
 const RAIL_SEA_DEPTH = -4;
 /** …or longer than this (m) runs where the land model has sea: it is not drawn. */
@@ -388,13 +398,18 @@ export class RoadNetwork {
       if (!only(p)) continue;
       const n = p.x.length;
       const rail = p.kind === 'rail';
+      // a local road (#127) is two vertices across (narrow: no crown), stays low over a causeway like a railway (no
+      // deck) and takes the sealed (u 0 … ½) or the gravel (u ½ … 1) half of its texture
+      const local = p.kind === 'local';
+      const across = local ? 2 : 3;
+      const u0 = local && p.unsealed ? 0.5 : 0;
       const raised = (k: number) => height(p.x[k], p.z[k]) + 0.45 < RAIL_CAUSEWAY_Y;
       // Water under the centre line → deck height profile (smoothed ramps). Railways stay low: on the
       // ground, or on a causeway just above the water (RAIL_CAUSEWAY_Y), so no deck.
       const wet = new Float32Array(n);
       for (let i = 0; i < n; i++) wet[i] = height(p.x[i], p.z[i]) < WET ? 1 : 0;
       const deck = new Float32Array(n);
-      for (let i = 0; i < n && !rail; i++) {
+      for (let i = 0; i < n && !rail && !local; i++) {
         let w = 0;
         for (let k = -4; k <= 4; k++) {
           const j = i + k;
@@ -429,19 +444,19 @@ export class RoadNetwork {
         const hw = p.width / 2;
         const deckY = 7 + 5 * Math.min(1, deck[i] * 1.2);
         const base = pos.length / 3;
-        for (let k = 0; k < 3; k++) {
-          const off = (k - 1) * hw;
+        for (let k = 0; k < across; k++) {
+          const off = ((2 * k) / (across - 1) - 1) * hw;
           const x = p.x[i] + nx * off;
           const z = p.z[i] + nz * off;
           const g = height(x, z) + 0.45;
-          const y = rail ? Math.max(g, RAIL_CAUSEWAY_Y) : deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
+          const y = rail ? Math.max(g, RAIL_CAUSEWAY_Y) : local ? Math.max(g, LOCAL_CAUSEWAY_Y) : deck[i] > 0 ? Math.max(g, g * (1 - deck[i]) + deckY * deck[i]) : g;
           pos.push(x, y, z);
-          uv.push((k / 2) * p.span, s / 40);
+          uv.push(u0 + (k / (across - 1)) * p.span, s / 40);
         }
         if (run >= 0) {
           // counter-clockwise seen from above (the road material is front-side only: the old
           // b-before-a+1 order faced down and every ribbon was culled)
-          for (let k = 0; k < 2; k++) {
+          for (let k = 0; k < across - 1; k++) {
             const a = run + k;
             const b = base + k;
             idx.push(a, a + 1, b, a + 1, b + 1, b);
@@ -474,7 +489,7 @@ export class RoadNetwork {
             B.box(f, 0, 0, 0, p.width * 0.8, y - 2 - (Math.min(0, height(p.x[i], p.z[i])) - 2), 3, 0xa8a59c, 0xa8a59c);
           }
         }
-        if (lamps && p.kind !== 'rail' && s >= nextLamp) {
+        if (lamps && !rail && !local && s >= nextLamp) {
           nextLamp = s + lampStep;
           const side = lampN++ % 2 === 0 ? 1 : -1;
           const x = p.x[i] + nx * (hw + 1) * side;

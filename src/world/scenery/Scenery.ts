@@ -3,13 +3,13 @@
  * meshes (one draw call per feature), textured ground decals (runways, taxiways, aprons), a single
  * Points object for all night lights, and camera-local instanced scatters for trees and houses.
  */
-import { Color, Group, Mesh, type BufferGeometry, type Camera, type PerspectiveCamera, type ShaderMaterial, type Texture, type Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, Group, Mesh, type Object3D, type Camera, type PerspectiveCamera, type ShaderMaterial, type Texture, type Vector3 } from 'three';
 import type { SceneryFeature } from '../../core/contracts';
 import type { QualitySettings, TheaterId } from '../../core/types';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import type { Heightfield } from '../terrain/Heightfield';
 import type { WorldConfig } from '../config';
-import { aerialUniforms, type AerialPhotoInfo, type TerrainStyle } from '../terrain/TerrainRenderer';
+import { aerialOuterUniforms, aerialUniforms, type AerialPhotoInfo, type TerrainStyle } from '../terrain/TerrainRenderer';
 import { aerialCovers } from '../terrain/theaters/aucklandAerial';
 import { createVegetation } from '../terrain/vegetation';
 import { GeometryBuilder } from './GeometryBuilder';
@@ -32,18 +32,23 @@ import { BridgeCollapseVisual } from './bridgeCollapse';
 import { MUSEUM } from '../../core/museum';
 import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
 import { aucklandRailPaths, aucklandRoadPaths, clipRailToLand, RoadNetwork } from './motorways';
-import { aucklandBuildings } from './aucklandBuildings';
+import { aucklandBuildings, type Building } from './aucklandBuildings';
+import { aucklandLandmarks, buildMallLamps, buildPlatforms, LANDMARK_FAR, LANDMARK_TILE } from './aucklandLandmarks';
 import { LotMask, maskFromRings, urbanBounds } from './lotMask';
 import { FRONT_BAND, FrontageMap } from './frontage';
 import { aucklandNeighbourhoods, neighbourhoodAt } from './aucklandNeighbourhoods';
+import { aucklandHouses, houseCoverage, unionMasks } from './aucklandHouses';
+import type { CorridorHouses, CorridorTile } from './corridorHouses';
 import { buildCityLightPoints, buildFacadeLightPoints, type ReflectionSource } from './nightLights';
 import { AKL_CBD_GRID } from '../config';
 import { createBuildingMaterial, createDecalMaterial, createFoliageMaterial, createLightsMaterial, createLogoMaterial, createRoadMaterial, createSignMaterial } from './materials';
-import { createTowerLogoTexture, towerSignGeometry } from './towerSkins';
+import { towerSignGeometry } from './towerSkins';
+import { createTowerLogoTexture } from './towerLogos';
 import { createRunwayTexture, runwayDesignators } from '../textures/runway';
-import { createConcreteTexture, createMotorwayTexture, createRailTexture } from '../textures/procedural';
+import { createConcreteTexture, createMotorwayTexture, createLocalRoadTexture, createRailTexture } from '../textures/procedural';
 import { TileScatter } from './scatter';
-import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource, type MeasuredTrees } from './sources';
+import { APARTMENT, ColorMapSampler, HOUSE, HouseSource, roofColorFn, SHED, shedColorFn, TreeSource, type CanopyTrees, type MeasuredTrees } from './sources';
+import type { Canopy } from '../terrain/theaters/aucklandCanopy';
 import { buildTamakiDrive, tamakiCovers, tamakiGround, tamakiTrees } from './tamakiDrive';
 import { tamakiDrive } from './tamakiDriveData';
 import type { LandUse } from './aucklandLandUse';
@@ -75,6 +80,13 @@ export interface SceneryOptions {
   aerial?: AerialPhotoInfo | null;
   /** The real land use (#122, medium and high tiers): houses off open ground, sheds on commercial land. */
   landUse?: LandUse | null;
+  /** The real tree canopy (#123, medium and high tiers): where it covers, the trees follow it, on the photo too. */
+  canopy?: Canopy | null;
+  /**
+   * The corridor's streamed real houses and streets (#126, corridorHouses.ts; Auckland): fetched as the house scatter's
+   * radius reaches them (Scenery.update). Without it (offline, the tests) the procedural suburbs stay.
+   */
+  corridor?: CorridorHouses | null;
 }
 
 /** All features used for terrain flattening / baking / scenery (mission + Auckland's built-ins). */
@@ -96,8 +108,10 @@ export class Scenery {
   roads: RoadNetwork | null = null;
   /** Lots left unbuilt along the road and railway ribbons (Auckland); the terrain shader takes it too. */
   lotMask: LotMask | null = null;
-  /** Landmark sites (stadium grounds, the oil terminal) where the procedural street grid stops (terrain shader, houses). */
+  /** Landmark sites (stadium grounds, the oil terminal) and the real houses' coverage, where the procedural street grid stops (terrain shader, houses). */
   siteMask: LotMask | null = null;
+  /** Where the real houses stand (#121, aucklandHouses.ts houseCoverage); part of siteMask. */
+  houseCover: LotMask | null = null;
   /** The lots lining the arterials, facing them (frontage.ts): the 3D houses here, the terrain paints them. */
   frontage: FrontageMap | null = null;
   /** The Sky Tower (Auckland): its own meshes and lights, so it can fall. */
@@ -107,17 +121,35 @@ export class Scenery {
   /** The Harbour Bridge's spans falling into the harbour (Auckland). */
   bridgeCollapse: BridgeCollapseVisual | null = null;
   cbdStats: CbdStats | null = null;
+  /** The landmark meshes (#124), one per LANDMARK_TILE square: hidden beyond LANDMARK_FAR of the camera. */
+  private readonly landmarkTiles: { mesh: Object3D; x0: number; z0: number }[] = [];
   /** The Tāmaki Drive waterfront's measured trees (tamakiDrive.ts), grown by the tree scatter. */
   private tamakiTrees: MeasuredTrees | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
   reflectionSources: ReflectionSource[] = [];
+  /** The corridor's streamed real houses (#126); null without. */
+  readonly corridor: CorridorHouses | null;
+  /** Told the house mask's texel rows a corridor tile changed (Environment: TerrainRenderer.updateHouseMask). */
+  onCorridorCover: ((r0: number, r1: number) => void) | null = null;
+  /** The loaded corridor tiles' street ribbons (one mesh, rebuilt as tiles come and go). */
+  private corridorRoads: Mesh | null = null;
+  private readonly corridorRibbons = new Map<string, BufferGeometry>();
+  private corridorRoadsDirty = false;
+  /** The tiles whose ribbons the mesh holds (those within the house scatter's radius + ROAD_REACH). */
+  private corridorRoadKey = '';
+  private readonly roadCam = { x: 0, z: 0 };
+  /** The town centres' blocks inside the corridor [x, z, v0, v1, …] and their positions, hidden under its real houses. */
+  private centreBlocks: { geo: BufferGeometry; blocks: number[]; orig: Float32Array[]; hidden: Uint8Array } | null = null;
   stats = { meshes: 0, lights: 0 };
 
   constructor(o: SceneryOptions) {
     this.group.name = 'world-scenery';
     this.treeRadius = o.cfg.treeRadius;
     this.houseRadius = o.cfg.houseRadius;
+    this.corridor = o.theater === 'auckland' ? o.corridor ?? null : null;
     const hf = o.hf;
+    // the outer photo's alpha (#120: Devonport, the gulf islands) for aerialCovers; null: the square alone
+    const aerialCover = o.aerial?.outer?.cover ?? null;
     const height = (x: number, z: number) => hf.meshHeightAt(x, z);
     const detail = o.quality.sceneryDensity;
     const buildingMat = createBuildingMaterial(o.atmo);
@@ -200,6 +232,11 @@ export class Scenery {
       this.roads = roads;
       // no painted streets or houses through a stadium (its stands are 3D): its site plus a street's width
       this.siteMask = maskFromRings(siteRings(), 8);
+      // nor round the real houses of Devonport and the gulf islands (#121: aucklandHouses.ts, drawn by the house
+      // scatter): the procedural lots, houses, frontage lots and centres' blocks step aside where they stand
+      const real = aucklandHouses();
+      this.houseCover = real ? houseCoverage(real) : null;
+      this.siteMask = unionMasks(this.siteMask, this.houseCover);
       // the arterials' frontage: a row of lots facing the road along both sides (frontage.ts)
       const site = this.siteMask;
       const region = o.style.cbd?.streets ?? null;
@@ -231,8 +268,34 @@ export class Scenery {
       const apart = new Map<string, GeometryBuilder>();
       for (const n of buildings && cbd.streets ? aucklandNeighbourhoods() ?? [] : [])
         if (!cbd.streets!.inRegion(n.footprint[0], n.footprint[1])) apart.set(n.name, new GeometryBuilder());
-      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings, (b) => (b.area !== undefined ? apart.get(b.area) ?? null : null));
+      // the landmark sites' buildings (#124: hospitals, stations, malls, schools; aucklandLandmarks.ts) and the platforms
+      // along the railway ribbons: one mesh per LANDMARK_TILE square, frustum-culled, with the CBD's facades (no photo roofs)
+      const tiles = new Map<string, GeometryBuilder>();
+      const tileOf = (x: number, z: number) => {
+        const k = `${Math.floor(x / LANDMARK_TILE)}_${Math.floor(z / LANDMARK_TILE)}`;
+        let t = tiles.get(k);
+        if (!t) {
+          tiles.set(k, (t = new GeometryBuilder()));
+          t.enableFacades();
+        }
+        return t;
+      };
+      const houseBuilder = (b: Building) => (b.area !== undefined ? apart.get(b.area) ?? null : b.landmark ? tileOf(b.prisms[0].cx, b.prisms[0].cz) : null);
+      this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings, houseBuilder);
       for (const [name, b] of apart) addMesh(b, `akl-nb-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      const landmarks = buildings ? aucklandLandmarks() : null;
+      if (landmarks) {
+        if (rails.length) buildPlatforms(landmarks, height, tileOf);
+        if (o.lights > 0.01) buildMallLamps(landmarks, lights, height, roads);
+        const lmMat = createBuildingMaterial(o.atmo, { facades: true });
+        this.materials.push(lmMat);
+        for (const [k, b] of tiles) {
+          const g = addMesh(b, `akl-landmarks-${k}`, lmMat);
+          const [i, j] = k.split('_').map(Number);
+          const mesh = this.group.children[this.group.children.length - 1];
+          if (g) this.landmarkTiles.push({ mesh, x0: i * LANDMARK_TILE, z0: j * LANDMARK_TILE });
+        }
+      }
       // the hero landmarks in the CBD mesh collapse when the player's jet flies into one (sim/buildings.ts):
       // their vertex and night-light ranges
       const heroes: HeroCollapseRange[] = [];
@@ -289,7 +352,15 @@ export class Scenery {
       // (not on the aerial photo, which shows the real buildings, nor on Spark Arena)
       // (nor on an arterial's frontage, whose shops and houses are the lots')
       const front = this.frontage;
-      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z));
+      // (nor where the real houses stand)
+      const cover = this.houseCover;
+      const realCovers = (x: number, z: number) => cover?.masked(x, z) ?? false;
+      // (nor on a landmark site, #124: its real buildings stand there)
+      const onSite = (x: number, z: number) => site?.masked(x, z) ?? false;
+      // (the blocks inside the corridor are hidden where its real houses load, #126: their vertex ranges)
+      const blocks: number[] | null = this.corridor ? [] : null;
+      const v0Centres = centres.vertexCount;
+      buildCentres(centres, lights, height, detail, cbd, roads, o.aerial ? (x, z) => aerialCovers(x, z, aerialCover) || sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z) || onSite(x, z) : (x, z) => sparkArenaCovers(x, z, 20) || westfieldCovers(x, z, 20) || front.inBand(x, z) || realCovers(x, z) || onSite(x, z), blocks);
       // the Tāmaki Drive waterfront (tamakiDrive.ts: paths, seawall, railings, lamps) in the centres mesh; its trees
       // join the tree scatter below. The road ribbon stands on its raised ground (the Hobson Bay causeway is sea in the
       // terrain) and leaves the lamps to the measured ones there
@@ -301,10 +372,21 @@ export class Scenery {
         this.tamakiTrees = { trees: tamakiTrees(td, tdGround), covers: tdCovers! };
       }
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
-      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail', { ground: tdGround, noLamp: tdCovers });
+      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail' && p.kind !== 'local', { ground: tdGround, noLamp: tdCovers });
+      // the local roads of the islands and Devonport (#127): unlit, their own texture (sealed / gravel), one draw call
+      const localGeo = roads.paths.some((p) => p.kind === 'local') ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'local') : null;
       // railway ribbons (+ bridges over the water): one more draw call
       const railGeo = rails.length ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'rail') : null;
-      addMesh(centres, 'akl-centres');
+      const centresGeo = addMesh(centres, 'akl-centres');
+      if (centresGeo && blocks && this.corridor) {
+        const [bx0, bz0, bx1, bz1] = this.corridor.manifest.bounds;
+        const kept: number[] = [];
+        for (let k = 0; k < blocks.length; k += 4) if (blocks[k] >= bx0 && blocks[k] < bx1 && blocks[k + 1] >= bz0 && blocks[k + 1] < bz1) kept.push(blocks[k], blocks[k + 1], blocks[k + 2] - v0Centres, blocks[k + 3] - v0Centres);
+        const pos = centresGeo.getAttribute('position') as BufferAttribute;
+        const orig = [];
+        for (let k = 0; k < kept.length; k += 4) orig.push((pos.array as Float32Array).slice(kept[k + 2] * 3, kept[k + 3] * 3));
+        this.centreBlocks = { geo: centresGeo, blocks: kept, orig, hidden: new Uint8Array(kept.length / 4) };
+      }
       const roadTex = createMotorwayTexture();
       roadTex.anisotropy = o.cfg.anisotropy;
       this.textures.push(roadTex);
@@ -317,6 +399,33 @@ export class Scenery {
       roadMesh.renderOrder = -4;
       roadMesh.matrixAutoUpdate = false;
       this.group.add(roadMesh);
+      let localMat: ShaderMaterial | null = null;
+      if (localGeo || this.corridor) {
+        const localTex = createLocalRoadTexture();
+        localTex.anisotropy = o.cfg.anisotropy;
+        this.textures.push(localTex);
+        localMat = createRoadMaterial(o.atmo, localTex);
+        this.materials.push(localMat);
+      }
+      if (this.corridor && localMat) {
+        // the corridor's streets (#126 / #127 phase B): the loaded tiles' ribbons, one mesh (rebuilt as they come)
+        const m = new Mesh(new BufferGeometry(), localMat);
+        m.name = 'akl-corridor-roads';
+        m.renderOrder = -4;
+        m.matrixAutoUpdate = false;
+        m.frustumCulled = false;
+        m.visible = false;
+        this.group.add(m);
+        this.corridorRoads = m;
+      }
+      if (localGeo && localMat) {
+        this.geometries.push(localGeo);
+        const localMesh = new Mesh(localGeo, localMat);
+        localMesh.name = 'akl-local-roads';
+        localMesh.renderOrder = -4;
+        localMesh.matrixAutoUpdate = false;
+        this.group.add(localMesh);
+      }
       if (railGeo) {
         const railTex = createRailTexture();
         railTex.anisotropy = o.cfg.anisotropy;
@@ -427,7 +536,13 @@ export class Scenery {
       // (none inside the CBD region or a hero neighbourhood, which have their facade lights, nor under Spark Arena's roof)
       const nbs = real ? aucklandNeighbourhoods() : null;
       buildCityLightPoints({ data: o.colorData, size: o.colorSize, origin: hf.origin, extent: hf.extent }, height, o.seed, maxCity, city, (x, z) => (region?.inRegion(x, z) ?? false) || sparkArenaCovers(x, z) || westfieldCovers(x, z) || neighbourhoodAt(x, z, nbs) !== null);
-      if (real) buildFacadeLightPoints(real, o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
+      if (real) {
+        // the CBD's lit windows; a hospital's are lit all night (#124), a few of a station's, none of a school's or a mall's
+        const tier = o.quality.level === 'low' ? 0.5 : o.quality.level === 'medium' ? 1 : 1.7;
+        buildFacadeLightPoints(real.filter((p) => !p.landmark), o.seed, o.quality.level === 'low' ? 3000 : o.quality.level === 'medium' ? 6000 : 10_000, city);
+        buildFacadeLightPoints(real.filter((p) => p.landmark === 'hospital'), o.seed + 1, Math.round(2500 * tier), city, 0.55);
+        buildFacadeLightPoints(real.filter((p) => p.landmark === 'station' || p.landmark === 'other'), o.seed + 2, Math.round(600 * tier), city);
+      }
       const cityMat = createLightsMaterial(o.atmo);
       cityMat.uniforms.uIntensity.value = o.lights;
       cityMat.uniforms.uNearFade.value = 1600;
@@ -474,7 +589,8 @@ export class Scenery {
     // ── Instanced scatters ──
     const cmap = new ColorMapSampler(o.colorData, o.colorSize, hf.origin, hf.extent);
     const veg = createVegetation(o.theater, o.seed, features);
-    const foliage = createFoliageMaterial(o.atmo);
+    // the real canopy's trees (#123) take the photo's colour where it covers
+    const foliage = createFoliageMaterial(o.atmo, o.aerial && o.canopy ? { ...aerialUniforms(o.aerial, o.aerial.texture), ...aerialOuterUniforms(o.aerial.outer ?? null, o.aerial.texture) } : undefined);
     this.materials.push(foliage);
     const treeCap = Math.max(300, o.cfg.treeMax);
     const treeGeoms = [palmGeometry(), broadleafGeometry(), coniferGeometry()];
@@ -485,19 +601,26 @@ export class Scenery {
     const sites = siteBlocker();
     // (the hero neighbourhoods grow their measured canopy under the photo too: TreeSource.nbTree)
     const nbs = aucklandNeighbourhoods();
-    const onSite = o.aerial ? (x: number, z: number, m: number) => (aerialCovers(x, z) && !neighbourhoodAt(x, z, nbs)) || (sites?.(x, z, m) ?? false) : sites;
+    const onSite = o.aerial ? (x: number, z: number, m: number) => (aerialCovers(x, z, aerialCover) && !neighbourhoodAt(x, z, nbs)) || (sites?.(x, z, m) ?? false) : sites;
+    // (and the corridor's loaded street ribbons, #126)
+    const corridor = this.corridor;
     const offRoad =
-      roadsRef || onSite ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) : null;
+      roadsRef || onSite || corridor ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (onSite?.(x, z, m) ?? false) || (corridor?.near(x, z, m) ?? false) : null;
+    // the road ribbons and the landmark sites, not the photo: the real houses (#121) and the real canopy (#123) stand on it
+    const roadsOrSites = roadsRef || sites || corridor ? (x: number, z: number, m: number) => (roadsRef?.near(x, z, m) ?? false) || (sites?.(x, z, m) ?? false) || (corridor?.near(x, z, m) ?? false) : null;
+    const realHouses = o.theater === 'auckland' ? aucklandHouses() : null;
+    const canopy: CanopyTrees | null = o.canopy ? { grid: o.canopy, blocked: roadsOrSites, houses: realHouses, lotMask: joinMasks(this.lotMask, this.siteMask) } : null;
     this.trees = new TileScatter(
-      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, o.theater === 'auckland' ? aucklandDomain() : null, this.tamakiTrees),
+      new TreeSource(hf, cmap, veg, o.theater, o.seed, 14, offRoad, o.style.cbd, nbs, o.landUse ?? null, o.theater === 'auckland' ? aucklandDomain() : null, this.tamakiTrees, canopy, corridor),
       [
-        { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM },
-        { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: treeCap, kind: TREE_BROADLEAF },
-        { geometry: treeGeoms[TREE_CONIFER], material: foliage, capacity: treeCap, kind: TREE_CONIFER },
+        { geometry: treeGeoms[TREE_PALM], material: foliage, capacity: Math.round(treeCap * 0.4), kind: TREE_PALM, aux: 'aPhoto' },
+        { geometry: treeGeoms[TREE_BROADLEAF], material: foliage, capacity: o.canopy ? treeCap * CANOPY_BROADLEAF_CAP : treeCap, kind: TREE_BROADLEAF, aux: 'aPhoto' },
+        { geometry: treeGeoms[TREE_CONIFER], material: foliage, capacity: treeCap, kind: TREE_CONIFER, aux: 'aPhoto' },
       ],
       400,
       o.cfg.treeRadius,
       2,
+      true,
     );
     for (const m of this.trees.meshes) this.group.add(m);
 
@@ -508,17 +631,115 @@ export class Scenery {
     const roofFn = roofColorFn(o.style.roofs);
     const hc = o.cfg.houseMax;
     this.houses = new TileScatter(
-      new HouseSource(hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null),
+      new HouseSource(
+        hf, cmap, height, o.style.cbd, offRoad, joinMasks(this.lotMask, this.siteMask), this.frontage, o.landUse ?? null,
+        // the real houses (#121) stand under the photo too: only the road ribbons and the landmark sites keep them off
+        realHouses,
+        roadsOrSites,
+        // the corridor's real houses (#126) as their tiles load
+        corridor,
+      ),
       [
-        { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn },
-        { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn },
-        ...(o.landUse ? [{ geometry: houseGeoms[2], material: houseMat, capacity: Math.round(hc / 6), kind: SHED, color: shedColorFn() }] : []),
+        { geometry: houseGeoms[0], material: houseMat, capacity: hc, kind: HOUSE, color: roofFn, aux: 'aRise' },
+        { geometry: houseGeoms[1], material: houseMat, capacity: Math.round(hc / 5), kind: APARTMENT, color: roofFn, aux: 'aRise' },
+        ...(o.landUse ? [{ geometry: houseGeoms[2], material: houseMat, capacity: Math.round(hc / 6), kind: SHED, color: shedColorFn(), aux: 'aRise' }] : []),
       ],
       300,
       o.cfg.houseRadius,
       3,
     );
     for (const m of this.houses.meshes) this.group.add(m);
+    if (corridor) corridor.listeners.push((t, loaded) => this.corridorTile(t, loaded, height));
+  }
+
+  /**
+   * A corridor tile came (or went, #126): the scatters regenerate under it (its real houses for the procedural ones, its
+   * coverage off their lots), its street ribbons join (or leave) the corridor's road mesh, the town centres' blocks under
+   * its coverage hide (or come back), and the terrain re-reads its rows of the house mask.
+   */
+  private corridorTile(t: CorridorTile, loaded: boolean, height: (x: number, z: number) => number): void {
+    const T = this.corridor!.manifest.tile;
+    const pad = 40;
+    this.houses?.invalidate(t.x0 - pad, t.z0 - pad, t.x0 + T + pad, t.z0 + T + pad);
+    this.trees?.invalidate(t.x0 - pad, t.z0 - pad, t.x0 + T + pad, t.z0 + T + pad);
+    const k = `${t.i}_${t.j}`;
+    this.corridorRibbons.get(k)?.dispose();
+    this.corridorRibbons.delete(k);
+    if (loaded && t.net && this.corridorRoads) this.corridorRibbons.set(k, t.net.buildRibbons(height, new GeometryBuilder(), new LightList(), false));
+    this.corridorRoadsDirty = true;
+    const cb = this.centreBlocks;
+    if (cb) {
+      const pos = cb.geo.getAttribute('position') as BufferAttribute;
+      const arr = pos.array as Float32Array;
+      let changed = false;
+      for (let b = 0; b < cb.hidden.length; b++) {
+        const x = cb.blocks[b * 4], z = cb.blocks[b * 4 + 1];
+        if (x < t.x0 || x >= t.x0 + T || z < t.z0 || z >= t.z0 + T) continue;
+        const hide = this.corridor!.covers(x, z) ? 1 : 0;
+        if (hide === cb.hidden[b]) continue;
+        cb.hidden[b] = hide;
+        const v0 = cb.blocks[b * 4 + 2], v1 = cb.blocks[b * 4 + 3];
+        if (hide) for (let v = v0; v < v1; v++) arr.set(cb.orig[b].subarray(0, 3), v * 3);
+        else arr.set(cb.orig[b], v0 * 3);
+        pos.addUpdateRange(v0 * 3, (v1 - v0) * 3);
+        changed = true;
+      }
+      if (changed) pos.needsUpdate = true;
+    }
+    this.onCorridorCover?.(...this.corridor!.coverRows(t));
+  }
+
+  /** The loaded corridor tiles near enough the camera for their street ribbons to be drawn (keys). */
+  private corridorRoadTiles(): string[] {
+    const c = this.corridor!;
+    const T = c.manifest.tile;
+    const R = this.houseRadius + ROAD_REACH;
+    const out: string[] = [];
+    for (const [k, t] of c.tiles) {
+      const dx = Math.max(t.x0 - this.roadCam.x, 0, this.roadCam.x - t.x0 - T);
+      const dz = Math.max(t.z0 - this.roadCam.z, 0, this.roadCam.z - t.z0 - T);
+      if (dx * dx + dz * dz <= R * R && this.corridorRibbons.has(k)) out.push(k);
+    }
+    return out.sort();
+  }
+
+  /** The near loaded corridor tiles' street ribbons as one geometry. */
+  private rebuildCorridorRoads(): void {
+    this.corridorRoadsDirty = false;
+    const m = this.corridorRoads;
+    if (!m) return;
+    const keys = this.corridorRoadTiles();
+    this.corridorRoadKey = keys.join(',');
+    const parts = keys.map((k) => this.corridorRibbons.get(k)!);
+    let nv = 0;
+    let ni = 0;
+    for (const g of parts) {
+      nv += g.getAttribute('position').count;
+      ni += g.index?.count ?? 0;
+    }
+    m.geometry.dispose();
+    const geo = new BufferGeometry();
+    if (nv) {
+      const pos = new Float32Array(nv * 3);
+      const uv = new Float32Array(nv * 2);
+      const idx = new Uint32Array(ni);
+      let v = 0;
+      let i = 0;
+      for (const g of parts) {
+        const p = g.getAttribute('position');
+        pos.set(p.array as Float32Array, v * 3);
+        uv.set(g.getAttribute('uv').array as Float32Array, v * 2);
+        const gi = g.index!.array;
+        for (let k = 0; k < gi.length; k++) idx[i + k] = gi[k] + v;
+        v += p.count;
+        i += gi.length;
+      }
+      geo.setAttribute('position', new BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new BufferAttribute(uv, 2));
+      geo.setIndex(new BufferAttribute(idx, 1));
+    }
+    m.geometry = geo;
+    m.visible = nv > 0;
   }
 
   /**
@@ -527,9 +748,23 @@ export class Scenery {
    * once the camera is higher than their radius.
    */
   update(camPos: Vector3, agl: number): void {
+    // the landmark tiles past LANDMARK_FAR (horizontally, to the square's nearest point) are a pixel or two: not drawn
+    for (const t of this.landmarkTiles) {
+      const dx = Math.max(t.x0 - camPos.x, 0, camPos.x - t.x0 - LANDMARK_TILE);
+      const dz = Math.max(t.z0 - camPos.z, 0, camPos.z - t.z0 - LANDMARK_TILE);
+      t.mesh.visible = dx * dx + dz * dz < LANDMARK_FAR * LANDMARK_FAR;
+    }
     if (this.trees) {
       this.trees.visible = agl < this.treeRadius;
       if (this.trees.visible) this.trees.update(camPos, agl);
+    }
+    // the corridor's tiles (#126) as the house scatter's radius reaches them (not while the houses are not drawn)
+    if (this.corridor && agl < this.houseRadius) this.corridor.update(camPos.x, camPos.z);
+    if (this.corridor) {
+      this.roadCam.x = camPos.x;
+      this.roadCam.z = camPos.z;
+      // (the street ribbons only of the tiles near enough to show: past that a 9 m ribbon is under a pixel)
+      if (this.corridorRoadsDirty || this.corridorRoadKey !== this.corridorRoadTiles().join(',')) this.rebuildCorridorRoads();
     }
     if (this.houses) {
       this.houses.visible = agl < this.houseRadius;
@@ -551,8 +786,13 @@ export class Scenery {
     this.bridgeCollapse?.update(world);
   }
 
+  /** How far (m, horizontally) the house scatter's houses reach this frame (Infinity: every tile in range fitted). */
+  get houseReach(): number {
+    return this.houses?.reach[0] ?? Number.POSITIVE_INFINITY;
+  }
+
   get idle(): boolean {
-    return (this.trees?.idle ?? true) && (this.houses?.idle ?? true);
+    return (this.trees?.idle ?? true) && (this.houses?.idle ?? true) && !(this.houses?.visible && this.corridor?.busy) && !this.corridorRoadsDirty;
   }
 
   get instanceCount(): number {
@@ -564,11 +804,24 @@ export class Scenery {
     this.trees?.dispose();
     this.houses?.dispose();
     this.skyTower?.dispose();
+    for (const g of this.corridorRibbons.values()) g.dispose();
+    this.corridorRoads?.geometry.dispose();
+    if (this.corridor) this.corridor.listeners.length = 0;
     for (const g of this.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
     for (const t of this.textures) t.dispose();
   }
 }
+
+/**
+ * With the real canopy (#123) the broadleaf mesh takes this × the tier's tree budget: a forest over a whole island (Rangitoto,
+ * Waiheke's bush) is many times the budget, and its crowns are what the photo's forest reads as at 1–3 km (≈ 16 triangles a
+ * crown).
+ */
+const CANOPY_BROADLEAF_CAP = 2;
+
+/** The corridor's street ribbons are drawn for its loaded tiles within the house scatter's radius + this (m). */
+const ROAD_REACH = 1000;
 
 /** Either mask (a lot cleared by a road corridor or a landmark site), as HouseSource asks it. */
 function joinMasks(a: LotMask | null, b: LotMask | null): Pick<LotMask, 'masked'> | null {

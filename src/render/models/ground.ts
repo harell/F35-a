@@ -1,14 +1,16 @@
 /**
  * Ground target prototypes: fuel farm, hardened aircraft shelter, parked jet, the stoat,
  * IRGC Navy fast boats, plus the merchant ships: container ship, cruise liner and crude carrier
- * (a 'ship' always has a VesselClass).
+ * (a 'ship' always has a VesselClass), and the named superyachts (superyachts.ts, #145).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
  * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
  * Civil ships also carry their night lights (ShipLight, drawn as sprites by the EntityRenderer).
  */
 import { BufferGeometry, Group, Object3D, Vector3 } from 'three';
-import type { GroundTargetType, VesselClass } from '../../core/types';
+import type { GroundTargetType, MerchantClass, VesselClass } from '../../core/types';
+import { isSuperyachtId } from '../../core/superyachts';
+import { buildSuperyacht } from './superyachts';
 import { mulberry32 } from '../../core/math';
 import { box, cylinder, place } from './geom/core';
 import { loftRings, prismZ } from './geom/loft';
@@ -51,7 +53,7 @@ const cache = new Map<string, GroundPrototype>();
 function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null = null): GroundPrototype {
   if (type === 'ship') {
     if (!vessel) throw new Error('a ship needs a VesselClass');
-    return buildMerchant(vessel);
+    return isSuperyachtId(vessel) ? buildSuperyacht(vessel) : buildMerchant(vessel);
   }
   const root = new Group();
   root.name = `ground:${type}`;
@@ -140,7 +142,7 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
  * a radar on the mast ('spin:0'); or the flat pipe deck and aft accommodation of a crude carrier.
  * Sizes match VESSEL_DATA (sim hit volume) and SHIP_DIMS.
  */
-function buildMerchant(vessel: VesselClass): GroundPrototype {
+function buildMerchant(vessel: MerchantClass): GroundPrototype {
   const root = new Group();
   root.name = `ground:ship:${vessel}`;
   const statics: BufferGeometry[] = [];

@@ -15,8 +15,9 @@ from outside, as in the skin), green marks at the top at the box face's ends.
   node -e "import('/tmp/hero/cbd/towers.mjs').then(m=>require('fs').writeFileSync('/tmp/hero/cbd/towers.json',JSON.stringify(m.CBD_TOWERS)))"
   python3 tools/hero/sites/cbd_tower_elevations.py --towers /tmp/hero/cbd/towers.json --out /tmp/hero/cbd/elev 11 7 4
   python3 tools/hero/sites/cbd_tower_elevations.py --out /tmp/hero/cbd/elev --colour 11,17,-20,-8,20,80[,hi|lo|all]
+  python3 tools/hero/sites/cbd_tower_elevations.py --out /tmp/hero/cbd/elev --grid 11
 
-Writes <out>/<n>_faces.jpg (all four faces), <n>_f<heading>.npy (each face, for --colour), boxes.json (the box of each
+Writes <out>/<n>_faces.jpg (all four faces), <n>_grid.jpg (the same under a full labelled 5 m grid, to read zones off), <n>_f<heading>.npy (each face, for --colour), boxes.json (the box of each
 tower: paste x, z, face into the skin). --colour prints the white-balanced median colour of a zone: tower, face heading,
 t0, t1, h0, h1 and the brighter half (hi, default: the sunlit side, as cbd_towers_colours.py), the darker or all.
 Mesh heights are the mesh's own: compare the main roof with the kit's terraces and set the skin's dy (up to 12 m apart).
@@ -123,6 +124,50 @@ def elevations(t, out):
     return dict(name=t['name'], x=round(cx, 2), z=round(cz, 2), top=top, faces=[{k: round(v, 3) for k, v in f.items()} for f in faces])
 
 
+def grid_sheet(out, boxes, n, towers=None):
+    """<n>_grid.jpg: the four faces again (from the .npy) under a full metre grid, every line labelled, for reading zones
+    and signs straight off: a faint line every 5 m, a stronger one every 10 m, t across (0 green) and h up both sides."""
+    b = boxes.get(str(n))
+    if b is None:  # (elevations written by a run that hasn't saved boxes.json yet)
+        t = {t['n']: t for t in json.load(open(towers))}[n]
+        cx, cz, top, faces = shaft_box(t)
+        b = dict(name=t['name'], faces=faces)
+    ims = []
+    for f in b['faces']:
+        img = np.load(f"{out}/{n}_f{int(round(f['hd']))}.npy")
+        H, W = img.shape[:2]
+        lim = f['L'] / 2 + 6
+        im = Image.fromarray(img)
+        ov = Image.new('RGBA', im.size, (0, 0, 0, 0))
+        dr = ImageDraw.Draw(ov)
+        for yy in range(0, int(H * PX) + 1, 5):
+            r = H - 1 - yy / PX
+            dr.line([(0, r), (W, r)], fill=(255, 0, 0, 150 if yy % 10 == 0 else 60))
+            if yy % 10 == 0:
+                dr.text((2, r - 11), str(yy), fill=(255, 0, 0, 255))
+                dr.text((W - 22, r - 11), str(yy), fill=(255, 0, 0, 255))
+        for tt in range(-int(lim) // 5 * 5, int(lim) + 1, 5):
+            col = (lim + tt) / PX
+            c = (0, 170, 0) if tt == 0 else (255, 140, 0)
+            dr.line([(col, 0), (col, H)], fill=(*c, 150 if tt % 10 == 0 else 60))
+            if tt % 10 == 0:
+                for yy in range(40, int(H * PX), 40):
+                    dr.text((col + 2, H - 1 - yy / PX), str(tt), fill=(*c, 255))
+        for s in (-1, 1):
+            col = (lim + s * f['L'] / 2) / PX
+            dr.line([(col, 0), (col, H)], fill=(0, 120, 255, 200), width=2)
+        ims.append((f, Image.alpha_composite(im.convert('RGBA'), ov).convert('RGB')))
+    Hh = max(i.height for _, i in ims)
+    sheet = Image.new('RGB', (sum(i.width for _, i in ims) + 12 * len(ims), Hh + 22), 'white')
+    dr = ImageDraw.Draw(sheet)
+    xx = 0
+    for f, i in ims:
+        sheet.paste(i, (xx, 22))
+        dr.text((xx + 2, 4), f"{b['name']} face {f['hd']:.0f} L={f['L']:.1f}", fill=(0, 0, 0))
+        xx += i.width + 12
+    sheet.save(f'{out}/{n}_grid.jpg', quality=90)
+
+
 def colour(out, boxes, spec):
     p = spec.split(',')
     n, hd, t0, t1, h0, h1 = p[0], float(p[1]), *map(float, p[2:6])
@@ -142,6 +187,7 @@ def main():
     ap.add_argument('--towers', default='/tmp/hero/cbd/towers.json')
     ap.add_argument('--out', default='/tmp/hero/cbd/elev')
     ap.add_argument('--colour', action='append', default=[], help='n,face,t0,t1,h0,h1[,hi|lo|all]')
+    ap.add_argument('--grid', action='append', type=int, default=[], help='redraw a tower\'s faces under a full labelled metre grid')
     ap.add_argument('rows', nargs='*', type=int)
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -154,6 +200,8 @@ def main():
             b = boxes[str(n)]
             print(n, b['name'], 'box', b['x'], b['z'], 'faces', [(round(f['hd']), round(f['L'], 1)) for f in b['faces']], flush=True)
         json.dump(boxes, open(bpath, 'w'), indent=1)
+    for n in a.rows + a.grid:
+        grid_sheet(a.out, boxes, n, a.towers)
     for s in a.colour:
         print(s, colour(a.out, boxes, s))
 

@@ -18,8 +18,9 @@ import { BUILDINGS_BYTES, BUILDINGS_GZ } from './linz-setup';
 import SPOT from './fixtures/linz-buildings-spotchecks.json';
 import ROOF_SPOT from './fixtures/linz-roof-spotchecks.json';
 
-// the LINZ file's buildings (the hero neighbourhoods' houses joined to the list are tested in world-neighbourhoods)
-const bs = aucklandBuildings()!.filter((b) => b.hero !== 'house');
+// the LINZ file's buildings (the hero neighbourhoods' houses joined to the list are tested in world-neighbourhoods, the
+// landmark sites' in world-landmark-buildings)
+const bs = aucklandBuildings()!.filter((b) => b.hero !== 'house' && !b.landmark);
 const st = aucklandStreets() as CbdStreets;
 const cbd = aucklandCbd();
 const roads = new RoadNetwork(aucklandRoadPaths());
@@ -308,17 +309,19 @@ describe('the CBD built from the LINZ buildings', () => {
   // Budget (issue #2): the CBD stays in the city's one merged mesh (no extra draw call), ≤ 50 k
   // triangles on the medium tier (≤ 1.4 × the procedural towers it replaces), ≤ 35 k on low. Issue #156 raised it
   // for the tower kit's 115 measured towers (terraces, setbacks, plant: 45.5 k → 58.6 k on medium, 33 k → 38 k on low,
-  // same draw call): ≤ 62 k on medium, ≤ 40 k on low.
-  it('stays within the mobile budget: same single mesh, ≤ 62 k triangles on medium, ≤ 40 k on low', () => {
+  // same draw call): ≤ 62 k on medium, ≤ 40 k on low. Issue #213's skins (painted zone splits, bracing, drawn lines) on
+  // the kit's 47 Tier A and B towers: 61.9 k → 67.2 k on medium and 37.9 k → 40.3 k on low, same draw call: ≤ 70 k on
+  // medium, ≤ 42 k on low.
+  it('stays within the mobile budget: same single mesh, ≤ 70 k triangles on medium, ≤ 42 k on low', () => {
     const procedural = build(0.7, false);
     const low = build(0.35);
     const high = build(1);
-    expect(medium.stats.triangles).toBeLessThan(62_000);
-    expect(low.stats.triangles).toBeLessThan(40_000);
+    expect(medium.stats.triangles).toBeLessThan(70_000);
+    expect(low.stats.triangles).toBeLessThan(42_000);
     expect(low.stats.triangles).toBeLessThan(medium.stats.triangles * 0.9);
     expect(high.stats.triangles).toBeGreaterThanOrEqual(medium.stats.triangles);
     // vs the procedural towers it replaces (same draw call: the caller's builder)
-    expect(medium.stats.triangles).toBeLessThan(procedural.stats.triangles * 1.7); // 1.4 before the tower kit (#156)
+    expect(medium.stats.triangles).toBeLessThan(procedural.stats.triangles * 1.9); // 1.4 before the tower kit (#156), 1.7 before #213
     expect(medium.ms).toBeLessThan(1500);
   });
 

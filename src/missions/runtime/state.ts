@@ -170,6 +170,8 @@ export class MissionState {
   civilianHeliKills = 0;
   /** Of which civil trains (#146). */
   civilianTrainKills = 0;
+  /** Of which named superyachts (#145), by name, in the order they were lost. */
+  readonly civilianYachts: string[] = [];
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */
   scriptedStrike = false;
 

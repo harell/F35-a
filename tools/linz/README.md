@@ -107,7 +107,7 @@ Coordinates: game origin = Sky Tower, +X east, +Z south, the equirectangular pro
 
 # Phase 2a: roads (CBD streets, motorways, arterials)
 
-`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 38 kB gzip with the railways), fetched next to
+`roads.ts` bakes LINZ road centrelines into `src/world/terrain/data/auckland-roads.bin` (≈ 68 kB gzip with the railways and the island and Devonport roads), fetched next to
 the terrain data (`src/world/scenery/aucklandRoads.ts`). Same licence and attribution as above.
 
 | Product | LDS layer | Used for |
@@ -166,6 +166,39 @@ At runtime `cbdStreets.ts` rasterises the streets into a 4 m RGBA8 texture over 
 distance, parks and the hero neighbourhoods' gardens, motorway verges); the shader and the JS placement code read the same
 texels. Since the region took in Herne Bay and Westhaven it is ≈ 1190 × 790 texels (3.7 MB of GPU memory, ≈ 0.22 s to
 build on the cloud container, ≈ 0.1 s before).
+
+## Island and Devonport roads (#127)
+
+`islandRoads.ts` adds every road of the gulf islands (Waiheke, Rangitoto, Motutapu, Motuihe, Rakino, Rotoroa, Pakatoa)
+and of the Devonport peninsula to the same file as **local roads** (kind `ROAD_LOCAL`): where #121's real houses stand
+(the coverage grid of `auckland-houses.bin`) and the procedural street grid is off. `roads.ts` runs it in a full re-bake;
+after a re-bake of the houses, `island-roads.ts` replaces just the local roads:
+
+```sh
+npx vite-node tools/linz/island-roads.ts <work> [preview.svg]   # SVG_BOX="x0,z0,x1,z1" picks the preview's view
+```
+
+| Product | LDS layer | Used for |
+|---|---|---|
+| NZ Addresses: Road Sections | 123109 | every section on the coverage, outside the CBD region and not along a ribbon already baked (Lake Rd, Victoria Rd, Bayswater Ave) |
+| NZ Road Centrelines (Topo, 1:50k) | 50329 | the surface (`surface`: sealed / metalled / unmetalled, `lane_count`), matched to a section by road id (`rna_sufi` = `road_id`) within 40 m or any line within 20 m, the section's majority; and the island roads with no address sections (Rangitoto's summit and Islington Bay roads, Motutapu's and Motuihe's farm roads), sealed and metalled only, where they run over 25 m from every address section |
+
+- Left out: footpaths (accessways, walks, steps, tracks), and the address data's placeholder "roads" with no road type
+  named after an island, bay, inlet or beach (Motutapu Island, Rotoroa Island, Matiatia Bay, Blackpool Beach): lines
+  round a shore, up to 15 m out to sea. Stretches off the coastline longer than 60 m (wharves) are cut; shorter ones
+  (causeways) stay, drawn at least 1.2 m over the water, without a deck.
+- Widths (m): island roads 7 for the sealed spine (`ISLAND_MAIN`: Ocean View, Onetangi, Waiheke, Te Whau, Orapiu, …),
+  6 for other sealed roads, 4.5 for one-lane roads, lanes and every unsealed road; Devonport's streets 9 (parking both
+  sides), lanes and places 6.
+- 2026-10-07: 1,257 sections (80 footpaths, motorways and placeholders skipped) and 44.8 km from Topo50 → 894 ribbons:
+  islands 129.0 km sealed + 80.8 km unsealed, Devonport 58.8 km. The file grew from 46.9 kB to 67.8 kB gzip (89 kB raw).
+- Checked on the 2024 photo (the 2.4 m mosaics `aerial.py` caches, every ribbon drawn on them): Waiheke's, Rakino's and
+  Devonport's roads lie on the photographed roads; the Topo50 lines on Rangitoto and Motutapu within a few metres in most
+  places, ≈ 10–20 m off on some bends (1:50k).
+
+At runtime `RoadNetwork` holds them like the other ribbons (houses, real houses, trees and the canopy keep off), drawn
+as one mesh of their own (`akl-local-roads`, Scenery.ts): two vertices across, unlit, no lamp posts and no frontage lots,
+the sealed or gravel half of `createLocalRoadTexture`.
 
 # Railways (#31)
 
@@ -277,11 +310,15 @@ commercial 60, office 24, civic 19, hotel 15, industrial 12, parking 8, house 2;
 material, 5 with a colour). +0.9 kB gzip. OSM data: © OpenStreetMap contributors, ODbL 1.0 (the file is a derivative
 database for these tags).
 
-# Open data 4: CBD and waterfront aerial photo
+# Open data 4: CBD and waterfront aerial photo (and Devonport and the gulf islands, #120)
 
 `aerial-mask.ts` and `aerial.py` bake the LINZ Auckland 0.075 m Urban Aerial Photos (2024–2025) into
 `src/world/terrain/data/auckland-aerial-2048.webp` (≈ 274 KiB, medium tier) and `auckland-aerial-4096.webp`
-(≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`. Same licence and attribution as above.
+(≈ 625 KiB, high tier), loaded by `src/world/terrain/theaters/aucklandAerial.ts`, and (#120) the outer atlas of the rest
+of the Devonport peninsula and the gulf islands, `auckland-aerial-outer-2048.webp` (≈ 272 KiB, medium) and
+`auckland-aerial-outer-4096.ktx2` (≈ 2.5 MiB, high; GPU-compressed, its alpha beside it in
+`auckland-aerial-outer-cover.png`, 28 KiB) with its layout `auckland-aerial-outer.json`. Same licence and attribution
+as above.
 
 | Product | Source | Used for |
 |---|---|---|
@@ -289,12 +326,23 @@ database for these tags).
 
 ```sh
 pip install numpy scipy rasterio pyproj pillow
-npx vite-node tools/linz/aerial-mask.ts <work>     # coastline / OSM deck / CBD street masks on the photo grid
-python3 tools/linz/aerial.py <work>                # writes both .webp files and prints the alignment report
+python3 tools/linz/aerial.py <work> city     # the square: both .webp files, its alignment report (runs aerial-mask.ts)
+python3 tools/linz/aerial.py <work> outer    # the outer atlas (Devonport, the islands), its seam and alignment reports
+python3 tools/linz/aerial.py <work> align    # the outer boxes' seam and alignment reports again (needs LINZ_API_KEY)
+python3 tools/linz/aerial.py <work> outer-ktx2 [atlas.png]   # the high tier's KTX2 + cover again from a saved atlas
 ```
 
-The first run reads every item of the STAC collection (≈ 17,700 JSONs, ≈ 10 min) to find the 154 tiles over the
-square; the list and the 0.6 m mosaic are cached in `<work>`. Then ≈ 1 min (the COGs' 1/8 overviews, ≈ 20 MB).
+The high tier's outer atlas is encoded with the Basis Universal CLI (`basisu`, github.com/BinomialLLC/basis_universal,
+built with cmake; `$BASISU` or on the PATH). `outer` saves the atlas as `<work>/aerial-outer-4096.png`, so `outer-ktx2`
+can re-encode it alone.
+
+`aerial-mask.ts <out.bin> <x0> <z0> <cols> <rows> <cell>` writes the coastline / OSM deck / CBD street / land masks on
+any photo grid (aerial.py runs it per box and caches it). The first run reads every item of the STAC collection
+(≈ 17,700 JSONs, 3–10 min) into `<work>/stac-all.json`, reused by every later bake (and by other layers that need
+the 7.5 cm tiles); each box's mosaic (`aerial-mosaic-<box>.npz`), masks and graded image (`aerial-rect-<box>.png`)
+are cached in `<work>` too. The square then takes ≈ 2 min (117 tiles, the COGs' 1/8 overviews), the outer atlas
+≈ 4 min (the Devonport boxes' 74 tiles at 1/8, the islands' 697 tiles at 1/32). Re-running `city` reproduces the
+committed square byte for byte. Delete a box's `aerial-rect-*.png` to bake it again.
 
 - **Square**: `AERIAL_RECT`, x −1536 … 3584, z −3072 … 2048 (5.12 km): Westhaven to the Fergusson terminal, Devonport and
   the naval base to the Domain, Grafton and Parnell. The issue's 4 × 4 km at 0.5–1 m in ≤ 500 KB is not reachable: the
@@ -316,9 +364,251 @@ square; the list and the 0.6 m mosaic are cached in `<work>`. Then ≈ 1 min (th
 - **Alpha** = land ≥ 2 m inside the LINZ coastline (the game's shore band paints the last metres) or inside an OSM
   wharf / pier / breakwater / dock outline; the open water is push-pull padded from the land colour.
 
+**The outer atlas (#120).** Boxes (`OUTER` in `aerial.py`, game XZ) packed into one atlas per tier (4096 px wide on
+high, 2048 on medium, the same layout halved), each with a 32 px apron of real photo round it (16 on medium) so
+filtering and the first mips never mix in a neighbour:
+
+| Box | x, z (m) | Pixel (high / medium) | Fade |
+|---|---|---|---|
+| `devonport_north`: Stanley Bay, Bayswater, Belmont, Narrow Neck | −1 … 4479, −5499.5 … −2749.5 | 1.25 / 2.5 m (the square's) | 320 m; overlaps the square's north fade, fades out across the Hauraki neck north of Belmont |
+| `devonport_east`: Cheltenham, North Head | 3261.5 … 5001.5, −3069.5 … −1399.5 | 1.25 / 2.5 m | 320 m; overlaps the square's east fade and `devonport_north`'s south fade |
+| `waiheke` (with Pakatoa, Rotoroa) | 19380 … 39420, −12420 … 160 | 5 / 10 m | 60 m, in the sea |
+| `rangitoto_motutapu` | 5720 … 15780, −13280 … −4200 | 5 / 10 m | 60 m |
+| `motuihe`, `rakino`, `browns` | (see `OUTER`) | 5 / 10 m | 40–60 m |
+
+- **Seamless Devonport.** The Devonport boxes lie on the square's pixel lattice and use the square's exposure, so where
+  they overlap it their pixels are the square's (`seam` lines of the report: 0.00 m, colour difference 0.00 / 255).
+  Overlapping boxes fade across each other over their feather; the weights add up to ≥ 1 there, so the only fade on
+  the peninsula's land is the one across the neck north of Belmont (z −5500 … −5180).
+- **Islands' alpha** = the land wholly inside the box (a land component the box's edge cuts, Ponui's tip inside
+  Waiheke's box, stays procedural); decks are left out there. It also reaches 90 m out to sea (`SEA_BAND`, the
+  photo's real shallows and beaches): the islands lie beyond the 32 km coast mask round the city, where the drawn
+  shoreline is the heightfield's own (86 m cells on medium), and a strip of terrain standing above the water between
+  it and the LINZ line read as bright procedural grass round every bay (the sea covers the rest of the band).
+- **Resolution.** Measured per tier before choosing: the whole atlas is 272 KiB on medium and 599 KiB on high (the
+  islands at 5 m and Devonport at 1.25 m are in the high one). At 5 m the high atlas is 4096 × 6724 (147 MB of GPU
+  memory with mips); the islands at 5 m on medium would have needed a 4096-wide atlas too (≈ 100 MB on a phone), so the
+  medium tier has them at 10 m (2048 × 3362, 37 MB): Rangitoto's lava and bush patches and Waiheke's vineyard blocks
+  still show at 10 m, its vine rows don't at either.
+- **High tier as KTX2 (ETC1S).** Measured on the 4096 atlas, against its WebP: GPU memory ≈ 140 → 35 MB (it stays
+  in the GPU's block format: BC7 on desktops, ASTC / ETC2 on phones, 1 byte a pixel, alpha included), load
+  1.8–2.8 s → 0.6–0.8 s and main-thread upload with mips 0.35–1.3 s → ≈ 90 ms (headless Chromium on SwiftShader, so
+  CPU-bound; the transcode runs in a worker), for a download of ≈ 2.5 MiB instead of 0.6 (plus three.js's Basis
+  transcoder, ≈ 245 KiB gzip, once). Quality on land: 36.8 dB PSNR against the WebP; up close it loses some local
+  colour (red roofs duller, a blue tinge in shadow), at the heights players see it from it reads the same, and it is
+  still sharper than the medium atlas at the same GPU memory. UASTC looked closer to the WebP but weighed 10.5 MiB.
+  The medium tier stays WebP: 35 MB is fine there and ETC1S would almost triple its download. A block-compressed
+  atlas needs sides that are multiples of 4 (the medium one, 3362 px tall, rendered black as KTX2).
+- **Grade.** The city square's exposure for every box (the islands' own would be ×1.1–2.2 brighter: bush is darker than
+  a suburb), so the islands sit in the same light as the city.
+- **Alignment.** The plain cross-correlation of the photo's water against the coastline (the square's check) does not
+  work here: Shoal Bay's mudflats and mangroves and the islands' reefs and beaches are dry in the photo but sea in the
+  high-water coastline, and the photo's blue-green cast makes shaded gardens look like water. The report has two
+  checks instead: (1) along the coast's normal every 5 m, where the photo's (smooth, blue) water ends, fitted as a
+  translation plus a mean waterline shift with outliers trimmed; and (2) the photo's roof edges cross-correlated
+  with the LINZ NZ Building Outlines (layer 101290, WFS, `LINZ_API_KEY`) over dense houses. Measured (east, south):
+  buildings Bayswater / Belmont +1.1, −0.0 m; Cheltenham +0.6, +0.4 m; Oneroa +1.4, +0.8 m; Surfdale / Ostend +1.5,
+  +1.1 m, against +0.9, +0.5 m for the square itself (Freemans Bay), i.e. 0 at the pixel. The coast fit gives
+  Waiheke −1.0, +5.2 m and Rangitoto–Motutapu −0.5, +5.2 m (≈ 1 pixel of the islands' 5 m; the coastline itself is
+  traced on a 16 m grid; Rakino −10, +9 and Motuihe −7, +3 m with a few hundred edges each), with the waterline
+  10–17 m seaward of the high-water line (the photos were flown on a falling tide); the Devonport boxes have too few
+  clear water edges (beaches, mudflats) for it to mean much.
+
 At runtime (medium / high tier, *Aerial photo* setting, `?aerial=0` to compare): the terrain shader mixes the photo
 over its procedural colour by alpha × a 320 m fade at the square's edge, skips the street / house / paddock patterns
 by day where it fully covers (at night they still run for their lamps and lit windows, over the dim photo), and keeps
 a trace of the shore band and a faint fine grain under 1.3 km. The wharf decks (`akl-waterfront`) and the naval base
 (`akl-sites`) take it on their upward faces. No scattered houses or trees and no procedural suburb-centre blocks
 stand where its fade is over ½. `e2e/aerial-shots.mjs` renders the before / after views.
+
+# Real suburbs 2/9: real houses on Devonport, Waiheke and the gulf islands (#121)
+
+`houses.py` and `houses.ts` bake the houses under #120's photo of the Devonport peninsula and the gulf islands into
+`src/world/terrain/data/auckland-houses.bin` (≈ 130 kB gzip, every tier), decoded by `src/world/scenery/aucklandHouses.ts`
+and drawn by the house scatter (`HouseSource`) through its instanced house and apartment archetypes. Same licence and
+attribution as above.
+
+| Product | Source | Used for |
+|---|---|---|
+| NZ Building Outlines | LDS layer 101290 (WFS, `LINZ_API_KEY`), one request per area box | footprints → rectangles |
+| Auckland Part 1 and Part 2 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-{1,2}_2024/{dsm,dem}_1m/2193/`, whole sheets (25 per product, ≈ 900 MB in all) | eave, roof pitch, gone since 2017, new since 2017 |
+| Auckland 0.075m Urban Aerial Photos (2024-2025) | the mosaics `aerial.py` caches (0.6 m over Devonport, 2.4 m over the islands) | roof colours, the houses' registration on the photo |
+
+```sh
+pip install numpy scipy rasterio pyproj shapely pillow
+python3 tools/linz/aerial.py <aerial work> outer                    # (#120) the photo mosaics, if not cached
+LINZ_API_KEY=… python3 tools/linz/houses.py <work> <aerial work> fetch   # the LiDAR sheets → <work>/../lidar
+LINZ_API_KEY=… python3 tools/linz/houses.py <work> <aerial work>         # → <work>/houses.json, house-spotchecks.json (≈ 3 min)
+npx vite-node tools/linz/houses.ts <work>                           # → auckland-houses.bin, tests/fixtures/linz-house-spotchecks.json
+```
+
+How it works (the details and every threshold are in `houses.py`'s header):
+
+- **Areas**: every outline whose centre the photo covers (its summed weight over ½: `aerialCovers`): the North Shore side
+  of the harbour inside the city square and the two Devonport boxes (Devonport, Stanley Bay, Cheltenham, Narrow Neck,
+  Bayswater, Belmont, Northcote Point at the square's edge), and the land of the island boxes (Waiheke with Pakatoa
+  and Rotoroa, Rangitoto, Motutapu, Motuihe, Rakino; Browns Island has no outlines). Outlines over 600 m² (schools,
+  halls, shops, apartment blocks: #124's) and under 20 m² are left out.
+- **Rectangles, not polygons**: each outline becomes the rectangle along its dominant edge direction with its centroid,
+  its second moments along both axes and its area (an L-shaped villa gets the rectangle of its mass), drawn through the
+  scatter's instanced archetypes, so no polygon is extruded and no draw call is added.
+- **Roofs**: on the nDSM inside the outline shrunk 0.7 m, h = eave + pitch · d for a gable along either axis, a hip over
+  the rectangle and a hip along the outline itself (d = the distance to its nearest edge), least squares refitted
+  without outliers; pitched when clearly better than flat, else a roof whose heights spread over a metre runs from its
+  p15 to its p90. In the game every pitched roof is a gable along the ridge direction (the house archetype; the ridge's
+  rise is per instance); a flat roof with its eave at 8 m or more is an apartment block.
+- **2017 vs 2024**: an outline with less than 2 m standing on most of it in 2024 is dropped (gone); buildings since are
+  taken from the LiDAR where 2.5–15 m stands outside every outline, smooth (a roof, not a canopy), not green in the
+  photo, compact and straight-edged, 40–600 m², and fits a roof plane to 0.35 m RMS (pohutukawa crowns read smooth
+  at 1 m; the photo's colour and the plane fit keep them out).
+- **On the photo's roofs**: the 2024 photo is a standard orthophoto (a roof drawn displaced from its footprint by its
+  height × the camera's lean) and the 2017 outlines carry their own photos' lean, so the houses are moved by the
+  photo-vs-outline offset measured every 400 m where the outlines are dense (the photo's luminance gradient
+  cross-correlated with the outlines' edges over a 300 m window, #120's alignment method). Devonport: 50 cells, median
+  +0.35 m east, +0.30 m north; Waiheke: 79 cells; the small islands are too sparse to measure and stay as traced.
+- **Coverage**: the land under those photo boxes (32 m cells) ships with the houses; there the procedural lots, streets,
+  houses, frontage lots and centres' blocks step aside on every tier (`houseCoverage` → `Scenery.siteMask`).
+- **Spot checks**: 20 random Devonport houses (60–400 m²); the photo's roof under each is the outline moved by the
+  photo-vs-outline offset of a 100 m window round it (one house alone registers badly: a gable's lit and shaded slopes
+  make an edge half a roof away). `tests/world-houses.test.ts` checks the baked centres within 2 m of it (2026-10-07:
+  median 0.37 m, max 1.57 m) and the ridges within 2 m of the LiDAR roof's p95.
+
+2026-10-07: 22,712 outlines in the area boxes; 17,088 houses baked (Devonport 8,314, Waiheke 8,453, Rangitoto and
+Motutapu 108, Motuihe 9, Rakino 212; 73 of them new since 2017 from the LiDAR), 170 over 600 m² left for #124, 632
+gone since 2017. 143.6 kB of houses raw (8.40 B a house) + 6.2 kB of coverage; 129.8 kB gzip (7.60 B a house; the
+houses alone 7.32 B).
+
+# Real suburbs 7/9: the corridor's real houses and streets, streamed (#126)
+
+`corridor-houses.py` and `corridor-houses.ts` bake every house and local street from Whenuapai to Auckland Airport into
+136 tiles of 2,048 m, `src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin` (gzip; ≈ 2.4 MB in all, the same on
+every tier), and their manifest `corridor.json` (bundled: tiles, bytes, the shared roof palette). The game fetches a tile
+as the house scatter's radius reaches it (`src/world/scenery/corridorHouses.ts`); the service worker caches it on first
+use and never precaches it (`public/sw.js` `ON_DEMAND`). Same licence and attribution as above.
+
+| Product | Source | Used for |
+|---|---|---|
+| NZ Building Outlines | LDS layer 101290, per LiDAR sheet as `canopy.py` (#123) cached them in `<work>/../canopy/outlines/` | footprints → rectangles |
+| Auckland Part 1 LiDAR 1m DSM / DEM (2024) | the 19 sheets of the corridor in `<work>/../lidar/part1/` (`canopy.py fetch`) | eave, roof pitch, gone since 2017, new since 2017 |
+| Auckland 0.075m Urban Aerial Photos (2024-2025) | COG overview 1/16 (1.2 m), one mosaic per sheet (`aerial.py` `mosaic()`, cached in `<aerial work>`; ≈ 150 tiles a sheet by range requests) | roof colours, the trees-vs-roofs test |
+| NZ Addresses: Road Sections | LDS layer 123109 (WFS, `LINZ_API_KEY`), 4 km boxes cached in `<work>` | the local streets (#127 phase B) |
+
+```sh
+python3 tools/linz/canopy.py fetch /home/user/work/canopy                 # (#123) the sheets and outlines, if not cached
+python3 tools/linz/corridor-houses.py /home/user/work/corridor           # → corridor-houses.json (≈ 12 min, 4 processes)
+LINZ_API_KEY=… npx vite-node tools/linz/corridor-houses.ts /home/user/work/corridor   # → the tiles, corridor.json, tests/fixtures/corridor-house-spotchecks.json (≈ 4 min)
+```
+
+How it works (the details are in the two files' headers):
+
+- **The corridor**: the box of epic #119's count (lon 174.58 … 174.86, lat −37.03 … −36.76) inside the 19 Part 1 sheets
+  `canopy.py` reads (604 km² with the water). Its edges outside them (≈ 15,600 outlines: a 1 km strip west of
+  Hobsonville, 0.4 km of Ōtāhuhu east of E 1765600, Papatoetoe and the Manukau shore south of the airport) stay
+  procedural.
+- **Houses**: `houses.py`'s fit (#121) on every outline of 20–20,000 m²: an oriented rectangle, the LiDAR roof, gone since
+  2017, the LiDAR-only buildings since 2017 (the photo's green test at 1.2 m), the photo's roof colour at the city
+  square's exposure in a 256-colour palette of the corridor's own. Unlike #121 the buildings over 600 m² are kept (shops,
+  warehouses, apartment blocks: nothing else draws them here, and the procedural sheds step aside); one longer than a
+  record holds (63 m) is cut into equal flat pieces. Not registered to the photo (#121's lean field): the game shows no
+  photo here, and the houses stand where LINZ traced them.
+- **Left out** (`corridor-houses.ts`): houses in the water, in the CBD region (its LINZ buildings), on #121's coverage
+  (Devonport), on the landmark and hero sites (`siteRings`, `siteBlocker`: #124's sites and footprints, the hero
+  neighbourhoods, the stadiums, the port, the oil terminal) and the OSM aerodromes (the airfields' own buildings).
+- **Coverage** (32 m cells, in each tile): the corridor's land outside the CBD region and #121's coverage.
+- **Streets (#127 phase B)**: every road section on the coverage that is not a footpath, a motorway or a placeholder, not
+  along a ribbon already baked (motorways, arterials, the hero neighbourhoods' streets) and outside the hero
+  neighbourhoods: a sealed `ROAD_LOCAL` ribbon, 9 m kerb to kerb (lanes and places 6 m), cut at the tiles' edges.
+- **Tile file**: `'AKLC'`, version, a houses file (`aucklandHouses.ts` format, no palette of its own, the tile's coverage
+  grid) and a roads file (`aucklandRoads.ts` format, no region, no names).
+
+2026-10-07: 345,316 outlines in the sheets (9,679 outside the box, 22,536 under 20 m², 46 over 20,000 m²); 307,120 houses
+fitted (12,256 outlines gone since 2017, 6,326 LiDAR-only buildings since); 285,961 records in the tiles after the
+exclusions (CBD region 2,155, Devonport 8,443, sites 12,891, aerodromes 320, water 139, landmark footprints 24; 2,303 big
+outlines cut into 4,661 pieces). Streets: 28,483 sections → 14,159 ribbon pieces, 2,109 km. **2,357,689 B gzip** in all
+(8.24 B a house): the houses alone 2.16 MB (7.57 B a house), the streets 179 kB, coverage and cell tables ≈ 82 kB raw.
+A tile: median 15.0 kB, p90 36.8 kB, max 46.7 kB.
+
+## Real tree canopy (#123)
+
+`canopy.py` and `canopy.ts` bake the real tree canopy of the suburbs and the gulf islands into
+`src/world/terrain/data/auckland-canopy.bin` (213 kB gzip; medium and high tiers, loaded with the land use by
+`src/world/terrain/theaters/aucklandCanopy.ts`). Same licence and attribution.
+
+| Product | Source | Used for |
+|---|---|---|
+| Auckland Part 1 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-1_2024/{dsm,dem}_1m/2193/`, 20 sheets (`PART1_SHEETS`: BA31 0303–0305, 0403–0405, 0503–0505; BA32 0301, 0302, 0401, 0402, 0404, 0501, 0502; BB31 0105; BB32 0101, 0102, 0201), gaps filled from Part 2 | canopy height (DSM − DEM): Devonport, the North Shore to Takapuna, the CBD, the isthmus, Whenuapai → Māngere and the airport |
+| Auckland Part 2 LiDAR 1m DSM / DEM (2024) | `auckland-part-2_2024`, the sheets under the island boxes of #120's photo (18) | Rangitoto, Motutapu, Browns Island, Motuihe, Rakino, Waiheke |
+| NZ Building Outlines | LDS layer 101290 (WFS per sheet, `propertyName=shape`) | buildings out of the canopy (buffered 1 m) |
+| NZ Suburbs and Localities | LDS layer 113764 | the test areas only (Mount Albert, Devonport, Māngere, Hobsonville; Rangitoto, Motutapu, Waiheke Island) |
+
+```sh
+export LINZ_API_KEY=…                                  # free key from https://data.linz.govt.nz (never commit it)
+python3 tools/linz/canopy.py fetch /home/user/work/canopy   # sheets (≈ 2 GB, into <work>/../lidar, shared with houses.py), outlines, areas
+python3 tools/linz/canopy.py bake /home/user/work/canopy    # ≈ 50 min on 3 processes; per-sheet results cached in <work>/sheets
+npx vite-node tools/linz/canopy.ts /home/user/work/canopy   # → auckland-canopy.bin, tests/fixtures/linz-canopy-areas.json
+```
+
+How it works:
+
+- **Tree pixel**: DEM ≥ 1 m (keeps the sea, beaches, mangroves and boats out), CHM ≥ 3 m, not inside a LINZ outline + 1 m,
+  not one of #121's LiDAR-only houses (`houses.json`) and, outside #121's areas, not a building since 2017 by the CBD
+  bake's test (smooth at 1 m, compact and straight-edged, 30–2,500 m²: without the cap pōhutukawa stands on Rangitoto
+  and pine blocks on Waiheke went as "buildings"). A 2 × 2 opening and a 3-pixel minimum drop wires and poles. Hedges,
+  sheds and cranes can still count; at 32 m they average out.
+- **Grid**: tree and land pixels counted per 16 m cell of the land-use lattice (game XZ through a per-sheet quadratic fit of
+  NZTM → `geoToWorld`, a few cm off), summed into 32 m cells: share = tree / land, 16 levels; a cell is covered when half its
+  pixels are LiDAR of a covered sheet or island box. Heights: the trees' 75th percentile per 128 m. 776 km² covered.
+- **Size**: an adaptive binary range coder (LZMA's) with the left and upper neighbours as context. 16 m cells were ≈ 640 kB
+  at 16 levels (≈ 290 kB at 4), over the issue's 100–250 kB estimate, so the grid ships at 32 m: 194 kB of shares, 19 kB of
+  heights. Decoding takes ≈ 0.1 s (desktop).
+- **LiDAR canopy of the test areas** (1 m, the polygons themselves): Mount Albert 18.2 %, Devonport 20.8 %, Māngere 11.1 %,
+  Hobsonville 11.9 %; Rangitoto 58.1 %, Motutapu 10.3 %, Waiheke Island 52.6 %. `tests/world-canopy.test.ts` checks the
+  grid within 2 points and the scatter's crowns within 5 points of these.
+
+# Real suburbs 5/9: landmark buildings — hospitals, stations, malls, schools (#124)
+
+`landmark-buildings.py` and `landmark-buildings.ts` bake the big buildings people navigate by outside the CBD into
+`src/world/terrain/data/auckland-landmarks.bin` (≈ 175 kB gzip, every tier; `src/world/scenery/aucklandLandmarks.ts`).
+LINZ data: same licence and attribution as above. The sites are © OpenStreetMap contributors (ODbL 1.0): the file is a
+derivative database, available under the ODbL, and these two scripts plus the Overpass queries in the Python file are
+how to rebuild it (the Overpass timestamps are printed by the bake and kept in `<work>/osm-<kind>.json`).
+
+| Product | Source | Used for |
+|---|---|---|
+| Sites | OpenStreetMap via Overpass (`maps.mail.ru` mirror; overpass-api.de and kumi refused the container): `amenity=hospital`, `shop=mall`, `railway=station`, `railway=platform`, `amenity=school` in the world box, `out body geom` (relations assembled from their member ways) | which outlines are a landmark's, the platforms, the site outlines (no procedural grid, lots or sheds there) |
+| NZ Building Outlines | LDS layer 101290, WFS per site box (+30 m) | footprints |
+| Auckland Part 1 / Part 2 LiDAR 1m DSM / DEM (2024) | `s3://nz-elevation/auckland/auckland-part-{1,2}_2024/`, a window per site: the sheets cached by `houses.py` / `canopy.py` in `<work>/../lidar`, others over HTTP (COG range reads; no sheet downloaded) | roof levels, buildings since 2017 |
+
+```sh
+export LINZ_API_KEY=…
+python3 tools/linz/landmark-buildings.py fetch /home/user/work/landmarks   # Overpass (5 queries) + 611 WFS requests, ≈ 3 min
+python3 tools/linz/landmark-buildings.py bake /home/user/work/landmarks    # ≈ 90 s with the 20 + 18 sheets cached
+npx vite-node tools/linz/landmark-buildings.ts /home/user/work/landmarks [preview.svg]   # → auckland-landmarks.bin, tests/fixtures/landmark-spotchecks.json
+```
+
+Selection (2026-10-07 inputs): hospitals over 2 ha plus the priority list (Auckland City, Middlemore, North Shore,
+Waitākere, Greenlane: checked by hand against the OSM names; the bake stops if one is missing) → 16 sites; malls over
+7,000 m² plus Sylvia Park, Westfield St Lukes / Newmarket / Albany / Manukau City, LynnMall and NorthWest (Westgate) → 33;
+all 44 `railway=station`s but MOTAT's tram stops, with the 77 above-ground platforms within 300 m (layer −1, an open
+cutting, kept; underground and the depot's cleaning platforms left out); schools over 2,000 m² → 518. A building
+belongs to the first site that holds its outline's representative point (hospitals, malls, stations, schools); an
+outline #121 ships as a house (`houses.json` ids) is left to #121, and every outline over #121's 600 m² in its areas is
+taken here as kind `other`. Heights: the CBD bake's level split (`buildings.py`) with a 5 m step; outlines standing on
+less than ¾ of their area (a wing demolished since 2017) or round an open court of 40 m² are cut to what stands, their
+courtyards split out. The `.ts` step leaves out what the game models already (the CBD region, the hero neighbourhoods,
+Westfield Newmarket, Spark Arena, the Domain, aerodromes, the water), moves each platform across the railway ribbon
+(beside the formation, or onto its centre line for an island platform; ≤ 16 m) with its canopies, drops 7 station
+outlines standing on the ribbon (footbridges, concourses), simplifies the schools' outlines by 0.9 m and quantises
+vertices to 0.5 m.
+
+| Kind | Sites | Buildings | gzip alone |
+|---|---|---|---|
+| hospital | 16 (+1 second part of Middlemore) | 217 | 10 kB |
+| mall | 29 | 66 | 8 kB |
+| station | 43, 75 platforms | 121 (56 canopies) | 7 kB |
+| school | 509 | 5,124 | 146 kB |
+| other (#121's areas) | 62 tiles | 171 | 10 kB |
+
+Spot checks (the ±5 m test, `tests/world-landmark-buildings.test.ts`): the highest smooth roof of every priority
+hospital and mall (all 11 within 3.1 m; Auckland City Hospital 56.8 m LiDAR / 56.5 m baked) and two random one-level
+outlines over 400 m² per site: 959 of 965 within 5 m, the rest pitched halls whose flat roof stands at the ridge (≤ 8.6 m).

@@ -36,13 +36,15 @@ import {
 import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
 import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
-import { BARE_MIX, LEAFY_MIX, suburbFarAlbedo } from './urbanColor';
+import { BARE_MIX, LEAFY_MIX, OPEN_MIX, suburbFarAlbedo } from './urbanColor';
+import { CANOPY_GPU_LEVELS, canopyPyramid, type Canopy } from './theaters/aucklandCanopy';
 import { districtAngles, type CbdGrid } from '../scenery/urbanGrid';
 import type { LandUse } from '../scenery/aucklandLandUse';
 import { SHED_ROOFS } from '../scenery/landUseLots';
 import { FRONT_TEX_W, type FrontageMap } from '../scenery/frontage';
 import type { CbdStreets } from '../scenery/cbdStreets';
 import type { LotMask } from '../scenery/lotMask';
+import { MAX_AERIAL_BOXES, type AerialBox, type AerialOuterCover } from './theaters/aucklandAerial';
 
 export interface TerrainStyle {
   rockColor: Color;
@@ -130,6 +132,17 @@ export interface AerialPhotoInfo {
   grade?: readonly [number, number, number, number];
   /** The procedural houses' scatter radius (m, config.ts): the photo's low-sun light fades with them. */
   houseRadius?: number;
+  /** The outer photo (#120: Devonport, the gulf islands): its atlas, its boxes (aucklandAerial.ts AERIAL_OUTER) and where each lies in the atlas. */
+  outer?: AerialOuterInfo | null;
+}
+
+/** An atlas of photo boxes (aucklandAerial.ts AERIAL_OUTER); `cover` is its alpha read back for the scatters. */
+export interface AerialOuterInfo {
+  texture: Texture;
+  boxes: readonly AerialBox[];
+  /** [u0, v0, u1, v1] of each box in the atlas (v = 0 at the image's top row). */
+  uv: readonly (readonly [number, number, number, number])[];
+  cover?: AerialOuterCover | null;
 }
 
 const MORPH_START = 0.68;
@@ -141,6 +154,12 @@ export class TerrainRenderer {
   readonly streetTexture: DataTexture | null;
   private lotMaskTexture: DataTexture | null = null;
   private siteMaskTexture: DataTexture | null = null;
+  private siteMask: LotMask | null = null;
+  private houseMask: LotMask | null = null;
+  /** The site mask's texture data: its rows, then the house mask's (houseRow0 on). */
+  private siteData: Uint8Array | null = null;
+  private siteW = 1;
+  private houseRow0 = 0;
   private landUseTexture: DataTexture | null = null;
   private angleTexture: DataTexture | null = null;
   private frontTextures: DataTexture[] = [];
@@ -329,6 +348,7 @@ export class TerrainRenderer {
         uCanopy: { value: o.style.canopy },
         uSuburbLeafy: { value: suburbFarAlbedo(o.style, LEAFY_MIX) },
         uSuburbBare: { value: suburbFarAlbedo(o.style, BARE_MIX) },
+        uSuburbOpen: { value: suburbFarAlbedo(o.style, OPEN_MIX) },
         uSand: { value: o.style.sand },
         uBlackSand: { value: o.style.blackSand },
         uShoreRock: { value: o.style.shoreRock },
@@ -343,6 +363,7 @@ export class TerrainRenderer {
         ...noFieldUniforms(o.noFields ?? []),
         ...coneUniforms(o.style.cones ?? []),
         ...aerialUniforms(o.aerial ?? null, o.dummy),
+        ...aerialOuterUniforms(o.aerial?.outer ?? null, o.dummy),
         // set by setLotMask() once the scenery has built the road network
         uLotMask: { value: o.dummy },
         uLotMaskRect: { value: new Vector4(0, 0, 1, 0) },
@@ -351,6 +372,12 @@ export class TerrainRenderer {
         uSiteMask: { value: o.dummy },
         uSiteMaskRect: { value: new Vector4(0, 0, 1, 0) },
         uSiteMaskRows: { value: 1 },
+        uSiteMaskSize: { value: new Vector2(1, 1) },
+        // set by setHouseMask() with the scenery (#126: the corridor's loaded real houses), rows below the site mask's
+        uHouseMaskRect: { value: new Vector4(0, 0, 1, 0) },
+        uHouseMaskRows: { value: new Vector2(1, 0) },
+        uRealHouseR: { value: 0 },
+        uRealHouseCut: { value: 1e9 },
         // the districts an arterial runs through turn their grid to it (urbanGrid.ts districtAngles)
         uDistAngles: { value: o.dummy },
         uDistAngleRect: { value: new Vector4(0, 0, 0, 0) },
@@ -365,6 +392,9 @@ export class TerrainRenderer {
         uLandUse: { value: o.dummy },
         uLandUseRect: { value: new Vector4(0, 0, 1, 0) },
         uLandUseRows: { value: 1 },
+        // … and the real tree canopy's pyramid in the same texture (#123)
+        uCanopyLv: { value: Array.from({ length: CANOPY_GPU_LEVELS }, () => new Vector4(0, 0, 0, 0)) },
+        uCanopyGrid: { value: new Vector4(0, 0, 0, 1) },
         uShedRoofs: { value: SHED_ROOFS.map((h) => new Color(h)) },
       },
     });
@@ -504,23 +534,117 @@ export class TerrainRenderer {
 
   /** Stop the procedural streets and lots on the landmarks' sites (Scenery.siteMask); null = none. */
   setSiteMask(mask: LotMask | null): void {
-    this.siteMaskTexture?.dispose();
-    this.siteMaskTexture = this.installMask(mask, 'uSiteMask');
+    this.siteMask = mask;
+    this.installSiteMasks();
   }
 
-  /** Paint the real land use (scenery/aucklandLandUse.ts: parks, pitches, sheds and car parks…); null = none. */
-  setLandUse(lu: LandUse | null): void {
+  /**
+   * Stop the procedural streets and lots where the corridor's loaded real houses stand (#126, Scenery.corridor.cover,
+   * changed as tiles stream in: updateHouseMask), the ground fading to the suburbs' far average beyond `radius` (the
+   * house scatter's: where the 3D houses thin out); null = none. Its rows ride below the site mask's in one texture
+   * (the fragment shader has no sampler unit to spare).
+   */
+  setHouseMask(mask: LotMask | null, radius = 0): void {
+    this.houseMask = mask;
+    this.material.uniforms.uRealHouseR.value = mask ? radius : 0;
+    this.installSiteMasks();
+  }
+
+  /**
+   * The slant range (m) past which the house scatter drew no real house this frame (its capacity ran out: Scenery.houseReach),
+   * where the house mask's ground turns to the suburbs' far average.
+   */
+  setRealHouseCut(range: number): void {
+    this.material.uniforms.uRealHouseCut.value = Math.min(range, 1e9);
+  }
+
+  /** Upload the house mask's texel rows [r0, r1) again (a corridor tile came or went). */
+  updateHouseMask(r0: number, r1: number): void {
+    const m = this.houseMask;
+    const d = this.siteData;
+    const t = this.siteMaskTexture;
+    if (!m || !d || !t) return;
+    const W = this.siteW;
+    r0 = Math.max(0, r0);
+    r1 = Math.min(m.texH, r1);
+    for (let r = r0; r < r1; r++) {
+      const at = ((this.houseRow0 + r) * W) * 4;
+      d.set(m.data.subarray(r * m.texW * 4, (r + 1) * m.texW * 4), at);
+      t.addUpdateRange(at, m.texW * 4);
+    }
+    if (r1 > r0) t.needsUpdate = true;
+  }
+
+  private installSiteMasks(): void {
+    this.siteMaskTexture?.dispose();
+    this.siteMaskTexture = null;
+    this.siteData = null;
+    const u = this.material.uniforms;
+    const site = this.siteMask;
+    const house = this.houseMask;
+    u.uSiteMaskRect.value.set(0, 0, 1, 0);
+    u.uHouseMaskRect.value.set(0, 0, 1, 0);
+    if (!site && !house) return;
+    const W = Math.max(site?.texW ?? 1, house?.texW ?? 1);
+    const siteRows = site?.texH ?? 0;
+    const H = siteRows + (house?.texH ?? 0);
+    const data = new Uint8Array(W * H * 4);
+    if (site) for (let r = 0; r < site.texH; r++) data.set(site.data.subarray(r * site.texW * 4, (r + 1) * site.texW * 4), r * W * 4);
+    if (house) for (let r = 0; r < house.texH; r++) data.set(house.data.subarray(r * house.texW * 4, (r + 1) * house.texW * 4), (siteRows + r) * W * 4);
+    const t = new DataTexture(data, W, H, RGBAFormat, UnsignedByteType);
+    t.wrapS = t.wrapT = ClampToEdgeWrapping;
+    t.magFilter = NearestFilter;
+    t.minFilter = NearestFilter;
+    t.generateMipmaps = false;
+    t.needsUpdate = true;
+    this.siteMaskTexture = t;
+    this.siteData = data;
+    this.siteW = W;
+    this.houseRow0 = siteRows;
+    u.uSiteMask.value = t;
+    u.uSiteMaskSize.value.set(W, H);
+    if (site) {
+      u.uSiteMaskRect.value.set(site.x0, site.z0, site.cell, site.texW);
+      u.uSiteMaskRows.value = site.texH;
+    }
+    if (house) {
+      u.uHouseMaskRect.value.set(house.x0, house.z0, house.cell, house.texW);
+      u.uHouseMaskRows.value.set(house.texH, siteRows);
+    }
+  }
+
+  /**
+   * Paint the real land use (scenery/aucklandLandUse.ts: parks, pitches, sheds and car parks…) and follow the real tree
+   * canopy (#123, aucklandCanopy.ts: its shader pyramid in the rows below the land use, one texture: the fragment
+   * shader has no sampler unit to spare); null = none.
+   */
+  setLandUse(lu: LandUse | null, canopy: Canopy | null = null): void {
     this.landUseTexture?.dispose();
     this.landUseTexture = null;
     const u = this.material.uniforms;
-    if (!lu) {
-      u.uLandUseRect.value.set(0, 0, 1, 0);
-      return;
+    u.uLandUseRect.value.set(0, 0, 1, 0);
+    for (const v of u.uCanopyLv.value as Vector4[]) v.set(0, 0, 0, 0);
+    if (!lu && !canopy) return;
+    const texW = lu ? lu.texW : 1024;
+    let data = lu ? lu.data : new Uint8Array(0);
+    let texH = lu ? lu.texH : 0;
+    if (canopy) {
+      const pyr = canopyPyramid(canopy);
+      const rows = Math.ceil(pyr.bytes.length / (texW * 4));
+      const d = new Uint8Array(texW * (texH + rows) * 4);
+      d.set(data);
+      d.set(pyr.bytes, texH * texW * 4);
+      pyr.levels.forEach((l, i) => (u.uCanopyLv.value as Vector4[])[i].set(l.cell, l.cols, l.rows, l.offset));
+      u.uCanopyGrid.value.set(canopy.x0, canopy.z0, texH, texW);
+      data = d;
+      texH += rows;
     }
-    this.landUseTexture = dataTexture(lu.data, lu.texW, lu.texH, RGBAFormat, UnsignedByteType);
+    this.landUseTexture = dataTexture(data, texW, texH, RGBAFormat, UnsignedByteType);
     u.uLandUse.value = this.landUseTexture;
-    u.uLandUseRect.value.set(lu.x0, lu.z0, 1 / lu.cell, lu.texW);
-    u.uLandUseRows.value = lu.texH;
+    if (lu) {
+      u.uLandUseRect.value.set(lu.x0, lu.z0, 1 / lu.cell, lu.texW);
+      u.uLandUseRows.value = lu.texH;
+    }
   }
 
   /** Paint the lots along the arterials (frontage.ts, built with the scenery); null = none. */
@@ -545,7 +669,7 @@ export class TerrainRenderer {
     u.uFrontRows.value = map.rows;
   }
 
-  private installMask(mask: LotMask | null, name: 'uLotMask' | 'uSiteMask'): DataTexture | null {
+  private installMask(mask: LotMask | null, name: 'uLotMask'): DataTexture | null {
     const u = this.material.uniforms;
     if (!mask) {
       u[`${name}Rect`].value.set(0, 0, 1, 0);
@@ -644,6 +768,35 @@ export function aerialUniforms(
     uAerialGrade: { value: new Vector4(...(a?.grade ?? [1, 1, 1, 0])) },
     uAerialHouseR: { value: a?.houseRadius ?? 0 },
   };
+}
+
+/** Uniforms of the terrain shader's outer photo boxes (#120); none (all boxes unused) without it. */
+export function aerialOuterUniforms(
+  o: AerialOuterInfo | null,
+  dummy: Texture,
+): {
+  uAerialOuter: { value: Texture };
+  uAerialBox: { value: Vector4[] };
+  uAerialBoxUv: { value: Vector4[] };
+  uAerialBoxFeather: { value: number[] };
+  uAerialOuterBounds: { value: Vector4 };
+} {
+  const box: Vector4[] = [];
+  const uv: Vector4[] = [];
+  const feather: number[] = [];
+  const bounds = new Vector4(0, 0, 0, 0);
+  if (o && o.boxes.length > MAX_AERIAL_BOXES) throw new Error(`aerial: ${o.boxes.length} boxes, the shader takes ${MAX_AERIAL_BOXES}`);
+  for (let i = 0; i < MAX_AERIAL_BOXES; i++) {
+    const b = o?.boxes[i];
+    const u = o?.uv[i];
+    box.push(b && u ? new Vector4(b.x0, b.z0, 1 / b.w, 1 / b.h) : new Vector4(0, 0, 0, 0));
+    uv.push(b && u ? new Vector4(u[0], u[1], u[2] - u[0], u[3] - u[1]) : new Vector4(0, 0, 0, 0));
+    feather.push(b ? b.feather : 1);
+  }
+  if (o && o.boxes.length) {
+    bounds.set(Math.min(...o.boxes.map((b) => b.x0)), Math.min(...o.boxes.map((b) => b.z0)), Math.max(...o.boxes.map((b) => b.x0 + b.w)), Math.max(...o.boxes.map((b) => b.z0 + b.h)));
+  }
+  return { uAerialOuter: { value: o ? o.texture : dummy }, uAerialBox: { value: box }, uAerialBoxUv: { value: uv }, uAerialBoxFeather: { value: feather }, uAerialOuterBounds: { value: bounds } };
 }
 
 /** Uniforms of COAST_GLSL (shared by terrain and water). */

@@ -24,6 +24,17 @@ export interface SuburbMix {
 /** Leafy (Remuera / Epsom / Birkenhead) and bare (newer / denser) neighbourhood mixes. */
 export const LEAFY_MIX: SuburbMix = { canopy: 0.44, roofs: 0.25, lawn: 0.19, paving: 0.12 };
 export const BARE_MIX: SuburbMix = { canopy: 0.3, roofs: 0.34, lawn: 0.2, paving: 0.16 };
+/**
+ * A suburb's ground without its trees (the bare mix's roofs, lawns and paving): where the real canopy covers (#123,
+ * aucklandCanopy.ts), the terrain shader's far field is this mixed with the canopy colour by the measured share, so
+ * a suburb's far albedo is suburbFarAlbedo with that share as its canopy.
+ */
+export const OPEN_MIX: SuburbMix = {
+  canopy: 0,
+  roofs: BARE_MIX.roofs / (1 - BARE_MIX.canopy),
+  lawn: BARE_MIX.lawn / (1 - BARE_MIX.canopy),
+  paving: BARE_MIX.paving / (1 - BARE_MIX.canopy),
+};
 
 export function roofAverage(roofs: Color[], out = new Color()): Color {
   out.setRGB(0, 0, 0);

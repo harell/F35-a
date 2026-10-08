@@ -70,7 +70,7 @@ describe('suburbs visible from altitude (no hard 1,500 m cut)', () => {
   class Grid implements ScatterSource {
     readonly kinds = 1;
     generate(x0: number, z0: number, size: number, out: TileInstances): void {
-      for (let z = z0 + 10; z < z0 + size; z += 20) for (let x = x0 + 10; x < x0 + size; x += 20) out.data[0].push(x, 0, z, 0, 1, 1, 1, 1, 1, 1, ((x * 0.37 + z * 0.71) % 1 + 1) % 1);
+      for (let z = z0 + 10; z < z0 + size; z += 20) for (let x = x0 + 10; x < x0 + size; x += 20) out.data[0].push(x, 0, z, 0, 1, 1, 1, 1, 1, 1, ((x * 0.37 + z * 0.71) % 1 + 1) % 1, 0);
     }
   }
   const make = () => new TileScatter(new Grid(), [{ geometry: new BoxGeometry(), material: new MeshBasicMaterial(), capacity: 60_000, kind: 0 }], 300, 2400, 50);
@@ -90,6 +90,38 @@ describe('suburbs visible from altitude (no hard 1,500 m cut)', () => {
     expect(cfg.houseRadius).toBeGreaterThanOrEqual(2200);
   });
 
+  it('over capacity, a fitCapacity scatter thins every tile evenly and widens what it keeps (the real canopy, #123)', () => {
+    const spec = () => [{ geometry: new BoxGeometry(), material: new MeshBasicMaterial(), capacity: 3000, kind: 0 }];
+    // a dense forest: ranks spread evenly (a hash), as the tree scatter's are
+    const forest: ScatterSource = {
+      kinds: 1,
+      generate(x0, z0, size, out) {
+        for (let z = z0 + 10; z < z0 + size; z += 20)
+          for (let x = x0 + 10; x < x0 + size; x += 20) out.data[0].push(x, 0, z, 0, 1, 1, 1, 1, 1, 1, Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1, 0);
+      },
+    };
+    const run = (fit: boolean) => {
+      const s = new TileScatter(forest, spec(), 300, 2400, 50, fit);
+      settle(s, 0);
+      const m = s.meshes[0];
+      const a = m.instanceMatrix.array as Float32Array;
+      let far = 0;
+      let width = 0;
+      for (let i = 0; i < m.count; i++) {
+        if (Math.hypot(a[i * 16 + 12], a[i * 16 + 14]) > 1500) far++;
+        width = Math.max(width, Math.hypot(a[i * 16], a[i * 16 + 1], a[i * 16 + 2]));
+      }
+      return { n: m.count, far, width };
+    };
+    const plain = run(false);
+    const fit = run(true);
+    expect(plain.n).toBe(3000);
+    expect(plain.far).toBe(0); // the nearest tiles took it all
+    expect(fit.n).toBeLessThanOrEqual(3000);
+    expect(fit.far).toBeGreaterThan(300);
+    expect(fit.width).toBeGreaterThan(1.5);
+  });
+
   it('3D houses keep off the motorways', () => {
     const src = new HouseSource(hf, cmap, height, AKL_CBD_GRID, (x, z, mm) => roads.near(x, z, mm));
     // tiles straddling SH1 through Newmarket / Greenlane
@@ -98,7 +130,7 @@ describe('suburbs visible from altitude (no hard 1,500 m cut)', () => {
     for (let dz = -600; dz <= 600; dz += 300) for (let dx = -600; dx <= 600; dx += 300) src.generate(p.x + dx, p.z + dz, 300, out);
     let n = 0;
     for (const arr of out.data)
-      for (let i = 0; i < arr.length; i += 11) {
+      for (let i = 0; i < arr.length; i += 12) {
         n++;
         expect(roads.edgeDistance(arr[i], arr[i + 2])).toBeGreaterThan(5);
       }
@@ -119,7 +151,7 @@ describe('street trees', () => {
         const out = { data: [[], [], []] as number[][] };
         src.generate(tx, tz, 400, out);
         for (const arr of out.data)
-          for (let i = 0; i < arr.length; i += 11) {
+          for (let i = 0; i < arr.length; i += 12) {
             if (cmap.urban(arr[i], arr[i + 2]) <= 0.05) continue;
             n++;
             expect(onStreet(arr[i], arr[i + 2], AKL_CBD_GRID, scratch)).toBe(false);

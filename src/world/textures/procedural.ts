@@ -362,6 +362,54 @@ export function createMotorwayTexture(): DataTexture {
 }
 
 /**
+ * Local roads of the islands and Devonport (#127; 64 × 256, tiling along v every 40 m like the motorway texture), two
+ * halves across u: 0 … ½ a sealed road (chip-seal grey, darker wheel tracks, a dashed white centre line), ½ … 1 an
+ * unsealed one (pale metal, two worn wheel tracks, grassy shoulders). A ribbon spans one half (RoadPath.unsealed).
+ */
+export function createLocalRoadTexture(): DataTexture {
+  const W = 64;
+  const H = 256;
+  const d = new Uint8Array(W * H * 4);
+  const rnd = mulberry32(41);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const gravel = x >= W / 2;
+      const u = ((x % (W / 2)) + 0.5) / (W / 2); // 0 … 1 across the road
+      const n = (rnd() - 0.5) * 14;
+      let r: number;
+      let g: number;
+      let b: number;
+      if (!gravel) {
+        const v = 92 + n - (Math.abs(u - 0.27) < 0.07 || Math.abs(u - 0.73) < 0.07 ? 9 : 0);
+        r = v;
+        g = v;
+        b = v + 3;
+        // dashed centre line (3 m of 10 m), the seal's edge a little worn
+        if (Math.abs(u - 0.5) < 0.035 && y % 64 < 20) r = g = b = 200;
+        else if (u < 0.04 || u > 0.96) r = g = b = v + 12;
+      } else {
+        const rut = Math.abs(u - 0.3) < 0.08 || Math.abs(u - 0.7) < 0.08;
+        r = 168 + n - (rut ? 16 : 0);
+        g = 158 + n - (rut ? 16 : 0);
+        b = 136 + n - (rut ? 14 : 0);
+        if (u < 0.08 || u > 0.92) {
+          // grass growing in from the shoulders
+          r = r * 0.55 + 90 * 0.45;
+          g = g * 0.55 + 112 * 0.45;
+          b = b * 0.55 + 66 * 0.45;
+        }
+      }
+      const o = (y * W + x) * 4;
+      d[o] = r;
+      d[o + 1] = g;
+      d[o + 2] = b;
+      d[o + 3] = 255;
+    }
+  }
+  return dataTexture(d, W, { srgb: true, w: W, h: H });
+}
+
+/**
  * Railway formation (64 × 256, tiling along v every 40 m like the motorway texture): grey-brown
  * ballast with two tracks, u 0..0.5 and 0.5..1 (a single track uses half the texture: span 0.5).
  * Each track: concrete sleepers every ≈ 0.65 m under two dark steel rails, gauge 1.067 m on a

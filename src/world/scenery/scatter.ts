@@ -7,11 +7,15 @@
 import { Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Quaternion, Vector3, type BufferGeometry, type Material } from 'three';
 
 export interface TileInstances {
-  /** Per archetype: packed [x, y, z, yaw, sx, sy, sz, r, g, b, rank] records. */
+  /** Per archetype: packed [x, y, z, yaw, sx, sy, sz, r, g, b, rank, aux] records. */
   data: number[][];
 }
 
-export const REC = 11;
+/**
+ * Floats a record takes. `aux` (the last) is free for the source: the house scatter's real houses (#121) carry their
+ * roof's rise there (sources.ts HouseSource), fed to the shader as a per-instance attribute (ScatterMeshSpec.aux).
+ */
+export const REC = 12;
 
 export interface ScatterSource {
   /** Number of archetypes this source emits. */
@@ -26,6 +30,8 @@ interface Tile {
   tz: number;
   inst: TileInstances;
   lastUsed: number;
+  /** Its source's data changed (invalidate): drawn as it was until generated again. */
+  stale?: boolean;
 }
 
 export interface ScatterMeshSpec {
@@ -36,6 +42,8 @@ export interface ScatterMeshSpec {
   kind: number;
   /** Instance colour slot: 0 = record colour, 1 = secondary colour function. */
   color?: (rec: number[], i: number, out: Color) => void;
+  /** Name of a per-instance float attribute set on the geometry from each record's `aux` (none when omitted). */
+  aux?: string;
 }
 
 /**
@@ -47,6 +55,9 @@ export function scatterKeep(ds: number, R: number): number {
   if (ds > R * 1.02) return 0;
   return ds < R * 0.35 ? 1 : Math.max(0.22, 1 - ((ds - R * 0.35) / (R * 0.65)) * 0.78);
 }
+
+/** How far a fitCapacity scatter widens the instances it keeps (across, not up). */
+const FIT_WIDEN = 2.2;
 
 const _m = new Matrix4();
 const _q = new Quaternion();
@@ -63,6 +74,12 @@ export class TileScatter {
   private lastTz = Number.NaN;
   private pending: { tx: number; tz: number; d: number }[] = [];
   private dirty = false;
+  /**
+   * Per mesh: how far (m, horizontally) its instances reach, Infinity when every tile in range fitted its capacity; else
+   * the near edge of the first tile it ran out in (the terrain fades the real houses' ground to the suburbs' far average
+   * past it, #126).
+   */
+  readonly reach: number[] = [];
   /** Camera height above ground (m): instances thin out with slant range, not map distance. */
   private agl = 0;
   private aglBucket = -1;
@@ -74,10 +91,18 @@ export class TileScatter {
     private readonly tileSize: number,
     private readonly radius: number,
     private readonly tilesPerFrame = 2,
+    /**
+     * When the tiles in range hold more instances than a mesh's capacity, thin them all evenly (the rank threshold
+     * scaled down) instead of dropping the farthest tiles: a forest then thins out round the camera rather than ending
+     * in a square of the nearest tiles (the real canopy over a whole island, #123), and the instances it keeps widen by
+     * up to FIT_WIDEN to keep some of the cover. The trees set it; the houses don't.
+     */
+    private readonly fitCapacity = false,
   ) {
     for (const s of specs) {
       const m = new InstancedMesh(s.geometry, s.material, s.capacity);
       m.instanceColor = new InstancedBufferAttribute(new Float32Array(s.capacity * 3), 3);
+      if (s.aux) s.geometry.setAttribute(s.aux, new InstancedBufferAttribute(new Float32Array(s.capacity), 1));
       m.count = 0;
       m.frustumCulled = false;
       m.matrixAutoUpdate = false;
@@ -114,7 +139,7 @@ export class TileScatter {
           if (d > this.radius + ts * 0.71) continue;
           const t = this.tiles.get(this.key(tx + i, tz + j));
           if (t) t.lastUsed = this.frame;
-          else this.pending.push({ tx: tx + i, tz: tz + j, d });
+          if (!t || t.stale) this.pending.push({ tx: tx + i, tz: tz + j, d });
         }
       this.pending.sort((a, b) => b.d - a.d); // pop() nearest first
       // Evict tiles far outside the radius
@@ -154,17 +179,37 @@ export class TileScatter {
       const mesh = this.meshes[si];
       const mat = mesh.instanceMatrix.array as Float32Array;
       const col = mesh.instanceColor!.array as Float32Array;
+      const auxAttr = spec.aux ? (spec.geometry.getAttribute(spec.aux) as InstancedBufferAttribute) : null;
+      const aux = auxAttr ? (auxAttr.array as Float32Array) : null;
       let n = 0;
+      let fit = 1;
+      if (this.fitCapacity) {
+        let want = 0;
+        for (const { t, d } of list) {
+          const keep = scatterKeep(Math.sqrt(d * d + agl2), R);
+          if (keep <= 0) continue;
+          const arr = t.inst.data[spec.kind];
+          for (let i = 10; i < arr.length; i += REC) if (arr[i] <= keep) want++;
+        }
+        if (want > spec.capacity) fit = spec.capacity / want;
+      }
+      // the crowns left widen to keep part of the cover the thinned ones gave (up to FIT_WIDEN ×)
+      const widen = Math.min(FIT_WIDEN, 1 / Math.sqrt(fit));
+      this.reach[si] = Infinity;
       for (const { t, d } of list) {
         // rank-based thinning with slant range: keep everything near, ~22 % at the edge, none beyond
-        const keep = scatterKeep(Math.sqrt(d * d + agl2), R);
+        const keep = scatterKeep(Math.sqrt(d * d + agl2), R) * fit;
         if (keep <= 0) continue;
         const arr = t.inst.data[spec.kind];
-        for (let i = 0; i < arr.length && n < spec.capacity; i += REC) {
+        for (let i = 0; i < arr.length; i += REC) {
+          if (n >= spec.capacity) {
+            this.reach[si] = Math.max(0, d - ts * 0.71);
+            break;
+          }
           if (arr[i + 10] > keep) continue;
           _p.set(arr[i], arr[i + 1], arr[i + 2]);
           _q.setFromAxisAngle(_up, arr[i + 3]);
-          _s.set(arr[i + 4], arr[i + 5], arr[i + 6]);
+          _s.set(arr[i + 4] * widen, arr[i + 5], arr[i + 6] * widen);
           _m.compose(_p, _q, _s);
           _m.toArray(mat, n * 16);
           if (spec.color) {
@@ -178,6 +223,7 @@ export class TileScatter {
             col[n * 3 + 1] = arr[i + 8];
             col[n * 3 + 2] = arr[i + 9];
           }
+          if (aux) aux[n] = arr[i + 11];
           n++;
         }
         if (n >= spec.capacity) break;
@@ -189,12 +235,38 @@ export class TileScatter {
       mesh.instanceColor!.clearUpdateRanges();
       mesh.instanceColor!.addUpdateRange(0, n * 3);
       mesh.instanceColor!.needsUpdate = true;
+      if (auxAttr) {
+        auxAttr.clearUpdateRanges();
+        auxAttr.addUpdateRange(0, n);
+        auxAttr.needsUpdate = true;
+      }
+    }
+  }
+
+  /**
+   * Drop the cached tiles overlapping [x0, x1) × [z0, z1) (the source's data there changed: a streamed tile of the
+   * corridor's real houses came or went, #126); the next updates generate them again, nearest first, each drawn as it
+   * was until then (no gap while they regenerate).
+   */
+  invalidate(x0: number, z0: number, x1: number, z1: number): void {
+    const ts = this.tileSize;
+    let any = false;
+    for (const t of this.tiles.values()) {
+      if (t.tx * ts >= x1 || (t.tx + 1) * ts <= x0 || t.tz * ts >= z1 || (t.tz + 1) * ts <= z0) continue;
+      t.stale = true;
+      any = true;
+    }
+    if (any) {
+      // (re-list the tiles in range on the next update)
+      this.lastTx = Number.NaN;
+      this.lastTz = Number.NaN;
     }
   }
 
   /** True when no tiles are pending and instances are packed. */
   get idle(): boolean {
-    return this.pending.length === 0 && !this.dirty;
+    // (an invalidate() between two updates re-lists the tiles on the next one: not idle until then)
+    return this.pending.length === 0 && !this.dirty && !Number.isNaN(this.lastTx);
   }
 
   get instanceCount(): number {
