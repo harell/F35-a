@@ -136,9 +136,10 @@ const AUTO: AutoHint[] = [
       const ir = p.incoming[0].guidance === 'ir';
       // short enough for one page: it must not page away while the missile flies
       // measured against the SA-6, the Tor and the AD boat (2026-10-08): beam + chaff a few seconds apart
-      // is the defence; a dive after the launch adds nothing to the beam, and against a heat-seeker the
-      // break into it does the work (flares alone barely help)
-      return ir ? 'IR MISSILE! Break hard into it, AB off' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
+      // is the defence, and a dive after the launch adds nothing to the beam. Against the boat's
+      // heat-seeker (real flight model, 48 rounds each): a hard turn across it + CMS late 3 hit, CMS
+      // alone 5, the turn alone 12, nothing 15, a break INTO it 29 (head-on, the end game's worst aspect)
+      return ir ? 'IR MISSILE! Beam it hard, AB off, CMS late' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
     },
   },
   {
