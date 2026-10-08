@@ -135,7 +135,10 @@ const AUTO: AutoHint[] = [
       if (p.incoming.length === 0) return null;
       const ir = p.incoming[0].guidance === 'ir';
       // short enough for one page: it must not page away while the missile flies
-      return ir ? 'IR MISSILE! CMS, break into it, AB off' : 'MISSILE! Beam it 90°, dive, CMS late';
+      // measured against the SA-6, the Tor and the AD boat (2026-10-08): beam + chaff a few seconds apart
+      // is the defence; a dive after the launch adds nothing to the beam, and against a heat-seeker the
+      // break into it does the work (flares alone barely help)
+      return ir ? 'IR MISSILE! Break hard into it, AB off' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
     },
   },
   {

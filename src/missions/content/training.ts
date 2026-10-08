@@ -171,7 +171,7 @@ export const T03: MissionDef = mission({
   weather: 'clear',
   briefing: [
     'Live-fire SAM training. An SA-6 battery and a Shilka on Rangitoto cover a fuel depot on Motutapu, the island behind it. The missiles are real. The steering cue takes you north round the SA-6, beyond the range its radar can pick up a clean F-35, to an IP north-east of Motutapu: run in from there.',
-    'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and descend — the radar loses you in the notch, and the notch works best low. Save the CMS for the last few seconds before impact: one press drops chaff and flares together, and at launch they are wasted. Against a heat-seeker, CMS late and a hard break into the missile.',
+    'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and press CMS every two or three seconds from about 6 s to impact: one press drops chaff and flares together, at launch they are wasted, and a held button wears them out. The notch works best low, but be low before the shot: a dive after the launch is too late. Do not run: the missile is faster. Against a heat-seeker, a hard break into the missile.',
     'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. There is no rearming, so make each release count.',
   ],
   recommendedLoadout: 'strike_stealth',
@@ -205,7 +205,7 @@ export const T03: MissionDef = mission({
       {
         id: 't_launch',
         when: { kind: 'sam_engaged' },
-        actions: [{ kind: 'hint', text: 'SAM LAUNCH! Beam it and descend — the notch works best low; CMS in the last seconds', duration: 9 }],
+        actions: [{ kind: 'hint', text: 'SAM LAUNCH! Beam it 90° and press CMS every 2–3 s from ~6 s to impact', duration: 9 }],
       },
     ],
     hints: [
@@ -213,7 +213,7 @@ export const T03: MissionDef = mission({
       { id: 'h2', text: 'Stay clean and in the bays: the SA-6 only sees a stealthy F-35 at ~10 km', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 24000 }, duration: 7 },
       { id: 'h3', text: 'Go low: below 300 ft the volcano blocks the radar line of sight', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 14000, above: 300 }, duration: 8 },
       { id: 'h4', text: 'Tap WPN to select the JDAM, TGT to designate the fuel tanks, release the moment IN RANGE shows', when: { kind: 'area', x: depot.x, z: depot.z, radius: 13000 }, duration: 9 },
-      { id: 'h5', text: 'Missile on the MAWS: count down the time-to-impact — CMS at ~5 s, not at launch', when: { kind: 'missile_inbound' }, duration: 7 },
+      { id: 'h5', text: 'Missile on the MAWS: count down the time-to-impact. CMS from ~6 s, a press every 2–3 s', when: { kind: 'missile_inbound' }, duration: 7 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get in, drop a JDAM on the depot, get out alive.', priority: 2 }],
     successText: 'SAM and strike qualification complete. You are ready, Viper.',

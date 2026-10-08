@@ -131,7 +131,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
       );
     else if (samType === 'zsu23') add('Shilkas shred anything low and close: stay above 5,000 ft or more than 3 km from the flak.');
     else if (IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');
-    else if (samType) add('SAM launch: beam it — turn 90° to the missile, dive for the deck and pump CHAFF in the last seconds.');
+    else if (samType) add('SAM launch: beam it — turn 90° to the missile and drop CHAFF every few seconds from about 6 s to impact. Diving after the launch is too late: be low before it.');
     else if (RADAR_MUNITIONS.has(w)) add('Radar missile: put it on your wing (beam), drop CHAFF — and shoot first: a clean F-35 sees them long before they see you.');
     else if (w === 'gun') add('Guns kill: don’t let a bandit sit behind you — keep your speed up and turn into him.');
   }

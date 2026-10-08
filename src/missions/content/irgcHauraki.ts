@@ -92,7 +92,7 @@ export const G02: MissionDef = mission({
   gunAmmo: 360,
   script: {
     // the built-in hints: the first mission that shoots back gets the MISSILE! defence prompt (beam
-    // it, dive, CMS late), and the first air-to-ground one the TGT / IN RANGE steps (player feedback
+    // it, CMS every few seconds), and the first air-to-ground one the TGT / IN RANGE steps (player feedback
     // 2026-10-08: stuck here on Recruit, unable to evade the AD boats' missiles)
     autoHints: true,
     parTime: 300,

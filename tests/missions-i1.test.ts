@@ -329,7 +329,7 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     const t03 = byId('t03');
     const t3 = [...t03.briefing, ...(t03.script.hints ?? []).map((x) => x.text), ...t03.script.triggers.flatMap((tr) => tr.actions.map((a) => ('text' in a ? a.text : '')))].join(' ');
     // (one CMS control drops chaff and flares together on every input: #62)
-    for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /last (few )?seconds/i, /300 ft/]) expect(t3).toMatch(k);
+    for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /6 s to impact/i, /every (two or three|2–3) s/i, /300 ft/]) expect(t3).toMatch(k);
   });
 });
 
