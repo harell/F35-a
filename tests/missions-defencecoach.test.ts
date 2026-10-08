@@ -11,14 +11,16 @@ import { Vector3 } from 'three';
 import type { MissionDef } from '../src/core/contracts';
 import { mission, site } from '../src/missions/content/common';
 import { validateMission } from '../src/missions/validate';
-import { COACH_TEXT, type MissileRecord } from '../src/missions/runtime/defenceCoach';
+import { COACH_TEXT, drillRecords, isDrillDefeat, type MissileRecord } from '../src/missions/runtime/defenceCoach';
+import type { MissionState } from '../src/missions/runtime/state';
+import { LOADOUTS } from '../src/core/data';
 import { harness, type Harness } from './missions-helpers';
 import { FlatTerrain, steerToward } from './combat-helpers';
 
 /** Out in the Gulf (the world origin is the Sky Tower: rounds fired from there hit it). */
 const BOAT = { x: 8000, z: -20000 };
 
-function drillFixture(opts: { practice?: boolean; coach?: boolean } = {}): MissionDef {
+function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: boolean } = {}): MissionDef {
   return mission({
     id: 'fx_drill',
     kind: 'training',
@@ -37,7 +39,7 @@ function drillFixture(opts: { practice?: boolean; coach?: boolean } = {}): Missi
       awacs: { silent: true },
       groups: [],
       ground: [],
-      sams: [site('boat', 'boats', 'ad_boat', BOAT)],
+      sams: [site('boat', 'boats', 'ad_boat', BOAT, opts.noHarass ? { noHarass: true } : {})],
       objectives: [
         { id: 'o_drill', kind: 'missile_drill', groups: ['boats'], defeat: 2, label: 'Defeat two missiles', primary: false },
         { id: 'o_stay', kind: 'survive', seconds: 900, label: 'Keep flying', primary: true },
@@ -164,5 +166,51 @@ describe('the defence coach', { timeout: 120_000 }, () => {
     // (measured: 8 of 16 rounds hit, against 0 of 22 for beam + CMS)
     expect(hits.length).toBeGreaterThanOrEqual(recs.length / 3);
     for (const r of hits) expect(['ran', 'no_beam']).toContain(r.fault);
+  });
+});
+
+describe('drill bookkeeping', () => {
+  const rec = (r: Partial<MissileRecord>): MissileRecord => ({ missileId: 1, group: 'b', guidance: 'radar', launchT: 10, endT: 20, outcome: 'chaff', fault: null, agl: 100, ...r });
+
+  it('a drill counts only its own rounds fired after it opened, and only real defeats', () => {
+    const s = { missileLog: [rec({ launchT: 5 }), rec({}), rec({ group: 'other' }), rec({ endT: -1, outcome: null }), rec({ guidance: 'ir' })] } as unknown as MissionState;
+    expect(drillRecords(s, ['b'], 8)).toHaveLength(2);
+    expect(drillRecords(s, ['b'], 8, 'radar')).toHaveLength(1);
+    for (const o of ['chaff', 'flares', 'notch', 'outflown'] as const) expect(isDrillDefeat(rec({ outcome: o }))).toBe(true);
+    for (const o of ['short', 'void', 'hit'] as const) expect(isDrillDefeat(rec({ outcome: o }))).toBe(false);
+  });
+
+  it('refill_cms tops the dispensers up to the loadout', () => {
+    const def = drillFixture();
+    def.script.triggers.push({ id: 't', when: { kind: 'time', t: 1 }, actions: [{ kind: 'refill_cms' }] });
+    const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
+    const p = h.world.player!;
+    p.chaff = 0;
+    p.flares = 3;
+    h.run(1.5);
+    expect(p.chaff).toBe(LOADOUTS.a2a_stealth.chaff);
+    expect(p.flares).toBe(LOADOUTS.a2a_stealth.flares);
+  });
+
+  it('noHarass: a boat that has tracked the jet fires no long shots past its 12 km envelope (Pilot)', { timeout: 60_000 }, () => {
+    const longShots = (noHarass: boolean): number => {
+      const def = drillFixture({ noHarass });
+      def.player = { ...def.player, x: BOAT.x, z: BOAT.z + 7000, heading: 180 };
+      const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
+      const p = h.world.player!;
+      let n = 0;
+      h.events.on('munition:launch', (e) => {
+        if (e.targetId === p.id && Math.hypot(p.position.x - BOAT.x, p.position.z - BOAT.z) > 12_500) n++;
+      });
+      // tracked inside 9 km, then away to 20 km
+      const v = new Vector3(0, 0, 1);
+      h.run(70, () => {
+        v.y = (2000 - p.position.y) / 2000;
+        steerToward(p, v, 4, 1 / 60, 250);
+      });
+      return n;
+    };
+    expect(longShots(false)).toBeGreaterThan(0);
+    expect(longShots(true)).toBe(0);
   });
 });

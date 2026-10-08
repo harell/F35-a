@@ -483,6 +483,11 @@ export class SamSiteEntity implements Entity {
    * of its type's SamTypeData.closeCue: a mission can give a fixed site the AD boat's tracker (g03's island SAMs).
    */
   closeCue?: { range: number; bayRange: number } | null;
+  /**
+   * The AD boat's long harassing shots (SamTypeData.harass, DifficultyParams.adBoatHarass) are off for
+   * this site: a training boat (t04) fires only inside its real envelope.
+   */
+  noHarass?: boolean;
 
   constructor(
     readonly id: number,

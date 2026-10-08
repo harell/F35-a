@@ -233,6 +233,8 @@ export interface SamSpawn {
   boat?: BoatSpawn;
   /** Close-in cue overriding the type's SamTypeData.closeCue (SamSiteEntity.closeCue). */
   closeCue?: { range: number; bayRange: number } | null;
+  /** No long harassing shots (SamSiteEntity.noHarass). */
+  noHarass?: boolean;
 }
 
 /**

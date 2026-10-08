@@ -259,6 +259,8 @@ export interface SamSiteDef {
   /** 'ad_boat' escort station: m behind its leader (negative = ahead of it, default 250) and m to its right (default 150). */
   escortAft?: number;
   escortRight?: number;
+  /** 'ad_boat': no long harassing shots outside its envelope (a training boat, t04). */
+  noHarass?: boolean;
 }
 
 /**
@@ -427,6 +429,8 @@ export type Action =
   | { kind: 'strike'; group: string; by?: string }
   /** Darkstar calls the current air picture. */
   | { kind: 'picture' }
+  /** Refill the player's flares and chaff to the loadout's load (a training range between drills, t04). */
+  | { kind: 'refill_cms' }
   | { kind: 'end'; success: boolean; reason: string };
 
 export interface TriggerDef {

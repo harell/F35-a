@@ -18,6 +18,7 @@
 import { Vector3 } from 'three';
 import type { CreateMissionRunner, MissionDef, MissionResult, MissionRunnerApi, ObjectiveStatus, Waypoint } from '../core/contracts';
 import { AKL, BRIDGE_SPAN_T } from '../core/auckland';
+import { LOADOUTS } from '../core/data';
 import type { LoadoutId, WeaponId } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import type { Action } from './schema';
@@ -460,6 +461,15 @@ class MissionRunnerImpl implements MissionRunnerApi {
       case 'retask':
         retaskGroup(s, a.group, a.task);
         break;
+      case 'refill_cms': {
+        const p = s.player;
+        const lo = p?.loadout ? LOADOUTS[p.loadout] : null;
+        if (p && p.alive && lo) {
+          p.flares = Math.max(p.flares, lo.flares);
+          p.chaff = Math.max(p.chaff, lo.chaff);
+        }
+        break;
+      }
       case 'reveal': {
         const g = s.groups.get(a.group);
         for (const m of g?.members ?? []) if (m.kind === 'sam' || m.kind === 'ground') m.known = true;

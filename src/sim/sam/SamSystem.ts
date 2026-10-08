@@ -247,7 +247,7 @@ function detects(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircraf
   if (cue && agl >= data.altMin * 0.5) {
     const scale = ctx.world.difficulty.samRangeScale;
     const bay = tracking || t.bayDoors > 0.05;
-    const k = ctx.world.difficulty.adBoatHarass;
+    const k = s.noHarass ? 0 : ctx.world.difficulty.adBoatHarass;
     const r = bay ? (data.harass && k > 0 ? Math.max(cue.bayRange, data.harass.cueRange * k) : cue.bayRange) : cue.range;
     if (d <= r * scale && lineOfSight(world.terrain, _eye, t.position)) return true;
   }
@@ -266,7 +266,7 @@ function canEngage(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircr
   const scale = ctx.world.difficulty.samRangeScale;
   const d = t.position.distanceTo(s.position);
   const agl = t.position.y - ctx.world.terrain.surfaceHeightAt(t.position.x, t.position.z);
-  const k = ctx.world.difficulty.adBoatHarass;
+  const k = s.noHarass ? 0 : ctx.world.difficulty.adBoatHarass;
   const harassReach = data.harass && k > 0 ? data.harass.reach * k : 0;
   if (d < data.engageMin || d > Math.max(data.engageMax, harassReach) * scale) return false;
   if (agl < data.altMin) return false;

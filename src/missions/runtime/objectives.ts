@@ -8,7 +8,7 @@ import { evalCondition } from './conditions';
 import { retaskGroup } from './spawner';
 import { aliveCount, deadCount, difficultyAtLeast, drivenOffCount, type MissionState, type ObjectiveRt } from './state';
 import { POINTS } from './scoring';
-import { drillRecords } from './defenceCoach';
+import { drillRecords, isDrillDefeat } from './defenceCoach';
 
 export function createObjectives(s: MissionState): void {
   for (const def of s.script.objectives) {
@@ -229,7 +229,7 @@ export function updateObjectives(s: MissionState, dt: number): void {
         let hits = 0;
         for (const r of recs) {
           if (r.outcome === 'hit') hits++;
-          else if (r.outcome !== 'void' && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
+          else if (isDrillDefeat(r) && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
         }
         st.progress = { done: Math.min(defeated, def.defeat), total: def.defeat };
         if (def.maxHits !== undefined && hits > def.maxHits) setState(s, o, 'failed');

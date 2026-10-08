@@ -7,9 +7,12 @@
  *   - defeated: chaff (a radar missile seduced), flares (a heat-seeker seduced), the notch (the
  *     radar lost the track: beam and clutter, or the terrain), outflown (it missed: couldn't turn);
  *   - hit: the first thing that went wrong, in the order the lesson teaches it (ran, flew at it,
- *     no CMS, CMS held / mashed, no break into a heat-seeker), else "some get through".
+ *     chaff empty, no CMS, CMS held / mashed; a heat-seeker: no CMS late, no hard turn across it), else
+ *     "some get through".
  * The order and the advice follow the measured defence table (2026-10-08, stack/sam-defence-advice):
  * beam + a CMS press every 2–3 s from ~6 s is the defence; running loses; mashing wears the chaff out.
+ * Against the heat-seeker the press late matters most (48 rounds each: CMS alone 5 hit, the turn
+ * across it alone 12, nothing 15), then the turn.
  *
  * Every record also goes to MissionState.missileLog, which 'missile_drill' objectives count.
  */
@@ -18,11 +21,12 @@ import type { MissionState } from './state';
 
 /**
  * How a missile fired at the player ended. 'void': it ended within MIN_FLIGHT of launch (into the
- * ground, the Sky Tower…): nothing the player did, neither counted nor called out.
+ * ground, the Sky Tower…): nothing the player did, neither counted nor called out. 'short': it missed
+ * without ever reaching its end game (a long shot that fell short): called out, never a drill's defeat.
  */
-export type MissileOutcome = 'chaff' | 'flares' | 'notch' | 'outflown' | 'hit' | 'void';
+export type MissileOutcome = 'chaff' | 'flares' | 'notch' | 'outflown' | 'short' | 'hit' | 'void';
 /** The first fault behind a hit. */
-export type DefenceFault = 'ran' | 'no_beam' | 'no_cms' | 'mashed' | 'no_break' | 'unlucky';
+export type DefenceFault = 'ran' | 'no_beam' | 'empty' | 'no_cms' | 'mashed' | 'ir_no_cms' | 'ir_no_turn' | 'unlucky';
 
 export interface MissileRecord {
   missileId: number;
@@ -46,21 +50,22 @@ export const COACH_WINDOW = 8;
 const PRESS_GAP = 0.4;
 /** A press sooner than this after the previous one (s) is mashing / holding the button. */
 export const MASH_GAP = 1.2;
-/** Heat-seeker: a break is at least this g in its last seconds. */
-export const BREAK_G = 4;
 
 export const COACH_TEXT: Record<MissileOutcome | DefenceFault, string> = {
   chaff: 'DEFEATED — beam and chaff',
   flares: 'DEFEATED — flares',
   notch: 'DEFEATED — the radar lost you: notch',
   outflown: 'DEFEATED — it couldn\'t follow you',
+  short: 'It fell short: a long shot, out of reach',
   hit: 'PRACTICE HIT',
   void: '',
   ran: 'HIT — running loses, it\'s faster. Beam it',
   no_beam: 'HIT — you flew at it. Turn 90°: beam it',
+  empty: 'HIT — chaff empty: one press every 2–3 s',
   no_cms: 'HIT — no CMS. A press every 2–3 s from ~6 s',
   mashed: 'HIT — CMS mashed: one press every 2–3 s',
-  no_break: 'HIT — heat-seeker: break hard into it',
+  ir_no_cms: 'HIT — heat-seeker: CMS late, in the last 3 s',
+  ir_no_turn: 'HIT — heat-seeker: turn hard across it',
   unlucky: 'HIT — good defence, some still get through',
 };
 
@@ -72,7 +77,6 @@ interface Watch {
   hot: number;
   cold: number;
   samples: number;
-  maxG: number;
   /** Sim time it entered the end game (-1 = not yet). */
   endgameAt: number;
 }
@@ -106,7 +110,7 @@ export class DefenceCoach {
           agl: 0,
         };
         this.s.missileLog.push(rec);
-        this.watches.set(m.id, { rec, guiderId: e.shooter.id, beam: 0, hot: 0, cold: 0, samples: 0, maxG: 0, endgameAt: -1 });
+        this.watches.set(m.id, { rec, guiderId: e.shooter.id, beam: 0, hot: 0, cold: 0, samples: 0, endgameAt: -1 });
       }),
       ev.on('countermeasure', (e) => {
         if (!this.live()) return;
@@ -131,6 +135,7 @@ export class DefenceCoach {
         else if (m.trackBroken && w.rec.guidance === 'radar') outcome = 'notch';
         // a radar round that missed with chaff in the gate: the chaff spoiled its aim (sim/sam/endgame.ts)
         else if (w.rec.guidance === 'radar' && this.pressesIn(w).length > 0) outcome = 'chaff';
+        else if (w.endgameAt < 0) outcome = 'short';
         else outcome = 'outflown';
         this.finish(w, outcome);
       }),
@@ -171,7 +176,6 @@ export class DefenceCoach {
       else if (radial < -0.6) w.hot++;
       else w.beam++;
       w.samples++;
-      w.maxG = Math.max(w.maxG, Math.abs(p.flight.gLoad));
     }
   }
 
@@ -185,7 +189,7 @@ export class DefenceCoach {
     if (outcome === 'hit') rec.fault = this.fault(w);
     // a hit says why; a defeat says how
     const text = outcome === 'hit' ? COACH_TEXT[rec.fault ?? 'unlucky'] : COACH_TEXT[outcome];
-    this.s.hud(text, outcome === 'hit' ? 'bad' : 'good', 4);
+    this.s.hud(text, outcome === 'hit' ? 'bad' : outcome === 'short' ? 'info' : 'good', 4);
   }
 
   /** The player's CMS presses in this missile's end game. */
@@ -198,11 +202,14 @@ export class DefenceCoach {
   /** The first thing that went wrong in the end game (the order the lesson teaches). */
   private fault(w: Watch): DefenceFault {
     const n = Math.max(1, w.samples);
-    if (w.rec.guidance === 'ir') return w.maxG < BREAK_G ? 'no_break' : 'unlucky';
+    if (w.rec.guidance === 'ir') {
+      if (this.pressesIn(w).length === 0) return 'ir_no_cms';
+      return w.beam / n < 0.5 ? 'ir_no_turn' : 'unlucky';
+    }
     if (w.cold / n > 0.5) return 'ran';
     if (w.hot / n > 0.5) return 'no_beam';
     const ps = this.pressesIn(w);
-    if (ps.length === 0) return 'no_cms';
+    if (ps.length === 0) return this.s.player && this.s.player.chaff <= 0 ? 'empty' : 'no_cms';
     let mashed = 0;
     for (let i = 1; i < ps.length; i++) if (ps[i] - ps[i - 1] < MASH_GAP) mashed++;
     if (ps.length >= 4 && mashed >= ps.length / 2) return 'mashed';
@@ -220,7 +227,12 @@ function endgameTti(p: AircraftEntity, pos: { x: number; y: number; z: number },
   return vc > 20 ? d / vc : Infinity;
 }
 
-/** Records of the drill's missiles that ended after `since`. */
+/** The drill's missiles: fired by `groups` at or after `since` (when the drill opened) and ended. */
 export function drillRecords(s: MissionState, groups: string[], since: number, guidance?: 'radar' | 'ir'): MissileRecord[] {
-  return s.missileLog.filter((r) => r.endT >= since && r.group !== null && groups.includes(r.group) && (!guidance || r.guidance === guidance));
+  return s.missileLog.filter((r) => r.endT >= 0 && r.launchT >= since && r.group !== null && groups.includes(r.group) && (!guidance || r.guidance === guidance));
+}
+
+/** A defeat a drill counts: the player beat it in its end game (not a void round, not a long shot that fell short). */
+export function isDrillDefeat(r: MissileRecord): boolean {
+  return r.outcome === 'chaff' || r.outcome === 'flares' || r.outcome === 'notch' || r.outcome === 'outflown';
 }

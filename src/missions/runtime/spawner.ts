@@ -402,6 +402,7 @@ export function spawnSamSite(s: MissionState, def: SamSiteDef): void {
     emcon: !!def.emcon,
     known: def.known ?? !def.emcon,
     closeCue: def.closeCue,
+    noHarass: def.noHarass,
     boat:
       def.type === 'ad_boat'
         ? { path: def.path?.map((p) => new Vector3(p.x, 0, p.z)), speed: def.speed, loop: def.loop, escortGroup: def.escort, escortAft: def.escortAft, escortRight: def.escortRight }
