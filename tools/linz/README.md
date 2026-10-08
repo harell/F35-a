@@ -344,6 +344,22 @@ are cached in `<work>` too. The square then takes ≈ 2 min (117 tiles, the COGs
 ≈ 4 min (the Devonport boxes' 74 tiles at 1/8, the islands' 697 tiles at 1/32). Re-running `city` reproduces the
 committed square byte for byte. Delete a box's `aerial-rect-*.png` to bake it again.
 
+### Game shots next to the 2024 photo (#124)
+
+`photo-compare.py` puts an e2e shot script's frames beside a north-up crop of the same photo round each view's look
+point, with the camera and its line of sight drawn on it. It reads the views from the script, so the two never drift:
+
+```sh
+node e2e/landmark-shots.mjs --out=<shots>                       # the game frames, <shots>/124-<view>-after.png
+python3 tools/linz/photo-compare.py <work> <shots>              # docs/screenshots/real-suburbs/124-<view>.jpg
+python3 tools/linz/photo-compare.py <work> <shots> --script=e2e/corridor-shots.mjs --prefix=126 --tag=streamed-after
+```
+
+It lists the tiles from their names in the 1:1000 grid (sheet BA32's north-west corner is E 1,756,000, N 5,946,000;
+tiles of 480 × 720 m named `<sheet>_1000_<row><col>`) rather than crawling the STAC items, so a view takes ≈ 20 s
+(about 24 tiles at the 1/16 overview). The bucket now and then answers a ranged read with a stray 404 through the
+cloud container's proxy; the script sets GDAL to retry on every code.
+
 - **Square**: `AERIAL_RECT`, x −1536 … 3584, z −3072 … 2048 (5.12 km): Westhaven to the Fergusson terminal, Devonport and
   the naval base to the Domain, Grafton and Parnell. The issue's 4 × 4 km at 0.5–1 m in ≤ 500 KB is not reachable: the
   4096² file at 1.25 m is ≈ 625 KiB even with the harbour masked out (the photo itself is ≈ 1 MB at that quality), so
