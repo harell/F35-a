@@ -8,6 +8,7 @@
 import { NM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import type { AircraftEntity } from '../../sim/entities';
+import { civilHidden } from '../../sim/entities';
 import { isMissileBoatLive } from '../../sim/boats';
 import { SAM_LABEL, trackShort } from './format';
 import { Occupancy } from './occupancy';
@@ -258,7 +259,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
     if (sam.id === des || sam.id === lock) ringHighlight(pen, x, y, s, c, sam.id === lock);
   }
   for (const gt of world.ground) {
-    if (!gt.alive || gt.team === p.team || (!gt.known && !tracked(p, gt.id))) continue;
+    if (!gt.alive || gt.team === p.team || civilHidden(p, gt) || (!gt.known && !tracked(p, gt.id))) continue;
     map(gt.position.x, gt.position.z);
     pen.begin();
     pen.rect(pt.x - 3.2 * s, pt.y - 3.2 * s, 6.4 * s, 6.4 * s);
@@ -304,7 +305,7 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   const now = world.time;
   for (const ct of p.radar.contacts) {
     const e = world.getEntity(ct.id);
-    if (!e || !e.alive || e.kind !== 'aircraft' || e.team === p.team) continue;
+    if (!e || !e.alive || e.kind !== 'aircraft' || e.team === p.team || civilHidden(p, e)) continue;
     const stale = now - ct.lastSeen > 1.5;
     const pos = stale ? ct.position : e.position;
     const vel = stale ? ct.velocity : e.velocity;
