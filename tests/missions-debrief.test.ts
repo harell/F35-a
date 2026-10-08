@@ -282,6 +282,25 @@ describe('#64: training debrief', () => {
     }
   });
 
+  it('shot down by an air-defence boat: the defence tip, then Training 04 (not inside T04 itself)', () => {
+    const downed = (id: string, weapon: string) => {
+      const s = new MissionState(byId(id), { createAi: stubAi({ created: [], retasked: [] }), difficulty: DIFFICULTIES.recruit, events: new EventBus() });
+      s.playerDied = true;
+      s.stats.downReason = 'shot';
+      s.stats.lastHitBy = 'sam';
+      s.stats.lastHitType = 'ad_boat';
+      s.stats.lastHitWeapon = weapon as never;
+      return buildTips(s, { ...win(id, 100), success: false, reason: 'Shot down by an AD boat', difficulty: 'recruit' });
+    };
+    const radar = downed('g02', 'm_9m330');
+    expect(radar[0]).toMatch(/beam it/);
+    expect(radar.some((t) => /Training 04, Gulf Defence/.test(t))).toBe(true);
+    const ir = downed('g02', 'm_igla');
+    expect(ir[0]).toMatch(/turn hard across it/);
+    expect(ir.some((t) => /Training 04/.test(t))).toBe(true);
+    expect(downed('t04', 'm_9m330').some((t) => /Training 04/.test(t))).toBe(false);
+  });
+
   it('the time tip only shows over par', () => {
     const par = byId('g01').script.parTime!;
     expect(buildTips(state('g01'), win('g01', par - 30)).some((t) => /Faster missions/.test(t))).toBe(false);

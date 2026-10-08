@@ -135,6 +135,9 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     else if (samType) add('SAM launch: beam it — turn 90° to the missile and drop CHAFF every few seconds from about 6 s to impact. Diving after the launch is too late: be low before it.');
     else if (RADAR_MUNITIONS.has(w)) add('Radar missile: put it on your wing (beam), drop CHAFF — and shoot first: a clean F-35 sees them long before they see you.');
     else if (w === 'gun') add('Guns kill: don’t let a bandit sit behind you — keep your speed up and turn into him.');
+    // the IRGC Navy's air-defence boats (g02, g03): a lesson drills exactly that defence, with practice
+    // rounds that can't hurt you (player feedback 2026-10-08: stuck at g02, unable to evade them)
+    if (samType === 'ad_boat' && s.def.id !== 't04') add('Training 04, Gulf Defence, drills the defence against these boats with practice rounds that can’t hurt you.');
   }
 
   if (!r.success && !died) {
@@ -167,7 +170,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     if (r.grade === 'S' && r.difficulty !== 'veteran' && !fixedDifficulty(s.def)) add('Perfect sortie — try it on a harder difficulty.');
   }
   if (tips.length === 0) {
-    if (!r.success) add('Fly Training first: T02 teaches the lock and SHOOT cue, T03 how to survive SAMs.');
+    if (!r.success) add('Fly Training first: T02 teaches the lock and SHOOT cue, T03 and T04 how to survive SAMs.');
     // the time tip only when there was time to gain, and the AMRAAM advice only where there is something to shoot
     else if (r.time > parTimeFor(s.def))
       add(hasAirToAirObjective(s.script) ? 'Faster missions score higher: fly the steering cue and use the AMRAAM’s reach.' : 'Faster missions score higher: fly the steering cue.');
