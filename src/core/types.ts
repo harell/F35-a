@@ -257,6 +257,11 @@ export interface DifficultyParams {
   scoreMultiplier: number;
   /** Player can survive this many direct missile hits (1 = first hit is not always fatal). */
   playerMissileHitsToKill: number;
+  /**
+   * Seconds after a missile hit on the player in which further missile hits do no damage (unset: none):
+   * a salvo counts as one of playerMissileHitsToKill. Recruit only.
+   */
+  playerMissileHitGrace?: number;
   /** Fuel burn multiplier. */
   fuelBurnScale: number;
   /**

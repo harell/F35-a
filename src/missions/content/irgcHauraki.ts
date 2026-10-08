@@ -91,6 +91,10 @@ export const G02: MissionDef = mission({
   // eight bombs for five to seven boats: the gun covers the spare boats (#77)
   gunAmmo: 360,
   script: {
+    // the built-in hints: the first mission that shoots back gets the MISSILE! defence prompt (beam
+    // it, dive, CMS late), and the first air-to-ground one the TGT / IN RANGE steps (player feedback
+    // 2026-10-08: stuck here on Recruit, unable to evade the AD boats' missiles)
+    autoHints: true,
     parTime: 300,
     ground: [
       target(G02_TANKER.id, G02_TANKER.group, 'ship', G02_TANKER.start, {

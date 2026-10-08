@@ -55,7 +55,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   recruit: {
     id: 'recruit',
     label: 'Recruit',
-    description: 'Forgiving enemies that react slowly and shoot late, generous countermeasures, three missile hits to kill, and Auto-GCAS pulls you up before the ground. Learn the jet.',
+    description: 'Forgiving enemies that react slowly and shoot late, generous and automatic countermeasures, three missile hits to kill (a salvo counts as one), and Auto-GCAS pulls you up before the ground. Learn the jet.',
     playerDamageScale: 0.35,
     aiSkill: 0.25,
     aiReactionTime: 3.0,
@@ -72,6 +72,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     enemyCountScale: 0.75,
     scoreMultiplier: 0.75,
     playerMissileHitsToKill: 3,
+    // a salvo is one hit: an air-defence boat's pair 1.5 s apart took two of the three at once, so a
+    // Recruit who missed one beam was gone (g02, player feedback 2026-10-08)
+    playerMissileHitGrace: 3,
     fuelBurnScale: 0.5,
     adBoatHarass: 0,
   },
