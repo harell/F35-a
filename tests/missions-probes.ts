@@ -102,6 +102,12 @@ export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
       { x: 25_000, z: -8_500, alt: 60, minAgl: 40, speed: 300 },
     ],
   },
+  // g02's second way (playtest r1, 1.3-f): the escort first, with an AARGM-ER on the way in (the
+  // briefing's "one for each escort"), then the bot's StormBreaker ripples. The plain bot is the
+  // first way: bombs only, its AARGMs never fired
+  g02: {
+    sead: [{ x: -2_000, z: -7_000, alt: 4_000, shoot: 'ad1' }],
+  },
 };
 
 /** The routes a mission has probes for (with `killall`, which every mission has). */

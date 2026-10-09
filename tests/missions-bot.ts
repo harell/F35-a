@@ -894,6 +894,22 @@ export class MissionBot {
     return ip;
   }
 
+  /**
+   * A boat on a clock (g02) with the jet already between its IP and it, on the IP's side (within
+   * 60° of the run-in bearing): a human turns in and presses, not back out to the IP and round
+   * again. Flying out to the IP after a SAM defence had left the jet inside it cost the casual
+   * proxy's second ripple ~45 s and the tanker on Pilot (playtest r1, 1.3-d).
+   */
+  private insideRunIn(t: AnyEntity, ip: Vector3, R: number): boolean {
+    if (!isBoat(t)) return false;
+    const ix = ip.x - t.position.x;
+    const iz = ip.z - t.position.z;
+    const ipR = Math.hypot(ix, iz);
+    if (R >= ipR || R < 1) return false;
+    const cos = (ix * (this.p.position.x - t.position.x) + iz * (this.p.position.z - t.position.z)) / (ipR * R);
+    return cos > Math.cos(60 * DEG);
+  }
+
   private strike(t: AnyEntity, dt: number): void {
     const p = this.p;
     const w = this.world;
@@ -947,7 +963,7 @@ export class MissionBot {
     const it = this.pilot.begin(p, 150);
     // leg 1: to the IP unless we are already inside the run-in
     const ipD = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
-    const runIn = this.runIn.has(t.id) || ipD < 3_000 || R < rel + 2_000;
+    const runIn = this.runIn.has(t.id) || ipD < 3_000 || R < rel + 2_000 || this.insideRunIn(t, ip, R);
     if (runIn) this.runIn.add(t.id);
     const aim = runIn ? t.position : ip;
     _h.set(aim.x - p.position.x, 0, aim.z - p.position.z);

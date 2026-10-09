@@ -179,16 +179,18 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
   });
 });
 
-describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
+describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways to win (playtest r1)', () => {
   // The bot won 24/24 by rippling all eight StormBreakers in the first 20–39 s, before any missile boat counted
   // down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes a second pass against a ~3.9-minute
   // launch, and Recruit flies a suicide boat fewer. Pilot and Veteran also meet the AD boats' harassment
   // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws SAM shots, the bot breaks to
   // defend and reaches the second wave late; Veteran adds a third boat ahead of the suicide wave, inside the real
-  // envelope of the opening release. Measured with no rearming (#63), 6 seeds: Recruit 6/6, Pilot 4/6, Veteran 3/6
-  // (24 seeds: Pilot 18, Veteran 9). The bands are the measured floors less one seed, and the campaign's:
-  // Recruit ≥ 75 %, Veteran ≥ 25 %.
-  it('Recruit ≥ 5/6, Pilot ≥ 3/6, Veteran ≥ 2/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+  // envelope of the opening release. With Pilot's salvo grace (a pair is one hit) and the bot turning in on a
+  // boat whose IP it is already inside (playtest r1, 1.3-d), 6 seeds: Recruit 6/6, Pilot 6/6, Veteran 3/6. The
+  // bands are the measured floors less one seed, and the campaign's: Recruit ≥ 75 %, Veteran ≥ 25 %.
+  const run = (d: Difficulty, seed: number, opts: Parameters<typeof runPlaythrough>[4] = {}) => runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600, ...opts });
+
+  it('Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 2/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran'];
     const won: Record<string, number> = {};
@@ -197,7 +199,7 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
       won[d] = 0;
       for (const seed of seeds) {
         await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
-        const r = runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600 });
+        const r = run(d, seed);
         if (r.state === 'success') won[d]++;
         log.push(`g02 ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
         // the opening ripple can't cover both waves: every bomb on a missile boat goes after they came in
@@ -206,10 +208,45 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
     }
     const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
     expect(won.recruit, table).toBeGreaterThanOrEqual(5);
-    expect(won.pilot, table).toBeGreaterThanOrEqual(3);
+    expect(won.pilot, table).toBeGreaterThanOrEqual(5);
     expect(won.veteran, table).toBeGreaterThanOrEqual(2);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+  });
+
+  // The casual player's proxy (bot-sweep --reaction=2.5: 2.5 s to react to any missile warning) lost all
+  // 6 Pilot runs: Pilot's harassing pair beamed it south, away from the missile boats, and it flew on out to
+  // its IP 28 km from them before turning in, so its second ripple went at 165 s from 18 km and the boats
+  // launched first. Turning in from inside the IP: 6/6, the boats sunk ~35 s before their countdown.
+  it('the casual proxy (2.5 s reactions) wins Pilot ≥ 3/6 (was 0/6)', { timeout: 300_000 }, async () => {
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('pilot', seed, { bot: { reaction: 2.5, samReaction: 2.5 } });
+      if (r.state === 'success') won++;
+      log.push(`casual pilot seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(3);
+  });
+
+  // The second way (1.3-f): the briefing's AARGM-ER at the first escort as the opening shot
+  // (ROUTE_PROBES.g02.sead), then the StormBreaker ripples. It sinks her in about half the runs (a crew
+  // that sees it coming goes off the air) and Pilot's runs draw 2–8 SAM rounds instead of 10. Measured
+  // Recruit 6/6, Pilot 6/6 (casual proxy 6/6), Veteran 0/6 (its third boat's long shots at the open bay
+  // cost the opening ripple). The first way, bombs only with the AARGMs never fired, is the test above.
+  it('the escort first, with an AARGM: Pilot ≥ 4/6, the AARGM on an escort', { timeout: 300_000 }, async () => {
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('pilot', seed, { probe: { kind: 'route', route: 'sead' } as ProbeSpec });
+      if (r.state === 'success') won++;
+      const arm = r.launches.find((l) => l.weapon === 'aargm');
+      log.push(`sead pilot seed ${seed}: ${r.state}@${r.t}s ${r.reason}, AARGM ${arm ? `at ${Math.round(arm.t)} s on ${arm.group}` : 'not fired'}`);
+      expect(arm?.group, log.join('\n')).toBe('ad_boats');
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(4);
   });
 });
 

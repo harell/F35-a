@@ -26,7 +26,7 @@
  *               or an objective credited, by waiting?
  *   --gunonly   gun-only probe: the stores are emptied every step and the air-to-air bot presses on
  *               with the gun; rows count `gunRounds`, and a rounds table follows the win rates
- *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g03: straight, north,
+ *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g02: sead; g03: straight, north,
  *               south, wide, high, golden, golden_north), then the bot attacks; `killall` attacks every
  *               SAM site first. "Is there a free way round?" and "does the intended way work?"
  *   --reaction=<s>  the bot's reaction to a missile warning, air-to-air and SAM (MissionBotOptions.reaction,
