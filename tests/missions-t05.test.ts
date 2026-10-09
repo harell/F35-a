@@ -85,7 +85,7 @@ describe('t05 Gulf Defence', () => {
 
   it('ignoring the missile warning: the coach moves him on, so the lesson ends instead of hanging', { timeout: 300_000 }, () => {
     const log: string[] = [];
-    for (const seed of [0, 1, 2]) {
+    for (const seed of [0, 1, 2, 4]) {
       const r = runPlaythrough('t05', 'pilot', seed, realTerrain(), { maxT: 900, log: true, bot: { defend: false } });
       const moved = r.events.filter((e) => e.includes(DRILL_MOVE_ON)).length;
       log.push(`seed ${seed}: ${r.state}@${r.t}s moved on ${moved}× ${[...completed(r)].map(([k, v]) => `${k}@${v}`).join(' ')}`);
@@ -101,6 +101,8 @@ describe('t05 Gulf Defence', () => {
     const later = T05_DEFENCE.script.sams.filter((s) => s.spawn).map((s) => s.id);
     expect(later).toEqual(['b3']);
     expect(T05_DEFENCE.script.sams.map((s) => !!s.irOnly)).toEqual([false, false, true]);
+    // ...restocked once spent: never out of rounds with the drill still open (r2 soft lock)
+    expect(T05_DEFENCE.script.sams.map((s) => !!s.restock)).toEqual([false, false, true]);
     expect(Math.hypot(DEFENCE.d3Pass.x - DEFENCE.b3.x, DEFENCE.d3Pass.z - DEFENCE.b3.z)).toBeCloseTo(3500, -2);
   });
 });

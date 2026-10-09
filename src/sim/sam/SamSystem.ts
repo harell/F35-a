@@ -605,6 +605,8 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
     if (n) updateEndgame(ctx, s, si, dt, si.mpMissiles);
   }
   if (si.mpTimer > 0) si.mpTimer -= dt;
+  // a range boat (t05's heat-seeker drill): a fresh load once the last round has ended
+  if (si.mpRounds <= 0 && s.restock && si.mpMissiles.length === 0) si.mpRounds = mp.rounds;
   if (si.mpRounds <= 0 || si.mpTimer > 0 || s.holdFire) return;
   if (!scanNow) {
     return;

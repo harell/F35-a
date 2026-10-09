@@ -239,6 +239,8 @@ export interface SamSpawn {
   noArmShutdown?: boolean;
   /** Only the site's shoulder-launched heat-seekers fire (SamSiteEntity.irOnly). */
   irOnly?: boolean;
+  /** Its heat-seekers are restocked once spent (SamSiteEntity.restock). */
+  restock?: boolean;
 }
 
 /**

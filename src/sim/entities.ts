@@ -500,6 +500,11 @@ export class SamSiteEntity implements Entity {
    * (t05's heat-seeker drill, which grades only those).
    */
   irOnly?: boolean;
+  /**
+   * A range boat: its shoulder-launched heat-seekers (SamTypeData.manpads) are restocked once all are spent and
+   * the last has ended, so a drill graded on them (t05's drill 3) always has another round to end it.
+   */
+  restock?: boolean;
   /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
   holdFire?: boolean;
 

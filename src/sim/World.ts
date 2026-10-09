@@ -272,6 +272,7 @@ class SimWorldImpl implements SimWorld {
     if (spec.noHarass) e.noHarass = true;
     if (spec.noArmShutdown) e.noArmShutdown = true;
     if (spec.irOnly) e.irOnly = true;
+    if (spec.restock) e.restock = true;
     if (spec.emcon) {
       e.radarOn = false;
       e.state = 'emcon';

@@ -21,7 +21,7 @@ import { FlatTerrain, steerToward } from './combat-helpers';
 /** Out in the Gulf (the world origin is the Sky Tower: rounds fired from there hit it). */
 const BOAT = { x: 8000, z: -20000 };
 
-function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: boolean } = {}): MissionDef {
+function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: boolean; irOnly?: boolean; restock?: boolean } = {}): MissionDef {
   return mission({
     id: 'fx_drill',
     kind: 'training',
@@ -40,7 +40,7 @@ function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: bo
       awacs: { silent: true },
       groups: [],
       ground: [],
-      sams: [site('boat', 'boats', 'ad_boat', BOAT, opts.noHarass ? { noHarass: true } : {})],
+      sams: [site('boat', 'boats', 'ad_boat', BOAT, { ...(opts.noHarass ? { noHarass: true } : {}), ...(opts.irOnly ? { irOnly: true } : {}), ...(opts.restock ? { restock: true } : {}) })],
       objectives: [
         { id: 'o_drill', kind: 'missile_drill', groups: ['boats'], defeat: 2, label: 'Defeat two missiles', primary: false },
         { id: 'o_stay', kind: 'survive', seconds: 900, label: 'Keep flying', primary: true },
@@ -233,6 +233,35 @@ describe('drill bookkeeping', () => {
     h.run(1.5);
     expect(p.chaff).toBe(LOADOUTS.a2a_stealth.chaff);
     expect(p.flares).toBe(LOADOUTS.a2a_stealth.flares);
+  });
+
+  it('irOnly + restock: a range boat fires only heat-seekers, and more than its four (t05 drill 3 never runs dry)', { timeout: 60_000 }, () => {
+    const shots = (restock: boolean): Record<string, number> => {
+      const def = drillFixture({ noHarass: true, irOnly: true, restock });
+      def.player = { ...def.player, x: BOAT.x + 2_000, z: BOAT.z, altitude: 1_500, heading: 0 };
+      const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
+      const p = h.world.player!;
+      const n: Record<string, number> = {};
+      h.events.on('munition:launch', (e) => {
+        if (e.targetId === p.id) n[e.missile.def.id] = (n[e.missile.def.id] ?? 0) + 1;
+      });
+      // round and round the boat 2 km off at 1,500 m: inside its heat-seekers' reach (on the beam) the whole time
+      const v = new Vector3();
+      h.run(120, () => {
+        const dx = p.position.x - BOAT.x;
+        const dz = p.position.z - BOAT.z;
+        const d = Math.hypot(dx, dz) || 1;
+        v.set(dz / d - (dx / d) * (d - 2_000) / 1_000, (1_500 - p.position.y) / 2000, -dx / d - (dz / d) * (d - 2_000) / 1_000);
+        steerToward(p, v, 6, 1 / 60, 230);
+      });
+      return n;
+    };
+    const once = shots(false);
+    expect(once.m_9m330 ?? 0).toBe(0);
+    expect(once.m_igla).toBe(4);
+    const restocked = shots(true);
+    expect(restocked.m_9m330 ?? 0).toBe(0);
+    expect(restocked.m_igla).toBeGreaterThan(4);
   });
 
   it('noHarass: a boat that has tracked the jet fires no long shots past its 12 km envelope (Pilot)', { timeout: 60_000 }, () => {

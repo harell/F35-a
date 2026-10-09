@@ -277,6 +277,8 @@ export interface SamSiteDef {
   noArmShutdown?: boolean;
   /** 'ad_boat': only the shoulder-launched heat-seekers fire, its radar SAM holds (t05's heat-seeker drill). */
   irOnly?: boolean;
+  /** 'ad_boat': a range boat whose heat-seekers are restocked once all are spent (t05's heat-seeker drill never runs dry). */
+  restock?: boolean;
 }
 
 /**
