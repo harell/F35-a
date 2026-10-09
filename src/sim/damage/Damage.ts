@@ -88,6 +88,10 @@ export class DamageSystem {
   /* ───────────────────────────── Aircraft ───────────────────────────── */
 
   private damageAircraft(ac: AircraftEntity, amount: number, attackerId: number | null, weapon: DamageWeapon, hitPoint?: Vector3): void {
+    if (ac.practiceRounds && weapon !== 'collision') {
+      this.host.events.emit('practice:hit', { target: ac, weapon, attackerId });
+      return;
+    }
     const d = this.host.difficulty;
     const isMunition = !NON_MUNITION.has(weapon);
     let dmg = amount;
@@ -241,7 +245,7 @@ export class DamageSystem {
       t.speed = 0;
       const data = GROUND_TARGET_DATA[t.type];
       size = data.explosion === 'huge' ? 'huge' : 'large';
-      // a boat, or a rat killed swimming (t04): the blast goes up as spray, not a fireball
+      // a boat, or a rat killed swimming (t07): the blast goes up as spray, not a fireball
       if (data.naval || t.stoat?.swimming) surface = 'water';
     }
     this.explode(t.position, size, surface);

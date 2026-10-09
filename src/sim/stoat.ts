@@ -17,7 +17,7 @@
  *  - Over water it swims (StoatState.swimming): a steady `swimSpeed`, no dashes and no bolting, and no
  *    stops, so a StormBreaker can't track it there (sim/weapons/small.ts) and a JDAM's blast has to.
  *
- * t04's sewer rats ('rat') run on the same runner: down a Herne Bay street with a stop at each drain,
+ * t07's sewer rats ('rat') run on the same runner: down a Herne Bay street with a stop at each drain,
  * across the beach and out to Watchman Island, which is their "nest".
  *
  * Pure stepping over the world's ground list, like sim/boats.ts; no allocations per step.
@@ -215,7 +215,7 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: StoatState, dt: numb
 
 /**
  * Seconds an undisturbed stoat takes from its start to the nest (route at `speed`, a stop at each station).
- * All on land: a route that swims (t04's rats) takes longer by its water legs at the slower swimSpeed.
+ * All on land: a route that swims (t07's rats) takes longer by its water legs at the slower swimSpeed.
  */
 export function stoatArrival(spec: Pick<StoatSpawn, 'route' | 'stations' | 'speed' | 'stopTime'>): number {
   let len = 0;

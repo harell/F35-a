@@ -18,6 +18,7 @@
 import { Vector3 } from 'three';
 import type { CreateMissionRunner, MissionDef, MissionResult, MissionRunnerApi, ObjectiveStatus, Waypoint } from '../core/contracts';
 import { AKL, BRIDGE_SPAN_T } from '../core/auckland';
+import { LOADOUTS } from '../core/data';
 import type { LoadoutId, WeaponId } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import type { Action } from './schema';
@@ -38,6 +39,7 @@ import { attemptSeed, nextAttempt } from './runtime/variation';
 import { assignGroundAttack, buildGroups, retaskGroup, spawnAirGroup, spawnGroundTarget, spawnInitial, spawnPlayer, spawnSamSite, updateGroupLead } from './runtime/spawner';
 import { MissionState, firstAlive, type RunnerDeps, type TriggerRt, type WaypointRt } from './runtime/state';
 import { CivilTraffic } from './runtime/civil';
+import { DefenceCoach } from './runtime/defenceCoach';
 import { HelicopterTraffic } from './runtime/helicopters';
 import { CivilShipping } from './runtime/shipping';
 import { SuperyachtTraffic } from './runtime/superyachts';
@@ -45,10 +47,17 @@ import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
 import { HomesWatch } from './runtime/collateral';
 import { SightseeingLog } from './runtime/sightseeing';
+import { updateManeuvers, type ManeuverId } from './runtime/maneuvers';
 import { FREE_FLIGHT_SPEED_FLOOR, setSpeedFloor } from '../sim/flight/FlightModel';
 
 /** Mission logic evaluation period (s). */
 const EVAL_PERIOD = 0.1;
+/** HUD call when a drill's manoeuvre is recognised. */
+const MANEUVER_CALL: Record<ManeuverId, string> = { loop: 'LOOP', immelmann: 'IMMELMANN' };
+const _up = new Vector3();
+/** 'player_level': the flight path within this of the horizon (rad), and the jet's up vector this close to vertical (y). */
+const LEVEL_PITCH = 10 * (Math.PI / 180);
+const LEVEL_UP_Y = 0.95;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
 const DEFAULT_AO = 38_000;
@@ -77,6 +86,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly awacs: AwacsController;
   private readonly hints: HintSystem;
   private readonly callouts: Callouts;
+  /** Missile-defence call-outs and the drill log (script.defenceCoach). */
+  private readonly coach: DefenceCoach | null;
   private readonly winchester: WinchesterWatch;
   private readonly withdrawal: WithdrawalMonitor;
   /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
@@ -91,7 +102,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly trains: TrainTraffic | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
-  /** Homes hit by the player's bombs (script.collateral, t04). */
+  /** Homes hit by the player's bombs (script.collateral, t07). */
   private readonly homes: HomesWatch | null;
   /** Free flight: tour stops, distance and passes for the debrief. */
   private readonly sightseeing: SightseeingLog | null;
@@ -135,6 +146,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.withdrawal = new WithdrawalMonitor(this.s);
     this.hints = new HintSystem(this.s, this.winchester);
     this.callouts = new Callouts(this.s, (r) => this.onPlayerDown(r));
+    this.coach = def.script.defenceCoach ? new DefenceCoach(this.s) : null;
     const civilTraffic = def.theater === 'auckland' && deps.civilTraffic !== false;
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
     this.helicopters = civilTraffic ? new HelicopterTraffic(this.s, deps.helicopters ?? 3) : null;
@@ -167,6 +179,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.disposed) return;
     s.disposed = true;
     this.callouts.detach();
+    this.coach?.detach();
     this.landmarks.detach();
     this.homes?.detach();
     s.radio.clear();
@@ -212,6 +225,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.landmarks.setup();
     this.homes?.setup();
     this.callouts.attach();
+    this.coach?.attach();
     // ground-level steering for target waypoints without an explicit altitude
     for (const w of s.waypoints) {
       if (w.def.altitude === undefined && w.def.kind === 'target') w.wp.position.y = world.terrain.surfaceHeightAt(w.def.x, w.def.z);
@@ -249,10 +263,12 @@ class MissionRunnerImpl implements MissionRunnerApi {
       updateGroupLead(s, g);
       assignGroundAttack(s, g);
     }
+    this.updateManeuvers();
     this.updateCommits();
     this.updateTriggers();
     // before the objectives: a 'bridge' objective completes on the pass that sets stats.bridge
     this.updateBridge();
+    this.coach?.update();
     updateObjectives(s, edt);
     this.updateWaypoints();
     this.updateBoundary(edt);
@@ -405,6 +421,20 @@ class MissionRunnerImpl implements MissionRunnerApi {
     }
   }
 
+  /** The player's loops and Immelmanns (drills): counted for conditions, called on the HUD where an objective asks for one. */
+  private updateManeuvers(): void {
+    const s = this.s;
+    const p = s.player;
+    if (!p || !p.alive) return;
+    _up.set(0, 1, 0).applyQuaternion(p.quaternion);
+    const v = p.velocity.length();
+    const level = v > 1 && Math.abs(Math.asin(Math.max(-1, Math.min(1, p.velocity.y / v)))) < LEVEL_PITCH && _up.y > LEVEL_UP_Y;
+    if (!level) s.levelSince = -1;
+    else if (s.levelSince < 0) s.levelSince = s.time;
+    const m = updateManeuvers(s.maneuvers, p.velocity, _up, s.time);
+    if (m && s.script.objectives.some((o) => o.kind === 'maneuver')) s.hud(MANEUVER_CALL[m], 'good', 2.5);
+  }
+
   /** Spawn a group now (trigger action), whatever its spawn condition. */
   private spawnGroupNow(id: string): void {
     const s = this.s;
@@ -462,9 +492,33 @@ class MissionRunnerImpl implements MissionRunnerApi {
       case 'spawn':
         this.spawnGroupNow(a.group);
         break;
+      case 'respawn': {
+        const g = s.groups.get(a.group);
+        if (!g?.air) break;
+        if (g.spawnedAt < 0) this.spawnGroupNow(a.group);
+        else if (!g.members.some((m) => m.alive)) {
+          g.members.length = 0;
+          g.leadId = undefined;
+          spawnAirGroup(s, g);
+        }
+        break;
+      }
       case 'retask':
         retaskGroup(s, a.group, a.task);
         break;
+      case 'refill_cms': {
+        const p = s.player;
+        const lo = p?.loadout ? LOADOUTS[p.loadout] : null;
+        if (p && p.alive && lo) {
+          p.flares = Math.max(p.flares, lo.flares);
+          p.chaff = Math.max(p.chaff, lo.chaff);
+        }
+        break;
+      }
+      case 'hold_fire': {
+        for (const m of s.groups.get(a.group)?.members ?? []) if (m.kind === 'sam') m.holdFire = true;
+        break;
+      }
       case 'reveal': {
         const g = s.groups.get(a.group);
         for (const m of g?.members ?? []) if (m.kind === 'sam' || m.kind === 'ground') m.known = true;

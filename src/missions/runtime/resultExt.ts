@@ -29,7 +29,7 @@ export type MissionResultExt = MissionResult & {
   civilianTrainKills?: number;
   /** Of which named superyachts (#145), by name ("Koru"). */
   civilianYachts?: string[];
-  /** Homes inside the damage ring of the player's bombs (MissionScript.collateral, t04). */
+  /** Homes inside the damage ring of the player's bombs (MissionScript.collateral, t07). */
   homesHit?: number;
   /** Protect objectives with a debrief tally: how many of the group survived ("Fuel tanks saved 7/9"). */
   saved?: { label: string; saved: number; total: number }[];

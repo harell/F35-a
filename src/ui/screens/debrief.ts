@@ -64,7 +64,7 @@ export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   if (trains > 0) rows.push(['skull', 'Civil trains destroyed', String(trains)]);
   // superyachts by name (#145): "Koru, Aquijo"
   if (yachts.length) rows.push(['skull', yachts.length === 1 ? 'Superyacht sunk' : 'Superyachts sunk', escapeHtml(yachts.join(', '))]);
-  // homes inside a bomb's damage ring (t04, MissionScript.collateral)
+  // homes inside a bomb's damage ring (t07, MissionScript.collateral)
   if ((r.homesHit ?? 0) > 0) rows.push(['skull', r.homesHit === 1 ? 'Home hit' : 'Homes hit', String(r.homesHit)]);
   return rows;
 }

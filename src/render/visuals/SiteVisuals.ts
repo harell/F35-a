@@ -165,7 +165,7 @@ export class GroundVisual {
   lightMode = 0;
   /** g03's stoat: its posable parts (render/visuals/stoatPose.ts); null for every other target. */
   private readonly stoat: StoatNodes | null;
-  /** t04's rats: posable parts (render/visuals/ratPose.ts); null for every other target. */
+  /** t07's rats: posable parts (render/visuals/ratPose.ts); null for every other target. */
   private readonly rat: RatNodes | null;
 
   constructor(readonly proto: GroundPrototype) {

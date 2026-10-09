@@ -1,5 +1,6 @@
 /**
- * F35-A — training mission 4: "Combined Overflow" (optional; not part of basic training).
+ * F35-A — training lesson T07 "Small Targets": the release g03's stoat asks for, before g03 asks for it
+ * under the Waiheke air defences (MissionDef.lessons on g03: T06 Live SAMs, then this one).
  *
  * Herne Bay's old sewers carry wastewater and stormwater in the same pipes, and after heavy rain they
  * overflow (true of the real suburb: the overflow points spill dozens of times a year). In the game,
@@ -17,7 +18,7 @@
  *
  * Rat routes run down real Herne Bay streets (LINZ road centrelines, world/scenery/aucklandRoads.ts),
  * every drain at least 8 m from the nearest house so a StormBreaker on a stopped rat hits no home;
- * tests/missions-t04.test.ts checks them against the coast and the houses. The local trap group is
+ * tests/missions-t07.test.ts checks them against the coast and the houses. The local trap group is
  * fictional; no real organisation is named.
  */
 import type { MissionDef } from '../../core/contracts';
@@ -26,23 +27,23 @@ import { NEVER, mission, target } from './common';
 
 const DS = 'DARKSTAR';
 /** The trap group's radio callsign (fictional, like the group). */
-export const T04_TRAPPERS = 'TRAPPERS';
-const TR = T04_TRAPPERS;
+export const T07_TRAPPERS = 'TRAPPERS';
+const TR = T07_TRAPPERS;
 
 /** Watchman Island / Te Kākāwhakaara, the rats' goal (m; the map label in ui/art/aucklandPlaces.ts). */
-export const T04_ISLAND: XZ = { x: -2_696, z: -1_500 };
+export const T07_ISLAND: XZ = { x: -2_696, z: -1_500 };
 /** A rat this close to the island's centre has reached it (m). */
-export const T04_ISLAND_RADIUS = 25;
+export const T07_ISLAND_RADIUS = 25;
 
 /** Rats on land: average dash speed (m/s), stop at each drain (s); in the water a steady swim (m/s). */
-export const T04_RAT = { speed: 2.5, stopTime: 40, swimSpeed: 1.5 } as const;
+export const T07_RAT = { speed: 2.5, stopTime: 40, swimSpeed: 1.5 } as const;
 
 /**
  * A rat's route: its start (the overflow manhole), the points after it in order (the drains first),
  * which of those are drains (a stop at each; indices into `route`), and the street it runs down.
  * The last point is the island.
  */
-export interface T04Route {
+export interface T07Route {
   street: string;
   start: XZ;
   route: XZ[];
@@ -50,41 +51,41 @@ export interface T04Route {
 }
 
 /** The routes, by rat. Wave 1 and wave 3 run down the streets; wave 2 starts in the water. */
-export const T04_ROUTES = {
+export const T07_ROUTES = {
   wallace: {
     street: 'Wallace Street',
     start: { x: -2_509, z: -315 },
-    route: [{ x: -2_554, z: -495 }, { x: -2_590, z: -633 }, { x: -2_684, z: -672 }, { x: -2_703, z: -747 }, T04_ISLAND],
+    route: [{ x: -2_554, z: -495 }, { x: -2_590, z: -633 }, { x: -2_684, z: -672 }, { x: -2_703, z: -747 }, T07_ISLAND],
     drains: [0, 1, 2],
   },
   hamilton: {
     street: 'Hamilton Road',
     start: { x: -2_148, z: -368 },
-    route: [{ x: -2_190, z: -580 }, { x: -2_234, z: -796 }, { x: -2_249, z: -876 }, T04_ISLAND],
+    route: [{ x: -2_190, z: -580 }, { x: -2_234, z: -796 }, { x: -2_249, z: -876 }, T07_ISLAND],
     drains: [0, 1, 2],
   },
-  swimWest: { street: 'the water off the beach', start: { x: -2_850, z: -950 }, route: [T04_ISLAND], drains: [] },
-  swimEast: { street: 'the water off the point', start: { x: -2_450, z: -1_100 }, route: [T04_ISLAND], drains: [] },
+  swimWest: { street: 'the water off the beach', start: { x: -2_850, z: -950 }, route: [T07_ISLAND], drains: [] },
+  swimEast: { street: 'the water off the point', start: { x: -2_450, z: -1_100 }, route: [T07_ISLAND], drains: [] },
   sentinel: {
     street: 'Sentinel Road',
     start: { x: -2_327, z: -347 },
-    route: [{ x: -2_380, z: -550 }, { x: -2_431, z: -752 }, { x: -2_446, z: -816 }, T04_ISLAND],
+    route: [{ x: -2_380, z: -550 }, { x: -2_431, z: -752 }, { x: -2_446, z: -816 }, T07_ISLAND],
     drains: [0, 1, 2],
   },
   lawrence: {
     street: 'Lawrence Street',
     start: { x: -2_418, z: -337 },
-    route: [{ x: -2_465, z: -518 }, { x: -2_521, z: -731 }, { x: -2_630, z: -781 }, T04_ISLAND],
+    route: [{ x: -2_465, z: -518 }, { x: -2_521, z: -731 }, { x: -2_630, z: -781 }, T07_ISLAND],
     drains: [0, 1, 2],
   },
-} as const satisfies Record<string, T04Route>;
+} as const satisfies Record<string, T07Route>;
 
 /** Mission group ids: one per wave. */
-export const T04_GROUPS = { wave1: 'rats1', wave2: 'rats2', wave3: 'rats3' } as const;
-const G = T04_GROUPS;
+export const T07_GROUPS = { wave1: 'rats1', wave2: 'rats2', wave3: 'rats3' } as const;
+const G = T07_GROUPS;
 
 /** The rats of each wave. */
-export const T04_WAVES: Record<keyof typeof T04_GROUPS, (keyof typeof T04_ROUTES)[]> = {
+export const T07_WAVES: Record<keyof typeof T07_GROUPS, (keyof typeof T07_ROUTES)[]> = {
   wave1: ['wallace', 'hamilton'],
   wave2: ['swimWest', 'swimEast'],
   wave3: ['sentinel', 'lawrence'],
@@ -94,22 +95,22 @@ export const T04_WAVES: Record<keyof typeof T04_GROUPS, (keyof typeof T04_ROUTES
 const STREETS: XZ = { x: -2_450, z: -620 };
 
 /** The player: over the upper harbour off Point Chevalier, heading east for Herne Bay, about 9 km out. */
-const t04Start = { x: -11_500, z: -1_500, altitude: 1_500, heading: 90, speed: 220 };
+const t07Start = { x: -11_500, z: -1_500, altitude: 1_500, heading: 90, speed: 220 };
 
-function rat(name: keyof typeof T04_ROUTES, group: string, spawned: boolean) {
-  const r: T04Route = T04_ROUTES[name];
+function rat(name: keyof typeof T07_ROUTES, group: string, spawned: boolean) {
+  const r: T07Route = T07_ROUTES[name];
   return target(`rat_${name}`, group, 'rat', r.start, {
     name: 'Rat',
     spawn: spawned ? undefined : NEVER,
-    stoat: { route: [...r.route], stations: [...r.drains], speed: T04_RAT.speed, stopTime: T04_RAT.stopTime, swimSpeed: T04_RAT.swimSpeed, clock: 'spawn' },
+    stoat: { route: [...r.route], stations: [...r.drains], speed: T07_RAT.speed, stopTime: T07_RAT.stopTime, swimSpeed: T07_RAT.swimSpeed, clock: 'spawn' },
   });
 }
 
-export const T04: MissionDef = mission({
-  id: 't04',
+export const T07_SMALL: MissionDef = mission({
+  id: 't07',
   kind: 'training',
-  index: 4,
-  title: 'Combined Overflow',
+  index: 7,
+  title: 'Small Targets',
   subtitle: 'StormBreaker or JDAM: sewer rats in Herne Bay',
   timeOfDay: 'day',
   weather: 'scattered',
@@ -121,16 +122,16 @@ export const T04: MissionDef = mission({
   ],
   recommendedLoadout: 'strike_mixed',
   allowedLoadouts: ['strike_mixed'],
-  player: t04Start,
+  player: t07Start,
   script: {
     autoHints: true,
     parTime: 480,
     awacs: { initialPictureAt: -1, pictureInterval: 0 },
     collateral: true,
     ground: [
-      ...T04_WAVES.wave1.map((n) => rat(n, G.wave1, true)),
-      ...T04_WAVES.wave2.map((n) => rat(n, G.wave2, false)),
-      ...T04_WAVES.wave3.map((n) => rat(n, G.wave3, false)),
+      ...T07_WAVES.wave1.map((n) => rat(n, G.wave1, true)),
+      ...T07_WAVES.wave2.map((n) => rat(n, G.wave2, false)),
+      ...T07_WAVES.wave3.map((n) => rat(n, G.wave3, false)),
     ],
     objectives: [
       { id: 'o_w1', kind: 'destroy', groups: [G.wave1], label: 'Wave 1: StormBreakers on the rats at the drains', primary: true },
@@ -169,13 +170,13 @@ export const T04: MissionDef = mission({
       },
       {
         id: 't_swimming',
-        when: { kind: 'any', of: [{ kind: 'area', who: { group: G.wave1 }, x: T04_ISLAND.x, z: T04_ISLAND.z, radius: 700 }, { kind: 'area', who: { group: G.wave3 }, x: T04_ISLAND.x, z: T04_ISLAND.z, radius: 700 }] },
+        when: { kind: 'any', of: [{ kind: 'area', who: { group: G.wave1 }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: 700 }, { kind: 'area', who: { group: G.wave3 }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: 700 }] },
         actions: [{ kind: 'radio', from: TR, text: 'One is in the water and swimming. A StormBreaker won\'t find it now.', priority: 2 }],
       },
       // a rat on the island: the sortie is lost
       ...Object.values(G).map((group) => ({
         id: `t_island_${group}`,
-        when: { kind: 'area' as const, who: { group }, x: T04_ISLAND.x, z: T04_ISLAND.z, radius: T04_ISLAND_RADIUS },
+        when: { kind: 'area' as const, who: { group }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: T07_ISLAND_RADIUS },
         actions: [{ kind: 'end' as const, success: false, reason: 'A rat reached Watchman Island' }],
       })),
       {

@@ -349,7 +349,7 @@ export class Game {
       const outcome = await this.playMission(def, loadout);
       if (outcome === 'retry') continue;
       if (outcome === 'next') {
-        def = nextMissionAfter(def.id);
+        def = nextMissionAfter(def.id, this.progress);
         loadout = null;
         continue;
       }
@@ -373,8 +373,8 @@ export class Game {
       const result = this.finishSession();
       if (!result) return 'menu';
       this.trackResult(result);
-      // campaign → next mission, training → next lesson (T03 → the first campaign mission)
-      const next = result.success ? nextMissionLabel(def.id) : null;
+      // campaign → next mission; training → the next lesson the next campaign mission wants, then that mission
+      const next = result.success ? nextMissionLabel(def.id, this.progress) : null;
       const choice = await this.flow.ask(this.ui.showDebrief(result, next));
       return choice;
     }

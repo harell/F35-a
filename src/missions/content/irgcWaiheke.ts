@@ -139,6 +139,9 @@ export const G03: MissionDef = mission({
   ],
   recommendedLoadout: 'sead_precision',
   allowedLoadouts: ['sead_precision'],
+  // Live SAMs: the SA-6, terrain masking and the notch over land; Small Targets: the StormBreaker
+  // released while a target too small to track stands still
+  lessons: ['t06', 't07'],
   player: g03Start,
   timeLimit: G03_CLOCK,
   script: {

@@ -25,7 +25,7 @@ const DIFFS: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 describe('#68: training flies at Pilot whatever the setting', () => {
   it('every lesson flies at Pilot; campaign and Instant Action missions follow the setting', () => {
     expect(TRAINING_DIFFICULTY).toBe('pilot');
-    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04']);
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04', 't05', 't06', 't07']);
     for (const m of TRAINING) {
       expect(fixedDifficulty(m)).toBe('pilot');
       for (const d of DIFFS) expect(missionDifficulty(m, d)).toBe('pilot');
@@ -37,7 +37,7 @@ describe('#68: training flies at Pilot whatever the setting', () => {
     }
   });
 
-  it('T01–T03 run at Pilot on a Veteran setting (the bot starts missions the way the game does)', { timeout: 240_000 }, () => {
+  it('every lesson runs at Pilot on a Veteran setting (the bot starts missions the way the game does)', { timeout: 240_000 }, () => {
     for (const def of TRAINING) {
       const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
       const r = runPlaythrough(def.id, 'veteran', 0, terrain, { maxT: 900 });

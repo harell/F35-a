@@ -336,7 +336,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     kind: 'warning', id: 'spike', cat: 'thr', name: 'SPIKE', chip: 'SPIKE 29', level: 'amb', sound: 'spike', voice: 'p_spike', voiceText: 'Spike!',
     line: 'A fighter\'s radar has locked on to you. It may fire next.',
     trigger: 'An enemy fighter\'s radar goes from searching to tracking you. The number after SPIKE identifies the aircraft type.',
-    how: ['Look for the chip\'s arrow and the diamond at the screen edge. The threat is that way.', 'Decide: fight back (lock and fire) or break the lock (turn 90° to it, dive, chaff).', 'Watch for it to turn red. That\'s a launch.'],
+    how: ['Look for the chip\'s arrow and the diamond at the screen edge. The threat is that way.', 'Decide: fight back (lock and fire) or break the lock (turn 90° to it, chaff).', 'Watch for it to turn red. That\'s a launch.'],
     notes: ['Search radars show as dim symbols with no chip. Only a lock makes a SPIKE.', 'Stealthy fighters are only picked up at closer range.', 'Your pilot calls "Spike!" at most once every 25 s.'],
   },
   {
@@ -357,7 +357,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     kind: 'warning', id: 'missile', cat: 'thr', name: 'MISSILE', chip: 'MISSILE 6s', level: 'red', sound: 'missile', voice: 'b_missile', voiceText: 'Missile',
     line: 'A missile is coming at you, any type, within 15 km. Act now.',
     trigger: 'The jet\'s missile approach warning sees a missile heading for you. A red ring appears around your flight path marker, with an arrow per missile (orange means heat-seeker) and 1–3 chevrons as it closes. The seconds to impact count down.',
-    how: ['Radar missile: turn 90° to it, dive, drop countermeasures late.', 'Heat-seeker (orange arrow): drop flares, break hard into it, come out of afterburner.', 'Three chevrons means under 4 s to impact.'],
+    how: ['A SAM\'s radar missile: turn 90° to it (beam it) and press CMS every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it is too late. Running away doesn\'t: the missile is faster.', 'A SAM\'s heat-seeker (orange arrow; the air-defence boats): the same hard turn across it, afterburner off, CMS late, in the last 3 s. Turning into it makes it worse.', 'A fighter\'s missile flies longer: beam it and dive, chaff late; against its heat-seeker, flares and a hard break into it.', 'Three chevrons means under 4 s to impact.'],
     notes: ['This is the only warning for shoulder-fired missiles and for long-range fighter missiles in midcourse.', 'The tone sweeps down, and it speeds up as the missile gets closer.'],
   },
   {

@@ -1,7 +1,7 @@
 /**
  * Impact craters (#201): a dark, shallow bowl with a raised rim of thrown-up sand, laid on the
  * terrain where a bomb or missile hit the ground (Effects: every munition that ends on land, sized
- * by its warhead) and where a target that leaves nothing else behind died (g03's stoat, t04's rats).
+ * by its warhead) and where a target that leaves nothing else behind died (g03's stoat, t07's rats).
  * Each crater is its own small mesh (a few hundred triangles), conformed to the ground under it, and
  * stays for the rest of the sortie; a fixed pool, the oldest reused when it runs out.
  *

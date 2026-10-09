@@ -23,6 +23,7 @@ import type {
   WeaponId,
 } from '../core/types';
 import type { WaypointKind } from '../core/contracts';
+import type { ManeuverId } from './runtime/maneuvers';
 
 /** World XZ point (m). */
 export interface XZ {
@@ -90,6 +91,15 @@ export type Condition =
   | { kind: 'player_radar'; state: 'designated' | 'locked' }
   /** The player has this weapon selected (e.g. the GUN: down to the gun, or lining up a gun pass). */
   | { kind: 'player_weapon'; weapon: WeaponId }
+  /** The player's indicated airspeed (m/s) is above / below the given values. */
+  | { kind: 'player_speed'; above?: number; below?: number }
+  /** The player has flown at least `count` (default 1) of a vertical manoeuvre since the start (runtime/maneuvers.ts). */
+  | { kind: 'player_maneuver'; maneuver: ManeuverId; count?: number }
+  /**
+   * The player is flying straight and level (flight path within LEVEL_PITCH of the horizon, wings
+   * within ~18° of level) and has been for at least `seconds` (default 0).
+   */
+  | { kind: 'player_level'; seconds?: number }
   | { kind: 'all'; of: Condition[] }
   | { kind: 'any'; of: Condition[] }
   | { kind: 'not'; of: Condition };
@@ -214,6 +224,13 @@ export interface AircraftGroupDef {
   enemyLoadout?: 'default' | 'strike';
   /** One-way attack drone group (type 'shahed136'): see OneWayDef. */
   oneWay?: OneWayDef;
+  /**
+   * 'player': the group is placed where the player is when it spawns (drills). `x`, `z` and the
+   * one-way target and route are then offsets in the player's frame along its flight path: +x to
+   * its right, −z ahead (+z behind), like the world's −Z north; `altitude` is metres above the
+   * player (kept clear of the ground) and `heading` degrees relative to the player's track.
+   */
+  relative?: 'player';
   /** Friendly 'wingman' only: standing orders (hold fire until the player fires, groups to leave alone). */
   orders?: WingmanOrders;
   /**
@@ -259,6 +276,8 @@ export interface SamSiteDef {
   /** 'ad_boat' escort station: m behind its leader (negative = ahead of it, default 250) and m to its right (default 150). */
   escortAft?: number;
   escortRight?: number;
+  /** 'ad_boat': no long harassing shots outside its envelope (a training boat, t05). */
+  noHarass?: boolean;
 }
 
 /**
@@ -319,7 +338,7 @@ export interface GroundTargetDef {
    * which of those points are bait stations (indices into `route`, 0 = the first point after the
    * start), its dash speed (m/s) and the stop at each station (s). Its clock starts at mission
    * start, whenever it spawns, unless `clock` is 'spawn'.
-   * 'rat' (t04) runs the same way; over water it swims at `swimSpeed` (m/s) and its clock starts when it
+   * 'rat' (t07) runs the same way; over water it swims at `swimSpeed` (m/s) and its clock starts when it
    * spawns (`clock: 'spawn'`: a wave the mission sends in later starts at its own start point).
    */
   stoat?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number; swimSpeed?: number; clock?: 'mission' | 'spawn' };
@@ -344,7 +363,17 @@ interface ObjectiveBase {
 export type ObjectiveDef = ObjectiveBase &
   (
     | /** Destroy every member (or `count`) of the given groups (aircraft, SAMs or ground targets). */
-    { kind: 'destroy'; groups: string[]; count?: number }
+    {
+        kind: 'destroy';
+        groups: string[];
+        count?: number;
+        /**
+         * Count only members the player shot down (a training drill): one lost any other way (a
+         * one-way drone reaching its target, a crash) doesn't complete it. Driven-off members don't
+         * count either. Pair it with a 'respawn' trigger so the drill gets another target.
+         */
+        byPlayer?: boolean;
+      }
     | /** Destroy every hostile SAM/AAA site inside a circle. */
     { kind: 'destroy_sams'; x: number; z: number; radius: number }
     | /**
@@ -384,6 +413,16 @@ export type ObjectiveDef = ObjectiveBase &
     { kind: 'survive'; seconds: number; area?: { x: number; z: number; radius: number } }
     | /** Return to base: only becomes active when every other primary is complete. */
     { kind: 'rtb'; x: number; z: number; radius: number }
+    | /**
+       * A missile-defence drill (needs `defenceCoach`): completes once `defeat` missiles fired at the
+       * player by the sites of `groups` since it opened have been defeated (only `guidance` ones, and only
+       * with the jet below `maxAgl` m when the missile ended, when given). `inARow`: that many in a row,
+       * a hit starts the count again (luck alone rarely strings them together). With `maxHits`, it fails
+       * once more hits than that land.
+       */
+    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number; inARow?: boolean }
+    | /** Fly a vertical manoeuvre (loop / Immelmann) after the objective opens (runtime/maneuvers.ts). */
+    { kind: 'maneuver'; maneuver: ManeuverId }
   );
 
 /* ───────────────────────────── Waypoints ───────────────────────────── */
@@ -413,6 +452,12 @@ export type Action =
   /** Show a HUD hint for `duration` s (default 8). */
   | { kind: 'hint'; text: string; duration?: number }
   | { kind: 'spawn'; group: string }
+  /**
+   * Spawn an aircraft group again once none of its members is alive (a drill's next try): its
+   * members are replaced, so 'destroy' objectives and group conditions count the new ones.
+   * A group that has not spawned yet just spawns.
+   */
+  | { kind: 'respawn'; group: string }
   | { kind: 'retask'; group: string; task: TaskDef }
   /** Mark SAM sites of a group as known (TSD rings) — e.g. after an intel update. */
   | { kind: 'reveal'; group: string }
@@ -422,6 +467,10 @@ export type Action =
   | { kind: 'strike'; group: string; by?: string }
   /** Darkstar calls the current air picture. */
   | { kind: 'picture' }
+  /** Refill the player's flares and chaff to the loadout's load (a training range between drills, t05). */
+  | { kind: 'refill_cms' }
+  /** The SAM sites of a group cease fire: they launch nothing more (missiles in flight fly on; t05's range boats). */
+  | { kind: 'hold_fire'; group: string }
   | { kind: 'end'; success: boolean; reason: string };
 
 export interface TriggerDef {
@@ -498,11 +547,11 @@ export interface MissionScript {
   /**
    * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
    * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` (one
-   * group, or several: t04's waves) the player killed, under `removed.label`.
+   * group, or several: t07's waves) the player killed, under `removed.label`.
    */
   costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string | string[] } };
   /**
-   * Count the homes the player's bombs hit (runtime/collateral.ts, t04): every building within half a
+   * Count the homes the player's bombs hit (runtime/collateral.ts, t07): every building within half a
    * weapon's blast radius of where it went off on land. Each one is called on the radio, listed in the
    * debrief and costs score and grade (scoring.ts POINTS.home).
    */
@@ -513,6 +562,17 @@ export interface MissionScript {
    * down doesn't end the sortie.
    */
   freeFlight?: boolean;
+  /**
+   * Practice rounds (training): enemy weapons that hit the player do no damage, each hit is scored
+   * and called out instead (AircraftEntity.practiceRounds). Flying into the ground still ends it.
+   */
+  practiceRounds?: boolean;
+  /**
+   * The defence coach (runtime/defenceCoach.ts): after every missile fired at the player, a HUD
+   * call-out of how it ended and why (defeated by chaff, the notch…; hit because you ran, didn't
+   * beam, didn't press CMS…). It also keeps the log that 'missile_drill' objectives count.
+   */
+  defenceCoach?: boolean;
 }
 
 /** Empty script (helper for builders). */

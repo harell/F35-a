@@ -8,6 +8,7 @@ import { DIFFICULTIES } from '../core/data';
 import { loadSettings, saveSettings } from '../core/settings';
 import type { Difficulty, DifficultyParams, Settings } from '../core/types';
 import { fixedDifficulty } from '../missions/difficulty';
+import { trainingTarget } from '../missions';
 
 export const DIFFICULTY_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 
@@ -72,7 +73,6 @@ export function difficultyChangeToast(id: Difficulty, running: Pick<MissionDef, 
 const ONBOARD_KEY = 'f35a.ui.onboarded.v1';
 const PROGRESS_KEY = 'f35a.progress.v1';
 const SETTINGS_KEY = 'f35a.settings.v1';
-export const BASIC_TRAINING = ['t01', 't02', 't03'];
 
 function store(): Storage | null {
   try {
@@ -101,9 +101,18 @@ export function dismissOnboarding(): void {
   }
 }
 
-/** Basic training (T01–T03) all flown successfully. */
+/**
+ * The lessons the next campaign mission wants that aren't flown yet, and that mission (trainingTarget):
+ * T01 and T02 before g01, Gulf Defence before g02… Null once the campaign is won.
+ */
+export function lessonsLeft(p: CampaignProgress): { mission: MissionDef; lessons: MissionDef[] } | null {
+  const t = trainingTarget(p);
+  return t && t.lessons.length > 0 ? t : null;
+}
+
+/** Every lesson the next campaign mission wants is flown: the campaign nudge and the RECOMMENDED badge go. */
 export function basicTrainingDone(p: CampaignProgress): boolean {
-  return BASIC_TRAINING.every((id) => !!p.best[id]);
+  return lessonsLeft(p) === null;
 }
 
 /* ───────────────────────── career ───────────────────────── */

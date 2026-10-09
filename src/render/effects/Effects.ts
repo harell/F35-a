@@ -1199,7 +1199,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       } else if (entity.kind === 'ground' && entity.type === 'ship') {
         shipKill(entity);
       } else if (entity.kind === 'ground' && (entity.type === 'stoat' || entity.type === 'rat')) {
-        // the stoat (#201) and t04's rats: no fire, no smoke column, no model; the bomb's own blast
+        // the stoat (#201) and t07's rats: no fire, no smoke column, no model; the bomb's own blast
         // throws the sand, and the crater it dug stays (a rat killed swimming leaves only the splash)
         if (!world.terrain.isWater(p.x, p.z)) craters.add(p.x, p.z, STOAT_CRATER_RADIUS, groundAt);
       } else if (entity.kind === 'sam' || entity.kind === 'ground') {

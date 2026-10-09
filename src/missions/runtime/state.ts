@@ -4,12 +4,14 @@
  *
  * Plain data + tiny helpers; all logic lives in the helper modules.
  */
+import type { MissileRecord } from './defenceCoach';
 import type { EventBus } from '../../core/events';
 import type { MissionDef, ObjectiveStatus, Waypoint } from '../../core/contracts';
 import type { Difficulty, DifficultyParams, Team } from '../../core/types';
 import type { CreateAiBrain, SimWorld } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Condition, GroundTargetDef, MissionScript, ObjectiveDef, SamSiteDef, TaskDef, TriggerDef, WaypointDef } from '../schema';
+import { createManeuverTracker } from './maneuvers';
 import { RadioQueue } from './radio';
 
 export interface RunnerDeps {
@@ -53,10 +55,14 @@ export interface ObjectiveRt {
   status: ObjectiveStatus;
   /** Survive: seconds accumulated. */
   accum: number;
+  /** 'maneuver' objectives: the manoeuvre's count when the objective opened. */
+  base?: number;
   /** Intercept: raid has turned back. */
   aborted: boolean;
   /** Destroy: members credited as driven off rather than killed (reduced bonus). */
   drivenOff: number;
+  /** Sim time it became active (-1 = not yet). */
+  openedAt?: number;
 }
 
 export interface TriggerRt {
@@ -190,6 +196,14 @@ export class MissionState {
   readonly withdrawSince = new Map<number, number>();
   /** Debrief bookkeeping (tips / medals). */
   readonly stats: SortieStats = newSortieStats();
+  /** Every missile fired at the player and how it ended (runtime/defenceCoach.ts; only with `defenceCoach`). */
+  readonly missileLog: MissileRecord[] = [];
+  /** The player's loops / Immelmanns (training drills). */
+  readonly maneuvers = createManeuverTracker();
+  /** Entities the player destroyed (ids): 'destroy' objectives with `byPlayer`. */
+  readonly playerKills = new Set<number>();
+  /** Since when (mission time, s) the player has flown straight and level; -1 while not ('player_level'). */
+  levelSince = -1;
   /** The runner has been disposed (mission torn down): every update is a no-op. */
   disposed = false;
 

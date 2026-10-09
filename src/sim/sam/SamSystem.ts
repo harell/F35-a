@@ -247,7 +247,7 @@ function detects(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircraf
   if (cue && agl >= data.altMin * 0.5) {
     const scale = ctx.world.difficulty.samRangeScale;
     const bay = tracking || t.bayDoors > 0.05;
-    const k = ctx.world.difficulty.adBoatHarass;
+    const k = s.noHarass ? 0 : ctx.world.difficulty.adBoatHarass;
     const r = bay ? (data.harass && k > 0 ? Math.max(cue.bayRange, data.harass.cueRange * k) : cue.bayRange) : cue.range;
     if (d <= r * scale && lineOfSight(world.terrain, _eye, t.position)) return true;
   }
@@ -266,7 +266,7 @@ function canEngage(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, t: Aircr
   const scale = ctx.world.difficulty.samRangeScale;
   const d = t.position.distanceTo(s.position);
   const agl = t.position.y - ctx.world.terrain.surfaceHeightAt(t.position.x, t.position.z);
-  const k = ctx.world.difficulty.adBoatHarass;
+  const k = s.noHarass ? 0 : ctx.world.difficulty.adBoatHarass;
   const harassReach = data.harass && k > 0 ? data.harass.reach * k : 0;
   if (d < data.engageMin || d > Math.max(data.engageMax, harassReach) * scale) return false;
   if (agl < data.altMin) return false;
@@ -526,9 +526,18 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
   if (s.guidedMissiles.length > 0) updateEndgame(ctx, s, si, dt);
   switch (s.state) {
     case 'track': {
+      // an empty launcher with nothing in flight reloads: a site whose track was broken (chaff, the
+      // notch) while it guided its last rounds re-acquires straight into 'track' with none left, and
+      // without this sat there for good (found by t05's drills: a boat silent after four rounds)
+      if (s.missilesReady <= 0 && liveGuided(ctx, s) === 0) {
+        s.state = 'reload';
+        s.reloadTimer = data.reloadTime;
+        dropTrack(s, si);
+        break;
+      }
       if (!tgt) break;
       s.trackProgress = Math.min(1, s.trackProgress + dt / Math.max(0.1, world.difficulty.samReactionTime * data.reaction));
-      if (s.trackProgress >= 1 && si.refireTimer <= 0 && s.missilesReady > 0 && si.engageable && liveGuided(ctx, s) < data.channels) {
+      if (s.trackProgress >= 1 && si.refireTimer <= 0 && s.missilesReady > 0 && si.engageable && !s.holdFire && liveGuided(ctx, s) < data.channels) {
         s.state = 'launch';
         si.salvoLeft = Math.min(data.salvo, s.missilesReady, data.channels - liveGuided(ctx, s));
         si.salvoTimer = 0;
@@ -596,7 +605,7 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
     if (n) updateEndgame(ctx, s, si, dt, si.mpMissiles);
   }
   if (si.mpTimer > 0) si.mpTimer -= dt;
-  if (si.mpRounds <= 0 || si.mpTimer > 0) return;
+  if (si.mpRounds <= 0 || si.mpTimer > 0 || s.holdFire) return;
   if (!scanNow) {
     return;
   }

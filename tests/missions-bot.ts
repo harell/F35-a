@@ -41,13 +41,14 @@ import { spawnFloor } from '../src/missions/runtime/spawner';
 import { cloudBase } from '../src/core/weather';
 import { isSmallGround } from '../src/sim/weapons/small';
 
+const DEG = Math.PI / 180;
 const _h = new Vector3();
 const _q = new Vector3();
 
 type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
 /** In order of preference (as the game's hints: AARGM for emitters, then SDB II, JDAM). */
 const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu31'];
-/** Height above a small target (m) the bot attacks it from, with no deck overhead (t04's rats). */
+/** Height above a small target (m) the bot attacks it from, with no deck overhead (t07's rats). */
 const SMALL_TARGET_ALT = 1_200;
 
 /** SDB-class glide bombs (GBU-53/B): pressed in to SDB_PRESS_RANGE. */
@@ -140,6 +141,8 @@ export interface MissionBotOptions {
   reaction?: number;
   /** Go home when Winchester or bingo (default true). */
   rtb?: boolean;
+  /** Defend against SAM rounds (default true). false: a probe of a pilot who ignores the warning (t05's drills). */
+  defend?: boolean;
 }
 
 export class MissionBot {
@@ -164,6 +167,21 @@ export class MissionBot {
   defenceAgl = 120;
   /** Base of the mission's cloud deck (m MSL), null in clear or scattered weather. */
   private readonly deck: number | null;
+  /**
+   * A missile-defence lesson (script.defenceCoach, t05): the bot flies it as taught — the steering cue
+   * at its own height (low when the drill says low), and against a SAM round the defence the lesson
+   * teaches (studentDefence), not the campaign bot's (samDefence).
+   */
+  private readonly student: boolean;
+  /** Student: extending away from the drill's boat before turning back in (an orbit draws no shot). */
+  private extending = false;
+  /**
+   * A vertical-manoeuvre lesson (a 'maneuver' objective, t03): the bot flies the drill as taught,
+   * with the stick (full afterburner, full back stick; for an Immelmann, roll upright over the top),
+   * then guns the drone. `vStick` is the manoeuvre in progress.
+   */
+  private readonly vertical: boolean;
+  private vStick: { kind: 'loop' | 'immelmann'; phase: 'pull' | 'roll'; climbed: boolean; since: number } | null = null;
 
   constructor(
     private readonly runner: MissionRunnerApi,
@@ -171,9 +189,11 @@ export class MissionBot {
     private readonly p: AircraftEntity,
     opts: MissionBotOptions = {},
   ) {
-    this.opts = { reaction: 0.8, rtb: true, ...opts };
+    this.opts = { reaction: 0.8, rtb: true, defend: true, ...opts };
     this.agLoadout = this.agLeft() > 0;
     this.deck = cloudBase(runner.def.weather);
+    this.student = !!runner.def.script.defenceCoach;
+    this.vertical = runner.def.script.objectives.some((o) => o.kind === 'maneuver');
     const h = homeBase(runner.def);
     this.home = new Vector3(h.x, 0, h.z);
     const wp = runner.currentWaypoint;
@@ -219,9 +239,9 @@ export class MissionBot {
   /** Best A/G weapon we carry for a target (null = none suitable). */
   private weaponFor(t: AnyEntity): AgWeapon | null {
     const c = this.world.combat;
-    // a target too small to track on the move (g03's stoat, t04's rats): a StormBreaker for one on land,
+    // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker for one on land,
     // released at a stop; a JDAM only for one in the water (its blast catches a swimmer, and on a street
-    // it takes the houses: t04's lesson). On land with no StormBreaker left, wait for it to swim.
+    // it takes the houses: t07's lesson). On land with no StormBreaker left, wait for it to swim.
     if (isSmallGround(t)) {
       const swimming = this.world.terrain.isWater(t.position.x, t.position.z);
       const w: AgWeapon = swimming ? 'gbu31' : 'gbu53';
@@ -254,7 +274,7 @@ export class MissionBot {
    * SDB-class glide bombs (StormBreaker): with one already on its way to a target the next is
    * preferred, so they are rippled onto the targets like a human does instead of one 2-minute glide
    * at a time (issue #65: StormBreaker runs over 600 s). Not JDAMs (a JDAM rippled from inside the
-   * run-in overflew its target in t03).
+   * run-in overflew its target in t06).
    * Fast boats (a swarm on a clock, IRGC g02) are bombed one bomb per boat, rippled: a boat with our
    * bomb already on the way is left to it while another one is free, and the shortest clock goes
    * first (suicide boats, then missile boats, then the rest), as the briefing tells a human.
@@ -323,14 +343,16 @@ export class MissionBot {
     const fuelLow = p.flight.fuel < AIRCRAFT_PERF[p.type].internalFuel * 0.18;
 
     // 1. missile inbound: a SAM shot is defended against; everything else: the calibrated air-to-air bot
-    if (p.incoming.length > 0) {
+    if (p.incoming.length > 0 && !(this.opts.defend === false && this.samShot())) {
       if (!this.samShot()) return this.fight('DEFEND', dt);
+      if (this.student) return this.studentDefence(dt);
       if (!this.finishingRipple()) return this.samDefence(dt);
     }
 
     this.beamSide = 0;
     // 2. mission over: go home
     if (this.runner.state !== 'running') return this.nav(this.home, 2500, 'HOME', dt);
+    if (this.vertical) return this.verticalDrill(dt);
 
     const surface = ag > 0 ? this.surfaceTarget() : null;
     // surface objectives are ours only when we brought air-to-ground stores (else a package's job)
@@ -420,6 +442,7 @@ export class MissionBot {
 
     // 7. steering cue (a target under an overcast deck is looked for from below the cloud)
     const wp = this.runner.currentWaypoint;
+    if (wp && this.student) return this.drillLeg(wp, dt);
     if (wp) {
       let alt = wp.kind === 'target' ? Math.max(4_000, wp.position.y) : wp.position.y > 10 ? wp.position.y : 1500;
       if (this.deck !== null && wp.kind === 'target' && Math.hypot(wp.position.x - p.position.x, wp.position.z - p.position.z) < UNDER_DECK_RANGE) alt = this.deck - 400;
@@ -503,7 +526,7 @@ export class MissionBot {
   }
 
   /**
-   * SAM defence as taught in T03: beam it (turn 90° to the launching site's radar), descend into
+   * SAM defence as taught in T06: beam it (turn 90° to the launching site's radar), descend into
    * the ground clutter, CHAFF in the last seconds (FLARES against IR missiles), last-ditch break.
    */
   private samDefence(dt: number): void {
@@ -537,6 +560,144 @@ export class MissionBot {
       else p.input.flare = p.flares > 0;
       if (urgent.timeToImpact < 2.5) p.input.flare = p.flares > 0;
       this.lastCm = now;
+    }
+  }
+
+  /**
+   * The student's leg to the steering cue: at a boat (a target waypoint) it flies in until it is shot
+   * at; after each defence (or an overflight inside 1.5 km) it extends out to 8 km and turns back in to
+   * draw the next shot. An orbit round the boat is a beam: it never shoots at one, and the drill stalls.
+   */
+  private drillLeg(wp: { kind: string; position: Vector3 }, dt: number): void {
+    const p = this.p;
+    const alt = Math.max(120, wp.position.y);
+    if (wp.kind !== 'target' || this.irDrill()) return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
+    const d = Math.hypot(p.position.x - wp.position.x, p.position.z - wp.position.z);
+    if (d < 1_500) this.extending = true;
+    else if (d > 8_000) this.extending = false;
+    if (!this.extending) return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
+    _q.set(p.position.x - wp.position.x, 0, p.position.z - wp.position.z).normalize();
+    _h.copy(wp.position).addScaledVector(_q, 14_000);
+    this.nav(_h, alt, 'EXTEND', dt, false, 100);
+  }
+
+  /** The open drill is a heat-seeker drill (the shoulder-launched missile fires at any aspect: no racetrack). */
+  private irDrill(): boolean {
+    for (const st of this.runner.objectives) {
+      if (st.state !== 'active') continue;
+      const o = this.runner.def.script.objectives.find((x) => x.id === st.id);
+      if (o && o.kind === 'missile_drill' && o.guidance === 'ir') return true;
+    }
+    return false;
+  }
+
+  /**
+   * The defence t05 teaches (measured with this bot, real flight model; stack/sam-defence-advice): beam
+   * it, holding the drill's height (a low drill stays low), with one CMS press every 2.5 s from 6 s to
+   * impact against a radar round, and late (the last 3 s) against a heat-seeker.
+   */
+  private studentDefence(dt: number): void {
+    const p = this.p;
+    const w = this.world;
+    this.mode = 'DRILLDEF';
+    this.clearTriggers();
+    this.extending = true; // when this one is over: out, and back in for the next
+    let urgent = p.incoming[0];
+    for (const m of p.incoming) if (m.timeToImpact < urgent.timeToImpact) urgent = m;
+    const m = w.getEntity(urgent.missileId);
+    const ir = urgent.guidance === 'ir';
+    const wp = this.runner.currentWaypoint;
+    const hold = wp && wp.position.y < 1_000 ? Math.max(120, wp.position.y) : p.position.y;
+    // beam: across the radar's line of sight (a heat-seeker: across the missile's own)
+    const site = !ir && m && m.kind === 'missile' ? w.getEntity(m.shooterId) : null;
+    const ref = site ? site.position : m ? m.position : p.position;
+    _q.set(p.position.x - ref.x, 0, p.position.z - ref.z).normalize();
+    _h.set(-_q.z, 0, _q.x);
+    if (this.beamSide === 0) this.beamSide = _h.x * p.velocity.x + _h.z * p.velocity.z >= 0 ? 1 : -1;
+    _h.multiplyScalar(this.beamSide);
+    const it = this.pilot.begin(p, 80);
+    it.allowInverted = false;
+    turnLimited(p, _h, 100);
+    dirWithElevation(_h, gammaForAltitude(p, hold, 0.2, 4), it.dir);
+    it.speed = 280;
+    it.allowAb = !ir;
+    it.gMax = ir ? 7 : 6;
+    it.gain = ir ? 2 : 1.6;
+    this.pilot.fly(p, w, dt);
+    const from = ir ? 3 : 6;
+    if (urgent.timeToImpact < from && w.time - this.lastCm > 2.5) {
+      if (ir) p.input.flare = p.flares > 0;
+      else p.input.chaff = p.chaff > 0;
+      this.lastCm = w.time;
+    }
+  }
+
+  /**
+   * The vertical-reversal drills (t03), as the briefing teaches them: an open Immelmann objective —
+   * fly straight and hold fire while the head-on drone passes under, extend until it is ~700 m
+   * behind, then the Immelmann; an open loop objective — the drone is behind: loop at once; a drone
+   * to kill — the gun (the air-to-air bot's gun attack); otherwise straight and level, fast (the next
+   * drone only comes above 280 kt and 700 m).
+   */
+  private verticalDrill(dt: number): void {
+    const p = this.p;
+    const w = this.world;
+    if (this.vStick) return this.stickManeuver();
+    let open: 'loop' | 'immelmann' | null = null;
+    for (const st of this.runner.objectives) {
+      if (st.state !== 'active') continue;
+      const o = this.runner.def.script.objectives.find((x) => x.id === st.id);
+      if (o && o.kind === 'maneuver') open = o.maneuver;
+    }
+    let drone: AircraftEntity | null = null;
+    for (const a of w.aircraft) if (a.alive && isHostile(p.team, a.team) && (!drone || a.position.distanceTo(p.position) < drone.position.distanceTo(p.position))) drone = a;
+    _h.copy(p.velocity).setY(0).normalize();
+    const along = drone ? _q.subVectors(drone.position, p.position).dot(_h) : 0;
+    if (open === 'immelmann' && drone && along < -700) return this.startStick('immelmann');
+    if (open === 'loop' && drone) return this.startStick('loop');
+    if (!open && drone) {
+      this.air.opts.rtbWhenWinchester = false;
+      return this.fight('GUNS', dt);
+    }
+    // straight and level at 350 kt, 1,500 m; back towards the middle of the AO when far out
+    const far = Math.hypot(p.position.x, p.position.z) > 25_000;
+    _q.copy(p.position).addScaledVector(_h, 5_000);
+    this.nav(far ? new Vector3(0, 0, 0) : _q.clone(), 1_500, 'VLEVEL', dt, false, 300, 185);
+  }
+
+  private startStick(kind: 'loop' | 'immelmann'): void {
+    this.vStick = { kind, phase: 'pull', climbed: false, since: this.world.time };
+    this.stickManeuver();
+  }
+
+  /** Full afterburner, full back stick; an Immelmann rolls upright once over the top on its back. */
+  private stickManeuver(): void {
+    const p = this.p;
+    const s = this.vStick!;
+    this.mode = s.kind === 'loop' ? 'LOOP' : 'IMMELMANN';
+    this.clearTriggers();
+    const v = Math.max(1, p.velocity.length());
+    const gamma = Math.asin(p.velocity.y / v);
+    const upY = _q.set(0, 1, 0).applyQuaternion(p.quaternion).y;
+    if (gamma > 60 * DEG) s.climbed = true;
+    const inp = p.input;
+    inp.throttle = 1;
+    inp.yaw = 0;
+    let done = this.world.time - s.since > 45;
+    if (s.phase === 'pull') {
+      inp.pitch = 1;
+      inp.roll = 0;
+      if (s.kind === 'immelmann' && s.climbed && upY < -0.5 && gamma < 15 * DEG) s.phase = 'roll';
+      if (s.kind === 'loop' && s.climbed && Math.abs(gamma) < 15 * DEG && upY > 0.5) done = true;
+    } else {
+      inp.pitch = 0;
+      inp.roll = 1;
+      if (upY > 0.95) done = true;
+    }
+    if (done) {
+      inp.pitch = 0;
+      inp.roll = 0;
+      this.vStick = null;
     }
   }
 
@@ -780,7 +941,7 @@ export class MissionBot {
     else if (isSmallGround(t)) alt = t.position.y + SMALL_TARGET_ALT;
     // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
     // until it stops (a release now would land where it was), instead of overflying it into the defences.
-    // Not with a JDAM at a swimmer (t04): its blast does the work
+    // Not with a JDAM at a swimmer (t07): its blast does the work
     if (isSmallGround(t) && t.velocity.lengthSq() > 0.25 && weapon !== 'gbu31') {
       const it3 = this.pilot.begin(p, 150);
       const dIp = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
@@ -819,7 +980,7 @@ export class MissionBot {
       // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
       ok = !!b && b.inRange && (!isSdb(weapon) || R <= SDB_PRESS_RANGE);
       // a target too small to track on the move (g03's stoat): released only while it stands still
-      // (a JDAM at a swimmer, t04: any time, its blast does the work)
+      // (a JDAM at a swimmer, t07: any time, its blast does the work)
       if (isSmallGround(t) && t.velocity.lengthSq() > 0.25 && weapon !== 'gbu31') ok = false;
     }
     if (ok) {

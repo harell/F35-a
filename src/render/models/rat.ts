@@ -1,5 +1,5 @@
 /**
- * The sewer rat (t04 "Combined Overflow"): a low-poly Norway rat at true scale, 0.22 m of head and
+ * The sewer rat (t07 "Small Targets"): a low-poly Norway rat at true scale, 0.22 m of head and
  * body and a 0.20 m scaly tail, grey-brown back, paler belly, pink ears, feet and tail. Front = -Z,
  * origin on the ground between its feet. Like the stoat (models/stoat.ts) its parts are separate
  * nodes the renderer poses every frame (render/visuals/ratPose.ts):

@@ -603,14 +603,14 @@ export const POD_MASKED = 'MASKED';
 
 /**
  * The pod's classification line under the readout, for a target that has one: g03's stoat (#200)
- * and t04's rats read as the pod identifies them. Longest first: the window takes the first one that fits.
+ * and t07's rats read as the pod identifies them. Longest first: the window takes the first one that fits.
  */
 export function podClass(t: AnyEntity): readonly string[] | null {
   if (t.kind !== 'ground') return null;
   return t.type === 'stoat' ? STOAT_CLASS : t.type === 'rat' ? RAT_CLASS : null;
 }
 export const STOAT_CLASS = ['HOSTILE · MUSTELA ERMINEA · 0.3 KG', 'MUSTELA ERMINEA · 0.3 KG', 'MUSTELA ERMINEA'] as const;
-/** t04's sewer rats: the Norway rat, the one that lives in sewers. */
+/** t07's sewer rats: the Norway rat, the one that lives in sewers. */
 export const RAT_CLASS = ['HOSTILE · RATTUS NORVEGICUS · 0.3 KG', 'RATTUS NORVEGICUS · 0.3 KG', 'RATTUS NORVEGICUS'] as const;
 
 /**

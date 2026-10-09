@@ -11,8 +11,7 @@ import { silhouetteSvg } from '../art/planform';
 import { escapeHtml, h } from '../dom';
 import { formatScore, gradeTone, missionState, pad2, suggestedMissionIndex } from '../format';
 import type { UiHost } from '../host';
-import { findMission } from '../../missions';
-import { BASIC_TRAINING, basicTrainingDone } from '../career';
+import { lessonsLeft } from '../career';
 import { screenHeader } from '../widgets';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered', overcast: 'Overcast' } as const;
@@ -85,13 +84,14 @@ function listScreen(
     );
 
     const body = h('div', { class: 'scr-body ml-body ui-scroll' });
-    // onboarding nudge: basic training first
-    if (kind === 'campaign' && !basicTrainingDone(progress) && trainingPick) {
-      const left = BASIC_TRAINING.filter((id) => !progress.best[id]);
+    // onboarding nudge: the lessons the next mission wants (T01 and T02 before g01, Gulf Defence before g02…)
+    const prep = kind === 'campaign' && trainingPick ? lessonsLeft(progress) : null;
+    if (prep && trainingPick) {
+      const list = prep.lessons.map((m) => `T${pad2(m.index)} ${escapeHtml(m.title)}`).join(' · ');
       const nudge = h('div', { class: 'ml-nudge ui-panel' });
       nudge.innerHTML =
         `<span class="ml-nudge-i">${icon('book')}</span>` +
-        `<span class="ml-nudge-t"><b>Recommended: complete Training first</b><em>${left.map((id) => id.toUpperCase()).join(' · ')} teach flying, locking and SAM defence (~10 min).</em></span>`;
+        `<span class="ml-nudge-t"><b>Recommended before ${escapeHtml(prep.mission.title)}</b><em>${list}: ${prep.lessons.length > 1 ? 'they teach' : 'it teaches'} what this mission asks for.</em></span>`;
       const go = h('button', { class: 'ui-btn ghost ml-nudge-b', attrs: { type: 'button' }, html: `<span>Training</span>${icon('next')}` });
       go.addEventListener('click', () => {
         const m = trainingPick();
@@ -152,10 +152,9 @@ function listScreen(
   });
 }
 
-/** First basic-training lesson not yet flown (the campaign nudge's shortcut). */
+/** The first lesson the next campaign mission wants that isn't flown yet (the campaign nudge's shortcut). */
 function nextTraining(progress: CampaignProgress): MissionDef | null {
-  const id = BASIC_TRAINING.find((t) => !progress.best[t]);
-  return id ? findMission(id) : null;
+  return lessonsLeft(progress)?.lessons[0] ?? null;
 }
 
 export const showCampaign = (host: UiHost, campaign: CampaignDef, progress: CampaignProgress, toast: (t: string) => void) =>

@@ -12,6 +12,16 @@
  *  energy     skilled pilots fly the corner (rate fight): throttle back / speed brake when fast,
  *             cap g when slow; thrust-vectoring Flankers (Su-35/Su-57) prefer slow, tight
  *             "radius" fights; rookies just pull max g with the burner on and bleed out
+ *  vertical   competent pilots (skill ≥ ~0.45, pilot difficulty and up) also use the vertical:
+ *             OBLIQUE turns in the rate fight (nose-high when fast: gravity tightens the turn and
+ *             bleeds speed toward the corner; nose-low when slow: gravity gives it back); an
+ *             IMMELMANN (half loop, roll out on top) to reverse after a head-on pass instead of a
+ *             flat turn; a full LOOP (skill ≥ ~0.55) against an attacker closing too fast behind
+ *             (it overshoots underneath) or to kill our own overshoot on a much slower bandit. A loop
+ *             or Immelmann is committed (`Bfm.committed`) and flown in the vertical plane of entry
+ *             with full afterburner and full g; it needs speed above the corner and height above
+ *             the hard deck to start, and is abandoned if the jet runs out of either on the way up.
+ *             Rookies keep fighting flat.
  */
 import { Vector3 } from 'three';
 import { AIRCRAFT_PERF } from '../../sim/flight/aircraftData';
@@ -28,6 +38,17 @@ const _vh = new Vector3();
 const _p = new Vector3();
 const _rel = new Vector3();
 const _bf = new Vector3();
+const _vp = new Vector3();
+
+/** Minimum skill level for the oblique turns, the Immelmann and the loop. */
+export const VERTICAL_SKILL = { oblique: 0.4, immelmann: 0.45, loop: 0.55 } as const;
+/** Height above the hard deck a loop (its bottom comes back to the entry height) / Immelmann needs (m). */
+const LOOP_MARGIN = 1_200;
+const IMMELMANN_MARGIN = 600;
+/** After a vertical play (or a decision not to fly one) the next one waits this long (s). */
+const VERTICAL_COOLDOWN = 8;
+
+type VerticalKind = 'loop' | 'immelmann';
 
 /** Load factor (g) the jet can sustain right now in afterburner (Ps ≈ 0), by bisection. */
 export function sustainableG(ac: AircraftEntity, gMax: number): number {
@@ -78,6 +99,92 @@ export class Bfm {
   private yoyo = 0;
   /** Last manoeuvre name (debug). */
   mode = '';
+  /**
+   * A committed loop / Immelmann: the horizontal entry direction, the pitch-up axis of its vertical
+   * plane, how far it has got (climbed past 60°, over the top heading the other way, rolling out).
+   */
+  private vert: { kind: VerticalKind; entry: Vector3; axis: Vector3; climbed: boolean; over: boolean; rollout: boolean; until: number } | null = null;
+  private nextVertical = 0;
+  /** Loops / Immelmanns started (tests, debug). */
+  readonly verticalCount: Record<VerticalKind, number> = { loop: 0, immelmann: 0 };
+
+  /** In a loop or Immelmann: the brain keeps its hands off (no extend at the slow top of it). */
+  get committed(): boolean {
+    return this.vert !== null;
+  }
+
+  /** Start a loop / Immelmann in the vertical plane of the current flight path. */
+  private startVertical(kind: VerticalKind, c: TickCtx): void {
+    const v = c.ac.velocity;
+    const entry = new Vector3(v.x, 0, v.z);
+    if (entry.lengthSq() < 1) return;
+    entry.normalize();
+    // rotating `entry` about entry × up by +θ pitches it up
+    const axis = new Vector3().crossVectors(entry, new Vector3(0, 1, 0)).normalize();
+    this.vert = { kind, entry, axis, climbed: false, over: false, rollout: false, until: c.now + 45 };
+    this.verticalCount[kind]++;
+  }
+
+  /**
+   * Take the vertical at this opportunity? The situation (speed, height, geometry) is checked by the
+   * caller; skill decides how often it's seen and taken: from ~30 % just above `minLevel` to always
+   * 0.2 above it (a veteran always does). Decided once per opportunity (then a cooldown).
+   */
+  private choose(c: TickCtx, minLevel: number): boolean {
+    if (c.now < this.nextVertical || c.skill.level < minLevel) return false;
+    this.nextVertical = c.now + VERTICAL_COOLDOWN;
+    return c.rng() < 0.3 + ((c.skill.level - minLevel) / 0.2) * 0.7;
+  }
+
+  /**
+   * Fly the committed loop / Immelmann: full afterburner, full g, the nose pulled round in the
+   * vertical plane of entry. An Immelmann rolls upright once over the top; a loop carries on round.
+   * Returns false when the manoeuvre is over (or abandoned) and normal BFM takes over.
+   */
+  private flyVertical(c: TickCtx): boolean {
+    const v = this.vert!;
+    const { ac, it, skill, now } = c;
+    const perf = AIRCRAFT_PERF[ac.type];
+    const V = Math.max(1, ac.velocity.length());
+    _vh.copy(ac.velocity).multiplyScalar(1 / V);
+    const gamma = Math.asin(clampN(_vh.y, -1, 1));
+    const h = Math.hypot(_vh.x, _vh.z);
+    const along = h > 0.17 ? (_vh.x * v.entry.x + _vh.z * v.entry.z) / h : 0;
+    if (gamma > 60 * DEG) v.climbed = true;
+    if (v.climbed && along < -0.3) v.over = true;
+    const deck = HARD_DECK + skill.minAgl;
+    const end = () => {
+      this.vert = null;
+      this.nextVertical = now + VERTICAL_COOLDOWN;
+      return false;
+    };
+    if (now > v.until) return end();
+    // ran out of speed on the way up: let the nose fall (normal BFM's energy rules)
+    if (!v.over && gamma > 0 && ac.flight.ias < perf.cornerSpeed * 0.4) return end();
+    // never carry a loop down through the hard deck
+    if (ac.flight.agl < deck && gamma < -10 * DEG) return end();
+    if (v.kind === 'immelmann' && v.over && gamma < 25 * DEG) v.rollout = true;
+    if (v.rollout) {
+      _bf.set(0, 1, 0).applyQuaternion(ac.quaternion);
+      if (_bf.y > 0.8) return end();
+      // level, the other way: the autopilot rolls upright to get there
+      it.dir.copy(v.entry).multiplyScalar(-1);
+    } else {
+      if (v.kind === 'loop' && v.over && gamma > -15 * DEG && gamma < 30 * DEG && _bf.set(0, 1, 0).applyQuaternion(ac.quaternion).y > 0.5) return end();
+      // pull: the flight path in the plane, rotated 80° further round
+      _vp.copy(_vh).addScaledVector(v.axis, -_vh.dot(v.axis));
+      if (_vp.lengthSq() < 1e-4) _vp.copy(v.entry);
+      _vp.normalize().applyAxisAngle(v.axis, 80 * DEG);
+      it.dir.copy(_vp);
+    }
+    it.gMax = skill.maxG;
+    it.gain = 3;
+    it.throttle = 1;
+    it.allowInverted = true;
+    it.track = false;
+    this.mode = v.rollout ? 'immelmann-rollout' : v.kind;
+    return true;
+  }
 
   run(c: TickCtx, b: Bandit): string {
     const { ac, it, skill, rng, now } = c;
@@ -102,7 +209,17 @@ export class Bfm {
     it.gain = 1.6 + 0.6 * skill.level;
     it.throttle = 1;
 
+    /* ── vertical: a loop / Immelmann in progress ── */
+    if (this.vert && this.flyVertical(c)) return 'BFM';
+    const deck = HARD_DECK + skill.minAgl;
+    const fast = ias > corner * 1.05;
+
     /* ── defensive: bandit at our six with its nose on us ── */
+    // an attacker closing fast from 0.6–3 km: pull a loop and let it overshoot underneath
+    if (b.fighter && banditAta < 35 * DEG && ata > 100 * DEG && R > 600 && R < 3_000 && vc > 40 && fast && agl > deck + LOOP_MARGIN && this.choose(c, VERTICAL_SKILL.loop)) {
+      this.startVertical('loop', c);
+      if (this.vert && this.flyVertical(c)) return 'BFM';
+    }
     if (b.fighter && banditAta < 35 * DEG && ata > 100 * DEG && R < 5_000) {
       this.mode = 'break';
       _p.copy(_los);
@@ -129,6 +246,20 @@ export class Bfm {
     const overshoot = aa < 80 * DEG && R < 2_500 && vc > 50 + 0.03 * R;
     const slow = ias < corner * 0.7;
     const tvcSlowFight = perf.tvc && skill.level > 0.35 && R < 2_500 && aa > 45 * DEG;
+
+    // just past a head-on pass, the bandit behind us going the other way: reverse in the vertical
+    // (Immelmann) instead of a flat turn — we stay over its track and arrive above and behind it
+    if (ata > 110 * DEG && banditAta > 90 * DEG && R > 400 && R < 3_000 && fast && agl > deck + IMMELMANN_MARGIN && this.choose(c, VERTICAL_SKILL.immelmann)) {
+      this.startVertical('immelmann', c);
+      if (this.vert && this.flyVertical(c)) return 'BFM';
+    }
+    // closing far too fast on a much slower bandit ahead (a drone, a helicopter, a jet out of
+    // energy): a loop kills the closure, it flies on under us. Against a jet at fighting speed
+    // the lag pursuit / high yo-yo below keeps the gun solution instead
+    if (overshoot && vc > 150 && b.vel.length() < 0.6 * V && ata < 30 * DEG && fast && agl > deck + LOOP_MARGIN && this.choose(c, VERTICAL_SKILL.loop)) {
+      this.startVertical('loop', c);
+      if (this.vert && this.flyVertical(c)) return 'BFM';
+    }
 
     if (R > 3_500) {
       this.mode = 'lead';
@@ -160,6 +291,19 @@ export class Bfm {
     it.dir.subVectors(_p, pos).normalize();
     if (this.yoyo > 0) it.dir.y += 0.35;
     else if (this.yoyo < 0) it.dir.y -= 0.3;
+    // oblique (semi-vertical) turns while pulling for the nose: nose-high when fast (gravity
+    // tightens the turn and trades speed for height), nose-low when slow (gravity gives it back)
+    // (not with the bandit far below / above: then the pull is straight down / up at it anyway)
+    else if (ata > 45 * DEG && skill.level >= VERTICAL_SKILL.oblique && !tvcSlowFight) {
+      const e = ias / corner;
+      if (e > 1.05 && it.dir.y > -0.5) {
+        it.dir.y = Math.max(it.dir.y + 0.35, 0.25 + clampN(e - 1.05, 0, 0.3));
+        this.mode = 'oblique-high';
+      } else if (e < 0.85 && it.dir.y < 0.5 && agl > deck + 500) {
+        it.dir.y = Math.min(it.dir.y - 0.25, -0.2);
+        this.mode = 'oblique-low';
+      }
+    }
     it.dir.normalize();
     it.track = R < 3_000 && ata < 50 * DEG;
 

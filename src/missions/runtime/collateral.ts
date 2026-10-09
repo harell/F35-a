@@ -1,5 +1,5 @@
 /**
- * F35-A — homes hit by the player's bombs (MissionScript.collateral, t04 "Combined Overflow").
+ * F35-A — homes hit by the player's bombs (MissionScript.collateral, t07 "Small Targets").
  *
  * The houses of the hero neighbourhoods (Herne Bay) and the LINZ buildings are scenery: a bomb falls
  * through a roof to the ground and nothing in the sim takes damage. A mission that asks for it counts

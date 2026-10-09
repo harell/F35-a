@@ -244,7 +244,7 @@ function stepMissile(ctx: CombatCtx, m: CombatMissile, dt: number): void {
       sweptClosest(_p0, m.position, target.position, target.position, _sweep);
       if (_sweep.dist <= def.fuseRadius + target.radius * 0.6) {
         _pt.lerpVectors(_p0, m.position, _sweep.s);
-        // a small target swimming (t04's rats): nothing solid to burn, the bomb goes off in the water
+        // a small target swimming (t07's rats): nothing solid to burn, the bomb goes off in the water
         const wet = isSmallGround(target) && world.terrain.isWater(_pt.x, _pt.z) && _pt.y <= 2;
         detonate(ctx, m, _pt, target, 'hit', wet ? 'water' : 'ground');
         return;

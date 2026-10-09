@@ -1,5 +1,5 @@
 /**
- * Poses t04's sewer rats (render/models/rat.ts) from their sim state (sim/stoat.ts StoatState, the
+ * Poses t07's sewer rats (render/models/rat.ts) from their sim state (sim/stoat.ts StoatState, the
  * runner rats share with the stoat):
  *  - running: a low, quick scurry (small bobs, the leg pairs swinging in turn, the tail swaying);
  *  - stopped at a drain: nose down, sniffing;

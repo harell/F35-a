@@ -305,7 +305,7 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
-  // t04's loadout (Combined Overflow): both bombs side by side, so the lesson is which one to drop where.
+  // t07's loadout (Small Targets): both bombs side by side, so the lesson is which one to drop where.
   // Four StormBreakers on a BRU-61 in one bay and a JDAM in the other, two more JDAMs on the wing
   // pylons (nothing shoots back over Herne Bay, so the pylons' stealth cost doesn't matter). Offered
   // only where a mission lists it.

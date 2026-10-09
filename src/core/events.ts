@@ -64,6 +64,8 @@ export interface GameEventMap {
   'mission:end': { success: boolean; reason: string };
   /** Player took a hit (screen flash, shake, haptics). */
   'player:hit': { amount: number; direction: Vector3 | null };
+  /** A weapon hit a jet flying with practice rounds (AircraftEntity.practiceRounds): scored, no damage done. */
+  'practice:hit': { target: AircraftEntity; weapon: string; attackerId: number | null };
   /** An enemy hit a protected landmark (the Sky Tower) without bringing it down: it is damaged and burning at `position`. */
   'landmark:damaged': { landmark: LandmarkEntity; hits: number; attackerId: number | null; position: Vector3 };
   /** A protected landmark (the Sky Tower) was destroyed: its collapse starts now. `cause`: the player's munition or enemy hits. */

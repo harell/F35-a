@@ -121,7 +121,7 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
       break;
     }
     case 'rat': {
-      // t04's sewer rats (models/rat.ts): posable like the stoat; a killed one is gone
+      // t07's sewer rats (models/rat.ts): posable like the stoat; a killed one is gone
       root.add(ratModel());
       radius = 0.3;
       farScale = 0.05;

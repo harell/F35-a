@@ -423,6 +423,13 @@ export class FighterBrain extends Brain {
       }
     }
 
+    // a loop / Immelmann in progress is flown to the end, though the range opens past the merge
+    // ranges on the way up (the bandit flies on while we go vertical)
+    if (this.bfm.committed && R < 8_000) {
+      this.setState(this.bfm.run(c, b));
+      return;
+    }
+
     const mergeR = b.fighter ? 7_000 : 4_000;
     this.selectWeapon(ac, world, R < mergeR);
     if (R > mergeR) {
@@ -465,12 +472,12 @@ export class FighterBrain extends Brain {
     }
     let label = this.bfm.run(c, b);
     if (R > 2_000 && this.wpn.irLeft(c) === 0) this.wpn.tryBvr(c, b);
-    if (label === 'BFM' && this.wpn.gunnery(c, b)) {
+    if (label === 'BFM' && !this.bfm.committed && this.wpn.gunnery(c, b)) {
       label = 'GUNS';
       applyEnergyLimits(c, true);
     }
     // losing the fight on energy: extend and come back
-    if (label === 'BFM' && skill.energy > 0.55 && b.fighter && R > 1_500 && b.threat < 2 && aa > 90 * DEG && ac.flight.ias < this.perfOf(ac).cornerSpeed * 0.55) {
+    if (label === 'BFM' && !this.bfm.committed && skill.energy > 0.55 && b.fighter && R > 1_500 && b.threat < 2 && aa > 90 * DEG && ac.flight.ias < this.perfOf(ac).cornerSpeed * 0.55) {
       this.extendUntil = this.now + 6 + 4 * this.rng();
       this.extendDir.set(ac.position.x - b.pos.x, 0, ac.position.z - b.pos.z).normalize();
       label = 'EXTEND';
