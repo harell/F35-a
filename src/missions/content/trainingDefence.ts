@@ -19,7 +19,8 @@
  * beam yet still finishes the lesson. A jet already on the beam is never shot at: every drill starts by
  * flying at the boat. Each drill's boat ceases fire when it is done ('hold_fire'), so only the drill in
  * hand shoots; drill 3 gets a fresh boat (a boat carries four heat-seekers, and drill 2's low passes can
- * spend them). Flares and chaff are topped up every 30 s and after each drill: a held button still
+ * spend them) that fires only its heat-seekers (`irOnly`): its radar rounds don't count towards the drill,
+ * and four of them cost ~55 s before the first heat-seeker (playtest r2, 2.3-j). Flares and chaff are topped up every 30 s and after each drill: a held button still
  * empties them in one engagement (the coach's "chaff empty").
  */
 import type { MissionDef } from '../../core/contracts';
@@ -83,7 +84,7 @@ export const T05_DEFENCE: MissionDef = mission({
     sams: [
       site('b1', 'b1', 'ad_boat', DEFENCE.b1, { name: 'Range boat 1', noHarass: true }),
       site('b2', 'b2', 'ad_boat', DEFENCE.b2, { name: 'Range boat 2', noHarass: true }),
-      site('b3', 'b3', 'ad_boat', DEFENCE.b3, { name: 'Range boat 3', spawn: done('o_d2'), noHarass: true }),
+      site('b3', 'b3', 'ad_boat', DEFENCE.b3, { name: 'Range boat 3', spawn: done('o_d2'), noHarass: true, irOnly: true }),
     ],
     objectives: [
       { id: 'o_d1', kind: 'missile_drill', groups: ['b1'], guidance: 'radar', defeat: 2, inARow: true, moveOn: DRILL_MOVE_ON_AFTER, label: 'Drill 1: beam it + CMS, two missiles in a row', primary: true },

@@ -495,6 +495,11 @@ export class SamSiteEntity implements Entity {
    * is ignored): a range target, so the AARGM drill (t04) is passed by the rule it teaches.
    */
   noArmShutdown?: boolean;
+  /**
+   * Only the site's shoulder-launched heat-seekers (SamTypeData.manpads) fire: its radar SAM tracks but holds
+   * (t05's heat-seeker drill, which grades only those).
+   */
+  irOnly?: boolean;
   /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
   holdFire?: boolean;
 

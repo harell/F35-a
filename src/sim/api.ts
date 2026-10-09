@@ -237,6 +237,8 @@ export interface SamSpawn {
   noHarass?: boolean;
   /** The radar stays on under an anti-radiation missile (SamSiteEntity.noArmShutdown). */
   noArmShutdown?: boolean;
+  /** Only the site's shoulder-launched heat-seekers fire (SamSiteEntity.irOnly). */
+  irOnly?: boolean;
 }
 
 /**

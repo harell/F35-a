@@ -537,7 +537,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
       }
       if (!tgt) break;
       s.trackProgress = Math.min(1, s.trackProgress + dt / Math.max(0.1, world.difficulty.samReactionTime * data.reaction));
-      if (s.trackProgress >= 1 && si.refireTimer <= 0 && s.missilesReady > 0 && si.engageable && !s.holdFire && liveGuided(ctx, s) < data.channels) {
+      if (s.trackProgress >= 1 && si.refireTimer <= 0 && s.missilesReady > 0 && si.engageable && !s.holdFire && !s.irOnly && liveGuided(ctx, s) < data.channels) {
         s.state = 'launch';
         si.salvoLeft = Math.min(data.salvo, s.missilesReady, data.channels - liveGuided(ctx, s));
         si.salvoTimer = 0;

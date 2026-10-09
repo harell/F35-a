@@ -275,6 +275,8 @@ export interface SamSiteDef {
   noHarass?: boolean;
   /** The crew never shuts its radar down against an inbound anti-radiation missile (a range target: t04's AARGM drill). */
   noArmShutdown?: boolean;
+  /** 'ad_boat': only the shoulder-launched heat-seekers fire, its radar SAM holds (t05's heat-seeker drill). */
+  irOnly?: boolean;
 }
 
 /**

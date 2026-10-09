@@ -4,7 +4,8 @@
  *  - every range boat sits in open water;
  *  - three drills, two in a row each, no high-altitude drill and no exam (playtest 2026-10-10, 1.4-e/f);
  *  - the student (the bot in a defenceCoach mission: beam + CMS as taught) gets through the drills
- *    in about three minutes;
+ *    in about three minutes, and drill 3's boat fires only the heat-seekers it grades (playtest r2,
+ *    2.3-j: four radar rounds first cost ~55 s);
  *  - a pilot who ignores the warning (bot option defend: false) is moved on by the coach after four
  *    misses, so the lesson still ends (it hung at 900 s with three in a row and an exam).
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t05 --seeds=12 --log
@@ -73,6 +74,10 @@ describe('t05 Gulf Defence', () => {
       log.push(`seed ${seed}: ${r.state}@${r.t}s ${[...done].map(([k, v]) => `${k}@${v}`).join(' ')}`);
       if (r.state === 'success' && r.t <= 300) won++;
       expect(r.state, `seed ${seed}`).toBe('success');
+      // once drill 3 opens, only heat-seekers fly (drill 2's boat holds fire, drill 3's is IR-only)
+      const d3 = r.events.findIndex((e) => / OBJ o_d3 active/.test(e));
+      expect(d3, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+      expect(r.events.slice(d3).filter((e) => / LAUNCH m_9m330 /.test(e)), `seed ${seed}`).toEqual([]);
       expect(r.alive, `seed ${seed}: practice rounds, nothing kills the jet`).toBe(true);
     }
     expect(won, log.join('\n')).toBeGreaterThanOrEqual(4);
@@ -92,9 +97,10 @@ describe('t05 Gulf Defence', () => {
     }
   });
 
-  it('the drill 3 boat appears only when its drill opens, 3.5 km from the pass point', () => {
+  it('the drill 3 boat appears only when its drill opens, 3.5 km from the pass point, and fires only heat-seekers', () => {
     const later = T05_DEFENCE.script.sams.filter((s) => s.spawn).map((s) => s.id);
     expect(later).toEqual(['b3']);
+    expect(T05_DEFENCE.script.sams.map((s) => !!s.irOnly)).toEqual([false, false, true]);
     expect(Math.hypot(DEFENCE.d3Pass.x - DEFENCE.b3.x, DEFENCE.d3Pass.z - DEFENCE.b3.z)).toBeCloseTo(3500, -2);
   });
 });
