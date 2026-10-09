@@ -25,7 +25,8 @@ describe('scripted hints before the auto weapon hints', () => {
     });
     expect(shown.length).toBeGreaterThan(0);
     expect(shown[0].text).toMatch(/Go LOW/);
-    const lessonArm = shown.findIndex((s) => s.text.startsWith('AARGM (WPN)'));
+    // (T06's own AARGM step, h2: 'AARGM on FIRE, the SA-6 boxed: …')
+    const lessonArm = shown.findIndex((s) => s.text === T06.script.hints!.find((x) => x.id === 'h2')!.text);
     for (const [i, s] of shown.entries()) {
       if (/^Close in: fire the AARGM/.test(s.text)) expect(lessonArm >= 0 && i > lessonArm, `${s.t.toFixed(1)} s ${s.km.toFixed(1)} km: ${s.text}`).toBe(true);
     }

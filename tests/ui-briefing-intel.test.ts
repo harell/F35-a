@@ -12,15 +12,15 @@ const chips = (id: string, d: Difficulty) => knownThreats(intelFor(missionById(i
 const sams = (id: string, d: Difficulty) => intelFor(missionById(id)!, d).filter((i) => i.kind === 'sam').length;
 
 describe('briefing intel follows the difficulty (playtest r2 2.1-b)', () => {
-  it('g03 on Pilot lists one SA-6 and no SA-15; Veteran adds the airstrip SA-6 and the Tor', () => {
+  it('g03 on Pilot lists one SA-6 and no SA-15; Veteran adds the Rakino SA-6 (no Tor since playtest r2, 2.3-a)', () => {
     const pilot = chips('g03', 'pilot');
     expect(pilot.filter((t) => t.includes('SA-6'))).toEqual([expect.stringMatching(/^SA-6 · \d+ km$/)]);
     expect(pilot.some((t) => t.includes('SA-15'))).toBe(false);
     expect(chips('g03', 'recruit')).toEqual(pilot);
     const vet = chips('g03', 'veteran');
     expect(vet.some((t) => /^2× SA-6 · /.test(t))).toBe(true);
-    expect(vet.some((t) => t.startsWith('SA-15'))).toBe(true);
-    expect(sams('g03', 'veteran') - sams('g03', 'pilot')).toBe(2);
+    expect(vet.some((t) => t.startsWith('SA-15'))).toBe(false);
+    expect(sams('g03', 'veteran') - sams('g03', 'pilot')).toBe(1);
   });
 
   it('g02 maps the third AD boat on Veteran only', () => {
