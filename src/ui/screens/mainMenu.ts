@@ -25,7 +25,7 @@ export const MAIN_MENU_ITEMS: { id: MainMenuChoice; title: string; sub: string; 
   { id: 'campaign', title: 'Campaign', sub: 'Defend Auckland', icon: 'flag', primary: true },
   { id: 'instant', title: 'Instant Action', sub: 'Sightseeing · dogfight · strike · defend', icon: 'crosshair' },
   { id: 'training', title: 'Training', sub: 'Learn to fly and fight the F-35A', icon: 'book' },
-  { id: 'codex', title: 'Codex', sub: 'Weapons · warnings · threats', icon: 'missile' },
+  { id: 'codex', title: 'Codex', sub: 'Weapons · threats · the pest army', icon: 'missile' },
   { id: 'settings', title: 'Settings', sub: 'Difficulty · controls · audio · display', icon: 'gear' },
   { id: 'credits', title: 'Credits', sub: 'Team, tools and licences', icon: 'info' },
 ];

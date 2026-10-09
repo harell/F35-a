@@ -22,7 +22,7 @@ export function showCodex(host: UiHost, initial?: string | null): Promise<void> 
       host.leave(el);
       resolve();
     };
-    el.appendChild(screenHeader({ kicker: 'Weapons · warnings · threats', title: 'Codex', back: finish }));
+    el.appendChild(screenHeader({ kicker: 'Weapons · threats · the pest army', title: 'Codex', back: finish }));
     el.appendChild(h('div', { class: 'scr-body cx-body' }, codex.el));
     host.present(el, { bg: true, back: finish, focus: codex.focusEl });
   });
