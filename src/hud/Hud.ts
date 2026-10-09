@@ -234,6 +234,7 @@ export const createHud: CreateHud = (canvas, events) => {
       const w = missile.def.id as WeaponId;
       st.brevity = WEAPON_BREVITY[w] ?? '';
       st.brevityAge = 0;
+      st.launched = w;
     }),
     events.on('mission:end', ({ success }) => {
       // a protected asset lost just now failed the mission: show how it went

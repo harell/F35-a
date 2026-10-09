@@ -277,6 +277,8 @@ export function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | nul
 
 /** "AMRAAM AWAY": the cue while our missile guides on the target (not "MISSILE …", the inbound warning's word). */
 const AWAY = Object.fromEntries(Object.entries(WEAPON_HUD).map(([k, v]) => [k, `${v} AWAY`])) as Record<WeaponId, string>;
+/** Seconds the AWAY cue holds after a missile release, whatever the box shows by then. */
+const AWAY_HOLD = 1.5;
 
 /**
  * SHOOT is held back while a missile aimed at the player is this close to impact (s): defence first,
@@ -340,10 +342,14 @@ export function planCues(f: HudFrame): number {
   // target: AMRAAM AWAY instead, steady, so a second missile isn't wasted on it (playtest r1 1.2-g);
   // the gun keeps its SHOOT. Nothing while a missile inbound is close (defending: 1.2-f). The AARGM
   // says SHOOT only as AARGM_RULE does, inside 10 km of a radar that is on (r2 2.1-a): CLOSE IN before.
+  // Just fired, AWAY holds AWAY_HOLD s even when the box has already stepped to the next drone of a
+  // swarm (r2 2.2 F4: g01 went straight from FIRE back to SHOOT), then SHOOT for that one.
   const sel = p.selectedWeapon;
   const own = f.target && sel !== 'gun' && !WEAPON_IS_BOMB[sel] ? ownMissileOn(f, f.target.id) : null;
   const arm = aargmCue(p, f.target, z);
+  const fired = st.launched && st.launched !== 'gun' && !WEAPON_IS_BOMB[st.launched] && st.brevityAge <= AWAY_HOLD ? st.launched : null;
   if (own && own.def.category !== 'bomb') addCue(AWAY[own.def.id as WeaponId] ?? AWAY.aim120, 15, pal.main, 0);
+  else if (fired) addCue(AWAY[fired], 15, pal.main, 0);
   else if (arm === 'close') addCue('CLOSE IN', 17, pal.main, 0);
   else if (arm === 'quiet') addCue('RADAR OFF', 15, pal.warn, 0);
   else if (z && shootNow(f) && !WEAPON_IS_BOMB[z.weapon] && !defending(f)) addCue('SHOOT', 20, pal.bright, 4);

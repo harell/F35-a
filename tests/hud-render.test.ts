@@ -1009,6 +1009,26 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
   });
 });
 
+describe('AMRAAM AWAY after a launch at a swarm (playtest r2 2.2 F4)', () => {
+  it('holds AMRAAM AWAY a moment after FIRE although the box has stepped to the next drone, then SHOOT for it', () => {
+    const r = rig('lock', 'hud');
+    const p = r.mock.player;
+    const first = r.mock.world.getEntity(p.radar.lockedId)!;
+    const next = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
+    const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+    r.run(1 / 30);
+    r.mock.events.emit('munition:launch', { missile: new MissileEntity(951, def, 'blue', p.id, first.id), shooter: p } as never);
+    // the box steps to the next drone straight after the launch (g01's swarm)
+    p.radar.lockedId = next.id;
+    p.radar.designatedId = next.id;
+    const soon = textsOver(r, 0.6).map((t) => t.text);
+    expect(soon).toContain('AMRAAM AWAY');
+    expect(soon).not.toContain('SHOOT');
+    r.run(1);
+    expect(textsOver(r, 0.5).map((t) => t.text)).toContain('SHOOT');
+  });
+});
+
 describe('engaged marker: own missile in flight at a contact', () => {
   it('marks a non-designated contact our missile is guiding on with T n beside its box, clear of other text', () => {
     const r = rig('aa', 'hud');

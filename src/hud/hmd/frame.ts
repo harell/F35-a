@@ -5,6 +5,7 @@
  */
 import { Vector3 } from 'three';
 import type { FrameContext } from '../../core/contracts';
+import type { WeaponId } from '../../core/types';
 import type { LaunchZone, SimWorld } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { KillFeed, MessageQueue, RadioQueue, type MessageTone } from './feeds';
@@ -44,6 +45,8 @@ export class HudState {
   weaponAge = 99;
   brevity = '';
   brevityAge = 99;
+  /** The weapon of the player's last release (brevityAge is its age): its AWAY cue holds a moment after it. */
+  launched: WeaponId | null = null;
   /** Seconds since a new warning appeared (master warning flash). */
   warnAge = 99;
   /** Seconds left to show the objective summary. */
