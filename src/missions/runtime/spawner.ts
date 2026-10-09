@@ -446,7 +446,8 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
           stations: def.stoat.stations.map((k) => k + 1),
           speed: def.stoat.speed,
           stopTime: def.stoat.stopTime,
-          clockStart: 0,
+          swimSpeed: def.stoat.swimSpeed,
+          clockStart: def.stoat.clock === 'spawn' ? s.world.time : 0,
         }
       : undefined,
   });

@@ -241,7 +241,8 @@ export class DamageSystem {
       t.speed = 0;
       const data = GROUND_TARGET_DATA[t.type];
       size = data.explosion === 'huge' ? 'huge' : 'large';
-      if (data.naval) surface = 'water';
+      // a boat, or a rat killed swimming (t04): the blast goes up as spray, not a fireball
+      if (data.naval || t.stoat?.swimming) surface = 'water';
     }
     this.explode(t.position, size, surface);
     if (hostileAttacker) (attacker as AircraftEntity).kills++;

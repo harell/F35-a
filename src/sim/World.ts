@@ -71,6 +71,7 @@ const GROUND_NAMES: Record<GroundTargetType, string> = {
   suicide_boat: 'Suicide Boat',
   missile_boat: 'Peykaap II',
   stoat: 'Stoat',
+  rat: 'Rat',
   train: 'Train',
 };
 
@@ -318,7 +319,7 @@ class SimWorldImpl implements SimWorld {
       e.path = null;
     }
     // the stoat: sim/stoat.ts runs it (route, stops, alert), not the ground-mover path
-    if (spec.type === 'stoat' && spec.stoat) makeStoat(e, spec.stoat);
+    if ((spec.type === 'stoat' || spec.type === 'rat') && spec.stoat) makeStoat(e, spec.stoat);
     this.ground.push(e);
     this.byId.set(e.id, e);
     this.hostileDirty = true;

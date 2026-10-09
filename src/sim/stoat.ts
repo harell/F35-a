@@ -14,6 +14,11 @@
  *    running: the stance comes at the stop.
  *  - A near miss (a weapon aimed at it that went off within NEAR_MISS m and left it alive) makes it
  *    bolt at BOLT_FACTOR × speed to the next station, cutting a stop short.
+ *  - Over water it swims (StoatState.swimming): a steady `swimSpeed`, no dashes and no bolting, and no
+ *    stops, so a StormBreaker can't track it there (sim/weapons/small.ts) and a JDAM's blast has to.
+ *
+ * t04's sewer rats ('rat') run on the same runner: down a Herne Bay street with a stop at each drain,
+ * across the beach and out to Watchman Island, which is their "nest".
  *
  * Pure stepping over the world's ground list, like sim/boats.ts; no allocations per step.
  */
@@ -31,6 +36,8 @@ export const NEAR_MISS = 30;
 export const BOLT_FACTOR = 2;
 /** Catch-up step when it spawns after its clock started (s). */
 const CATCH_UP_DT = 0.25;
+/** Default swimming speed (m/s): steady, whatever its speed on land. */
+export const SWIM_SPEED = 1.2;
 
 export type StoatPhase = 'run' | 'stop' | 'nest';
 
@@ -44,6 +51,8 @@ export interface StoatSpawn {
   stopTime?: number;
   /** World time its clock started (default 0: mission start). */
   clockStart?: number;
+  /** Swimming speed over water (m/s, default SWIM_SPEED). */
+  swimSpeed?: number;
 }
 
 export interface StoatState {
@@ -52,6 +61,9 @@ export interface StoatState {
   speed: number;
   stopTime: number;
   clockStart: number;
+  swimSpeed: number;
+  /** In the water (swimming), this step. For the renderer and the HUD. */
+  swimming: boolean;
   /** Index of the route point it is heading for (or stopped at). */
   leg: number;
   phase: StoatPhase;
@@ -82,6 +94,8 @@ export function makeStoat(e: GroundTargetEntity, spec: StoatSpawn): void {
     speed: spec.speed ?? STOAT_SPEED,
     stopTime: spec.stopTime ?? STOAT_STOP,
     clockStart: spec.clockStart ?? 0,
+    swimSpeed: spec.swimSpeed ?? SWIM_SPEED,
+    swimming: false,
     leg: 1,
     phase: 'run',
     phaseT: 0,
@@ -154,6 +168,7 @@ function nearMisses(world: SimWorld, g: GroundTargetEntity, s: StoatState): void
 /** One step of the route: dash to the next point, stop at a station, end at the nest. */
 function advance(world: SimWorld, g: GroundTargetEntity, s: StoatState, dt: number): void {
   s.phaseT += dt;
+  s.swimming = world.terrain.isWater(g.position.x, g.position.z);
   if (s.phase === 'nest') {
     g.velocity.set(0, 0, 0);
     return;
@@ -170,9 +185,10 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: StoatState, dt: numb
   const target = s.route[s.leg];
   _v.set(target.x - g.position.x, 0, target.z - g.position.z);
   const dist = _v.length();
-  // dashes: the pace swings between ~0.3 and ~1.7 × speed over each bound (average = speed)
-  s.gait += dt * 9;
-  const pace = s.speed * (s.bolting ? BOLT_FACTOR : 1) * (1 + 0.7 * Math.sin(s.gait * 0.25));
+  // dashes: the pace swings between ~0.3 and ~1.7 × speed over each bound (average = speed); in the
+  // water a steady paddle
+  s.gait += dt * (s.swimming ? 5 : 9);
+  const pace = s.swimming ? s.swimSpeed : s.speed * (s.bolting ? BOLT_FACTOR : 1) * (1 + 0.7 * Math.sin(s.gait * 0.25));
   const step = pace * dt;
   const oldY = g.position.y;
   if (dist <= step + 1e-3) {
@@ -197,7 +213,10 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: StoatState, dt: numb
   else g.velocity.set(0, 0, 0);
 }
 
-/** Seconds an undisturbed stoat takes from its start to the nest (route at `speed`, a stop at each station). */
+/**
+ * Seconds an undisturbed stoat takes from its start to the nest (route at `speed`, a stop at each station).
+ * All on land: a route that swims (t04's rats) takes longer by its water legs at the slower swimSpeed.
+ */
 export function stoatArrival(spec: Pick<StoatSpawn, 'route' | 'stations' | 'speed' | 'stopTime'>): number {
   let len = 0;
   for (let i = 1; i < spec.route.length; i++) len += Math.hypot(spec.route[i].x - spec.route[i - 1].x, spec.route[i].z - spec.route[i - 1].z);

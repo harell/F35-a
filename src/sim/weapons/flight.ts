@@ -21,6 +21,7 @@ import { SAM_INFO } from '../../core/data';
 import { STRUCTURAL_BLAST_FRACTION, destroyLandmark, firstLandmarkHit, landmarkDistance } from '../landmarks';
 import { hasLongHull, vesselHullDistance, vesselSegmentHit } from '../civil/vessels';
 import { isHostile } from '../../core/types';
+import { isSmallGround } from './small';
 
 type EndReason = 'hit' | 'proximity' | 'ground' | 'water' | 'selfdestruct' | 'decoyed';
 
@@ -243,7 +244,9 @@ function stepMissile(ctx: CombatCtx, m: CombatMissile, dt: number): void {
       sweptClosest(_p0, m.position, target.position, target.position, _sweep);
       if (_sweep.dist <= def.fuseRadius + target.radius * 0.6) {
         _pt.lerpVectors(_p0, m.position, _sweep.s);
-        detonate(ctx, m, _pt, target, 'hit', 'ground');
+        // a small target swimming (t04's rats): nothing solid to burn, the bomb goes off in the water
+        const wet = isSmallGround(target) && world.terrain.isWater(_pt.x, _pt.z) && _pt.y <= 2;
+        detonate(ctx, m, _pt, target, 'hit', wet ? 'water' : 'ground');
         return;
       }
     }

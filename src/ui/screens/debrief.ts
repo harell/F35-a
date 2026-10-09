@@ -50,7 +50,7 @@ export function offerRecruitRetry(r: Pick<MissionResult, 'success' | 'missionId'
   return !(m && fixedDifficulty(m));
 }
 
-/** Debrief stat rows for civil losses: airliners and helicopters downed, civil ships and trains destroyed, superyachts sunk by name (only when > 0). */
+/** Debrief stat rows for civil losses: airliners and helicopters downed, civil ships and trains destroyed, superyachts sunk by name, homes hit (only when > 0). */
 export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   const ships = r.civilianShipKills ?? 0;
   const helis = r.civilianHeliKills ?? 0;
@@ -64,6 +64,8 @@ export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   if (trains > 0) rows.push(['skull', 'Civil trains destroyed', String(trains)]);
   // superyachts by name (#145): "Koru, Aquijo"
   if (yachts.length) rows.push(['skull', yachts.length === 1 ? 'Superyacht sunk' : 'Superyachts sunk', escapeHtml(yachts.join(', '))]);
+  // homes inside a bomb's damage ring (t04, MissionScript.collateral)
+  if ((r.homesHit ?? 0) > 0) rows.push(['skull', r.homesHit === 1 ? 'Home hit' : 'Homes hit', String(r.homesHit)]);
   return rows;
 }
 

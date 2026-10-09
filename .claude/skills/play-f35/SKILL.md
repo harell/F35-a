@@ -26,7 +26,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 
 ## What to play
 
-**Operation Southern Cross was deleted** (c01–c11, 2026-10-04). The playable game is the IRGC campaign (`g01`–`g03`), training (`t01`–`t03`) and Instant Action (`ia_<mode>_auckland`, including `ia_stroll_auckland`). Which campaigns are playable: `PLAYABLE_CAMPAIGNS` in `src/missions/index.ts` (`enabled: false` on a `CampaignDef` hides it).
+**Operation Southern Cross was deleted** (c01–c11, 2026-10-04). The playable game is the IRGC campaign (`g01`–`g03`), training (`t01`–`t04`; `t04` is optional) and Instant Action (`ia_<mode>_auckland`, including `ia_stroll_auckland`). Which campaigns are playable: `PLAYABLE_CAMPAIGNS` in `src/missions/index.ts` (`enabled: false` on a `CampaignDef` hides it).
 
 ## Routing table
 
@@ -41,7 +41,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 | Sweep everything the player can play | same, `--diffs=recruit,pilot,veteran --json=<file>` (no `--missions`: the default is `all`). Groups: `campaigns` is every playable campaign (today the IRGC campaign only); `irgc` is g01–g03; `training`; `all` is every playable campaign plus training. | 20 runs ≈ 1 min |
 | See a mission at minute 3 without flying there | `node tools/playtest/browser-run.mjs --mission=g02 --at=0,60,180` (needs the dev server, below) | load ~7 s + ~1 s per 3 min of game time + ~4.5 s per screenshot |
 | Smoke or draw-call baseline over many missions | `browser-run.mjs --missions=g01,g02,… --at=0,120 --shots=0 --seed=7` (one page, `fly()` per mission; `--seed` makes reruns read the same calls) | ~23 s per mission, ~2× faster than a page load each |
-| Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `g01`–`g03` (IRGC), `t01`–`t03`, `ia_<mode>_auckland` (Auckland is the only theatre). An Instant Action id at night or in other weather: `&tod=dawn|day|dusk|night&weather=clear|scattered|overcast` (same seeded layout; default day, scattered; a bad value is warned in the console and ignored), `fly(id, loadout, { timeOfDay, weather })`, `missionById(id, { timeOfDay, weather })` in tests, browser-run `--tod= --weather=` | free |
+| Play level 13 without unlocking 1–12 | `?mission=<id>&autostart=1` (dev server / test build only). Ids: `g01`–`g03` (IRGC), `t01`–`t04`, `ia_<mode>_auckland` (Auckland is the only theatre). An Instant Action id at night or in other weather: `&tod=dawn|day|dusk|night&weather=clear|scattered|overcast` (same seeded layout; default day, scattered; a bad value is warned in the console and ignored), `fly(id, loadout, { timeOfDay, weather })`, `missionById(id, { timeOfDay, weather })` in tests, browser-run `--tod= --weather=` | free |
 | Read the game state (objectives, player, counts, draw calls) | `window.__f35.state()` in `page.evaluate` | free |
 | Put the jet somewhere (over a landmark, behind a drone, at the map edge) | `window.__f35.place('skytower', 600, 0, 90, 150)` (an `AKL` place id) or `place(x, alt, z, headingDeg, speed)`: level and trimmed by the flight model, so no overstress | free |
 | Fly with scripted inputs (stall, high-g, low level) | `window.__f35.controls({pitch:1, throttle:1})`, `null` to clear; `autopilot(false)` first | free |
@@ -100,6 +100,7 @@ npx vite --config vite.e2e.config.ts --port 5190 &       # stable dev server for
 ## Learned
 
 <!-- Dated one-liners appended by /playtest's efficiency retro. Keep only durable lessons; delete ones the code has made untrue. -->
+- 2026-10-09: Effects next to the camera (a bomb going off 40 m away) can push a SwiftShader screenshot past Playwright's 30 s default: pass `timeout: 240_000` to `page.screenshot`. `camera()` in the cockpit view draws the canopy frame over the shot: `setView('hud')` first. Don't `pkill -f vite` in the same command that restarts it.
 - 2026-10-07: Over the corridor (Whenuapai → airport) the real houses stream in 2 km tiles (#126): `__f35.corridor(x, z)` reads the stream (tiles loaded, `busy`, whether a tile covers x, z), and `env.stats().idle` waits for them too. After a `camera()` jump the scatters regenerate under each tile that lands: on SwiftShader (1–2 s a frame) give `idle` 10+ minutes; `e2e/corridor-shots.mjs --variants=offline` blocks the tiles (the procedural fallback).
 - 2026-10-06: Judge HUD clutter only with `browser-run.mjs --hudclock`: without it the mission title, radio box and objectives stay as at t = 0 in every shot. `--weapon=gbu53` reselects a weapon at each checkpoint (the autopilot picks its own, often the gun). The desktop keyboard legend hides on a wall-clock timer, so it shows in every headless shot: not a finding.
 - 2026-10-05: The bot can't fly under 70 m at speed: the autopilot's terrain-safety buffer (`src/ai/pilot/safety.ts`, 35 m + 0.1 s × speed) keeps it above the SA-6's 80 m floor much of the time. A human can fly lower; read a low-level probe's losses with that in mind.

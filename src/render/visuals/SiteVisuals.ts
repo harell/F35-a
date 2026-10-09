@@ -13,6 +13,7 @@ import { munitionGeometry } from '../models/munitions';
 import { charredMaterial, getMaterial } from '../models/materials';
 import { shipMatrix } from './shipMotion';
 import { poseStoat, stoatNodes, type StoatNodes } from './stoatPose';
+import { poseRat, ratNodes, type RatNodes } from './ratPose';
 
 const _v = new Vector3();
 const _m = new Matrix4();
@@ -164,10 +165,13 @@ export class GroundVisual {
   lightMode = 0;
   /** g03's stoat: its posable parts (render/visuals/stoatPose.ts); null for every other target. */
   private readonly stoat: StoatNodes | null;
+  /** t04's rats: posable parts (render/visuals/ratPose.ts); null for every other target. */
+  private readonly rat: RatNodes | null;
 
   constructor(readonly proto: GroundPrototype) {
     this.root = proto.root.clone(true);
     this.stoat = proto.type === 'stoat' ? stoatNodes(this.root) : null;
+    this.rat = proto.type === 'rat' ? ratNodes(this.root) : null;
     for (const s of proto.spinners) {
       const n = this.root.getObjectByName(s.name);
       if (n) this.spinners.push({ node: n, rate: s.rate });
@@ -194,8 +198,8 @@ export class GroundVisual {
       this.root.visible = false;
       return false;
     }
-    // a killed stoat leaves nothing to draw (only the crater the bomb dug)
-    if (this.stoat && !g.alive) {
+    // a killed stoat or rat leaves nothing to draw (only the crater the bomb dug)
+    if ((this.stoat || this.rat) && !g.alive) {
       this.root.visible = false;
       return false;
     }
@@ -218,6 +222,7 @@ export class GroundVisual {
     }
     for (const s of this.spinners) s.node.rotation.y = time * s.rate;
     if (this.stoat && g.stoat) poseStoat(this.stoat, g.stoat, time, this.seed);
+    if (this.rat && g.stoat) poseRat(this.rat, g.stoat, time, this.seed);
     const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
     if (this.proto.lights.length) this.lightMode = speed > 0.5 ? 1 : g.anchored ? 2 : 4;
     return true;

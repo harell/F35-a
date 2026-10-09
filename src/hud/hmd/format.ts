@@ -50,6 +50,7 @@ export const GROUND_LABEL: Record<GroundTargetType, string> = {
   suicide_boat: 'SUICIDE BOAT',
   missile_boat: 'MSL BOAT',
   stoat: 'STOAT',
+  rat: 'RAT',
   train: 'TRAIN',
 };
 

@@ -200,11 +200,12 @@ describe('#64: the Harbour Bridge pays once in T01', () => {
 });
 
 describe('#64: training debrief', () => {
-  it("NEXT reads 'Next lesson' between lessons and 'Start the campaign' after T03", () => {
-    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03']);
+  it("NEXT reads 'Next lesson' between lessons and 'Start the campaign' after T03 and after the optional T04", () => {
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04']);
     expect(nextMissionLabel('t01')).toBe('Next lesson');
     expect(nextMissionLabel('t02')).toBe('Next lesson');
     expect(nextMissionLabel('t03')).toBe('Start the campaign');
+    expect(nextMissionLabel('t04')).toBe('Start the campaign');
     for (const m of CAMPAIGN.slice(0, -1)) expect(nextMissionLabel(m.id), m.id).toBe('Next mission');
     expect(nextMissionLabel(CAMPAIGN[CAMPAIGN.length - 1].id)).toBeNull();
     expect(nextMissionLabel('ia_dogfight_auckland')).toBeNull();

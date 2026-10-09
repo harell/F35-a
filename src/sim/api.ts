@@ -286,7 +286,7 @@ export interface GroundSpawn {
   civilId?: boolean;
   /** IRGC Navy fast boat ('suicide_boat' / 'missile_boat'): chase / strike target (sim/boats.ts). `path` and `speed` above still apply. */
   boat?: BoatSpawn;
-  /** The stoat ('stoat'): its route, bait stations and clock (sim/stoat.ts). */
+  /** The stoat ('stoat') and t04's rats ('rat'): route, bait stations, clock and swimming (sim/stoat.ts). */
   stoat?: import('./stoat').StoatSpawn;
 }
 

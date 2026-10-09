@@ -305,6 +305,26 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
+  // t04's loadout (Combined Overflow): both bombs side by side, so the lesson is which one to drop where.
+  // Four StormBreakers on a BRU-61 in one bay and a JDAM in the other, two more JDAMs on the wing
+  // pylons (nothing shoots back over Herne Bay, so the pylons' stealth cost doesn't matter). Offered
+  // only where a mission lists it.
+  strike_mixed: {
+    id: 'strike_mixed',
+    name: 'Mixed Strike',
+    description: '4× GBU-53/B StormBreaker + 1× GBU-31 JDAM internal, 2× GBU-31 JDAM on the wing pylons, no air-to-air missiles. The small bomb for a small target, the big one where its blast can do the work.',
+    rcsMultiplier: 20,
+    stores: [
+      // the JDAM first: it takes a main bay station, and the StormBreakers pair up on the rest
+      { weapon: 'gbu31', count: 1, internal: true },
+      { weapon: 'gbu53', count: 4, internal: true },
+      { weapon: 'gbu31', count: 2, internal: false },
+    ],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'ag',
+  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',

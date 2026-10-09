@@ -318,9 +318,11 @@ export interface GroundTargetDef {
    * 'stoat' (g03, sim/stoat.ts): the route after its start point (bait stations, then the nest last),
    * which of those points are bait stations (indices into `route`, 0 = the first point after the
    * start), its dash speed (m/s) and the stop at each station (s). Its clock starts at mission
-   * start, whenever it spawns.
+   * start, whenever it spawns, unless `clock` is 'spawn'.
+   * 'rat' (t04) runs the same way; over water it swims at `swimSpeed` (m/s) and its clock starts when it
+   * spawns (`clock: 'spawn'`: a wave the mission sends in later starts at its own start point).
    */
-  stoat?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number };
+  stoat?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number; swimSpeed?: number; clock?: 'mission' | 'spawn' };
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */
@@ -495,10 +497,16 @@ export interface MissionScript {
   campaignFinale?: boolean;
   /**
    * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
-   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
-   * player killed, under `removed.label`.
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` (one
+   * group, or several: t04's waves) the player killed, under `removed.label`.
    */
-  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string | string[] } };
+  /**
+   * Count the homes the player's bombs hit (runtime/collateral.ts, t04): every building within half a
+   * weapon's blast radius of where it went off on land. Each one is called on the radio, listed in the
+   * debrief and costs score and grade (scoring.ts POINTS.home).
+   */
+  collateral?: boolean;
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower

@@ -5,7 +5,8 @@
  *   kills (air 100, SAM 150, ground 75) + objective bonuses (500 primary / 250 secondary)
  *   + time bonus (success only, up to 300) + accuracy bonus (up to 250)
  *   + stunt bonus (Harbour Bridge) − damage penalty (2 per HP lost) − 150 per friendly loss
- *   − 500 per civil airliner or ship the player destroyed,
+ *   − 500 per civil airliner or ship the player destroyed − 100 per home the player's bombs hit
+ *   (missions that count them, MissionScript.collateral),
  *   all × difficulty.scoreMultiplier, floored at 0.
  *
  * Grade: from a 0..1 performance rating that is independent of mission size (objective
@@ -36,7 +37,12 @@ export const POINTS = {
   friendlyLoss: 150,
   /** Civil airliner or ship destroyed by the player. */
   civilian: 500,
+  /** A home inside the damage ring of one of the player's bombs (runtime/collateral.ts). */
+  home: 100,
 } as const;
+
+/** Rating lost per home hit: a JDAM on a street (four or five homes) costs about a grade. */
+export const HOME_RATING_PENALTY = 0.03;
 
 export type Grade = MissionResult['grade'];
 
@@ -70,6 +76,8 @@ export interface ScoreInput {
   friendlyLosses: number;
   /** Neutral civil traffic (airliners + ships) the player destroyed. */
   civilianKills?: number;
+  /** Homes the player's bombs hit (missions that count them). */
+  homesHit?: number;
   /** Extra stunt points (flying under the Harbour Bridge…). */
   bonus: number;
   scoreMultiplier: number;
@@ -137,7 +145,7 @@ export function computeScore(i: ScoreInput): ScoreOutput {
   const accPts = i.shotsFired >= 2 ? Math.round(accuracy * POINTS.accuracyMax) : 0;
   const dmg = Math.max(0, Math.min(100, i.damageTaken));
   const dmgPts = -Math.round(dmg * POINTS.damagePerHp);
-  const friendlyPts = -i.friendlyLosses * POINTS.friendlyLoss - (i.civilianKills ?? 0) * POINTS.civilian;
+  const friendlyPts = -i.friendlyLosses * POINTS.friendlyLoss - (i.civilianKills ?? 0) * POINTS.civilian - (i.homesHit ?? 0) * POINTS.home;
   const raw = killPts + i.objectiveBonus + timePts + accPts + dmgPts + friendlyPts + i.bonus;
   const score = Math.max(0, Math.round(raw * i.scoreMultiplier));
 
@@ -158,7 +166,7 @@ export function computeScore(i: ScoreInput): ScoreOutput {
     0.1 * (i.success ? tf : 0) +
     0.1 * accShare +
     0.1 * (1 - dmg / 100);
-  rating -= 0.06 * i.friendlyLosses + 0.15 * (i.civilianKills ?? 0);
+  rating -= 0.06 * i.friendlyLosses + 0.15 * (i.civilianKills ?? 0) + HOME_RATING_PENALTY * (i.homesHit ?? 0);
   if (i.bonus > 0) rating += 0.03;
   rating = clamp01(rating);
 

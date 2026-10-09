@@ -130,11 +130,12 @@ describe('campaign progress', () => {
     for (const m of CAMPAIGN) expect(done.unlocked).toContain(m.id);
   });
 
-  it('training lessons chain T01 → T02 → T03 → the first campaign mission', () => {
-    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03']);
+  it('training lessons chain T01 → T02 → T03 → the first campaign mission; the optional T04 leads there too', () => {
+    expect(TRAINING.map((m) => m.id)).toEqual(['t01', 't02', 't03', 't04']);
     expect(nextMissionAfter('t01')?.id).toBe('t02');
     expect(nextMissionAfter('t02')?.id).toBe('t03');
     expect(nextMissionAfter('t03')?.id).toBe(PLAYABLE_CAMPAIGNS[0].missions[0].id);
+    expect(nextMissionAfter('t04')?.id).toBe(PLAYABLE_CAMPAIGNS[0].missions[0].id);
     // the campaign's first mission is always unlocked, so NEXT after T03 never hits a locked mission
     expect(loadProgress().unlocked).toContain(CAMPAIGN[0].id);
     expect(nextMissionAfter('ia_dogfight_auckland')).toBeNull();

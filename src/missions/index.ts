@@ -36,6 +36,12 @@ export type { MissionScript } from './schema';
 /** Training missions (always unlocked). */
 export const TRAINING: MissionDef[] = TRAINING_MISSIONS;
 
+/**
+ * Optional lessons (t04 Combined Overflow): listed with the rest, but not on the path from basic
+ * training into the campaign. The lesson before one leads past it, and it leads into the campaign.
+ */
+export const OPTIONAL_TRAINING: ReadonlySet<string> = new Set(['t04']);
+
 /** Every campaign, in menu order, disabled ones included. Each has its own unlock chain and ending. */
 export const CAMPAIGNS: CampaignDef[] = [IRGC_CAMPAIGN];
 
@@ -74,7 +80,8 @@ export function skipMission(p: CampaignProgress, id: string): CampaignProgress {
 
 /**
  * What the debrief's NEXT button flies: the next mission of the same campaign, the next training
- * lesson (the last lesson leads into the first playable campaign's first mission, which is always unlocked), or
+ * lesson (the last basic lesson, and an optional one, lead into the first playable campaign's first
+ * mission, which is always unlocked; OPTIONAL_TRAINING is skipped on the way), or
  * null after a campaign's last mission (never into another campaign) / for Instant Action ids.
  */
 export function nextMissionAfter(id: string): MissionDef | null {
@@ -85,7 +92,8 @@ export function nextMissionAfter(id: string): MissionDef | null {
   }
   const t = TRAINING.findIndex((m) => m.id === id);
   if (t < 0) return null;
-  return t + 1 < TRAINING.length ? TRAINING[t + 1] : (PLAYABLE_CAMPAIGNS[0]?.missions[0] ?? null);
+  const next = OPTIONAL_TRAINING.has(id) ? undefined : TRAINING.slice(t + 1).find((m) => !OPTIONAL_TRAINING.has(m.id));
+  return next ?? PLAYABLE_CAMPAIGNS[0]?.missions[0] ?? null;
 }
 
 /**
