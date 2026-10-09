@@ -5,7 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { Box3, type BufferGeometry, type Mesh, Vector3, type Object3D } from 'three';
 import { getAircraftPrototype } from '../src/render/models/aircraft';
-import { AIR_KILL } from '../src/render/effects/Effects';
+import { AIR_KILL, LAUNCH_FX, motorGlow } from '../src/render/effects/Effects';
+import type { SpriteBatch } from '../src/render/effects/SpriteBatch';
+import { MissileEntity } from '../src/sim/entities';
+import { MUNITIONS } from '../src/sim/weapons/defs';
 import liverySrc from '../src/render/models/aircraft/liveries.ts?raw';
 
 /** Vertical extent (m) of the model's vertices with |x| < xMax inside the z slab [z0, z1]. */
@@ -94,5 +97,37 @@ describe('air kill readability (reviewer: 16 m explosion = 1-3 px at 3-8 km)', (
     // natural size at 5 km on a 375 px phone screen would be ~3-4 px; the min-pixel clamp keeps it readable
     expect(Math.max(S * 1.1 * pxPerM(5000), AIR_KILL.fireballMinPx)).toBeGreaterThanOrEqual(10);
     expect(AIR_KILL.secondaries).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('an AMRAAM launch reads from the cockpit (playtest r1 1.2-b)', () => {
+  /** The motor glow's [world size, min CSS px] for a missile of `id` at `age` s after release. */
+  const glow = (id: 'aim120' | 'm_3m9', age: number) => {
+    const m = new MissileEntity(7, MUNITIONS[id], 'blue', 1, 2);
+    m.age = age;
+    const out: number[][] = [];
+    motorGlow({ add: (...a: number[]) => (out.push(a), true) } as unknown as Pick<SpriteBatch, 'add'>, m, new Vector3(), 0, 1);
+    expect(out.length).toBe(1);
+    return [out[0][7], out[0][8]];
+  };
+  const pxPerM = (distM: number, screenH = 390, fovDeg = 60) => screenH / (2 * Math.tan((fovDeg * Math.PI) / 360) * distM);
+
+  it('its motor is a big bright dot for its first 1–2 s, easing back to the usual 6 px', () => {
+    const [s0, px0] = glow('aim120', 0.6);
+    expect(px0).toBe(LAUNCH_FX.glowMinPx);
+    expect(px0).toBeGreaterThanOrEqual(16);
+    // 1.5 s out the AMRAAM is ~250 m ahead of the jet: its natural size there is ~3 px; the glow keeps ≥ 12
+    const [s15, px15] = glow('aim120', 1.5);
+    expect(Math.max(px15, s15 * pxPerM(250))).toBeGreaterThanOrEqual(12);
+    expect(s0).toBeGreaterThan(glow('aim120', 3)[0]);
+    expect(glow('aim120', 3)[1]).toBe(6);
+    // a SAM's glow is untouched (it is seen from the target's side, already 9 px)
+    expect(glow('m_3m9', 0.5)[1]).toBe(9);
+  });
+
+  it('the ignition flash is bigger than a kill fireball\'s minimum and lasts long enough to catch', () => {
+    expect(LAUNCH_FX.flashMinPx).toBeGreaterThan(AIR_KILL.fireballMinPx);
+    expect(LAUNCH_FX.flashLife).toBeGreaterThanOrEqual(0.25);
+    expect(LAUNCH_FX.glowS).toBeGreaterThanOrEqual(1.5);
   });
 });

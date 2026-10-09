@@ -84,6 +84,35 @@ export const AIR_KILL = {
   scale: (length: number) => Math.max(36, length * 2.8),
 };
 
+/**
+ * A missile launch read from the cockpit (playtest r1 1.2-b: an AMRAAM shot showed nothing in front of
+ * the canopy). An AIM-120 drops from a bay under and behind the pilot and lights 0.3 s later, so for
+ * its first seconds it is a small thing low ahead of the nose. An air-launched missile's ignition
+ * flash rides with it, bigger and longer (`flashMinPx`, `flashLife` s); its motor glow keeps a larger
+ * size and a `glowMinPx` minimum for `glowHold` s after release, easing to the usual 6 px by `glowS`;
+ * its smoke puffs come every frame and `puffK` × bigger meanwhile. All in the existing particle and
+ * sprite batches: no draw call added.
+ */
+export const LAUNCH_FX = { glowHold: 1.2, glowS: 2, glowMinPx: 18, flashMinPx: 28, flashLife: 0.3, puffK: 1.6 };
+
+/** 1 for an air-launched missile in its first LAUNCH_FX.glowHold s, easing to 0 at glowS (0 for a SAM). */
+export function launchBoost(m: Pick<MissileEntity, 'age' | 'def'>): number {
+  if (m.def.category === 'sam') return 0;
+  return Math.max(0, Math.min(1, (LAUNCH_FX.glowS - m.age) / (LAUNCH_FX.glowS - LAUNCH_FX.glowHold)));
+}
+
+/**
+ * The motor glow of a burning missile at its tail (the sprite pass): a bright dot from far away, at
+ * least 6 px (9 for a SAM), bigger in its first seconds (launchBoost).
+ */
+export function motorGlow(sprites: Pick<SpriteBatch, 'add'>, m: MissileEntity, tail: Vector3, t: number, nightK: number): void {
+  const fl = 0.85 + 0.15 * Math.sin(t * 60 + m.id);
+  const k = launchBoost(m);
+  const base = m.def.category === 'sam' ? 9 : 6;
+  const s = Math.max(1.2, (m.def.diameter || 0.2) * 9) * (1 + k);
+  sprites.add(tail.x, tail.y, tail.z, 4 * fl * nightK, 3.1 * fl * nightK, 1.9 * fl * nightK, 1, s, base + (LAUNCH_FX.glowMinPx - base) * k);
+}
+
 function trailStyleFor(def: MunitionDef): RibbonStyle | null {
   if (def.category === 'bomb' || def.smoke <= 0.01) return null;
   const sam = def.category === 'sam';
@@ -1392,27 +1421,37 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       const burning = m.motorBurning;
       const tail = missileTail(m, _v);
       const d = distCam(tail.x, tail.y, tail.z);
+      const boost = launchBoost(m);
       if (burning && !fx.motor) {
-        // motor ignition flash
+        // motor ignition flash; an air launch's rides with the missile, so it lights the air under the
+        // nose instead of being left behind the jet (LAUNCH_FX)
         resetSpawn(P);
         P.x = tail.x;
         P.y = tail.y;
         P.z = tail.z;
-        P.life = 0.15;
-        P.size0 = 3;
-        P.size1 = 5;
+        if (boost > 0) {
+          P.vx = m.velocity.x;
+          P.vy = m.velocity.y;
+          P.vz = m.velocity.z;
+          P.drag = 0.01;
+        }
+        P.life = boost > 0 ? LAUNCH_FX.flashLife : 0.15;
+        P.size0 = boost > 0 ? 5 : 3;
+        P.size1 = boost > 0 ? 9 : 5;
         col0(P, [1, 0.85, 0.6], 1, 5);
         col1(P, [1, 0.5, 0.2], 0, 2);
-        P.minPx = AIR_KILL.fireballMinPx;
+        P.minPx = boost > 0 ? LAUNCH_FX.flashMinPx : AIR_KILL.fireballMinPx;
         fire.spawn(P, t);
       }
       if (burning && fx.style) {
         if (fx.ribbon < 0 || !ribbons.isActive(fx.ribbon)) fx.ribbon = ribbons.alloc(fx.style);
         ribbons.emit(fx.ribbon, tail.x, tail.y, tail.z, t);
-        // volumetric puffs close to the camera (ribbons collapse when seen end-on, e.g. chase view)
-        if (d < 2500 && rnd() < (d < 900 ? 1 : 0.5) * Math.max(0.5, ps)) {
+        // volumetric puffs close to the camera (ribbons collapse when seen end-on, e.g. chase view and
+        // the cockpit), every frame and bigger just after an air launch
+        if (d < 2500 && (boost > 0 || rnd() < (d < 900 ? 1 : 0.5) * Math.max(0.5, ps))) {
           const s = fx.style;
-          smallPuff(tail.x, tail.y, tail.z, m.velocity.x * 0.03, m.velocity.y * 0.03, m.velocity.z * 0.03, [s.r, s.g, s.b], Math.min(0.85, s.alpha * 0.8), s.width * 1.5, s.width * 3.5 + s.growth * s.life * 0.35, s.life * 0.5);
+          const k = 1 + (LAUNCH_FX.puffK - 1) * boost;
+          smallPuff(tail.x, tail.y, tail.z, m.velocity.x * 0.03, m.velocity.y * 0.03, m.velocity.z * 0.03, [s.r, s.g, s.b], Math.min(0.85, s.alpha * 0.8), s.width * 1.5 * k, (s.width * 3.5 + s.growth * s.life * 0.35) * k, s.life * 0.5);
         }
         // exhaust tongue
         if (d < 700) {
@@ -1738,10 +1777,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     // missile motor glows (visible as bright dots from far away)
     for (const m of world.missiles) {
       if (!m.alive || !m.motorBurning) continue;
-      missileTail(m, _v);
-      const fl = 0.85 + 0.15 * Math.sin(t * 60 + m.id);
-      const s = Math.max(1.2, (m.def.diameter || 0.2) * 9);
-      sprites.add(_v.x, _v.y, _v.z, 4 * fl * nightK, 3.1 * fl * nightK, 1.9 * fl * nightK, 1, s, m.def.category === 'sam' ? 9 : 6);
+      motorGlow(sprites, m, missileTail(m, _v), t, nightK);
     }
     // flares: blinding cores
     for (const dc of world.decoys) {
