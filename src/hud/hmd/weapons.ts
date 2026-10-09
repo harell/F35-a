@@ -561,6 +561,15 @@ export function gunOvershoot(range: number, closure: number): boolean {
   return closure > 0 && (range - GUN_OVERSHOOT_MIN) / closure < GUN_OVERSHOOT_TIME;
 }
 
+/**
+ * The target flies toward the jet (aspect over 90°: the jet is in its front hemisphere). A head-on
+ * pass is one the lessons say to let go by (T03, g01), not a gun pass to slow for: no OVERSHOOT then
+ * (playtest r2 2.1-e: "Vc 471 OVERSHOOT" through T03's head-on pass).
+ */
+export function headOnAspect(p: { position: Vector3 }, t: { position: Vector3; velocity: Vector3 }): boolean {
+  const v = t.velocity;
+  return v.x * (p.position.x - t.position.x) + v.y * (p.position.y - t.position.y) + v.z * (p.position.z - t.position.z) > 0;
+}
 const gunVcTxt = new NumText(0, 'Vc ');
 
 /** Closure rate (m/s, positive = closing) between the player and `t`. */
@@ -575,7 +584,7 @@ export function closureRate(p: { position: Vector3; velocity: Vector3 }, t: { po
 
 /**
  * Gun closure cue beside the anchor (the LCOS pipper, or the gun cross without one): "Vc 140", and
- * OVERSHOOT under it when closing too fast (gunOvershoot). Drawn after the target box and its labels
+ * OVERSHOOT under it when closing too fast (gunOvershoot) from behind its wing line (headOnAspect). Drawn after the target box and its labels
  * (drawGunCues), so it tries right, left, below, above the anchor for a spot clear of everything
  * registered, them included (playtest 2.1-d: "Vc" into the drone's name), then registers itself.
  */
@@ -588,7 +597,7 @@ function drawGunClosure(f: HudFrame, ax: number, ay: number, ar: number): void {
   const u = L.u;
   const closure = closureRate(p, t);
   const kt = toKnots(closure);
-  const over = gunOvershoot(range, closure);
+  const over = gunOvershoot(range, closure) && !headOnAspect(p, t);
   const vc = gunVcTxt.get(kt);
   const lh = 12 * u;
   const w = Math.max(pen.textWidth(vc, 11), over ? pen.textWidth('OVERSHOOT', 11) : 0) + 2 * u;

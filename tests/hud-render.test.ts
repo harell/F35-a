@@ -1076,6 +1076,20 @@ describe('gun closure cue', () => {
     expect(gunOvershoot(300, -20)).toBe(false); // opening
   });
 
+  it('no OVERSHOOT in a head-on pass, the one the lessons say to let go by (playtest r2 2.1-e)', () => {
+    const r = rig('gun', 'hud');
+    const p = r.mock.player;
+    // 300 m ahead, flying at the jet at 100 kt: T03's head-on pass
+    const mig = place(r, 300, 154);
+    mig.velocity.copy(p.velocity).normalize().multiplyScalar(-100 * kt);
+    const { texts, vc } = gunVcs(r);
+    expect(vc.length, 'Vc still drawn').toBe(1);
+    expect(find(texts, 'OVERSHOOT').length).toBe(0);
+    // the same range and closure from behind it: OVERSHOOT
+    place(r, 300, 154);
+    expect(find(gunVcs(r).texts, 'OVERSHOOT').length).toBe(1);
+  });
+
   for (const view of ['hud', 'chase'] as const) {
     it(`${view}: Vc (knots) by the gun cue inside 3 km of an air target, OVERSHOOT only when about to overshoot, clear of every text`, () => {
       const r = rig('gun', view);
