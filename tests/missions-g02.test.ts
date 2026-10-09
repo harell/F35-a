@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEventMap } from '../src/core/events';
-import { DIFFICULTIES, LOADOUTS, WEAPON_INFO } from '../src/core/data';
+import { AARGM_RULE, DIFFICULTIES, LOADOUTS, WEAPON_INFO } from '../src/core/data';
 import type { Difficulty } from '../src/core/types';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -114,9 +114,7 @@ describe('g02 Straight Outta Hauraki: content', () => {
     }
     // one anti-radiation missile for each air-defence boat on Recruit and Pilot; Veteran's third boat is a gun target
     expect(l.stores.find((s) => s.weapon === 'aargm')!.count).toBeGreaterThanOrEqual(G02.script.sams.filter((s) => s.type === 'ad_boat' && !s.minDifficulty).length);
-    const text = G02.briefing.join(' ');
-    expect(text).toMatch(/AARGM-ER/);
-    expect(text).toMatch(/no air-to-air missiles/i);
+    expect(G02.briefing.join(' ')).toMatch(/AARGM-ER/);
   });
 
   it('the briefing names the mother ship, the two-hit rule, the early release and the friendly-fire risk', () => {
@@ -126,6 +124,15 @@ describe('g02 Straight Outta Hauraki: content', () => {
     expect(text).toMatch(/release early/i);
     expect(text).toMatch(/alongside the tanker can hit her/i);
     expect(text).toMatch(/cannot be shot down/i);
+    // the AARGM's one rule, as the lessons teach it (core/data.ts)
+    expect(text).toContain(AARGM_RULE);
+  });
+
+  it('the briefing reads on a phone (playtest r2, 2.1-d: 421 words over 3.3 screens): at most 3 paragraphs and 170 words, no unexplained hardware', () => {
+    expect(G02.briefing.length).toBeLessThanOrEqual(3);
+    const words = G02.briefing.join(' ').split(/\s+/).filter(Boolean).length;
+    expect(words).toBeLessThanOrEqual(170);
+    expect(G02.briefing.join(' ')).not.toMatch(/Peykaap|Kowsar|Tor-type|optical tracker|open bay/i);
   });
 
   // the first test to build the real terrain (~3.5 s alone, past the 5 s default under load)
