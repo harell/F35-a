@@ -125,9 +125,10 @@ const TOD: Record<TimeOfDay, TodBase> = {
 
 /**
  * Auckland: sun path, haze colour/density, water colours. Southern hemisphere: the midday sun (and
- * the night's moon) stands in the NORTH over the Hauraki Gulf.
+ * the night's moon) stands in the NORTH over the Hauraki Gulf. The harbour's shallows are a murky grey-green (silt over
+ * mud), not a tropical turquoise: the small basins (the Viaduct, the marinas, the estuaries) are shallow all over.
  */
-const AKL = { aerialNear: 4000, aerialRange: 9000, aerialHeight: 1500, dayEl: 54, dayAz: 20, nightAz: 20, haze: 0xb6cde6, fogK: 1.3, hazeH: 3000, deep: 0x0f3844, shallow: 0x2a5e58, tint: 0.1, shallowDepth: 5 };
+const AKL = { aerialNear: 4000, aerialRange: 9000, aerialHeight: 1500, dayEl: 54, dayAz: 20, nightAz: 20, haze: 0xb6cde6, fogK: 1.3, hazeH: 3000, deep: 0x0f3844, shallow: 0x334f47, tint: 0.1, shallowDepth: 5 };
 
 /**
  * City / street-light intensity from the sun's elevation (degrees): street lights and the urban

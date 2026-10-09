@@ -3,7 +3,7 @@
  * farmland; weak signature details" and "night city goes dark at distance".
  */
 import { describe, expect, it } from 'vitest';
-import { BoxGeometry, MeshBasicMaterial, Vector3 } from 'three';
+import { BoxGeometry, MeshBasicMaterial, SRGBColorSpace, Vector3 } from 'three';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { bakeColorRows, dilateLandColour } from '../src/world/terrain/bake';
@@ -263,6 +263,14 @@ describe('Auckland signature details', () => {
     expect(over.waterDeep.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(clear.waterDeep.getHSL({ h: 0, s: 0, l: 0 }).l);
     expect(OVERCAST_DECK.altitude).toBeLessThanOrEqual(2000);
     expect(OVERCAST_DECK.cover).toBeGreaterThan(0.95);
+  });
+
+  it('the harbour shallows are a murky grey-green, not tropical turquoise (playtest r1 R11-5)', () => {
+    const w = skyPreset('auckland', 'day', 'clear', 40_000).waterShallow;
+    expect(w.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace).s).toBeLessThan(0.25); // 0x2a5e58 before: 0.38
+    expect(w.b / w.r).toBeLessThan(2.2); // before: 4.2 (cyan)
+    expect(w.g).toBeGreaterThan(w.b); // green-grey, not blue
+    expect(0.2126 * w.r + 0.7152 * w.g + 0.0722 * w.b).toBeLessThan(0.075); // before: 0.092
   });
 
   it('terrain style: Auckland has a vineyard region on Waiheke, the CBD streets, and a shore band', () => {
