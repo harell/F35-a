@@ -20,7 +20,7 @@
  */
 import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
-import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget } from '../core/pod';
+import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, podSpan } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
@@ -135,9 +135,11 @@ export class TargetCam {
         this.lastPod = 'MASKED';
         return false;
       }
-      const step = POD_ZOOM[rect.zoom ?? POD_ZOOM_DEFAULT] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
-      podCamPose(t as CamTarget, eye, step.span, this.pose, this.surfaceAt);
-      fov = podFov(step.span, this.pose.position.distanceTo(this.pose.look));
+      const zoom = rect.zoom ?? POD_ZOOM_DEFAULT;
+      const step = POD_ZOOM[zoom] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
+      const span = podSpan(zoom, (t as CamTarget).radius);
+      podCamPose(t as CamTarget, eye, span, this.pose, this.surfaceAt);
+      fov = podFov(span, this.pose.position.distanceTo(this.pose.look));
       range = range > 0 ? Math.min(range, POD_RANGE) : POD_RANGE;
       this.lastPod = step.name;
     } else if (lm) landmarkCamPose(lm, this.world.time, this.pose, this.surfaceAt);

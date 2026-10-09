@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Scene, Vector3, type WebGLRenderer } from 'three';
-import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, nextPodZoom } from '../src/core/pod';
+import { POD_ZOOM, POD_ZOOM_DEFAULT, POD_ZOOM_SMALL, isPodTarget, nextPodZoom, podSpan } from '../src/core/pod';
 import { OVERCAST_DECK, cloudBase } from '../src/core/weather';
 import type { EntityRendererApi } from '../src/core/contracts';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
@@ -148,6 +148,28 @@ describe('pod camera pose', () => {
     // WIDE: the same object is a speck (why ZOOM exists)
     const wide = podCamPose(t, eye, POD_ZOOM[0].span, makePose(), () => 0);
     expect(spanPx(wide, at, 0.3, L.pipH)).toBeLessThan(1);
+  });
+});
+
+describe('ZOOM on an animal (playtest r2 F6)', () => {
+  it('closes to half a metre on a target under a metre across; every other step and target as before', () => {
+    expect(POD_ZOOM_SMALL).toBe(0.5);
+    expect(podSpan(ZOOM, tiny().radius)).toBe(POD_ZOOM_SMALL);
+    expect(podSpan(ZOOM, 9)).toBe(POD_ZOOM[ZOOM].span);
+    for (let i = 0; i < POD_ZOOM.length; i++) if (i !== ZOOM) expect(podSpan(i, tiny().radius)).toBe(POD_ZOOM[i].span);
+  });
+
+  it("g03's stoat ~4 km out fills about half the 82 px window at ZOOM (it was a 10 x 20 px blob)", () => {
+    const t = tiny();
+    t.position.set(27867, 34, -6744);
+    const eye = new Vector3(27867 - 4200, 450, -6744 + 600);
+    const span = podSpan(ZOOM, t.radius);
+    const pose = podCamPose(t, eye, span, makePose(), () => 34);
+    const fov = podFov(span, pose.position.distanceTo(pose.look));
+    // the 0.38 m animal against the window's height (its length lies across the wider window)
+    const px = spanPx(pose, pose.look, 0.38, 82, fov);
+    expect(px).toBeGreaterThan(82 * 0.6);
+    expect(px).toBeLessThan(82);
   });
 });
 
