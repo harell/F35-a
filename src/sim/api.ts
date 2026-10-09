@@ -235,6 +235,8 @@ export interface SamSpawn {
   closeCue?: { range: number; bayRange: number } | null;
   /** No long harassing shots (SamSiteEntity.noHarass). */
   noHarass?: boolean;
+  /** The radar stays on under an anti-radiation missile (SamSiteEntity.noArmShutdown). */
+  noArmShutdown?: boolean;
 }
 
 /**

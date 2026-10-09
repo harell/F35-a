@@ -273,6 +273,8 @@ export interface SamSiteDef {
   escortRight?: number;
   /** 'ad_boat': no long harassing shots outside its envelope (a training boat, t05). */
   noHarass?: boolean;
+  /** The crew never shuts its radar down against an inbound anti-radiation missile (a range target: t04's AARGM drill). */
+  noArmShutdown?: boolean;
 }
 
 /**

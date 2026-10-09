@@ -683,6 +683,8 @@ function handleEmcon(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: Sa
     if (data.pointDefense && s.missilesReady > 0) si.armShutTti = disciplined ? 2 : -1; // fight it; hide only at the last moment
     else if (disciplined) si.armShutTti = (6 + 10 * skill) * (0.75 + 0.5 * ctx.rng());
     else si.armShutTti = ctx.rng() < 0.5 ? -1 : 1 + 2 * ctx.rng(); // panics too late (or never)
+    // a range target (t04's AARGM drill): it stays on the air
+    if (s.noArmShutdown) si.armShutTti = -1;
   }
   if (arm && s.radarOn && !si.armShutdown && now >= si.armNoticeAt && si.armShutTti > 0 && arm.tti <= si.armShutTti) {
     // keep guiding missiles that arrive well before the ARM, as long as it is not about to hit

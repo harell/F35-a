@@ -490,6 +490,11 @@ export class SamSiteEntity implements Entity {
    * this site: a training boat (t05) fires only inside its real envelope.
    */
   noHarass?: boolean;
+  /**
+   * The crew never shuts its radar down against an inbound anti-radiation missile (SamTypeData.armDiscipline
+   * is ignored): a range target, so the AARGM drill (t04) is passed by the rule it teaches.
+   */
+  noArmShutdown?: boolean;
   /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
   holdFire?: boolean;
 

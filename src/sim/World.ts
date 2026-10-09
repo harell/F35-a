@@ -270,6 +270,7 @@ class SimWorldImpl implements SimWorld {
     e.known = !!spec.known;
     if (spec.closeCue !== undefined) e.closeCue = spec.closeCue;
     if (spec.noHarass) e.noHarass = true;
+    if (spec.noArmShutdown) e.noArmShutdown = true;
     if (spec.emcon) {
       e.radarOn = false;
       e.state = 'emcon';

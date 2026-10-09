@@ -6,8 +6,12 @@
  *      shows. The bomb tracks a moving boat, so the player turns for the next one while it glides.
  *   2. AARGM-ER: an air-defence boat at anchor, its radar on, a few kilometres north of the start. It fires practice
  *      rounds (a hit does no damage): the AARGM-ER homes on that radar, by the one rule (AARGM_RULE,
- *      core/data.ts): inside about 10 km while the radar is on, then press in.
- *   3. Gun: one boat, close by, for a gun pass (asked for, not enforced yet: a StormBreaker sinks it too).
+ *      core/data.ts): inside about 10 km while the radar is on, then press in. A range crew, it never shuts
+ *      the radar down against the AARGM (`noArmShutdown`): a disciplined one went quiet and 4 of 6 bot runs'
+ *      AARGMs, fired by the rule, missed (playtest r2, 2.3-d), so the drill was passed with a bomb.
+ *   3. Gun: one boat, 3 km beyond the air-defence boat, where the AARGM pass ends low: a gun pass is the
+ *      short way. Not enforced (the label says "try the gun"): a StormBreaker sinks it too, which is how the
+ *      mission bot, which can't aim the gun at a boat, flies it.
  * Sized for a casual player (playtest 2026-10-10, 1.4-e/h: 397–562 s, a first AARGM fired from 30 km):
  * the drills sit close together and the start is a StormBreaker's reach from the first boat.
  * Every boat sails in open water at least 1 km from any shore (tests/missions-t04.test.ts).
@@ -22,22 +26,27 @@ const DS = 'DARKSTAR';
 export const STRIKE = {
   /**
    * Off Takapuna at 10,000 ft, about 9 km from the first boat: inside a StormBreaker's reach from there
-   * (~11.5 km), so the first release comes within seconds; the second boat is further up the Gulf.
+   * (~11.5 km), so the first release comes within seconds; the second boat is 3 km further up the Gulf.
    */
   start: { x: 1500, z: -7500 },
-  /** Drill 1: two boats sailing a loop on the tanker's route up the Gulf. */
+  /**
+   * Drill 1: two boats sailing a loop on the tanker's route up the Gulf; the second starts on it 3 km behind the
+   * first, coming back down (from further up the Gulf its StormBreaker glided 75 s: r2, 2.3-d).
+   */
   d1Path: [
     { x: 7000, z: -15000 },
     { x: 8400, z: -21000 },
     { x: 8600, z: -26000 },
     { x: 8400, z: -21000 },
   ],
+  /** Drill 1's second boat: on the loop's first leg, 3 km beyond the first. */
+  d1Second: { x: 7700, z: -18000 },
   /** Drill 2: the air-defence boat, at anchor 6 km north of the start. */
   d2: { x: 3500, z: -13000 },
-  /** Drill 3: the gun boat, 4.5 km beyond the air-defence boat. */
+  /** Drill 3: the gun boat, 3 km beyond the air-defence boat. */
   d3Path: [
-    { x: 5000, z: -17500 },
-    { x: 2000, z: -17500 },
+    { x: 4500, z: -16000 },
+    { x: 2000, z: -16000 },
   ],
 } as const;
 
@@ -71,20 +80,20 @@ export const T04_STRIKE: MissionDef = mission({
     groups: [],
     ground: [
       target('sb1', 'd1', 'suicide_boat', STRIKE.d1Path[0], { name: 'Range boat 1', path: [...STRIKE.d1Path], speed: BOAT_SPEED, loop: true }),
-      target('sb2', 'd1', 'suicide_boat', { x: 8400, z: -21000 }, { name: 'Range boat 2', path: [...STRIKE.d1Path.slice(2), ...STRIKE.d1Path.slice(0, 2)], speed: BOAT_SPEED, loop: true }),
+      target('sb2', 'd1', 'suicide_boat', STRIKE.d1Second, { name: 'Range boat 2', path: [...STRIKE.d1Path], speed: BOAT_SPEED, loop: true }),
       target('gb', 'd3', 'suicide_boat', STRIKE.d3Path[0], { name: 'Range boat 4', path: [...STRIKE.d3Path], speed: BOAT_SPEED, loop: true, spawn: done('o_d2') }),
     ],
-    // at anchor: an AARGM fired close in finds a boat that went quiet where it was (a moving one sails out of the miss)
-    sams: [site('ad', 'd2', 'ad_boat', STRIKE.d2, { name: 'Range boat 3', noHarass: true, spawn: done('o_d1') })],
+    // at anchor, and a range crew that keeps its radar on: the AARGM fired by the rule homes all the way in
+    sams: [site('ad', 'd2', 'ad_boat', STRIKE.d2, { name: 'Range boat 3', noHarass: true, noArmShutdown: true, spawn: done('o_d1') })],
     objectives: [
       { id: 'o_d1', kind: 'destroy', groups: ['d1'], label: 'Drill 1: sink both moving boats with StormBreakers', primary: true },
       { id: 'o_d2', kind: 'destroy', groups: ['d2'], label: 'Drill 2: AARGM-ER on the air-defence boat’s radar', primary: true, activeAt: done('o_d1') },
-      { id: 'o_d3', kind: 'destroy', groups: ['d3'], label: 'Drill 3: sink the last boat (a gun pass)', primary: true, activeAt: done('o_d2') },
+      { id: 'o_d3', kind: 'destroy', groups: ['d3'], label: 'Drill 3: sink the last boat (try the gun)', primary: true, activeAt: done('o_d2') },
     ],
     waypoints: [
-      { id: 'wp_d1', label: 'Drill 1: boats', kind: 'target', x: 8400, z: -21000, objective: 'o_d1' },
+      { id: 'wp_d1', label: 'Drill 1: boats', kind: 'target', x: STRIKE.d1Second.x, z: STRIKE.d1Second.z, objective: 'o_d1' },
       { id: 'wp_d2', label: 'Drill 2: air-defence boat', kind: 'target', x: STRIKE.d2.x, z: STRIKE.d2.z, objective: 'o_d2' },
-      { id: 'wp_d3', label: 'Drill 3: gun boat', kind: 'target', x: 3500, z: STRIKE.d3Path[0].z, altitude: 300, objective: 'o_d3' },
+      { id: 'wp_d3', label: 'Drill 3: gun boat', kind: 'target', x: (STRIKE.d3Path[0].x + STRIKE.d3Path[1].x) / 2, z: STRIKE.d3Path[0].z, altitude: 300, objective: 'o_d3' },
     ],
     triggers: [
       {

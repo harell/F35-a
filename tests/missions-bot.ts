@@ -1168,6 +1168,14 @@ export function runPlaythrough(
       const who = e.shooter === p ? 'PLAYER' : e.shooter.kind === 'aircraft' ? e.shooter.callsign : e.shooter.kind;
       log.push(`${T()} LAUNCH ${e.missile.def.id} ${who} -> ${tgt ? (tgt.kind === 'aircraft' ? tgt.callsign : tgt.kind) : '-'} ${tgt ? (tgt.position.distanceTo(e.shooter.position) / 1000).toFixed(1) + 'km' : ''}`);
     });
+    // how each of the player's weapons ended, and by how much a miss missed (a target SAM: radar on or off)
+    events.on('munition:end', (e) => {
+      if (e.missile.shooterId !== p.id) return;
+      const tgt = world.getEntity(e.targetId);
+      const miss = tgt ? ` ${Math.round(tgt.position.distanceTo(e.position))}m` : '';
+      const radar = tgt && tgt.kind === 'sam' ? (tgt.radarOn ? ' radar on' : ` radar off (${tgt.state})`) : '';
+      log.push(`${T()} END ${e.missile.def.id} ${e.reason}${miss}${radar}`);
+    });
   }
   const modes: Record<string, number> = {};
   const dt = 1 / 60;

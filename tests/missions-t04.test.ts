@@ -4,8 +4,10 @@
  *  - every boat's route (or anchorage) is in open water, 1 km from any shore;
  *  - the drills sit close together (playtest 2026-10-10, 1.4-e): the first boat is in a StormBreaker's
  *    reach at the start, the air-defence boat and the gun boat a few kilometres on;
- *  - the AARGM drill teaches the one rule (AARGM_RULE);
- *  - the bot wins it, and the air-defence boat's practice rounds never kill the jet.
+ *  - the AARGM drill teaches the one rule (AARGM_RULE), and an AARGM fired by it sinks the air-defence boat
+ *    (playtest r2, 2.3-d: its crew went quiet, 4 of 6 runs' AARGMs missed and a bomb passed the drill);
+ *  - the bot wins it in about 3 minutes with no long quiet stretch, and the air-defence boat's practice
+ *    rounds never kill the jet.
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t04 --seeds=12 --log
  */
 import { describe, expect, it } from 'vitest';
@@ -16,6 +18,7 @@ import { allFeatures } from '../src/world/scenery/Scenery';
 import { AARGM_RULE } from '../src/core/data';
 import { STRIKE, T04_STRIKE } from '../src/missions/content/trainingStrike';
 import { runPlaythrough } from './missions-bot';
+import { MAX_DEAD_STRETCH, deadStretchText, longestDeadStretch } from './missions-pacing';
 
 let terrain: TerrainQueryImpl | null = null;
 function realTerrain(): TerrainQueryImpl {
@@ -51,7 +54,8 @@ describe('t04 Maritime Strike', () => {
     // a StormBreaker reaches ~11.5 km from 10,000 ft
     expect(near).toBeLessThan(11_000);
     expect(Math.hypot(STRIKE.d2.x - STRIKE.start.x, STRIKE.d2.z - STRIKE.start.z)).toBeLessThan(8_000);
-    expect(Math.hypot(STRIKE.d3Path[0].x - STRIKE.d2.x, STRIKE.d3Path[0].z - STRIKE.d2.z)).toBeLessThan(6_000);
+    // the gun boat where the AARGM pass ends, low: ~3 km on (r2, 2.3-d)
+    expect(Math.hypot(STRIKE.d3Path[0].x - STRIKE.d2.x, STRIKE.d3Path[0].z - STRIKE.d2.z)).toBeLessThan(4_000);
     expect(T04_STRIKE.briefing.length).toBeLessThanOrEqual(3);
   });
 
@@ -61,15 +65,26 @@ describe('t04 Maritime Strike', () => {
     expect(T04_STRIKE.script.hints!.find((h) => h.id === 'h_d2')!.text).toMatch(/inside 10 km while its radar is on/);
   });
 
-  it('the bot flies it: every drill, never killed by a practice round', { timeout: 300_000 }, () => {
+  it('the air-defence boat is a range crew: it keeps its radar on under the AARGM', () => {
+    const ad = T04_STRIKE.script.sams.find((s) => s.group === 'd2')!;
+    expect(ad.noArmShutdown).toBe(true);
+  });
+
+  it('the bot flies it: every drill, the AARGM drill with AARGMs, about 3 minutes, never killed by a practice round', { timeout: 300_000 }, () => {
     let won = 0;
     const log: string[] = [];
     for (const seed of [0, 1, 2, 3, 4, 5]) {
-      const r = runPlaythrough('t04', 'pilot', seed, realTerrain(), { maxT: 900 });
-      log.push(`seed ${seed}: ${r.state}@${r.t}s ${r.reason ?? ''}`);
+      const r = runPlaythrough('t04', 'pilot', seed, realTerrain(), { maxT: 900, log: true });
+      const dead = longestDeadStretch(r.events, r.t);
+      log.push(`seed ${seed}: ${r.state}@${r.t}s ${r.reason ?? ''} ${deadStretchText(dead)}`);
       if (r.state === 'success') won++;
       expect(r.alive, `seed ${seed}: practice rounds, nothing kills the jet`).toBe(true);
+      // the rule sinks the boat: no StormBreaker was needed on it (2.3-d: two AARGMs missed, then a bomb)
+      const onAdBoat = r.launches.filter((l) => l.group === 'd2').map((l) => l.weapon);
+      expect(onAdBoat, `seed ${seed}`).toEqual(['aargm']);
+      expect(r.t, log.join('\n')).toBeLessThanOrEqual(210);
+      expect(dead.length, log.join('\n')).toBeLessThanOrEqual(MAX_DEAD_STRETCH);
     }
-    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
+    expect(won, log.join('\n')).toBe(6);
   });
 });
