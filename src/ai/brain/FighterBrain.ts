@@ -690,10 +690,10 @@ export class FighterBrain extends Brain {
   }
 
   /**
-   * Ace-level hostile fighters fly with ground-controlled-intercept support (the island radar
+   * Veteran hostile fighters (aiSkill ≥ 0.75) fly with ground-controlled-intercept support (the island radar
    * network / an airborne controller): coarse vectors (±2.5 km, refreshed every 8 s) onto the
    * nearest hostile jet inside their commit range, even a stealthy one they can't see. They still
-   * need their own radar / IRST track to shoot, so stealth keeps the first shot — but an Ace
+   * need their own radar / IRST track to shoot, so stealth keeps the first shot — but a Veteran
    * enemy does not lose a player who runs.
    */
   private offboardGci(ac: AircraftEntity): boolean {

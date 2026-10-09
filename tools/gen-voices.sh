@@ -26,7 +26,7 @@
 # Options:  --verify   also transcribe every clip with pocketsphinx (ffmpeg asr)
 #           --check    transcribe the existing clips only (no re-render)
 #           --only=ID  regenerate a single clip
-#           --segments render only the radio segments (s_*, h_*: composed AWACS calls, Hammer 1)
+#           --segments render only the radio segments (s_*: composed AWACS calls)
 # Env:      VOICE_ENGINE=auto|piper|flite|espeak   PIPER_HOME (default ~/.cache/f35-voices)
 # Re-runnable; output files are overwritten. Requires: ffmpeg (libmp3lame),
 # optionally libflite in ffmpeg, espeak-ng.
@@ -76,8 +76,6 @@ AWACS_FLITE=rms;  AWACS_ESPEAK="en-us+m3:155:30"
 BETTY_PIPER="${BETTY_PIPER:-en-us-kathleen-low|0|1.08}"
 PILOT_PIPER="${PILOT_PIPER:-en-us-libritts-high|19|1.02}"
 AWACS_PIPER="${AWACS_PIPER:-en-us-libritts-high|5|1.05}"
-# Hammer flight lead (a second pilot, heard on c09): another male LibriTTS speaker
-HAMMER_PIPER="${HAMMER_PIPER:-en-us-libritts-high|3|1.0}"
 # Flite tempo per role (1 = native): all slightly slowed for clarity over the radio.
 BETTY_TEMPO=0.97; PILOT_TEMPO=0.97; AWACS_TEMPO=0.97
 
@@ -127,23 +125,21 @@ CLIPS=(
 #   s_*  AWACS words / numbers that src/audio/voice/radioSpeech.ts strings together so dynamic
 #        calls (BRAA, bullseye, pop-up, threat, wave N…) are spoken exactly as the subtitle reads.
 #        Rendered with the AWACS chain but without the squelch tail (s_tail is appended once).
-#   h_*  whole calls by other speakers (Hammer flight lead).
 SEGMENTS=(
   "s_0|Zero." "s_1|One." "s_2|Two." "s_3|Three." "s_4|Four." "s_5|Five." "s_6|Six." "s_7|Seven." "s_8|Eight." "s_9|Niner."
   "s_10|Ten." "s_11|Eleven." "s_12|Twelve." "s_13|Thirteen." "s_14|Fourteen." "s_15|Fifteen." "s_16|Sixteen." "s_17|Seventeen." "s_18|Eighteen." "s_19|Nineteen."
   "s_20|Twenty." "s_30|Thirty." "s_40|Forty." "s_50|Fifty." "s_60|Sixty." "s_70|Seventy." "s_80|Eighty." "s_90|Ninety."
-  "s_darkstar|Darkstar." "s_kiwi|Kiwi." "s_viper|Viper." "s_weasel|Weasel." "s_hammer|Hammer."
+  "s_darkstar|Darkstar." "s_viper|Viper."
   "s_single|Single." "s_heavy|Heavy." "s_group|group." "s_groups|groups." "s_single_group|Single group."
   "s_new_picture|New picture." "s_pop_up_group|Pop-up group." "s_threat|Threat!" "s_last_bandit|Last bandit."
-  "s_bandit|bandit." "s_bandits|bandits." "s_backfires|Backfires." "s_mainstay|Mainstay."
+  "s_bandit|bandit." "s_bandits|bandits."
   "s_braa|Bra." "s_bullseye|Bullseye." "s_miles|miles." "s_angels|angels." "s_track|track."
   "s_hot|hot." "s_cold|cold." "s_flanking|flanking." "s_beaming|beaming."
   "s_north|north." "s_northeast|northeast." "s_east|east." "s_southeast|southeast."
   "s_south|south." "s_southwest|southwest." "s_west|west." "s_northwest|northwest."
-  "s_wave|Wave." "s_destroyed|destroyed." "s_stand_by|Stand by for the next group."
+  "s_wave|Wave." "s_destroyed|destroyed."
   "s_raid_turning|The raid is turning back! Good work."
   "s_tail|"
-  "h_hammer_release|Hammer one, in hot. Bombs away!"
 )
 
 # ── Every VoiceId in the contract must have a clip ────────────────────────────
@@ -173,7 +169,7 @@ tts() {
     "${FF[@]}" -i "$TMP/hts.wav" -af "atempo=${HTS_TEMPO:-0.95},aresample=$RATE" -ac 1 "$out"
   elif [ "$ENGINE" = piper ]; then
     local spec model spk ls
-    case $role in betty) spec=$BETTY_PIPER ;; pilot) spec=$PILOT_PIPER ;; hammer) spec=$HAMMER_PIPER ;; *) spec=$AWACS_PIPER ;; esac
+    case $role in betty) spec=$BETTY_PIPER ;; pilot) spec=$PILOT_PIPER ;; *) spec=$AWACS_PIPER ;; esac
     IFS='|' read -r model spk ls <<< "$spec"
     printf '%s\n' "$text" | "$PIPER_BIN" -m "$PIPER_HOME/$model/$model.onnx" -s "$spk" --length-scale "$ls" \
       --noise-scale 0.5 --noise-w-scale 0.6 --sentence-silence 0.12 -f "$TMP/pp.wav" >/dev/null 2>&1
@@ -181,12 +177,12 @@ tts() {
     "${FF[@]}" -i "$TMP/pp.wav" -af "volume=-8dB,aresample=$RATE" -ac 1 "$out"
   elif [ "$ENGINE" = flite ]; then
     local v tempo
-    case $role in betty) v=$BETTY_FLITE; tempo=$BETTY_TEMPO ;; pilot|hammer) v=$PILOT_FLITE; tempo=$PILOT_TEMPO ;; *) v=$AWACS_FLITE; tempo=$AWACS_TEMPO ;; esac
+    case $role in betty) v=$BETTY_FLITE; tempo=$BETTY_TEMPO ;; pilot) v=$PILOT_FLITE; tempo=$PILOT_TEMPO ;; *) v=$AWACS_FLITE; tempo=$AWACS_TEMPO ;; esac
     printf '%s' "$text" > "$TMP/text.txt"
     "${FF[@]}" -f lavfi -i "flite=voice=$v:textfile=$TMP/text.txt" -af "atempo=$tempo,aresample=$RATE" -ac 1 "$out"
   else
     local spec
-    case $role in betty) spec=$BETTY_ESPEAK ;; pilot|hammer) spec=$PILOT_ESPEAK ;; *) spec=$AWACS_ESPEAK ;; esac
+    case $role in betty) spec=$BETTY_ESPEAK ;; pilot) spec=$PILOT_ESPEAK ;; *) spec=$AWACS_ESPEAK ;; esac
     IFS=: read -r v s p <<< "$spec"
     espeak-ng -v "$v" -s "$s" -p "$p" -w "$TMP/es.wav" "$text" < /dev/null
     "${FF[@]}" -i "$TMP/es.wav" -af "aresample=$RATE" -ac 1 "$out"
@@ -209,7 +205,6 @@ render() {
     b_*) role=betty; fx=$BETTY_FX; target=-17 ;;
     p_*) role=pilot; fx=$PILOT_FX; target=-18; bed=0.005; tail=0.16 ;;
     a_*) role=awacs; fx=$AWACS_FX; target=-18; bed=0.009; tail=0.20 ;;
-    h_*) role=hammer; fx=$PILOT_FX; target=-18; bed=0.006; tail=0.16 ;;
     s_tail)
       # squelch burst on mic release, appended after a spoken segment list
       "${FF[@]}" -f lavfi -i "anoisesrc=color=white:sample_rate=$RATE:amplitude=1:duration=0.2:seed=7" \

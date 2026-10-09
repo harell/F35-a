@@ -6,7 +6,7 @@
   explosions, sonic booms, RWR / MAWS / AIM-9X tones, wind, G-suit, breathing, clicks) is synthesised at
   runtime with the Web Audio API from procedurally generated noise buffers and oscillators
   (`src/audio/**`).
-* **Voice clips** in `public/audio/voice/*.mp3` (37 files) are generated offline by
+* **Voice clips** in `public/audio/voice/*.mp3` (99 files: 37 whole calls and 62 AWACS word segments) are generated offline by
   `tools/gen-voices.sh` (`npm run voices`) with neural text-to-speech (Piper) and then processed with
   ffmpeg filters (cockpit / radio chains).
 * **Music** is procedural too (`src/audio/music/Music.ts`): a D-minor pad, bell arpeggio and bass for the
@@ -23,8 +23,7 @@ robotic CMU Flite voices. The Flite and eSpeak NG paths remain in `tools/gen-voi
 | "Betty", the female ICAWS voice | `b_*` | Piper `en-us-kathleen-low` | **CC0** (public domain, github.com/rhasspy/dataset-voice-kathleen) |
 | Pilot and wingmen | `p_*` | Piper `en-us-libritts-high`, speaker id 19 (male) | **CC BY 4.0** (LibriTTS, openslr.org/60, derived from LibriVox public-domain readings) |
 | AWACS "Darkstar" | `a_*` | Piper `en-us-libritts-high`, speaker id 5 (a different male) | **CC BY 4.0** (as above) |
-| AWACS word segments (iteration 2) | `s_*` | same AWACS speaker (id 5); 67 short words / numbers + a squelch-tail clip | **CC BY 4.0** (as above) |
-| "Hammer 1" flight lead (iteration 2) | `h_*` | Piper `en-us-libritts-high`, speaker id 3 (male, median F0 ≈ 109 Hz, lower than the pilot and AWACS) | **CC BY 4.0** (as above) |
+| AWACS word segments (iteration 2) | `s_*` | same AWACS speaker (id 5); 61 short words / numbers + a squelch-tail clip | **CC BY 4.0** (as above) |
 | Fallbacks | all | CMU Flite slt / awb / rms, then eSpeak NG | BSD-style / GPL (output unrestricted) |
 
 Setup: `bash tools/voice-piper-setup.sh` (piper-tts 1.8.0 wheel + onnxruntime from PyPI into
@@ -95,8 +94,8 @@ The generated clips are original works of this project.
 
 Dynamic AWACS calls (BRAA / bullseye pictures, pop-up groups, threat calls, "last bandit", "wave N destroyed",
 "the raid is turning back") used to be voiced with a generic clip ("Bandits, bandits."). `src/audio/voice/radioSpeech.ts`
-now voices a radio event from its subtitle: the fixed clip if its words appear verbatim in the subtitle, else a
-whole-call clip by another speaker (Hammer 1), else — for AWACS — the subtitle spoken word by word from the `s_*`
+now voices a radio event from its subtitle: the fixed clip if its words appear verbatim in the subtitle, else — for
+AWACS — the subtitle spoken word by word from the `s_*`
 segments (bearings digit by digit, ranges and angels as numbers, a pause at each comma, one squelch tail at the end).
 Words without a segment are left out, never replaced, so what is heard is always the subtitle or an in-order subset of
 it; calls that cannot be voiced that way become text-only (key-up click + static). `tools/gen-voices.sh --segments`

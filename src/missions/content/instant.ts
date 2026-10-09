@@ -257,7 +257,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // the SA-6 sits east of the field, off the run-in from the west (issue #60: at Waiheke west it
       // shot the bot down on the bomb run in 4 of 6 Pilot runs)
       if (n >= 2) sams.push(site('sam1', 'defences', 'sa6', P.waiE));
-      // the SA-15 Tor shoots down JDAMs: Veteran and up only, as in c04
+      // the SA-15 Tor shoots down JDAMs: Veteran only
       if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', P.waiC, { minDifficulty: 'veteran' }));
       const cap = enemyFlights(opts, Math.max(1, Math.ceil(n / 2)), lay, rng, { role: 'cap' });
       groups.push(...cap);

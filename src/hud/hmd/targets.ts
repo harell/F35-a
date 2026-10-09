@@ -737,7 +737,7 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   const rng = rangeLabel(dist);
   // the text block (angle-off, type, range, time to impact) sits inward of the arrow, clear of it
   // whichever way it points: anchored by its top line it ran down into a downward arrow (#62: "16°"
-  // over "MIG-29 7.1" in the cockpit view, "35°" under "TU-22M 3.2")
+  // over "MIG-29 7.1" in the cockpit view, "35°" under the type line)
   const hw = Math.max(pen.textWidth(off, 12.5), pen.textWidth(name, 10.5), pen.textWidth(tl, 10.5)) / 2 + 2 * u;
   const below = (tl ? 41 : 28) * u + 6 * u; // last line's bottom (10.5 px row), from the first line's centre
   const hh = (below + 8 * u) / 2;

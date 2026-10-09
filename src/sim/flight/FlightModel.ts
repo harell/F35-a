@@ -58,7 +58,7 @@ export function ensureSimState(ac: AircraftEntity): AircraftSimState {
 
 /**
  * Does the pilot fly with the convenience assists (neutral-stick flight-path hold, gentle buffet,
- * no G-LOC)? False only for the human player on the no-assist difficulty (Ace). The FBW g/AoA
+ * no G-LOC)? False only for the human player on a difficulty with flightAssist off (none today, since Ace was removed). The FBW g/AoA
  * limiters and Auto-GCAS are part of the F-35 and stay on regardless.
  */
 export function isAssisted(ac: AircraftEntity, env: FlightEnv): boolean {

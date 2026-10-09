@@ -12,7 +12,7 @@ import { daysToPredatorFree } from '../predatorFree';
 import { basicTrainingDone, careerRank, dismissOnboarding, isFirstLaunch } from '../career';
 import { escapeHtml, h } from '../dom';
 import type { UiHost } from '../host';
-import { PLAYABLE_CAMPAIGNS } from '../../missions';
+import { PLAYABLE_CAMPAIGNS, lessonsFor } from '../../missions';
 import { stagger } from '../widgets';
 import { showServiceRecord } from './serviceRecord';
 
@@ -118,7 +118,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
       card.innerHTML =
         `<div class="mo-k">${icon('book')} NEW PILOT?</div>` +
         `<div class="mo-t">Start with Training</div>` +
-        `<div class="mo-s">Three short lessons — basic flight, air-to-air, surviving SAMs — teach the controls before the campaign. About 10 minutes.</div>`;
+        `<div class="mo-s">${escapeHtml(firstLessonsLine())}</div>`;
       const go = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `${icon('play')}<span>Start training</span>` });
       const skip = h('button', { class: 'ui-btn ghost', attrs: { type: 'button' }, html: `<span>Not now</span>` });
       go.addEventListener('click', () => {
@@ -172,4 +172,19 @@ function predatorFreeLine(nowMs: number): { el: HTMLElement; cleanup: () => void
   };
   document.addEventListener('pointerdown', outside);
   return { el: line, cleanup: () => document.removeEventListener('pointerdown', outside) };
+}
+
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
+
+/**
+ * The new-pilot card's line: the lessons the first campaign mission asks for (MissionDef.lessons), named
+ * from the missions themselves so it follows any change to the lesson order.
+ */
+export function firstLessonsLine(): string {
+  const first = PLAYABLE_CAMPAIGNS[0]?.missions[0];
+  const lessons = first ? lessonsFor(first.id) : [];
+  if (!first || lessons.length === 0) return 'Short lessons teach the controls before the campaign.';
+  const n = COUNT_WORDS[lessons.length] ?? String(lessons.length);
+  const names = lessons.map((m) => m.title.toLowerCase()).join(', ');
+  return `${n} short ${lessons.length === 1 ? 'lesson' : 'lessons'} (${names}) prepare you for the first mission, ${first.title}.`;
 }

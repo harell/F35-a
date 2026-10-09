@@ -1,5 +1,5 @@
 /**
- * F35-A UI — the briefing hangar's loadout cards (unit-tested in tests/missions-loadout-sdb2-full.test.ts).
+ * F35-A UI — the briefing hangar's loadout cards (unit-tested in tests/missions-loadout-maritime.test.ts).
  */
 import type { MissionDef } from '../core/contracts';
 import { LOADOUTS } from '../core/data';

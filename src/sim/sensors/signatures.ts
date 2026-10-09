@@ -93,8 +93,8 @@ export function isStealthy(ac: AircraftEntity): boolean {
  * stores only, bay doors shut) is detected at a fraction of the radar-equation range — the
  * softened RCS exponent under-rates how hard a fighter radar's scan finds a 0.001 m² target.
  * How much of the radar's potential the crew gets out of it grows with the enemy's training
- * (difficulty.aiSkill): LO_FCR_FACTOR + LO_FCR_SKILL × aiSkill ≈ 0.76 (Recruit) … 0.87 (Ace).
- * Clean F-35A head-on vs a MiG-29: ≈ 6.9 km (Recruit) … 7.9 km (Ace); Su-35 / Su-57 ≈ 10.8 … 12.3 km
+ * (difficulty.aiSkill): LO_FCR_FACTOR + LO_FCR_SKILL × aiSkill ≈ 0.76 (Recruit) … 0.84 (Veteran).
+ * Clean F-35A head-on vs a MiG-29: ≈ 6.9 km (Recruit) … 7.6 km (Veteran); Su-35 / Su-57 ≈ 10.8 … 11.9 km
  * — inside the F-35's SHOOT range, so a disciplined (STT / TWS / EMCON, no afterburner) F-35
  * typically gets the first shot. Beast mode (external pylons) and an open weapon bay lose the
  * bonus: MiG-29 ≈ 16 km, Su-35 ≈ 25 km. Ground radars (SAM / EWR, VHF) are not affected; the

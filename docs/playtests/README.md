@@ -31,3 +31,5 @@ When each playtest type was last run, and on what. `/playtest` adds +2 risk to a
 | First-time experience | 2026-10-02 bc94edd (r1) | the main menu and Instant Action from a fresh save; the IRGC picker from a fresh save | the training chain and touch layouts were not rerun |
 | Pacing | 2026-10-02 bc94edd (r1) | dead stretches for c02, c04, c08, c09, c11, g01, g02 | — |
 | Performance budget | 2026-10-02 796f92b (r1, r3) | draw calls and triangles at t=0/120 for 24 missions (quality=low, chase, 844×390); the target-camera PiP's cost (about 2×, #66) | not rerun in bc94edd; frame time on a real device |
+
+Rows dated before 2026-10-04 predate the deletion of Operation Southern Cross (c01–c12), the Ace difficulty and the lesson renumbering of #271 (the old t03 is t06 now): read them as history, not as current scope.

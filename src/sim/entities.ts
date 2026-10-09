@@ -263,7 +263,7 @@ export class AircraftEntity implements Entity {
   /** (sim-core) Airframe buffet 0..1 (high AoA, departure, transonic high-g) — for camera shake / haptics. */
   buffet?: number;
   /**
-   * (sim-core) Pilot G-LOC state, human player on Ace only (see sim/flight/gloc.ts): 0..1 accumulated
+   * (sim-core) Pilot G-LOC state, human player without flight assist only (see sim/flight/gloc.ts): 0..1 accumulated
    * g stress (tunnel vision builds towards 1), exactly 1 while unconscious (black out; stick ignored).
    */
   gloc?: number;

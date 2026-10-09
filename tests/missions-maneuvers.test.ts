@@ -178,7 +178,7 @@ const obj = (h: Harness, id: string) => h.runner.objectives.find((o) => o.id ===
 const drone = (h: Harness, group: string) => h.world.aircraft.find((a) => a.groupId === group && a.alive) ?? null;
 
 describe('t03 Vertical Reversals', () => {
-  it('is a valid lesson after t03 that leads into the campaign', () => {
+  it('is a valid lesson, the last one g01 wants, leading into the campaign', () => {
     const def = T03();
     expect(def.kind).toBe('training');
     expect(validateMission(def)).toEqual([]);

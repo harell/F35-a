@@ -3,7 +3,7 @@
  *  - i2 / #57: no Pilot walls; the Pilot band (≥ 75 % over 6 seeds) in t06;
  *  - #65: the bot ripples its StormBreakers instead of waiting out each one's long glide;
  *  - #58: a difficulty curve that only falls, in every campaign mission;
- *  - the IRGC missions' own bands (g01, g02).
+ *  - the IRGC missions' own bands (g01, g02, and g03 on its route probe).
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  */
 import { describe, expect, it } from 'vitest';
@@ -101,7 +101,7 @@ describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)
   }
 });
 
-describe('issue #57: t06 SAMs & Strike — the route keeps the SA-6 off the player', () => {
+describe('issue #57: t06 Live SAMs — the route keeps the SA-6 off the player', () => {
   it('every steering point before the target stays ≥ 14 km from the SA-6, the IP behind Rangitoto from it', () => {
     const def = missionById('t06')!;
     const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;

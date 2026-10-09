@@ -103,7 +103,7 @@ export function dismissOnboarding(): void {
 
 /**
  * The lessons the next campaign mission wants that aren't flown yet, and that mission (trainingTarget):
- * T01 and T02 before g01, Gulf Defence before g02… Null once the campaign is won.
+ * T01–T03 before g01, T04–T05 before g02, T06–T07 before g03 (MissionDef.lessons). Null once the campaign is won.
  */
 export function lessonsLeft(p: CampaignProgress): { mission: MissionDef; lessons: MissionDef[] } | null {
   const t = trainingTarget(p);

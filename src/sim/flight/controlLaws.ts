@@ -15,8 +15,8 @@
  *
  *  The g / AoA limiters ("carefree handling") are ALWAYS on — like the real F-35 CLAW — on every
  *  difficulty. `ControlLaw.pathHold` (neutral-stick flight-path latch) is the only convenience
- *  the Ace difficulty removes; Ace also gets a rougher buffet at the AoA limiter and G-LOC
- *  (see ./gloc.ts). The departure model (wing drop + nose slice past the stall AoA) stays for
+ *  a difficulty without flight assist removes (none today: Ace, the only one, was removed); it
+ *  also gets a rougher buffet at the AoA limiter and G-LOC (see ./gloc.ts). The departure model (wing drop + nose slice past the stall AoA) stays for
  *  transients the limiter cannot catch (damaged hydraulics, tail slides) but a full stick
  *  deflection alone can no longer depart the jet.
  *
@@ -43,12 +43,12 @@ export interface StickInput {
 
 /** Per-aircraft control-law options (the g/AoA limiters are always on). */
 export interface ControlLaw {
-  /** Neutral stick latches and holds the flight-path angle (off for the player on Ace). */
+  /** Neutral stick latches and holds the flight-path angle (off for the player without flight assist). */
   pathHold: boolean;
-  /** Buffet severity at high AoA (1 = normal; Ace 1.6: rougher ride, less precise tracking). */
+  /** Buffet severity at high AoA (1 = normal; 1.6 without flight assist: rougher ride, less precise tracking). */
   buffetGain: number;
   /**
-   * High-AoA regime (player without flight assist, i.e. Ace): below ~250 KIAS, full aft stick
+   * High-AoA regime (player without flight assist): below ~250 KIAS, full aft stick
    * opens the limiter from the normal 28° to just under the stall AoA (F-35A ≈ 33°) — more nose
    * authority for a snapshot, paid for with heavy induced-drag energy bleed and buffet.
    */
@@ -274,7 +274,7 @@ export function updateControlLaws(
   /* ───────── BUFFET ───────── */
   // Airframe buffet (felt through the camera / haptics via st.buffet) from high AoA, departure and
   // transonic high-g. Its effect on the body rates is small — a light wing rock — so the limiter
-  // stays crisp; Ace (buffetGain 1.6) gets a rougher, less precise ride near the limit.
+  // stays crisp; without flight assist (buffetGain 1.6) it gets a rougher, less precise ride near the limit.
   const aAbs = Math.abs(ad.alpha);
   const transonic = ad.mach > 0.92 && ad.mach < 1.05 && st.nzCmd > 4 ? 0.15 : 0;
   const buf = (0.35 * sstep(aAbs, 0.7 * perf.alphaStall, perf.alphaStall) + transonic) * law.buffetGain + 0.65 * D;

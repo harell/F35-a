@@ -398,7 +398,7 @@ export class AudioSystem implements AudioApi {
     this.on('radio', (e) => {
       const l = this.live();
       if (!l || !this.core || e.team === 'red') return;
-      this.core.voice.onRadio(e.voice, e.priority ?? 1, e.text, e.from);
+      this.core.voice.onRadio(e.voice, e.priority ?? 1, e.text);
     });
   }
 }

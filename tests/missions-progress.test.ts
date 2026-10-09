@@ -6,7 +6,7 @@ import type { MissionResult } from '../src/core/contracts';
 import { PLAYABLE_CAMPAIGNS, TRAINING, failStreak, lessonsFor, loadProgress, nextMissionAfter, nextMissionLabel, recordResult, saveProgress } from '../src/missions';
 import { LESSON_IDS_VERSION, PROGRESS_KEY, sanitizeProgress } from '../src/missions/progress';
 
-/** The first playable campaign's missions (the IRGC campaign: g01, g02). */
+/** The first playable campaign's missions (the IRGC campaign: g01–g03). */
 const CAMPAIGN = PLAYABLE_CAMPAIGNS[0].missions;
 
 function result(missionId: string, over: Partial<MissionResult> = {}): MissionResult {

@@ -87,7 +87,7 @@ export const GUN_HIT_DAMAGE = 18;
 /** AIM-120D no-escape range (sim/weapons/defs.ts header: "no-escape zone about 10 km"). */
 const AMRAAM_NO_ESCAPE = 10_000;
 
-export type CodexWeaponId = Exclude<WeaponId, 'gbu39'> | 'cms';
+export type CodexWeaponId = WeaponId | 'cms';
 
 export interface RangeSpec {
   unit: 'km' | 'm';

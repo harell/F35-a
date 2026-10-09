@@ -24,9 +24,10 @@ Techniques and references (reimplemented, no code copied):
 * `hash12` shader hash: Dave Hoskins, *Hash without Sine* (MIT).
 * Ridged multifractal: F. K. Musgrave, *Texturing & Modeling: A Procedural Approach*.
 
-Geography: the Auckland (Tāmaki Makaurau) coastline, islands, volcanic cones and landmarks are a
-stylised reconstruction hand-traced from public geographic knowledge, using the landmark
-coordinates in `src/core/auckland.ts`. No map data files were imported.
+Geography: the coastline, terrain, roads and buildings are LINZ open data and the airfields, land
+use and waterfront sites OpenStreetMap (see docs/CREDITS.md). The original hand-traced reconstruction
+(`src/world/terrain/theaters/aucklandMap.ts`, landmark coordinates in `src/core/auckland.ts`) remains
+as the offline fallback.
 
 Iteration 1 additions (all procedural, no new assets or dependencies):
 * Coastline: exact vector distance to the hand-traced coast polygons (segment splatting,

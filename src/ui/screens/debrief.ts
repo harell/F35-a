@@ -188,7 +188,7 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       ['skull', 'Friendly losses', String(r.friendlyLosses)],
     ];
     if (!r.freeFlight) {
-      // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
+      // who else scored (Viper 2…): the grade weighs the player's share of the flight's kills
       for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
       for (const t of ext.saved ?? []) stats.push(['shield', escapeHtml(t.label), `${t.saved}/${t.total}`]);
       stats.push(...civilLossRows(ext));

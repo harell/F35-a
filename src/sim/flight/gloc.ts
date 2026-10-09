@@ -1,7 +1,8 @@
 /**
  * F35-A — pilot g tolerance and G-LOC (g-induced loss of consciousness). SIM-CORE.
  *
- * Modelled for the human player on the difficulty without convenience assists (Ace): the jet's
+ * Modelled for the human player on a difficulty without convenience assists (DifficultyParams.flightAssist
+ * false; none today, since Ace was removed): the jet's
  * FBW still limits it to 9 g, but the pilot is now the weak link. A trained pilot with a g-suit,
  * pressure breathing and the anti-g straining manoeuvre tolerates ~9 g for 10–15 s. The model
  * accumulates a "g stress" S above ONSET_G:

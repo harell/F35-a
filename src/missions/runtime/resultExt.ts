@@ -7,7 +7,7 @@ import type { SightseeingStats } from './sightseeing';
 import type { CostSummary } from './costs';
 
 export interface TeamKill {
-  /** "Viper 2", "Weasel 1"… */
+  /** "Viper 2"… */
   callsign: string;
   kills: number;
   /** In the player's own flight (these count against the player's share in the grade). */

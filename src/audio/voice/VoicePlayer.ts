@@ -92,9 +92,9 @@ export class VoicePlayer {
     }
   }
 
-  /** A 'radio' event (`text` = the subtitle, `from` = the speaker). */
-  onRadio(voice: VoiceId | undefined, priority: number, text?: string, from?: string): void {
-    const tokens = resolveRadioSpeech(text, voice, from);
+  /** A 'radio' event (`text` = the subtitle). */
+  onRadio(voice: VoiceId | undefined, priority: number, text?: string): void {
+    const tokens = resolveRadioSpeech(text, voice);
     if (tokens && voice) {
       const single = tokens.length === 1 && tokens[0] === voice;
       this.radio.push(voice, priority, this.clock, single ? null : tokens, single ? voice : (text ?? voice));
@@ -228,7 +228,7 @@ export class VoicePlayer {
     // an urgent call holds Betty's lesser clips; MISSILE / PULL UP never wait (see betty.deferAll)
     if (item.priority >= URGENT_RADIO && !(warnings && warnings.has('missile'))) this.betty.deferAll(end);
     this.betty.deferRepeats(end);
-    // log what is actually heard: a whole-call replacement (Hammer) by its own id
+    // log what is actually heard: a single segment by its own id
     this.onClipStart?.(tokens && tokens.length === 1 && tokens[0] !== PAUSE ? tokens[0] : item.voice, 'radio', now);
     this.onRadioStart?.(item.voice, tokens, now);
     const t0 = ctx.currentTime + 0.01;

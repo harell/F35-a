@@ -12,7 +12,7 @@ export const TRAINING_DIFFICULTY: Difficulty = 'pilot';
 /**
  * The difficulty a mission flies at whatever the player's setting, or null when it follows the
  * setting. Training is a lesson, not a wall: lessons always fly at Pilot, so a Veteran setting chosen
- * for the campaign doesn't turn the SAMs & Strike SA-6 into a 1-in-3 (playtest finding 4.3-b).
+ * for the campaign doesn't turn T06 Live SAMs' SA-6 into a 1-in-3 (playtest finding 4.3-b).
  */
 export function fixedDifficulty(def: Pick<MissionDef, 'kind'>): Difficulty | null {
   return def.kind === 'training' ? TRAINING_DIFFICULTY : null;

@@ -24,7 +24,7 @@ import { T07_SMALL } from './trainingSmallTargets';
 const DS = 'DARKSTAR';
 const TOWER = 'Whenuapai Tower';
 
-/* ───────────────────────── T1 — Basic flight ───────────────────────── */
+/* ───────────────────────── T01 — Basic flight ───────────────────────── */
 
 const RINGS = [
   { id: 'r1', label: 'Ring 1', x: -5500, z: -4200, altitude: 1200 },
@@ -82,7 +82,7 @@ export const T01: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── T2 — Air-to-air ───────────────────────── */
+/* ───────────────────────── T02 — Air-to-air ───────────────────────── */
 
 export const T02: MissionDef = mission({
   id: 't02',
@@ -169,7 +169,7 @@ export const T02: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── T6 — Live SAMs ───────────────────────── */
+/* ───────────────────────── T06 — Live SAMs ───────────────────────── */
 
 const sa6 = P.rangSW;
 /** The fuel depot on Motutapu (centre of the two tanks). */
@@ -231,11 +231,11 @@ export const T06: MissionDef = mission({
       { id: 'h5', text: 'Missile on the MAWS: count down the time-to-impact. CMS from ~6 s, a press every 2–3 s', when: { kind: 'missile_inbound' }, duration: 7 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get in, drop a JDAM on the depot, get out alive.', priority: 2 }],
-    successText: 'SAM and strike qualification complete. You are ready, Viper.',
+    successText: 'SAM qualification complete. Next: small targets, before Waiheke.',
   },
 });
 
-/* ───────────────────────── T3 — Vertical reversals ───────────────────────── */
+/* ───────────────────────── T03 — Vertical reversals ───────────────────────── */
 
 const KT = 0.514444;
 /**

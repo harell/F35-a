@@ -21,7 +21,7 @@ import { MissionState } from '../src/missions/runtime/state';
 import { flatLand, harness, killGroup, shieldPlayer, stubAi } from './missions-helpers';
 
 const byId = (id: string): MissionDef => missionById(id)!;
-/** The first playable campaign's missions (the IRGC campaign: g01, g02). */
+/** The first playable campaign's missions (the IRGC campaign: g01–g03). */
 const CAMPAIGN = PLAYABLE_CAMPAIGNS[0].missions;
 
 describe('#64: no fight, no credit', () => {

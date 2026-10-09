@@ -1,7 +1,7 @@
 /**
  * F35-A UI — mission briefing: intel map (left) + tabs BRIEFING / OBJECTIVES / HANGAR (right),
  * loadout picker limited to allowedLoadouts (default recommendedLoadout) with store diagrams and a
- * stealth rating bar, difficulty picker (4 levels, saved to settings; a training lesson shows its
+ * stealth rating bar, difficulty picker (3 levels, saved to settings; a training lesson shows its
  * fixed Pilot instead, see missionDifficulty), FLY / BACK.
  */
 import type { MissionDef } from '../../core/contracts';

@@ -2,7 +2,7 @@
  * Mission sweep smoke test: launches every mission (campaign + training) via
  * ?mission=<id>&autostart=1, lets it run, and reports console errors, entity counts,
  * player state and frame stats. Screenshots go to e2e/screenshots/missions/.
- * Training lessons start on an Ace setting and must fly at Pilot (#68: Game.runSession).
+ * Training lessons start on a Veteran setting and must fly at Pilot (#68: Game.runSession).
  *
  *   node e2e/missions.mjs [--base=http://localhost:5173/] [--seconds=12] [--only=g01,g02] [--view=chase]
  */
@@ -55,7 +55,7 @@ for (const m of missions) {
   await page.waitForTimeout(seconds * 1000);
   const state = await page.evaluate(() => window.__f35?.state()).catch((e) => ({ error: e.message }));
   await page.screenshot({ path: `e2e/screenshots/missions/${m.id}.png` });
-  if (lesson && state?.difficulty !== 'pilot') errors.push(`lesson flies at ${state?.difficulty} on an Ace setting, not Pilot`);
+  if (lesson && state?.difficulty !== 'pilot') errors.push(`lesson flies at ${state?.difficulty} on a Veteran setting, not Pilot`);
   const ok = errors.length === 0 && state?.inMission && state?.player;
   if (!ok) failures++;
   console.log(

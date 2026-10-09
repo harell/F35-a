@@ -1,6 +1,6 @@
 /**
  * Issue #68, item 2 (repo owner's decision, 2026-10-02): training always flies at Pilot, whatever
- * the difficulty setting. On Veteran (then Ace), T03 dropped to 1/3 (SA-6 with both JDAMs still aboard).
+ * the difficulty setting. On Veteran (then Ace, since removed), the SA-6 lesson (T03 then, T06 now) dropped to 1/3 (SA-6 with both JDAMs still aboard).
  * Review follow-up: nothing tells the player to change the difficulty of a lesson (the S-grade
  * "try it on a harder difficulty" tip, the pause-menu settings note and toast).
  */

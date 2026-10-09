@@ -16,6 +16,8 @@ export interface MedalDef {
   id: string;
   name: string;
   description: string;
+  /** No mission awards it any more: the cabinet shows it only to a pilot who earned it before. */
+  retired?: boolean;
 }
 
 /** Every award the game hands out (ids are stable: the UI may key artwork / saves on them). */
@@ -28,7 +30,8 @@ export const MEDALS = {
   no_hits: { id: 'no_hits', name: 'Untouchable', description: 'Fought and won a mission without a hit and without losing a friendly.' },
   sharpshooter: { id: 'sharpshooter', name: 'Sharpshooter', description: 'Four or more shots with 80 % or better accuracy.' },
   gunslinger: { id: 'gunslinger', name: 'Gunslinger', description: 'Shot down an enemy aircraft with the GAU-22 gun.' },
-  shepherd: { id: 'shepherd', name: 'Good Shepherd', description: 'Brought every friendly aircraft home.' },
+  // Southern Cross's escort missions awarded it; none of today's missions has friendlies to bring home
+  shepherd: { id: 'shepherd', name: 'Good Shepherd', description: 'Brought every friendly aircraft home.', retired: true },
 } as const satisfies Record<string, MedalDef>;
 
 export type MedalId = keyof typeof MEDALS;
@@ -99,7 +102,7 @@ export function codexTopic(s: MissionState, r: MissionResult): string | undefine
 
 /**
  * The mission asks for air-to-air kills: a 'destroy' or 'intercept' objective on a hostile aircraft
- * group (T02, c01, a Dogfight…). T01's rings or a pure strike are not.
+ * group (T02, g01's Shahed swarm, a Dogfight…). T01's rings or a pure strike are not.
  */
 export function hasAirToAirObjective(script: Pick<MissionScript, 'objectives' | 'groups'>): boolean {
   const air = new Set(script.groups.filter((g) => g.team === 'red').map((g) => g.id));
@@ -149,8 +152,6 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     else if (/rat reached/i.test(r.reason)) add('StormBreakers on the rats stopped at the drains; once a rat is swimming, a JDAM, released low and close.');
     else if (r.reason.startsWith('Objective failed')) {
       if (/tanker|Kōtuku/i.test(r.reason)) add('Escort the tanker: StormBreakers on the suicide boats first, released early from height, then the missile boats before they count down.');
-      else if (/Hammer|Kiwi|package|alive/i.test(r.reason)) add('Protect missions: kill the fighters going for the friendlies first — ignore bonus targets until they are safe.');
-      else if (/raid|bomber/i.test(r.reason)) add('Bombers don’t dodge: shoot them from long range the moment SHOOT shows, then deal with the escort.');
       else add('A primary objective failed: the objective list in the pause menu shows what must survive or die.');
     }
   }
@@ -200,9 +201,6 @@ export function awardMedals(s: MissionState, r: MissionResult): MedalDef[] {
     const fought = s.enemiesSpawned > 0 && !noFight({ enemiesSpawned: s.enemiesSpawned, hits: r.hits, kills: r.kills });
     if (r.damageTaken <= 0 && r.friendlyLosses === 0 && fought) give(MEDALS.no_hits);
     if (r.shotsFired >= 4 && r.accuracy >= 0.8) give(MEDALS.sharpshooter);
-    let friendlies = 0;
-    for (const g of s.groups.values()) if (g.team === 'blue' && g.air && g.air.role !== 'wingman') friendlies += g.expected;
-    if (friendlies > 0 && r.friendlyLosses === 0) give(MEDALS.shepherd);
   }
   return out;
 }

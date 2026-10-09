@@ -66,19 +66,18 @@ const NUMBER_WORDS: Record<string, string[]> = new Proxy(
 
 describe('radio speech matches the subtitle (i2 reviewer: BRAA calls voiced as "Bandits, bandits")', () => {
   const cases: [string, VoiceId, string][] = [
-    ['DARKSTAR', 'a_bandits', 'Kiwi 1, Darkstar, single group, two bandits, BRAA 045, 40 miles, angels 25, hot.'],
-    ['DARKSTAR', 'a_bandits', 'Kiwi 1, Darkstar, pop-up group, single bandit, BRAA 310, 18 miles, angels 3, flanking.'],
-    ['DARKSTAR', 'a_bandits', 'Kiwi 1, threat, two bandits, BRAA 040, 25 miles, angels 12, hot!'],
-    ['DARKSTAR', 'a_bandits', 'Kiwi 1, Darkstar, last bandit: single bandit, BRAA 270, 12 miles, angels 8, cold.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, single group, two bandits, BRAA 045, 40 miles, angels 25, hot.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, pop-up group, single bandit, BRAA 310, 18 miles, angels 3, flanking.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, threat, two bandits, BRAA 040, 25 miles, angels 12, hot!'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, last bandit: single bandit, BRAA 270, 12 miles, angels 8, cold.'],
     ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, single group, four bandits, bullseye 090, 22 miles, angels 25, track southwest.'],
-    ['DARKSTAR', 'a_new_picture', 'Kiwi 1, Darkstar, new picture, two groups.'],
-    ['DARKSTAR', 'a_good_kill', 'Kiwi 1, Darkstar. The raid is turning back! Good work.'],
-    ['DARKSTAR', 'a_good_kill', 'Kiwi 1, Darkstar, wave 3 destroyed. Stand by for the next group.'],
+    ['DARKSTAR', 'a_new_picture', 'Viper 1, Darkstar, new picture, two groups.'],
+    ['DARKSTAR', 'a_good_kill', 'Viper 1, Darkstar. The raid is turning back! Good work.'],
   ];
-  for (const [from, voice, text] of cases) {
+  for (const [, voice, text] of cases) {
     it(`"${text}"`, () => {
       expect(clipMatchesText(voice, text)).toBe(false); // the generic clip would disagree
-      const t = resolveRadioSpeech(text, voice, from);
+      const t = resolveRadioSpeech(text, voice);
       expect(t).not.toBeNull();
       expect(t).not.toContain(voice);
       const spoken = say(t);
@@ -91,37 +90,31 @@ describe('radio speech matches the subtitle (i2 reviewer: BRAA calls voiced as "
   }
 
   it('speaks BRAA bearings digit by digit and ranges / angels as numbers', () => {
-    const t = resolveRadioSpeech('Kiwi 1, threat, two bandits, BRAA 045, 40 miles, angels 25, hot!', 'a_bandits', 'DARKSTAR')!;
+    const t = resolveRadioSpeech('Viper 1, threat, two bandits, BRAA 045, 40 miles, angels 25, hot!', 'a_bandits')!;
     const ids = t.filter((x) => x !== PAUSE);
-    expect(ids).toEqual(['s_kiwi', 's_1', 's_threat', 's_2', 's_bandits', 's_braa', 's_0', 's_4', 's_5', 's_40', 's_miles', 's_angels', 's_20', 's_5', 's_hot']);
+    expect(ids).toEqual(['s_viper', 's_1', 's_threat', 's_2', 's_bandits', 's_braa', 's_0', 's_4', 's_5', 's_40', 's_miles', 's_angels', 's_20', 's_5', 's_hot']);
     expect(t.filter((x) => x === PAUSE).length).toBe(6); // one pause per comma
   });
 
-  it('Hammer 1 speaks with its own voice, not the player\'s "Rifle!"', () => {
-    const t = resolveRadioSpeech('Hammer 1, in hot… bombs away!', 'p_rifle', 'Hammer 1');
-    expect(t).toEqual(['h_hammer_release']);
-    expect(saysOnlySubtitle(say(t), 'Hammer 1, in hot… bombs away!')).toBe(true);
-  });
-
   it('fixed clips are kept when they say what the subtitle says', () => {
-    expect(resolveRadioSpeech('SAM launch, SAM launch!', 'a_sam_launch', 'DARKSTAR')).toEqual(['a_sam_launch']);
-    expect(resolveRadioSpeech('Kiwi 1, Darkstar. Mission complete, RTB.', 'a_mission_complete', 'DARKSTAR')).toEqual(['a_mission_complete']);
-    expect(resolveRadioSpeech('Fox Three', 'p_fox3', 'Kiwi 1')).toEqual(['p_fox3']);
-    expect(resolveRadioSpeech('Friendly down! Viper 2 is down.', 'a_friendly_down', 'DARKSTAR')).toEqual(['a_friendly_down']);
+    expect(resolveRadioSpeech('SAM launch, SAM launch!', 'a_sam_launch')).toEqual(['a_sam_launch']);
+    expect(resolveRadioSpeech('Viper 1, Darkstar. Mission complete, RTB.', 'a_mission_complete')).toEqual(['a_mission_complete']);
+    expect(resolveRadioSpeech('Fox Three', 'p_fox3')).toEqual(['p_fox3']);
+    expect(resolveRadioSpeech('Friendly down! Viper 2 is down.', 'a_friendly_down')).toEqual(['a_friendly_down']);
     expect(resolveRadioSpeech(undefined, 'p_copy')).toEqual(['p_copy']);
   });
 
   it('a call nothing can voice correctly becomes a text-only call (click + static), never a wrong clip', () => {
-    expect(resolveRadioSpeech('Tanker is on station at angels 20.', 'p_rifle', 'Kiwi 2')).toBeNull();
-    expect(resolveRadioSpeech('Gate is open, proceed to the target area.', 'a_bandits', 'DARKSTAR')).toBeNull();
+    expect(resolveRadioSpeech('Tanker is on station at angels 20.', 'p_rifle')).toBeNull();
+    expect(resolveRadioSpeech('Gate is open, proceed to the target area.', 'a_bandits')).toBeNull();
   });
 
   it('every radio push in the game source says only what its subtitle says', () => {
     // literal `text: …, voice: '…'` pairs in missions / sim, with sample values for the ${…} parts
     const SAMPLE: [RegExp, string][] = [
-      [/\$\{s\.callsign\}/g, 'Kiwi 1'],
+      [/\$\{s\.callsign\}/g, 'Viper 1'],
       [/\$\{s\.awacsSpoken\}/g, 'Darkstar'],
-      [/\$\{who\}/g, 'Kiwi 1, Darkstar'],
+      [/\$\{who\}/g, 'Viper 1, Darkstar'],
       [/\$\{this\.describe\(pic\)\}/g, 'two bandits, BRAA 045, 40 miles, angels 25, hot'],
       [/\$\{braaText\([^}]*\)\}/g, 'single bandit, BRAA 270, 12 miles, angels 8, cold'],
       [/\$\{countWord\([^}]*\)\}/g, 'three'],
@@ -146,7 +139,7 @@ describe('radio speech matches the subtitle (i2 reviewer: BRAA calls voiced as "
         let text = m[4];
         for (const [re, v] of SAMPLE) text = text.replace(re, v);
         const voice = m[5] as VoiceId;
-        const t = resolveRadioSpeech(text, voice, m[2] ?? 'DARKSTAR');
+        const t = resolveRadioSpeech(text, voice);
         pairs++;
         if (t && !saysOnlySubtitle(say(t), text)) bad.push(`${f}: "${text}" → ${say(t)}`);
       }

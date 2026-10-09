@@ -3,7 +3,7 @@
  * tanks in Instant Action Defend). Hostile-only filters keep friendly ground targets off every display,
  * so the HMD, the TSD and the tactical map draw each site as ONE friendly symbol at its survivors'
  * centroid with the survivor count ("DEFEND 8/9"). A site is never registered for picking: friendly
- * ground targets can't be designated. Protected aircraft groups (Kiwi, Hammer) are already drawn as
+ * ground targets can't be designated. A protected aircraft group would already be drawn as
  * friendlies, so only ground groups count.
  */
 import type { MissionRunnerApi } from '../../core/contracts';
