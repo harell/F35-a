@@ -373,6 +373,8 @@ describe('g01 Buzz Kill: gun pass and swarm hints', () => {
     const all = [...G01.briefing, ...G01.script.hints!.map((h) => h.text)].join(' ');
     expect(all).not.toMatch(/throttle right back/i);
     expect(G01.briefing.join(' ')).toContain(`${G01_GUN_PASS.approachKt} knots`);
+    // the numbers only: Training 03 (Turn and Gun) teaches the pass (playtest r2, 2.1-i)
+    expect(G01.briefing.join(' ')).toContain('Training 03 shows how');
   });
 
   it('times them: the swarm hint after the first launch (missiles), the gun pass hints once the GUN is selected', () => {
