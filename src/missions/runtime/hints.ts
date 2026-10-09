@@ -223,6 +223,8 @@ const AUTO: AutoHint[] = [
         // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker waits for it to stop
         const e = hostileDesignated(p, s);
         if (w === 'gbu53' && e && isSmallGround(e) && e.velocity.lengthSq() > STILL_SPEED * STILL_SPEED) return `Wait for it to stop: the ${name} can't track a target this small on the move`;
+        // our bomb is already guiding onto it: the HUD's <WPN> AWAY, not a call for a second (r2 2.2 F7)
+        if (b && b.bombAway) return `${name} AWAY: it flies itself to the target. TGT for the next one`;
         if (b && b.inRange) {
           // an SDB lobbed from its 30 km maximum glides for 3+ minutes and arrives slow — easy
           // meat for a Tor / Osa: press in to ~20 km first

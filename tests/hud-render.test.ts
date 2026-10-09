@@ -1001,11 +1001,28 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     const oor = cueTexts({ bombAway: true });
     expect(oor).toContain('BOMB AWAY');
     expect(oor).not.toContain('OUT OF RANGE');
-    // a second bomb is still cued (a target can take two StormBreakers)
+    // in range or counting down too: AWAY, as the missiles do, not a cue inviting a second bomb on the
+    // same target (playtest r2 2.2 F7: IN RANGE blinked on the boat a StormBreaker was heading for)
     const again = cueTexts({ inRange: true, timeToRelease: 0, bombAway: true });
-    expect(again).toContain('IN RANGE');
-    expect(again).not.toContain('BOMB AWAY');
-    expect(cueTexts({ timeToRelease: 12, bombAway: true })).toContain('REL 12');
+    expect(again).toContain('BOMB AWAY');
+    expect(again).not.toContain('IN RANGE');
+    expect(cueTexts({ timeToRelease: 12, bombAway: true })).not.toContain('REL 12');
+    expect(cueTexts({ inRange: true, timeToRelease: 0 })).toContain('IN RANGE');
+  });
+
+  it('names the bomb guiding onto the designated target: GBU-53 AWAY (playtest r2 2.2 F7)', () => {
+    const r = rig('ag', 'hud');
+    const p = r.mock.player;
+    const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+    const bi = { point: ship.position.clone(), inRange: true, timeToRelease: 0, offAxis: false, steer: 0, bombAway: true };
+    (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => bi;
+    const def = { id: 'gbu53', name: 'GBU-53/B', short: 'GBU-53', category: 'bomb', guidance: 'tri_mode' } as MissileEntity['def'];
+    const m = new MissileEntity(902, def, 'blue', p.id, ship.id);
+    m.position.copy(ship.position).add(new Vector3(0, 3000, 6000));
+    (r.mock.world.missiles as MissileEntity[]).push(m);
+    const texts = textsOver(r, 1).map((t) => t.text);
+    expect(texts).toContain('GBU-53 AWAY');
+    expect(texts).not.toContain('IN RANGE');
   });
 });
 

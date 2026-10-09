@@ -280,6 +280,12 @@ const AWAY = Object.fromEntries(Object.entries(WEAPON_HUD).map(([k, v]) => [k, `
 /** Seconds the AWAY cue holds after a missile release, whatever the box shows by then. */
 const AWAY_HOLD = 1.5;
 
+/** "GBU-53 AWAY" for our bomb guiding onto the designated target ("BOMB AWAY" onto a designated point). */
+function bombAwayText(f: HudFrame): string {
+  const b = f.target ? ownMissileOn(f, f.target.id) : null;
+  return b && b.def.category === 'bomb' ? (AWAY[b.def.id as WeaponId] ?? 'BOMB AWAY') : 'BOMB AWAY';
+}
+
 /**
  * SHOOT is held back while a missile aimed at the player is this close to impact (s): defence first,
  * the DAS ring and the MISSILE warning own the moment (playtest r1 1.2-f).
@@ -359,10 +365,11 @@ export function planCues(f: HudFrame): number {
     const bi = bombInfo(f);
     if (bi) {
       if (p.radar.groundPoint) {
-        if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
+        // our bomb is still guiding onto it: GBU-53 AWAY, as the missiles do, not IN RANGE inviting a
+        // second bomb on the same boat (r2 2.2 F7), nor STEER read as "turn back for the bomb"
+        if (bi.bombAway) addCue(bombAwayText(f), 15, pal.main, 0);
+        else if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
         else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
-        // our bomb is still guiding onto it: nothing to steer for (STEER read as "turn back for the bomb")
-        else if (bi.bombAway) addCue('BOMB AWAY', 15, pal.main, 0);
         // target outside the bomb's release cone: which way to turn
         else if (bi.offAxis) addCue(bi.steer < 0 ? 'STEER LEFT' : 'STEER RIGHT', 17, pal.warn, 0);
         else addCue('OUT OF RANGE', 15, pal.warn, 0);
