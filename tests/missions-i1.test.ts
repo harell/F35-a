@@ -498,9 +498,9 @@ describe('i1: late fixes — SDB press-in', () => {
     };
     const far = hintsAt(24_000);
     expect(far.some((t) => /press in to 20 km/.test(t)), JSON.stringify(far)).toBe(true);
-    expect(far.some((t) => /release the SDB/.test(t))).toBe(false);
+    expect(far.some((t) => /release the GBU-53/.test(t))).toBe(false);
     const near = hintsAt(18_000);
-    expect(near.some((t) => /release the SDB/.test(t)), JSON.stringify(near)).toBe(true);
+    expect(near.some((t) => /release the GBU-53/.test(t)), JSON.stringify(near)).toBe(true);
     expect(near.some((t) => /press in/.test(t))).toBe(false);
   });
 });
