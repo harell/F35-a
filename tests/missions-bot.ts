@@ -9,7 +9,8 @@
  *    guarding it goes first), selects AARGM against emitters / SDB II / JDAM, designates it
  *    with the sensors a human has (the target must be a contact), releases on the launch-zone cue
  *    (the StormBreaker glides from far out and also follows a mover; the AARGM goes as the game teaches
- *    it, AARGM_RULE: from low and inside ARM_RELEASE, and the bot presses on to the next target behind it);
+ *    it, AARGM_RULE: from low and inside ARM_RELEASE, and the bot presses on to the next target behind it;
+ *    a glide bomb wanted from inside an SA-6's or Tor's ring is flown out to its IP low and back in);
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
  *  - weather: under an overcast deck (cloudBase) it attacks from below the cloud, as a human must to
  *    see the target (g03's target only appears under the deck), and plans its releases for that height;
@@ -25,7 +26,7 @@ import { EventBus } from '../src/core/events';
 import type { MissionDef, MissionResult, MissionRunnerApi } from '../src/core/contracts';
 import { isHostile, type Difficulty, type LoadoutId, type WeaponId } from '../src/core/types';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
-import type { AircraftEntity, AnyEntity, MissileEntity } from '../src/sim/entities';
+import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../src/sim/entities';
 import { isBoat } from '../src/sim/boats';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -33,6 +34,7 @@ import { createAiBrain } from '../src/ai';
 import { Autopilot, gammaForAltitude } from '../src/ai/pilot/Autopilot';
 import { dirWithElevation } from '../src/ai/geom';
 import { createMissionRunner, missionById, missionDifficulty } from '../src/missions';
+import { DEFAULT_AO } from '../src/missions/MissionRunner';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
 import { Probe, type ProbeSpec } from './missions-probes';
@@ -54,6 +56,16 @@ const SMALL_TARGET_ALT = 1_200;
 
 /** The bot's AARGM release range (m): inside the rule the game teaches (AARGM_CLOSE_RANGE), with a margin. */
 export const ARM_RELEASE = AARGM_CLOSE_RANGE - 2_000;
+/**
+ * Height above the surface an AARGM attack is flown at (m), and the autopilot's floor there: under the
+ * SA-6's 80 m floor, as T06 teaches ("get down low", then the AARGM close in), as low as the jet goes
+ * (the g03 golden route's legs). Flown at height, the rule's last 10 km lay inside the SA-6's envelope:
+ * IA Strike Veteran, whose Tor sits 3.8 km from the SA-6, went 0/6 (playtest r1).
+ */
+const ARM_RUN_IN_AGL = 45;
+const ARM_MIN_AGL = 25;
+/** A stand-off hold turns back towards its target this far inside the edge of the AO (m). */
+const HOLD_AO_MARGIN = 8_000;
 
 /** SDB-class glide bombs (GBU-53/B): pressed in to SDB_PRESS_RANGE. */
 const isSdb = (w: AgWeapon): boolean => w === 'gbu53';
@@ -164,6 +176,8 @@ export class MissionBot {
   private orbitSign = 1;
   private readonly ips = new Map<number, Vector3>();
   private readonly runIn = new Set<number>();
+  /** Targets whose run-in starts at the IP, however close the jet is (insideSamRing at the start). */
+  private readonly viaIp = new Set<number>();
   private readonly opts: Required<MissionBotOptions>;
   /** The briefed loadout carries air-to-ground stores. */
   private readonly agLoadout: boolean;
@@ -877,10 +891,7 @@ export class MissionBot {
       for (const s of this.world.sams) {
         if (!s.alive || s.team === this.p.team || s === t) continue;
         const d = Math.hypot(s.position.x - rx, s.position.z - rz);
-        // (an AD boat sees a jet at 9 km whatever its shaping: under a deck, where the run-in is short
-        // and close, its reach counts as the Tor's; elsewhere the bot keeps its old reading)
-        const reach = s.type === 'sa6' ? 14_000 : s.type === 'sa15' || (s.type === 'ad_boat' && this.deck !== null) ? 10_000 : 4_000;
-        score -= Math.max(0, reach - d);
+        score -= Math.max(0, this.samReach(s) - d);
       }
       // prefer run-ins from our side of the target
       const toUs = Math.hypot(this.p.position.x - rx, this.p.position.z - rz);
@@ -895,6 +906,26 @@ export class MissionBot {
     const ip = new Vector3(t.position.x + Math.sin(best) * out, 0, t.position.z - Math.cos(best) * out);
     this.ips.set(t.id, ip);
     return ip;
+  }
+
+  /** How far a site reaches the jet (m), as the bot reads its TSD ring. */
+  private samReach(s: SamSiteEntity): number {
+    // (an AD boat sees a jet at 9 km whatever its shaping: under a deck, where the run-in is short
+    // and close, its reach counts as the Tor's; elsewhere the bot keeps its old reading)
+    return s.type === 'sa6' ? 14_000 : s.type === 'sa15' || (s.type === 'ad_boat' && this.deck !== null) ? 10_000 : 4_000;
+  }
+
+  /**
+   * The jet is inside the ring of a live SA-6 or Tor other than `t`, not counting one with our AARGM on
+   * its way (pressed straight in behind it, as the rule says: t06's StormBreaker run).
+   */
+  private insideSamRing(t: AnyEntity): boolean {
+    const p = this.p.position;
+    for (const s of this.world.sams) {
+      if (!s.alive || s.team === this.p.team || s === t || (s.type !== 'sa6' && s.type !== 'sa15') || this.bombOnTheWay(s)) continue;
+      if (Math.hypot(s.position.x - p.x, s.position.z - p.z) < this.samReach(s)) return true;
+    }
+    return false;
   }
 
   /**
@@ -934,8 +965,11 @@ export class MissionBot {
       // stand-off weapon on its way: hold (a gentle orbit) where we are
       const it2 = this.pilot.begin(p, 150);
       const V1 = p.velocity.length();
-      // a wide, gentle turn that keeps the energy (a tight orbit at 25,000 ft bleeds it all)
-      _h.set(p.velocity.x - p.velocity.z * 0.25, 0, p.velocity.z + p.velocity.x * 0.25);
+      // a wide, gentle turn that keeps the energy (a tight orbit at 25,000 ft bleeds it all), and back
+      // towards the target near the edge of the AO (a hold off an IP to the north drifted out of it)
+      const edge = (this.runner.def.script.aoHalfSize ?? DEFAULT_AO) - HOLD_AO_MARGIN;
+      if (Math.abs(p.position.x) > edge || Math.abs(p.position.z) > edge) _h.set(t.position.x - p.position.x, 0, t.position.z - p.position.z);
+      else _h.set(p.velocity.x - p.velocity.z * 0.25, 0, p.velocity.z + p.velocity.x * 0.25);
       dirWithElevation(_h, V1 < 220 ? -0.04 : gammaForAltitude(p, Math.max(p.position.y, ground + 3_000), 0.1, 8), it2.dir);
       it2.speed = 260;
       it2.allowAb = V1 < 200;
@@ -947,13 +981,16 @@ export class MissionBot {
       return;
     }
     if (inFlight > 0) {
-      const it2 = this.pilot.begin(p, 150);
+      // (after an AARGM: still low, under the floor, until it lands)
+      const low = weapon === 'aargm';
+      const it2 = this.pilot.begin(p, low ? ARM_MIN_AGL : 150);
       // turn away
       _h.set(p.position.x - t.position.x, 0, p.position.z - t.position.z);
       turnLimited(p, _h, 70);
       it2.allowInverted = false;
       const V2 = p.velocity.length();
-      dirWithElevation(_h, V2 < 220 ? -0.05 : gammaForAltitude(p, Math.min(p.position.y, ground + 7_000), 0.2, 6), it2.dir);
+      const egressAlt = low ? ground + ARM_RUN_IN_AGL : Math.min(p.position.y, ground + 7_000);
+      dirWithElevation(_h, V2 < 220 ? -0.05 : gammaForAltitude(p, egressAlt, 0.2, 6), it2.dir);
       it2.speed = 280;
       it2.allowAb = V2 < 220;
       it2.gMax = 5;
@@ -963,18 +1000,23 @@ export class MissionBot {
       this.pilot.fly(p, w, dt);
       return;
     }
-    const it = this.pilot.begin(p, 150);
+    // a stand-off glide bomb with the jet inside an SA-6's or Tor's ring (after an AARGM pass close in):
+    // out to the IP, low while in the ring, and the stand-off run-in from there, not a pop-up into the
+    // ring (IA Strike Veteran: the pop-up at the parked jets met the SA-6 6 km beyond them)
+    if (isSdb(weapon) && this.deck === null && !isSmallGround(t) && !this.runIn.has(t.id) && this.insideSamRing(t)) this.viaIp.add(t.id);
     // leg 1: to the IP unless we are already inside the run-in
     const ipD = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
-    const runIn = this.runIn.has(t.id) || ipD < 3_000 || R < rel + 2_000 || this.insideRunIn(t, ip, R);
+    const runIn = this.runIn.has(t.id) || ipD < 3_000 || (!this.viaIp.has(t.id) && R < rel + 2_000) || this.insideRunIn(t, ip, R);
     if (runIn) this.runIn.add(t.id);
+    const low = weapon === 'aargm' || (!runIn && this.viaIp.has(t.id) && this.insideSamRing(t));
+    const it = this.pilot.begin(p, low ? ARM_MIN_AGL : 150);
     const aim = runIn ? t.position : ip;
     _h.set(aim.x - p.position.x, 0, aim.z - p.position.z);
     let alt = Math.min(8_500, Math.max(ground + 7_000, t.position.y + 7_000));
     if (this.deck !== null) alt = Math.min(alt, this.deck - 300);
     else if (isSmallGround(t)) alt = t.position.y + SMALL_TARGET_ALT;
-    // an AARGM run-in: no climb into the site's envelope (the lesson's "low, then the AARGM close in")
-    if (weapon === 'aargm') alt = Math.min(alt, Math.max(p.position.y, ground + 100));
+    // an AARGM attack, or the way out of a ring to the IP: down low under the SA-6's floor (T06's lesson)
+    if (low) alt = ground + ARM_RUN_IN_AGL;
     // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
     // until it stops (a release now would land where it was), instead of overflying it into the defences
     if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) {

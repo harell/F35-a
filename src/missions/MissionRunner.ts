@@ -59,7 +59,8 @@ const LEVEL_PITCH = 10 * (Math.PI / 180);
 const LEVEL_UP_Y = 0.95;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
-const DEFAULT_AO = 38_000;
+/** Area of operations half-size (m) when the mission sets none (script.aoHalfSize). */
+export const DEFAULT_AO = 38_000;
 /** Free flight has no AO: past this half-size (m, near the edge of the 88 km terrain) a nudge back towards the city. */
 const FREE_FLIGHT_EDGE = 42_000;
 /** Seconds before a patrolling enemy fighter group is vectored onto the player. */
