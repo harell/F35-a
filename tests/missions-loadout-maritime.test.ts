@@ -27,7 +27,7 @@ vi.setConfig({ testTimeout: 60_000 });
 installPath2D();
 
 const FULL = 'strike_maritime' as const;
-/** t06 (the strike lesson) as a mission that also lists the maritime load. */
+/** t06 (Live SAMs, the JDAM strike lesson) as a mission that also lists the maritime load. */
 const offering = (): MissionDef => {
   const t06 = missionById('t06')!;
   return { ...t06, allowedLoadouts: [...t06.allowedLoadouts, FULL] };

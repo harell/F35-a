@@ -3,7 +3,7 @@
  * throw), taps the screen (the audio module self-unlocks on any gesture), then records the real
  * game's master output while driving the jet (AB, views, weapons) and writes WAV + spectrogram.
  *
- *   node src/audio/dev/gameAudioCheck.mjs [--url=http://localhost:5173/?mission=c01&autostart=1&view=cockpit]
+ *   node src/audio/dev/gameAudioCheck.mjs [--url=http://localhost:5173/?mission=g01&autostart=1&view=cockpit]
  *                                          [--out=/tmp/f35-audio-game] [--seconds=10]
  */
 import { chromium } from 'playwright-core';
@@ -17,7 +17,7 @@ const args = Object.fromEntries(
     return m ? [m[1], m[2] === '' ? true : m[2]] : [a, true];
   }),
 );
-const url = args.url || 'http://localhost:5173/?mission=c01&autostart=1&view=cockpit';
+const url = args.url || 'http://localhost:5173/?mission=g01&autostart=1&view=cockpit';
 const out = args.out || '/tmp/f35-audio-game';
 const seconds = Number(args.seconds || 10);
 fs.mkdirSync(out, { recursive: true });

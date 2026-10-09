@@ -20,8 +20,9 @@ The game is built on **three.js (WebGL 2) + TypeScript + Vite + Web Audio**, pac
 >   `AKL.<id>` for landmark positions, for example `AKL.rangitoto`, `AKL.whenuapai`, `AKL.port`, `AKL.bridge_s`, `AKL.waiheke`.
 >   The CBD sits on the south shore of the Waitematā Harbour, the Hauraki Gulf and its islands lie to the east/north-east,
 >   the Manukau Harbour and the airport to the south-west/south, and the Waitākere Ranges (≤474 m) plus the Tasman coast to the west.
-> * **Campaign fiction:** the IRGC campaign (epic #72, `src/missions/content/irgc.ts` and `irgcHauraki.ts`, mission ids
->   `g01`, `g02`, …): Shahed one-way attack drones over the city and IRGC Navy fast boats in the Hauraki Gulf. F-35As fly
+> * **Campaign fiction:** the IRGC campaign (epic #72, `src/missions/content/irgc.ts`, `irgcHauraki.ts` and `irgcWaiheke.ts`,
+>   mission ids `g01`–`g03`): Shahed one-way attack drones over the city, IRGC Navy fast boats in the Hauraki Gulf and the
+>   Waiheke air defences round a stoat on the Onetangi dunes. F-35As fly
 >   from **RNZAF Base Auckland (Whenuapai)** to defend Auckland. Enemy targets are always **military**; never target
 >   civilian landmarks. The CBD, Sky Tower and Harbour Bridge are things you **protect**. Optional bonus: flying under the
 >   Harbour Bridge (43 m clearance) earns a score bonus and a HUD message. Instant Action still uses a hostile SAM belt on
@@ -419,23 +420,30 @@ The player starts at 10,000 ft with no boat in StormBreaker reach; Recruit flies
 must be sunk with eight bombs, so the gun is part of the plan. The briefing map marks a neutral ground group (the tanker)
 friendly, by name (`autoIntel`), and drops a waypoint's label next to a marker of the same name (`routeLabel`).
 
-## The stoat (g03, #200)
+## The stoat (g03, #200) and the rats (t07)
 
-g03's target is a `'stoat'` ground target (`src/sim/stoat.ts`, one hit point, 0.2 m radius): it runs a route along
+g03's target is a `'stoat'` ground target (one hit point, 0.2 m radius) run by `src/sim/runner.ts`: it runs a route along
 the Onetangi dunes in dashes, stops at three bait stations (the drop windows) and reaching its last point is reaching
 the nest (a mission `area` trigger on its group ends the sortie). Its clock starts at mission start
-(`StoatSpawn.clockStart`), so when the mission spawns it late (under the cloud, near the nest) it catches up with where
+(`RunnerSpawn.clockStart`), so when the mission spawns it late (under the cloud, near the nest) it catches up with where
 it would be. Designated, locked or with a weapon in flight at it, it rears up into the "periscope" stance at its next
-stop (`StoatState.alert`, posed by `src/render/visuals/stoatPose.ts` on the posable model in
+stop (`RunnerState.alert`, posed by `src/render/visuals/stoatPose.ts` on the posable model in
 `src/render/models/stoat.ts`); a weapon that goes off within 30 m and misses makes it bolt to the next station. A
 ground target under 0.5 m (`src/sim/weapons/small.ts`) is too small for a GBU-53/B to track on the move: the seeker and
 the datalink only update its estimate while it stands still, and never lead it (`smallTargetGuidance`), so a release
 at a stop hits and one while it runs lands where it was. A killed stoat leaves no model, only a crater
-(`src/render/effects/Craters.ts`: a shallow dark bowl with a raised sand rim, conformed to the terrain, kept for the
-sortie; `Effects` adds one on the stoat's `destroyed` instead of the fire and smoke column a site gets). The
-volunteers' radio channel (`G03_VOLUNTEERS`, fictional like every local name in the mission) calls the bait stations
-and the moment the stoat stands up (the `stoat_alert` condition). The debrief prices the sortie against one volunteer's
-trap (`MissionScript.costSummary`, unit costs and their sources in `src/missions/runtime/costs.ts`).
+(`src/render/effects/Craters.ts`). The volunteers' radio channel (`G03_VOLUNTEERS`, fictional like every local name in
+the mission) calls the bait stations and the moment the stoat stands up (the `runner_alert` condition). The debrief
+prices the sortie against one volunteer's trap (`MissionScript.costSummary`, unit costs and their sources in
+`src/missions/runtime/costs.ts`).
+
+T07's sewer rats (`'rat'`, `src/missions/content/trainingSmallTargets.ts`) run on the same runner: down a Herne Bay
+street with a stop at each drain, then swimming (`RunnerState.swimming`: a steady speed, no stops, so a StormBreaker
+can't track them) for Watchman Island. The lesson counts the homes inside the player's bombs' damage ring
+(`MissionScript.collateral`, `src/missions/runtime/collateral.ts`).
+
+Every munition that goes off on land digs a crater sized by its warhead (`craterRadius` in
+`src/render/effects/Effects.ts`), and a bomb going off in the water throws up a splash column, hit or miss.
 
 ## Targeting pod view (#199)
 

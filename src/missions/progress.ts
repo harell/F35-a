@@ -127,8 +127,8 @@ export function sanitizeProgress(raw: unknown, campaigns: CampaignChains, traini
   }
   if (Array.isArray(ext.skipped)) out.skipped = ext.skipped.filter((id): id is string => typeof id === 'string').map(idOf);
   // (an old save's `skyTowerDown` is not copied: the tower stands again)
-  // a won or skipped mission unlocks the next one of its campaign: repairs saves made while c07 sat
-  // between c06 and c08 (c07 and c12 were removed with rearming, issue #63)
+  // a won or skipped mission unlocks the next one of its campaign: repairs saves made before a mission
+  // was added to or removed from a campaign (first needed when Southern Cross's c07 and c12 went, #63)
   for (const campaign of campaigns) {
     for (let i = 0; i + 1 < campaign.length; i++) {
       const id = campaign[i].id;

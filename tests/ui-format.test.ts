@@ -6,7 +6,7 @@ import { formatPercent, formatScore, formatTime, gradeTone, missionState, niceSc
 import { fitIntelView, intelBounds } from '../src/ui/screens/intelMap';
 import { CAMPAIGNS, PLAYABLE_CAMPAIGNS, TRAINING } from '../src/missions';
 
-/** The first playable campaign's missions (the IRGC campaign: g01, g02). */
+/** The first playable campaign's missions (the IRGC campaign: g01–g03). */
 const CAMPAIGN = PLAYABLE_CAMPAIGNS[0].missions;
 
 describe('formatting', () => {

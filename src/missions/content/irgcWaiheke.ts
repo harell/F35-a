@@ -35,7 +35,7 @@ export const G03_NEST: XZ = { x: 28_250, z: -6_700 };
 export const G03_CLOCK = 240;
 
 /**
- * The stoat (#200, sim/stoat.ts): it runs east along the dune line from its start, stops at three
+ * The stoat (#200, sim/runner.ts): it runs east along the dune line from its start, stops at three
  * bait stations the volunteers set close to the nest (the drop windows) and ends at the nest. Its
  * first leg is the long one, so the windows fall when a jet that came the long way round can be
  * there: about 1:09–1:49, 2:03–2:43 and 2:57–3:37, each long enough for the run-in and a
@@ -139,8 +139,9 @@ export const G03: MissionDef = mission({
   ],
   recommendedLoadout: 'sead_precision',
   allowedLoadouts: ['sead_precision'],
-  // Live SAMs: the SA-6, terrain masking and the notch over land
-  lessons: ['t06'],
+  // Live SAMs: the SA-6, terrain masking and the notch over land; Small Targets: the StormBreaker
+  // released while a target too small to track stands still
+  lessons: ['t06', 't07'],
   player: g03Start,
   timeLimit: G03_CLOCK,
   script: {
@@ -159,7 +160,7 @@ export const G03: MissionDef = mission({
       target('stoat', G.target, 'stoat', G03_STOAT.start, {
         name: 'Stoat',
         spawn: reveal,
-        stoat: { route: [...G03_STOAT.stations, G03_NEST], stations: [0, 1, 2], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime },
+        runner: { route: [...G03_STOAT.stations, G03_NEST], stations: [0, 1, 2], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime },
       }),
     ],
     objectives: [{ id: 'o_target', kind: 'destroy', groups: [G.target], label: 'Kill the stoat before it reaches the nest', primary: true }],
@@ -183,7 +184,7 @@ export const G03: MissionDef = mission({
       })),
       {
         id: 't_alert',
-        when: { kind: 'stoat_alert', group: G.target },
+        when: { kind: 'runner_alert', group: G.target },
         actions: [{ kind: 'radio', from: TL, text: 'It has stood up. It is looking straight at you.' }],
       },
       {

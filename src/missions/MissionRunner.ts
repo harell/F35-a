@@ -45,6 +45,7 @@ import { CivilShipping } from './runtime/shipping';
 import { SuperyachtTraffic } from './runtime/superyachts';
 import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
+import { HomesWatch } from './runtime/collateral';
 import { SightseeingLog } from './runtime/sightseeing';
 import { updateManeuvers, type ManeuverId } from './runtime/maneuvers';
 import { FREE_FLIGHT_SPEED_FLOOR, setSpeedFloor } from '../sim/flight/FlightModel';
@@ -101,6 +102,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly trains: TrainTraffic | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
+  /** Homes hit by the player's bombs (script.collateral, t07). */
+  private readonly homes: HomesWatch | null;
   /** Free flight: tour stops, distance and passes for the debrief. */
   private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
@@ -151,6 +154,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts = civilTraffic ? new SuperyachtTraffic(this.s) : null;
     this.trains = civilTraffic ? new TrainTraffic(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
+    this.homes = def.script.collateral ? new HomesWatch(this.s) : null;
     this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
@@ -177,6 +181,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.callouts.detach();
     this.coach?.detach();
     this.landmarks.detach();
+    this.homes?.detach();
     s.radio.clear();
     this.hints.clear();
     s.world = null as unknown as SimWorld;
@@ -218,6 +223,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts?.setup();
     this.trains?.setup();
     this.landmarks.setup();
+    this.homes?.setup();
     this.callouts.attach();
     this.coach?.attach();
     // ground-level steering for target waypoints without an explicit altitude
@@ -304,6 +310,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       damageTaken,
       friendlyLosses: s.friendlyLosses,
       civilianKills: s.civilianKills,
+      homesHit: s.homesHit,
       bonus: s.bonus,
       scoreMultiplier: s.difficulty.scoreMultiplier,
       flightKills: s.flightKills,
@@ -337,6 +344,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.civilianHeliKills > 0) (r as MissionResultExt).civilianHeliKills = s.civilianHeliKills;
     if (s.civilianTrainKills > 0) (r as MissionResultExt).civilianTrainKills = s.civilianTrainKills;
     if (s.civilianYachts.length) (r as MissionResultExt).civilianYachts = [...s.civilianYachts];
+    if (s.homesHit > 0) (r as MissionResultExt).homesHit = s.homesHit;
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
@@ -351,7 +359,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
         for (const st of p?.stores ?? []) if (st.weapon === w) left += st.count;
         if (n - left > 0) fired[w] = n - left;
       }
-      const removed = s.groups.get(cs.removed.group)?.members.filter((m) => !m.alive).length ?? 0;
+      let removed = 0;
+      for (const id of typeof cs.removed.group === 'string' ? [cs.removed.group] : cs.removed.group) removed += s.groups.get(id)?.members.filter((m) => !m.alive).length ?? 0;
       (r as MissionResultExt).costSummary = costSummary(time, fired, cs.comparison, { label: cs.removed.label, count: removed });
     }
     r.tips = r.freeFlight ? [] : buildTips(s, r);

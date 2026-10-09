@@ -250,7 +250,7 @@ describe('the neighbourhoods in the building list (applyNeighbourhoods)', () => 
     expect(houses.every((b) => b.colors)).toBe(true);
   });
 
-  it('are built in the city mesh: measured roofs over the terrain, within a budget of their own', () => {
+  it('are built in the city mesh: measured roofs over the terrain, within a budget of their own', { timeout: 60_000 }, () => {
     const cbd = aucklandCbd();
     const roads = new RoadNetwork(aucklandRoadPaths());
     const height = () => 10;

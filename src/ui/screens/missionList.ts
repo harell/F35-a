@@ -84,7 +84,7 @@ function listScreen(
     );
 
     const body = h('div', { class: 'scr-body ml-body ui-scroll' });
-    // onboarding nudge: the lessons the next mission wants (T01 and T02 before g01, Gulf Defence before g02…)
+    // onboarding nudge: the lessons the next mission wants (T01–T03 before g01, T04–T05 before g02, T06–T07 before g03)
     const prep = kind === 'campaign' && trainingPick ? lessonsLeft(progress) : null;
     if (prep && trainingPick) {
       const list = prep.lessons.map((m) => `T${pad2(m.index)} ${escapeHtml(m.title)}`).join(' · ');

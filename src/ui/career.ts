@@ -15,7 +15,6 @@ export const DIFFICULTY_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 /** Short fact list derived from the live DIFFICULTIES numbers (never hand-written, so it can't go stale). */
 export function difficultyFacts(d: DifficultyParams): string[] {
   const out: string[] = [];
-  out.push(d.flightAssist ? 'Flight-path hold · gentle buffet' : 'No flight-path hold · G-LOC');
   const hits = d.playerMissileHitsToKill;
   out.push(hits > 1 ? `Survive ${hits} missile hits` : 'One missile hit kills');
   const pct = Math.round((d.enemyCountScale - 1) * 100);
@@ -103,7 +102,7 @@ export function dismissOnboarding(): void {
 
 /**
  * The lessons the next campaign mission wants that aren't flown yet, and that mission (trainingTarget):
- * T01 and T02 before g01, Gulf Defence before g02… Null once the campaign is won.
+ * T01–T03 before g01, T04–T05 before g02, T06–T07 before g03 (MissionDef.lessons). Null once the campaign is won.
  */
 export function lessonsLeft(p: CampaignProgress): { mission: MissionDef; lessons: MissionDef[] } | null {
   const t = trainingTarget(p);

@@ -17,6 +17,7 @@ interface MedalInfo {
   id: string;
   name: string;
   description: string;
+  retired?: boolean;
 }
 
 /** Defensive read of the missions module's medal catalogue (empty if it is ever renamed). */
@@ -45,6 +46,8 @@ export function showServiceRecord(host: UiHost, progress: CampaignProgress | nul
     const earned = loadMedals();
     // earned medals first (catalogue order within each group)
     const catalogue = medalCatalogue()
+      // a retired medal (no mission awards it now) only for the pilots who earned it
+      .filter((m) => !m.retired || earned[m.id])
       .map((m, i) => ({ m, i }))
       .sort((a, b) => Number(!!earned[b.m.id]) - Number(!!earned[a.m.id]) || a.i - b.i)
       .map((e) => e.m);

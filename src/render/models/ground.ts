@@ -18,6 +18,7 @@ import { getAircraftPrototype } from './aircraft';
 import { SHIP_DIMS } from '../visuals/shipMotion';
 import { missileBoat, suicideBoat } from './boats';
 import { stoatModel } from './stoat';
+import { ratModel } from './rat';
 import { PALETTES, meshFrom, panel, tank, type Palette, type PaletteId } from './vehicles';
 
 export type WreckStyle = 'vehicle' | 'building' | 'ship' | 'aircraft';
@@ -115,6 +116,13 @@ function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null 
     case 'stoat': {
       // g03's stoat (models/stoat.ts): posable parts, posed by the renderer; a killed one is gone
       root.add(stoatModel());
+      radius = 0.3;
+      farScale = 0.05;
+      break;
+    }
+    case 'rat': {
+      // t07's sewer rats (models/rat.ts): posable like the stoat; a killed one is gone
+      root.add(ratModel());
       radius = 0.3;
       farScale = 0.05;
       break;

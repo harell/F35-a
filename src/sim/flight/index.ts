@@ -4,9 +4,8 @@
  */
 export { AIRCRAFT_PERF, STORE_DATA, type AircraftPerf } from './aircraftData';
 export { FM_RATE_HZ, type FlightEnv } from './env';
-export { initFlight, stepFlight, ensureSimState, isAssisted, controlLawFor, massOf, makeWreck, type FlightInitOptions } from './FlightModel';
-export { neutralStickG, gLimits, alphaLimits, rollRateLimit, type ControlLaw } from './controlLaws';
-export { GLOC, glocModelled } from './gloc';
+export { initFlight, stepFlight, ensureSimState, massOf, makeWreck, type FlightInitOptions } from './FlightModel';
+export { neutralStickG, gLimits, alphaLimits, rollRateLimit } from './controlLaws';
 export { predictRecoveryClearance } from './gcas';
 export { setQuatFromHPR, hprFromQuaternion, hprFromAxes } from './attitude';
 export * from './performance';

@@ -45,7 +45,7 @@ import { stepOneWay } from './drone/oneWay';
 import { BuildingIndex, buildingGeometry } from './buildings';
 import { stepLandmarks, type LandmarkEntity } from './landmarks';
 import { BOAT_SPEED, makeBoat, stepBoats } from './boats';
-import { makeStoat, stepStoats } from './stoat';
+import { makeRunner, stepRunners } from './runner';
 import type { TrainService } from './civil/rail';
 
 /** Ground target types that are IRGC Navy fast boats (sailed by sim/boats.ts). */
@@ -71,6 +71,7 @@ const GROUND_NAMES: Record<GroundTargetType, string> = {
   suicide_boat: 'Suicide Boat',
   missile_boat: 'Peykaap II',
   stoat: 'Stoat',
+  rat: 'Rat',
   train: 'Train',
 };
 
@@ -318,8 +319,8 @@ class SimWorldImpl implements SimWorld {
       e.speed = e.boat!.speed;
       e.path = null;
     }
-    // the stoat: sim/stoat.ts runs it (route, stops, alert), not the ground-mover path
-    if (spec.type === 'stoat' && spec.stoat) makeStoat(e, spec.stoat);
+    // the stoat and the rats: sim/runner.ts runs them (route, stops, alert), not the ground-mover path
+    if ((spec.type === 'stoat' || spec.type === 'rat') && spec.runner) makeRunner(e, spec.runner);
     this.ground.push(e);
     this.byId.set(e.id, e);
     this.hostileDirty = true;
@@ -409,7 +410,7 @@ class SimWorldImpl implements SimWorld {
     // 4. Ground movers, then the IRGC Navy fast boats (chase, strike countdown, moving SAMs, Kowsars)
     this.updateMovers(dt);
     stepBoats(this, dt);
-    stepStoats(this, dt);
+    stepRunners(this, dt);
 
     // 5. Collisions (terrain / sea, mid-air, landmarks) and landmark collapses
     this.collisions.update(aircraft, dt, this.landmarks, this.buildings);

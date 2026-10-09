@@ -3,7 +3,7 @@
  * dynamic-inversion CLAW:
  *
  *  PITCH  stick → commanded normal load (g). Neutral stick = 1 g corrected for flight-path
- *         angle and bank (ControlLaw.pathHold latches and holds the flight-path angle). The g command is
+ *         angle and bank (in near-level flight it latches and holds the flight-path angle). The g command is
  *         inverted through the lift curve to a required AoA, which the pitch rate loop tracks:
  *              q_cmd = (g/V)(n_achievable − n_gravity) + Kα (α_req − α)
  *         α_req is clamped by the AoA limiter, n by the g limiter. At low dynamic pressure the
@@ -13,10 +13,8 @@
  *         ~440 KEAS), load factor (rolling-pull limit), AoA and external stores — see rollRateLimit.
  *  YAW    automatic turn coordination (β → 0, gravity feed-forward), rudder = sideslip command.
  *
- *  The g / AoA limiters ("carefree handling") are ALWAYS on — like the real F-35 CLAW — on every
- *  difficulty. `ControlLaw.pathHold` (neutral-stick flight-path latch) is the only convenience
- *  the Ace difficulty removes; Ace also gets a rougher buffet at the AoA limiter and G-LOC
- *  (see ./gloc.ts). The departure model (wing drop + nose slice past the stall AoA) stays for
+ *  The g / AoA limiters ("carefree handling") are ALWAYS on — like the real F-35 CLAW — for every
+ *  aircraft. The departure model (wing drop + nose slice past the stall AoA) stays for
  *  transients the limiter cannot catch (damaged hydraulics, tail slides) but a full stick
  *  deflection alone can no longer depart the jet.
  *
@@ -41,27 +39,13 @@ export interface StickInput {
   nzOverride: number | null;
 }
 
-/** Per-aircraft control-law options (the g/AoA limiters are always on). */
-export interface ControlLaw {
-  /** Neutral stick latches and holds the flight-path angle (off for the player on Ace). */
-  pathHold: boolean;
-  /** Buffet severity at high AoA (1 = normal; Ace 1.6: rougher ride, less precise tracking). */
-  buffetGain: number;
-  /**
-   * High-AoA regime (player without flight assist, i.e. Ace): below ~250 KIAS, full aft stick
-   * opens the limiter from the normal 28° to just under the stall AoA (F-35A ≈ 33°) — more nose
-   * authority for a snapshot, paid for with heavy induced-drag energy bleed and buffet.
-   */
-  highAoa?: boolean;
-}
-
 /**
  * Neutral-stick normal-load command (g).
  *  - near-level flight: bank-compensated flight-path hold  n = cosγ / cosφ
  *  - steep climbs/dives (|γ| 30°→60°): blends to a 1 g-per-cosφ law, so a released
  *    stick gently rounds out dives instead of holding them
  *  - beyond ~60–100° of bank the compensation fades to a plain 1 g (F-16 / F-35 style)
- * (the flight-path latch on top of it is ControlLaw.pathHold, see updateControlLaws)
+ * (the flight-path latch on top of it is in updateControlLaws)
  */
 export function neutralStickG(gamma: number, cosBank: number, bank: number): number {
   const cb = Math.max(cosBank, 0.5);
@@ -156,7 +140,6 @@ export function updateControlLaws(
   st: AircraftSimState,
   ad: AirData,
   h: number,
-  law: ControlLaw,
   input: StickInput,
 ): void {
   const perf = st.perf;
@@ -174,7 +157,7 @@ export function updateControlLaws(
   /* ───────── PITCH ───────── */
   const lim = gLimits(perf, ad.heavyExternal, hyd, _gl);
   let n0 = neutralStickG(ad.gamma, ad.cosBankW, ad.bankW);
-  if (law.pathHold && input.nzOverride === null) {
+  if (input.nzOverride === null) {
     // Flight-path-angle hold (near-level flight only): latch γ shortly after the stick
     // returns to neutral; re-latch if the path has been pushed far from the reference.
     if (Math.abs(sp) < 0.05 && Math.abs(ad.bankW) < 65 * DEG && Math.abs(ad.gamma) < 30 * DEG) st.neutralTime += h;
@@ -203,12 +186,6 @@ export function updateControlLaws(
   st.nzCmd += dn > maxStep ? maxStep : dn < -maxStep ? -maxStep : dn;
 
   const al = alphaLimits(perf, _al);
-  if (law.highAoa && sp > 0.8) {
-    // high-AoA regime: blend in below ~250 KIAS (q̄ ≈ 10 kPa), stay 1.5° under the stall
-    const w = (1 - sstep(ad.qbar, 8_000, 12_000)) * sstep(sp, 0.8, 0.95);
-    const hi = perf.alphaStall - 1.5 * DEG;
-    if (hi > al.max) al.max += (hi - al.max) * w;
-  }
   const kA = Math.min(6, 0.6 / tauQ);
   // α̇ ≈ body pitch rate − flight-path rotation rate at the current α (limiter lead term)
   const qss = pitchRateFor(perf, ad, ad.alpha, 0);
@@ -274,17 +251,17 @@ export function updateControlLaws(
   /* ───────── BUFFET ───────── */
   // Airframe buffet (felt through the camera / haptics via st.buffet) from high AoA, departure and
   // transonic high-g. Its effect on the body rates is small — a light wing rock — so the limiter
-  // stays crisp; Ace (buffetGain 1.6) gets a rougher, less precise ride near the limit.
+  // stays crisp.
   const aAbs = Math.abs(ad.alpha);
   const transonic = ad.mach > 0.92 && ad.mach < 1.05 && st.nzCmd > 4 ? 0.15 : 0;
-  const buf = (0.35 * sstep(aAbs, 0.7 * perf.alphaStall, perf.alphaStall) + transonic) * law.buffetGain + 0.65 * D;
+  const buf = 0.35 * sstep(aAbs, 0.7 * perf.alphaStall, perf.alphaStall) + transonic + 0.65 * D;
   st.buffet = buf > 1 ? 1 : buf;
   if (buf > 0.01) {
     const k = Math.min(1, 25 * h);
     st.noiseP += (st.rng() * 2 - 1 - st.noiseP) * k;
     st.noiseQ += (st.rng() * 2 - 1 - st.noiseQ) * k;
     st.noiseR += (st.rng() * 2 - 1 - st.noiseR) * k;
-    const rock = D > 0.05 ? 1 : law.buffetGain > 1 ? 0.6 : 0.35;
+    const rock = D > 0.05 ? 1 : 0.35;
     pCmd += st.noiseP * buf * 0.35 * rock;
     qCmd += st.noiseQ * buf * 0.12 * rock;
     rCmd += st.noiseR * buf * 0.1 * rock;

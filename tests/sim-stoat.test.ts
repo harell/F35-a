@@ -1,5 +1,5 @@
 /**
- * g03's stoat (#200, sim/stoat.ts): its route with stops at the bait stations, its clock (it catches up
+ * g03's stoat (#200, sim/runner.ts): its route with stops at the bait stations, its clock (it catches up
  * when spawned late), the alert when targeted, bolting after a near miss; the GBU-53/B against a
  * target too small to track on the move (sim/weapons/small.ts); the model and its poses.
  */
@@ -11,7 +11,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import type { SimWorld } from '../src/sim/api';
 import type { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
-import { NEAR_MISS, STOAT_STOP, stoatArrival, type StoatSpawn } from '../src/sim/stoat';
+import { NEAR_MISS, RUNNER_STOP, runnerArrival, type RunnerSpawn } from '../src/sim/runner';
 import { isSmallGround } from '../src/sim/weapons/small';
 import { getGroundPrototype } from '../src/render/models/ground';
 import { GroundVisual } from '../src/render/visuals/SiteVisuals';
@@ -34,15 +34,15 @@ function run(w: SimWorld, seconds: number, each?: () => boolean | void): void {
 }
 
 /** A stoat running east from x = 0: stations every 100 m (route points 1–3), the nest at 400 m. */
-const ROUTE = (): StoatSpawn => ({
+const ROUTE = (): RunnerSpawn => ({
   route: [0, 100, 200, 300, 400].map((x) => new Vector3(x, 0, 0)),
   stations: [1, 2, 3],
   speed: 2.5,
   stopTime: 20,
 });
 
-function stoat(w: SimWorld, spec: StoatSpawn = ROUTE()): GroundTargetEntity {
-  return w.spawnGround({ type: 'stoat', team: 'red', position: spec.route[0].clone(), name: 'Stoat', stoat: spec });
+function stoat(w: SimWorld, spec: RunnerSpawn = ROUTE()): GroundTargetEntity {
+  return w.spawnGround({ type: 'stoat', team: 'red', position: spec.route[0].clone(), name: 'Stoat', runner: spec });
 }
 
 describe('the stoat: route, stops and clock', () => {
@@ -58,20 +58,20 @@ describe('the stoat: route, stops and clock', () => {
   it('runs to each bait station, stops there for its stop time, and reaches the nest when its clock says', () => {
     const w = world();
     const s = stoat(w);
-    const st = s.stoat!;
+    const st = s.runner!;
     const stops: { leg: number; from: number; to: number }[] = [];
     let at = -1;
     run(w, 400, () => {
       if (st.phase === 'stop' && (stops.length === 0 || stops[stops.length - 1].to >= 0)) stops.push({ leg: st.leg, from: w.time, to: -1 });
       if (st.phase !== 'stop' && stops.length && stops[stops.length - 1].to < 0) stops[stops.length - 1].to = w.time;
-      if (st.atNest && at < 0) at = w.time;
-      return st.atNest;
+      if (st.arrived && at < 0) at = w.time;
+      return st.arrived;
     });
     expect(stops.map((x) => x.leg)).toEqual([1, 2, 3]);
-    for (const x of stops) expect(x.to - x.from).toBeCloseTo(STOAT_STOP, 0);
+    for (const x of stops) expect(x.to - x.from).toBeCloseTo(RUNNER_STOP, 0);
     // the planned arrival (route at its average dash speed + the stops), give or take a dash
-    expect(at).toBeGreaterThan(stoatArrival(ROUTE()) - 6);
-    expect(at).toBeLessThan(stoatArrival(ROUTE()) + 6);
+    expect(at).toBeGreaterThan(runnerArrival(ROUTE()) - 6);
+    expect(at).toBeLessThan(runnerArrival(ROUTE()) + 6);
     expect(Math.hypot(s.position.x - 400, s.position.z)).toBeLessThan(0.5);
     // stopped: no velocity (the bombs read it)
     expect(s.velocity.length()).toBe(0);
@@ -86,7 +86,7 @@ describe('the stoat: route, stops and clock', () => {
     const late = stoat(b);
     run(b, DT);
     expect(Math.hypot(late.position.x - early.position.x, late.position.z - early.position.z)).toBeLessThan(3);
-    expect(late.stoat!.leg).toBe(early.stoat!.leg);
+    expect(late.runner!.leg).toBe(early.runner!.leg);
   });
 
   it('designated, it rears up into the periscope stance at its stop; running, it keeps running', () => {
@@ -96,44 +96,44 @@ describe('the stoat: route, stops and clock', () => {
     run(w, 5);
     p.radar.designatedId = s.id;
     run(w, DT);
-    expect(s.stoat!.targeted).toBe(true);
-    expect(s.stoat!.phase).toBe('run'); // still running to the first station
+    expect(s.runner!.targeted).toBe(true);
+    expect(s.runner!.phase).toBe('run'); // still running to the first station
     expect(s.velocity.length()).toBeGreaterThan(0);
     run(w, 60, () => {
       p.radar.designatedId = s.id;
-      return s.stoat!.phase === 'stop' && s.stoat!.phaseT > 1;
+      return s.runner!.phase === 'stop' && s.runner!.phaseT > 1;
     });
-    expect(s.stoat!.phase).toBe('stop');
-    expect(s.stoat!.alert).toBeGreaterThan(0.95);
+    expect(s.runner!.phase).toBe('stop');
+    expect(s.runner!.alert).toBeGreaterThan(0.95);
     // undesignated: it sinks back down
     p.radar.designatedId = null;
     run(w, 2);
-    expect(s.stoat!.alert).toBeLessThan(0.1);
+    expect(s.runner!.alert).toBeLessThan(0.1);
   });
 
   it(`a near miss (within ${NEAR_MISS} m, alive) cuts its stop short and makes it bolt to the next station`, () => {
     const w = world();
     const s = stoat(w);
-    run(w, 60, () => s.stoat!.phase === 'stop');
-    expect(s.stoat!.phase).toBe('stop');
-    const leg = s.stoat!.leg;
+    run(w, 60, () => s.runner!.phase === 'stop');
+    expect(s.runner!.phase).toBe('stop');
+    const leg = s.runner!.leg;
     // a weapon of ours that was in flight at it, last seen 20 m off, is gone
-    s.stoat!.incoming.set(987_654, new Vector3(s.position.x + 20, 0, s.position.z));
+    s.runner!.incoming.set(987_654, new Vector3(s.position.x + 20, 0, s.position.z));
     run(w, DT * 2);
-    expect(s.stoat!.phase).toBe('run');
-    expect(s.stoat!.bolting).toBe(true);
-    expect(s.stoat!.leg).toBe(leg + 1);
+    expect(s.runner!.phase).toBe('run');
+    expect(s.runner!.bolting).toBe(true);
+    expect(s.runner!.leg).toBe(leg + 1);
     // twice as fast to the next station, where it stops (and calms down)
     const t0 = w.time;
-    run(w, 60, () => s.stoat!.phase === 'stop');
+    run(w, 60, () => s.runner!.phase === 'stop');
     expect(w.time - t0).toBeLessThan(100 / 2.5 / 1.6);
-    expect(s.stoat!.bolting).toBe(false);
+    expect(s.runner!.bolting).toBe(false);
   });
 });
 
 describe('a GBU-53/B against the stoat', { timeout: 60_000 }, () => {
   /** Release one StormBreaker at the stoat from 4 km, 1,200 m up; true when it dies. */
-  function drop(spec: StoatSpawn, releaseWhen: (s: GroundTargetEntity) => boolean, seed = 1): { killed: boolean; ranOff: number } {
+  function drop(spec: RunnerSpawn, releaseWhen: (s: GroundTargetEntity) => boolean, seed = 1): { killed: boolean; ranOff: number } {
     const w = world(seed);
     const s = stoat(w, spec);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(spec.route[0].x - 4_000, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'sead_precision' });
@@ -159,7 +159,7 @@ describe('a GBU-53/B against the stoat', { timeout: 60_000 }, () => {
   it('released while it stands at a bait station (stopped long enough), it kills it', () => {
     let kills = 0;
     for (const seed of [1, 2, 3]) {
-      const r = drop({ ...ROUTE(), stopTime: 60 }, (s) => s.stoat!.phase === 'stop' && s.stoat!.phaseT > 1, seed);
+      const r = drop({ ...ROUTE(), stopTime: 60 }, (s) => s.runner!.phase === 'stop' && s.runner!.phaseT > 1, seed);
       if (r.killed) kills++;
     }
     expect(kills).toBe(3);
@@ -170,7 +170,7 @@ describe('a GBU-53/B against the stoat', { timeout: 60_000 }, () => {
     let ran = 0;
     for (const seed of [1, 2, 3]) {
       // one long leg, no station before the bomb lands
-      const spec: StoatSpawn = { route: [new Vector3(0, 0, 0), new Vector3(2_000, 0, 0)], stations: [], speed: 3 };
+      const spec: RunnerSpawn = { route: [new Vector3(0, 0, 0), new Vector3(2_000, 0, 0)], stations: [], speed: 3 };
       const r = drop(spec, (s) => s.position.x > 30, seed);
       if (r.killed) kills++;
       ran = Math.max(ran, r.ranOff);
@@ -205,8 +205,8 @@ describe('the stoat in the HUD and on screen', () => {
     const cam = new Vector3(0, 2, 5);
     v.update(s, 0, DT, cam, 20_000);
     expect(nodes.hips.rotation.x).toBeLessThan(0.5); // running, not rearing
-    s.stoat!.phase = 'stop';
-    s.stoat!.alert = 1;
+    s.runner!.phase = 'stop';
+    s.runner!.alert = 1;
     v.update(s, 1, DT, cam, 20_000);
     expect(nodes.hips.rotation.x).toBeCloseTo(PERISCOPE_PITCH, 5);
     expect(nodes.tail.scale.x).toBeCloseTo(TAIL_PUFF, 5);

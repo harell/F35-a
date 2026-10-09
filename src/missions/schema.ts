@@ -63,8 +63,8 @@ export type Condition =
   | { kind: 'group_defeated'; group: string; count?: number }
   /** The group has spawned. */
   | { kind: 'group_spawned'; group: string }
-  /** A live stoat of the group stands in the periscope stance: targeted at a stop (g03, sim/stoat.ts StoatState.alert). */
-  | { kind: 'stoat_alert'; group: string }
+  /** A live runner of the group (the stoat, a rat) stands up: targeted at a stop (sim/runner.ts RunnerState.alert). */
+  | { kind: 'runner_alert'; group: string }
   /** The player has reached (captured) a waypoint. */
   | { kind: 'waypoint'; id: string }
   /** The player has destroyed at least `count` targets of a category. */
@@ -175,11 +175,6 @@ export interface AircraftGroupDef {
   countFor?: Partial<Record<Difficulty, number>>;
   /** Upper bound after scaling. */
   maxCount?: number;
-  /**
-   * Flown by a lesser type below a difficulty (Instant Action 'mixed': Su-35 / Su-57 only on
-   * Ace, a MiG-29 / Su-27 below).
-   */
-  downgrade?: { below: Difficulty; type: AircraftType };
   formation?: Formation;
   /** Distance between elements (m). Default 300 (fighters) / 600 (heavies). */
   spacing?: number;
@@ -334,12 +329,15 @@ export interface GroundTargetDef {
   /** 'missile_boat': its target, launch range and countdown. */
   strike?: BoatStrikeDef;
   /**
-   * 'stoat' (g03, sim/stoat.ts): the route after its start point (bait stations, then the nest last),
+   * 'stoat' (g03) and 'rat' (t07), run by sim/runner.ts: the route after its start point (the
+   * stations, then the goal last),
    * which of those points are bait stations (indices into `route`, 0 = the first point after the
    * start), its dash speed (m/s) and the stop at each station (s). Its clock starts at mission
-   * start, whenever it spawns.
+   * start, whenever it spawns, unless `clock` is 'spawn'.
+   * Over water it swims at `swimSpeed` (m/s); `clock: 'spawn'` starts its clock when it spawns (t07: a
+   * wave the mission sends in later starts at its own start point).
    */
-  stoat?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number };
+  runner?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number; swimSpeed?: number; clock?: 'mission' | 'spawn' };
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */
@@ -526,16 +524,10 @@ export interface MissionScript {
   playerCallsign?: string;
   /**
    * Scale the TOTAL of the non-fixed red aircraft groups by difficulty.enemyCountScale instead of
-   * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit, 6 on Ace; per-group
+   * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit; per-group
    * rounding would leave pairs unchanged). Groups that lose all members don't spawn.
    */
   scaleEnemyTotal?: boolean;
-  /**
-   * The mission's own enemy-count scale on the listed difficulties, in place of
-   * difficulty.enemyCountScale for its red aircraft groups (Instant Action on Ace: Pilot's
-   * numbers, the enemies get better instead of more numerous; issue #60).
-   */
-  enemyCountScale?: Partial<Record<Difficulty, number>>;
   /** Opening radio calls at mission start (convenience for a 'start' trigger). */
   opening?: Action[];
   /** Radio line on success (after "Mission complete, RTB"). */
@@ -544,10 +536,16 @@ export interface MissionScript {
   campaignFinale?: boolean;
   /**
    * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
-   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
-   * player killed, under `removed.label`.
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` (one
+   * group, or several: t07's waves) the player killed, under `removed.label`.
    */
-  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string | string[] } };
+  /**
+   * Count the homes the player's bombs hit (runtime/collateral.ts, t07): every building within half a
+   * weapon's blast radius of where it went off on land. Each one is called on the radio, listed in the
+   * debrief and costs score and grade (scoring.ts POINTS.home).
+   */
+  collateral?: boolean;
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower

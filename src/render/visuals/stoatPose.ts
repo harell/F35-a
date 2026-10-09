@@ -1,14 +1,14 @@
 /**
- * Poses g03's stoat (render/models/stoat.ts) from its sim state (sim/stoat.ts StoatState):
+ * Poses g03's stoat (render/models/stoat.ts) from its sim state (sim/runner.ts RunnerState):
  *  - running: a bounding gait (the body bobs and pitches, the leg pairs swing in turn);
  *  - stopped at a bait station: nose down, sniffing;
- *  - targeted at a stop (StoatState.alert → 1): it rears up on its hind legs into the "periscope"
+ *  - targeted at a stop (RunnerState.alert → 1): it rears up on its hind legs into the "periscope"
  *    stance, turns its head up towards the jet, its tail puffs out into a bottle-brush, and it
  *    dithers on the spot, shuffling round a little.
  * Pure function of the state and the time: no allocations.
  */
 import type { Object3D } from 'three';
-import type { StoatState } from '../../sim/stoat';
+import type { RunnerState } from '../../sim/runner';
 
 export interface StoatNodes {
   hips: Object3D;
@@ -35,7 +35,7 @@ export const PERISCOPE_PITCH = 1.3;
 export const TAIL_PUFF = 1.9;
 
 /** Pose the stoat's nodes for `s` at sim time `time` (s); `seed` desynchronises two stoats. */
-export function poseStoat(n: StoatNodes, s: StoatState, time: number, seed = 0): void {
+export function poseStoat(n: StoatNodes, s: RunnerState, time: number, seed = 0): void {
   const a = s.alert;
   const running = s.phase === 'run';
   // bounding gait while running (s.gait advances with its pace), a sniff while stopped

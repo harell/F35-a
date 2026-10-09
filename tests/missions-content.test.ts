@@ -14,11 +14,11 @@ const CAMPAIGN = CAMPAIGNS.flatMap((c) => c.missions);
 const ALL = [...CAMPAIGN, ...TRAINING];
 
 describe('missions: campaign & training content', () => {
-  it('has the IRGC campaign (3 missions) and 6 training missions in order; none is the finale while the campaign is built', () => {
+  it('has the IRGC campaign (3 missions) and 7 training missions in order; none is the finale while the campaign is built', () => {
     expect(CAMPAIGNS.map((c) => c.id)).toEqual(['irgc']);
     expect(CAMPAIGN.map((m) => m.id)).toEqual(['g01', 'g02', 'g03']);
     expect(CAMPAIGN.filter((m) => m.script.campaignFinale).map((m) => m.id)).toEqual([]);
-    expect(TRAINING).toHaveLength(6);
+    expect(TRAINING).toHaveLength(7);
     for (const c of CAMPAIGNS) {
       c.missions.forEach((m, i) => {
         expect(m.kind).toBe('campaign');
@@ -116,7 +116,7 @@ describe('missions: instant action generator', () => {
     const red = def.script.groups.filter((g) => g.team === 'red');
     expect(red.reduce((n, g) => n + g.count, 0)).toBe(5);
     // the runner scales the TOTAL by difficulty.enemyCountScale (i1: IA honours difficulty)
-    expect(red.every((g) => g.type === 'su35' && !g.fixedCount && !g.downgrade)).toBe(true);
+    expect(red.every((g) => g.type === 'su35' && !g.fixedCount)).toBe(true);
     expect(def.script.scaleEnemyTotal).toBe(true);
     expect(def.timeOfDay).toBe('dusk');
   });

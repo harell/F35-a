@@ -24,6 +24,7 @@ import { Debris, Pulses, VaporCones } from './Props';
 import { COLLAPSE } from '../../core/skyTower';
 import { fireTexture, glowTexture, smokeTexture } from './textures';
 import { Craters } from './Craters';
+import { GROUND_TARGET_DATA } from '../../sim/damage/tables';
 
 /* ───────────────────────── colours & styles ───────────────────────── */
 
@@ -163,6 +164,28 @@ const _f = new Vector3();
 
 /** Radius of the crater a StormBreaker leaves where it killed the stoat (m): about 6 m across. */
 export const STOAT_CRATER_RADIUS = 3;
+
+/**
+ * Radius of the crater a munition digs where it hits the ground (m), by weapon: a 2,000 lb JDAM (and
+ * the enemy's KAB-500) leaves a hole about 13 m across, a 250 lb StormBreaker the stoat's 6 m, an
+ * AARGM-ER's warhead 5 m, and a missile that ends on the ground a scorch about 3 m across.
+ */
+export function craterRadius(weapon: string, category: string): number {
+  if (weapon === 'gbu31') return 6.5;
+  if (weapon === 'kab500') return 5;
+  if (weapon === 'gbu53') return STOAT_CRATER_RADIUS;
+  if (category === 'bomb') return 4;
+  if (category === 'agm') return 2.5;
+  return 1.5;
+}
+
+/** A munition that ends this close to the surface (m) went off on it: a crater on land, a splash on water. */
+export const SURFACE_BURST = 4;
+
+/** Height of a bomb's splash column (m) by weapon: a JDAM throws water about 120 m up, a StormBreaker about 60 m. */
+export function splashHeight(weapon: string): number {
+  return weapon === 'gbu31' || weapon === 'kab500' ? 120 : weapon === 'gbu53' ? 60 : 35;
+}
 
 export const createEffects: CreateEffects = (scene, world, events, env, quality) => {
   const ps = Math.min(1.5, Math.max(0.2, quality.particleScale));
@@ -398,6 +421,133 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const FIREBALL_CORE: RGB = [1, 0.5, 0.12];
   const SHOCK_COL = new Color(0xfff2d8);
   const FOAM_COL = new Color(0xf0f4f5);
+
+  /** A vessel (a ship, a fast boat, an air-defence boat): a munition that hit it went off on its hull. */
+  function onHull(id: number | null): boolean {
+    const e = world.getEntity(id);
+    if (!e) return false;
+    if (e.kind === 'ground') return GROUND_TARGET_DATA[e.type].naval;
+    return e.kind === 'sam' && e.type === 'ad_boat';
+  }
+
+  /** Where a munition that ended at `p` went off: on land, on the water, or in the air (above SURFACE_BURST). */
+  function surfaceBurst(p: Vector3): 'ground' | 'water' | 'air' {
+    if (p.y - groundAt(p.x, p.z) > SURFACE_BURST) return 'air';
+    return world.terrain.isWater(p.x, p.z) && p.y <= SURFACE_BURST ? 'water' : 'ground';
+  }
+
+  /**
+   * A bomb going off in the water, hit or miss: on top of the explosion's own splash, a white dome of
+   * spray thrown out at the instant of the burst, a broad column of water `h` m high that rises, hangs
+   * and falls back as spray (it stays dense most of the way: readable from several km), a crown of jets
+   * round its foot, and a base surge of mist rolling out over the surface with a foam ring.
+   */
+  function bombSplash(x: number, z: number, h: number): void {
+    const t = now();
+    const d = distCam(x, 0, z);
+    const w = h * 0.18; // column radius
+    const vTop = Math.sqrt(2 * 9.8 * h);
+    // the dome: spray thrown out in every upward direction, fast and short-lived
+    const nd = count(28, d);
+    for (let i = 0; i < nd; i++) {
+      resetSpawn(P);
+      randDir(0.9);
+      const sp = vTop * (0.45 + 0.25 * rnd());
+      P.x = x;
+      P.y = 1;
+      P.z = z;
+      P.vx = _w.x * sp;
+      P.vy = Math.abs(_w.y) * sp;
+      P.vz = _w.z * sp;
+      P.drag = 0.6;
+      P.grav = -9.8;
+      P.size0 = w * 0.6;
+      P.size1 = w * 1.8;
+      P.sizeCurve = 1.3;
+      P.life = 1.6 + rnd() * 0.8;
+      P.variant = (rnd() * 4) | 0;
+      P.rot = rnd() * 6;
+      col0(P, C.water, 1);
+      col1(P, C.steam, 0.1);
+      P.fadeIn = 0.02;
+      smoke.spawn(P, t);
+    }
+    // the column: water thrown straight up, the fastest reaching h
+    const nc = count(Math.round(40 + h * 0.3), d);
+    for (let i = 0; i < nc; i++) {
+      resetSpawn(P);
+      const a = rnd() * 6.283;
+      const rr = Math.sqrt(rnd()) * w;
+      const k = 0.35 + 0.65 * rnd();
+      P.x = x + Math.cos(a) * rr;
+      P.y = 1;
+      P.z = z + Math.sin(a) * rr;
+      P.vx = Math.cos(a) * w * 0.3 * rnd();
+      P.vz = Math.sin(a) * w * 0.3 * rnd();
+      P.vy = vTop * k;
+      P.drag = 0.08;
+      P.grav = -9.8;
+      P.size0 = w * 1.1;
+      P.size1 = w * (2.4 + rnd());
+      P.sizeCurve = 1.4;
+      P.life = (2 * vTop * k) / 9.8 + 0.6 + rnd() * 0.6;
+      P.variant = (rnd() * 4) | 0;
+      P.rot = rnd() * 6;
+      col0(P, C.water, 1);
+      col1(P, C.steam, 0.35);
+      P.fadeIn = 0.02;
+      smoke.spawn(P, t);
+    }
+    // the crown: jets thrown up and out round the column's foot
+    const nj = count(22, d);
+    for (let i = 0; i < nj; i++) {
+      resetSpawn(P);
+      const a = (i / nj) * 6.283 + rnd() * 0.3;
+      const out = vTop * (0.25 + 0.15 * rnd());
+      P.x = x + Math.cos(a) * w;
+      P.y = 1;
+      P.z = z + Math.sin(a) * w;
+      P.vx = Math.cos(a) * out;
+      P.vz = Math.sin(a) * out;
+      P.vy = vTop * (0.45 + 0.2 * rnd());
+      P.drag = 0.15;
+      P.grav = -9.8;
+      P.size0 = w * 0.6;
+      P.size1 = w * 1.6;
+      P.sizeCurve = 1.5;
+      P.life = 2.6 + rnd() * 1.2;
+      P.variant = (rnd() * 4) | 0;
+      P.rot = rnd() * 6;
+      col0(P, C.water, 0.95);
+      col1(P, C.steam, 0.15);
+      smoke.spawn(P, t);
+    }
+    // the base surge: mist rolling out over the water
+    const nb = count(18, d);
+    for (let i = 0; i < nb; i++) {
+      resetSpawn(P);
+      const a = (i / nb) * 6.283 + rnd() * 0.4;
+      const sp = h * (0.2 + 0.1 * rnd());
+      P.x = x;
+      P.y = 2;
+      P.z = z;
+      P.vx = Math.cos(a) * sp;
+      P.vz = Math.sin(a) * sp;
+      P.vy = 0.5;
+      P.drag = 0.9;
+      P.grav = 0.2;
+      P.size0 = w;
+      P.size1 = w * 4;
+      P.sizeCurve = 2;
+      P.life = 5 + rnd() * 2;
+      P.variant = (rnd() * 4) | 0;
+      P.rot = rnd() * 6;
+      col0(P, C.steam, 0.7);
+      col1(P, C.steam, 0);
+      smoke.spawn(P, t);
+    }
+    pulses.fire('ring', x, 0.3, z, w, h * 1.3, 4, FOAM_COL, 0.75);
+  }
 
   function waterSplash(x: number, y: number, z: number, S: number, d: number, t: number): void {
     const n = count(Math.round(10 + S * 0.8), d);
@@ -1019,19 +1169,25 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         smallPuff(p.x, p.y, p.z, v.x * 0.9, v.y * 0.9, v.z * 0.9, C.smokeGrey, 0.5, 1.2, 5, 1.5);
       }
     }),
-    events.on('munition:end', ({ missile, position, reason }) => {
+    events.on('munition:end', ({ missile, position, reason, targetId }) => {
       const fx = missileFx.get(missile.id);
       if (fx && fx.ribbon >= 0) {
         ribbons.release(fx.ribbon, now());
         fx.ribbon = -1;
       }
       if (reason === 'decoyed') return;
+      const cat = missile.def.category;
+      // every munition that goes off on the surface: a crater on land, and a bomb's splash column in the
+      // water, hit or miss (a swimming rat: the warhead went off in the water either way). Not a hit on a
+      // hull: the boat burns, it isn't a bomb in the water
+      const surface = surfaceBurst(position);
+      if (surface === 'ground') craters.add(position.x, position.z, craterRadius(missile.def.id, cat), groundAt);
+      else if (surface === 'water' && (cat === 'bomb' || cat === 'agm') && !(reason === 'hit' && onHull(targetId))) bombSplash(position.x, position.z, splashHeight(missile.def.id));
       const slot = pending.find((q) => !q.active);
       if (!slot) return;
       slot.active = true;
       slot.pos.copy(position);
       slot.t = now();
-      const cat = missile.def.category;
       slot.size = cat === 'bomb' ? (missile.def.id === 'gbu31' ? 'large' : 'medium') : cat === 'sam' ? 'medium' : cat === 'agm' ? 'medium' : 'small';
       slot.surface = reason === 'water' ? 'water' : reason === 'ground' ? 'ground' : 'air';
     }),
@@ -1042,10 +1198,10 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         airKill(p, entity.velocity, spec ? spec.length : 17);
       } else if (entity.kind === 'ground' && entity.type === 'ship') {
         shipKill(entity);
-      } else if (entity.kind === 'ground' && entity.type === 'stoat') {
-        // the stoat (#201): no fire, no smoke column, no model; the bomb's own blast throws the sand,
-        // and the crater it dug stays
-        craters.add(p.x, p.z, STOAT_CRATER_RADIUS, groundAt);
+      } else if (entity.kind === 'ground' && (entity.type === 'stoat' || entity.type === 'rat')) {
+        // the stoat (#201) and t07's rats: no fire, no smoke column, no model; the bomb's own blast
+        // throws the sand, and the crater it dug stays (a rat killed swimming leaves only the splash)
+        if (!world.terrain.isWater(p.x, p.z)) craters.add(p.x, p.z, STOAT_CRATER_RADIUS, groundAt);
       } else if (entity.kind === 'sam' || entity.kind === 'ground') {
         const type = (entity as { type: string }).type;
         const bigFire = type === 'fuel';
@@ -1664,6 +1820,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         updateFires(t, dt);
         updateLandmarkDamage(t, dt);
         updateShips(t, dt);
+        craters.update(t);
         debris.update(dt, groundAt, debrisTrail);
         pulses.update(dt);
       }

@@ -262,11 +262,6 @@ export class AircraftEntity implements Entity {
   gcasActive?: boolean;
   /** (sim-core) Airframe buffet 0..1 (high AoA, departure, transonic high-g) — for camera shake / haptics. */
   buffet?: number;
-  /**
-   * (sim-core) Pilot G-LOC state, human player on Ace only (see sim/flight/gloc.ts): 0..1 accumulated
-   * g stress (tunnel vision builds towards 1), exactly 1 while unconscious (black out; stick ignored).
-   */
-  gloc?: number;
   /** (civil) Landing gear extension 0 (up) .. 1 (down) — airliners animate it; others leave it unset. */
   gear?: number;
   /**
@@ -564,8 +559,8 @@ export class GroundTargetEntity implements Entity {
    * route), not the ground-mover path above. Absent on every other ground target.
    */
   boat?: import('./boats').BoatState;
-  /** g03's stoat (#200): sim/stoat.ts runs it (route, stops, alert, bolting), not the ground-mover path. */
-  stoat?: import('./stoat').StoatState;
+  /** g03's stoat (#200) and t07's rats: sim/runner.ts runs them (route, stops, alert, bolting, swimming), not the ground-mover path. */
+  runner?: import('./runner').RunnerState;
   /**
    * A civil train ('train', #146): its unit in the sortie's timetable and its cars, posed every step by
    * the mission's TrainTraffic (missions/runtime/trains.ts); hit tests run along the cars (sim/civil/vessels.ts).

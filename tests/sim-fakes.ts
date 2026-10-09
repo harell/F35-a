@@ -108,30 +108,6 @@ export interface TestWorld {
   of<K extends GameEventName>(name: K): GameEventMap[K][];
 }
 
-/** The retired Ace level's numbers (no level uses them now): keeps the no-flight-assist / G-LOC engine knobs covered. */
-export const NO_ASSIST_PARAMS: DifficultyParams = {
-  ...DIFFICULTIES.veteran,
-  label: 'No-assist (ex-Ace)',
-  playerDamageScale: 1.25,
-  aiSkill: 0.95,
-  aiReactionTime: 0.4,
-  aiMaxG: 9,
-  enemyMissileSkill: 1.2,
-  samRangeScale: 1.1,
-  samReactionTime: 1.5,
-  playerLockTime: 2,
-  countermeasureEffectiveness: 0.85,
-  flightAssist: false,
-  autoGcas: false,
-  gEffects: true,
-  generousShootCues: false,
-  enemyCountScale: 1.5,
-  scoreMultiplier: 2,
-  playerMissileHitsToKill: 1,
-  fuelBurnScale: 1,
-  adBoatHarass: 0,
-};
-
 export function makeWorld(difficulty: Difficulty | DifficultyParams = 'pilot', terrain: TerrainQuery = flatTerrain(0)): TestWorld {
   const events = new EventBus();
   const combat = fakeCombat();

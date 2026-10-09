@@ -77,7 +77,8 @@ export type GroundTargetType =
   | 'ship' // merchant ship, always with a VesselClass (can move)
   | 'suicide_boat' // IRGC Navy unmanned explosive boat: chases a ship and rams it (sim/boats.ts)
   | 'missile_boat' // IRGC Navy Peykaap II missile boat: closes to launch range, counts down, fires a Kowsar (sim/boats.ts)
-  | 'stoat' // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/stoat.ts)
+  | 'stoat' // g03's 0.3 kg target on the Onetangi dunes: runs to a nest, stops at bait stations (sim/runner.ts)
+  | 'rat' // t07's sewer rats in Herne Bay: run down a street, stop at drains, swim for Watchman Island (sim/runner.ts)
   | 'train'; // Auckland's civil trains (AT AM class sets, KiwiRail freight): neutral, posed by their timetable (sim/civil/rail.ts)
 
 /**
@@ -118,6 +119,8 @@ export type LoadoutId =
   | 'strike_maritime'
   /** 2× AARGM-ER + 2× GBU-53/B, no air-to-air missile: open a gap, then one precise shot (g03, #197). */
   | 'sead_precision'
+  /** 4× GBU-53/B + 1× GBU-31 internal, 2× GBU-31 on the wing pylons: both bombs side by side (t07). */
+  | 'strike_mixed'
   | 'a2a_beast'
   /** 4× AIM-120D internal + 2× AIM-9X on the outer pylons: Instant Action Dogfight's default (#116). */
   | 'a2a_dogfight'
@@ -240,8 +243,6 @@ export interface DifficultyParams {
   playerLockTime: number;
   /** Probability multiplier that the player's flares/chaff decoy a missile. */
   countermeasureEffectiveness: number;
-  /** Flight assists: auto-trim, stall/spin protection, g-limiter, auto-rudder. */
-  flightAssist: boolean;
   /**
    * Auto-GCAS on the player's jet: the automatic fly-up before the ground. Recruit only; from Pilot up
    * the player can fly into the ground (owner's call, 2026-10-04).

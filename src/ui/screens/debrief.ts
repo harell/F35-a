@@ -50,7 +50,7 @@ export function offerRecruitRetry(r: Pick<MissionResult, 'success' | 'missionId'
   return !(m && fixedDifficulty(m));
 }
 
-/** Debrief stat rows for civil losses: airliners and helicopters downed, civil ships and trains destroyed, superyachts sunk by name (only when > 0). */
+/** Debrief stat rows for civil losses: airliners and helicopters downed, civil ships and trains destroyed, superyachts sunk by name, homes hit (only when > 0). */
 export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   const ships = r.civilianShipKills ?? 0;
   const helis = r.civilianHeliKills ?? 0;
@@ -64,6 +64,8 @@ export function civilLossRows(r: MissionResultExt): [string, string, string][] {
   if (trains > 0) rows.push(['skull', 'Civil trains destroyed', String(trains)]);
   // superyachts by name (#145): "Koru, Aquijo"
   if (yachts.length) rows.push(['skull', yachts.length === 1 ? 'Superyacht sunk' : 'Superyachts sunk', escapeHtml(yachts.join(', '))]);
+  // homes inside a bomb's damage ring (t07, MissionScript.collateral)
+  if ((r.homesHit ?? 0) > 0) rows.push(['skull', r.homesHit === 1 ? 'Home hit' : 'Homes hit', String(r.homesHit)]);
   return rows;
 }
 
@@ -186,7 +188,7 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       ['skull', 'Friendly losses', String(r.friendlyLosses)],
     ];
     if (!r.freeFlight) {
-      // who else scored (Viper 2, Weasel…): the grade weighs the player's share of the flight's kills
+      // who else scored (Viper 2…): the grade weighs the player's share of the flight's kills
       for (const t of ext.teamKills ?? []) if (t.kills > 0) stats.push(['jet', `${escapeHtml(t.callsign)} kills`, String(t.kills)]);
       for (const t of ext.saved ?? []) stats.push(['shield', escapeHtml(t.label), `${t.saved}/${t.total}`]);
       stats.push(...civilLossRows(ext));

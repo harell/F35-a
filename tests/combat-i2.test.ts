@@ -247,35 +247,27 @@ describe('combat i2: instant action & recruit forgiveness', () => {
   });
 });
 
-describe('combat i2: high-AoA regime of the flight model without flight assist (Pilot holds 28°, carefree FBW opens up)', () => {
-  // the engine knobs survive the removal of the Ace preset: Veteran with flight assist off and G effects on
-  const NO_ASSIST = { ...DIFFICULTIES.veteran, id: 'veteran' as const, flightAssist: false, gEffects: true };
-  const pull = (diff: Difficulty | 'noAssist', speed: number, seconds = 6) => {
+describe('combat i2: the AoA limiter holds 28° at low speed on every difficulty (carefree FBW)', () => {
+  const DEG_ = Math.PI / 180;
+  const pull = (diff: Difficulty, speed: number, seconds = 6) => {
     const events = new EventBus();
-    const world = createSimWorld({ terrain: flatLand(0), difficulty: diff === 'noAssist' ? NO_ASSIST : DIFFICULTIES[diff], events, combat: createCombatSystemSeeded(1) });
+    const world = createSimWorld({ terrain: flatLand(0), difficulty: DIFFICULTIES[diff], events, combat: createCombatSystemSeeded(1) });
     const p = world.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4000, 0), heading: 0, speed, loadout: 'a2a_stealth', fuel: 0.5 });
     let maxA = 0;
-    let stalled = 0;
     for (let i = 0; i < 60 * seconds; i++) {
       p.input.pitch = 1;
       p.input.roll = 0;
       p.input.throttle = 1;
       world.step(1 / 60);
       maxA = Math.max(maxA, p.flight.alpha);
-      if (p.flight.stalled) stalled++;
     }
-    return { maxA: maxA / DEG_, stalled, alive: p.alive };
+    return { maxA: maxA / DEG_, alive: p.alive };
   };
-  const DEG_ = Math.PI / 180;
-  it('full aft stick at low speed: Pilot holds 28°, no-assist opens to ~33° without departing', () => {
-    const pilot = pull('pilot', 140);
-    const ace = pull('noAssist', 140);
-    expect(pilot.maxA).toBeLessThan(28.8);
-    expect(ace.maxA).toBeGreaterThan(30.5);
-    expect(ace.maxA).toBeLessThan(35);
-    expect(ace.stalled).toBeLessThan(30); // at most a brief stall-warning flicker, no departure
-    expect(ace.alive).toBe(true);
-    // fast (above ~250 KIAS, first second of the pull) the no-assist limiter is the normal one
-    expect(pull('noAssist', 280, 1).maxA).toBeLessThan(29);
+  it('full aft stick at 140 m/s: at most 28°, no departure', () => {
+    for (const d of ['recruit', 'pilot', 'veteran'] as Difficulty[]) {
+      const r = pull(d, 140);
+      expect(r.maxA, d).toBeLessThan(28.8);
+      expect(r.alive, d).toBe(true);
+    }
   });
 });

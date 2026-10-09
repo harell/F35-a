@@ -6,10 +6,9 @@
  * angels 25, hot") makes the voice disagree with the subtitle. resolveRadioSpeech() decides:
  *
  *  1. the hint clip, if its spoken words appear verbatim (in order) in the subtitle;
- *  2. a whole-call clip by another speaker (Hammer flight lead) if the call matches one;
- *  3. for AWACS calls, the subtitle spoken word by word from short Piper segments (numbers,
+ *  2. for AWACS calls, the subtitle spoken word by word from short Piper segments (numbers,
  *     brevity words, callsigns) — words without a segment are left out, never replaced;
- *  4. otherwise nothing (the caller plays a key-up click + static burst: text-only call).
+ *  3. otherwise nothing (the caller plays a key-up click + static burst: text-only call).
  *
  * So what is heard is always the subtitle or a subset of it, in the same order.
  */
@@ -20,15 +19,14 @@ export const SEGMENT_IDS = [
   's_0', 's_1', 's_2', 's_3', 's_4', 's_5', 's_6', 's_7', 's_8', 's_9',
   's_10', 's_11', 's_12', 's_13', 's_14', 's_15', 's_16', 's_17', 's_18', 's_19',
   's_20', 's_30', 's_40', 's_50', 's_60', 's_70', 's_80', 's_90',
-  's_darkstar', 's_kiwi', 's_viper', 's_weasel', 's_hammer',
+  's_darkstar', 's_viper',
   's_single', 's_heavy', 's_group', 's_groups', 's_single_group',
   's_new_picture', 's_pop_up_group', 's_threat', 's_last_bandit',
-  's_bandit', 's_bandits', 's_backfires', 's_mainstay',
+  's_bandit', 's_bandits',
   's_braa', 's_bullseye', 's_miles', 's_angels', 's_track',
   's_hot', 's_cold', 's_flanking', 's_beaming',
   's_north', 's_northeast', 's_east', 's_southeast', 's_south', 's_southwest', 's_west', 's_northwest',
-  's_wave', 's_destroyed', 's_stand_by', 's_raid_turning', 's_tail',
-  'h_hammer_release',
+  's_wave', 's_destroyed', 's_raid_turning', 's_tail',
 ] as const;
 export type SegmentId = (typeof SEGMENT_IDS)[number];
 /** Any playable radio/Betty clip. */
@@ -78,11 +76,6 @@ export const VOICE_TEXT: Record<VoiceId, string> = {
   a_friendly_down: 'Friendly down.',
 };
 
-/** Spoken words of the segments (the gen script is the source of truth; a test cross-checks). */
-const SEGMENT_TEXT: Partial<Record<SegmentId, string>> = {
-  h_hammer_release: 'Hammer one, in hot. Bombs away!',
-};
-
 /** Lower-case words, punctuation stripped, a few brevity abbreviations expanded. */
 export function speechWords(text: string): string[] {
   const t = text
@@ -111,7 +104,6 @@ export function clipMatchesText(id: VoiceId, text: string): boolean {
 
 const PHRASES: readonly (readonly [string, SegmentId])[] = [
   ['the raid is turning back good work', 's_raid_turning'],
-  ['stand by for the next group', 's_stand_by'],
   ['single group', 's_single_group'],
   ['new picture', 's_new_picture'],
   ['pop up group', 's_pop_up_group'],
@@ -120,9 +112,9 @@ const PHRASES: readonly (readonly [string, SegmentId])[] = [
 const PHRASE_WORDS = PHRASES.map(([p, id]) => [p.split(' '), id] as const);
 
 const WORDS: Record<string, SegmentId> = {
-  darkstar: 's_darkstar', kiwi: 's_kiwi', viper: 's_viper', weasel: 's_weasel', hammer: 's_hammer',
+  darkstar: 's_darkstar', viper: 's_viper',
   single: 's_single', heavy: 's_heavy', group: 's_group', groups: 's_groups', threat: 's_threat',
-  bandit: 's_bandit', bandits: 's_bandits', backfires: 's_backfires', mainstay: 's_mainstay',
+  bandit: 's_bandit', bandits: 's_bandits',
   braa: 's_braa', bullseye: 's_bullseye', miles: 's_miles', angels: 's_angels', track: 's_track',
   hot: 's_hot', cold: 's_cold', flanking: 's_flanking', beaming: 's_beaming',
   north: 's_north', northeast: 's_northeast', east: 's_east', southeast: 's_southeast',
@@ -197,9 +189,6 @@ export function composeAwacs(text: string): { tokens: SpeechToken[]; covered: nu
   return { tokens, covered, total };
 }
 
-/** Whole calls by other speakers: [speaker prefix, required subtitle words, clip]. */
-const WHOLE_CALLS: readonly (readonly [string, string, SegmentId])[] = [['hammer', 'bombs away', 'h_hammer_release']];
-
 /** Minimum share of the subtitle's words a composed call must speak (else: text-only call). */
 const MIN_COVERAGE = 0.6;
 
@@ -207,15 +196,10 @@ const MIN_COVERAGE = 0.6;
  * What to play for a radio call. `null` = text-only (click + static).
  * The returned array is new (radio calls are rare events, not per frame).
  */
-export function resolveRadioSpeech(text: string | undefined, voice: VoiceId | undefined, from?: string): SpeechToken[] | null {
+export function resolveRadioSpeech(text: string | undefined, voice: VoiceId | undefined): SpeechToken[] | null {
   if (!voice) return null;
   if (!text) return [voice];
   if (clipMatchesText(voice, text)) return [voice];
-  const words = speechWords(text);
-  const who = (from ?? '').toLowerCase();
-  for (const [speaker, need, id] of WHOLE_CALLS) {
-    if ((who.startsWith(speaker) || words[0] === speaker) && containsRun(words, need.split(' '))) return [id];
-  }
   if (voice.startsWith('a_')) {
     const c = composeAwacs(text);
     if (c.tokens.length >= 2 && c.covered >= MIN_COVERAGE * c.total) return c.tokens;
@@ -229,7 +213,7 @@ export function spokenText(tokens: readonly SpeechToken[], segmentText: (id: Seg
   for (const t of tokens) {
     if (t === PAUSE) continue;
     if ((VOICE_TEXT as Record<string, string>)[t]) parts.push(VOICE_TEXT[t as VoiceId]);
-    else parts.push(SEGMENT_TEXT[t as SegmentId] ?? segmentText(t as SegmentId));
+    else parts.push(segmentText(t as SegmentId));
   }
   return parts.join(' ');
 }

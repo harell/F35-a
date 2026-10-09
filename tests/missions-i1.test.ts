@@ -375,7 +375,7 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     expect(r.tips!.some((t) => /Wait for SHOOT/.test(t))).toBe(true);
   });
 
-  it('flying under the Harbour Bridge earns Bridge Runner; winning the finale completes the campaign', () => {
+  it('flying under the Harbour Bridge earns Bridge Runner; no IRGC mission is the finale yet, so no win completes the campaign', () => {
     const h = harness(byId('t01'));
     h.run(0.5);
     const p = h.world.player!;

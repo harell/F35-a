@@ -1,6 +1,6 @@
 /**
  * g03's words and its ending (#201): the cost summary in the debrief, the crater a killed stoat
- * leaves, the volunteers' radio, the stoat_alert condition, and that every radio sender is one of the
+ * leaves, the volunteers' radio, the runner_alert condition, and that every radio sender is one of the
  * mission's own (military or fictional) callsigns.
  */
 import { describe, expect, it } from 'vitest';

@@ -197,6 +197,7 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     suicide_boat: 'Suicide boats',
     missile_boat: 'Missile boats',
     stoat: 'Stoat',
+    rat: 'Rat',
     train: 'Trains',
   };
   for (const e of groundGroups.values()) {
@@ -212,9 +213,7 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
       if (g.role === 'wingman') continue;
       out.push({ kind: 'friendly', label: `${g.callsign ?? 'Friendly'} flight`, x: g.x, z: g.z });
     } else {
-      // 'mixed' Instant Action flights fly a lesser type below Veteran: show both
-      const name = g.downgrade ? `${AIRCRAFT_INFO[g.downgrade.type].name} / ${AIRCRAFT_INFO[g.type].name}` : AIRCRAFT_INFO[g.type].name;
-      out.push({ kind: 'air', label: `${g.count}× ${name}`, x: g.x, z: g.z });
+      out.push({ kind: 'air', label: `${g.count}× ${AIRCRAFT_INFO[g.type].name}`, x: g.x, z: g.z });
     }
   }
   return out;

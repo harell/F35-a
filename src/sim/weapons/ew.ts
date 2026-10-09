@@ -24,7 +24,7 @@ import type { AircraftEntity, AnyEntity } from '../entities';
 import type { CombatCtx } from './context';
 import { playerTeam } from './context';
 
-/** Air-to-air active seekers: cap on the "processing not fooled by the notch" roll (Ace ≈ 15%). */
+/** Air-to-air active seekers: cap on the "processing not fooled by the notch" roll (at most 15%, whatever the difficulty). */
 export const AAM_IMMUNE_CAP = 0.15;
 /** Doppler notch half-width (m/s radial velocity). */
 export const NOTCH_WIDTH = 45;

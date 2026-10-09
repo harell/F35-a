@@ -1,10 +1,13 @@
 /**
  * Impact craters (#201): a dark, shallow bowl with a raised rim of thrown-up sand, laid on the
- * terrain where a bomb killed a target that leaves nothing else behind (g03's stoat). Each crater is
- * its own small mesh (a few hundred triangles), conformed to the ground under it, and stays for the
- * rest of the sortie; a fixed pool, the oldest reused when it runs out.
+ * terrain where a bomb or missile hit the ground (Effects: every munition that ends on land, sized
+ * by its warhead) and where a target that leaves nothing else behind died (g03's stoat, t07's rats).
+ * Each crater is its own small mesh (a few hundred triangles), conformed to the ground under it, and
+ * stays for the rest of the sortie; a fixed pool, the oldest reused when it runs out.
  *
- * Built so other bomb impacts could use it later (Effects.addCrater); only the stoat's kill does today.
+ * A new crater is dug, not dropped: it opens from a third of its size to full over CRATER_DIG s
+ * (update), under the blast's own dust. A crater asked for where one already is (a bomb that killed
+ * the stoat: the kill and the impact land together) reuses it, grown to the larger of the two.
  */
 import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshLambertMaterial } from 'three';
 
@@ -29,14 +32,46 @@ export function craterProfile(f: number, rim: number): number {
   return lift;
 }
 
+/** Seconds a new crater takes to open to its full size. */
+export const CRATER_DIG = 0.6;
+/** Size a crater opens from (× its radius). */
+const DIG_FROM = 0.35;
+
+/** How far a crater has opened (× its radius) `age` s after it was dug: eases out from DIG_FROM to 1. */
+export function craterOpening(age: number): number {
+  const f = Math.min(1, Math.max(0, age / CRATER_DIG));
+  return DIG_FROM + (1 - DIG_FROM) * (1 - (1 - f) ** 3);
+}
+
+interface CraterInfo {
+  x: number;
+  z: number;
+  radius: number;
+  /** Time it was dug (s, the clock update() is given). */
+  t0: number;
+}
+
 export class Craters {
   readonly group = new Group();
   private readonly meshes: Mesh[] = [];
+  private readonly info: CraterInfo[] = [];
   private next = 0;
+  private time = 0;
   private readonly material = new MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
-  constructor(private readonly max = 6) {
+  constructor(private readonly max = 32) {
     this.group.name = 'craters';
+  }
+
+  /** Open the craters still being dug; `time` is the sim clock (s). */
+  update(time: number): void {
+    this.time = time;
+    for (let i = 0; i < this.meshes.length; i++) {
+      const m = this.meshes[i];
+      if (!m.visible) continue;
+      const k = craterOpening(time - this.info[i].t0);
+      m.scale.set(k, 1, k);
+    }
   }
 
   /** How many craters are on the ground. */
@@ -49,6 +84,21 @@ export class Craters {
    * `rim` m high.
    */
   add(x: number, z: number, radius: number, groundAt: (x: number, z: number) => number, rim = radius * 0.15): Mesh {
+    // one already there (the kill and the bomb that made it): keep it, or grow it to the bigger one
+    for (let i = 0; i < this.meshes.length; i++) {
+      const m = this.meshes[i];
+      const c = this.info[i];
+      if (!m.visible || Math.hypot(c.x - x, c.z - z) > Math.max(c.radius, radius) * 0.6) continue;
+      if (c.radius >= radius) return m;
+      this.build(i, c.x, c.z, radius, groundAt, rim, c.t0);
+      return m;
+    }
+    const slot = this.next;
+    this.next = (this.next + 1) % this.max;
+    return this.build(slot, x, z, radius, groundAt, rim, this.time);
+  }
+
+  private build(slot: number, x: number, z: number, radius: number, groundAt: (x: number, z: number) => number, rim: number, t0: number): Mesh {
     const verts = 1 + RINGS * SEGS;
     const pos = new Float32Array(verts * 3);
     const col = new Float32Array(verts * 3);
@@ -90,7 +140,7 @@ export class Craters {
     geo.setAttribute('color', new BufferAttribute(col, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    let mesh = this.meshes[this.next];
+    let mesh = this.meshes[slot];
     if (mesh) {
       mesh.geometry.dispose();
       mesh.geometry = geo;
@@ -98,12 +148,14 @@ export class Craters {
       mesh = new Mesh(geo, this.material);
       mesh.name = 'crater';
       mesh.receiveShadow = true;
-      this.meshes[this.next] = mesh;
+      this.meshes[slot] = mesh;
       this.group.add(mesh);
     }
+    this.info[slot] = { x, z, radius, t0 };
     mesh.position.set(x, 0, z);
+    const k = craterOpening(this.time - t0);
+    mesh.scale.set(k, 1, k);
     mesh.visible = true;
-    this.next = (this.next + 1) % this.max;
     return mesh;
   }
 

@@ -9,6 +9,9 @@
  *  - AGM-88G AARGM-ER: US$6.149 million, the programme unit cost in the AARGM-ER Major Selected
  *    Acquisition Report, December 2023 (it includes development: a round off the line costs less).
  *  - GBU-53/B StormBreaker: US$195,000, the US Air Force's unit cost.
+ *  - GBU-31 JDAM: about US$30,000, an estimate: the tail kit cost about US$27,000 by 2011 (Wikipedia,
+ *    "Joint Direct Attack Munition", after the USAF fact sheets), and the Mk-84 bomb body is extra
+ *    (no current unit cost found; rounded up to cover it).
  * Converted to New Zealand dollars at NZD_PER_USD (about the 2025–26 rate).
  */
 import type { WeaponId } from '../../core/types';
@@ -18,6 +21,7 @@ export const UNIT_COST_USD = {
   flightHour: 35_000,
   aargm: 6_149_000,
   gbu53: 195_000,
+  gbu31: 30_000,
 } as const;
 /** New Zealand dollars per US dollar. */
 export const NZD_PER_USD = 1.7;
@@ -44,7 +48,7 @@ export function costSummary(seconds: number, fired: Partial<Record<WeaponId, num
   const hours = Math.max(0, seconds) / 3600;
   const flightNzd = hours * UNIT_COST_USD.flightHour * NZD_PER_USD;
   const weapons: CostSummary['weapons'] = [];
-  for (const weapon of ['aargm', 'gbu53'] as const) {
+  for (const weapon of ['aargm', 'gbu53', 'gbu31'] as const) {
     const count = fired[weapon] ?? 0;
     if (count > 0) weapons.push({ weapon, count, nzd: count * UNIT_COST_USD[weapon] * NZD_PER_USD });
   }

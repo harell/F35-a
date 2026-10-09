@@ -287,7 +287,7 @@ export class KillFeed {
   }
 
   /**
-   * A mission's kill message ("SPLASH MIG-29", "HAMMER 1: SPLASH SU-27", "SA-6 SITE DESTROYED"): if the
+   * A mission's kill message ("SPLASH MIG-29", "VIPER 2: SPLASH SHAHED", "SA-6 SITE DESTROYED"): if the
    * HUD pushed a line for the same kill a moment ago, replace its text (the mission's wording is richer)
    * instead of adding a second line; else push it.
    */

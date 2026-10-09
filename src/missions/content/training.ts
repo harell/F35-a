@@ -8,6 +8,8 @@
  *   T04 Maritime strike — StormBreaker on moving boats, AARGM-ER on a radar, gun (trainingStrike.ts) → g02
  *   T05 Gulf Defence — missile defence drills against the IRGC air-defence boat (trainingDefence.ts) → g02
  *   T06 Live SAMs — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM          → g03
+ *   T07 Small Targets — sewer rats in Herne Bay: StormBreaker at a stop, JDAM on a swimmer, the
+ *       houses a JDAM takes on a street (trainingSmallTargets.ts)                                → g03
  * Ids match the numbers players see. Saves from before this order hold the SA-6 lesson as 't03':
  * progress.ts moves it to 't06' once (LESSON_IDS_VERSION).
  */
@@ -17,11 +19,12 @@ import type { Condition } from '../schema';
 import { NEVER, P, flight, mission, site, target } from './common';
 import { T05_DEFENCE } from './trainingDefence';
 import { T04_STRIKE } from './trainingStrike';
+import { T07_SMALL } from './trainingSmallTargets';
 
 const DS = 'DARKSTAR';
 const TOWER = 'Whenuapai Tower';
 
-/* ───────────────────────── T1 — Basic flight ───────────────────────── */
+/* ───────────────────────── T01 — Basic flight ───────────────────────── */
 
 const RINGS = [
   { id: 'r1', label: 'Ring 1', x: -5500, z: -4200, altitude: 1200 },
@@ -79,7 +82,7 @@ export const T01: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── T2 — Air-to-air ───────────────────────── */
+/* ───────────────────────── T02 — Air-to-air ───────────────────────── */
 
 export const T02: MissionDef = mission({
   id: 't02',
@@ -166,7 +169,7 @@ export const T02: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── T6 — Live SAMs ───────────────────────── */
+/* ───────────────────────── T06 — Live SAMs ───────────────────────── */
 
 const sa6 = P.rangSW;
 /** The fuel depot on Motutapu (centre of the two tanks). */
@@ -228,11 +231,11 @@ export const T06: MissionDef = mission({
       { id: 'h5', text: 'Missile on the MAWS: count down the time-to-impact. CMS from ~6 s, a press every 2–3 s', when: { kind: 'missile_inbound' }, duration: 7 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get in, drop a JDAM on the depot, get out alive.', priority: 2 }],
-    successText: 'SAM and strike qualification complete. You are ready, Viper.',
+    successText: 'SAM qualification complete. Next: small targets, before Waiheke.',
   },
 });
 
-/* ───────────────────────── T3 — Vertical reversals ───────────────────────── */
+/* ───────────────────────── T03 — Vertical reversals ───────────────────────── */
 
 const KT = 0.514444;
 /**
@@ -387,4 +390,4 @@ export const T03: MissionDef = mission({
 
 
 /** In `index` order: what the Training screen lists and the NEXT lesson button walks. */
-export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04_STRIKE, T05_DEFENCE, T06];
+export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04_STRIKE, T05_DEFENCE, T06, T07_SMALL];

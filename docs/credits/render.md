@@ -5,7 +5,7 @@ no external model, texture or sound files are used or downloaded.
 
 | Asset | How it is made |
 |---|---|
-| F-35A, MiG-29, Su-27, Su-35, Su-57, Tu-22M3, A-50 | Lofted cross-sections, lifting-surface builders and lathes (`src/render/models/geom/*`, `src/render/models/aircraft/*`) built from public dimensions/planforms |
+| F-35A, MiG-29, Su-27, Su-35, Su-57, Shahed-136, A320neo, AW169, Bell 429, H130 | Lofted cross-sections, lifting-surface builders and lathes (`src/render/models/geom/*`, `src/render/models/aircraft/*`) built from public dimensions/planforms |
 | Liveries (RAM panel lines, camouflage, insignia, tail codes, bort numbers) | Painted on a canvas in model space (`src/render/models/aircraft/liveries.ts`) |
 | Missiles, bombs, SAM vehicles, ships, buildings | Procedural geometry (`munitions.ts`, `vehicles.ts`, `sams.ts`, `ground.ts`) |
 | Reflection environment | Procedural sky cube (`materials.ts`), auto-PMREM'd by three.js |

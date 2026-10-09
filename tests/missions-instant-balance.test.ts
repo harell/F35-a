@@ -184,7 +184,6 @@ describe('Instant Action balance floors over 6 seeds (issue #60; was Strike 5/2/
       for (const g of missionById(id)!.script.groups) {
         if (g.team !== 'red') continue;
         expect(['mig29', 'su27'], `${id} ${g.id}`).toContain(g.type);
-        expect(g.downgrade, `${id} ${g.id}`).toBeUndefined();
       }
     }
   });

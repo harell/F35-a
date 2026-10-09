@@ -4,7 +4,7 @@
  */
 import type { InstantActionOptions, MissionDef, SceneryFeature } from '../../core/contracts';
 import { mulberry32 } from '../../core/math';
-import type { AircraftType, Difficulty, LoadoutId, SamType, TheaterId } from '../../core/types';
+import type { AircraftType, LoadoutId, SamType, TheaterId } from '../../core/types';
 import type { WingmanOrders } from '../../sim/api';
 import { WIRI_TANKS } from '../../core/sites';
 import type { AircraftGroupDef, Condition, GroundTargetDef, HintDef, MissionScript, ObjectiveDef, SamSiteDef, TriggerDef, WaypointDef, XZ } from '../schema';
@@ -126,14 +126,6 @@ function enemyFlights(opts: InstantActionOptions, n: number, lay: Layout, rng: (
 
 /** Instant Action wingman (issue #60): it backs the player up and can't win the mission for a player who never fires. */
 const WING_ORDERS: WingmanOrders = { holdFireUntilPlayerFires: true };
-
-/**
- * Instant Action's own enemy-count scale (MissionScript.enemyCountScale), in place of the
- * difficulty's, for a level that needs one. None today: with Ace gone (its ×1.5 count made the bot 0/6 in every
- * mode: six Flankers against four AIM-120s in Dogfight, a third MiG-29 inside R-73 range in Strike, a third
- * Su-35 on the Gauntlet's CAP, a third striker in Defend) every level flies its own numbers.
- */
-export const IA_ENEMY_COUNT_SCALE: Partial<Record<Difficulty, number>> = {};
 
 const BELT_TYPES: SamType[] = ['sa6', 'zsu23', 'sa15', 'sa15', 'sa6', 'zsu23', 'sa15', 'sa15'];
 
@@ -257,7 +249,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // the SA-6 sits east of the field, off the run-in from the west (issue #60: at Waiheke west it
       // shot the bot down on the bomb run in 4 of 6 Pilot runs)
       if (n >= 2) sams.push(site('sam1', 'defences', 'sa6', P.waiE));
-      // the SA-15 Tor shoots down JDAMs: Veteran and up only, as in c04
+      // the SA-15 Tor shoots down JDAMs: Veteran only
       if (n >= 4) sams.push(site('sam2', 'defences', 'sa15', P.waiC, { minDifficulty: 'veteran' }));
       const cap = enemyFlights(opts, Math.max(1, Math.ceil(n / 2)), lay, rng, { role: 'cap' });
       groups.push(...cap);
@@ -293,8 +285,6 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       break;
     }
   }
-
-  script.enemyCountScale = IA_ENEMY_COUNT_SCALE;
 
   const title = `${MODE_TITLE[opts.mode]} — ${THEATER_LABEL[opts.theater]}`;
   return mission({

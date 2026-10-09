@@ -424,7 +424,7 @@ describe('radio subtitles: paged (never truncated), 2 lines max, placed clear of
     return { lines, maxLines, boxes };
   }
 
-  it('shows the whole long raid call (c05 punchline) in pages of at most two lines', () => {
+  it('shows the whole long raid call in pages of at most two lines', () => {
     const r = rig('nav', 'hud');
     r.mock.events.emit('radio', { from: 'DARKSTAR', text: long, priority: 1, team: 'blue' });
     const { lines, maxLines } = collect(r, 14);

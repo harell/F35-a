@@ -29,9 +29,9 @@ import {
 import { FakeWorld, FlatTerrain } from './combat-helpers';
 
 describe('Codex data comes from the game', () => {
-  it('has a page for every weapon the player can carry (the GBU-39 is being removed), plus flares and chaff', () => {
+  it('has a page for every weapon the player can carry, plus flares and chaff', () => {
     const ids = CODEX_WEAPONS.map((w) => w.id);
-    for (const id of Object.keys(WEAPON_HUD)) if (id !== 'gbu39') expect(ids).toContain(id);
+    for (const id of Object.keys(WEAPON_HUD)) expect(ids).toContain(id);
     expect(ids).toContain('cms');
     expect(ids).not.toContain('gbu39');
   });

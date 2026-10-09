@@ -464,8 +464,8 @@ export function awareOf(ctx: CombatCtx, ac: AircraftEntity, other: AircraftEntit
 /** SHOOT never beyond this multiple of the (instant-turn-cold) no-escape range. */
 const NE_FACTOR = 1.35;
 
-/** Target types that fly straight and don't defend much (bombers, AEW). */
-const NON_MANEUVERING = new Set(['tu22m', 'a50', 'a320', 'shahed136', 'aw169', 'bell429', 'h130']);
+/** Target types that fly straight and don't defend much (airliners, one-way drones, helicopters). */
+const NON_MANEUVERING = new Set(['a320', 'shahed136', 'aw169', 'bell429', 'h130']);
 
 /**
  * Pk-calibrated shoot range for air-to-air missiles — must be called right after kinematicZone()
