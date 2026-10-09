@@ -15,13 +15,13 @@ export interface PodZoomStep {
 
 /**
  * Zoom steps, widest first (a tap on the window cycles them). WIDE: a site and its surroundings; NARROW:
- * one vehicle or building; ZOOM: about 2 m of ground, so a 0.3 m object fills ~15 % of the window height
- * (≈ 12 px in the 82 px HMD window, ≥ 8 px in the smallest 54 px one) at any slant range.
+ * one vehicle or building; ZOOM: about 1 m of ground, so g03's 0.38 m stoat spans over a third of the
+ * window height (≈ 31 px in the 82 px HMD window, ≥ 20 px in the smallest 54 px one) at any slant range.
  */
 export const POD_ZOOM: readonly PodZoomStep[] = [
   { name: 'WIDE', span: 150 },
   { name: 'NARROW', span: 30 },
-  { name: 'ZOOM', span: 2 },
+  { name: 'ZOOM', span: 1 },
 ];
 
 /** The step a new pod shot opens at. */

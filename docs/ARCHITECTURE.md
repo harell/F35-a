@@ -448,9 +448,10 @@ Every munition that goes off on land digs a crater sized by its warhead (`crater
 
 The target camera window (`src/render/TargetCam.ts`, laid out by `src/hud/hmd/pip.ts`) shows aircraft and ships in
 its cinematic shots near the target, but a ground target or SAM site through the targeting pod (`src/core/pod.ts`):
-the camera sits on the line of sight from the player's jet (`podCamPose` in `src/render/targetCam/pose.ts`) and frames
-one of three zoom steps (WIDE 150 m, NARROW 30 m, ZOOM 2 m top to bottom; a tap on the window cycles them), so a
-target a few tenths of a metre long is still a dozen pixels tall. With no line of sight (terrain, or the overcast
+the camera sits on the line of sight from the player's jet, 200 m up it from the target or at the jet when that is
+closer (`podCamPose` and `POD_STANDOFF` in `src/render/targetCam/pose.ts`), looking down it as the pod does, with the
+lens narrowed to one of three zoom steps (WIDE 150 m, NARROW 30 m, ZOOM 1 m top to bottom; a tap on the window cycles
+them), so g03's 0.38 m stoat spans a third of the window at ZOOM. With no line of sight (terrain, or the overcast
 deck between the jet and the target: `cloudBetween()` in `src/sim/sensors/los.ts`) nothing is rendered and the window
 reads MASKED. Small ground targets are framed size-aware in the orbit shot too (`groundMinFraming`).
 
