@@ -9,7 +9,7 @@ import { AircraftEntity, GroundTargetEntity, SamSiteEntity } from '../src/sim/en
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { pipView, podMask, podReadout, resetPip, resetPodZoom, stepPod, tapPip } from '../src/hud/hmd/pip';
 import { TargetCam } from '../src/render/TargetCam';
-import { POD_CLEAR_K, POD_STANDOFF, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
+import { POD_CLEAR_K, POD_RANGE, POD_STANDOFF, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
 
 const noSafe = { top: 0, right: 0, bottom: 0, left: 0 };
 const tan30 = Math.tan(Math.PI / 6);
@@ -273,6 +273,20 @@ describe('TargetCam pod pass', () => {
     expect(2 * d * Math.tan((cam.camera.fov * Math.PI) / 360)).toBeCloseTo(POD_ZOOM[2].span, 3);
     const toEye = player.position.clone().sub(look).normalize();
     expect(cam.camera.position.clone().sub(look).normalize().dot(toEye)).toBeGreaterThan(0.9999);
+  });
+
+  it('the pod pass ends POD_RANGE past the target, whatever the quality (the orbit keeps the main far plane)', () => {
+    const { cam, renderer, sam } = setup();
+    for (const zoom of [0, 1, 2]) {
+      cam.render(renderer, new Scene(), rect({ pod: true, zoom }), 30_000);
+      const d = cam.camera.position.distanceTo(sam.position);
+      expect(cam.camera.far, `zoom ${zoom}`).toBeLessThanOrEqual(d + POD_RANGE + 1);
+      // low quality's longer range is cut to the pod's too
+      cam.render(renderer, new Scene(), rect({ pod: true, zoom }), 30_000, 8_000);
+      expect(cam.camera.far, `zoom ${zoom} low`).toBeLessThanOrEqual(d + POD_RANGE + 1);
+    }
+    cam.render(renderer, new Scene(), rect({}), 30_000);
+    expect(cam.camera.far).toBe(30_000);
   });
 
   it('masked: nothing is rendered (no cost) and the pass says MASKED', () => {

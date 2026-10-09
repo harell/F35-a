@@ -308,6 +308,14 @@ export const POD_MIN_AGL = 0.8;
 export const POD_STANDOFF = 200;
 
 /**
+ * The pod pass draws this far past the target at most (m), whatever the quality preset: its narrow
+ * view ends on the ground just behind the target, so terrain patches and models further out are
+ * culled instead of drawn for a few pixels (the pass cost almost a whole main pass, r1 1.2-d); the
+ * haze reaches the horizon colour at the far plane (targetCamFar keeps nearer ground in the frame).
+ */
+export const POD_RANGE = 2_000;
+
+/**
  * Camera distance (m) at which the target camera's vertical field of view shows `span` metres top to
  * bottom: the pod's zoom step rendered with the window's own FOV (the same picture a narrow-FOV camera
  * on the jet would give, without a second projection to manage).
