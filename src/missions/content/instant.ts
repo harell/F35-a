@@ -169,8 +169,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
         'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. Airliners climb out over the city and ships sail the harbour: civilians going about their day, boxed CIV on the HUD.',
-        // (playtest 1.1-d: until the suburbs' streets are baked from LINZ data, say so)
-        "The CBD, the motorways and the main roads follow Auckland's real streets. The suburbs between them are stylised, so your own street isn't there yet.",
+        // (say where the real houses and streets are: the LINZ bakes #121, #126 and the neighbourhood models; the rest is stylised)
+        "Real houses and streets cover the flight corridor from Whenuapai over Mt Albert and Mt Roskill to the airport, Herne Bay, Mission Bay, Devonport and Waiheke, with the CBD's real towers. Elsewhere the suburbs are stylised for now, so your own street may not be there yet.",
         'The jet is clean, radar off, for the slowest and quietest flight. Pull the throttle back and the autothrottle holds 150 knots (A/T by the speed box) so the jet never sinks. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',
         'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
@@ -199,7 +199,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'sam_gauntlet': {
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
+      // not strike_stealth: its two JDAMs can't finish three depot targets 250 m apart (0/12, playtest 2026-10-10)
+      allowed = ['sead_stealth', 'strike_beast'];
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
@@ -259,7 +260,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // SEAD fit (issue #60): 4 SDBs take the 3 parked jets in one sortie (the 2 JDAMs of
       // strike_stealth needed a second pass through the SA-6 ring), the AARGMs answer the SA-6
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
+      // not strike_stealth: its two JDAMs can't finish three depot targets 250 m apart (0/12, playtest 2026-10-10)
+      allowed = ['sead_stealth', 'strike_beast'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
       if (!features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);
