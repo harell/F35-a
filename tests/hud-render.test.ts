@@ -24,6 +24,7 @@ import { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
 import { paletteFor } from '../src/hud/hmd/palette';
 import { PLAYER_LOCK_CONE } from '../src/sim/sensors/Sensors';
 import { gunOvershoot } from '../src/hud/hmd/weapons';
+import { hintPages } from '../src/hud/hmd/overlays';
 
 installPath2D();
 
@@ -1149,6 +1150,35 @@ describe('AARGM cue: SHOOT only as AARGM_RULE says (playtest r2 2.1-a: SHOOT fro
     texts = arm(8, false);
     expect(find(texts, 'SHOOT').length).toBe(0);
     expect(find(texts, 'RADAR OFF').length).toBeGreaterThan(0);
+  });
+});
+
+describe('a long hint pages at a clause, not mid-sentence (playtest r2 2.1-m)', () => {
+  const THROTTLE = 'THROTTLE (left thumb): slide up for power, past the detent for AFTERBURNER';
+  const IMMELMANN = 'IMMELMANN: it passes under you, count three, full AFTERBURNER, pull up. Over the top: roll upright';
+
+  it("the phone-width breaks the review saw ('…the detent for' | 'AFTERBURNER', '…AFTERBURNER, pull' | 'up.') end at the comma before", () => {
+    for (const [chars, room] of [[23, 3], [25, 3], [35, 2]]) {
+      const t = hintPages(THROTTLE, chars, room);
+      expect(t.length, `${chars}×${room}`).toBe(2);
+      expect(t[0][t[0].length - 1].endsWith('power,'), `${chars}×${room}: ${JSON.stringify(t)}`).toBe(true);
+      expect(t[1][0].startsWith('past'), `${chars}×${room}`).toBe(true);
+      const m = hintPages(IMMELMANN, chars, room);
+      for (const pg of m.slice(0, -1)) expect(/[:,.]$/.test(pg[pg.length - 1]), `${chars}×${room}: ${JSON.stringify(m)}`).toBe(true);
+    }
+  });
+
+  it('at any width: no word lost, no page over its lines, never a page ending on "for" / "pull"', () => {
+    for (let chars = 16; chars <= 44; chars++) {
+      for (const room of [2, 3]) {
+        for (const text of [THROTTLE, IMMELMANN]) {
+          const pages = hintPages(text, chars, room);
+          expect(pages.flat().join(' '), `${chars}×${room}`).toBe(text);
+          for (const pg of pages) expect(pg.length, `${chars}×${room}`).toBeLessThanOrEqual(room);
+          for (const pg of pages.slice(0, -1)) expect(/ (for|pull)$/.test(' ' + pg[pg.length - 1]), `${chars}×${room}: ${JSON.stringify(pages)}`).toBe(false);
+        }
+      }
+    }
   });
 });
 

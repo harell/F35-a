@@ -527,12 +527,63 @@ const HINT_PAGE = 4;
  */
 const HINT_SIZE = 11.5;
 
-/** The hint's lines in a column `maxW` wide (wrap() caches them). */
-function hintLines(f: HudFrame, hint: string, maxW: number): string[] {
+/** Characters per hint line in a column `maxW` wide. */
+function hintChars(f: HudFrame, maxW: number): number {
   const u = f.L.u;
   // (room at the right end for the "1/2" page counter: it never sits on the last word)
-  const maxChars = Math.max(16, Math.floor((maxW - 16 * u - 24 * u) / f.pen.charWidth(HINT_SIZE)));
-  return wrap(hint, maxChars);
+  return Math.max(16, Math.floor((maxW - 16 * u - 24 * u) / f.pen.charWidth(HINT_SIZE)));
+}
+
+/** The hint's lines in a column `maxW` wide (wrap() caches them). */
+function hintLines(f: HudFrame, hint: string, maxW: number): string[] {
+  return wrap(hint, hintChars(f, maxW));
+}
+
+/** A word that ends a clause: a page of a long hint may end after it. */
+const CLAUSE_END = /[:;,.!?—–]$/;
+const pageCache = new Map<string, string[][]>();
+/**
+ * A long hint in pages of `room` lines of `maxChars`. A page that would end mid-clause ends at the
+ * last clause mark (: ; , — or a sentence end) instead, when the words after it fit on one line, so
+ * a page never stops on '…past the detent for' with 'AFTERBURNER' alone on the next (playtest r2
+ * 2.1-m). Cached like wrap().
+ */
+export function hintPages(text: string, maxChars: number, room: number): string[][] {
+  const key = `${maxChars}|${room}|${text}`;
+  let pages = pageCache.get(key);
+  if (pages) return pages;
+  pages = [];
+  const words = text.split(/\s+/).filter(Boolean);
+  let i = 0;
+  while (i < words.length) {
+    // fill a page: words[i, j) fit in `room` lines
+    let lines = 1;
+    let len = 0;
+    let j = i;
+    for (; j < words.length; j++) {
+      const w = words[j].length;
+      if (len && len + 1 + w > maxChars) {
+        if (++lines > room) break;
+        len = w;
+      } else len = len ? len + 1 + w : w;
+    }
+    let end = j;
+    if (j < words.length && !CLAUSE_END.test(words[j - 1])) {
+      let tail = words[j - 1].length;
+      for (let k = j - 1; k > i && tail <= maxChars; k--) {
+        if (CLAUSE_END.test(words[k - 1])) {
+          end = k;
+          break;
+        }
+        tail += 1 + words[k - 1].length;
+      }
+    }
+    pages.push(wrap(words.slice(i, end).join(' '), maxChars));
+    i = end;
+  }
+  if (pageCache.size > 100) pageCache.clear();
+  pageCache.set(key, pages);
+  return pages;
 }
 
 /** Height drawHint needs for the current hint (one page, at most 3 lines), plus its gaps; 0 = no hint. */
@@ -550,7 +601,7 @@ export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMa
   const u = L.u;
   const size = HINT_SIZE;
   const cw = pen.charWidth(size);
-  const lines = hintLines(f, hint, maxW);
+  const maxChars = hintChars(f, maxW);
   if (hint !== hintRef) {
     hintRef = hint;
     hintStart = st.clock;
@@ -559,13 +610,15 @@ export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMa
   const room = Math.max(1, Math.min(3, Math.floor((yMax - y - 8 * u) / lh)));
   // squeezed to one line (cockpit view with the radio pill + objectives in the column): wait for room
   // instead of paging a long hint one line at a time
-  if (room < 2 && lines.length > 1) return y;
-  const pages = Math.ceil(lines.length / room);
+  if (room < 2 && wrap(hint, maxChars).length > 1) return y;
+  const all = hintPages(hint, maxChars, room);
+  const pages = all.length;
   const page = pages > 1 ? Math.floor((st.clock - hintStart) / HINT_PAGE) % pages : 0;
-  const first = page * room;
-  const n = Math.min(room, lines.length - first);
+  const lines = all[page];
+  const n = lines.length;
+  // (as wide as the widest line of any page, so the box doesn't change width as it pages)
   let widest = 0;
-  for (let i = 0; i < lines.length; i++) widest = Math.max(widest, lines[i].length);
+  for (const pl of all) for (const l of pl) widest = Math.max(widest, l.length);
   const w = Math.min(maxW, widest * cw + (pages > 1 ? 40 : 16) * u);
   const h = n * lh + 8 * u;
   // never over the target box / pipper / jet (the hint is the least important text on screen)
@@ -575,7 +628,7 @@ export function drawHint(f: HudFrame, x: number, y: number, maxW = f.L.colW, yMa
   pen.setFill('rgba(0,12,6,0.55)');
   pen.roundRect(x - 4 * u, y, w, h, 6 * u);
   pen.g.fill();
-  for (let i = 0; i < n; i++) pen.text(lines[first + i], x + 4 * u, y + 4 * u + lh * (i + 0.5), pal.main, size, 'left');
+  for (let i = 0; i < n; i++) pen.text(lines[i], x + 4 * u, y + 4 * u + lh * (i + 0.5), pal.main, size, 'left');
   if (pages > 1) pen.text(pageLabel(page, pages), x - 4 * u + w - 4 * u, y + h - 5 * u, pal.dim, 8.5, 'right');
   pen.g.globalAlpha = 1;
   return y + h + 6 * u;
