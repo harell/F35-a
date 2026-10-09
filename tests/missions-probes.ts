@@ -57,12 +57,14 @@ export const KILL_ALL = 'killall';
  *  - north / south: round the defences low over the water, either side of the islands;
  *  - wide: round Waiheke's east end in burner, outside every ring until the end;
  *  - high: above every SAM ceiling (43,000 ft) to overhead the nest;
- *  - golden: the intended way through: out of the harbour and down the Tāmaki Strait as low as the jet
- *    goes (the Motuihe SA-6 sees down it but can't engage under its 80 m floor; the Tor stands 8 km off),
- *    an AARGM at the strait's patrol boat, a second at the airstrip SA-6 from inside 7 km (fired from
- *    far out it only silences the radar for seconds), then the attack from under the cloud at one of the
- *    stoat's stops (#200: the bot holds off while it runs);
- *  - golden_north: the same idea round the north (AARGMs at the two northern boats), slower and less sure.
+ *  - golden: low down the Tāmaki Strait as low as the jet goes (the Motuihe SA-6 sees down it but can't
+ *    engage under its 80 m floor; Veteran's Tor stands 8 km off), an AARGM at the strait's patrol boat,
+ *    a second at the airstrip SA-6 (Veteran) from inside 7 km (fired from far out it only silences the
+ *    radar for seconds), then the attack from under the cloud at one of the stoat's stops (#200: the bot
+ *    holds off while it runs);
+ *  - golden_north: the same idea round the north (AARGMs at the two northern boats);
+ *  - sead: the straight line, low, with an AARGM at the Motuihe SA-6 from inside 7 km (Veteran's Tor
+ *    first), then straight in to the attack.
  */
 export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
   g03: {
@@ -100,6 +102,13 @@ export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
       { x: 16_000, z: -11_500, alt: 60, minAgl: 40, speed: 320 },
       { x: 21_000, z: -10_500, alt: 150, minAgl: 40, speed: 300, shoot: 'ad_n2' },
       { x: 25_000, z: -8_500, alt: 60, minAgl: 40, speed: 300 },
+    ],
+    sead: [
+      { x: -4_000, z: -2_000, alt: 150, speed: 320 },
+      { x: 6_000, z: -3_500, alt: 45, minAgl: 25, speed: 260 },
+      { x: 12_000, z: -4_500, alt: 45, minAgl: 25, speed: 260, shoot: 'mot_tor', within: 8_000 },
+      { x: 14_000, z: -5_000, alt: 45, minAgl: 25, speed: 260, shoot: 'mot_sa6', within: 7_000 },
+      { x: 22_000, z: -6_500, alt: 600 },
     ],
   },
   // g02's second way (playtest r1, 1.3-f): the escort first, with an AARGM-ER on the way in (the

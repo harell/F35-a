@@ -3,7 +3,7 @@
  *  - i2 / #57: no Pilot walls; the Pilot band (≥ 75 % over 6 seeds) in t06;
  *  - #65: the bot ripples its StormBreakers instead of waiting out each one's long glide;
  *  - #58: a difficulty curve that only falls, in every campaign mission;
- *  - the IRGC missions' own bands (g01, g02, and g03 on its route probe).
+ *  - the IRGC missions' own bands (g01, g02, and g03 on its route probes).
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  */
 import { describe, expect, it } from 'vitest';
@@ -153,7 +153,7 @@ describe('#58: a difficulty curve that only falls (6 seeds)', () => {
     return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6\n${log.join('\n')}` };
   }
 
-  // g02 and g03 check their own curves below (g03's with the route probe: the plain bot flies straight at it)
+  // g02 and g03 check their own curves below (g03's on its best route probe)
   for (const id of CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id)).filter((id) => id !== 'g02' && id !== 'g03')) {
     it(`${id}: the win rate doesn't rise from Pilot to Veteran`, { timeout: 600_000 }, async () => {
       const c = await curve(id);
@@ -250,32 +250,40 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
   });
 });
 
-describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
-  // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then
-  // the bot attacks. With the stoat (#200: a running stoat can't be bombed, so the drop waits for one
-  // of its stops), measured over 16 seeds: the straight line and both detours 0/16 on Pilot and
-  // Veteran; the intended way through (low down the Tāmaki Strait, an AARGM at the strait's boat, a
-  // second at the airstrip SA-6 from close in, then the attack at a stop) Recruit 14/16, Pilot 8/16,
-  // Veteran 4/16 (with master's AD-boat harassment on Pilot and Veteran). (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
-  // stops are the extra puzzle, and the bot pays for waiting near a live SA-6.) Bands over 6 seeds.
+describe('g03 Stoat of Emergency: several ways in (#198, #200; playtest 2026-10-10, r1)', () => {
+  // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then the bot
+  // attacks at one of the stoat's stops (#200: a running stoat can't be bombed). Casual players (the owner's ask,
+  // r1) get several ways in, each about as hard as g01: on Recruit and Pilot the Tor and the airstrip SA-6 are
+  // Veteran's (minDifficulty), the boats fire no harassing long shots, the northern boats sail clear of the
+  // straight line, and the stops fall later and last 60 s on a 5:20 clock. Measured, 6 seeds, Recruit / Pilot /
+  // Veteran (casual proxy --reaction=2.5 on Pilot): golden (low down the strait, AARGMs at the strait's boat and,
+  // on Veteran, the airstrip SA-6) 6 / 5 / 4 (2); golden_north (round the north, AARGMs at the northern boats)
+  // 6 / 6 / 0 (5; Pilot 10/12 over 12 seeds); south (low down the strait, no AARGM) 6 / 6 / 0 (5; 11/12); sead
+  // (low, an AARGM at the Motuihe SA-6, then straight in) 5 / 4 / 0 (4); the plain bot (straight in on the steering
+  // cue) 6 / 3 / 0 (3); north (low, no AARGM) 6 / 0 / 0; high 6 / 1 / 0; killall 0 / 0 / 0. Before (4:00 clock, 40 s
+  // stops, every site on every difficulty, boats harassing): golden 5 / 3 / 0 (0), golden_north 3 / 1 / 0, south
+  // 2 / 0 / 0, the plain bot 0 / 0 / 0. Bands over 4–6 seeds are the measured floors less one seed.
   const run = (route: string, diff: Difficulty, seed: number) =>
-    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
+    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 400, probe: { kind: 'route', route } as ProbeSpec });
 
-  it('the straight line and both detours fail on Pilot', { timeout: 600_000 }, async () => {
+  it('at least three ways win on Pilot: the strait (golden, south) and round the north', { timeout: 900_000 }, async () => {
     const log: string[] = [];
-    let won = 0;
-    for (const route of ['straight', 'north', 'south']) {
+    const won: Record<string, number> = {};
+    for (const route of ['golden', 'south', 'golden_north']) {
+      won[route] = 0;
       for (const seed of [0, 1, 2, 3]) {
-        await new Promise((r) => setTimeout(r, 0));
+        await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
         const r = run(route, 'pilot', seed);
-        if (r.state === 'success') won++;
+        if (r.state === 'success') won[route]++;
         log.push(`${route} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
       }
     }
-    expect(won, log.join('\n')).toBeLessThanOrEqual(1);
+    // measured on these seeds: golden 3/4, south 4/4, golden_north 4/4
+    const floor: Record<string, number> = { golden: 2, south: 3, golden_north: 3 };
+    for (const route of Object.keys(won)) expect(won[route], `${route}\n${log.join('\n')}`).toBeGreaterThanOrEqual(floor[route]);
   });
 
-  it('the intended way through: Pilot ≥ 2/6, and no harder difficulty beats Pilot', { timeout: 600_000 }, async () => {
+  it('the best way on Veteran: wins some (≥ 2/6), never more than on Pilot', { timeout: 900_000 }, async () => {
     const won: Record<string, number> = {};
     const log: string[] = [];
     for (const d of ['pilot', 'veteran'] as const) {
@@ -288,7 +296,20 @@ describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
       }
     }
     const table = log.join('\n');
-    expect(won.pilot, table).toBeGreaterThanOrEqual(2);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+  });
+
+  it('not a walkover: straight over the top of every SAM (high) still fails on Pilot', { timeout: 600_000 }, async () => {
+    // above the cloud nothing is revealed; diving through it from 43,000 ft at the end meets every site at once
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('high', 'pilot', seed);
+      if (r.state === 'success') won++;
+      log.push(`high seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+    }
+    expect(won, log.join('\n')).toBeLessThanOrEqual(1);
   });
 });

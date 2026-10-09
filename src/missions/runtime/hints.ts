@@ -8,7 +8,8 @@
  *  - AIM-9X / gun: seeker tone / pipper;
  *  - AARGM: designate an emitting SAM, close in to AARGM_CLOSE_RANGE, fire on SHOOT and press in
  *    (AARGM_RULE; never sent to a bomb while an AARGM cue is up);
- *  - SDB / JDAM: designate with TGT, release IN RANGE;
+ *  - SDB / JDAM: designate with TGT, release IN RANGE (a StormBreaker at a target too small to track
+ *    on the move, g03's stoat or t07's rats: once it stops);
  *  - an A/A weapon selected while a surface objective is near: which A/G store to select.
  * Texts stay short; the HUD decides visibility (Settings.hints).
  */
@@ -16,6 +17,7 @@ import { AARGM_CLOSE_RANGE, WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { stallSpeedIas } from '../../sim/flight/performance';
+import { STILL_SPEED, isSmallGround } from '../../sim/weapons/small';
 import { evalCondition } from './conditions';
 import { controlPrefsVersion, formatControls, savedControlPrefs, withActiveScheme } from './controlsText';
 import { aircraftHudName } from './names';
@@ -215,6 +217,9 @@ const AUTO: AutoHint[] = [
       if (w === 'gbu31' || w === 'gbu53') {
         const b = s.world.combat.bombImpactPoint(p, s.world);
         if (!p.radar.groundPoint) return `Tap TGT to designate a ground target for the ${name}`;
+        // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker waits for it to stop
+        const e = hostileDesignated(p, s);
+        if (w === 'gbu53' && e && isSmallGround(e) && e.velocity.lengthSq() > STILL_SPEED * STILL_SPEED) return `Wait for it to stop: the ${name} can't track a target this small on the move`;
         if (b && b.inRange) {
           // an SDB lobbed from its 30 km maximum glides for 3+ minutes and arrives slow — easy
           // meat for a Tor / Osa: press in to ~20 km first

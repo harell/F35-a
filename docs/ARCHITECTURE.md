@@ -454,25 +454,28 @@ target a few tenths of a metre long is still a dozen pixels tall. With no line o
 deck between the jet and the target: `cloudBetween()` in `src/sim/sensors/los.ts`) nothing is rendered and the window
 reads MASKED. Small ground targets are framed size-aware in the orbit shot too (`groundMinFraming`).
 
-## Waiheke air defences: no free route (g03)
+## Waiheke air defences: several ways in (g03)
 
 The IRGC campaign's g03 "Stoat of Emergency" (`src/missions/content/irgcWaiheke.ts`, epic #196) sends the jet from
-west Auckland through a layered air-defence network to one small target on the Onetangi dunes, on a 4:00 clock
-(`timeLimit`) with 2 AARGM-ER and 2 GBU-53/B (`sead_precision`). The layout is built so no single route is free: an
-SA-6 and a Tor on Motuihe (the Tor's point defence covers the SA-6), an SA-6 at the Waiheke airstrip and a ZSU-23-4 on
-the ridge (the nest is inside both, so every route ends in a fight), and three patrolling AD boats over the water north
-and south (`SamSiteDef.path` + `loop`). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
+west Auckland through a layered air-defence network to one small target on the Onetangi dunes, on a 5:20 clock
+(`timeLimit`) with 2 AARGM-ER and 2 GBU-53/B (`sead_precision`). The layout gives a casual player several ways in, none
+of them free (playtest 2026-10-10, r1): an SA-6 on Motuihe on the straight line, a ZSU-23-4 on the ridge over the nest
+(every route ends in a fight), and three patrolling AD boats over the water north of Rakino, off Onetangi and in the
+Tāmaki Strait (`SamSiteDef.path` + `loop`; `noHarass`, so no long shots at the drop the reveal radius already forces
+close in). Veteran adds a Tor on Motuihe (its point defence covers the SA-6) and an SA-6 at the Waiheke airstrip over
+the nest (`minDifficulty`). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
 `SamSiteEntity.closeCue`, which overrides the type's `SamTypeData.closeCue`): it holds a jet beaming them low in the
 notch, where the radar alone would lose it. The weather is overcast; the deck height is `OVERCAST_DECK` in
 `src/core/weather.ts` (shared with `world/clouds/Clouds.ts`), and the target spawns only once the player has been under
 it within 6 km of the nest (an `area` spawn condition with `below`), so neither a high transit nor a stand-off release
-finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast, and the bot's route
-probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`) measure it in
-flight: every naive route (straight, either detour, the wide way, above the SAMs, killing every site) loses on Pilot,
-the intended path (low down the Tāmaki Strait, an AARGM at the strait's boat, a second at the airstrip SA-6 from close
-in, then the attack at one of the stoat's stops) wins about half the time on Pilot (`tests/missions-balance.test.ts`). Under an overcast deck the bot
-attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the campaign's finale
-while the campaign is being built (no `campaignFinale`).
+finds it. The stoat's three 60 s stops start at about 1:28, 2:43 and 3:58, so a jet that finds it at 3:00 still has two
+drop windows. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast and the stops, and
+the bot's route probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`)
+measure the ways in flight (`tests/missions-balance.test.ts`): low down the Tāmaki Strait (`golden`, `south`), round
+the north with an AARGM for each boat (`golden_north`) and straight across behind an AARGM at the Motuihe SA-6 (`sead`)
+each win on Pilot, while over the top of every SAM (`high`) or killing every site first (`killall`) loses. Under an
+overcast deck the bot attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the
+campaign's finale while the campaign is being built (no `campaignFinale`).
 
 ## Frame / sim order (Game.ts)
 
