@@ -7,6 +7,7 @@
  *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=g01,g02|irgc|campaigns|training|all]
  *       [--diffs=recruit,pilot,veteran] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
  *       [--loadout=sead_stealth] [--log] [--nojitter] [--park[=start|far] | --gunonly | --route=<name>]
+ *       [--reaction=<s>] [--nodefend]
  *
  * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run and a
  * win-rate table per mission × difficulty; --json writes every PlaythroughResult (minus the raw
@@ -28,6 +29,9 @@
  *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g03: straight, north,
  *               south, wide, high, golden, golden_north), then the bot attacks; `killall` attacks every
  *               SAM site first. "Is there a free way round?" and "does the intended way work?"
+ *   --reaction=<s>  the bot's reaction to a missile warning (MissionBotOptions.reaction, default 0.8 s): a
+ *               casual player's proxy is ~2.5 s
+ *   --nodefend  the bot doesn't defend against SAM rounds (a player who ignores the warning)
  *   (tests/missions-probes.ts; every row's `probe` says which ran: bot, park:start, park:far, gunonly, route:<name>,
  *   and with --log the event log starts with a PROBE line)
  * Mission ids include Instant Action (`ia_<mode>_auckland`, e.g. ia_strike_auckland): the id seeds
@@ -87,6 +91,8 @@ const log = 'log' in args;
 const jitter = !('nojitter' in args);
 /** --park / --gunonly (null: the plain mission bot). */
 const probe = parseProbe(args);
+/** --reaction / --nodefend: the bot flies slower or careless (a casual player's proxy); unset: the competent bot. */
+const bot = { ...(args.reaction ? { reaction: Number(args.reaction) } : {}), ...('nodefend' in args ? { defend: false } : {}) };
 for (const id of missions) if (!missionById(id)) throw new Error(`no mission ${id}`);
 /** Missions that don't allow the --loadout (skipped). */
 const skipped = loadout ? missions.filter((id) => !missionById(id)!.allowedLoadouts.includes(loadout)) : [];
@@ -111,7 +117,7 @@ if (args.shard) {
       terrains.set(r.mission, t);
     }
     const t0 = Date.now();
-    const { result: _, probe: pr, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT, loadout, log, jitter, probe });
+    const { result: _, probe: pr, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT, loadout, log, jitter, probe, bot });
     const dead = log ? longestDeadStretch(rest.events, rest.t) : undefined;
     const row: Row = { ...rest, probe: probeLabel(probe), gunRounds: pr?.gunRounds, loadout: loadout ?? missionById(r.mission)!.recommendedLoadout, wallMs: Date.now() - t0, dead };
     process.stdout.write(JSON.stringify(row) + '\n');
@@ -140,7 +146,7 @@ if (args.shard) {
       return new Promise<void>((resolve) => child.on('close', () => resolve()));
     }),
   );
-  const flags = [probe ? `probe ${probeLabel(probe)}` : '', loadout ? `loadout ${loadout}` : '', log ? 'log' : '', jitter ? '' : 'no jitter'].filter(Boolean).join(', ');
+  const flags = [probe ? `probe ${probeLabel(probe)}` : '', loadout ? `loadout ${loadout}` : '', args.reaction ? `reaction ${args.reaction} s` : '', 'nodefend' in args ? 'no SAM defence' : '', log ? 'log' : '', jitter ? '' : 'no jitter'].filter(Boolean).join(', ');
   console.log(`\nwin rate (${seeds} seeds, maxT ${maxT} s${flags ? `, ${flags}` : ''}), ${rows.length}/${runs.length} runs in ${((Date.now() - t0) / 1000).toFixed(0)} s on ${n} jobs`);
   const w = Math.max(9, ...missions.map((m) => m.length + 2));
   console.log(`${'mission'.padEnd(w)}${diffs.map((d) => d.padEnd(9)).join('')}`);
