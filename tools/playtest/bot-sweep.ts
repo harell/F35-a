@@ -29,8 +29,8 @@
  *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g03: straight, north,
  *               south, wide, high, golden, golden_north), then the bot attacks; `killall` attacks every
  *               SAM site first. "Is there a free way round?" and "does the intended way work?"
- *   --reaction=<s>  the bot's reaction to a missile warning (MissionBotOptions.reaction, default 0.8 s): a
- *               casual player's proxy is ~2.5 s
+ *   --reaction=<s>  the bot's reaction to a missile warning, air-to-air and SAM (MissionBotOptions.reaction,
+ *               default 0.8 s, and samReaction, default 0): a casual player's proxy is ~2.5 s
  *   --nodefend  the bot doesn't defend against SAM rounds (a player who ignores the warning)
  *   (tests/missions-probes.ts; every row's `probe` says which ran: bot, park:start, park:far, gunonly, route:<name>,
  *   and with --log the event log starts with a PROBE line)
@@ -92,7 +92,7 @@ const jitter = !('nojitter' in args);
 /** --park / --gunonly (null: the plain mission bot). */
 const probe = parseProbe(args);
 /** --reaction / --nodefend: the bot flies slower or careless (a casual player's proxy); unset: the competent bot. */
-const bot = { ...(args.reaction ? { reaction: Number(args.reaction) } : {}), ...('nodefend' in args ? { defend: false } : {}) };
+const bot = { ...(args.reaction ? { reaction: Number(args.reaction), samReaction: Number(args.reaction) } : {}), ...('nodefend' in args ? { defend: false } : {}) };
 for (const id of missions) if (!missionById(id)) throw new Error(`no mission ${id}`);
 /** Missions that don't allow the --loadout (skipped). */
 const skipped = loadout ? missions.filter((id) => !missionById(id)!.allowedLoadouts.includes(loadout)) : [];

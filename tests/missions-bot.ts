@@ -143,6 +143,11 @@ export interface MissionBotOptions {
   rtb?: boolean;
   /** Defend against SAM rounds (default true). false: a probe of a pilot who ignores the warning (t05's drills). */
   defend?: boolean;
+  /**
+   * Seconds a SAM round is on the warning before the bot starts defending (default 0: at once). A
+   * casual player's proxy (bot-sweep --reaction sets it with `reaction`).
+   */
+  samReaction?: number;
 }
 
 export class MissionBot {
@@ -189,7 +194,7 @@ export class MissionBot {
     private readonly p: AircraftEntity,
     opts: MissionBotOptions = {},
   ) {
-    this.opts = { reaction: 0.8, rtb: true, defend: true, ...opts };
+    this.opts = { reaction: 0.8, rtb: true, defend: true, samReaction: 0, ...opts };
     this.agLoadout = this.agLeft() > 0;
     this.deck = cloudBase(runner.def.weather);
     this.student = !!runner.def.script.defenceCoach;
@@ -342,8 +347,8 @@ export class MissionBot {
     const bandit = this.nearestBandit();
     const fuelLow = p.flight.fuel < AIRCRAFT_PERF[p.type].internalFuel * 0.18;
 
-    // 1. missile inbound: a SAM shot is defended against; everything else: the calibrated air-to-air bot
-    if (p.incoming.length > 0 && !(this.opts.defend === false && this.samShot())) {
+    // 1. missile inbound: a SAM shot is defended against (after samReaction); everything else: the calibrated air-to-air bot
+    if (p.incoming.length > 0 && !(this.opts.defend === false && this.samShot()) && !this.samUnseen()) {
       if (!this.samShot()) return this.fight('DEFEND', dt);
       if (this.student) return this.studentDefence(dt);
       if (!this.finishingRipple()) return this.samDefence(dt);
@@ -513,6 +518,19 @@ export class MissionBot {
     let tti = Infinity;
     for (const m of this.p.incoming) tti = Math.min(tti, m.timeToImpact);
     return tti > SAM_BREAK_TTI;
+  }
+
+  /** When each SAM round was first on the warning (world time), for samReaction. */
+  private readonly samSeen = new Map<number, number>();
+
+  /** The most urgent inbound round is a SAM shot the bot hasn't reacted to yet (on the warning < samReaction s). */
+  private samUnseen(): boolean {
+    if (this.opts.samReaction <= 0 || !this.samShot()) return false;
+    let best = this.p.incoming[0];
+    for (const m of this.p.incoming) if (m.timeToImpact < best.timeToImpact) best = m;
+    const first = this.samSeen.get(best.missileId) ?? this.world.time;
+    this.samSeen.set(best.missileId, first);
+    return this.world.time - first < this.opts.samReaction;
   }
 
   /** The most urgent inbound missile was fired by a SAM site. */
