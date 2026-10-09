@@ -22,7 +22,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { buildInstantMissionSeeded, createMissionRunner, missionById, terrainPadsFor } from '../src/missions';
-import { DEFEND_BEAST_FROM, IA_STRIKE_TIME_LIMIT } from '../src/missions/content/instant';
+import { DEFEND_BEAST_FROM, IA_GAUNTLET_TIME_LIMIT, IA_STRIKE_TIME_LIMIT } from '../src/missions/content/instant';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -229,6 +229,19 @@ describe('Instant Action balance bands over 6 seeds (issue #60, playtest r1; was
     expect(def.timeLimit).toBe(IA_STRIKE_TIME_LIMIT);
     expect(IA_STRIKE_TIME_LIMIT).toBeGreaterThanOrEqual(2 * 335);
     expect(def.briefing.join(' ')).toContain(`${IA_STRIKE_TIME_LIMIT / 60} minutes`);
+  });
+  it('Gauntlet: a clock ends a stalled sortie (the briefing says how long), and the CAP pair flies a notch below the difficulty', () => {
+    // playtest r2 (2.3-c): a Pilot jet Winchester after the CAP extended for 493 s with its bombs aboard,
+    // and a parked jet hung the sweep at 900 s; the bot's slowest win takes 559 s
+    const def = missionById('ia_sam_gauntlet_auckland')!;
+    expect(def.timeLimit).toBe(IA_GAUNTLET_TIME_LIMIT);
+    expect(IA_GAUNTLET_TIME_LIMIT).toBeGreaterThanOrEqual(1.25 * 559);
+    expect(def.briefing.join(' ')).toContain(`${IA_GAUNTLET_TIME_LIMIT / 60} minutes`);
+    // the pair at full skill decided Pilot's losses; one jet alone left Pilot untouched
+    const cap = def.script.groups.find((g) => g.id === 'cap')!;
+    expect(cap.count).toBe(2);
+    expect(cap.countFor).toEqual({ recruit: 1 });
+    expect(cap.skillOffset).toBeLessThan(0);
   });
 });
 

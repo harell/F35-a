@@ -227,6 +227,12 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         const capType = pickType(opts, rng);
         groups.push(
           flight('cap', capType, 2, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', {
+            // a pair, a notch below the difficulty's skill, and one jet on Recruit (playtest r2, 2.3-c):
+            // at full skill the pair shot the bot down in Pilot's losses, or left a Winchester jet
+            // running from it with its bombs aboard; a single jet left Pilot untouched (6/6, 0-1 rounds
+            // at the jet), and one launched two minutes after the other changed nothing
+            countFor: { recruit: 1 },
+            skillOffset: -0.2,
             spawn: { kind: 'time', t: 120 },
             task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
           }),
@@ -234,10 +240,14 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       }
       briefing = [
         `A belt of ${count} SAM sites guards a depot${flank ? ', and an SA-6 in the hills south of the Tāmaki Strait covers the way round its south end' : ''}. Some sites are silent until you are close.`,
-        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
+        ...(n >= 4 ? ['Two fighters (one on Recruit) launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
         'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.',
+        `The depot is being emptied: in ${IA_GAUNTLET_TIME_LIMIT / 60} minutes there is nothing left to hit.`,
       ];
       script.parTime = 420;
+      // a clock (playtest r2, 2.3-c): a jet that spent its AMRAAMs on the CAP extended from it for 8
+      // minutes with its bombs aboard, and a parked one hung the sweep at 900 s
+      timeLimit = IA_GAUNTLET_TIME_LIMIT;
       // the run-in and the StormBreakers' two-minute glide are quiet: Darkstar calls the belt up (the
       // CAP comes at 120 s), and the depot's crews moving a minute after the belt opens fire (about
       // halfway through a stand-off glide)
@@ -505,6 +515,13 @@ export const DEFEND_BEAST_FROM = 4;
  * (335 s): it ends a sortie that has stalled (out of bombs with a jet still on the apron), not a slow one.
  */
 export const IA_STRIKE_TIME_LIMIT = 720;
+
+/**
+ * The SAM Gauntlet's clock (s): the depot is empty when it runs out. Well over the bot's slowest win
+ * (559 s, Pilot; most take 270-370 s): it ends a sortie that has stalled (Winchester and running from
+ * the CAP with the bombs aboard, or parked), not a slow one.
+ */
+export const IA_GAUNTLET_TIME_LIMIT = 720;
 
 /** Instant Action mission (fresh random seed each time). */
 export function buildInstantMission(opts: InstantActionOptions): MissionDef {
