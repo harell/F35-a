@@ -198,6 +198,12 @@ export const G03: MissionDef = mission({
         when: { kind: 'time', t: 14 },
         actions: [{ kind: 'radio', from: TL, text: 'Viper, Waiheke Trap Line. Camera seven still has it on the dunes, heading east. We have three stations baited for you.' }],
       },
+      {
+        // the long transit (playtest r2, 2.3-k): nothing else was said between this call and the first SAM at ~95 s
+        id: 't_volunteers_transit',
+        when: { kind: 'time', t: 55 },
+        actions: [{ kind: 'radio', from: TL, text: 'Camera nine has it now. Still heading east for the first station, about half a minute off.' }],
+      },
       // the volunteers call each bait station as the stoat reaches it: the drop windows
       ...G03_STOAT.stations.map((st, i) => ({
         id: `t_station${i + 1}`,
