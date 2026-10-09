@@ -3,7 +3,8 @@
  *
  *  - DAS missile approach warning: dashed threat ring around the flight path marker (HMD) with direction
  *    arrows, range chevrons and time-to-impact; defeated missiles stay on the ring crossed out for ~1 s.
- *    External views put the arrows on the radar inset rim instead of a ring in the middle of the screen.
+ *    The chase view draws the same ring round the jet (sized to clear it); the other external views put
+ *    the arrows on the radar inset rim instead.
  *  - Warning band (top centre, above the FPM, fixed position):
  *      row 1 — ONE critical line, highest priority wins: PULL UP › MISSILE › MISSILE DEFEATED › STALL ›
  *              AUTO GCAS › red ICAWS warning › SPEED › AOA › mission title banner
@@ -30,9 +31,13 @@ const ROW1_RED: WarningId[] = ['engine_fire', 'over_g', 'altitude', 'engine_fail
 
 /* ───────────────────────── Missile approach warning ───────────────────────── */
 
-const ring = { cx: 0, cy: 0, R: 0, aLen: 0, tr: 0 };
+const ring = { cx: 0, cy: 0, R: 0, aLen: 0, tr: 0, full: false };
 
-/** The DAS threat ring's centre and radius, its arrows' length and the TTI radius, into `ring`. */
+/**
+ * The DAS threat ring's centre and radius, its arrows' length and the TTI radius, into `ring`. `full`:
+ * the dashed ring and full-size arrows (the HMD views, and the chase view round the jet: playtest r2 F5,
+ * the chase view showed only "MISSILE 3s", the direction lived on the small inset rim).
+ */
 function incomingRing(f: HudFrame): void {
   const { L } = f;
   const u = L.u;
@@ -40,7 +45,13 @@ function incomingRing(f: HudFrame): void {
   let cy = L.cy;
   let R = 62 * u;
   const hmd = f.mode === 'hmd';
-  if (hmd) {
+  const chase = !hmd && f.ctx.viewMode === 'chase' && f.proj.point(f.p.position, f.sp) && f.sp.onScreen;
+  if (chase) {
+    // round the jet, clear of its wings (half span ≈ 7.5 m at the chase distance)
+    cx = f.sp.x;
+    cy = f.sp.y;
+    R = Math.min(Math.max(R, ((7.5 / Math.max(1, f.sp.depth)) * f.proj.pxPerRad) * 0.9), 0.3 * Math.min(L.W, L.H));
+  } else if (hmd) {
     if (f.cockpit) R = 54 * u;
     if (f.fpm.front && f.fpm.onScreen && f.fpm.y > L.row2Y) {
       cx = f.fpm.x;
@@ -56,8 +67,9 @@ function incomingRing(f: HudFrame): void {
   ring.cx = cx;
   ring.cy = cy;
   ring.R = R;
-  ring.aLen = (hmd ? 20 : 12) * u;
-  ring.tr = hmd ? R - 14 * u : R - 12 * u;
+  ring.full = hmd || chase;
+  ring.aLen = (ring.full ? 20 : 12) * u;
+  ring.tr = ring.full ? R - 14 * u : R - 12 * u;
 }
 
 /**
@@ -91,13 +103,12 @@ export function drawIncoming(f: HudFrame): boolean {
   for (const m of marks) anyMark = anyMark || m.active;
   if ((!inc || inc.length === 0) && !anyMark) return false;
   const u = L.u;
-  const hmd = f.mode === 'hmd';
   incomingRing(f);
-  const { cx, cy, R } = ring;
+  const { cx, cy, R, full } = ring;
   let nearest = Infinity;
   for (let i = 0; i < inc.length; i++) nearest = Math.min(nearest, inc[i].timeToImpact);
   const urgentAll = nearest < 5;
-  if (hmd && inc.length > 0) {
+  if (full && inc.length > 0) {
     pen.setDash('dash');
     pen.begin();
     pen.circle(cx, cy, R);
@@ -123,7 +134,7 @@ export function drawIncoming(f: HudFrame): boolean {
     }
     // distance ticks outside the arrow: more chevrons = closer
     const chev = m.timeToImpact < 4 ? 3 : m.timeToImpact < 9 ? 2 : 1;
-    const ck = hmd ? 1 : 0.6;
+    const ck = full ? 1 : 0.6;
     pen.begin();
     for (let k = 0; k < chev; k++) {
       const d = R + aLen + 6 * u + k * 7 * u * ck;
@@ -134,9 +145,9 @@ export function drawIncoming(f: HudFrame): boolean {
       pen.g.lineTo(px + sy * 8 * u * ck - sx * 5 * u * ck, py - sx * 8 * u * ck - sy * 5 * u * ck);
     }
     pen.strokeGlow(col, 2.2);
-    // time to impact inside the ring (HMD) / next to the arrow (inset)
+    // time to impact inside the ring (HMD, chase) / next to the arrow (inset)
     const tr = ring.tr;
-    pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), cx + sx * tr, cy + sy * tr, col, hmd ? 13 : 11);
+    pen.text(ttiTxt[i].get(Math.max(0, Math.ceil(m.timeToImpact))), cx + sx * tr, cy + sy * tr, col, full ? 13 : 11);
     // (labels near the ring make way for the arrow / chevrons / time to impact: reserveIncoming)
     // conformal marker when the missile is in view (DAS)
     const e = world.getEntity(m.missileId);
