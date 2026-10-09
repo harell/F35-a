@@ -20,6 +20,7 @@ import { bakeColorRows } from '../src/world/terrain/bake';
 import { reduceView } from '../src/world/terrain/parallel';
 import { AKL_CBD_GRID } from '../src/world/config';
 import { createVegetation } from '../src/world/terrain/vegetation';
+import { AKL_LAKES } from '../src/world/terrain/theaters/aucklandMap';
 import { BoxGeometry, MeshBasicMaterial, Vector3 } from 'three';
 
 interface Fs {
@@ -154,6 +155,24 @@ describe('corridor tiles (src/world/terrain/data/corridor)', () => {
         }
     }
     expect(n).toBeGreaterThan(10_000);
+  });
+
+  it('stand clear of the hand-placed lakes, as their streets do (playtest r1 1.2-a: the Panmure Basin over Pakuranga)', () => {
+    let near = 0;
+    for (const [lx, lz, lr] of AKL_LAKES) {
+      const cx = lx * 1000, cz = lz * 1000, r = lr * 1000;
+      for (const [i, j] of M.tiles) {
+        if (cx + r < i * CORRIDOR_TILE || cx - r > (i + 1) * CORRIDOR_TILE || cz + r < j * CORRIDOR_TILE || cz - r > (j + 1) * CORRIDOR_TILE) continue;
+        const t = tile(i, j);
+        for (let k = 0; k < t.houses.count; k++) {
+          const d = Math.hypot(t.houses.x[k] - cx, t.houses.z[k] - cz);
+          if (d < r + 200) near++;
+          expect(d, `house at ${t.houses.x[k].toFixed(0)},${t.houses.z[k].toFixed(0)}`).toBeGreaterThan(r + 5);
+        }
+        for (const l of t.roads) for (let k = 0; k < l.pts.length; k += 2) expect(Math.hypot(l.pts[k] - cx, l.pts[k + 1] - cz)).toBeGreaterThan(r);
+      }
+    }
+    expect(near).toBeGreaterThan(20); // (the basin's shore is built up)
   });
 
   it('carry the suburbs’ LINZ streets as local road ribbons (#127 phase B)', () => {

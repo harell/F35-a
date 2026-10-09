@@ -98,10 +98,15 @@ export const AKL_ISLANDS: ({ pts: number[] } | { ellipse: [number, number, numbe
   { ellipse: [37.2, 2.4, 1.5, 0.9, 0.6] }, // Ponui Island
 ];
 
-/** Inland water painted last (crater lakes). */
+/**
+ * Inland water painted last (crater lakes): centre (km), radius (km). The LINZ coastline has neither, so with the real
+ * terrain each one drowns the LiDAR ground under it: it must sit on the lake's own flat bed there, clear of the real
+ * houses and streets round it, or it cuts a hole in the suburb next to it.
+ */
 export const AKL_LAKES: [number, number, number][] = [
-  [0.25, -7.49, 0.55], // Lake Pupuke
-  [8.35, 5.75, 0.42], // Panmure Basin
+  // Each one the largest circle on its LiDAR bed that keeps off the corridor's real houses and streets:
+  [0.27, -7.55, 0.49], // Lake Pupuke (its surface at 5 m)
+  [7.8, 6.26, 0.34], // Panmure Basin (flat ground under 1.5 m, west of the Tāmaki River)
 ];
 
 /** Relief regions: ellipse (cx, cz, rx, rz, rot) km, base height (m), roughness 0..1. */

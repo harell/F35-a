@@ -15,8 +15,8 @@ import { runwaysOf } from '../src/core/airfields';
 import { airfieldLayout } from '../src/world/scenery/aucklandOsm';
 import { segmentDistance } from '../src/world/terrain/coastline';
 import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
-import { aucklandLinz, decodeLinz, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
-import { AKL_CONES, AKL_RANGITOTO } from '../src/world/terrain/theaters/aucklandMap';
+import { aucklandLinz, decodeLinz, linzHeight, linzIsLand, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
+import { AKL_CONES, AKL_LAKES, AKL_RANGITOTO } from '../src/world/terrain/theaters/aucklandMap';
 import { CAMPAIGNS, TRAINING, missionById, terrainPadsFor } from '../src/missions';
 import { BASE_FEATURES, FEATURES } from '../src/missions/content/common';
 
@@ -101,6 +101,40 @@ describe('real terrain heights (LiDAR) on the 86 m heightfield', () => {
     expect(w).toBeLessThan(480);
     expect(q.heightAt(0, 0)).toBeGreaterThan(20); // Sky Tower stands at ≈ 30–40 m
     expect(q.heightAt(0, 0)).toBeLessThan(90);
+  });
+});
+
+describe('inland water (the hand-placed lakes) on the real terrain', () => {
+  const linz = aucklandLinz()!;
+  const lakes = AKL_LAKES.map(([x, z, r]) => ({ x: x * 1000, z: z * 1000, r: r * 1000 }));
+
+  it('each lake lies on its own flat LiDAR bed, not over the suburb next to it', () => {
+    for (const k of lakes) {
+      const hs: number[] = [];
+      for (let a = 0; a < 48; a++) for (const f of [0, 0.25, 0.5, 0.75]) hs.push(linzHeight(linz, k.x + Math.cos(a) * f * k.r, k.z + Math.sin(a) * f * k.r));
+      const bed = Math.min(...hs);
+      const flat = hs.filter((h) => h < bed + 2).length / hs.length;
+      expect(flat, `lake at ${k.x},${k.z}`).toBeGreaterThan(0.9);
+    }
+  });
+
+  it('no dry LiDAR ground of the isthmus and the eastern suburbs sits below the sea (playtest r1 1.2-a: a lake hole in Pakuranga)', () => {
+    const holes: string[] = [];
+    for (let z = -2000; z <= 10_000; z += 250)
+      for (let x = -8000; x <= 12_000; x += 250) {
+        // dry ground (not a lake bed or a mudflat), clear of a lake's 86 m-blurred rim
+        if (!linzIsLand(linz, x, z) || linzHeight(linz, x, z) < 8) continue;
+        if (lakes.some((k) => Math.abs(Math.hypot(x - k.x, z - k.z) - k.r) < 100)) continue;
+        if (q.heightAt(x, z) <= 0) holes.push(`${x},${z}`);
+      }
+    expect(holes).toEqual([]);
+    // the reviewer's spots on g01's route (heightAt was −17.9, −18.5, −2.8 there), and the Panmure Basin itself
+    for (const [x, z] of [[8150, 5750], [8300, 5800], [8000, 5700]]) {
+      expect(q.heightAt(x, z), `${x},${z}`).toBeGreaterThan(5);
+      expect(q.isWater(x, z), `${x},${z}`).toBe(false);
+    }
+    const basin = geo(-36.905, 174.8496);
+    expect(q.isWater(basin.x, basin.z)).toBe(true);
   });
 });
 
