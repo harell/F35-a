@@ -52,7 +52,7 @@
 .mo-k .ico { width: 14px; height: 14px; }
 .mo-t { font: 800 16px/1.2 var(--sans); letter-spacing: 0.06em; color: #eef8ff; }
 .mo-s { font: 400 12px/1.4 var(--sans); color: var(--dim); }
-.mo-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.mo-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 
 /* ───────── campaign: training nudge ───────── */
 .ml-nudge { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 2px 0 10px; border-color: rgba(var(--green-rgb), 0.4); }

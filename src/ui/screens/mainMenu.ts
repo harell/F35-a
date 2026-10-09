@@ -1,7 +1,8 @@
 /**
  * F35-A UI — main menu: logo + theatre card + pilot card (rank, current difficulty, service record)
  * on the left, six big menu items on the right. On a first launch a friendly prompt suggests the
- * Training lessons (dismissable, remembered).
+ * Training lessons, or a sightseeing flight (Instant Action, A Stroll in the Park) for a player who
+ * only wants to see Auckland (dismissable, remembered).
  */
 import type { CampaignProgress, MainMenuChoice } from '../../core/contracts';
 import { DIFFICULTIES } from '../../core/data';
@@ -16,9 +17,13 @@ import { PLAYABLE_CAMPAIGNS, lessonsFor } from '../../missions';
 import { stagger } from '../widgets';
 import { showServiceRecord } from './serviceRecord';
 
-const ITEMS: { id: MainMenuChoice; title: string; sub: string; icon: string; primary?: boolean }[] = [
+/**
+ * The menu items. Instant Action names its sightseeing flight first: most new players want to see Auckland
+ * (playtest 2026-10-10: A Stroll in the Park was named nowhere on the main menu, 1.4-n).
+ */
+export const MAIN_MENU_ITEMS: { id: MainMenuChoice; title: string; sub: string; icon: string; primary?: boolean }[] = [
   { id: 'campaign', title: 'Campaign', sub: 'Defend Auckland', icon: 'flag', primary: true },
-  { id: 'instant', title: 'Instant Action', sub: 'Free flight · dogfight · strike · defend', icon: 'crosshair' },
+  { id: 'instant', title: 'Instant Action', sub: 'Sightseeing · dogfight · strike · defend', icon: 'crosshair' },
   { id: 'training', title: 'Training', sub: 'Learn to fly and fight the F-35A', icon: 'book' },
   { id: 'codex', title: 'Codex', sub: 'Weapons · warnings · threats', icon: 'missile' },
   { id: 'settings', title: 'Settings', sub: 'Difficulty · controls · audio · display', icon: 'gear' },
@@ -85,7 +90,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
 
     const list = h('nav', { class: 'mm-list', attrs: { 'aria-label': 'Main menu' } });
     let first: HTMLButtonElement | null = null;
-    for (const it of ITEMS) {
+    for (const it of MAIN_MENU_ITEMS) {
       // the Campaign line names every playable campaign (a disabled one isn't shown)
       const sub = it.id === 'campaign' && PLAYABLE_CAMPAIGNS.length > 0 ? PLAYABLE_CAMPAIGNS.map((c) => c.name).join(' · ') : it.sub;
       const recBadge = it.id === 'training' && needsTraining ? '<span class="badge mm-recb">RECOMMENDED</span>' : '';
@@ -121,6 +126,12 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
         `<div class="mo-s">${escapeHtml(firstLessonsLine())}</div>`;
       const go = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `${icon('play')}<span>Start training</span>` });
       const skip = h('button', { class: 'ui-btn ghost', attrs: { type: 'button' }, html: `<span>Not now</span>` });
+      // Instant Action opens on A Stroll in the Park (its first, preselected mode)
+      const look = h('button', { class: 'ui-btn ghost', attrs: { type: 'button' }, html: `<span>${SIGHTSEEING_LABEL}</span>` });
+      look.addEventListener('click', () => {
+        dismissOnboarding();
+        finish('instant');
+      });
       go.addEventListener('click', () => {
         dismissOnboarding();
         finish('training');
@@ -131,7 +142,7 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
         window.setTimeout(() => card.remove(), 180);
         first?.focus();
       });
-      card.appendChild(h('div', { class: 'mo-btns' }, skip, go));
+      card.appendChild(h('div', { class: 'mo-btns' }, skip, look, go));
       el.appendChild(card);
       focus = go;
     }
@@ -173,6 +184,9 @@ function predatorFreeLine(nowMs: number): { el: HTMLElement; cleanup: () => void
   document.addEventListener('pointerdown', outside);
   return { el: line, cleanup: () => document.removeEventListener('pointerdown', outside) };
 }
+
+/** The new-pilot card's button for a player who only wants to look around: into Instant Action's sightseeing flight. */
+export const SIGHTSEEING_LABEL = 'Just look around Auckland';
 
 const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
 
