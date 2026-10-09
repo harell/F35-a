@@ -281,6 +281,8 @@ export interface IntelMarker {
   radius?: number;
   /** Only there on this difficulty and harder (the script item's minDifficulty): intelFor filters by it. */
   minDifficulty?: Difficulty;
+  /** Not there at the start: it comes with a later wave (g02's second AD boat escorts wave 2). */
+  later?: boolean;
 }
 
 export interface MissionDef {

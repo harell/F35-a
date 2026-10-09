@@ -242,17 +242,19 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
   });
 }
 
-/** The Known threats chips ('2× SA-6 · 20 km'): SAM and air markers, alike ones counted together. */
+/** The Known threats chips ('2× SA-6 · 20 km'): SAM and air markers, alike ones counted together (a later wave's apart). */
 export function knownThreats(intel: readonly IntelMarker[]): { kind: 'sam' | 'air'; text: string }[] {
-  const counted = new Map<string, { kind: 'sam' | 'air'; label: string; radius?: number; n: number }>();
+  const counted = new Map<string, { kind: 'sam' | 'air'; label: string; radius?: number; later: boolean; n: number }>();
   for (const t of intel) {
     if (t.kind !== 'sam' && t.kind !== 'air') continue;
-    const key = `${t.kind}|${t.label}`;
+    const later = !!t.later;
+    const key = `${t.kind}|${t.label}|${later}`;
     const e = counted.get(key);
     if (e) e.n++;
-    else counted.set(key, { kind: t.kind, label: t.label, radius: t.radius, n: 1 });
+    else counted.set(key, { kind: t.kind, label: t.label, radius: t.radius, later, n: 1 });
   }
-  return [...counted.values()].map((t) => ({ kind: t.kind, text: `${t.n > 1 ? `${t.n}× ` : ''}${t.label}${t.radius ? ` · ${Math.round(t.radius / 1000)} km` : ''}` }));
+  // a later wave's threats get their own chip (r3.1 R31-7: g02's wave-2 escort went unlisted)
+  return [...counted.values()].map((t) => ({ kind: t.kind, text: `${t.n > 1 ? `${t.n}× ` : ''}${t.label}${t.radius ? ` · ${Math.round(t.radius / 1000)} km` : ''}${t.later ? ' · later' : ''}` }));
 }
 
 /** Footer chip of a mission that flies at a fixed difficulty (training: Pilot): not a button. */

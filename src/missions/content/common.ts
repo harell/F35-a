@@ -165,9 +165,10 @@ export function target(
 /* ───────────────────────────── Briefing data ───────────────────────────── */
 
 /**
- * Briefing-map markers derived from the script: known SAM rings, enemy air groups present at
- * the start, ground-target groups (centroid), friendly flights, airbases. Each keeps its item's
- * minDifficulty, so the briefing shows the threats of the difficulty being flown (intelFor).
+ * Briefing-map markers derived from the script: known SAM rings (a later wave's marked `later`, where
+ * it spawns), enemy air groups present at the start, ground-target groups (centroid), friendly
+ * flights, airbases. Each keeps its item's minDifficulty, so the briefing shows the threats of the
+ * difficulty being flown (intelFor).
  */
 export function autoIntel(script: MissionScript, features: SceneryFeature[]): IntelMarker[] {
   const out: IntelMarker[] = [];
@@ -179,9 +180,10 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
   }
   for (const s of script.sams) {
     const known = s.known ?? !s.emcon;
-    if (!known || (s.team ?? 'red') !== 'red' || (s.spawn && s.spawn.kind !== 'start')) continue;
+    if (!known || (s.team ?? 'red') !== 'red') continue;
     const d = SAM_DATA[s.type];
-    out.push({ kind: 'sam', label: SAM_INFO[s.type].nato.split(' ')[0], x: s.x, z: s.z, radius: d.engageMax, minDifficulty: s.minDifficulty });
+    const later = !!s.spawn && s.spawn.kind !== 'start';
+    out.push({ kind: 'sam', label: SAM_INFO[s.type].nato.split(' ')[0], x: s.x, z: s.z, radius: d.engageMax, minDifficulty: s.minDifficulty, ...(later ? { later } : {}) });
   }
   const groundGroups = new Map<string, { xs: number; zs: number; n: number; type: GroundTargetType; team: string; name?: string; min?: Difficulty }>();
   for (const g of script.ground) {

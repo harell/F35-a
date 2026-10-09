@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Difficulty } from '../src/core/types';
 import { intelFor, missionById } from '../src/missions';
+import { difficultyAtLeast } from '../src/missions/runtime/state';
 import { knownThreats } from '../src/ui/screens/briefing';
 
 const chips = (id: string, d: Difficulty) => knownThreats(intelFor(missionById(id)!, d)).map((t) => t.text);
@@ -25,6 +26,21 @@ describe('briefing intel follows the difficulty (playtest r2 2.1-b)', () => {
 
   it('g02 maps the third AD boat on Veteran only', () => {
     expect(sams('g02', 'veteran') - sams('g02', 'pilot')).toBe(1);
+  });
+
+  // playtest r3.1 (R31-7): Pilot listed 'AD · 12 km' though the wave-2 escort (ad2) comes later and
+  // the harbour picket (ad_h) is there from the start
+  it('g02 lists every AD boat of the difficulty, the wave-2 escort as a later one', () => {
+    const g02 = missionById('g02')!;
+    const boats = (d: Difficulty) => g02.script.sams.filter((x) => x.type === 'ad_boat' && difficultyAtLeast(d, x.minDifficulty)).length;
+    for (const d of ['recruit', 'pilot', 'veteran'] as const) {
+      expect(sams('g02', d), d).toBe(boats(d));
+      const c = chips('g02', d).filter((t) => t.includes('AD'));
+      expect(c, d).toContain('AD · 12 km · later');
+      const now = c.find((t) => !t.endsWith('later'))!;
+      expect(Number(now.match(/^(\d+)× /)?.[1] ?? 1), `${d}: ${JSON.stringify(c)}`).toBe(boats(d) - 1);
+    }
+    expect(intelFor(g02, 'pilot').filter((i) => i.later).map((i) => i.kind)).toEqual(['sam']);
   });
 
   it('a training lesson briefs its fixed Pilot whatever the setting', () => {
