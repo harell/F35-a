@@ -190,7 +190,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       briefing = [
         `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
-        n >= 3 ? 'Viper 2 is on your wing It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
+        n >= 3 ? 'Viper 2 is on your wing. It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'The default load adds an AIM-9X on each outer pylon for the close fight, at a little stealth. Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;

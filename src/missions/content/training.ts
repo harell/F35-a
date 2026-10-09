@@ -95,7 +95,7 @@ export const T02: MissionDef = mission({
   kind: 'training',
   index: 2,
   title: 'Air-to-Air',
-  subtitle: 'AMRAAM and AIM-9X vs Shahed drones',
+  subtitle: 'Missiles and the heat-seeker on drones',
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
@@ -219,7 +219,7 @@ export const T06: MissionDef = mission({
   kind: 'training',
   index: 6,
   title: 'Live SAMs',
-  subtitle: 'Past a live SA-6 with an AARGM-ER',
+  subtitle: 'Low past a live SA-6, then kill its radar',
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
@@ -292,6 +292,8 @@ const T03_READY: Condition = {
   ],
 };
 const GUN = G01_GUN_PASS;
+/** The lesson's clock (s): time for several tries (the chip on the briefing shows it). */
+const T03_TIME_LIMIT = 720;
 
 export const T03: MissionDef = mission({
   id: 't03',
@@ -304,12 +306,12 @@ export const T03: MissionDef = mission({
   briefing: [
     'Shaheds fly at about 100 knots; you can barely fly that slowly. In Buzz Kill you pass the swarm head-on, then turn round and come in behind it. Turn round upwards, with an Immelmann: you stay over the drone\'s track and slow down at the top.',
     'A training Shahed comes at you head-on, 500 ft below. Let it pass under you and count three. Then full afterburner and pull straight up; over the top, on your back, roll upright. The drone is now ahead of you and below, going your way.',
-    `Then the gun pass, as in Buzz Kill: throttle back and come in behind it at about ${GUN.approachKt} knots, closing at about ${GUN.closureKt}. Sit about ${GUN.belowFt} ft below it and fire short bursts at ${GUN.burstFrom} to ${GUN.burstTo} m. Only the gun today, and its warhead is live: kill it beyond 150 m.`,
+    `Then the gun pass, as in Buzz Kill: throttle back and come in behind it at about ${GUN.approachKt} knots, closing at about ${GUN.closureKt}. Sit about ${GUN.belowFt} ft below it and fire short bursts at ${GUN.burstFrom} to ${GUN.burstTo} m. Only the gun today, and its warhead is live: kill it beyond 150 m. The clock gives you ${T03_TIME_LIMIT / 60} minutes: time for several tries.`,
   ],
   recommendedLoadout: 'clean',
   allowedLoadouts: ['clean'],
   gunAmmo: 400,
-  timeLimit: 720,
+  timeLimit: T03_TIME_LIMIT,
   player: T03_START,
   script: {
     autoHints: false,
