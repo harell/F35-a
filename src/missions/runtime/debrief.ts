@@ -148,8 +148,8 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     else if (r.reason === REASONS.ao) add('Stay inside the area of operations — turn back as soon as RETURN TO AO shows.');
     // g03's stoat at the nest: a lesson drills the release at a stop on targets that can't shoot back
     else if (/stoat/i.test(r.reason)) add('Release while the stoat stops at a bait station: Training 07, Small Targets, drills that release on rats that can’t shoot back.');
-    // T07's own rats: the lesson's two rules
-    else if (/rat reached/i.test(r.reason)) add('StormBreakers on the rats stopped at the drains; once a rat is swimming, a JDAM, released low and close.');
+    // T07's own rats: the lesson's rule
+    else if (/rat reached/i.test(r.reason)) add('Release the StormBreaker while the rat stops at a drain: running or swimming, the bomb can’t track it.');
     else if (r.reason.startsWith('Objective failed')) {
       if (/tanker|Kōtuku/i.test(r.reason)) add('Escort the tanker: StormBreakers on the suicide boats first, released early from height, then the missile boats before they count down.');
       else add('A primary objective failed: the objective list in the pause menu shows what must survive or die.');

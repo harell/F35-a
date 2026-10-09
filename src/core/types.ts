@@ -120,7 +120,6 @@ export type LoadoutId =
   /** 2× AARGM-ER + 2× GBU-53/B, no air-to-air missile: open a gap, then one precise shot (g03, #197). */
   | 'sead_precision'
   /** 4× GBU-53/B + 1× GBU-31 internal, 2× GBU-31 on the wing pylons: both bombs side by side (t07). */
-  | 'strike_mixed'
   | 'a2a_beast'
   /** 4× AIM-120D internal + 2× AIM-9X on the outer pylons: Instant Action Dogfight's default (#116). */
   | 'a2a_dogfight'

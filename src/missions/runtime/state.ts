@@ -178,8 +178,6 @@ export class MissionState {
   civilianTrainKills = 0;
   /** Of which named superyachts (#145), by name, in the order they were lost. */
   readonly civilianYachts: string[] = [];
-  /** Homes inside the damage ring of the player's bombs (MissionScript.collateral, runtime/collateral.ts). */
-  homesHit = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */
   scriptedStrike = false;
 

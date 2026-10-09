@@ -538,16 +538,10 @@ export interface MissionScript {
   campaignFinale?: boolean;
   /**
    * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
-   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` (one
-   * group, or several: t07's waves) the player killed, under `removed.label`.
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
+   * player killed, under `removed.label`.
    */
-  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string | string[] } };
-  /**
-   * Count the homes the player's bombs hit (runtime/collateral.ts, t07): every building within half a
-   * weapon's blast radius of where it went off on land. Each one is called on the radio, listed in the
-   * debrief and costs score and grade (scoring.ts POINTS.home).
-   */
-  collateral?: boolean;
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower

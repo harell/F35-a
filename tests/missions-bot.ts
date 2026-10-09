@@ -244,14 +244,8 @@ export class MissionBot {
   /** Best A/G weapon we carry for a target (null = none suitable). */
   private weaponFor(t: AnyEntity): AgWeapon | null {
     const c = this.world.combat;
-    // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker for one on land,
-    // released at a stop; a JDAM only for one in the water (its blast catches a swimmer, and on a street
-    // it takes the houses: t07's lesson). On land with no StormBreaker left, wait for it to swim.
-    if (isSmallGround(t)) {
-      const swimming = this.world.terrain.isWater(t.position.x, t.position.z);
-      const w: AgWeapon = swimming ? 'gbu31' : 'gbu53';
-      return c.remaining(this.p, w) > 0 ? w : null;
-    }
+    // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker, released at a stop
+    if (isSmallGround(t)) return c.remaining(this.p, 'gbu53') > 0 ? 'gbu53' : null;
     for (const w of AG) {
       if (c.remaining(this.p, w) <= 0) continue;
       if (w === 'aargm' && !(t.kind === 'sam' && (t.radarOn || t.known) && t.type !== 'zsu23')) continue;
@@ -854,7 +848,7 @@ export class MissionBot {
    * below it; at a small target, from SMALL_TARGET_ALT, close in so the bomb lands inside its stop).
    */
   private releaseRange(weapon: AgWeapon, t?: AnyEntity): number {
-    if (t && isSmallGround(t) && this.deck === null) return weapon === 'gbu31' ? 1_400 : 4_000;
+    if (t && isSmallGround(t) && this.deck === null) return 4_000;
     if (this.deck !== null) return weapon === 'gbu31' ? 4_000 : isSdb(weapon) ? 6_000 : 15_000;
     return weapon === 'gbu31' ? 9_500 : isSdb(weapon) ? 21_000 : 28_000;
   }
@@ -974,9 +968,8 @@ export class MissionBot {
     if (this.deck !== null) alt = Math.min(alt, this.deck - 300);
     else if (isSmallGround(t)) alt = t.position.y + SMALL_TARGET_ALT;
     // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
-    // until it stops (a release now would land where it was), instead of overflying it into the defences.
-    // Not with a JDAM at a swimmer (t07): its blast does the work
-    if (isSmallGround(t) && t.velocity.lengthSq() > 0.25 && weapon !== 'gbu31') {
+    // until it stops (a release now would land where it was), instead of overflying it into the defences
+    if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) {
       const it3 = this.pilot.begin(p, 150);
       const dIp = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
       if (dIp > 1_500) _h.set(ip.x - p.position.x, 0, ip.z - p.position.z);
@@ -1013,9 +1006,8 @@ export class MissionBot {
       const b = c.bombImpactPoint(p, w);
       // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
       ok = !!b && b.inRange && (!isSdb(weapon) || R <= SDB_PRESS_RANGE);
-      // a target too small to track on the move (g03's stoat): released only while it stands still
-      // (a JDAM at a swimmer, t07: any time, its blast does the work)
-      if (isSmallGround(t) && t.velocity.lengthSq() > 0.25 && weapon !== 'gbu31') ok = false;
+      // a target too small to track on the move (g03's stoat, t07's rats): released only while it stands still
+      if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) ok = false;
     }
     if (ok) {
       p.input.fireWeapon = true;
