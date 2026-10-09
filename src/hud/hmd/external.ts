@@ -9,7 +9,7 @@ import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { bombTimeToGo, nextWaypointText, rangeLabel, rangeLabelNm } from './targets';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from './tsd';
-import { drawWeaponBlock } from './weapons';
+import { drawWeaponBlock, shootNow } from './weapons';
 
 const spdTxt = new NumText(0);
 const altTxt = new NumText(0, '', '', true);
@@ -118,7 +118,7 @@ export function drawExternalBlock(f: HudFrame): number {
       f.st.dlzScale = g.scaleMax;
       miniX = x;
       miniW = w;
-      const col = z.shoot ? pal.bright : pal.main;
+      const col = shootNow(f) ? pal.bright : pal.main;
       pen.begin();
       pen.line(xs(g.yMin), y, xs(g.yMax), y);
       pen.line(xs(g.yMax), y - 5 * u, xs(g.yMax), y + 5 * u);

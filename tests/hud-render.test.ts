@@ -1104,6 +1104,40 @@ describe('gun closure cue', () => {
   }
 });
 
+describe('AARGM cue: SHOOT only as AARGM_RULE says (playtest r2 2.1-a: SHOOT from 18.5 km)', () => {
+  /** The AARGM selected and the SA-6 designated `km` ahead (ground range), its radar `on`. */
+  const arm = (km: number, on: boolean) => {
+    const r = rig('lock', 'hud');
+    const p = r.mock.player;
+    p.stores.push({ weapon: 'aargm', count: 2, internal: true });
+    p.selectedWeapon = 'aargm';
+    const sa6 = r.mock.world.sams[0];
+    const fwd = p.velocity.clone().setY(0).normalize();
+    sa6.position.copy(p.position).addScaledVector(fwd, km * 1000).setY(0);
+    sa6.radarOn = on;
+    p.radar.lockedId = null;
+    p.radar.designatedId = sa6.id;
+    return textsOver(r, 0.5);
+  };
+
+  it('beyond 10 km: CLOSE IN, never SHOOT (the launch zone reaches ~20 km)', () => {
+    for (const km of [18.5, 13]) {
+      const texts = arm(km, true);
+      expect(find(texts, 'SHOOT').length, `${km} km`).toBe(0);
+      expect(find(texts, 'CLOSE IN').length, `${km} km`).toBeGreaterThan(0);
+    }
+  });
+
+  it('inside 10 km: SHOOT with the radar on, RADAR OFF (no SHOOT) with it off', () => {
+    let texts = arm(8, true);
+    expect(find(texts, 'SHOOT').length).toBeGreaterThan(0);
+    expect(find(texts, 'CLOSE IN').length).toBe(0);
+    texts = arm(8, false);
+    expect(find(texts, 'SHOOT').length).toBe(0);
+    expect(find(texts, 'RADAR OFF').length).toBeGreaterThan(0);
+  });
+});
+
 describe('target waypoint labels with the bandits in reach', () => {
   it('drops the target waypoint\'s name / distance once a hostile aircraft is within 5 km (the boxes take over)', () => {
     const r = rig('gun', 'hud');

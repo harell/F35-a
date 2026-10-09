@@ -17,6 +17,7 @@ import { AARGM_CLOSE_RANGE, WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { stallSpeedIas } from '../../sim/flight/performance';
+import { aargmCue } from '../../sim/weapons/fit';
 import { STILL_SPEED, isSmallGround } from '../../sim/weapons/small';
 import { evalCondition } from './conditions';
 import { controlPrefsVersion, formatControls, savedControlPrefs, withActiveScheme } from './controlsText';
@@ -211,8 +212,7 @@ const AUTO: AutoHint[] = [
         const e = hostileDesignated(p, s);
         if (!e || !armTargetable(e)) return 'AARGM homes on radars: designate an emitting SAM with TGT, then fire';
         if (Math.hypot(e.position.x - p.position.x, e.position.z - p.position.z) > AARGM_CLOSE_RANGE) return 'Close in: fire the AARGM inside 10 km, while its radar is on';
-        const z = h.zone(p, s);
-        if (z && z.shoot) return 'SHOOT — fire the AARGM, then press straight in while its radar is quiet';
+        if (aargmCue(p, e, h.zone(p, s)) === 'shoot') return 'SHOOT — fire the AARGM, then press straight in while its radar is quiet';
         return 'Fire the AARGM when SHOOT shows: its radar must be on';
       }
       if (w === 'gbu31' || w === 'gbu53') {
@@ -250,6 +250,7 @@ function ruleById(id: string): AutoHint | null {
 
 /** Minimal launch-zone shape used by the hints (CombatLaunchZone carries rShoot too). */
 interface ZoneLike {
+  weapon: WeaponId;
   shoot: boolean;
   range: number;
   rMin: number;

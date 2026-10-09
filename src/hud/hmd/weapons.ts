@@ -15,7 +15,7 @@ import { blink, type HudFrame } from './frame';
 import { TEST_HOOKS } from '../../core/data';
 import { noteCue, noteFunnelBar, notePipper } from './drawn';
 import { colText } from './flight';
-import { weaponMismatch } from '../../sim/weapons/fit';
+import { aargmCue, weaponMismatch } from '../../sim/weapons/fit';
 
 const dlzGeom = makeDlzGeometry();
 const tofTxt = new NumText(0, 'TOF ');
@@ -197,7 +197,7 @@ export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): vo
   const u = L.u;
   const g = dlzLayout(z, top, bottom, dlzGeom, st.dlzScale);
   st.dlzScale = g.scaleMax;
-  const col = z.shoot ? pal.bright : pal.main;
+  const col = shootNow(f) ? pal.bright : pal.main;
   pen.setDash('solid');
   // scale top tick + label
   pen.begin();
@@ -284,6 +284,13 @@ const AWAY = Object.fromEntries(Object.entries(WEAPON_HUD).map(([k, v]) => [k, `
  */
 export const SHOOT_HOLD_TTI = 10;
 
+/** The zone says SHOOT now; the AARGM only inside AARGM_CLOSE_RANGE of a radar that is on (aargmCue). */
+export function shootNow(f: HudFrame): boolean {
+  const z = f.zone;
+  if (!z || !z.shoot) return false;
+  return z.weapon !== 'aargm' || aargmCue(f.p, f.target, z) === 'shoot';
+}
+
 /** A missile inbound on the player with under SHOOT_HOLD_TTI seconds to go. */
 function defending(f: HudFrame): boolean {
   const inc = f.p.incoming;
@@ -331,11 +338,15 @@ export function planCues(f: HudFrame): number {
   // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
   // never lands on the target box that the pipper is tracking). Our missile already guiding on the
   // target: AMRAAM AWAY instead, steady, so a second missile isn't wasted on it (playtest r1 1.2-g);
-  // the gun keeps its SHOOT. Nothing while a missile inbound is close (defending: 1.2-f).
+  // the gun keeps its SHOOT. Nothing while a missile inbound is close (defending: 1.2-f). The AARGM
+  // says SHOOT only as AARGM_RULE does, inside 10 km of a radar that is on (r2 2.1-a): CLOSE IN before.
   const sel = p.selectedWeapon;
   const own = f.target && sel !== 'gun' && !WEAPON_IS_BOMB[sel] ? ownMissileOn(f, f.target.id) : null;
+  const arm = aargmCue(p, f.target, z);
   if (own && own.def.category !== 'bomb') addCue(AWAY[own.def.id as WeaponId] ?? AWAY.aim120, 15, pal.main, 0);
-  else if (z && z.shoot && !WEAPON_IS_BOMB[z.weapon] && !defending(f)) addCue('SHOOT', 20, pal.bright, 4);
+  else if (arm === 'close') addCue('CLOSE IN', 17, pal.main, 0);
+  else if (arm === 'quiet') addCue('RADAR OFF', 15, pal.warn, 0);
+  else if (z && shootNow(f) && !WEAPON_IS_BOMB[z.weapon] && !defending(f)) addCue('SHOOT', 20, pal.bright, 4);
   // bombs: release cue. The GPS cue (REL n / IN RANGE, the wording the briefings and hints use) shows
   // in every view, chase included; the CCIP cue goes with its pipper, which only the HMD draws
   if (WEAPON_IS_BOMB[sel]) {
@@ -549,6 +560,7 @@ export const GUN_OVERSHOOT_MIN = 150;
 export function gunOvershoot(range: number, closure: number): boolean {
   return closure > 0 && (range - GUN_OVERSHOOT_MIN) / closure < GUN_OVERSHOOT_TIME;
 }
+
 const gunVcTxt = new NumText(0, 'Vc ');
 
 /** Closure rate (m/s, positive = closing) between the player and `t`. */
