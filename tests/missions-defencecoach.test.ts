@@ -12,6 +12,7 @@ import type { MissionDef } from '../src/core/contracts';
 import { mission, site } from '../src/missions/content/common';
 import { validateMission } from '../src/missions/validate';
 import { COACH_TEXT, drillRecords, isDrillDefeat, type MissileRecord } from '../src/missions/runtime/defenceCoach';
+import { DRILL_MOVE_ON } from '../src/missions/runtime/objectives';
 import type { MissionState } from '../src/missions/runtime/state';
 import { LOADOUTS } from '../src/core/data';
 import { harness, type Harness } from './missions-helpers';
@@ -178,6 +179,28 @@ describe('drill bookkeeping', () => {
     expect(drillRecords(s, ['b'], 8, 'radar')).toHaveLength(1);
     for (const o of ['chaff', 'flares', 'notch', 'outflown'] as const) expect(isDrillDefeat(rec({ outcome: o }))).toBe(true);
     for (const o of ['short', 'void', 'hit'] as const) expect(isDrillDefeat(rec({ outcome: o }))).toBe(false);
+  });
+
+  it('moveOn: after that many missiles that did not count, the coach moves the player on and the drill completes', () => {
+    const def = drillFixture({ noHarass: true });
+    const o = def.script.objectives[0];
+    if (o.kind !== 'missile_drill') throw new Error('fixture');
+    Object.assign(o, { inARow: true, maxAgl: 200, moveOn: 4 });
+    const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
+    h.run(1);
+    const log = (h.runner as unknown as { s: MissionState }).s.missileLog;
+    const stateOf = () => h.runner.objectives.find((x) => x.id === 'o_drill')!.state;
+    // three hits and a defeat too high to count: not yet; a short round counts for nothing
+    log.push(rec({ group: 'boats', missileId: 101, launchT: 1, endT: 2, outcome: 'hit' }), rec({ group: 'boats', missileId: 102, launchT: 1, endT: 2, outcome: 'chaff', agl: 2000 }));
+    log.push(rec({ group: 'boats', missileId: 103, launchT: 1, endT: 2, outcome: 'hit' }), rec({ group: 'boats', missileId: 104, launchT: 1, endT: 2, outcome: 'short' }));
+    h.run(0.5);
+    expect(stateOf()).toBe('active');
+    log.push(rec({ group: 'boats', missileId: 105, launchT: 1, endT: 2, outcome: 'hit' }));
+    h.run(0.5);
+    expect(stateOf()).toBe('complete');
+    const radio = h.of('radio').map((r) => r.text).join(' | ');
+    expect(radio).toContain(DRILL_MOVE_ON);
+    expect(radio).not.toMatch(/Objective complete/);
   });
 
   it('refill_cms tops the dispensers up to the loadout', () => {

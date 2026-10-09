@@ -2,10 +2,11 @@
  * DEFENCE "Gulf Defence" (missile-defence drills with practice rounds, src/missions/content/trainingDefence.ts),
  * flown by the mission bot on the real LINZ coast at Pilot (training's fixed difficulty):
  *  - every range boat sits in open water;
- *  - drill 1 (above 23,000 ft) draws no shot;
- *  - the student (the bot in a defenceCoach mission: beam + CMS as taught) gets through the drills;
- *  - a pilot who ignores the warning (bot option defend: false) is stuck at drill 2: two in a row
- *    don't come by luck.
+ *  - three drills, two in a row each, no high-altitude drill and no exam (playtest 2026-10-10, 1.4-e/f);
+ *  - the student (the bot in a defenceCoach mission: beam + CMS as taught) gets through the drills
+ *    in about three minutes;
+ *  - a pilot who ignores the warning (bot option defend: false) is moved on by the coach after four
+ *    misses, so the lesson still ends (it hung at 900 s with three in a row and an exam).
  * Sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=t05 --seeds=12 --log
  */
 import { describe, expect, it } from 'vitest';
@@ -13,7 +14,8 @@ import { missionById, terrainPadsFor } from '../src/missions';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
-import { DEFENCE, T05_DEFENCE } from '../src/missions/content/trainingDefence';
+import { DEFENCE, DRILL_MOVE_ON_AFTER, T05_DEFENCE } from '../src/missions/content/trainingDefence';
+import { DRILL_MOVE_ON } from '../src/missions/runtime/objectives';
 import { runPlaythrough, type PlaythroughResult } from './missions-bot';
 
 let terrain: TerrainQueryImpl | null = null;
@@ -47,39 +49,50 @@ describe('t05 Gulf Defence', () => {
     expect(T05_DEFENCE.script.sams.every((s) => s.type === 'ad_boat' && s.noHarass)).toBe(true);
   });
 
-  it('the student flies it: every drill and the exam, drill 1 without a shot fired', { timeout: 300_000 }, () => {
+  it('three drills, two in a row each, with a way on: no high-altitude drill and no exam', () => {
+    const objs = T05_DEFENCE.script.objectives;
+    expect(objs.map((o) => o.id)).toEqual(['o_d1', 'o_d2', 'o_d3']);
+    for (const o of objs) {
+      expect(o.kind, o.id).toBe('missile_drill');
+      if (o.kind !== 'missile_drill') continue;
+      expect([o.defeat, o.inARow, o.moveOn], o.id).toEqual([2, true, DRILL_MOVE_ON_AFTER]);
+    }
+    expect(DRILL_MOVE_ON_AFTER).toBe(4);
+    // the first boat is close and ahead: nothing to fly through before the first shot
+    expect(Math.hypot(DEFENCE.b1.x - DEFENCE.start.x, DEFENCE.b1.z - DEFENCE.start.z)).toBeLessThan(15_000);
+    expect(T05_DEFENCE.player.altitude).toBeLessThan(6_000);
+    expect(T05_DEFENCE.briefing.length).toBeLessThanOrEqual(3);
+  });
+
+  it('the student flies it: every drill in about three minutes', { timeout: 300_000 }, () => {
     let won = 0;
     const log: string[] = [];
     for (const seed of [0, 1, 2, 3, 4, 5]) {
-      const r = runPlaythrough('t05', 'pilot', seed, realTerrain(), { maxT: 900, log: true });
+      const r = runPlaythrough('t05', 'pilot', seed, realTerrain(), { maxT: 600, log: true });
       const done = completed(r);
       log.push(`seed ${seed}: ${r.state}@${r.t}s ${[...done].map(([k, v]) => `${k}@${v}`).join(' ')}`);
-      if (r.state === 'success') won++;
-      // drill 1: nothing launched at the jet before it was done
-      const d1 = done.get('o_d1') ?? Infinity;
-      expect(r.events.filter((e) => /LAUNCH m_\S+ sam -> Viper 1/.test(e) && Number(e.trim().split(' ')[0]) < d1), `seed ${seed}`).toEqual([]);
+      if (r.state === 'success' && r.t <= 300) won++;
+      expect(r.state, `seed ${seed}`).toBe('success');
       expect(r.alive, `seed ${seed}: practice rounds, nothing kills the jet`).toBe(true);
     }
-    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(4);
   });
 
-  it('ignoring the missile warning does not pass drill 2 (three in a row)', { timeout: 300_000 }, () => {
-    let passed = 0;
+  it('ignoring the missile warning: the coach moves him on, so the lesson ends instead of hanging', { timeout: 300_000 }, () => {
     const log: string[] = [];
-    for (const seed of [0, 1, 2, 3, 4, 5]) {
-      const r = runPlaythrough('t05', 'pilot', seed, realTerrain(), { maxT: 600, log: true, bot: { defend: false } });
-      const done = completed(r);
-      log.push(`seed ${seed}: ${[...done].map(([k, v]) => `${k}@${v}`).join(' ')}`);
-      expect(done.has('o_d1'), `seed ${seed}`).toBe(true);
-      if (done.has('o_d2')) passed++;
+    for (const seed of [0, 1, 2]) {
+      const r = runPlaythrough('t05', 'pilot', seed, realTerrain(), { maxT: 900, log: true, bot: { defend: false } });
+      const moved = r.events.filter((e) => e.includes(DRILL_MOVE_ON)).length;
+      log.push(`seed ${seed}: ${r.state}@${r.t}s moved on ${moved}× ${[...completed(r)].map(([k, v]) => `${k}@${v}`).join(' ')}`);
+      expect(r.state, log.join('\n')).toBe('success');
+      expect(moved, log.join('\n')).toBeGreaterThanOrEqual(1);
     }
-    expect(passed, log.join('\n')).toBeLessThanOrEqual(1);
   });
 
-  it('the drill 4 boat and the exam boats appear only when their drill opens', () => {
+  it('the drill 3 boat appears only when its drill opens, 3.5 km from the pass point', () => {
     const later = T05_DEFENCE.script.sams.filter((s) => s.spawn).map((s) => s.id);
-    expect(later.sort()).toEqual(['b4', 'ex1', 'ex2']);
-    expect(Math.hypot(DEFENCE.d4Pass.x - DEFENCE.b4.x, DEFENCE.d4Pass.z - DEFENCE.b4.z)).toBeCloseTo(3500, -2);
+    expect(later).toEqual(['b3']);
+    expect(Math.hypot(DEFENCE.d3Pass.x - DEFENCE.b3.x, DEFENCE.d3Pass.z - DEFENCE.b3.z)).toBeCloseTo(3500, -2);
   });
 });
 

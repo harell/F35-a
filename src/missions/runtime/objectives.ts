@@ -10,6 +10,9 @@ import { aliveCount, deadCount, difficultyAtLeast, drivenOffCount, type MissionS
 import { POINTS } from './scoring';
 import { drillRecords, isDrillDefeat } from './defenceCoach';
 
+/** The coach's call when a 'missile_drill' with `moveOn` lets the player move on without passing it. */
+export const DRILL_MOVE_ON = 'Let\'s move on — practise this one again later.';
+
 export function createObjectives(s: MissionState): void {
   for (const def of s.script.objectives) {
     if (!difficultyAtLeast(s.difficulty.id, def.minDifficulty)) continue;
@@ -244,11 +247,17 @@ export function updateObjectives(s: MissionState, dt: number): void {
         let defeated = 0;
         let hits = 0;
         let best = 0;
+        // missiles that didn't count: a hit, or a defeat above the drill's height
+        let misses = 0;
         for (const r of recs) {
           if (r.outcome === 'hit') {
             hits++;
+            misses++;
             if (def.inARow) defeated = 0;
-          } else if (isDrillDefeat(r) && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
+          } else if (isDrillDefeat(r)) {
+            if (def.maxAgl === undefined || r.agl <= def.maxAgl) defeated++;
+            else misses++;
+          }
           best = Math.max(best, defeated);
         }
         // (a streak that reached the mark counts even if a hit ended in the same tick)
@@ -256,6 +265,12 @@ export function updateObjectives(s: MissionState, dt: number): void {
         st.progress = { done: Math.min(defeated, def.defeat), total: def.defeat };
         if (def.maxHits !== undefined && hits > def.maxHits) setState(s, o, 'failed');
         else if (defeated >= def.defeat) setState(s, o, 'complete');
+        else if (def.moveOn !== undefined && misses >= def.moveOn) {
+          // the coach moves the player on: no "objective complete" call for a drill not passed
+          s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. ${DRILL_MOVE_ON}`, priority: 2 });
+          s.hud('DRILL SKIPPED — MOVING ON', 'info', 3);
+          setState(s, o, 'complete', false);
+        }
         break;
       }
       case 'rtb': {

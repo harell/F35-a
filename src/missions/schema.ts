@@ -414,9 +414,11 @@ export type ObjectiveDef = ObjectiveBase &
        * player by the sites of `groups` since it opened have been defeated (only `guidance` ones, and only
        * with the jet below `maxAgl` m when the missile ended, when given). `inARow`: that many in a row,
        * a hit starts the count again (luck alone rarely strings them together). With `maxHits`, it fails
-       * once more hits than that land.
+       * once more hits than that land. With `moveOn`, the coach lets the player move on once that many of
+       * the drill's missiles have not counted (a hit, or a defeat above `maxAgl`): a radio call, and the
+       * drill completes (a casual player who hasn't got it yet is never stuck on one drill).
        */
-    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number; inARow?: boolean }
+    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number; inARow?: boolean; moveOn?: number }
     | /** Fly a vertical manoeuvre (loop / Immelmann) after the objective opens (runtime/maneuvers.ts). */
     { kind: 'maneuver'; maneuver: ManeuverId }
   );

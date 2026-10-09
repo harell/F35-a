@@ -593,10 +593,13 @@ export class MissionBot {
     const d = Math.hypot(p.position.x - wp.position.x, p.position.z - wp.position.z);
     if (d < 1_500) this.extending = true;
     else if (d > 8_000) this.extending = false;
-    if (!this.extending) return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
-    _q.set(p.position.x - wp.position.x, 0, p.position.z - wp.position.z).normalize();
-    _h.copy(wp.position).addScaledVector(_q, 14_000);
-    this.nav(_h, alt, 'EXTEND', dt, false, 100);
+    // out, or back in, as a level turn (a reversal straight at the point is flown as a climb that
+    // bleeds the jet to 150 kt at 15,000 ft before it is back in)
+    const sign = this.extending ? -1 : 1;
+    _h.set((wp.position.x - p.position.x) * sign, 0, (wp.position.z - p.position.z) * sign);
+    turnLimited(p, _h, 60);
+    const aim = _q.copy(p.position).addScaledVector(_h.normalize(), 5_000);
+    this.nav(aim, alt, this.extending ? 'EXTEND' : 'DRILL', dt, false, 100);
   }
 
   /** The open drill is a heat-seeker drill (the shoulder-launched missile fires at any aspect: no racetrack). */
