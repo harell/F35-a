@@ -314,7 +314,7 @@ export const createHud: CreateHud = (canvas, events) => {
       }
       if (dirty) clear();
       dirty = false;
-      st.step(ctx.dt, ctx.paused);
+      st.step(ctx.dt, ctx.paused, holdsMessage(ctx.player));
       if (TEST_HOOKS) beginDrawn(st.frame);
       if (!ctx.world || !ctx.camera) {
         // no session (teardown): forget everything from the previous mission
@@ -535,7 +535,7 @@ export const createHud: CreateHud = (canvas, events) => {
       // info block + inset): every label placed after this dodges them, the ladder knocks out under them
       reserveFixedZones(f);
       // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
-      const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
+      const critical = holdsMessage(p);
       if (!zoomed) {
         const below = planCues(f);
         const cur = st.messages.current;
@@ -736,7 +736,7 @@ export const createHud: CreateHud = (canvas, events) => {
         };
       },
       stepClock(ctx) {
-        st.step(ctx.dt, false);
+        st.step(ctx.dt, false, holdsMessage(ctx.player));
         const p = ctx.player;
         if (p && p.id !== st.playerId) {
           st.resetPlayer();
@@ -755,6 +755,11 @@ export const createHud: CreateHud = (canvas, events) => {
 };
 
 /** The DAS window's frame: a thin ring round the hole in the panel and its 'DAS' tag on top (#116). */
+/** A life-critical warning (PULL UP, MISSILE, STALL) holds the centre message back (priority 4+ shows through). */
+function holdsMessage(p: FrameContext['player']): boolean {
+  return !!p && (p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled);
+}
+
 function drawDasFrame(f: HudFrame): void {
   const { pen, pal, L } = f;
   const d = dasWindow;

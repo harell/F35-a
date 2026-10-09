@@ -105,7 +105,8 @@ export class HudState {
     slot.y = NaN;
   }
 
-  step(dt: number, paused: boolean): void {
+  /** `holdMessage`: a life-critical warning holds the centre message back (`MessageQueue.update`). */
+  step(dt: number, paused: boolean, holdMessage = false): void {
     this.clock += dt;
     this.frame++;
     if (paused) return;
@@ -118,7 +119,7 @@ export class HudState {
     if (!this.objHold) this.objShow = Math.max(0, this.objShow - dt);
     this.objFree = this.objYield ? 0 : this.objFree + dt;
     this.radio.update(dt);
-    this.messages.update(dt);
+    this.messages.update(dt, holdMessage);
     this.kills.update(dt);
     for (const h of this.hits) {
       if (!h.active) continue;

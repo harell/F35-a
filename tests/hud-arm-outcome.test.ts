@@ -84,46 +84,72 @@ describe('HUD: what the player\'s AARGM did (r2 F2)', () => {
   });
 
   it('the HUD draws the line when the sim reports the player\'s AARGM ended at a quiet site', () => {
-    installPath2D();
-    const mock = buildMock('aa');
-    const p = mock.player;
-    const W = 844;
-    const H = 390;
-    const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
-    const hud = createHud(canvas, mock.events);
-    hud.resize(W, H, 1);
-    hud.setVisible(true);
-    const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
-    camera.position.copy(p.position).add(new Vector3(0, 4.5, 20));
-    camera.updateMatrixWorld();
-    const ctx: FrameContext = {
-      dt: 1 / 30,
-      time: 0,
-      world: mock.world,
-      player: p,
-      camera,
-      viewMode: 'hud',
-      focusId: p.id,
-      mission: mock.mission,
-      settings: { ...DEFAULT_SETTINGS },
-      quality: { ...QUALITY_PRESETS.medium },
-      paused: false,
-      screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-    };
-    const frame = (): string => {
-      fake.reset();
-      ctx.time += 1 / 30;
-      hud.update(ctx);
-      return fake.texts.map((t) => t.text).join(' ').toUpperCase();
-    };
+    const { mock, frame } = hudRig();
     frame();
     const sa6 = mock.world.sams[0] as SamSiteEntity;
     sa6.radarOn = false;
     sa6.state = 'emcon';
-    const arm = new MissileEntity(mock.world.nextId(), MUNITIONS.aargm, 'blue', p.id, sa6.id);
+    const arm = new MissileEntity(mock.world.nextId(), MUNITIONS.aargm, 'blue', mock.player.id, sa6.id);
     mock.events.emit('munition:end', { missile: arm, position: sa6.position.clone().add(v3(150, 0, 0)), reason: 'ground', targetId: sa6.id });
     let drawn = '';
     for (let i = 0; i < 4; i++) drawn += frame();
     expect(drawn).toContain('SA-6 WENT QUIET');
   });
+
+  // playtest r3.1 (R31-1): the AARGM usually hits while the site's rounds are still flying at the jet;
+  // the MISSILE warning holds the centre slot, and the line used to age out unseen behind it
+  it('a hit while a missile is inbound: HIT — DAMAGED shows once the defence is over', () => {
+    const { mock, frame } = hudRig();
+    const p = mock.player;
+    frame();
+    const sa6 = mock.world.sams[0] as SamSiteEntity;
+    sa6.health = sa6.maxHealth * 0.5;
+    p.incoming = [{ missileId: 9999, bearing: -0.4, elevation: -0.3, distance: 6000, timeToImpact: 8, guidance: 'radar' }];
+    const arm = new MissileEntity(mock.world.nextId(), MUNITIONS.aargm, 'blue', p.id, sa6.id);
+    mock.events.emit('munition:end', { missile: arm, position: sa6.position.clone(), reason: 'hit', targetId: sa6.id });
+    let during = '';
+    for (let i = 0; i < 30 * 8; i++) during += frame();
+    expect(during).not.toContain('HIT — DAMAGED');
+    p.incoming = [];
+    let after = '';
+    for (let i = 0; i < 30; i++) after += frame();
+    expect(after).toContain('SA-6 HIT — DAMAGED');
+  });
 });
+
+/** A HUD over the mock 'aa' scene (844x390, HUD view) and a frame stepper returning the text it drew. */
+function hudRig() {
+  installPath2D();
+  const mock = buildMock('aa');
+  const p = mock.player;
+  const W = 844;
+  const H = 390;
+  const { canvas, ctx: fake } = makeFakeCanvas(W, H, 1);
+  const hud = createHud(canvas, mock.events);
+  hud.resize(W, H, 1);
+  hud.setVisible(true);
+  const camera = new PerspectiveCamera(60, W / H, 0.5, 60_000);
+  camera.position.copy(p.position).add(new Vector3(0, 4.5, 20));
+  camera.updateMatrixWorld();
+  const ctx: FrameContext = {
+    dt: 1 / 30,
+    time: 0,
+    world: mock.world,
+    player: p,
+    camera,
+    viewMode: 'hud',
+    focusId: p.id,
+    mission: mock.mission,
+    settings: { ...DEFAULT_SETTINGS },
+    quality: { ...QUALITY_PRESETS.medium },
+    paused: false,
+    screen: { width: W, height: H, dpr: 1, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+  };
+  const frame = (): string => {
+    fake.reset();
+    ctx.time += 1 / 30;
+    hud.update(ctx);
+    return fake.texts.map((t) => t.text).join(' ').toUpperCase();
+  };
+  return { mock, frame };
+}
