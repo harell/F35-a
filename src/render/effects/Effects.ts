@@ -461,7 +461,6 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const DUST_COL = new Color(0x9b8a6c);
   const FIREBALL_CORE: RGB = [1, 0.5, 0.12];
   const SHOCK_COL = new Color(0xfff2d8);
-  const FOAM_COL = new Color(0xf0f4f5);
 
   /** A vessel (a ship, a fast boat, an air-defence boat): a munition that hit it went off on its hull. */
   function onHull(id: number | null): boolean {
@@ -587,7 +586,39 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       col1(P, C.steam, 0);
       smoke.spawn(P, t);
     }
-    pulses.fire('ring', x, 0.3, z, w, h * 1.3, 4, FOAM_COL, 0.75);
+    sprayRing(x, z, w, h * 0.5, d, t);
+  }
+
+  /**
+   * A ring of white spray thrown out low over the water round a burst from radius `r0` (m), the fastest
+   * `out` m/s. On the sea an explosion used to lay a flat translucent foam / dust disc there that read as
+   * a sticker on the water (playtest r2 F10): spray has height, catches the light and falls back.
+   */
+  function sprayRing(x: number, z: number, r0: number, out: number, d: number, t: number): void {
+    const n = count(24, d);
+    for (let i = 0; i < n; i++) {
+      resetSpawn(P);
+      const a = (i / n) * 6.283 + rnd() * 0.25;
+      const sp = out * (0.7 + 0.3 * rnd());
+      P.x = x + Math.cos(a) * r0;
+      P.y = 0.6;
+      P.z = z + Math.sin(a) * r0;
+      P.vx = Math.cos(a) * sp;
+      P.vz = Math.sin(a) * sp;
+      P.vy = out * (0.35 + 0.25 * rnd());
+      P.drag = 1.2;
+      P.grav = -9.8;
+      P.size0 = r0 * 0.5 + 1;
+      P.size1 = r0 * 1.4 + 3;
+      P.sizeCurve = 1.5;
+      P.life = 1.4 + rnd() * 0.8;
+      P.variant = (rnd() * 4) | 0;
+      P.rot = rnd() * 6;
+      col0(P, C.water, 0.95);
+      col1(P, C.steam, 0);
+      P.fadeIn = 0.02;
+      smoke.spawn(P, t);
+    }
   }
 
   function waterSplash(x: number, y: number, z: number, S: number, d: number, t: number): void {
@@ -635,7 +666,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       col1(P, C.steam, 0);
       smoke.spawn(P, t);
     }
-    pulses.fire('ring', x, 0.3, z, S * 0.2, S * 2.5, 2.5, FOAM_COL, 0.55);
+    sprayRing(x, z, S * 0.2, S * 1.4, d, t);
     void y;
   }
 
@@ -1294,12 +1325,14 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         const type = (entity as { type: string }).type;
         const bigFire = type === 'fuel';
         const gy = groundAt(p.x, p.z);
+        // a boat (an AD, missile or suicide boat): its secondaries go off in the water, not as dust rings
+        const surf = world.terrain.isWater(p.x, p.z) ? 'water' : 'ground';
         // tall, long-lived fire + smoke column readable from several km
         startFire(p.x, gy, p.z, bigFire ? 2.8 : 1.7, bigFire ? 170 : 120);
         groundPillar(p.x, gy, p.z, bigFire ? 1.6 : 1);
         const n = bigFire ? 4 : 3;
         for (let i = 0; i < n; i++)
-          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', 'ground');
+          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', surf);
       }
     }),
     events.on('landmark:destroyed', ({ landmark }) => {
