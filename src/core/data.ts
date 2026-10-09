@@ -375,7 +375,8 @@ export const WEAPON_INFO: Record<WeaponId, { name: string; short: string; kind: 
   aim120: { name: 'AIM-120D AMRAAM', short: 'AMRAAM', kind: 'aam' },
   aim9x: { name: 'AIM-9X Sidewinder', short: 'AIM-9X', kind: 'aam' },
   gbu31: { name: 'GBU-31 JDAM', short: 'JDAM', kind: 'bomb' },
-  gbu53: { name: 'GBU-53/B StormBreaker', short: 'SDB II', kind: 'bomb' },
+  // short: the designation, as the SMS page reads ("StormBreaker" doesn't fit the FIRE button; r1 1.2-h)
+  gbu53: { name: 'GBU-53/B StormBreaker', short: 'GBU-53', kind: 'bomb' },
   aargm: { name: 'AGM-88G AARGM-ER', short: 'AARGM', kind: 'agm' },
 };
 

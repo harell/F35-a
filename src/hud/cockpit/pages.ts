@@ -14,7 +14,7 @@ import { BINGO_FRACTION } from '../../core/data';
 import { AB_DETENT } from '../../core/types';
 import type { AircraftEntity, StoreStation } from '../../sim/entities';
 import { civilHidden } from '../../sim/entities';
-import { AIRCRAFT_LABEL, WARNING_INFO, WEAPON_HUD, entityLabel, groupThousands, hmm } from '../hmd/format';
+import { AIRCRAFT_LABEL, WARNING_INFO, entityLabel, groupThousands, hmm } from '../hmd/format';
 import type { Pen } from '../hmd/pen';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from '../hmd/tsd';
 import type { WarningId, WeaponId } from '../../core/types';
@@ -259,7 +259,8 @@ function stationCount(stores: StoreStation[], w: WeaponId): number {
   return n;
 }
 
-const WEAPON_NAME: Record<WeaponId, string> = {
+/** The page's title line: the selected weapon's designation. */
+export const WEAPON_NAME: Record<WeaponId, string> = {
   gun: 'GAU-22',
   aim120: 'AIM-120D',
   aim9x: 'AIM-9X',
@@ -267,6 +268,9 @@ const WEAPON_NAME: Record<WeaponId, string> = {
   gbu53: 'GBU-53',
   aargm: 'AGM-88G',
 };
+
+/** A station's tag on the planform (4 characters at most): the HMD's weapon name, the GBU-53's number. */
+const STATION_TAG: Record<WeaponId, string> = { gun: 'GUN', aim120: 'AMRA', aim9x: '9X', gbu31: 'JDAM', gbu53: 'G53', aargm: 'AARG' };
 
 export const drawSmsPage: PageFn = (pen, x, y, w, h, d) => {
   const { p } = d;
@@ -335,7 +339,7 @@ export const drawSmsPage: PageFn = (pen, x, y, w, h, d) => {
       g.fill();
     }
     pen.strokePlain(col, 2.5);
-    pen.text(WEAPON_HUD[st.weapon].slice(0, 4), X, Y - 34, col, 17);
+    pen.text(STATION_TAG[st.weapon], X, Y - 34, col, 17);
     pen.text(String(st.count), X, Y + 1, col, 24);
   }
 };

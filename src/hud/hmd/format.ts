@@ -60,7 +60,7 @@ export const WEAPON_HUD: Record<WeaponId, string> = {
   aim120: 'AMRAAM',
   aim9x: '9X',
   gbu31: 'JDAM',
-  gbu53: 'SDB II',
+  gbu53: 'GBU-53',
   aargm: 'AARGM',
 };
 

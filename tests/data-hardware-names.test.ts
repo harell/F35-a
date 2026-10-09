@@ -12,6 +12,8 @@ import { AIRCRAFT_INFO, SAM_INFO, WEAPON_INFO } from '../src/core/data';
 import { MUNITIONS } from '../src/sim/weapons/defs';
 import { CODEX_WEAPONS } from '../src/ui/codex/data';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
+import { WEAPON_HUD } from '../src/hud/hmd/format';
+import { WEAPON_NAME } from '../src/hud/cockpit/pages';
 
 describe('hardware names (#211)', () => {
   it('Russian missiles show the NATO designation and reporting name in brackets', () => {
@@ -31,6 +33,17 @@ describe('hardware names (#211)', () => {
       expect(CODEX_WEAPONS.find((w) => w.id === id)?.name, id).toBe(WEAPON_INFO[id].name);
     }
     expect(CODEX_WEAPONS.find((w) => w.id === 'gun')?.name).toBe(WEAPON_INFO.gun.name);
+  });
+
+  it('one bomb, one short name: the GBU-53/B reads GBU-53 on the FIRE button, the HMD, the SMS page and its missile label (r1 1.2-h)', () => {
+    const short = WEAPON_INFO.gbu53.short;
+    expect(short).toBe('GBU-53');
+    expect(WEAPON_INFO.gbu53.name.startsWith(short)).toBe(true);
+    expect(WEAPON_HUD.gbu53).toBe(short);
+    expect(WEAPON_NAME.gbu53).toBe(short);
+    expect(MUNITIONS.gbu53.short).toBe(short);
+    // and every player weapon's missile label is its stores-list short name
+    for (const id of ['aim120', 'gbu31', 'gbu53', 'aargm'] as const) expect(MUNITIONS[id].short, id).toBe(WEAPON_INFO[id].short);
   });
 
   it('fighters: designation plus reporting name, the same in both tables', () => {

@@ -129,14 +129,14 @@ describe('strike_maritime: a mission that allows it', () => {
     expect(p.gunAmmo).toBe(180);
   });
 
-  it('the cockpit stores page shows them: SDB II 8 and AARGM 2 on the stations, QTY of the selected weapon', () => {
+  it('the cockpit stores page shows them: G53 8 and AARG 2 on the stations, QTY of the selected weapon', () => {
     const h = harness(offering(), 'pilot', FULL);
     const p = h.world.player!;
     let texts = smsTexts(p);
     expect(texts).toContain('GBU-53');
     expect(texts).toContain('QTY 8');
-    // station boxes: label (first four letters of the HUD name) and count
-    expect(texts).toContain('SDB ');
+    // station boxes: tag (pages.ts STATION_TAG: the GBU-53's number, as its title line reads) and count
+    expect(texts).toContain('G53');
     expect(texts).toContain('8');
     expect(texts).toContain('AARG');
     expect(texts).toContain('2');

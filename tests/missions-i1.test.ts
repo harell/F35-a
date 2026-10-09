@@ -291,7 +291,7 @@ describe('i1: a strike package keeps its route', () => {
 });
 
 describe('i1: hints follow the selected weapon (SEAD)', () => {
-  it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; SDB II → names the SDB II', () => {
+  it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; GBU-53 → names the GBU-53', () => {
     // the reviewers' case: AARGM selected, SA-6 designated, the EW radar (a ground target) in range
     const h = harness(seadFixture());
     const p = h.world.player!;
@@ -308,7 +308,7 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     const all = [...texts];
     expect(all.some((t) => /AARGM/.test(t))).toBe(true);
     expect(all.filter((t) => /JDAM/.test(t))).toEqual([]);
-    // SDB II selected, nothing designated → the hint names the real store
+    // GBU-53 selected, nothing designated → the hint names the real store
     const h2 = harness(seadFixture());
     const p2 = h2.world.player!;
     const t2 = new Set<string>();
@@ -318,7 +318,7 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
       if (p2.radar.designatedId !== null) h2.world.combat.designate(p2, null, h2.world);
       if (h2.runner.hint) t2.add(h2.runner.hint);
     });
-    expect([...t2].some((t) => /SDB/.test(t))).toBe(true);
+    expect([...t2].some((t) => /GBU-53/.test(t))).toBe(true);
     expect([...t2].filter((t) => /JDAM/.test(t))).toEqual([]);
   });
 

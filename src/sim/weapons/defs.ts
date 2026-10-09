@@ -234,7 +234,7 @@ export const MUNITIONS: Record<MunitionId, Def> = {
     ...BASE,
     id: 'gbu53',
     name: 'GBU-53/B StormBreaker',
-    short: 'SDB II',
+    short: 'GBU-53',
     category: 'bomb',
     guidance: 'tri_mode',
     launch: 'drop',
