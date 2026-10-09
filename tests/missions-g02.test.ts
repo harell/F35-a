@@ -181,15 +181,16 @@ describe('g02 Straight Outta Hauraki: content', () => {
     expect(p.altitude).toBeLessThan(ad.altMax);
     expect(reach(p.altitude)).toBeLessThan(ad.engageMax);
     for (const g of [...G02.script.ground, ...G02.script.sams]) {
-      if (g.group === G02_TANKER.group) continue;
+      // (the harbour picket is a bonus target under the run-in, outside its own reach of the start: validateMission)
+      if (g.group === G02_TANKER.group || g.id === 'ad_h') continue;
       const d = Math.hypot(g.x - p.x, g.z - p.z);
       expect(d, g.id).toBeGreaterThan(reach(p.altitude) + 5_000);
       if (g.group === G02_GROUPS.missile) expect(d, g.id).toBeGreaterThan(reach(ad.altMax) + 2_000);
     }
   });
 
-  it('the boat mix: 2 air-defence, 3 missile, 3 suicide; Recruit one suicide boat fewer (#115); Veteran adds a suicide boat and a third air-defence boat', { timeout: 60_000 }, () => {
-    const want: Record<Difficulty, [number, number, number]> = { recruit: [2, 3, 2], pilot: [3, 3, 2], veteran: [4, 3, 3] };
+  it('the boat mix: 2 air-defence escorts, 3 missile, 3 suicide; Recruit one suicide boat fewer (#115); Pilot and Veteran add the harbour picket, Veteran a suicide boat and a third escort', { timeout: 60_000 }, () => {
+    const want: Record<Difficulty, [number, number, number]> = { recruit: [2, 3, 2], pilot: [3, 3, 3], veteran: [4, 3, 4] };
     const bombs = LOADOUTS[G02.recommendedLoadout].stores.filter((s) => s.weapon === 'gbu53').reduce((n, s) => n + s.count, 0);
     for (const d of DIFFS) {
       const m = setup(d);
@@ -214,11 +215,12 @@ describe('g02: the missile wave comes in on a trigger (#115)', { timeout: 60_000
     const radio = m.record('radio');
     m.tick(G02_MISSILE_WAVE_AT - 1);
     expect(m.group(G02_GROUPS.missile)).toEqual([]);
-    expect(m.group(G02_GROUPS.ad).length).toBe(1); // the suicide wave's escort only
+    const escorts = () => m.group(G02_GROUPS.ad).filter((b) => b.kind === 'sam' && b.boat?.escortGroup);
+    expect(escorts().length).toBe(1); // the suicide wave's escort only
     expect(m.objective('o_missile').state).toBe('active'); // not won by an empty group
     m.tick(2);
     expect(m.group(G02_GROUPS.missile).length).toBe(3);
-    expect(m.group(G02_GROUPS.ad).length).toBe(2);
+    expect(escorts().length).toBe(2);
     const ad2 = m.group(G02_GROUPS.ad).find((b) => b.kind === 'sam' && b.boat?.escortGroup === G02_GROUPS.missile);
     expect(ad2).toBeDefined();
     expect(radio.some((r) => /missile boats in the water/i.test(r.text) && r.t >= G02_MISSILE_WAVE_AT)).toBe(true);
