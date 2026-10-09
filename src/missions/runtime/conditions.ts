@@ -113,6 +113,8 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       const ias = p.flight.ias;
       return (c.above === undefined || ias > c.above) && (c.below === undefined || ias < c.below);
     }
+    case 'player_level':
+      return !!s.player && s.player.alive && s.levelSince >= 0 && s.time - s.levelSince >= (c.seconds ?? 0);
     case 'player_maneuver':
       return s.maneuvers.counts[c.maneuver] >= (c.count ?? 1);
     case 'all':

@@ -153,6 +153,7 @@ export class Callouts {
     const running = s.state === 'running';
     const attacker = s.world.getEntity(attackerId);
     const byPlayer = attackerId !== null && attackerId === p.id;
+    if (byPlayer) s.playerKills.add(entity.id);
 
     // neutral civil traffic: never a kill — a player shoot-down is a civilian loss
     if (entity.team === 'neutral') {

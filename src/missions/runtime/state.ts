@@ -198,6 +198,10 @@ export class MissionState {
   readonly missileLog: MissileRecord[] = [];
   /** The player's loops / Immelmanns (training drills). */
   readonly maneuvers = createManeuverTracker();
+  /** Entities the player destroyed (ids): 'destroy' objectives with `byPlayer`. */
+  readonly playerKills = new Set<number>();
+  /** Since when (mission time, s) the player has flown straight and level; -1 while not ('player_level'). */
+  levelSince = -1;
   /** The runner has been disposed (mission torn down): every update is a no-op. */
   disposed = false;
 

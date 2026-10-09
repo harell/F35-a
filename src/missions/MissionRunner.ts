@@ -54,6 +54,9 @@ const EVAL_PERIOD = 0.1;
 /** HUD call when a drill's manoeuvre is recognised. */
 const MANEUVER_CALL: Record<ManeuverId, string> = { loop: 'LOOP', immelmann: 'IMMELMANN' };
 const _up = new Vector3();
+/** 'player_level': the flight path within this of the horizon (rad), and the jet's up vector this close to vertical (y). */
+const LEVEL_PITCH = 10 * (Math.PI / 180);
+const LEVEL_UP_Y = 0.95;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
 const DEFAULT_AO = 38_000;
@@ -415,6 +418,10 @@ class MissionRunnerImpl implements MissionRunnerApi {
     const p = s.player;
     if (!p || !p.alive) return;
     _up.set(0, 1, 0).applyQuaternion(p.quaternion);
+    const v = p.velocity.length();
+    const level = v > 1 && Math.abs(Math.asin(Math.max(-1, Math.min(1, p.velocity.y / v)))) < LEVEL_PITCH && _up.y > LEVEL_UP_Y;
+    if (!level) s.levelSince = -1;
+    else if (s.levelSince < 0) s.levelSince = s.time;
     const m = updateManeuvers(s.maneuvers, p.velocity, _up, s.time);
     if (m && s.script.objectives.some((o) => o.kind === 'maneuver')) s.hud(MANEUVER_CALL[m], 'good', 2.5);
   }

@@ -95,6 +95,11 @@ export type Condition =
   | { kind: 'player_speed'; above?: number; below?: number }
   /** The player has flown at least `count` (default 1) of a vertical manoeuvre since the start (runtime/maneuvers.ts). */
   | { kind: 'player_maneuver'; maneuver: ManeuverId; count?: number }
+  /**
+   * The player is flying straight and level (flight path within LEVEL_PITCH of the horizon, wings
+   * within ~18° of level) and has been for at least `seconds` (default 0).
+   */
+  | { kind: 'player_level'; seconds?: number }
   | { kind: 'all'; of: Condition[] }
   | { kind: 'any'; of: Condition[] }
   | { kind: 'not'; of: Condition };
@@ -356,7 +361,17 @@ interface ObjectiveBase {
 export type ObjectiveDef = ObjectiveBase &
   (
     | /** Destroy every member (or `count`) of the given groups (aircraft, SAMs or ground targets). */
-    { kind: 'destroy'; groups: string[]; count?: number }
+    {
+        kind: 'destroy';
+        groups: string[];
+        count?: number;
+        /**
+         * Count only members the player shot down (a training drill): one lost any other way (a
+         * one-way drone reaching its target, a crash) doesn't complete it. Driven-off members don't
+         * count either. Pair it with a 'respawn' trigger so the drill gets another target.
+         */
+        byPlayer?: boolean;
+      }
     | /** Destroy every hostile SAM/AAA site inside a circle. */
     { kind: 'destroy_sams'; x: number; z: number; radius: number }
     | /**

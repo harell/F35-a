@@ -249,6 +249,10 @@ const T03_READY: Condition = {
   of: [
     { kind: 'player_speed', above: 280 * KT },
     { kind: 'area', x: 0, z: 0, radius: 60_000, above: 700 },
+    // straight and level, as the hint says (a trigger's delay needs it held throughout): a drone
+    // that appears while the jet is still diving out of its gun pass starts the loop from a dive,
+    // and its bottom comes out far lower
+    { kind: 'player_level' },
   ],
 };
 
@@ -300,9 +304,10 @@ export const T03: MissionDef = mission({
     ],
     objectives: [
       { id: 'o_imm', kind: 'maneuver', maneuver: 'immelmann', label: 'Head-on pass, then an Immelmann', primary: true },
-      { id: 'o_kill1', kind: 'destroy', groups: ['imm_drone'], label: 'Gun the drone from behind', primary: true, activeAt: { kind: 'objective', id: 'o_imm', state: 'complete' } },
+      // byPlayer: a drone that reaches its one-way target and blows up got away, it isn't a kill
+      { id: 'o_kill1', kind: 'destroy', groups: ['imm_drone'], byPlayer: true, label: 'Gun the drone from behind', primary: true, activeAt: { kind: 'objective', id: 'o_imm', state: 'complete' } },
       { id: 'o_loop', kind: 'maneuver', maneuver: 'loop', label: 'Drone behind you: loop', primary: true, activeAt: { kind: 'group_spawned', group: 'loop_drone' } },
-      { id: 'o_kill2', kind: 'destroy', groups: ['loop_drone'], label: 'Gun the second drone', primary: true, activeAt: { kind: 'objective', id: 'o_loop', state: 'complete' } },
+      { id: 'o_kill2', kind: 'destroy', groups: ['loop_drone'], byPlayer: true, label: 'Gun the second drone', primary: true, activeAt: { kind: 'objective', id: 'o_loop', state: 'complete' } },
     ],
     triggers: [
       {
@@ -344,6 +349,28 @@ export const T03: MissionDef = mission({
         repeat: 6,
         actions: [
           { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one does not count. Another drone behind you. Loop!' },
+          { kind: 'respawn', group: 'loop_drone' },
+        ],
+      },
+      {
+        // got away after the Immelmann (it reached its one-way target): another one, head-on
+        id: 't_kill1_retry',
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'imm_drone' }, { kind: 'objective', id: 'o_imm', state: 'complete' }, { kind: 'not', of: { kind: 'objective', id: 'o_kill1', state: 'complete' } }, T03_READY] },
+        delay: 4,
+        repeat: 5,
+        actions: [
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one got away. Another drone, head-on. Pass it, Immelmann, and gun it.' },
+          { kind: 'respawn', group: 'imm_drone' },
+        ],
+      },
+      {
+        // got away after the loop: another one behind the jet
+        id: 't_kill2_retry',
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'loop_drone' }, { kind: 'objective', id: 'o_loop', state: 'complete' }, { kind: 'not', of: { kind: 'objective', id: 'o_kill2', state: 'complete' } }, T03_READY] },
+        delay: 4,
+        repeat: 6,
+        actions: [
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one got away. Another drone behind you. Loop, and gun it.' },
           { kind: 'respawn', group: 'loop_drone' },
         ],
       },

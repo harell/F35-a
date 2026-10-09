@@ -107,6 +107,21 @@ export function updateObjectives(s: MissionState, dt: number): void {
 
     switch (def.kind) {
       case 'destroy': {
+        if (def.byPlayer) {
+          // only the player's own kills (a drill): what got away or crashed doesn't count
+          let need = 0;
+          let done = 0;
+          for (const id of def.groups) {
+            const g = s.groups.get(id);
+            if (!g) continue;
+            need += g.expected;
+            for (const m of g.members) if (!m.alive && s.playerKills.has(m.id)) done++;
+          }
+          if (def.count !== undefined) need = Math.min(def.count, need);
+          st.progress = { done: Math.min(done, need), total: need };
+          if (need > 0 && done >= need) setState(s, o, 'complete');
+          break;
+        }
         // bandits that bugged out / ran home count as defeated (never a stalled mission)
         const pr = groupsProgress(s, def.groups, true);
         const need = def.count !== undefined ? Math.min(def.count, pr.total) : pr.total;

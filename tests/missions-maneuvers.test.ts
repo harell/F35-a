@@ -159,6 +159,20 @@ function cruise(h: Harness, kt: number, seconds: number, each?: () => boolean | 
   });
 }
 
+/** Straight and level at `kt` for `seconds`: the stick holds the flight path on the horizon (neutral stick holds a climb or dive). */
+function levelFlight(h: Harness, kt: number, seconds: number, each?: () => boolean | void): void {
+  const p = h.world.player!;
+  h.run(seconds, () => {
+    shieldPlayer(h);
+    const inp = p.input;
+    inp.throttle = p.flight.ias < kt * KT ? 1 : 0.6;
+    inp.roll = 0;
+    inp.yaw = 0;
+    inp.pitch = Math.max(-0.5, Math.min(1, -attitude(p).gamma * 4));
+    return each?.();
+  });
+}
+
 const T03 = () => missionById('t03')!;
 const obj = (h: Harness, id: string) => h.runner.objectives.find((o) => o.id === id)!.state;
 const drone = (h: Harness, group: string) => h.world.aircraft.find((a) => a.groupId === group && a.alive) ?? null;
@@ -225,6 +239,61 @@ describe('t03 Vertical Reversals', () => {
     expect(ahead2).toBeLessThan(1200);
     killGroup(h, 'loop_drone');
     h.run(1);
+    expect(h.runner.state).toBe('success');
+  });
+
+  it('drill 2 waits for straight and level: no drone behind while the jet is still diving, fast and high', { timeout: 60_000 }, () => {
+    const h = harness(T03(), 'pilot', undefined, flatLand(10));
+    const p = h.world.player!;
+    cruise(h, 350, 4);
+    const d1 = drone(h, 'imm_drone')!;
+    cruise(h, 350, 30, () => d1.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize()) < -700);
+    fly(h, 'immelmann', 30);
+    killGroup(h, 'imm_drone');
+    // dive in afterburner: soon fast (> 280 kt) and still high (> 700 m), but not level
+    let sawFastHighDive = false;
+    h.run(12, () => {
+      shieldPlayer(h);
+      p.input.throttle = 1;
+      p.input.roll = 0;
+      p.input.pitch = attitude(p).gamma > -25 * DEG ? -0.3 : 0;
+      if (p.flight.ias > 290 * KT && p.position.y > 900 && attitude(p).gamma < -15 * DEG) sawFastHighDive = true;
+      expect(drone(h, 'loop_drone'), `t=${h.world.time.toFixed(1)}: drone while diving`).toBeNull();
+      return p.position.y < 900;
+    });
+    expect(sawFastHighDive).toBe(true);
+    // pull out and fly level: now it comes, behind the jet
+    levelFlight(h, 350, 60, () => drone(h, 'loop_drone') !== null);
+    expect(drone(h, 'loop_drone')).not.toBeNull();
+    expect(Math.abs(attitude(p).gamma)).toBeLessThan(10 * DEG);
+  });
+
+  it('a drone that gets away after the loop is not a kill: the drill sends another one behind the jet', { timeout: 60_000 }, () => {
+    const h = harness(T03(), 'pilot', undefined, flatLand(10));
+    const p = h.world.player!;
+    cruise(h, 350, 4);
+    const d1 = drone(h, 'imm_drone')!;
+    cruise(h, 350, 30, () => d1.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize()) < -700);
+    fly(h, 'immelmann', 30);
+    killGroup(h, 'imm_drone');
+    cruise(h, 400, 60, () => drone(h, 'loop_drone') !== null);
+    const first = drone(h, 'loop_drone')!;
+    fly(h, 'loop', 40);
+    h.run(0.3);
+    expect(obj(h, 'o_loop')).toBe('complete');
+    // it reaches its target and blows up (no attacker): not the player's kill
+    killGroup(h, 'loop_drone', false);
+    h.run(0.5);
+    expect(obj(h, 'o_kill2')).toBe('active');
+    expect(h.runner.state).toBe('running');
+    levelFlight(h, 350, 30, () => drone(h, 'loop_drone') !== null);
+    const next = drone(h, 'loop_drone');
+    expect(next).not.toBeNull();
+    expect(next!.id).not.toBe(first.id);
+    // the player's own kill completes it
+    killGroup(h, 'loop_drone');
+    h.run(1);
+    expect(obj(h, 'o_kill2')).toBe('complete');
     expect(h.runner.state).toBe('success');
   });
 
