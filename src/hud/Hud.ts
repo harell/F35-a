@@ -20,7 +20,7 @@ import type { WeaponId } from '../core/types';
 import { loadHudFont } from './font';
 import { drawVesselCounters } from './hmd/escort';
 import { drawExternalBlock, drawInset, drawMissileCam } from './hmd/external';
-import { WARNING_INFO, WEAPON_BREVITY, killText } from './hmd/format';
+import { WARNING_INFO, WEAPON_BREVITY, armOutcomeText, killText } from './hmd/format';
 import { classifyHudMessage } from './hmd/feeds';
 import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, drawSpeedColumn, drawWaterline } from './hmd/flight';
 import { HudState, makeFrame, type HudMode, type HudFrame } from './hmd/frame';
@@ -223,7 +223,12 @@ export const createHud: CreateHud = (canvas, events) => {
     }),
     events.on('munition:end', ({ missile, targetId, reason }) => {
       st.threats.onMunitionEnd(missile.id, targetId, reason, st.playerId);
-      if (missile.shooterId === st.playerId) wpnState.tracker.onEnd(missile.id, reason);
+      if (missile.shooterId !== st.playerId) return;
+      wpnState.tracker.onEnd(missile.id, reason);
+      if (missile.def.guidance === 'anti_radiation') {
+        const o = armOutcomeText(curWorld?.getEntity(targetId) ?? null, reason === 'hit' || reason === 'proximity');
+        if (o) st.messages.push(o.text, o.tone, 3);
+      }
     }),
     events.on('player:hit', ({ amount }) => hitFlash(st.g, amount)),
     events.on('warning', ({ id, active }) => {

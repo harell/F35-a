@@ -71,6 +71,16 @@ export const LANDMARK_FIRE = {
 };
 
 /**
+ * How hard a damaged, still fighting SAM site (an air-defence boat, an SA-6 a near miss hurt) burns:
+ * 0 intact or dead, else 0.4 for a scratch up to 1 near the end. A fire on its deck and a smoke
+ * column show the player the hit landed (playtest r2 F2: an AD boat sailed on with no sign of it).
+ */
+export function siteBurn(e: { alive: boolean; health: number; maxHealth: number }): number {
+  if (!e.alive || e.health >= e.maxHealth || e.maxHealth <= 0) return 0;
+  return 0.4 + 0.6 * Math.min(1, 1 - e.health / e.maxHealth);
+}
+
+/**
  * Air-kill payoff tuning (i1 review: kills were 1-3 px at BVR ranges). Minimum on-screen sizes are
  * in device pixels; `scale` is the fireball size in metres for an aircraft of the given length.
  */
@@ -258,6 +268,8 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const landmarkAcc = new Map<object, { f: number; s: number }>();
   /** Fire / smoke accumulators of a hit ship still afloat (per ship id: the escorted tanker after its first hit). */
   const burnAcc = new Map<number, { f: number; s: number }>();
+  /** Fire / smoke accumulators of a damaged SAM site still fighting (per site id, siteBurn). */
+  const siteAcc = new Map<number, { f: number; s: number }>();
   const trailStyles = new Map<string, RibbonStyle | null>();
 
   const now = () => world.time;
@@ -1136,6 +1148,53 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     }
   }
 
+  /** Fire on the deck and a smoke column on every damaged SAM site still fighting (siteBurn). */
+  function updateSiteDamage(t: number, dt: number): void {
+    for (const s of world.sams) {
+      const k = siteBurn(s);
+      if (k <= 0) {
+        if (siteAcc.size) siteAcc.delete(s.id);
+        continue;
+      }
+      let acc = siteAcc.get(s.id);
+      if (!acc) siteAcc.set(s.id, (acc = { f: 0, s: 0 }));
+      const p = s.position;
+      const y = p.y + (s.type === 'ad_boat' ? 2.5 : 1); // on the boat's deck / the site's vehicles
+      const d = distCam(p.x, y, p.z);
+      acc.f += dt * 12 * k * ps * lodK(d);
+      while (acc.f >= 1) {
+        acc.f -= 1;
+        fireLick(p.x + (rnd() - 0.5) * 4, y + rnd(), p.z + (rnd() - 0.5) * 4, (rnd() - 0.5) * 1.5, 2 + rnd() * 3, (rnd() - 0.5) * 1.5, (1.8 + rnd() * 2) * k, 0.5 + rnd() * 0.4, 1, 2);
+      }
+      acc.s += dt * (1 + 1.5 * k) * ps * Math.max(0.5, lodK(d));
+      const v = s.velocity;
+      while (acc.s >= 1) {
+        acc.s -= 1;
+        resetSpawn(P);
+        P.x = p.x + (rnd() - 0.5) * 4;
+        P.y = y + 2 + rnd() * 2;
+        P.z = p.z + (rnd() - 0.5) * 4;
+        P.vx = v.x * 0.6 + (rnd() - 0.5) * 2;
+        P.vy = 6 + rnd() * 4;
+        P.vz = v.z * 0.6 + (rnd() - 0.5) * 2;
+        P.drag = 0.3;
+        P.grav = 3.5;
+        P.size0 = 4 * k;
+        P.size1 = (20 + rnd() * 18) * k;
+        P.sizeCurve = 1.6;
+        P.life = 12 + rnd() * 6;
+        P.rot = rnd() * 6.28;
+        P.rotSpeed = (rnd() - 0.5) * 0.15;
+        P.variant = (rnd() * 4) | 0;
+        col0(P, C.smokeDark, 0.8);
+        col1(P, C.smokeGrey, 0);
+        P.fadeIn = 0.04;
+        P.minPx = 3;
+        smoke.spawn(P, t);
+      }
+    }
+  }
+
   function schedule(delay: number, x: number, y: number, z: number, size: ExplosionSize, surface: 'air' | 'ground' | 'water'): void {
     const d = delayed.find((e) => !e.active);
     if (!d) return;
@@ -1855,6 +1914,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         scanDecoys(t, dt);
         updateFires(t, dt);
         updateLandmarkDamage(t, dt);
+        updateSiteDamage(t, dt);
         updateShips(t, dt);
         craters.update(t);
         debris.update(dt, groundAt, debrisTrail);

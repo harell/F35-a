@@ -191,6 +191,20 @@ export function killText(e: AnyEntity): string {
   return '';
 }
 
+/**
+ * Plain words for the player's anti-radiation missile that ended without killing its site (the kill
+ * feed reports a kill): damaged by it, or missed because the site went quiet (ARM discipline,
+ * sim/sam/SamSystem.ts handleEmcon) and the missile flew to where the radar last was. Playtest r2 F2:
+ * an AARGM at an air-defence boat that shut down ended in a spark 150 m off with no word on the HUD.
+ */
+export function armOutcomeText(target: AnyEntity | null, hit: boolean): { text: string; tone: 'good' | 'warn' } | null {
+  if (!target || target.kind !== 'sam' || !target.alive) return null;
+  const name = entityLabel(target);
+  if (hit) return { text: `${name} HIT — DAMAGED`, tone: 'good' };
+  if (!target.radarOn) return { text: `${name} WENT QUIET — AARGM LOST IT`, tone: 'warn' };
+  return { text: `AARGM MISSED THE ${name}`, tone: 'warn' };
+}
+
 /** Cached integer / fixed-point formatter for one readout. */
 export class NumText {
   private v = NaN;
