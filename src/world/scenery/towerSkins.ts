@@ -1,11 +1,12 @@
 /**
  * The CBD tower kit's skins (core/cbdTowerSkins.ts) in the scenery: walls painted by zone (by face and height, split
  * where a zone starts or ends, so the facade shaders' world-anchored patterns run on across the joins), bracing as
- * beams on the outermost wall of each face (and so are drawn lines: the Pacifica's white twist), and the crown signs as
- * one small mesh with the logo atlas (towerLogos.ts, createLogoMaterial). Built from the same terraces the sim collides with.
+ * straight beams just proud of the outermost wall of each face, drawn lines (the Pacifica's white twist) as strips
+ * following it, and the crown signs as one small mesh with the logo atlas (towerLogos.ts, createLogoMaterial). Built
+ * from the same terraces the sim collides with.
  */
 import { BufferAttribute, BufferGeometry } from 'three';
-import type { SkinFinish, SkinZone, TowerSkin } from '../../core/cbdTowerSkins';
+import type { SkinBrace, SkinFinish, SkinZone, TowerSkin } from '../../core/cbdTowerSkins';
 import { logoSlot } from './towerLogos';
 import { GeometryBuilder, IDENT_FRAME, WIN_BANDS, WIN_CURTAIN, WIN_EMPTY, WIN_FLOOD, WIN_GLOW, WIN_HERITAGE, WIN_NONE, WIN_OFFICE } from './GeometryBuilder';
 
@@ -179,12 +180,11 @@ function facePoint(skin: TowerSkin, k: number, t: number, s: number): [number, n
 }
 
 /**
- * Segments (t, h → t, h in mesh m) on face k as beams 0.5 m proud of the outermost wall (or, `ribbon`, flat strips
- * 0.3 m proud: drawn lines), following it in steps of about 3 m and merged into one member wherever the wall is one
- * plane, clipped to [hMin, hMax]: only on the face itself (a wall set far back is another face's), and broken where
- * the wall steps.
+ * Drawn lines (t, h → t, h in mesh m) on face k as flat strips 0.3 m proud of the outermost wall, following it in steps
+ * of about 3 m and merged into one strip wherever the wall is one plane: only on the face itself (a wall set far back
+ * is another face's), and broken where the wall steps.
  */
-function faceBeams(
+function faceLines(
   B: GeometryBuilder,
   skin: TowerSkin,
   parts: readonly SkinPart[],
@@ -192,22 +192,15 @@ function faceBeams(
   k: number,
   half: number,
   segs: readonly (readonly [number, number, number, number])[],
-  hMin: number,
-  hMax: number,
   width: number,
   colour: number,
-  ribbon = false,
 ): void {
   const yOf = (h: number) => g + h + skin.dy;
   const { nx, nz } = faceAxes(skin, k);
   type P = [number, number, number, number];
-  // one member from a to b: a box beam, or a flat ribbon facing out (a drawn line: 2 triangles, not 8)
+  // one strip from a to b, facing out (2 triangles)
   const member = (a: P, b: P) => {
     if (a === b) return;
-    if (!ribbon) {
-      B.beam(IDENT_FRAME, a[0], a[1], a[2], b[0], b[1], b[2], width, colour);
-      return;
-    }
     // across the line in the wall's plane: (b − a) × n
     const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
     let sx = dy * nz, sy = dz * nx - dx * nz, sz = -dy * nx;
@@ -222,12 +215,11 @@ function faceBeams(
     B.quad(IDENT_FRAME, out >= 0 ? q : [...q.slice(9, 12), ...q.slice(6, 9), ...q.slice(3, 6), ...q.slice(0, 3)], colour);
   };
   for (const [ta, ha, tb, hb] of segs) {
-    const c0 = Math.max(hMin, Math.min(ha, hb)), c1 = Math.min(hMax, Math.max(ha, hb));
-    if (c1 < c0 || (c1 === c0 && ha !== hb)) continue;
+    const c0 = Math.min(ha, hb), c1 = Math.max(ha, hb);
     const at = (h: number) => ta + ((tb - ta) * (h - ha)) / (hb - ha || 1);
     const flat = ha === hb;
     const pieces = Math.max(1, Math.ceil((flat ? Math.abs(tb - ta) : Math.hypot(at(c1) - at(c0), c1 - c0)) / 3));
-    // walk the segment in ~3 m steps on the outermost wall; pieces on one wall plane merge into one member
+    // walk the segment in ~3 m steps on the outermost wall; pieces on one wall plane merge into one strip
     let start: P | null = null;
     let last: P | null = null;
     for (let i = 0; i <= pieces; i++) {
@@ -237,7 +229,7 @@ function faceBeams(
       const s = outerWall(skin, parts, k, t, y);
       let p: P | null = null;
       if (s !== null && s >= half - 6) {
-        const [x, z] = facePoint(skin, k, t, s + (ribbon ? 0.3 : 0.5));
+        const [x, z] = facePoint(skin, k, t, s + 0.3);
         p = [x, y, z, s];
       }
       if (!p || !last || Math.abs(p[3] - last[3]) >= 1.5) {
@@ -263,26 +255,91 @@ function faceBeams(
   }
 }
 
-/** The skin's bracing (an X per module and the mullion where they cross) and its drawn lines, as beams on the walls. */
+/** A straight brace member on its face: from (t0, h0) to (t1, h1) (mesh m), `s` m out from the box's centre. */
+export interface BraceMember {
+  t0: number;
+  h0: number;
+  t1: number;
+  h1: number;
+  s: number;
+}
+
+/**
+ * A brace's members on face k (`half`: how far that face of the box stands from its centre): per module the two
+ * diagonals of its X from one edge of the braced band to the other, meeting the next module's there, and the mullion
+ * where they cross; each straight, on one plane 0.5 m proud of the outermost wall over its module. (Members that
+ * followed the kit's LiDAR-traced walls kinked at every wiggle and broke where a wall stepped or a corner was cut:
+ * loose sticks, not a lattice.) The band keeps its measured edges, narrowed only to where this face's walls stand (the
+ * kit's corner can sit a metre or two inside), and ends at a node where the face sets back out of reach.
+ */
+export function braceMembers(skin: TowerSkin, parts: readonly SkinPart[], g: number, br: SkinBrace, half: number): BraceMember[] {
+  const k = faceOf(skin, br.face);
+  const onFace = (t: number, h: number): number | null => {
+    const s = outerWall(skin, parts, k, t, g + h + skin.dy);
+    return s !== null && s >= half - 6 ? s : null;
+  };
+  const steps = (a: number, b: number, d: number) => {
+    const n = Math.max(1, Math.ceil((b - a) / d));
+    return Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
+  };
+  const ts = steps(br.t[0], br.t[1], 0.5);
+  // where the face stands: its walls' extent across the band, and the lowest and highest heights with a wall
+  let tl = Infinity, tr = -Infinity, lo = Infinity, hi = -Infinity;
+  for (const h of steps(br.h[0], br.h[1], 2))
+    for (const t of ts)
+      if (onFace(t, h) !== null) {
+        tl = Math.min(tl, t);
+        tr = Math.max(tr, t);
+        lo = Math.min(lo, h);
+        hi = Math.max(hi, h);
+      }
+  if (!(tr - tl > 1)) return [];
+  // where the face sets back short of the band's measured ends, the lattice ends at its last node on the face
+  const node = (h: number, round: (x: number) => number) => br.node + round((h - br.node) / br.module) * br.module;
+  if (hi < br.h[1] - 2.5 && node(hi, Math.floor) > lo) hi = node(hi, Math.floor);
+  if (lo > br.h[0] + 2.5 && node(lo, Math.ceil) < hi) lo = node(lo, Math.ceil);
+  const out: BraceMember[] = [];
+  const first = br.node - Math.ceil((br.node - lo) / br.module) * br.module;
+  for (let h = first; h < hi; h += br.module) {
+    const m0 = Math.max(lo, h), m1 = Math.min(hi, h + br.module);
+    if (m1 - m0 < 0.5) continue;
+    // the module's plane: its outermost wall on this face
+    let s = -Infinity;
+    for (const y of steps(m0, m1, 2))
+      for (const t of ts) {
+        const w = t >= tl && t <= tr ? onFace(t, y) : null;
+        if (w !== null) s = Math.max(s, w);
+      }
+    if (s === -Infinity) continue;
+    // the X: tl at h up to tr at h + module, and tr back to tl, clipped to [m0, m1]
+    const at = (ta: number, tb: number, y: number) => ta + ((tb - ta) * (y - h)) / br.module;
+    out.push({ t0: at(tl, tr, m0), h0: m0, t1: at(tl, tr, m1), h1: m1, s: s + 0.5 });
+    out.push({ t0: at(tr, tl, m0), h0: m0, t1: at(tr, tl, m1), h1: m1, s: s + 0.5 });
+    if (!br.noMullion) out.push({ t0: (tl + tr) / 2, h0: m0, t1: (tl + tr) / 2, h1: m1, s: s + 0.5 });
+  }
+  return out;
+}
+
+/** The skin's bracing (braceMembers, as beams) and its drawn lines (faceLines) on the walls. */
 export function buildBraces(B: GeometryBuilder, skin: TowerSkin, parts: readonly SkinPart[], g: number): void {
   const half = [0, 1, 2, 3].map((k) => boxHalf(skin, parts, k));
   for (const br of skin.braces ?? []) {
     const k = faceOf(skin, br.face);
-    const [t0, t1] = br.t;
-    const segs: [number, number, number, number][] = [];
-    const first = br.node - Math.ceil((br.node - br.h[0]) / br.module) * br.module;
-    for (let h = first; h < br.h[1]; h += br.module) {
-      segs.push([t0, h, t1, h + br.module]);
-      segs.push([t1, h, t0, h + br.module]);
+    for (const m of braceMembers(skin, parts, g, br, half[k])) {
+      // each end run on by half the width, so the members meeting at a node close over its corner
+      const e = br.width / 2 / (Math.hypot(m.t1 - m.t0, m.h1 - m.h0) || 1);
+      const [ax, az] = facePoint(skin, k, m.t0 - (m.t1 - m.t0) * e, m.s);
+      const [bx, bz] = facePoint(skin, k, m.t1 + (m.t1 - m.t0) * e, m.s);
+      const ay = g + skin.dy + m.h0 - (m.h1 - m.h0) * e;
+      const by = g + skin.dy + m.h1 + (m.h1 - m.h0) * e;
+      B.beam(IDENT_FRAME, ax, ay, az, bx, by, bz, br.width, br.colour);
     }
-    if (!br.noMullion) segs.push([(t0 + t1) / 2, br.h[0], (t0 + t1) / 2, br.h[1]]);
-    faceBeams(B, skin, parts, g, k, half[k], segs, br.h[0], br.h[1], br.width, br.colour);
   }
   for (const ln of skin.lines ?? []) {
     const k = faceOf(skin, ln.face);
     const segs: [number, number, number, number][] = [];
     for (let i = 0; i + 3 < ln.pts.length; i += 2) segs.push([ln.pts[i], ln.pts[i + 1], ln.pts[i + 2], ln.pts[i + 3]]);
-    faceBeams(B, skin, parts, g, k, half[k], segs, -Infinity, Infinity, ln.width, ln.colour, true);
+    faceLines(B, skin, parts, g, k, half[k], segs, ln.width, ln.colour);
   }
 }
 
