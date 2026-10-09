@@ -1,10 +1,10 @@
 /**
  * Effects — all combat "juice": missile smoke trails (ribbons + puffs) and motor glows, explosions
- * (flash, fireball, smoke, sparks, debris, ground shockwave, water splash columns), burning wrecks &
- * tall smoke columns, falling-wreck fire trails, gun tracers, muzzle flashes, bullet impacts, flares
- * (burning cores + smoke arcs), chaff glitter, contrails, wingtip vortices, LEX vapour, transonic
- * vapour cones, damage smoke, ship funnel exhaust, the fires riding a sinking hull down and the fire
- * burning on a damaged Sky Tower.
+ * (flash, fireball, smoke, sparks, debris, ground shockwave, water splash columns and spray rings),
+ * burning wrecks & tall smoke columns, falling-wreck fire trails, gun tracers, muzzle flashes, bullet
+ * impacts, flares (burning cores + smoke arcs), chaff glitter, contrails, wingtip vortices, LEX vapour,
+ * transonic vapour cones, damage smoke, ship funnel exhaust, the fires riding a sinking hull down, the
+ * fire burning on a damaged Sky Tower and on a damaged SAM site still fighting (an AD boat's deck).
  *
  * Budgets: particle capacities and emission rates scale with QualitySettings.particleScale and with
  * distance to the camera. Everything is pooled; the per-frame path allocates nothing.
