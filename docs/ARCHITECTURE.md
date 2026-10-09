@@ -252,7 +252,7 @@ drops them past radius + 6 km. A tile's arrival: its houses join `HouseSource` (
 in the same texture (`setHouseMask` / `updateHouseMask`: no sampler unit to spare) and paints no procedural
 streets there, nor lots where the 3D houses are drawn (gardens round them); as they thin out (`realHouseShare`, the
 scatter's curve) and past where the scatter's capacity runs out (`TileScatter.reach`: a dense real suburb fills the
-medium tier's 3,600 houses within about a kilometre) the lots' roofs come back as the mid-range mosaic and the far
+medium tier's 6,000 houses within about 1.4 km, about as far as the high tier's 7,500 over its wider radius) the lots' roofs come back as the mid-range mosaic and the far
 average, without the grid's streets. Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
 tiles come and go: +1 draw call) and the trees keep off them. The scatter tiles under a changed tile regenerate
 (`TileScatter.invalidate`), drawn as they were until then. The service worker never precaches the tiles and keeps them

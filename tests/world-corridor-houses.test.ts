@@ -18,7 +18,8 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { bakeColorRows } from '../src/world/terrain/bake';
 import { reduceView } from '../src/world/terrain/parallel';
-import { AKL_CBD_GRID } from '../src/world/config';
+import { AKL_CBD_GRID, worldConfig } from '../src/world/config';
+import { QUALITY_PRESETS } from '../src/core/data';
 import { createVegetation } from '../src/world/terrain/vegetation';
 import { AKL_LAKES } from '../src/world/terrain/theaters/aucklandMap';
 import { BoxGeometry, MeshBasicMaterial, Vector3 } from 'three';
@@ -341,6 +342,36 @@ describe('the scatters under a loaded tile', () => {
       }
     expect(n).toBeGreaterThan(20);
     expect(inside).toBe(0);
+  });
+
+  it('the medium tier draws the real houses as far out as the high tier over a dense suburb (playtest r1 R11-1)', async () => {
+    // Mt Eden from 520 m, looking south (the reviewer's view): past where the house scatter's capacity runs out the
+    // ground is the lots' mosaic, which read as green farmland from ≈ 0.9 km on (medium's 3,600 houses)
+    const cam = new Vector3(-680, 520, 1300);
+    const agl = cam.y - ground(cam.x, cam.z);
+    const geo = new BoxGeometry();
+    const mat = new MeshBasicMaterial();
+    const reach = async (cfg: { houseRadius: number; houseMax: number }) => {
+      const s = diskStream(cfg.houseRadius);
+      await loadAround(s, cam.x, cam.z);
+      const src = new HouseSource(hf, cmap, ground, AKL_CBD_GRID, null, null, null, null, null, null, s);
+      const sc = new TileScatter(
+        src,
+        [
+          { geometry: geo, material: mat, capacity: cfg.houseMax, kind: HOUSE },
+          { geometry: geo, material: mat, capacity: Math.round(cfg.houseMax / 5), kind: APARTMENT },
+        ],
+        300,
+        cfg.houseRadius,
+        10_000,
+      );
+      sc.update(cam, agl);
+      return sc.reach[0];
+    };
+    const medium = await reach(worldConfig(QUALITY_PRESETS.medium));
+    const high = await reach(worldConfig(QUALITY_PRESETS.high));
+    expect(medium).toBeGreaterThan(1250); // 3,600 houses: 918 m; 6,000: 1,373 m
+    expect(medium).toBeGreaterThan(high * 0.9); // high: 1,451 m
   });
 
   it('a scatter regenerates the tiles a stream tile changed, drawing the old ones until then', () => {

@@ -342,7 +342,7 @@ float realHouseShare(float ds) {
   float R = uRealHouseR;
   if (R <= 0.0) return 0.0;
   float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);
-  // (and none past where the scatter's capacity ran out: a dense real suburb fills it within ≈ 1 km)
+  // (and none past where the scatter's capacity ran out: a dense real suburb fills it within ≈ 1.4 km)
   return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds)) * (1.0 - smoothstep(uRealHouseCut - 150.0, uRealHouseCut + 50.0, ds));
 }
 

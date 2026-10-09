@@ -51,7 +51,7 @@ export function worldConfig(q: QualitySettings): WorldConfig {
     case 0:
       return { hfResolution: 1024, hdTerrain: false, aerial: 0, landUse: false, patchQuads: 6, lodRange: 2.4, anisotropy: 2, treeRadius: 1600, treeMax: Math.round(1500 * (d / 0.35)), houseRadius: 1500, houseMax: 1800 };
     case 1:
-      return { hfResolution: 1024, hdTerrain: false, aerial: q.aerialPhoto ? 2048 : 0, landUse: true, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 2400, houseMax: 3600 };
+      return { hfResolution: 1024, hdTerrain: false, aerial: q.aerialPhoto ? 2048 : 0, landUse: true, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 2400, houseMax: 6000 };
     default:
       return { hfResolution: 2048, hdTerrain: q.hdTerrain, aerial: q.aerialPhoto ? 4096 : 0, landUse: true, patchQuads: 16, lodRange: 2.6, anisotropy: 8, treeRadius: 3000, treeMax: Math.round(4500 * d), houseRadius: 3400, houseMax: 7500 };
   }
