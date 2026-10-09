@@ -1158,9 +1158,13 @@ describe('gun closure cue', () => {
 
 describe('AARGM cue: SHOOT only as AARGM_RULE says (playtest r2 2.1-a: SHOOT from 18.5 km)', () => {
   /** The AARGM selected and the SA-6 designated `km` ahead (ground range), its radar `on`. */
-  const arm = (km: number, on: boolean) => {
+  const arm = (km: number, on: boolean, inboundTti?: number) => {
     const r = rig('lock', 'hud');
     const p = r.mock.player;
+    if (inboundTti !== undefined) {
+      r.mock.world.missiles.length = 0;
+      p.incoming = [{ missileId: 9999, bearing: 2, elevation: 0, distance: 5000, timeToImpact: inboundTti, guidance: 'radar' }];
+    }
     p.stores.push({ weapon: 'aargm', count: 2, internal: true });
     p.selectedWeapon = 'aargm';
     const sa6 = r.mock.world.sams[0];
@@ -1187,6 +1191,13 @@ describe('AARGM cue: SHOOT only as AARGM_RULE says (playtest r2 2.1-a: SHOOT fro
     texts = arm(8, false);
     expect(find(texts, 'SHOOT').length).toBe(0);
     expect(find(texts, 'RADAR OFF').length).toBeGreaterThan(0);
+  });
+
+  it('a missile inbound under 10 s holds CLOSE IN and RADAR OFF back, as it does SHOOT (playtest r3.1 R31-4)', () => {
+    for (const [km, on, cue] of [[13, true, 'CLOSE IN'], [8, false, 'RADAR OFF'], [8, true, 'SHOOT']] as const) {
+      expect(find(arm(km, on, 8), cue).length, `${cue}, inbound`).toBe(0);
+      expect(find(arm(km, on, 14), cue).length, `${cue}, inbound further out`).toBeGreaterThan(0);
+    }
   });
 });
 

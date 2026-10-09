@@ -346,7 +346,7 @@ export function planCues(f: HudFrame): number {
   // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
   // never lands on the target box that the pipper is tracking). Our missile already guiding on the
   // target: AMRAAM AWAY instead, steady, so a second missile isn't wasted on it (playtest r1 1.2-g);
-  // the gun keeps its SHOOT. Nothing while a missile inbound is close (defending: 1.2-f). The AARGM
+  // the gun keeps its SHOOT. No shot cue while a missile inbound is close (defending: 1.2-f). The AARGM
   // says SHOOT only as AARGM_RULE does, inside 10 km of a radar that is on (r2 2.1-a): CLOSE IN before.
   // Just fired, AWAY holds AWAY_HOLD s even when the box has already stepped to the next drone of a
   // swarm (r2 2.2 F4: g01 went straight from FIRE back to SHOOT), then SHOOT for that one.
@@ -356,9 +356,12 @@ export function planCues(f: HudFrame): number {
   const fired = st.launched && st.launched !== 'gun' && !WEAPON_IS_BOMB[st.launched] && st.brevityAge <= AWAY_HOLD ? st.launched : null;
   if (own && own.def.category !== 'bomb') addCue(AWAY[own.def.id as WeaponId] ?? AWAY.aim120, 15, pal.main, 0);
   else if (fired) addCue(AWAY[fired], 15, pal.main, 0);
-  else if (arm === 'close') addCue('CLOSE IN', 17, pal.main, 0);
-  else if (arm === 'quiet') addCue('RADAR OFF', 15, pal.warn, 0);
-  else if (z && shootNow(f) && !WEAPON_IS_BOMB[z.weapon] && !defending(f)) addCue('SHOOT', 20, pal.bright, 4);
+  // the shot cues (SHOOT, and the AARGM's CLOSE IN / RADAR OFF) wait while defending (r3.1 R31-4)
+  else if (!defending(f)) {
+    if (arm === 'close') addCue('CLOSE IN', 17, pal.main, 0);
+    else if (arm === 'quiet') addCue('RADAR OFF', 15, pal.warn, 0);
+    else if (z && shootNow(f) && !WEAPON_IS_BOMB[z.weapon]) addCue('SHOOT', 20, pal.bright, 4);
+  }
   // bombs: release cue. The GPS cue (REL n / IN RANGE, the wording the briefings and hints use) shows
   // in every view, chase included; the CCIP cue goes with its pipper, which only the HMD draws
   if (WEAPON_IS_BOMB[sel]) {
