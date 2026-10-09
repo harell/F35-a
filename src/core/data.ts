@@ -80,7 +80,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   pilot: {
     id: 'pilot',
     label: 'Pilot',
-    description: 'Balanced. Competent enemies and dangerous SAMs — see them first, shoot first, defend every missile. No Auto-GCAS: the ground is yours to hit.',
+    description: 'Balanced. Competent enemies and dangerous SAMs — see them first, shoot first, defend every missile. Two missile hits to kill (a salvo counts as one). No Auto-GCAS: the ground is yours to hit.',
     playerDamageScale: 0.65,
     aiSkill: 0.5,
     aiReactionTime: 2.0,
@@ -96,6 +96,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     enemyCountScale: 1,
     scoreMultiplier: 1,
     playerMissileHitsToKill: 2,
+    // a salvo is one hit here too (playtest 2026-10-10, 1.3-e): an AD boat's pair 2 s apart was both of
+    // Pilot's hits at once, the bot's only losses in g02 and most of g03's
+    playerMissileHitGrace: 3,
     fuelBurnScale: 0.8,
     adBoatHarass: 1,
   },

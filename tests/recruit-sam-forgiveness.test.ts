@@ -3,7 +3,7 @@
  * missiles"). An air-defence boat's two-round salvo took two of Recruit's three hits at once, and the
  * automatic countermeasure program covered air-to-air missiles only. Now:
  *  - a salvo counts as one hit: missile damage within DifficultyParams.playerMissileHitGrace of the
- *    last missile hit does nothing (Recruit only);
+ *    last missile hit does nothing (Recruit, and Pilot since playtest 2026-10-10; never Veteran);
  *  - Recruit's auto-CMDS answers a SAM round with two timed salvos (AUTO_SAM_PULSES), not a held
  *    program that emptied the dispenser on the first round.
  * The bands were measured with a "novice" bot (no climb, release close in) in g02 and g03's intended
@@ -48,15 +48,23 @@ describe('Recruit: a SAM salvo counts as one hit', () => {
     expect(p.alive).toBe(true);
   });
 
-  it('the grace is Recruit only, and only for missiles (gun and collision damage still land)', () => {
+  it('the grace is Recruit and Pilot, never Veteran, and only for missiles (gun and collision damage still land)', () => {
     const pilot = jetIn('pilot');
     pilot.step(0.5);
     pilot.world.applyDamage(pilot.p, 30, null, 'm_9m330');
     pilot.step(1.5);
     const h1 = pilot.p.health;
     pilot.world.applyDamage(pilot.p, 30, null, 'm_9m330');
-    expect(pilot.p.health).toBeLessThan(h1 - 10);
-    expect(DIFFICULTIES.pilot.playerMissileHitGrace).toBeUndefined();
+    expect(pilot.p.health).toBe(h1);
+    expect(DIFFICULTIES.pilot.playerMissileHitGrace).toBe(3);
+
+    const vet = jetIn('veteran');
+    vet.step(0.5);
+    vet.world.applyDamage(vet.p, 5, null, 'm_9m330');
+    vet.step(1.5);
+    const v1 = vet.p.health;
+    vet.world.applyDamage(vet.p, 5, null, 'm_9m330');
+    expect(vet.p.health).toBeLessThan(v1);
     expect(DIFFICULTIES.veteran.playerMissileHitGrace).toBeUndefined();
 
     const rec = jetIn('recruit');

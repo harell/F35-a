@@ -260,7 +260,7 @@ export interface DifficultyParams {
   playerMissileHitsToKill: number;
   /**
    * Seconds after a missile hit on the player in which further missile hits do no damage (unset: none):
-   * a salvo counts as one of playerMissileHitsToKill. Recruit only.
+   * a salvo counts as one of playerMissileHitsToKill. Recruit and Pilot.
    */
   playerMissileHitGrace?: number;
   /** Fuel burn multiplier. */
