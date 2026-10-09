@@ -11,7 +11,7 @@
  * prediction uses the pilot's g and the system stays out of the way.
  *
  * On for friendly AI F-35s, and for the player's F-35 on Recruit only (DifficultyParams.autoGcas):
- * from Pilot up the player can fly into the ground, and a G-LOC without flight assist (./gloc.ts; no difficulty turns the assist off since Ace was removed) can end in it.
+ * from Pilot up the player can fly into the ground.
  */
 import { G } from '../../core/math';
 import { AB_DETENT } from '../../core/types';

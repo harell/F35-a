@@ -116,7 +116,7 @@ describe('missions: instant action generator', () => {
     const red = def.script.groups.filter((g) => g.team === 'red');
     expect(red.reduce((n, g) => n + g.count, 0)).toBe(5);
     // the runner scales the TOTAL by difficulty.enemyCountScale (i1: IA honours difficulty)
-    expect(red.every((g) => g.type === 'su35' && !g.fixedCount && !g.downgrade)).toBe(true);
+    expect(red.every((g) => g.type === 'su35' && !g.fixedCount)).toBe(true);
     expect(def.script.scaleEnemyTotal).toBe(true);
     expect(def.timeOfDay).toBe('dusk');
   });

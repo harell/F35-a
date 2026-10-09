@@ -15,7 +15,7 @@ import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import type { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
-import { type StoatSpawn } from '../src/sim/stoat';
+import { type RunnerSpawn } from '../src/sim/runner';
 import { isSmallGround } from '../src/sim/weapons/small';
 import { MUNITIONS } from '../src/sim/weapons/defs';
 import { TRAINING, createMissionRunner, fixedDifficulty, lessonsFor, missionById, nextMissionAfter, terrainPadsFor, validateMission } from '../src/missions';
@@ -63,7 +63,7 @@ function run(w: SimWorld, seconds: number, each?: () => boolean | void): void {
 }
 
 /** A rat running east: drains at 100 and 200 m, the shore at 500 m, the island 1 km out to sea. */
-const SHORE_ROUTE = (): StoatSpawn => ({
+const SHORE_ROUTE = (): RunnerSpawn => ({
   route: [0, 100, 200, 400, 1_500].map((x) => new Vector3(x, 0, 0)),
   stations: [1, 2],
   speed: T07_RAT.speed,
@@ -71,8 +71,8 @@ const SHORE_ROUTE = (): StoatSpawn => ({
   swimSpeed: T07_RAT.swimSpeed,
 });
 
-function rat(w: SimWorld, spec: StoatSpawn): GroundTargetEntity {
-  return w.spawnGround({ type: 'rat', team: 'red', position: spec.route[0].clone(), name: 'Rat', stoat: spec });
+function rat(w: SimWorld, spec: RunnerSpawn): GroundTargetEntity {
+  return w.spawnGround({ type: 'rat', team: 'red', position: spec.route[0].clone(), name: 'Rat', runner: spec });
 }
 
 const terrains = new Map<number, TerrainQuery>();
@@ -120,7 +120,7 @@ describe('t07 Small Targets: content', () => {
   it('three waves of two rats; every route ends at Watchman Island', () => {
     const ground = T07_SMALL.script.ground;
     expect(ground).toHaveLength(6);
-    expect(ground.every((g) => g.type === 'rat' && g.stoat?.clock === 'spawn')).toBe(true);
+    expect(ground.every((g) => g.type === 'rat' && g.runner?.clock === 'spawn')).toBe(true);
     for (const [wave, names] of Object.entries(T07_WAVES)) {
       const group = T07_GROUPS[wave as keyof typeof T07_GROUPS];
       expect(ground.filter((g) => g.group === group)).toHaveLength(names.length);
@@ -183,7 +183,7 @@ describe('the rat: runs, stops at the drains, swims', () => {
   it('stops at each drain on land; over the water it swims at its steady speed without stopping, to the island', () => {
     const w = shoreWorld();
     const r = rat(w, SHORE_ROUTE());
-    const st = r.stoat!;
+    const st = r.runner!;
     const stops: number[] = [];
     const swimSpeeds: number[] = [];
     run(w, 1_200, () => {
@@ -194,10 +194,10 @@ describe('the rat: runs, stops at the drains, swims', () => {
         swimSpeeds.push(Math.hypot(r.velocity.x, r.velocity.z));
         expect(r.position.y).toBe(0); // on the surface
       } else if (r.position.x < 480) expect(st.swimming).toBe(false);
-      return st.atNest;
+      return st.arrived;
     });
     expect(stops).toEqual([1, 2]);
-    expect(st.atNest).toBe(true);
+    expect(st.arrived).toBe(true);
     expect(Math.min(...swimSpeeds)).toBeCloseTo(T07_RAT.swimSpeed, 3);
     expect(Math.max(...swimSpeeds)).toBeCloseTo(T07_RAT.swimSpeed, 3);
   });
@@ -217,11 +217,11 @@ describe('the rat: runs, stops at the drains, swims', () => {
     const w = shoreWorld();
     const r = rat(w, SHORE_ROUTE());
     const cam = new Vector3(0, 2, 5);
-    r.stoat!.phase = 'stop';
-    r.stoat!.alert = 1;
+    r.runner!.phase = 'stop';
+    r.runner!.alert = 1;
     v.update(r, 1, DT, cam, 20_000);
     expect(nodes.hips.rotation.x).toBeCloseTo(SIT_PITCH, 5);
-    r.stoat!.swimming = true;
+    r.runner!.swimming = true;
     v.update(r, 2, DT, cam, 20_000);
     expect(nodes.hips.position.y).toBeLessThan(RAT_SWIM_Y + 0.005);
     r.alive = false;
@@ -234,7 +234,7 @@ describe('bombs against a swimming rat', { timeout: 120_000 }, () => {
   function drop(weapon: 'gbu53' | 'gbu31', seed: number, still = false, range = 3_000) {
     const w = shoreWorld(seed);
     const from = new Vector3(800, 0, 0);
-    const spec: StoatSpawn = still ? { route: [from, from.clone()], stations: [] } : { route: [from, new Vector3(3_000, 0, 0)], stations: [], swimSpeed: T07_RAT.swimSpeed };
+    const spec: RunnerSpawn = still ? { route: [from, from.clone()], stations: [] } : { route: [from, new Vector3(3_000, 0, 0)], stations: [], swimSpeed: T07_RAT.swimSpeed };
     const r = rat(w, spec);
     const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_mixed' });
     w.combat.selectWeapon(p, weapon, w);
@@ -333,15 +333,15 @@ describe('t07 in the mission runner (real terrain, real houses)', { timeout: 240
     expect(rats(T07_GROUPS.wave2)).toHaveLength(0);
     // the first rat stops at its first drain: a StormBreaker there
     const a = w1[0];
-    step(120, () => a.stoat!.phase === 'stop');
-    expect(a.stoat!.phase).toBe('stop');
+    step(120, () => a.runner!.phase === 'stop');
+    expect(a.runner!.phase).toBe('stop');
     release(ctx, a, 'gbu53');
     expect(a.alive).toBe(false);
     const r0 = runner.result(ctx.world);
     expect((r0 as { homesHit?: number }).homesHit ?? 0).toBe(0);
     // the second at a drain: a JDAM on the street
     const b = w1[1];
-    step(200, () => b.stoat!.phase === 'stop');
+    step(200, () => b.runner!.phase === 'stop');
     release(ctx, b, 'gbu31', 1_400);
     const r1 = runner.result(ctx.world) as { homesHit?: number };
     expect(r1.homesHit ?? 0).toBeGreaterThan(0);
@@ -368,7 +368,7 @@ describe('t07 in the mission runner (real terrain, real houses)', { timeout: 240
   it('a rat that reaches Watchman Island loses the sortie', () => {
     const { runner, rats, step, world } = setup();
     const r = rats(T07_GROUPS.wave1)[0];
-    r.stoat!.leg = r.stoat!.route.length - 1;
+    r.runner!.leg = r.runner!.route.length - 1;
     r.position.set(T07_ISLAND.x, 0, T07_ISLAND.z + 30);
     step(5);
     expect(runner.state).toBe('failed');

@@ -18,11 +18,10 @@ import type { AircraftEntity } from '../entities';
 import { createAirData } from './airdata';
 import { PYLON_DRAG, STORE_DATA, GUN_ROUND_MASS } from './aircraftData';
 import { alphaForLift, dragCoefficient, liftCoefficient, sstep, thrustMax, thrustMil, IDLE_THRUST_FRACTION } from './aero';
-import { alphaLimits, gLimits, updateControlLaws, updateWreckRates, type ControlLaw, type StickInput } from './controlLaws';
+import { alphaLimits, gLimits, updateControlLaws, updateWreckRates, type StickInput } from './controlLaws';
 import { throttleForThrust, updateEngine } from './engine';
 import { FM_RATE_HZ, type FlightEnv } from './env';
 import { applyGcasOverride, updateGcas } from './gcas';
-import { updateGloc } from './gloc';
 import { createSimState, type AircraftSimState } from './state';
 import { hprFromAxes, setQuatFromHPR, type Hpr } from './attitude';
 
@@ -54,22 +53,6 @@ export function ensureSimState(ac: AircraftEntity): AircraftSimState {
     ac.sim = st;
   }
   return st;
-}
-
-/**
- * Does the pilot fly with the convenience assists (neutral-stick flight-path hold, gentle buffet,
- * no G-LOC)? False only for the human player on a difficulty with flightAssist off (none today, since Ace was removed). The FBW g/AoA
- * limiters and Auto-GCAS are part of the F-35 and stay on regardless.
- */
-export function isAssisted(ac: AircraftEntity, env: FlightEnv): boolean {
-  return ac.isPlayer ? env.difficulty.flightAssist : true;
-}
-
-const LAW_ASSISTED: ControlLaw = { pathHold: true, buffetGain: 1 };
-const LAW_NO_ASSIST: ControlLaw = { pathHold: false, buffetGain: 1.6, highAoa: true };
-/** Control-law options for this aircraft. */
-export function controlLawFor(ac: AircraftEntity, env: FlightEnv): ControlLaw {
-  return isAssisted(ac, env) ? LAW_ASSISTED : LAW_NO_ASSIST;
 }
 
 /** Free-flight speed floor (#113): 150 KIAS, about 1.3 × the clean jet's 1 g stall at low level. */
@@ -240,14 +223,12 @@ export function stepFlight(ac: AircraftEntity, dt: number, env: FlightEnv): void
     ac.gcasActive = false;
     return;
   }
-  updateGloc(ac, st, env, dt);
   updateGcas(ac, st, env, dt);
   const n = Math.max(1, Math.ceil(dt * FM_RATE_HZ - 1e-6));
   const h = dt / n;
-  const law = controlLawFor(ac, env);
   let gAbsMax = 0;
   for (let i = 0; i < n; i++) {
-    const g = substep(ac, st, h, env, law);
+    const g = substep(ac, st, h, env);
     const ag = Math.abs(g);
     if (ag > gAbsMax) gAbsMax = ag;
   }
@@ -264,7 +245,7 @@ export function stepFlight(ac: AircraftEntity, dt: number, env: FlightEnv): void
 }
 
 /** One integration sub-step. Returns the pilot-felt normal load factor (g). */
-function substep(ac: AircraftEntity, st: AircraftSimState, h: number, env: FlightEnv, law: ControlLaw): number {
+function substep(ac: AircraftEntity, st: AircraftSimState, h: number, env: FlightEnv): number {
   const perf = st.perf;
   const f = ac.flight;
   const pos = ac.position;
@@ -340,8 +321,8 @@ function substep(ac: AircraftEntity, st: AircraftSimState, h: number, env: Fligh
   /* ── Pilot / GCAS inputs ── */
   const inp = ac.input;
   let throttle = inp.throttle;
-  // a G-LOC'd pilot's hand is off the stick (pilotAuthority ramps back after waking up)
-  const pa = alive ? st.pilotAuthority : 0;
+  // a dead pilot's stick does nothing
+  const pa = alive ? 1 : 0;
   _stick.pitch = clamp1(inp.pitch) * pa;
   _stick.roll = clamp1(inp.roll) * pa;
   _stick.yaw = clamp1(inp.yaw) * pa;
@@ -375,7 +356,7 @@ function substep(ac: AircraftEntity, st: AircraftSimState, h: number, env: Fligh
   ad.authority = auth > 1 ? 1 : auth < 0.06 ? 0.06 : auth;
 
   /* ── Rates ── */
-  if (alive) updateControlLaws(ac, st, ad, h, law, _stick);
+  if (alive) updateControlLaws(ac, st, ad, h, _stick);
   else updateWreckRates(ac, st, h);
 
   const brakeTarget = alive && inp.airbrake ? 1 : 0;

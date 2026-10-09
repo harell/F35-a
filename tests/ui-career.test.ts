@@ -24,7 +24,6 @@ import {
 } from '../src/ui/career';
 import { RECRUIT_OFFER_AFTER, debriefPrimary } from '../src/ui/screens/debrief';
 import { countNote } from '../src/ui/screens/instantAction';
-import { IA_ENEMY_COUNT_SCALE } from '../src/missions/content/instant';
 
 class MemStorage {
   private m = new Map<string, string>();
@@ -57,14 +56,13 @@ describe('difficulty text comes from the live numbers', () => {
   });
   for (const id of DIFFICULTY_ORDER) {
     const d = DIFFICULTIES[id];
-    it(`${id}: facts match hits-to-kill, enemy scale, assists and score`, () => {
+    it(`${id}: facts match hits-to-kill, enemy scale and score`, () => {
       const f = difficultyFacts(d).join(' | ');
       if (d.playerMissileHitsToKill > 1) expect(f).toContain(`Survive ${d.playerMissileHitsToKill} missile hits`);
       else expect(f).toContain('One missile hit kills');
       const pct = Math.round((d.enemyCountScale - 1) * 100);
       if (pct === 0) expect(f).toContain('Standard enemy numbers');
       else expect(f).toContain(`${pct > 0 ? '+' : ''}${pct}% enemies`);
-      expect(f).toContain(d.flightAssist ? 'Flight-path hold' : 'No flight-path hold');
       expect(f).toContain(`Score ×${d.scoreMultiplier}`);
       expect(d.description.startsWith(difficultyShort(d))).toBe(true);
       expect(difficultyShort(d).length).toBeGreaterThan(8);
@@ -185,8 +183,8 @@ describe('instant action enemy-count label', () => {
   it('states the real scaling instead of "More bandits on harder difficulties"', () => {
     const t = countNote();
     expect(t).not.toMatch(/More bandits on harder/);
-    const r = IA_ENEMY_COUNT_SCALE.recruit ?? DIFFICULTIES.recruit.enemyCountScale;
-    const a = IA_ENEMY_COUNT_SCALE.veteran ?? DIFFICULTIES.veteran.enemyCountScale;
+    const r = DIFFICULTIES.recruit.enemyCountScale;
+    const a = DIFFICULTIES.veteran.enemyCountScale;
     expect(a).toBe(1);
     if (r !== 1 || a !== 1) {
       expect(t).toContain(`×${r}`);

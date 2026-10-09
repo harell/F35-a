@@ -5,7 +5,7 @@
 import { Vector3 } from 'three';
 import { AIRCRAFT_INFO } from '../../core/data';
 import { DEG, clamp } from '../../core/math';
-import { isHostile, type Difficulty, type DifficultyParams, type LoadoutId, type Team } from '../../core/types';
+import { isHostile, type Difficulty, type LoadoutId, type Team } from '../../core/types';
 import type { AiTask, TerrainQuery } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import type { AircraftGroupDef, Formation, GroundTargetDef, SamSiteDef, TaskDef } from '../schema';
@@ -42,12 +42,6 @@ export function scaledCount(def: AircraftGroupDef, enemyCountScale: number, diff
   if (def.team === 'red' && !def.fixedCount) n = Math.max(1, Math.round(def.count * enemyCountScale));
   if (def.maxCount !== undefined) n = Math.min(n, def.maxCount);
   return Math.max(1, n);
-}
-
-/** Aircraft type actually flown on this difficulty (see AircraftGroupDef.downgrade). */
-export function groupType(def: AircraftGroupDef, difficulty: DifficultyParams['id']): AircraftGroupDef['type'] {
-  if (def.downgrade && !difficultyAtLeast(difficulty, def.downgrade.below)) return def.downgrade.type;
-  return def.type;
 }
 
 /**
@@ -272,7 +266,7 @@ export function spawnAirGroup(s: MissionState, g: GroupRt): void {
   const formation: Formation = def.formation ?? (n === 1 ? 'single' : n >= 4 ? 'box' : 'pair');
   const skill = groupSkill(def, s.difficulty.aiSkill);
   const task = def.task ?? defaultTask(def);
-  const type = groupType(def, s.difficulty.id);
+  const type = def.type;
   const stem = def.callsign ?? AIRCRAFT_INFO[type].nato;
   const first = def.firstNumber ?? 1;
   let leadId: number | null = null;
@@ -336,7 +330,7 @@ function spawnOneWayGroup(s: MissionState, g: GroupRt, def: AircraftGroupDef): v
   const rz = Math.sin(heading);
   const spacing = def.spacing ?? 150;
   const formation: Formation = def.formation ?? 'triangle';
-  const type = groupType(def, s.difficulty.id);
+  const type = def.type;
   const stem = def.callsign ?? AIRCRAFT_INFO[type].nato;
   const firstNumber = def.firstNumber ?? 1;
   const target = new Vector3(ow.targetX, ow.targetY ?? world.terrain.surfaceHeightAt(ow.targetX, ow.targetZ), ow.targetZ);
@@ -472,15 +466,15 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
             strike: def.strike ? { group: def.strike.group, range: def.strike.range, countdown: def.strike.countdown, missiles: def.strike.missiles } : null,
           }
         : undefined,
-    // the stoat's route starts where it is placed; its station indices shift by that start point
-    stoat: def.stoat
+    // a runner's route starts where it is placed; its station indices shift by that start point
+    runner: def.runner
       ? {
-          route: [new Vector3(def.x, 0, def.z), ...def.stoat.route.map((p) => new Vector3(p.x, 0, p.z))],
-          stations: def.stoat.stations.map((k) => k + 1),
-          speed: def.stoat.speed,
-          stopTime: def.stoat.stopTime,
-          swimSpeed: def.stoat.swimSpeed,
-          clockStart: def.stoat.clock === 'spawn' ? s.world.time : 0,
+          route: [new Vector3(def.x, 0, def.z), ...def.runner.route.map((p) => new Vector3(p.x, 0, p.z))],
+          stations: def.runner.stations.map((k) => k + 1),
+          speed: def.runner.speed,
+          stopTime: def.runner.stopTime,
+          swimSpeed: def.runner.swimSpeed,
+          clockStart: def.runner.clock === 'spawn' ? s.world.time : 0,
         }
       : undefined,
   });
@@ -498,7 +492,7 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
 export function buildGroups(s: MissionState): void {
   const diff = s.difficulty.id;
   const sc = s.script;
-  const scale = sc.enemyCountScale?.[diff] ?? s.difficulty.enemyCountScale;
+  const scale = s.difficulty.enemyCountScale;
   const ensure = (id: string, team: GroupRt['team']): GroupRt => {
     let g = s.groups.get(id);
     if (!g) {

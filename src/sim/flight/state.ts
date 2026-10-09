@@ -74,16 +74,6 @@ export interface AircraftSimState {
   /** Climb angle the fly-up captures (rad) — steepened while the predicted path doesn't clear. */
   gcasClimb: number;
 
-  /* ── Pilot physiology (G-LOC, see gloc.ts) ── */
-  /** Accumulated g stress 0..1 (1 = G-LOC). */
-  gStress: number;
-  /** Unconscious (and then regaining control) after a G-LOC. */
-  glocActive: boolean;
-  /** Seconds of incapacitation left (runs below zero through the recovery ramp). */
-  glocTimer: number;
-  /** 0..1 multiplier on the pilot's stick (0 while unconscious). */
-  pilotAuthority: number;
-
   /* ── World bookkeeping ── */
   /** AI brain accumulator (20 Hz, staggered). */
   aiTimer: number;
@@ -134,10 +124,6 @@ export function createSimState(type: AircraftType, seed: number): AircraftSimSta
     gcasLastMessage: -999,
     gcasG: 5,
     gcasClimb: 0.26,
-    gStress: 0,
-    glocActive: false,
-    glocTimer: 0,
-    pilotAuthority: 1,
     aiTimer: 0,
     crashTime: -1,
     wreckSpin: new Vector3(),

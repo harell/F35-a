@@ -102,7 +102,7 @@ function rat(name: keyof typeof T07_ROUTES, group: string, spawned: boolean) {
   return target(`rat_${name}`, group, 'rat', r.start, {
     name: 'Rat',
     spawn: spawned ? undefined : NEVER,
-    stoat: { route: [...r.route], stations: [...r.drains], speed: T07_RAT.speed, stopTime: T07_RAT.stopTime, swimSpeed: T07_RAT.swimSpeed, clock: 'spawn' },
+    runner: { route: [...r.route], stations: [...r.drains], speed: T07_RAT.speed, stopTime: T07_RAT.stopTime, swimSpeed: T07_RAT.swimSpeed, clock: 'spawn' },
   });
 }
 
@@ -165,7 +165,7 @@ export const T07_SMALL: MissionDef = mission({
       },
       {
         id: 't_alert',
-        when: { kind: 'stoat_alert', group: G.wave1 },
+        when: { kind: 'runner_alert', group: G.wave1 },
         actions: [{ kind: 'radio', from: TR, text: 'That one has sat up. It is looking at you.' }],
       },
       {

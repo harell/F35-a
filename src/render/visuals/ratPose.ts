@@ -1,16 +1,16 @@
 /**
- * Poses t07's sewer rats (render/models/rat.ts) from their sim state (sim/stoat.ts StoatState, the
+ * Poses t07's sewer rats (render/models/rat.ts) from their sim state (sim/runner.ts RunnerState, the
  * runner rats share with the stoat):
  *  - running: a low, quick scurry (small bobs, the leg pairs swinging in turn, the tail swaying);
  *  - stopped at a drain: nose down, sniffing;
- *  - targeted at a stop (StoatState.alert → 1): it sits up on its haunches, front paws off the
+ *  - targeted at a stop (RunnerState.alert → 1): it sits up on its haunches, front paws off the
  *    ground, and turns its head up towards the jet;
- *  - swimming (StoatState.swimming): sunk to the waterline with only its head and the top of its back
+ *  - swimming (RunnerState.swimming): sunk to the waterline with only its head and the top of its back
  *    showing, nose up, legs paddling, tail trailing and sculling behind.
  * Pure function of the state and the time: no allocations.
  */
 import type { Object3D } from 'three';
-import type { StoatState } from '../../sim/stoat';
+import type { RunnerState } from '../../sim/runner';
 
 export interface RatNodes {
   hips: Object3D;
@@ -38,7 +38,7 @@ export const RAT_SWIM_Y = -0.012;
 export const SIT_PITCH = 0.95;
 
 /** Pose the rat's nodes for `s` at sim time `time` (s); `seed` desynchronises two rats. */
-export function poseRat(n: RatNodes, s: StoatState, time: number, seed = 0): void {
+export function poseRat(n: RatNodes, s: RunnerState, time: number, seed = 0): void {
   const g = s.gait;
   if (s.swimming) {
     n.hips.position.y = RAT_SWIM_Y + 0.004 * Math.sin(g * 2);

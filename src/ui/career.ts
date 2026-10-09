@@ -15,7 +15,6 @@ export const DIFFICULTY_ORDER: Difficulty[] = ['recruit', 'pilot', 'veteran'];
 /** Short fact list derived from the live DIFFICULTIES numbers (never hand-written, so it can't go stale). */
 export function difficultyFacts(d: DifficultyParams): string[] {
   const out: string[] = [];
-  out.push(d.flightAssist ? 'Flight-path hold · gentle buffet' : 'No flight-path hold · G-LOC');
   const hits = d.playerMissileHitsToKill;
   out.push(hits > 1 ? `Survive ${hits} missile hits` : 'One missile hit kills');
   const pct = Math.round((d.enemyCountScale - 1) * 100);

@@ -20,7 +20,7 @@ import { SAM_DATA } from '../src/sim/sam/samData';
 import { rcsRangeFactor } from '../src/sim/sensors/signatures';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { G03, G03_BOATS, G03_CLOCK, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_SITES, G03_STOAT } from '../src/missions/content/irgcWaiheke';
-import { stoatArrival } from '../src/sim/stoat';
+import { runnerArrival } from '../src/sim/runner';
 import { Vector3 } from 'three';
 import type { XZ } from '../src/missions/schema';
 import { forceDestroy } from '../src/game/forceDestroy';
@@ -259,7 +259,7 @@ describe('g03: the target, the cloud and the clock', () => {
     expect(m.runner.result(m.world).reason).toBe('The stoat reached the nest');
     expect(at).toBeGreaterThan(G03_CLOCK - 20);
     expect(at).toBeLessThan(G03_CLOCK);
-    expect(stoatArrival({ route: [G03_STOAT.start, ...G03_STOAT.stations, G03_NEST].map((p) => new Vector3(p.x, 0, p.z)), stations: [1, 2, 3], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime })).toBeLessThan(G03_CLOCK);
+    expect(runnerArrival({ route: [G03_STOAT.start, ...G03_STOAT.stations, G03_NEST].map((p) => new Vector3(p.x, 0, p.z)), stations: [1, 2, 3], speed: G03_STOAT.speed, stopTime: G03_STOAT.stopTime })).toBeLessThan(G03_CLOCK);
     m.runner.dispose?.();
   });
 

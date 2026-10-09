@@ -221,8 +221,8 @@ export class GroundVisual {
       this.root.scale.set(1, 1, 1);
     }
     for (const s of this.spinners) s.node.rotation.y = time * s.rate;
-    if (this.stoat && g.stoat) poseStoat(this.stoat, g.stoat, time, this.seed);
-    if (this.rat && g.stoat) poseRat(this.rat, g.stoat, time, this.seed);
+    if (this.stoat && g.runner) poseStoat(this.stoat, g.runner, time, this.seed);
+    if (this.rat && g.runner) poseRat(this.rat, g.runner, time, this.seed);
     const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
     if (this.proto.lights.length) this.lightMode = speed > 0.5 ? 1 : g.anchored ? 2 : 4;
     return true;

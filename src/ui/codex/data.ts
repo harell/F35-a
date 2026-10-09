@@ -414,7 +414,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     line: 'You\'re pulling more g than the airframe allows.',
     trigger: 'More than 0.3 g past the limit. The limit is lower with heavy JDAMs on the wings. Overstressing damages the jet ("OVERSTRESS").',
     how: ['Relax the pull.'],
-    notes: ['Holding about 9 g for around 11 s causes G-LOC (blackout) when flight assist is off.'],
+    notes: [],
   },
   {
     kind: 'warning', id: 'fuel', cat: 'fly', name: 'BINGO · FUEL LOW', chip: 'BINGO', level: 'amb', sound: 'none', voice: 'b_bingo', voiceText: 'Bingo',
