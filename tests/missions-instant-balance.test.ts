@@ -4,10 +4,9 @@
  *  - the wingman (Viper 2) can't win Defend or Dogfight for a player who never fires: in Dogfight
  *    it holds fire until the player engages a bandit (a stray gun burst doesn't count), in Defend it
  *    fights the escort and never the strikers;
- *  - balance floors over 6 seeds, one win under what the sweep measures (Strike 6/6/5, Gauntlet
- *    6/6/4, Dogfight 6/6/4, Defend 6/5/5 on Recruit/Pilot/Veteran) so a bot tweak or #63's
- *    no-rearm bot (which measured Defend Pilot 4/6) doesn't flip them; the issue's bands are
- *    Recruit and Pilot ≥ 75 % (5/6) and Veteran ≥ 25 % (2/6);
+ *  - balance bands over 6 seeds (BANDS: floors one win under what the sweep measures, ceilings
+ *    where playtest r1 found a walkover), every run ending, and the Gauntlet's SAMs firing at the
+ *    jet in most runs; the issue's bands are Recruit and Pilot ≥ 75 % (5/6) and Veteran ≥ 25 % (2/6);
  *  - the enemy-count extremes: Defend at 8 (Beast mode, three bombers below Veteran, 2 escorts at
  *    most) is winnable on Recruit and Pilot; enemyCount 1 is accepted as the easy end.
  * The heavy tests are async and yield after every playthrough: a long synchronous stretch starves
@@ -23,7 +22,7 @@ import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
 import { buildInstantMissionSeeded, createMissionRunner, missionById, terrainPadsFor } from '../src/missions';
-import { DEFEND_BEAST_FROM } from '../src/missions/content/instant';
+import { DEFEND_BEAST_FROM, IA_STRIKE_TIME_LIMIT } from '../src/missions/content/instant';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -153,30 +152,58 @@ describe('Instant Action: the wingman supports, it does not win the mission (iss
 
 const IA_IDS = ['ia_strike_auckland', 'ia_sam_gauntlet_auckland', 'ia_dogfight_auckland', 'ia_defend_auckland'];
 
-/** Bot wins over seeds 0..5, as the sweep counts them (bot-sweep.ts --seeds=6). */
-async function wins(id: string, diff: Difficulty): Promise<{ won: number; log: string }> {
+/**
+ * Bot wins over seeds 0..5, as the sweep counts them (bot-sweep.ts --seeds=6), and the runs in which a
+ * SAM fired at the jet. Every run has to end: Strike on Veteran used to circle out of bombs until the
+ * sweep gave up (4 of 6), Defend on Pilot once (playtest r1, 1.3-h and 1.3-i).
+ */
+async function wins(id: string, diff: Difficulty): Promise<{ won: number; samShot: number; log: string }> {
   const log: string[] = [];
   let won = 0;
+  let samShot = 0;
   for (let seed = 0; seed < 6; seed++) {
-    const r = runPlaythrough(id, diff, seed, terrainFor(id), { maxT: 900 });
+    const r = runPlaythrough(id, diff, seed, terrainFor(id), { maxT: 900, log: true });
     await yieldToVitest();
     if (r.state === 'success') won++;
-    log.push(`${id} ${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}`);
+    const shots = r.events.filter((e) => / LAUNCH \S+ sam -> Viper 1 /.test(e)).length;
+    if (shots > 0) samShot++;
+    log.push(`${id} ${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}, ${shots} SAM rounds at the jet`);
+    expect(r.state, log.join('\n')).not.toBe('running');
   }
-  return { won, log: log.join('\n') };
+  return { won, samShot, log: log.join('\n') };
 }
 
-describe('Instant Action balance floors over 6 seeds (issue #60; was Strike 5/2/0, Gauntlet 2/4/0, Dogfight 6/5/0)', () => {
-  // floors one win under the measured numbers (see the header): Recruit and Pilot ≥ 4/6, Veteran ≥ 2/6
-  // the Gauntlet's Pilot cell joins the others: 6/6 on today's bot (was 4/6 with #99's)
+/**
+ * Bands [min, max] of wins in 6 per difficulty: the measured numbers less one seed for the floors (the
+ * issue's bands are Recruit and Pilot ≥ 5/6, Veteran ≥ 2/6), and a ceiling where playtest r1 found a
+ * walkover (Gauntlet Recruit and Pilot 12/12 with no SAM at the jet on Recruit, Defend Veteran 6/6
+ * above Pilot's 5/6). Measured after r1: Strike 6/6/2, Gauntlet 6/3/4 (12 seeds: Pilot 7, Veteran 5;
+ * two of Pilot's losses a Winchester jet extending low from the CAP until it hit the sea), Dogfight
+ * 6/6/4, Defend 6/6/3.
+ */
+const BANDS: Record<string, Record<Difficulty, [number, number]>> = {
+  ia_strike_auckland: { recruit: [5, 6], pilot: [5, 6], veteran: [2, 6] },
+  ia_sam_gauntlet_auckland: { recruit: [5, 6], pilot: [2, 5], veteran: [2, 5] },
+  ia_dogfight_auckland: { recruit: [4, 6], pilot: [4, 6], veteran: [2, 6] },
+  ia_defend_auckland: { recruit: [5, 6], pilot: [5, 6], veteran: [2, 5] },
+};
+
+describe('Instant Action balance bands over 6 seeds (issue #60, playtest r1; was Strike 5/2/0, Gauntlet 2/4/0, Dogfight 6/5/0)', () => {
   for (const id of IA_IDS) {
-    it(`${id}: Recruit ≥ 4/6, Pilot ≥ 4/6, Veteran ≥ 2/6`, { timeout: 300_000 }, async () => {
-      const rc = await wins(id, 'recruit');
-      expect(rc.won, rc.log).toBeGreaterThanOrEqual(4);
-      const p = await wins(id, 'pilot');
-      expect(p.won, p.log).toBeGreaterThanOrEqual(4);
-      const v = await wins(id, 'veteran');
-      expect(v.won, v.log).toBeGreaterThanOrEqual(2);
+    const b = BANDS[id];
+    it(`${id}: Recruit ${b.recruit.join('-')}/6, Pilot ${b.pilot.join('-')}/6, Veteran ${b.veteran.join('-')}/6, every run ends`, { timeout: 300_000 }, async () => {
+      const shot: Partial<Record<Difficulty, number>> = {};
+      for (const diff of ['recruit', 'pilot', 'veteran'] as const) {
+        const r = await wins(id, diff);
+        expect(r.won, r.log).toBeGreaterThanOrEqual(b[diff][0]);
+        expect(r.won, r.log).toBeLessThanOrEqual(b[diff][1]);
+        shot[diff] = r.samShot;
+      }
+      // the Gauntlet is flown through SAMs: one fires at the jet in most runs (r1: none on Recruit, 6 of 6)
+      if (id === 'ia_sam_gauntlet_auckland') {
+        expect(shot.recruit, JSON.stringify(shot)).toBeGreaterThanOrEqual(4);
+        expect(shot.pilot, JSON.stringify(shot)).toBeGreaterThanOrEqual(4);
+      }
     });
   }
   it("'mixed' flies no Su-35 / Su-57 on any difficulty (their R-77s decided every Veteran run, then every Ace run, since removed)", () => {
@@ -187,15 +214,21 @@ describe('Instant Action balance floors over 6 seeds (issue #60; was Strike 5/2/
       }
     }
   });
-  it('Strike: the SA-6 is off the run-in (east of the field) and the SEAD fit carries a bomb per parked jet', () => {
+  it('Strike: the SA-6 is off the run-in (east of the field), the SEAD fit carries a bomb per parked jet, and a clock ends a stalled sortie', () => {
     const def = missionById('ia_strike_auckland')!;
     const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
     const jets = def.script.ground.filter((g) => g.group === 'parked');
     const eastmost = Math.max(...jets.map((j) => j.x));
     expect(sa6.x).toBeGreaterThan(eastmost);
     expect(def.recommendedLoadout).toBe('sead_stealth');
-    // one glide bomb per pass: the par time fits the bot's 550-600 s wins (was 420 s)
+    // the bot's wins take 205-335 s: the par leaves room for a second look
     expect(def.script.parTime).toBeGreaterThanOrEqual(600);
+    // playtest r1 (1.3-h): Veteran's Tor shoots the glide bombs down, and a jet out of bombs with a
+    // parked jet left circled until the sweep gave up (4 of 6 runs); the clock, over twice the slowest
+    // win, ends it, and the briefing says how long
+    expect(def.timeLimit).toBe(IA_STRIKE_TIME_LIMIT);
+    expect(IA_STRIKE_TIME_LIMIT).toBeGreaterThanOrEqual(2 * 335);
+    expect(def.briefing.join(' ')).toContain(`${IA_STRIKE_TIME_LIMIT / 60} minutes`);
   });
 });
 
@@ -206,15 +239,18 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
     expect(g.find((x) => x.id === 'strikers')!.count).toBe(4);
     // three of them below Veteran (Pilot at 8: 4/6 with four, 5/6 with three)
     expect(g.find((x) => x.id === 'strikers')!.countFor).toEqual({ recruit: 3, pilot: 3 });
-    expect(defend(6).script.groups.find((x) => x.id === 'strikers')!.countFor).toBeUndefined();
+    // a smaller raid sends one bomber more on Veteran (playtest r1, 1.3-i: Veteran won 6/6 with two)
+    expect(defend(6).script.groups.find((x) => x.id === 'strikers')!.countFor).toEqual({ veteran: 4 });
+    expect(defend(4).script.groups.find((x) => x.id === 'strikers')!.countFor).toEqual({ veteran: 3 });
     expect(g.find((x) => x.id === 'escort')!.count).toBeLessThanOrEqual(2);
     expect(g.find((x) => x.role === 'wingman')!.count).toBe(2);
     expect(defend(4).script.groups.find((x) => x.role === 'wingman')!.count).toBe(1);
-    // from 6 enemies Beast mode is the recommended fit: 4 strikers outnumber the stealth fit's 4 AMRAAMs
-    expect(DEFEND_BEAST_FROM).toBe(6);
+    // from 4 enemies (the default raid) Beast mode is the recommended fit: the stealth fit's 4 AMRAAMs
+    // went Winchester with a striker left (playtest r1, 1.3-i: one Pilot sortie hung, one took 846 s)
+    expect(DEFEND_BEAST_FROM).toBe(4);
     expect(defend(8).recommendedLoadout).toBe('a2a_beast');
-    expect(defend(6).recommendedLoadout).toBe('a2a_beast');
-    expect(defend(5).recommendedLoadout).toBe('a2a_stealth');
+    expect(defend(4).recommendedLoadout).toBe('a2a_beast');
+    expect(defend(3).recommendedLoadout).toBe('a2a_stealth');
     expect(defend(8).allowedLoadouts).toContain('a2a_stealth');
   });
   it('the Defend escort spawns at most two jets on every difficulty', () => {
@@ -229,7 +265,7 @@ describe('Instant Action: enemy-count extremes (issue #60, playtest round 4)', (
       }
     }
   });
-  // Measured with Beast mode (the recommended fit from 6) and three bombers below Veteran: Recruit
+  // Measured with Beast mode (the recommended fit from 6 then, from 4 now) and three bombers below Veteran: Recruit
   // 3/3, Pilot 3/3 here and 5/6 over seeds 0-5 (0/3 with the stealth fit and four bombers:
   // Winchester with a striker left, gunned down on the way home). Floors one win under.
   it('Defend at 8 is winnable on Recruit (≥ 2/3; was 1/2) and Pilot (≥ 2/3; was 0/2)', { timeout: 300_000 }, async () => {
