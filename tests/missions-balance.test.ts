@@ -227,16 +227,17 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
 describe('g03 Stoat of Emergency: several ways in (#198, #200; playtest 2026-10-10, r1)', () => {
   // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then the bot
   // attacks at one of the stoat's stops (#200: a running stoat can't be bombed). Casual players (the owner's ask,
-  // r1) get several ways in, each about as hard as g01: on Recruit and Pilot the Tor and the airstrip SA-6 are
-  // Veteran's (minDifficulty), the boats fire no harassing long shots, the northern boats sail clear of the
-  // straight line, and the stops fall later and last 60 s on a 5:20 clock. Measured, 6 seeds, Recruit / Pilot /
-  // Veteran (casual proxy --reaction=2.5 on Pilot): golden (low down the strait, AARGMs at the strait's boat and,
-  // on Veteran, the airstrip SA-6) 6 / 5 / 4 (2); golden_north (round the north, AARGMs at the northern boats)
-  // 6 / 6 / 0 (5; Pilot 10/12 over 12 seeds); south (low down the strait, no AARGM) 6 / 6 / 0 (5; 11/12); sead
-  // (low, an AARGM at the Motuihe SA-6, then straight in) 5 / 4 / 0 (4); the plain bot (straight in on the steering
-  // cue) 6 / 3 / 0 (3); north (low, no AARGM) 6 / 0 / 0; high 6 / 1 / 0; killall 0 / 0 / 0. Before (4:00 clock, 40 s
-  // stops, every site on every difficulty, boats harassing): golden 5 / 3 / 0 (0), golden_north 3 / 1 / 0, south
-  // 2 / 0 / 0, the plain bot 0 / 0 / 0. Bands over 4–6 seeds are the measured floors less one seed.
+  // r1) get several ways in, each about as hard as g01: Veteran's extra SA-6 is Veteran's only (minDifficulty), the
+  // boats fire no harassing long shots, the northern boats sail clear of the straight line, and the stops fall later
+  // and last 60 s on a 5:20 clock. Measured (playtest r1), 6 seeds, Recruit / Pilot (casual proxy --reaction=2.5 on
+  // Pilot): golden (low down the strait, an AARGM at the strait's boat) 6 / 5 (2); golden_north (round the north,
+  // AARGMs at the northern boats) 6 / 6 (5; Pilot 10/12 over 12 seeds); south (low down the strait, no AARGM) 6 / 6
+  // (5; 11/12); sead (low, an AARGM at the Motuihe SA-6, then straight in) 5 / 4 (4); the plain bot (straight in on
+  // the steering cue) 6 / 3 (3); north (low, no AARGM) 6 / 0; high 6 / 1; killall 0 / 0. Veteran (playtest r2,
+  // 2.3-a): its SA-6 stood at the airstrip over the nest and a Tor covered the Motuihe SA-6, so every way needed
+  // three AARGMs: golden 4/6, everything else 0/6 (south, sead, golden_north, the plain bot). With the SA-6 on
+  // Rakino over the north way and no Tor: golden 5/6, south 2/6, golden_north 0/6, sead 0/6, the plain bot 0/6.
+  // Bands over 4–6 seeds are the measured floors less one seed (Veteran's second way: its measured 2/6).
   const run = (route: string, diff: Difficulty, seed: number) =>
     runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 400, probe: { kind: 'route', route } as ProbeSpec });
 
@@ -257,21 +258,25 @@ describe('g03 Stoat of Emergency: several ways in (#198, #200; playtest 2026-10-
     for (const route of Object.keys(won)) expect(won[route], `${route}\n${log.join('\n')}`).toBeGreaterThanOrEqual(floor[route]);
   });
 
-  it('the best way on Veteran: wins some (≥ 2/6), never more than on Pilot', { timeout: 900_000 }, async () => {
+  it('two ways win on Veteran (golden and south, each ≥ 2/6), golden never more than on Pilot', { timeout: 1_200_000 }, async () => {
+    // playtest r2, 2.3-a: with a Tor over the Motuihe SA-6 and an SA-6 at the airstrip over the nest every way
+    // needed three AARGMs, and only golden won (4/6; south 0/6)
     const won: Record<string, number> = {};
     const log: string[] = [];
-    for (const d of ['pilot', 'veteran'] as const) {
-      won[d] = 0;
+    for (const [route, d] of [['golden', 'pilot'], ['golden', 'veteran'], ['south', 'veteran']] as const) {
+      const k = `${route} ${d}`;
+      won[k] = 0;
       for (const seed of [0, 1, 2, 3, 4, 5]) {
         await new Promise((r) => setTimeout(r, 0));
-        const r = run('golden', d, seed);
-        if (r.state === 'success') won[d]++;
-        log.push(`golden ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+        const r = run(route, d, seed);
+        if (r.state === 'success') won[k]++;
+        log.push(`${k} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
       }
     }
     const table = log.join('\n');
-    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
-    expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+    expect(won['golden veteran'], table).toBeGreaterThanOrEqual(4);
+    expect(won['south veteran'], table).toBeGreaterThanOrEqual(2);
+    expect(won['golden veteran'], table).toBeLessThanOrEqual(won['golden pilot']);
   });
 
   it('not a walkover: straight over the top of every SAM (high) still fails on Pilot', { timeout: 600_000 }, async () => {

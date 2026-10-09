@@ -12,9 +12,11 @@
  * The ZSU covers the drop pass at the end of every route; the boats' optical trackers (and the island
  * sites' own, `closeCue`) don't care about stealth; the target is revealed only to a jet under the
  * cloud deck within G03_REVEAL.radius of it, and it can be bombed only at its stops, so the clock and
- * the stops decide how long a jet can take. Veteran adds a Tor covering the Motuihe SA-6 and the
- * airstrip SA-6 over the nest. Two AARGM-ERs: the player picks which radars to kill, which to slip
- * past (terrain masking, the notch, chaff, the SA-6's radar floor) and which to outlast.
+ * the stops decide how long a jet can take. Veteran adds an SA-6 on Rakino over the north way, so
+ * round the north meets three radars there; the strait (an AARGM for its boat) and straight across
+ * (one for the Motuihe SA-6) leave an AARGM-ER to spare. Two AARGM-ERs: the player picks which radars
+ * to kill, which to slip past (terrain masking, the notch, chaff, the SA-6's radar floor) and which to
+ * outlast.
  *
  * Geometry is checked on the real LINZ coast in tests/missions-g03.test.ts.
  */
@@ -70,7 +72,7 @@ export const G03_REVEAL = { radius: 6_000, below: OVERCAST_DECK.altitude } as co
 export const G03_GROUPS = {
   target: 'stoat',
   motuihe: 'motuihe_sams',
-  airstrip: 'airstrip_sam',
+  rakino: 'rakino_sam',
   ridge: 'ridge_aaa',
   boats: 'ad_boats',
 } as const;
@@ -86,17 +88,19 @@ export const G03_GROUPS = {
 export const G03_ISLAND_CUE = { range: 7_000, bayRange: 10_000 } as const;
 
 /** Fixed sites (m). */
-export const G03_SITES = {
+const G03_SITES = {
   /**
-   * Motuihe: the SA-6 on the straight line in, and on Veteran a Tor whose point defence (3 km) covers it
-   * 1 km away. The Tor stands on the island's north-east end, 8 km from the Tāmaki Strait: the strait is
-   * a corridor its patrol boat guards, not the Tor (the SA-6 sees down it, but can't engage a jet under
-   * its 80 m floor).
+   * Motuihe: the SA-6 on the straight line in. It sees down the Tāmaki Strait, but can't engage a jet
+   * under its 80 m floor: the strait is a corridor its patrol boat guards.
    */
   motuiheSa6: { x: 16_200, z: -3_400 } as XZ,
-  motuiheTor: { x: 16_600, z: -4_300 } as XZ,
-  /** The enemy airstrip between Oneroa and Onetangi (Veteran): covers the end of every route. */
-  airstripSa6: P.waiAirstrip,
+  /**
+   * Rakino (Veteran): over the way round the north, 14 km from the nest, so it guards one approach and
+   * not the drop. Until playtest r2 Veteran's SA-6 stood at the airstrip 1.35 km from the nest, covering
+   * every drop pass, and a Tor covered the Motuihe SA-6: every way needed three AARGMs and Veteran had
+   * one way to win (2.3-a).
+   */
+  rakinoSa6: P.rakino,
   /** The ridge above Onetangi: covers the low drop pass. */
   ridgeZsu: { x: 28_200, z: -6_400 } as XZ,
 } as const;
@@ -166,10 +170,8 @@ export const G03: MissionDef = mission({
     parTime: G03_CLOCK,
     sams: [
       site('mot_sa6', G.motuihe, 'sa6', G03_SITES.motuiheSa6, { closeCue: G03_ISLAND_CUE }),
-      // Veteran's extra layer (playtest 2026-10-10, 1.3-a): on Recruit and Pilot the Tor made the straight line a wall
-      // and the airstrip SA-6 killed at 3–5 km in the drop window on every route
-      site('mot_tor', G.motuihe, 'sa15', G03_SITES.motuiheTor, { closeCue: G03_ISLAND_CUE, minDifficulty: 'veteran' }),
-      site('strip_sa6', G.airstrip, 'sa6', G03_SITES.airstripSa6, { closeCue: G03_ISLAND_CUE, minDifficulty: 'veteran' }),
+      // Veteran's extra layer over the north way (playtest r2, 2.3-a)
+      site('rakino_sa6', G.rakino, 'sa6', G03_SITES.rakinoSa6, { closeCue: G03_ISLAND_CUE, minDifficulty: 'veteran' }),
       site('ridge_zsu', G.ridge, 'zsu23', G03_SITES.ridgeZsu),
       site('ad_n1', G.boats, 'ad_boat', G03_BOATS.n1[0], { path: G03_BOATS.n1, loop: true, speed: G03_BOATS.speed, noHarass: true }),
       site('ad_n2', G.boats, 'ad_boat', G03_BOATS.n2[0], { path: G03_BOATS.n2, loop: true, speed: G03_BOATS.speed, noHarass: true }),

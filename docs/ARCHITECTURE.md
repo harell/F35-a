@@ -465,8 +465,9 @@ west Auckland through a layered air-defence network to one small target on the O
 of them free (playtest 2026-10-10, r1): an SA-6 on Motuihe on the straight line, a ZSU-23-4 on the ridge over the nest
 (every route ends in a fight), and three patrolling AD boats over the water north of Rakino, off Onetangi and in the
 Tāmaki Strait (`SamSiteDef.path` + `loop`; `noHarass`, so no long shots at the drop the reveal radius already forces
-close in). Veteran adds a Tor on Motuihe (its point defence covers the SA-6) and an SA-6 at the Waiheke airstrip over
-the nest (`minDifficulty`). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
+close in). Veteran adds an SA-6 on Rakino over the way round the north (`minDifficulty`), 14 km from the nest, so the
+north meets three radars there and the strait and the straight line leave an AARGM to spare (playtest r2: with a
+Veteran Tor over the Motuihe SA-6 and the SA-6 at the airstrip over the nest, every way needed three AARGMs). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
 `SamSiteEntity.closeCue`, which overrides the type's `SamTypeData.closeCue`): it holds a jet beaming them low in the
 notch, where the radar alone would lose it. The weather is overcast; the deck height is `OVERCAST_DECK` in
 `src/core/weather.ts` (shared with `world/clouds/Clouds.ts`), and the target spawns only once the player has been under

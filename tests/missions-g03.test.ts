@@ -20,7 +20,7 @@ import type { TerrainQuery } from '../src/sim/api';
 import { SAM_DATA } from '../src/sim/sam/samData';
 import { rcsRangeFactor } from '../src/sim/sensors/signatures';
 import { CAMPAIGNS, campaignOf, createMissionRunner, missionById, terrainPadsFor, validateMission } from '../src/missions';
-import { G03, G03_BOATS, G03_CLOCK, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_SITES, G03_STOAT } from '../src/missions/content/irgcWaiheke';
+import { G03, G03_BOATS, G03_CLOCK, G03_GROUPS, G03_ISLAND_CUE, G03_NEST, G03_REVEAL, G03_STOAT } from '../src/missions/content/irgcWaiheke';
 import { runnerArrival } from '../src/sim/runner';
 import { Vector3 } from 'three';
 import type { XZ } from '../src/missions/schema';
@@ -167,8 +167,8 @@ describe('g03 Stoat of Emergency: content', () => {
     for (const s of l.stores) expect(WEAPON_INFO[s.weapon].kind).not.toBe('aam');
     // two anti-radiation missiles can't clear the radars: the player has to choose
     const radars = G03.script.sams.filter((s) => SAM_DATA[s.type].radar).length;
-    expect(radars).toBe(7);
-    expect(radars).toBeGreaterThan(l.stores.find((s) => s.weapon === 'aargm')!.count * 3);
+    expect(radars).toBe(6);
+    expect(radars).toBeGreaterThan(l.stores.find((s) => s.weapon === 'aargm')!.count * 2);
   });
 
   it('is overcast with the deck the rest of the game draws, and starts on a 0.55 fuel state with a 5:20 clock', () => {
@@ -204,21 +204,22 @@ describe('g03: the layout on the real LINZ coast', () => {
     for (const p of [G03_STOAT.start, ...G03_STOAT.stations]) expect(t.isWater(p.x, p.z), `stoat at ${p.x},${p.z}`).toBe(false);
   });
 
-  it('on Veteran the Tor covers the Motuihe SA-6 with its point defence', () => {
-    expect(G03.script.sams.find((s) => s.id === 'mot_tor')!.minDifficulty).toBe('veteran');
-    const pd = SAM_DATA.sa15.pointDefense!;
-    const d = Math.hypot(G03_SITES.motuiheSa6.x - G03_SITES.motuiheTor.x, G03_SITES.motuiheSa6.z - G03_SITES.motuiheTor.z);
-    expect(d).toBeLessThan(pd.protect);
-  });
-
-  it('the end of every route is defended: the nest is inside the ZSU reach, and on Veteran the airstrip SA-6 ring', () => {
-    const strip = G03.script.sams.find((s) => s.id === 'strip_sa6')!;
+  it('the end of every route is defended: the nest is inside the ZSU reach on every difficulty', () => {
     const zsu = G03.script.sams.find((s) => s.id === 'ridge_zsu')!;
     expect(Math.hypot(zsu.x - G03_NEST.x, zsu.z - G03_NEST.z)).toBeLessThan(ring(zsu));
     expect(zsu.minDifficulty).toBeUndefined();
-    expect(Math.hypot(strip.x - G03_NEST.x, strip.z - G03_NEST.z)).toBeLessThan(ring(strip));
-    expect(strip.closeCue).toEqual(G03_ISLAND_CUE);
-    expect(strip.minDifficulty).toBe('veteran');
+  });
+
+  it("Veteran's extra SA-6 guards one way in (round the north), not every drop, and no Tor swats the AARGMs (playtest r2, 2.3-a)", () => {
+    // at the airstrip, 1.35 km from the nest, with a Tor over the Motuihe SA-6, every way needed three AARGMs
+    const sa6 = G03.script.sams.find((s) => s.id === 'rakino_sa6')!;
+    expect(sa6.minDifficulty).toBe('veteran');
+    expect(sa6.closeCue).toEqual(G03_ISLAND_CUE);
+    // farther from the nest than it sees a jet with its bay open: the drop pass is outside its reach
+    expect(Math.hypot(sa6.x - G03_NEST.x, sa6.z - G03_NEST.z)).toBeGreaterThan(G03_ISLAND_CUE.bayRange + 2_000);
+    expect(crossed(ROUTES.north)).toContain('rakino_sa6');
+    expect(crossed(ROUTES.south)).not.toContain('rakino_sa6');
+    expect(G03.script.sams.filter((s) => SAM_DATA[s.type].pointDefense)).toEqual([]);
   });
 
   it('the straight line passes the Motuihe SA-6 on every difficulty, and neither northern boat', () => {

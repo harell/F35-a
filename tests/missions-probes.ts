@@ -58,13 +58,12 @@ export const KILL_ALL = 'killall';
  *  - wide: round Waiheke's east end in burner, outside every ring until the end;
  *  - high: above every SAM ceiling (43,000 ft) to overhead the nest;
  *  - golden: low down the Tāmaki Strait as low as the jet goes (the Motuihe SA-6 sees down it but can't
- *    engage under its 80 m floor; Veteran's Tor stands 8 km off), an AARGM at the strait's patrol boat,
- *    a second at the airstrip SA-6 (Veteran) from inside 7 km (fired from far out it only silences the
- *    radar for seconds), then the attack from under the cloud at one of the stoat's stops (#200: the bot
- *    holds off while it runs);
- *  - golden_north: the same idea round the north (AARGMs at the two northern boats);
- *  - sead: the straight line, low, with an AARGM at the Motuihe SA-6 from inside 7 km (Veteran's Tor
- *    first), then straight in to the attack.
+ *    engage under its 80 m floor), an AARGM at the strait's patrol boat, then the attack from under the
+ *    cloud at one of the stoat's stops (#200: the bot holds off while it runs);
+ *  - golden_north: the same idea round the north (AARGMs at the two northern boats; on Veteran the
+ *    Rakino SA-6 is a third radar there);
+ *  - sead: the straight line, low, with an AARGM at the Motuihe SA-6 from inside 7 km (fired from far
+ *    out it only silences the radar for seconds), then straight in to the attack.
  */
 export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
   g03: {
@@ -92,7 +91,7 @@ export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
       { x: 11_000, z: 1_500, alt: 45, minAgl: 25, speed: 260 },
       { x: 16_000, z: 3_700, alt: 45, minAgl: 25, speed: 260, shoot: 'ad_s' },
       { x: 22_000, z: 3_500, alt: 45, minAgl: 25, speed: 260 },
-      { x: 26_000, z: -1_000, alt: 45, minAgl: 25, speed: 260, shoot: 'strip_sa6', within: 7_000 },
+      { x: 26_000, z: -1_000, alt: 45, minAgl: 25, speed: 260 },
     ],
     golden_north: [
       { x: -4_000, z: -2_000, alt: 150, speed: 320 },
@@ -106,7 +105,6 @@ export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
     sead: [
       { x: -4_000, z: -2_000, alt: 150, speed: 320 },
       { x: 6_000, z: -3_500, alt: 45, minAgl: 25, speed: 260 },
-      { x: 12_000, z: -4_500, alt: 45, minAgl: 25, speed: 260, shoot: 'mot_tor', within: 8_000 },
       { x: 14_000, z: -5_000, alt: 45, minAgl: 25, speed: 260, shoot: 'mot_sa6', within: 7_000 },
       { x: 22_000, z: -6_500, alt: 600 },
     ],
