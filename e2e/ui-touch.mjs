@@ -427,7 +427,7 @@ async function menus() {
   check(true, 'splash → main menu');
   // a fresh save shows the New pilot card over the menu rows: 'Not now' dismisses it
   if (await page.$('.mm-onboard')) {
-    await page.tap('.mm-onboard .mo-btns .ui-btn.ghost');
+    await page.tap('.mm-onboard .mo-skip');
     await page.waitForSelector('.mm-onboard', { state: 'detached' });
     check(true, "New pilot card → 'Not now' dismisses it");
   }

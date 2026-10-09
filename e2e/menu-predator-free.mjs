@@ -35,7 +35,7 @@ async function menu(name, opts) {
   await page.click('.scr-splash');
   await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 10000 });
   if (await page.$('.mm-onboard')) {
-    await page.click('.mm-onboard .mo-btns .ui-btn.ghost');
+    await page.click('.mm-onboard .mo-skip');
     await page.waitForSelector('.mm-onboard', { state: 'detached' });
   }
   await page.waitForTimeout(1800);

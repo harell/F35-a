@@ -3,7 +3,7 @@
  * 2026-10-10, 1.4-n: A Stroll in the Park was named nowhere on the main menu, four taps away).
  */
 import { describe, expect, it } from 'vitest';
-import { MAIN_MENU_ITEMS, SIGHTSEEING_LABEL } from '../src/ui/screens/mainMenu';
+import { MAIN_MENU_ITEMS, ONBOARD_BUTTONS, SIGHTSEEING_LABEL } from '../src/ui/screens/mainMenu';
 import { TRAINING, missionById, missionForLesson } from '../src/missions';
 import { suggestedLesson } from '../src/ui/career';
 import type { CampaignProgress } from '../src/core/contracts';
@@ -15,6 +15,14 @@ describe('main menu: sightseeing', () => {
     expect(SIGHTSEEING_LABEL).toMatch(/Auckland/);
     // the sightseeing flight is Instant Action's stroll, a free flight with no hostiles
     expect(missionById('ia_stroll_auckland')?.script.freeFlight).toBe(true);
+  });
+
+  it('the new-pilot card: sightseeing is a clear second button in one row with Start training, not a ghost like Not now (playtest r2 2.1-k)', () => {
+    expect(ONBOARD_BUTTONS.map((b) => b.id)).toEqual(['instant', 'training']);
+    const [look, go] = ONBOARD_BUTTONS;
+    expect(look.label).toBe(SIGHTSEEING_LABEL);
+    expect(look.class.split(' ')).not.toContain('ghost');
+    expect(go.class.split(' ')).toContain('primary');
   });
 });
 

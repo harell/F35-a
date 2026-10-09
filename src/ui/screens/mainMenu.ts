@@ -120,31 +120,30 @@ function menuOnce(host: UiHost, build: string, ctx: MainMenuContext): Promise<Ma
     let focus: HTMLElement | null = first;
     if (isFirstLaunch()) {
       const card = h('div', { class: 'mm-onboard ui-panel brk', attrs: { role: 'dialog', 'aria-label': 'New pilot' } });
-      card.innerHTML =
-        `<div class="mo-k">${icon('book')} NEW PILOT?</div>` +
-        `<div class="mo-t">Start with Training</div>` +
-        `<div class="mo-s">${escapeHtml(firstLessonsLine())}</div>`;
-      const go = h('button', { class: 'ui-btn primary go', attrs: { type: 'button' }, html: `${icon('play')}<span>Start training</span>` });
-      const skip = h('button', { class: 'ui-btn ghost', attrs: { type: 'button' }, html: `<span>Not now</span>` });
-      // Instant Action opens on A Stroll in the Park (its first, preselected mode)
-      const look = h('button', { class: 'ui-btn ghost', attrs: { type: 'button' }, html: `<span>${SIGHTSEEING_LABEL}</span>` });
-      look.addEventListener('click', () => {
-        dismissOnboarding();
-        finish('instant');
-      });
-      go.addEventListener('click', () => {
-        dismissOnboarding();
-        finish('training');
-      });
+      const skip = h('button', { class: 'ui-btn ghost mo-skip', attrs: { type: 'button' }, html: `<span>Not now</span>` });
       skip.addEventListener('click', () => {
         dismissOnboarding();
         card.classList.add('is-out');
         window.setTimeout(() => card.remove(), 180);
         first?.focus();
       });
-      card.appendChild(h('div', { class: 'mo-btns' }, skip, look, go));
+      card.append(
+        h('div', { class: 'mo-head' }, h('div', { class: 'mo-k', html: `${icon('book')} NEW PILOT?` }), skip),
+        h('div', { class: 'mo-t', text: 'Start with Training' }),
+        h('div', { class: 'mo-s', text: firstLessonsLine() }),
+      );
+      const btns = h('div', { class: 'mo-btns' });
+      for (const b of ONBOARD_BUTTONS) {
+        const btn = h('button', { class: b.class, attrs: { type: 'button' }, html: `${icon(b.icon)}<span>${escapeHtml(b.label)}</span>` });
+        btn.addEventListener('click', () => {
+          dismissOnboarding();
+          finish(b.id);
+        });
+        btns.appendChild(btn);
+        if (b.id === 'training') focus = btn;
+      }
+      card.appendChild(btns);
       el.appendChild(card);
-      focus = go;
     }
     host.present(el, { bg: true, focus });
   });
@@ -187,6 +186,17 @@ function predatorFreeLine(nowMs: number): { el: HTMLElement; cleanup: () => void
 
 /** The new-pilot card's button for a player who only wants to look around: into Instant Action's sightseeing flight. */
 export const SIGHTSEEING_LABEL = 'Just look around Auckland';
+
+/**
+ * The new-pilot card's two ways in, one row left to right (Not now is a quiet link in the card's
+ * corner). Sightseeing is the main draw for a player who came to see Auckland: a clear second button
+ * beside Start training, not a ghost like Not now (playtest r2 2.1-k). Instant Action opens on A Stroll
+ * in the Park, its first, preselected mode.
+ */
+export const ONBOARD_BUTTONS = [
+  { id: 'instant', label: SIGHTSEEING_LABEL, icon: 'pin', class: 'ui-btn mo-look' },
+  { id: 'training', label: 'Start training', icon: 'play', class: 'ui-btn primary go mo-go' },
+] as const;
 
 const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
 
