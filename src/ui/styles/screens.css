@@ -81,8 +81,10 @@
 .mm-pf b { font-weight: 700; color: var(--dim); }
 .mm-pf .ico { width: 13px; height: 13px; color: var(--green); }
 .mm-pf:focus-visible { outline: 1px solid rgba(var(--acc-rgb), 0.6); outline-offset: 2px; }
+/* the explainer opens just above the counter, right-aligned with it, so it stays on screen at any size (on a phone in
+   landscape it covers the last items while it is open; playtest r3 R32-9 had it 450 px away at the far left) */
 .mm-pf-pop {
-  display: none; position: absolute; right: 0; bottom: calc(100% + 6px); width: 250px; padding: 9px 12px 10px; z-index: 5;
+  display: none; position: absolute; right: 0; bottom: calc(100% + 6px); width: min(250px, calc(100vw - 32px)); padding: 9px 12px 10px; z-index: 5;
   text-align: left; font: 400 12px/1.4 var(--sans); color: var(--dim); white-space: normal;
 }
 .mm-pf-k { display: block; margin-bottom: 4px; font: 800 10px/1 var(--sans); letter-spacing: 0.22em; color: var(--acc); }
@@ -91,11 +93,6 @@
 .mm-pf:focus-visible .mm-pf-pop { display: block; }
 @media (hover: hover) {
   .mm-pf:hover .mm-pf-pop { display: block; }
-}
-/* phone landscape: the list fills the height, so the explainer opens to the left of it, never over an item */
-@media (max-height: 500px) {
-  .mm-pf { position: static; }
-  .mm-pf-pop { right: calc(100% + 10px); bottom: 0; }
 }
 .mm-list { flex: none; width: min(440px, 52vw); display: flex; flex-direction: column; gap: clamp(5px, 1.5vh, 9px); }
 .mm-item {
