@@ -90,6 +90,7 @@ export function evalCondition(c: Condition, s: MissionState): boolean {
       return true;
     }
     case 'player_fired': {
+      if (c.weapon) return (s.playerLaunches.get(c.weapon) ?? 0) >= (c.count ?? 1);
       const p = s.player;
       return !!p && p.shotsFired >= (c.count ?? 1);
     }

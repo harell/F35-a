@@ -166,6 +166,8 @@ export class MissionState {
   samEngaged = false;
   /** The player's bombs / missiles shot down by a SAM site's point defence, by the site's group id. */
   readonly munitionsShotDown = new Map<string, number>();
+  /** The player's launches and releases so far, by weapon id (the `player_fired` condition's `weapon`). */
+  readonly playerLaunches = new Map<string, number>();
   /** Stunt bonus points (Harbour Bridge). */
   bonus = 0;
   /** Neutral civil traffic the player destroyed (airliners + ships; each costs POINTS.civilian). */

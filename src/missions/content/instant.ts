@@ -185,10 +185,14 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // the player has fired.
       if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
       const flights = enemyFlights(opts, n, lay, rng);
+      // one more bandit on Pilot (playtest r2, 2.3-e): with Veteran's number the bot won every Pilot
+      // run untouched, while Veteran's sharper bandits won a third of theirs
+      const last = flights[flights.length - 1];
+      last.countFor = { pilot: last.count + 1 };
       groups.push(...flights);
       objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
       briefing = [
-        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
+        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, one more on Pilot). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
         n >= 3 ? 'Viper 2 is on your wing. It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'The default load adds an AIM-9X on each outer pylon for the close fight, at a little stealth. Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
@@ -311,6 +315,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // a clock (playtest r1, 1.3-h): a jet out of bombs with a parked jet left (Veteran's Tor shoots
       // glide bombs down) used to circle for ever
       timeLimit = IA_STRIKE_TIME_LIMIT;
+      // the StormBreakers' glide from a stand-off release was 106-127 s of silence in 17 of 18 bot runs
+      // (playtest r2, 2.3-e): Darkstar speaks up partway through it
+      script.triggers = [
+        {
+          id: 't_glide',
+          when: { kind: 'player_fired', weapon: 'gbu53' },
+          delay: 50,
+          actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. From stand-off range StormBreakers glide up to two minutes. Stay clear of the defences meanwhile.`, priority: 2 }],
+        },
+      ];
       break;
     }
     case 'defend': {
@@ -415,8 +429,9 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     flight('strikers', strikeType, strikers, from, low, inbound, 235, 'fighter', {
       maxCount: 4,
       // three bombers at most below Veteran (issue #60: at 8, Pilot went 4/6 with four, 5/6 with three);
-      // below that Veteran sends one more (playtest r1, 1.3-i: Veteran won 6/6, its two bombers no match)
-      countFor: strikers > 3 ? { recruit: 3, pilot: 3 } : { veteran: strikers + 1 },
+      // below that Pilot and Veteran send one more (playtest r1, 1.3-i: Veteran won 6/6, its two bombers
+      // no match; r2, 2.3-e: Pilot won every ~100 s raid with the jet hit once in 8 runs)
+      countFor: strikers > 3 ? { recruit: 3, pilot: 3 } : { pilot: strikers + 1, veteran: strikers + 1 },
       formation: 'echelon',
       spacing: 400,
       enemyLoadout: 'strike',
@@ -495,7 +510,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     successText: 'Wiri is still standing. The airport keeps its fuel.',
     briefing: [
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
-      `About ${strikers} Flankers${strikers > 3 ? ' (three below Veteran)' : ' (one more on Veteran)'} loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
+      `About ${strikers} Flankers${strikers > 3 ? ' (three below Veteran)' : ' (one more on Pilot and Veteran)'} loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
       ...(wings > 0 ? [`${wings > 1 ? 'Vipers 2 and 3 are' : 'Viper 2 is'} on your wing and takes the escort. The bombers are yours.`] : []),
       ...(n >= DEFEND_BEAST_FROM ? ["Beast mode recommended: a raid this size, bombers and escort, takes more than the stealth fit's four AMRAAMs."] : []),

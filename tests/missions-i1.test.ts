@@ -429,10 +429,11 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
 describe('i1: Instant Action honours the difficulty', () => {
   const opts = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 } as const;
 
-  it("4 bandits → 3 on Recruit, 4 on Pilot / Veteran", () => {
+  // Pilot flies one bandit more (playtest r2, 2.3-e: at Veteran's 4 the bot won every Pilot run untouched)
+  it("4 bandits → 3 on Recruit, 5 on Pilot, 4 on Veteran", () => {
     const count = (d: 'recruit' | 'pilot' | 'veteran') => harness(buildInstantMissionSeeded(opts, 9), d).world.aircraft.filter((a) => a.team === 'red').length;
     expect(count('recruit')).toBe(3);
-    expect(count('pilot')).toBe(4);
+    expect(count('pilot')).toBe(5);
     expect(count('veteran')).toBe(4);
     expect(scaleTotal([2, 2], 0.75)).toEqual([2, 1]);
     expect(scaleTotal([2, 2], 1.5)).toEqual([3, 3]);

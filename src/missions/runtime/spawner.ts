@@ -514,7 +514,8 @@ export function buildGroups(s: MissionState): void {
     g.expected = scaledCount(def, scale, diff);
   }
   if (sc.scaleEnemyTotal) {
-    const list = sc.groups.filter((d) => d.team === 'red' && !d.fixedCount && difficultyAtLeast(diff, d.minDifficulty));
+    // a group sized for this difficulty (countFor) keeps that size; the rest scale as one total
+    const list = sc.groups.filter((d) => d.team === 'red' && !d.fixedCount && d.countFor?.[diff] === undefined && difficultyAtLeast(diff, d.minDifficulty));
     const counts = scaleTotal(
       list.map((d) => d.count),
       scale,

@@ -77,8 +77,8 @@ export type Condition =
   | { kind: 'munitions_clear'; group: string }
   /** Another trigger has fired. */
   | { kind: 'trigger'; id: string }
-  /** Player fired at least `count` weapons of any kind. */
-  | { kind: 'player_fired'; count?: number }
+  /** Player fired at least `count` weapons of any kind (gun bursts count), or launched / released `count` of `weapon`. */
+  | { kind: 'player_fired'; count?: number; weapon?: WeaponId }
   /**
    * At least `count` (default 1) of the player's bombs / missiles have been shot down by the point
    * defence of a SAM site in `group` (SA-8 / SA-15 interceptors).
@@ -527,7 +527,8 @@ export interface MissionScript {
   /**
    * Scale the TOTAL of the non-fixed red aircraft groups by difficulty.enemyCountScale instead of
    * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit; per-group
-   * rounding would leave pairs unchanged). Groups that lose all members don't spawn.
+   * rounding would leave pairs unchanged). Groups that lose all members don't spawn. A group with a
+   * `countFor` size on the difficulty flown keeps that size and stays out of the total.
    */
   scaleEnemyTotal?: boolean;
   /** Opening radio calls at mission start (convenience for a 'start' trigger). */

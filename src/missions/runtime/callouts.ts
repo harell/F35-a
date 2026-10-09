@@ -67,7 +67,10 @@ export class Callouts {
       ev.on('munition:launch', (e) => {
         if (!this.guard()) return;
         const p = this.s.player;
-        if (!p || e.shooter !== p || e.missile.def.category !== 'aam') return;
+        if (!p || e.shooter !== p) return;
+        const launches = this.s.playerLaunches;
+        launches.set(e.missile.def.id, (launches.get(e.missile.def.id) ?? 0) + 1);
+        if (e.missile.def.category !== 'aam') return;
         const st = this.s.stats;
         st.aamShots++;
         const t = this.s.world.getEntity(e.targetId);
