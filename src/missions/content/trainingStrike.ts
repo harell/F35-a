@@ -55,7 +55,7 @@ export const T04_STRIKE: MissionDef = mission({
   weather: 'clear',
   briefing: [
     'Air-to-ground on the Hauraki Gulf range, with what you carry against the IRGC Navy’s fast boats over the Gulf: StormBreakers, two AARGM-ERs and the gun. The range boats are crewed by drones, and the air-defence boat fires practice rounds: a hit does no damage.',
-    `One: two boats sailing up the Gulf. Tap WPN to select the StormBreaker, TGT to designate a boat, and release the moment IN RANGE shows. The bomb tracks a moving boat on its own: turn for the next one while it glides. Two: an air-defence boat with its radar on. Select the AARGM-ER, designate the boat, and ${AARGM_RULE}.`,
+    `One: two boats sailing up the Gulf. Tap WPN to select the StormBreaker (GBU-53 on the button), TGT to designate a boat, and release the moment IN RANGE shows. The bomb tracks a moving boat on its own: turn for the next one while it glides. Two: an air-defence boat with its radar on. Select the AARGM-ER, designate the boat, and ${AARGM_RULE}.`,
     'Three: one last boat, for the gun: over the Gulf the bombs run out before the boats do. Get low, put the pipper on it and hold the trigger inside 1,200 m.',
   ],
   recommendedLoadout: 'strike_maritime',
@@ -95,7 +95,7 @@ export const T04_STRIKE: MissionDef = mission({
       },
     ],
     hints: [
-      { id: 'h_d1', text: 'Drill 1: WPN selects the StormBreaker, TGT designates a boat. Release the moment IN RANGE shows', when: { kind: 'time', t: 5 }, duration: 10 },
+      { id: 'h_d1', text: 'Drill 1: WPN selects the StormBreaker (GBU-53), TGT designates a boat. Release the moment IN RANGE shows', when: { kind: 'time', t: 5 }, duration: 10 },
       { id: 'h_d2', text: 'Drill 2: AARGM (WPN), TGT the boat: fire inside 10 km while its radar is on, then press in', when: { kind: 'objective', id: 'o_d2', state: 'active' }, duration: 10 },
       { id: 'h_d3', text: 'Drill 3: the GUN. Get low, put the pipper on the boat and fire inside 1,200 m', when: { kind: 'objective', id: 'o_d3', state: 'active' }, duration: 10 },
     ],

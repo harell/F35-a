@@ -261,7 +261,7 @@ export const T06: MissionDef = mission({
       { id: 'h1', text: 'The SA-6 reaches 20 km. Go LOW over the harbour: under 250 ft it can\'t engage you', when: { kind: 'time', t: 3 }, duration: 9 },
       { id: 'h2', text: 'AARGM (WPN), TGT the SA-6: fire inside 10 km while its radar is on, then press straight in', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 13000 }, duration: 9 },
       { id: 'h3', text: 'The Shilka shreds anything low and close: keep 3 km from it', when: { kind: 'area', x: shilka.x, z: shilka.z, radius: 5000, below: 3000 }, duration: 7 },
-      { id: 'h4', text: 'StormBreaker (WPN), TGT the fuel tank: climb, release the moment IN RANGE shows', when: { kind: 'player_fired' }, duration: 9 },
+      { id: 'h4', text: 'StormBreaker (GBU-53 on WPN), TGT the fuel tank: climb, release the moment IN RANGE shows', when: { kind: 'player_fired' }, duration: 9 },
       { id: 'h5', text: 'Missile coming: beam it, a CMS press every 2–3 s from ~6 s to impact', when: { kind: 'missile_inbound' }, duration: 7 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get low, kill its radar, bomb the tank.', priority: 2 }],

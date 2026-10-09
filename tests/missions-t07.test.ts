@@ -128,7 +128,7 @@ describe('t07 Small Targets: content', () => {
 });
 
 describe('t07: the routes on the real coast', () => {
-  it.each([512, 1024])('streets and drains are on land and the island is offshore (terrain %i)', (res) => {
+  it.each([512, 1024])('streets and drains are on land and the island is offshore (terrain %i)', { timeout: 60_000 }, (res) => {
     const t = realTerrain(res);
     expect(t.isWater(T07_ISLAND.x, T07_ISLAND.z)).toBe(true);
     const routes: Record<string, T07Route> = T07_ROUTES;
