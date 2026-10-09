@@ -148,7 +148,7 @@ export const G03: MissionDef = mission({
   weather: 'overcast',
   briefing: [
     'Tasking from the Waiheke Trap Line volunteers. Their trail camera has one adult stoat on the dunes at Onetangi, moving east towards a nest of NZ dotterel chicks. It will reach the nest in just over five minutes. It stops at each of the three bait stations the volunteers set on its path: those stops are your drop windows, because a StormBreaker cannot track it while it runs.',
-    'The Guard holds the island: an SA-6 on Motuihe, a ZSU-23-4 on the ridge above the beach, and IRGC Navy air-defence boats north of Rakino, off Onetangi and in the Tāmaki Strait. The radars and the boats have optical trackers that see you inside 7 to 9 km whatever your shaping. On Veteran a Tor covers the Motuihe SA-6 and a second SA-6 guards the airstrip.',
+    'The Guard holds the island: an SA-6 on Motuihe, a Shilka (ZSU-23-4) gun on the ridge above the beach, and IRGC Navy air-defence boats north of Rakino, off Onetangi and in the Tāmaki Strait. The radars and the boats have optical trackers that see you inside 7 to 9 km whatever your shaping. On Veteran the SA-15 Tor covers the Motuihe SA-6 and a second SA-6 guards the airstrip.',
     `There is more than one way in. Low down the Tāmaki Strait, under the SA-6's radar floor. Round the north of the islands, an AARGM for each boat in your way. Or straight across, after an AARGM at the Motuihe SA-6. You carry two AARGM-ERs and two GBU-53/B StormBreakers. With an AARGM, ${AARGM_RULE}: fired from far out, it only silences a radar for a few seconds.`,
     'The cloud base is about 6,000 ft: you will only find the target from under the cloud, within 6 km of the nest. Rules of engagement: the stoat is the only authorised target on the island.',
   ],
@@ -222,7 +222,7 @@ export const G03: MissionDef = mission({
     hints: [
       { id: 'h_plan', text: 'Pick a way in: low down the strait, round the north, or straight in after an AARGM', when: { kind: 'time', t: 6 }, duration: 8 },
       // the sweep's lesson (#198): an AARGM fired from far out only silences a radar for a few seconds
-      { id: 'h_arm', text: 'An AARGM silences a radar for seconds: fire it close in, then attack straight after', when: { kind: 'player_weapon', weapon: 'aargm' }, duration: 8 },
+      { id: 'h_arm', text: 'From far out an AARGM only silences a radar for seconds. Fire inside 10 km, radar on, then press in', when: { kind: 'player_weapon', weapon: 'aargm' }, duration: 8 },
       // the stoat (#200): a bomb can't track it while it runs (sim/weapons/small.ts)
       { id: 'h_stops', text: 'Release while the stoat stops at a bait station: running, a StormBreaker can\'t track it', when: { kind: 'group_spawned', group: G.target }, duration: 9 },
     ],

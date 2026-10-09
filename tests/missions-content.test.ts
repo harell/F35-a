@@ -147,6 +147,17 @@ describe('missions: lesson texts and the weapon the jet already has (playtest r2
   });
 });
 
+describe('missions: one name per threat (playtest r2, 2.1-j)', () => {
+  it('texts call a threat what its chip on the map calls it, the designation at most in brackets (#211)', () => {
+    for (const m of ALL) {
+      for (const { at, text } of playerTexts(m)) {
+        expect(text.replace(/Shilka \(ZSU-23-4\)/g, ''), `${m.id} ${at}`).not.toMatch(/ZSU-23-4/);
+        expect(text.replace(/SA-15 Tor/g, ''), `${m.id} ${at}`).not.toMatch(/\bTor\b/);
+      }
+    }
+  });
+});
+
 describe('missions: instant action generator', () => {
   const modes: InstantActionOptions['mode'][] = ['stroll', 'dogfight', 'sam_gauntlet', 'strike', 'defend'];
   const theaters: TheaterId[] = ['auckland'];

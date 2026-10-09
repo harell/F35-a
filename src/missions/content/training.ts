@@ -223,7 +223,7 @@ export const T06: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
-    'Live-fire SAM training, with what you carry over Waiheke: two AARGM-ERs and two StormBreakers. An SA-6 on Rangitoto guards a fuel tank on Motutapu, the island behind it, and a Shilka anti-aircraft gun sits on Rangitoto\'s south shore. The missiles are real.',
+    'Live-fire SAM training, with what you carry over Waiheke: two AARGM-ERs and two StormBreakers. An SA-6 on Rangitoto guards a fuel tank on Motutapu, the island behind it, and a Shilka (ZSU-23-4) anti-aircraft gun sits on Rangitoto\'s south shore. The missiles are real.',
     `Get down low over the harbour: below 250 ft the SA-6 can't engage you. Keep 3 km from the Shilka. You start with the AARGM-ER up (AARGM on the FIRE button) and the SA-6 boxed: ${AARGM_RULE}. Fired from far out, it only quiets the radar for a few seconds.`,
     'Last, a StormBreaker on the fuel tank: TGT, climb, release when IN RANGE shows. If a missile comes, turn 90° to put it on your wing (beam it) and press CMS, which drops chaff and flares together, every 2–3 s from about 6 s to impact.',
   ],
