@@ -341,8 +341,11 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     h.run(1);
     const sa6 = h.world.sams.find((s) => s.groupId === 'rangi_sa6')!;
     const p = h.world.player!;
-    for (let i = 0; i < 4 && p.alive; i++) h.world.applyDamage(p, 9999, sa6.id, 'm_3m9');
-    h.run(1);
+    // separate salvos: on Recruit and Pilot rounds inside playerMissileHitGrace of a hit count as one
+    for (let i = 0; i < 4 && p.alive; i++) {
+      h.world.applyDamage(p, 9999, sa6.id, 'm_3m9');
+      h.run(3.5);
+    }
     const r = h.runner.result(h.world);
     expect(r.success).toBe(false);
     expect(r.reason).toBe('Shot down by an SA-6 Gainful');

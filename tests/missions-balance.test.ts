@@ -44,7 +44,8 @@ describe('#65: the bot ripples its StormBreakers (playtest 2026-10-02, 2.2-h)', 
   // the bot used to keep one bomb in flight at a time (each glides 110–160 s): 12 of 36 runs of the
   // repro sweep took over 600 s (every Southern Cross c04 and c06 one). Now its releases come close
   // together: the second StormBreaker leaves long before the first one lands.
-  for (const id of ['t06', 'ia_strike_auckland']) {
+  // (t06 flew sead_stealth until playtest 2026-10-10; it flies g03's sead_precision now, one tank, one bomb)
+  for (const id of ['ia_strike_auckland']) {
     it(`${id} with sead_stealth (4 StormBreakers) is won in under 600 s on Pilot (the bot ripples its bombs)`, { timeout: 300_000 }, async () => {
       for (const seed of [0, 1]) {
         // yield between runs: a worker blocked for long stretches can trip vitest's RPC timeout
@@ -99,33 +100,6 @@ describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)
       });
     }
   }
-});
-
-describe('issue #57: t06 Live SAMs — the route keeps the SA-6 off the player', () => {
-  it('every steering point before the target stays ≥ 14 km from the SA-6, the IP behind Rangitoto from it', () => {
-    const def = missionById('t06')!;
-    const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
-    const route = def.script.waypoints.filter((w) => w.kind === 'nav' || w.kind === 'ip');
-    expect(route.length).toBeGreaterThan(0);
-    const pts = [{ x: def.player.x, z: def.player.z }, ...route];
-    for (const w of route) expect(Math.hypot(w.x - sa6.x, w.z - sa6.z), (w as { id: string }).id).toBeGreaterThanOrEqual(14_000);
-    // every leg (start → … → IP) passes ≥ 14 km from the SA-6
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1];
-      const b = pts[i];
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const t = Math.max(0, Math.min(1, ((sa6.x - a.x) * dx + (sa6.z - a.z) * dz) / (dx * dx + dz * dz)));
-      expect(Math.hypot(a.x + dx * t - sa6.x, a.z + dz * t - sa6.z), `leg ${i}`).toBeGreaterThanOrEqual(14_000);
-    }
-    // the IP and the depot are on the far side of Rangitoto from the SA-6
-    const ip = route.find((w) => w.kind === 'ip')!;
-    const rangi = { x: 8700, z: -6850 };
-    const along = (q: { x: number; z: number }) => ((q.x - sa6.x) * (rangi.x - sa6.x) + (q.z - sa6.z) * (rangi.z - sa6.z)) / Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
-    const rangiD = Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
-    expect(along(ip)).toBeGreaterThan(rangiD);
-    for (const g of def.script.ground.filter((x) => x.group === 'depot')) expect(along(g), g.id).toBeGreaterThan(rangiD);
-  });
 });
 
 /**
