@@ -137,7 +137,7 @@ export const G01: MissionDef = mission({
   // air-to-air only, and every air-to-air missile the game has: the player meets both, the AIM-120
   // and the AIM-9X, on the same jet (#136). g02 introduces the air-to-ground weapons.
   allowedLoadouts: ['a2a_beast'],
-  // flying the jet, the lock, SHOOT cue, AIM-9X and gun, then turning round on a slow drone (the Immelmann and the loop)
+  // flying the jet; the lock, SHOOT cue and AIM-9X on Shaheds; turning round on a slow drone (the Immelmann) for the gun pass
   lessons: ['t01', 't02', 't03'],
   player: g01Start,
   // the gun is required (10 drones, at most 8 missiles): more than the real 180 rounds (#77)

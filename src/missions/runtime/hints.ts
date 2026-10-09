@@ -184,13 +184,15 @@ const AUTO: AutoHint[] = [
       const r = e.position.distanceTo(p.position);
       if (w === 'aim9x') return r < 8_000 ? 'Look at the bandit: fire the AIM-9X on the lock TONE' : null;
       if (w === 'gun') return r < 1_500 ? 'GUNS: pipper on the bandit, fire inside 1,200 m' : null;
-      // AMRAAM: supporting a shot in flight → crank
+      // AMRAAM: supporting a shot in flight → crank. Not against a one-way drone (a Shahed): it never
+      // shoots back, and at the ranges it is shot at the missile's own seeker has it (T02, playtest r1 1.4-c)
+      const drone = !!e.oneWay;
       for (const m of s.world.missiles) {
-        if (m.alive && m.shooterId === p.id && m.targetId === e.id && m.def.id === 'aim120') return 'Crank 50° off the bandit — keep it on the radar until the missile goes PITBULL';
+        if (!drone && m.alive && m.shooterId === p.id && m.targetId === e.id && m.def.id === 'aim120') return 'Crank 50° off the bandit — keep it on the radar until the missile goes PITBULL';
       }
       if (p.radar.lockedId !== e.id && !inLockCone(p, e)) return 'Point the nose at the TD box: the lock builds inside 30°';
       const z = h.zone(p, s);
-      if (z && z.shoot) return 'SHOOT — fire the AMRAAM, then crank 50°';
+      if (z && z.shoot) return drone ? 'SHOOT — fire the AMRAAM' : 'SHOOT — fire the AMRAAM, then crank 50°';
       if (z && z.range <= z.rMax && z.range >= z.rMin) return 'IN RANGE — wait for SHOOT: closer shots hit';
       return p.radar.lockedId === e.id ? 'Locked. Close in until SHOOT flashes' : null;
     },

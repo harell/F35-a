@@ -153,7 +153,7 @@ describe('campaign progress', () => {
     expect(p.best.t03).toBeUndefined();
     expect(failStreak(p, 't06')).toBe(2);
     expect(failStreak(p, 't03')).toBe(0);
-    // a Vertical Reversals result after the move stays t03 through a save and a load
+    // a result of the new t03 (Turn and Gun) after the move stays t03 through a save and a load
     p.best.t03 = { score: 900, grade: 'C', difficulty: 'pilot' };
     saveProgress(p);
     const again = loadProgress();

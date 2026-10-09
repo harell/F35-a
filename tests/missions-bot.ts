@@ -181,12 +181,12 @@ export class MissionBot {
   /** Student: extending away from the drill's boat before turning back in (an orbit draws no shot). */
   private extending = false;
   /**
-   * A vertical-manoeuvre lesson (a 'maneuver' objective, t03): the bot flies the drill as taught,
-   * with the stick (full afterburner, full back stick; for an Immelmann, roll upright over the top),
-   * then guns the drone. `vStick` is the manoeuvre in progress.
+   * A vertical-manoeuvre lesson (a 'maneuver' objective, t03's Immelmann): the bot flies the drill as
+   * taught, with the stick (full afterburner, full back stick, roll upright over the top), then guns
+   * the drone. `vStick` is the Immelmann in progress.
    */
   private readonly vertical: boolean;
-  private vStick: { kind: 'loop' | 'immelmann'; phase: 'pull' | 'roll'; climbed: boolean; since: number } | null = null;
+  private vStick: { phase: 'pull' | 'roll'; climbed: boolean; since: number } | null = null;
 
   constructor(
     private readonly runner: MissionRunnerApi,
@@ -651,28 +651,26 @@ export class MissionBot {
   }
 
   /**
-   * The vertical-reversal drills (t03), as the briefing teaches them: an open Immelmann objective —
-   * fly straight and hold fire while the head-on drone passes under, extend until it is ~700 m
-   * behind, then the Immelmann; an open loop objective — the drone is behind: loop at once; a drone
-   * to kill — the gun (the air-to-air bot's gun attack); otherwise straight and level, fast (the next
-   * drone only comes above 280 kt and 700 m).
+   * The turn-and-gun drill (t03), as the briefing teaches it: an open Immelmann objective — fly
+   * straight and hold fire while the head-on drone passes under, extend until it is ~700 m behind,
+   * then the Immelmann; a drone to kill — the gun (the air-to-air bot's gun attack); otherwise
+   * straight and level, fast (a new drone only comes above 280 kt and 700 m: T03_READY).
    */
   private verticalDrill(dt: number): void {
     const p = this.p;
     const w = this.world;
     if (this.vStick) return this.stickManeuver();
-    let open: 'loop' | 'immelmann' | null = null;
+    let open = false;
     for (const st of this.runner.objectives) {
       if (st.state !== 'active') continue;
       const o = this.runner.def.script.objectives.find((x) => x.id === st.id);
-      if (o && o.kind === 'maneuver') open = o.maneuver;
+      if (o && o.kind === 'maneuver' && o.maneuver === 'immelmann') open = true;
     }
     let drone: AircraftEntity | null = null;
     for (const a of w.aircraft) if (a.alive && isHostile(p.team, a.team) && (!drone || a.position.distanceTo(p.position) < drone.position.distanceTo(p.position))) drone = a;
     _h.copy(p.velocity).setY(0).normalize();
     const along = drone ? _q.subVectors(drone.position, p.position).dot(_h) : 0;
-    if (open === 'immelmann' && drone && along < -700) return this.startStick('immelmann');
-    if (open === 'loop' && drone) return this.startStick('loop');
+    if (open && drone && along < -700) return this.startStick();
     if (!open && drone) {
       this.air.opts.rtbWhenWinchester = false;
       return this.fight('GUNS', dt);
@@ -683,16 +681,16 @@ export class MissionBot {
     this.nav(far ? new Vector3(0, 0, 0) : _q.clone(), 1_500, 'VLEVEL', dt, false, 300, 185);
   }
 
-  private startStick(kind: 'loop' | 'immelmann'): void {
-    this.vStick = { kind, phase: 'pull', climbed: false, since: this.world.time };
+  private startStick(): void {
+    this.vStick = { phase: 'pull', climbed: false, since: this.world.time };
     this.stickManeuver();
   }
 
-  /** Full afterburner, full back stick; an Immelmann rolls upright once over the top on its back. */
+  /** The Immelmann: full afterburner, full back stick, and roll upright once over the top on its back. */
   private stickManeuver(): void {
     const p = this.p;
     const s = this.vStick!;
-    this.mode = s.kind === 'loop' ? 'LOOP' : 'IMMELMANN';
+    this.mode = 'IMMELMANN';
     this.clearTriggers();
     const v = Math.max(1, p.velocity.length());
     const gamma = Math.asin(p.velocity.y / v);
@@ -705,8 +703,7 @@ export class MissionBot {
     if (s.phase === 'pull') {
       inp.pitch = 1;
       inp.roll = 0;
-      if (s.kind === 'immelmann' && s.climbed && upY < -0.5 && gamma < 15 * DEG) s.phase = 'roll';
-      if (s.kind === 'loop' && s.climbed && Math.abs(gamma) < 15 * DEG && upY > 0.5) done = true;
+      if (s.climbed && upY < -0.5 && gamma < 15 * DEG) s.phase = 'roll';
     } else {
       inp.pitch = 0;
       inp.roll = 1;

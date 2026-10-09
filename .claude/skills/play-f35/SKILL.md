@@ -26,7 +26,7 @@ When you learn something durable during a session, add it to **Learned** at the 
 
 ## What to play
 
-**Operation Southern Cross was deleted** (c01–c11, 2026-10-04). The playable game is the IRGC campaign (`g01`–`g03`), training (`t01`–`t07`; t05 is the missile-defence lesson with practice rounds, t03 the loop / Immelmann drills, t07 the small-target bombing lesson with the rats in Herne Bay) and Instant Action (`ia_<mode>_auckland`, including `ia_stroll_auckland`). Which campaigns are playable: `PLAYABLE_CAMPAIGNS` in `src/missions/index.ts` (`enabled: false` on a `CampaignDef` hides it).
+**Operation Southern Cross was deleted** (c01–c11, 2026-10-04). The playable game is the IRGC campaign (`g01`–`g03`), training (`t01`–`t07`; t03 is Turn and Gun, the Immelmann and g01's gun pass; t05 the missile-defence lesson with practice rounds; t07 the small-target bombing lesson with the rats in Herne Bay) and Instant Action (`ia_<mode>_auckland`, including `ia_stroll_auckland`). Which campaigns are playable: `PLAYABLE_CAMPAIGNS` in `src/missions/index.ts` (`enabled: false` on a `CampaignDef` hides it).
 
 ## Routing table
 

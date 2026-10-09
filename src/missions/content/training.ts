@@ -1,10 +1,10 @@
 /**
  * F35-A — training missions (always unlocked, Auckland), in the order the campaign needs them
  * (MissionDef.lessons on each campaign mission), so a player flies only what the next mission asks for:
- *   T01 Basic flight — rings over the harbour, throttle / afterburner / turns, RTB               → g01
- *   T02 Air-to-air — unarmed MiG-29 target drones: AMRAAM, multiple targets, AIM-9X / guns        → g01
- *   T03 Vertical reversals — Shahed drills: an Immelmann after a head-on pass, a loop to get
- *       behind a drone that is behind you, gun kills                                             → g01
+ *   T01 Basic flight — rings over the harbour, throttle / afterburner / turns                     → g01
+ *   T02 Air-to-air — training Shaheds head-on: an AMRAAM, a row stepped through with FIRE, then
+ *       the AIM-9X inside 2 km                                                                   → g01
+ *   T03 Turn and gun — a Shahed head-on, an Immelmann, then g01's gun pass from behind           → g01
  *   T04 Maritime strike — StormBreaker on moving boats, AARGM-ER on a radar, gun (trainingStrike.ts) → g02
  *   T05 Gulf Defence — missile defence drills against the IRGC air-defence boat (trainingDefence.ts) → g02
  *   T06 Live SAMs — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM          → g03
@@ -14,9 +14,11 @@
  * progress.ts moves it to 't06' once (LESSON_IDS_VERSION).
  */
 import type { MissionDef } from '../../core/contracts';
+import { LOADOUTS } from '../../core/data';
 import { SHAHED_SPEED } from '../../sim/drone/oneWay';
 import type { Condition } from '../schema';
 import { NEVER, P, flight, mission, site, target } from './common';
+import { G01_GUN_PASS, G01_HINTS } from './irgc';
 import { T05_DEFENCE } from './trainingDefence';
 import { T04_STRIKE } from './trainingStrike';
 import { T07_SMALL } from './trainingSmallTargets';
@@ -46,27 +48,21 @@ export const T01: MissionDef = mission({
   briefing: [
     'Welcome to the F-35A Lightning II. Before the shooting starts, get a feel for the jet over the city you are here to defend.',
     'The side-stick sits under your stick thumb (right by default; left in the left-handed layout; Tilt steering replaces it): pull to climb, push to dive, sideways to roll. The throttle is under the other thumb: slide it up for power and past the detent for afterburner. The fly-by-wire keeps you inside the 9 g limit — mostly.',
-    'Fly through six rings over the Waitematā and the isthmus — the Harbour Bridge, North Head, Mission Bay, Mt Wellington and Mt Eden — then bring the jet home to Whenuapai. Bonus points if you fly under the bridge.',
+    'Fly through six rings over the Waitematā and the isthmus: the Harbour Bridge, North Head, Mission Bay, Mt Wellington and Mt Eden. Bonus points if you fly under the bridge.',
   ],
   recommendedLoadout: 'a2a_stealth',
   allowedLoadouts: ['a2a_stealth', 'a2a_beast'],
   player: { x: -9000, z: -6000, altitude: 1200, heading: 100, speed: 220, fuel: 0.9 },
   script: {
     autoHints: true,
-    parTime: 300,
+    parTime: 240,
     awacs: { initialPictureAt: -1, pictureInterval: 0 },
-    waypoints: [
-      ...RINGS.map((r) => ({ id: r.id, label: r.label, kind: 'nav' as const, x: r.x, z: r.z, altitude: r.altitude, radius: 700 })),
-      { id: 'home', label: 'Whenuapai', kind: 'rtb' as const, x: P.whenuapai.x, z: P.whenuapai.z, altitude: 800, radius: 3000 },
-    ],
+    // the lesson ends at the last ring: no campaign mission has the player fly home (playtest r1, 1.4-a)
+    waypoints: RINGS.map((r) => ({ id: r.id, label: r.label, kind: 'nav' as const, x: r.x, z: r.z, altitude: r.altitude, radius: 700 })),
     objectives: [
       { id: 'o_rings', kind: 'waypoints', waypoints: RINGS.map((r) => r.id), label: 'Fly through all six rings', primary: true },
-      { id: 'o_rtb', kind: 'rtb', x: P.whenuapai.x, z: P.whenuapai.z, radius: 3000, label: 'Return to Whenuapai', primary: true },
       // the stunt's own span test, and the stunt pays the bonus (one pass = +250, not +500)
       { id: 'o_bridge', kind: 'bridge', label: 'Fly under the Harbour Bridge', primary: false },
-    ],
-    triggers: [
-      { id: 't_done', when: { kind: 'objective', id: 'o_rings', state: 'complete' }, actions: [{ kind: 'radio', from: TOWER, text: 'Viper 1, Tower. Nice flying. Come on home.' }] },
     ],
     hints: [
       { id: 'h1', text: 'STICK ({stickThumb}): pull back to climb, push to dive, sideways to roll', when: { kind: 'time', t: 1.5 }, duration: 7 },
@@ -75,97 +71,123 @@ export const T01: MissionDef = mission({
       { id: 'h4', text: 'To turn: roll into a bank, then pull. More pull = tighter turn, but you bleed speed', when: { kind: 'waypoint', id: 'r3' }, duration: 7 },
       { id: 'h5', text: 'Climb to the next ring: add power first, then raise the nose', when: { kind: 'waypoint', id: 'r4' }, duration: 7 },
       { id: 'h6', text: 'Too fast? Pull the throttle to IDLE: the speed brake opens at the stop', when: { kind: 'waypoint', id: 'r5' }, duration: 7 },
-      { id: 'h7', text: 'Rings complete! Follow the RTB cue home to Whenuapai', when: { kind: 'objective', id: 'o_rings', state: 'complete' }, duration: 7 },
     ],
-    opening: [{ kind: 'radio', from: TOWER, text: 'Viper 1, Whenuapai Tower. Training area is hot. Six rings over the harbour, then come home.', priority: 2 }],
-    successText: 'Welcome back, Viper. You are cleared for weapons training.',
+    opening: [{ kind: 'radio', from: TOWER, text: 'Viper 1, Whenuapai Tower. Training area is hot. Six rings over the harbour: enjoy the view.', priority: 2 }],
+    successText: 'Nice flying, Viper. You are cleared for weapons training.',
   },
 });
 
 /* ───────────────────────── T02 — Air-to-air ───────────────────────── */
+
+/** A hint's text in g01 (G01_HINTS): the lessons say it in Buzz Kill's words, so the two can't drift. */
+const g01Hint = (id: string): string => G01_HINTS!.find((h) => h.id === id)!.text;
+
+/**
+ * The Beast load's AMRAAMs: drill 1 takes one and drill 2's row one each, so they are gone by drill 3
+ * (the autoselect moves on to the AIM-9X), as g01's swarm uses them up before the AIM-9X and the gun.
+ */
+const T02_AMRAAMS = LOADOUTS.a2a_beast.stores.reduce((n, s) => n + (s.weapon === 'aim120' ? s.count : 0), 0);
+export const T02_ROW = T02_AMRAAMS - 1;
+/** The drills' Shaheds fly this far below the jet (m; kept clear of the ground): from the start height, g01's 1,000 ft. */
+const T02_BELOW = -1200;
 
 export const T02: MissionDef = mission({
   id: 't02',
   kind: 'training',
   index: 2,
   title: 'Air-to-Air',
-  subtitle: 'AMRAAM, Sidewinder and gun vs drones',
+  subtitle: 'AMRAAM and AIM-9X vs Shahed drones',
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
-    'Three waves of unarmed MiG-29 target drones will launch over the Gulf. They cannot shoot back, so take your time and do it by the book.',
-    'Beyond visual range, the AMRAAM drill: (1) tap the TD box (or TGT) to designate the drone — that also commands a radar LOCK; (2) point the nose at it: the lock only builds while it is within 30° of the nose; (3) wait for SHOOT — IN RANGE alone means a long, low-odds shot; (4) fire; (5) crank — turn 50° off the drone and keep it on the radar until the missile calls PITBULL.',
-    'Up close: the AIM-9X locks wherever you look. Put the drone in the seeker circle, wait for the lock tone and fire. Out of missiles? The GAU-22 gun: put the pipper on the target and hold the trigger inside 1,200 m.',
+    'Buzz Kill is a swarm of Shahed drones: slow, dumb, and they never shoot back. Practise on training Shaheds first, with the Beast load: six AMRAAMs, two AIM-9Xs and the gun.',
+    `Drill 1, one drone head-on: tap the box around it (or TGT) to lock it, point your nose at it, wait for SHOOT and fire. The AMRAAM finds it by itself. Drill 2, a row of ${T02_ROW}: after each launch the next drone is boxed, so keep pressing FIRE.`,
+    'Drill 3, one more head-on: the AMRAAMs are gone and the AIM-9X is up. Its seeker needs the tone (a growl), so fire inside about 2 km.',
   ],
   recommendedLoadout: 'a2a_beast',
-  allowedLoadouts: ['a2a_beast', 'a2a_stealth'],
-  player: { x: -6000, z: -8000, altitude: 4000, heading: 60, speed: 240 },
+  // the Beast load is g01's, and drill 3 needs its AIM-9X
+  allowedLoadouts: ['a2a_beast'],
+  player: { x: -6000, z: -8000, altitude: 1500, heading: 60, speed: 230 },
   script: {
-    autoHints: true,
-    parTime: 360,
+    // no auto hints: they teach the crank and PITBULL, and a Shahed never shoots back
+    autoHints: false,
+    parTime: 240,
+    awacs: { initialPictureAt: -1, pictureInterval: 0 },
+    // each drill's drones appear ahead of the jet, wherever it is (relative), flying at it: a training
+    // Shahed's one-way target lies 15 km behind the jet, so it never gets there before the drill is flown
     groups: [
-      flight('drone1', 'mig29', 1, { x: 12000, z: -17000 }, 4000, 240, 220, 'fighter', {
-        skill: 0,
+      flight('drone1', 'shahed136', 1, { x: 0, z: -15_000 }, T02_BELOW, 0, SHAHED_SPEED, 'bomber', {
+        relative: 'player',
         fixedCount: true,
-        unarmed: true,
         callsign: 'Drone',
-        task: { kind: 'patrol', x: 8000, z: -14000, radius: 4000, altitude: 4000 },
+        noun: 'drones',
+        announce: false,
+        spawn: { kind: 'time', t: 3 },
+        oneWay: { targetX: 0, targetZ: 15_000 },
       }),
-      flight('drone2', 'mig29', 2, { x: 16000, z: -16000 }, 5000, 250, 220, 'fighter', {
-        skill: 0.1,
+      // a row abreast, 300 m apart, holding its spacing until it passes the jet
+      flight('row', 'shahed136', T02_ROW, { x: 0, z: -15_000 }, T02_BELOW, 0, SHAHED_SPEED, 'bomber', {
+        relative: 'player',
         fixedCount: true,
-        unarmed: true,
+        formation: 'wall',
+        spacing: 100,
         callsign: 'Drone',
         firstNumber: 2,
+        noun: 'drones',
+        announce: false,
         spawn: NEVER,
-        task: { kind: 'patrol', x: 8000, z: -12000, radius: 5000, altitude: 5000 },
+        oneWay: { targetX: 0, targetZ: 15_000, route: [{ x: 0, z: 0 }] },
       }),
-      flight('drone3', 'mig29', 1, { x: 14000, z: -6000 }, 4000, 270, 230, 'interceptor', {
-        skill: 0.2,
+      // head-on again, as the swarm's last drones meet the jet in g01: the AIM-9X's tone comes inside ~2 km
+      flight('drone3', 'shahed136', 1, { x: 0, z: -10_000 }, T02_BELOW, 0, SHAHED_SPEED, 'bomber', {
+        relative: 'player',
         fixedCount: true,
-        unarmed: true,
         callsign: 'Drone',
-        firstNumber: 4,
+        firstNumber: T02_ROW + 2,
+        noun: 'drones',
+        announce: false,
         spawn: NEVER,
-        task: { kind: 'attack_player' },
+        oneWay: { targetX: 0, targetZ: 15_000 },
       }),
     ],
     objectives: [
-      { id: 'o_d1', kind: 'destroy', groups: ['drone1'], label: 'BVR: kill the drone with an AMRAAM', primary: true },
-      { id: 'o_d2', kind: 'destroy', groups: ['drone2'], label: 'Two targets: designate and shoot each', primary: true, activeAt: { kind: 'objective', id: 'o_d1', state: 'complete' } },
-      { id: 'o_d3', kind: 'destroy', groups: ['drone3'], label: 'Dogfight: AIM-9X or guns', primary: true, activeAt: { kind: 'objective', id: 'o_d2', state: 'complete' } },
+      { id: 'o_d1', kind: 'destroy', groups: ['drone1'], label: 'Head-on: one drone, one AMRAAM', primary: true },
+      { id: 'o_d2', kind: 'destroy', groups: ['row'], label: `A row of ${T02_ROW}: keep pressing FIRE`, primary: true, activeAt: { kind: 'objective', id: 'o_d1', state: 'complete' } },
+      { id: 'o_d3', kind: 'destroy', groups: ['drone3'], label: 'The AIM-9X: on the tone, inside 2 km', primary: true, activeAt: { kind: 'objective', id: 'o_d2', state: 'complete' } },
     ],
     triggers: [
       {
-        id: 't_wave2',
+        id: 't_row',
         when: { kind: 'objective', id: 'o_d1', state: 'complete' },
         delay: 4,
         actions: [
-          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Good kill. Two more drones launching, north-east.' },
-          { kind: 'spawn', group: 'drone2' },
+          { kind: 'radio', from: DS, text: `Viper 1, Darkstar. Good kill. ${T02_ROW} more, in a row, head-on.` },
+          { kind: 'spawn', group: 'row' },
         ],
       },
       {
-        id: 't_wave3',
+        id: 't_last',
         when: { kind: 'objective', id: 'o_d2', state: 'complete' },
         delay: 4,
         actions: [
-          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Last drone is programmed to merge with you. Knife fight.' },
+          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Last one, head-on. Take it with the AIM-9X.' },
           { kind: 'spawn', group: 'drone3' },
-          { kind: 'hint', text: 'WPN selects the AIM-9X (beast loadout) or the GUN: look at the drone, wait for the TONE, fire', duration: 9 },
         ],
       },
     ],
     hints: [
-      { id: 'h1', text: 'Step 1: the drone is on your radar. Tap its TD box (or TGT) to designate it and command a LOCK', when: { kind: 'time', t: 4 }, until: { kind: 'player_radar', state: 'designated' }, duration: 9 },
-      { id: 'h2', text: 'Step 2: point the nose at the TD box — the lock only builds within 30° of the nose', when: { kind: 'player_radar', state: 'designated' }, until: { kind: 'player_radar', state: 'locked' }, duration: 8 },
-      { id: 'h2b', text: 'Step 3: LOCKED. Wait for SHOOT — IN RANGE alone is a long, low-odds shot', when: { kind: 'player_radar', state: 'locked' }, until: { kind: 'player_fired' }, duration: 8 },
-      { id: 'h2c', text: 'Step 4: now CRANK — turn 50° off the drone and keep it on the radar until PITBULL', when: { kind: 'player_fired' }, until: { kind: 'objective', id: 'o_d1', state: 'complete' }, duration: 8 },
-      { id: 'h3', text: 'Two targets: TGT moves the TD box and the lock to the next drone — shoot one, then the other', when: { kind: 'group_spawned', group: 'drone2' }, duration: 8 },
-      { id: 'h4', text: 'Out of missiles? Select the GUN and put the pipper on the drone inside 1,200 m', when: { kind: 'player_fired', count: 7 }, duration: 8 },
+      { id: 'h1', text: 'Drone ahead, head-on. Tap the box around it (or TGT) to lock it', when: { kind: 'time', t: 5 }, until: { kind: 'player_radar', state: 'designated' }, duration: 8 },
+      { id: 'h2', text: 'Point your nose at the box: the lock builds within 30° of the nose', when: { kind: 'player_radar', state: 'designated' }, until: { kind: 'player_radar', state: 'locked' }, duration: 8 },
+      { id: 'h3', text: 'LOCKED. Wait for SHOOT, then FIRE', when: { kind: 'player_radar', state: 'locked' }, until: { kind: 'player_fired' }, duration: 8 },
+      { id: 'h4', text: 'Missile away: the AMRAAM finds the drone by itself', when: { kind: 'player_fired' }, until: { kind: 'objective', id: 'o_d1', state: 'complete' }, duration: 6 },
+      { id: 'h5', text: `${T02_ROW} drones in a row. Lock one, FIRE on SHOOT`, when: { kind: 'group_spawned', group: 'row' }, duration: 7 },
+      { id: 'h6', text: g01Hint('h_swarm'), when: { kind: 'all', of: [{ kind: 'group_spawned', group: 'row' }, { kind: 'player_fired', count: 2 }] }, duration: 8 },
+      { id: 'h7', text: 'Last drone, head-on: this one is for the AIM-9X (WPN selects it)', when: { kind: 'group_spawned', group: 'drone3' }, duration: 6 },
+      { id: 'h8', text: g01Hint('h_9x'), when: { kind: 'all', of: [{ kind: 'group_spawned', group: 'drone3' }, { kind: 'player_weapon', weapon: 'aim9x' }] }, duration: 8 },
+      { id: 'h9', text: g01Hint('h_gun'), when: { kind: 'player_weapon', weapon: 'gun' }, duration: 10 },
     ],
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Target drone airborne north-east of you. It is unarmed. Do it by the book.', priority: 2 }],
-    successText: 'Air-to-air qualification complete.',
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Training Shahed inbound, head-on. It cannot shoot back. Lock it and take the shot.', priority: 2 }],
+    successText: 'Air-to-air qualification complete. Next: turn and gun.',
   },
 });
 
@@ -235,43 +257,42 @@ export const T06: MissionDef = mission({
   },
 });
 
-/* ───────────────────────── T03 — Vertical reversals ───────────────────────── */
+/* ───────────────────────── T03 — Turn and Gun ───────────────────────── */
 
 const KT = 0.514444;
+const FT = 0.3048;
 /**
- * Measured in the flight model (clean jet, 1,000 ft): a loop from 300 kt in afterburner takes
- * ~26 s and ~880 m of height and comes out ~500 m on from where it started; from 200 kt it only
- * goes round in afterburner (on MIL it hangs on its back at 73 kt). A half loop from 300 kt
- * tops out ~850 m up at ~120 kt after ~14 s. In those 26 s a Shahed flies ~1.3 km: a drone
- * ~200 m behind the jet when the loop starts is ~600 m ahead of it at the bottom, gun range.
+ * Measured in the flight model (clean jet, 1,000 ft): a half loop from 300 kt in afterburner tops out
+ * ~850 m up at ~120 kt after ~14 s. Rolled out of the Immelmann, the drone that passed under the jet is
+ * ahead and below it, going its way: the gun pass from behind (g01's numbers, G01_GUN_PASS).
  */
 const T03_START = { x: 24000, z: -22000, altitude: 1500, heading: 270, speed: 350 * KT, fuel: 0.9 };
-/** Fast and high enough for the drill's next drone. */
+/** Before a new drone comes head-on (a retry): this fast and this high (MSL), straight and level. */
+const T03_READY_AT = { kt: 280, ft: 2300 };
 const T03_READY: Condition = {
   kind: 'all',
   of: [
-    { kind: 'player_speed', above: 280 * KT },
-    { kind: 'area', x: 0, z: 0, radius: 60_000, above: 700 },
-    // straight and level, as the hint says (a trigger's delay needs it held throughout): a drone
-    // that appears while the jet is still diving out of its gun pass starts the loop from a dive,
-    // and its bottom comes out far lower
+    { kind: 'player_speed', above: T03_READY_AT.kt * KT },
+    { kind: 'area', x: 0, z: 0, radius: 60_000, above: T03_READY_AT.ft * FT },
+    // straight and level, as the hint says (a trigger's delay needs it held throughout): a drone that
+    // appears while the jet is still diving out of its gun pass meets it below its own height
     { kind: 'player_level' },
   ],
 };
+const GUN = G01_GUN_PASS;
 
 export const T03: MissionDef = mission({
   id: 't03',
   kind: 'training',
   index: 3,
-  title: 'Vertical Reversals',
-  subtitle: 'Immelmann and loop vs Shahed drones — guns only',
+  title: 'Turn and Gun',
+  subtitle: 'Immelmann, then a gun pass on a Shahed',
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
-    'Shaheds fly at 100 knots; you can barely fly that slowly. In Buzz Kill you will pass them head-on and overshoot them from behind. Turn round in the vertical instead: you stay over the drone\'s track and slow down at the top.',
-    'Drill 1, the Immelmann. A training Shahed comes at you head-on, 500 ft below. Let it pass under you and count three: that puts room between you. Then full afterburner and pull straight up. Over the top, on your back, roll upright. You come out about 1,200 m above it and 1,500 m behind it, slow and going its way. Throttle back, dive in behind it and gun it from 600 m.',
-    'Drill 2, the loop. A second drone appears 200 m behind you, going your way. Full afterburner, full back stick, wings level all the way round. The loop brings you back to where you started, and in those 25 seconds the drone flies under you: at the bottom it is about 600 m ahead. Throttle to idle and gun it.',
-    'Only the gun today. Below 300 knots the loop only goes round in afterburner. Kill the drones beyond 150 m: their warheads are live.',
+    'Shaheds fly at about 100 knots; you can barely fly that slowly. In Buzz Kill you pass the swarm head-on, then turn round and come in behind it. Turn round upwards, with an Immelmann: you stay over the drone\'s track and slow down at the top.',
+    'A training Shahed comes at you head-on, 500 ft below. Let it pass under you and count three. Then full afterburner and pull straight up; over the top, on your back, roll upright. The drone is now ahead of you and below, going your way.',
+    `Then the gun pass, as in Buzz Kill: throttle back and come in behind it at about ${GUN.approachKt} knots, closing at about ${GUN.closureKt}. Sit about ${GUN.belowFt} ft below it and fire short bursts at ${GUN.burstFrom} to ${GUN.burstTo} m. Only the gun today, and its warhead is live: kill it beyond 150 m.`,
   ],
   recommendedLoadout: 'clean',
   allowedLoadouts: ['clean'],
@@ -280,7 +301,7 @@ export const T03: MissionDef = mission({
   player: T03_START,
   script: {
     autoHints: false,
-    parTime: 300,
+    parTime: 180,
     awacs: { initialPictureAt: -1, pictureInterval: 0 },
     groups: [
       // 3 km ahead, 150 m below and flying at the jet; its target lies 15 km behind the jet
@@ -293,31 +314,13 @@ export const T03: MissionDef = mission({
         spawn: { kind: 'time', t: 3 },
         oneWay: { targetX: 0, targetZ: 15_000 },
       }),
-      // 200 m behind the jet, at its height and going its way; its target lies 15 km ahead
-      flight('loop_drone', 'shahed136', 1, { x: 0, z: 200 }, 0, 0, SHAHED_SPEED, 'bomber', {
-        relative: 'player',
-        fixedCount: true,
-        callsign: 'Drone',
-        firstNumber: 2,
-        noun: 'drones',
-        announce: false,
-        spawn: NEVER,
-        oneWay: { targetX: 0, targetZ: -15_000 },
-      }),
     ],
     objectives: [
       { id: 'o_imm', kind: 'maneuver', maneuver: 'immelmann', label: 'Head-on pass, then an Immelmann', primary: true },
       // byPlayer: a drone that reaches its one-way target and blows up got away, it isn't a kill
-      { id: 'o_kill1', kind: 'destroy', groups: ['imm_drone'], byPlayer: true, label: 'Gun the drone from behind', primary: true, activeAt: { kind: 'objective', id: 'o_imm', state: 'complete' } },
-      { id: 'o_loop', kind: 'maneuver', maneuver: 'loop', label: 'Drone behind you: loop', primary: true, activeAt: { kind: 'group_spawned', group: 'loop_drone' } },
-      { id: 'o_kill2', kind: 'destroy', groups: ['loop_drone'], byPlayer: true, label: 'Gun the second drone', primary: true, activeAt: { kind: 'objective', id: 'o_loop', state: 'complete' } },
+      { id: 'o_kill', kind: 'destroy', groups: ['imm_drone'], byPlayer: true, label: 'Gun the drone from behind', primary: true, activeAt: { kind: 'objective', id: 'o_imm', state: 'complete' } },
     ],
     triggers: [
-      {
-        id: 't_imm_done',
-        when: { kind: 'objective', id: 'o_imm', state: 'complete' },
-        actions: [{ kind: 'hint', text: 'Good Immelmann. It is ahead and below, going your way: throttle back, dive in behind it, gun it at 600 m', duration: 9 }],
-      },
       {
         // shot down (or lost) before the Immelmann: a new drone, head-on again
         id: 't_imm_retry',
@@ -330,35 +333,9 @@ export const T03: MissionDef = mission({
         ],
       },
       {
-        id: 't_loop',
-        when: { kind: 'all', of: [{ kind: 'objective', id: 'o_kill1', state: 'complete' }, T03_READY] },
-        delay: 4,
-        actions: [
-          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Drone two, two hundred metres behind you. Loop now!', priority: 2 },
-          { kind: 'spawn', group: 'loop_drone' },
-          { kind: 'hint', text: 'It is BEHIND you: LOOP NOW. Full afterburner, full back stick, wings level all the way round', duration: 9 },
-        ],
-      },
-      {
-        id: 't_loop_done',
-        when: { kind: 'objective', id: 'o_loop', state: 'complete' },
-        actions: [{ kind: 'hint', text: 'It flew under you: now it is ahead. Throttle to IDLE and gun it at 600 m', duration: 9 }],
-      },
-      {
-        // shot down (or lost) before the loop: a new drone behind the jet
-        id: 't_loop_retry',
-        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'loop_drone' }, { kind: 'not', of: { kind: 'objective', id: 'o_loop', state: 'complete' } }, T03_READY] },
-        delay: 4,
-        repeat: 6,
-        actions: [
-          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one does not count. Another drone behind you. Loop!' },
-          { kind: 'respawn', group: 'loop_drone' },
-        ],
-      },
-      {
         // got away after the Immelmann (it reached its one-way target): another one, head-on
-        id: 't_kill1_retry',
-        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'imm_drone' }, { kind: 'objective', id: 'o_imm', state: 'complete' }, { kind: 'not', of: { kind: 'objective', id: 'o_kill1', state: 'complete' } }, T03_READY] },
+        id: 't_kill_retry',
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'imm_drone' }, { kind: 'objective', id: 'o_imm', state: 'complete' }, { kind: 'not', of: { kind: 'objective', id: 'o_kill', state: 'complete' } }, T03_READY] },
         delay: 4,
         repeat: 5,
         actions: [
@@ -367,27 +344,26 @@ export const T03: MissionDef = mission({
         ],
       },
       {
-        // got away after the loop: another one behind the jet
-        id: 't_kill2_retry',
-        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'loop_drone' }, { kind: 'objective', id: 'o_loop', state: 'complete' }, { kind: 'not', of: { kind: 'objective', id: 'o_kill2', state: 'complete' } }, T03_READY] },
-        delay: 4,
-        repeat: 6,
-        actions: [
-          { kind: 'radio', from: DS, text: 'Viper 1, Darkstar. That one got away. Another drone behind you. Loop, and gun it.' },
-          { kind: 'respawn', group: 'loop_drone' },
-        ],
+        // no drone and not ready for the next one: say what brings it
+        id: 't_wait',
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: 'imm_drone' }, { kind: 'not', of: { kind: 'objective', id: 'o_kill', state: 'complete' } }, { kind: 'not', of: T03_READY }] },
+        delay: 3,
+        repeat: 20,
+        actions: [{ kind: 'hint', text: `Next drone: fly straight and level above ${T03_READY_AT.ft.toLocaleString('en-NZ')} ft, over ${T03_READY_AT.kt} knots`, duration: 8 }],
       },
     ],
     hints: [
       { id: 'h1', text: 'Drone ahead, head-on and 500 ft below. Let it pass under you: do not shoot yet', when: { kind: 'group_spawned', group: 'imm_drone' }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 8 },
       { id: 'h2', text: 'IMMELMANN: it passes under you, count three, full AFTERBURNER, pull up. Over the top: roll upright', when: { kind: 'time', t: 11 }, until: { kind: 'objective', id: 'o_imm', state: 'complete' }, duration: 12 },
-      { id: 'h3', text: 'Next drill: straight and level above 2,000 ft, over 300 knots. The next drone appears right behind you', when: { kind: 'objective', id: 'o_kill1', state: 'complete' }, until: { kind: 'group_spawned', group: 'loop_drone' }, duration: 10 },
+      { id: 'h3', text: 'Good Immelmann. It is ahead and below, going your way: throttle back, dive in behind it', when: { kind: 'objective', id: 'o_imm', state: 'complete' }, until: { kind: 'objective', id: 'o_kill', state: 'complete' }, duration: 7 },
+      // the gun pass in Buzz Kill's words (G01_HINTS), so the lesson and the mission can't drift apart
+      { id: 'h4', text: g01Hint('h_gun'), when: { kind: 'objective', id: 'o_imm', state: 'complete' }, until: { kind: 'objective', id: 'o_kill', state: 'complete' }, duration: 10 },
+      { id: 'h5', text: g01Hint('h_overshoot'), when: { kind: 'objective', id: 'o_imm', state: 'complete' }, until: { kind: 'objective', id: 'o_kill', state: 'complete' }, duration: 8 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Training drone inbound, head-on. Guns only. Pass it, then the Immelmann.', priority: 2 }],
-    successText: 'Vertical reversals complete. Use them on the real swarm.',
+    successText: 'Turn and gun complete. Use it on the real swarm.',
   },
 });
-
 
 /** In `index` order: what the Training screen lists and the NEXT lesson button walks. */
 export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04_STRIKE, T05_DEFENCE, T06, T07_SMALL];

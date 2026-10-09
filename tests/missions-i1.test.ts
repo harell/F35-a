@@ -322,10 +322,11 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     expect([...t2].filter((t) => /JDAM/.test(t))).toEqual([]);
   });
 
-  it('training T02 teaches the lock drill (designate → nose within 30° → SHOOT → crank)', () => {
+  it('training T02 teaches the lock drill on a Shahed (the box → nose within 30° → SHOOT → fire; no crank, it never shoots back)', () => {
     const t02 = byId('t02');
     const all = [...t02.briefing, ...(t02.script.hints ?? []).map((x) => x.text)].join(' ');
-    for (const k of [/TD box/, /30°/, /SHOOT/, /crank/i, /PITBULL/]) expect(all).toMatch(k);
+    for (const k of [/box around it/, /30°/, /SHOOT/, /FIRE/]) expect(all).toMatch(k);
+    for (const k of [/TD box/, /crank/i, /PITBULL/]) expect(all).not.toMatch(k);
     const t06 = byId('t06');
     const t3 = [...t06.briefing, ...(t06.script.hints ?? []).map((x) => x.text), ...t06.script.triggers.flatMap((tr) => tr.actions.map((a) => ('text' in a ? a.text : '')))].join(' ');
     // (one CMS control drops chaff and flares together on every input: #62)

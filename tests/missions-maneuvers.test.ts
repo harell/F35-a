@@ -1,7 +1,7 @@
 /**
- * Vertical manoeuvre drills (t03): the loop / Immelmann detector on synthetic flight paths and in
- * the real flight model, groups placed relative to the player, the 'respawn' action, and the
- * lesson flown end to end with scripted stick inputs.
+ * Vertical manoeuvres and t03 Turn and Gun: the loop / Immelmann detector on synthetic flight paths
+ * and in the real flight model, groups placed relative to the player, the 'respawn' action, and the
+ * lesson flown end to end with scripted stick inputs and by the mission bot.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
@@ -176,8 +176,20 @@ function levelFlight(h: Harness, kt: number, seconds: number, each?: () => boole
 const T03 = () => missionById('t03')!;
 const obj = (h: Harness, id: string) => h.runner.objectives.find((o) => o.id === id)!.state;
 const drone = (h: Harness, group: string) => h.world.aircraft.find((a) => a.groupId === group && a.alive) ?? null;
+/** How far `d` is ahead of the jet along its track (m; negative: behind it). */
+const ahead = (h: Harness, d: AircraftEntity) => {
+  const p = h.world.player!;
+  return d.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize());
+};
 
-describe('t03 Vertical Reversals', () => {
+/** The drill as briefed: level at 350 kt while the head-on drone passes under, ~700 m on, then the Immelmann. */
+function passAndImmelmann(h: Harness, d: AircraftEntity): void {
+  cruise(h, 350, 30, () => ahead(h, d) < -700);
+  fly(h, 'immelmann', 30);
+  h.run(0.3);
+}
+
+describe('t03 Turn and Gun', () => {
   it('is a valid lesson, the last one g01 wants, leading into the campaign', () => {
     const def = T03();
     expect(def.kind).toBe('training');
@@ -185,119 +197,84 @@ describe('t03 Vertical Reversals', () => {
     expect(def.recommendedLoadout).toBe('clean');
   });
 
-  it('the real flight model: a stick-flown Immelmann and loop from 350 kt are recognised', () => {
+  it('the real flight model: a stick-flown Immelmann from 350 kt is recognised (a loop is still called, though no drill asks for one)', { timeout: 60_000 }, () => {
     const h = harness(T03(), 'pilot', undefined, flatLand(10));
     fly(h, 'immelmann', 30);
     expect(obj(h, 'o_imm')).toBe('complete');
     const p = h.world.player!;
     initFlight(p, { heading: Math.PI / 2, speed: 350 * KT });
     fly(h, 'loop', 40);
-    // the loop is counted even before its objective opens
     expect(h.of('hud:message').some((m) => (m as { text: string }).text === 'LOOP')).toBe(true);
   });
 
-  it('flown end to end: head-on drone, Immelmann, kill, drone behind, loop, it is ahead in gun range, kill', { timeout: 60_000 }, () => {
+  it('flown end to end: head-on drone, Immelmann, it is ahead and below going the jet\'s way, gun kill, done', { timeout: 60_000 }, () => {
     const h = harness(T03(), 'pilot', undefined, flatLand(10));
     const p = h.world.player!;
-    // the first drone appears 3 km ahead, 150 m below, flying at the jet
+    // the drone appears 3 km ahead, 150 m below, flying at the jet
     cruise(h, 350, 4);
-    const d1 = drone(h, 'imm_drone')!;
-    expect(d1).not.toBeNull();
-    const ahead = d1.position.clone().sub(p.position);
-    const fwd = _f.copy(p.velocity).setY(0).normalize();
-    expect(ahead.dot(fwd)).toBeGreaterThan(2000);
-    expect(ahead.y).toBeLessThan(-100);
-    expect(d1.velocity.dot(p.velocity)).toBeLessThan(0);
+    const d = drone(h, 'imm_drone')!;
+    expect(d).not.toBeNull();
+    expect(ahead(h, d)).toBeGreaterThan(2000);
+    expect(d.position.y - p.position.y).toBeLessThan(-100);
+    expect(d.velocity.dot(p.velocity)).toBeLessThan(0);
     // let it pass under the jet, extend ~3 s (it is ~700 m behind), then the Immelmann
-    cruise(h, 350, 30, () => d1.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize()) < -700);
-    fly(h, 'immelmann', 30);
-    h.run(0.3);
+    passAndImmelmann(h, d);
     expect(obj(h, 'o_imm')).toBe('complete');
-    expect(obj(h, 'o_kill1')).toBe('active');
+    expect(obj(h, 'o_kill')).toBe('active');
     // rolled out high and slow, the drone ahead and below, going the jet's way: a ~40° dive onto it
-    const rel = d1.position.clone().sub(p.position);
-    const along = rel.dot(_f.copy(p.velocity).setY(0).normalize());
-    expect(rel.y).toBeLessThan(-800);
-    expect(along).toBeGreaterThan(1000);
-    expect(d1.velocity.dot(p.velocity)).toBeGreaterThan(0);
+    expect(d.position.y - p.position.y).toBeLessThan(-800);
+    expect(ahead(h, d)).toBeGreaterThan(1000);
+    expect(d.velocity.dot(p.velocity)).toBeGreaterThan(0);
     expect(p.flight.ias).toBeLessThan(220 * KT);
     killGroup(h, 'imm_drone');
-    // the next drone waits until the jet is fast again, then appears 200 m behind it
-    cruise(h, 400, 60, () => drone(h, 'loop_drone') !== null);
-    const d2 = drone(h, 'loop_drone')!;
-    expect(d2).not.toBeNull();
-    const behind = d2.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize());
-    expect(behind).toBeLessThan(-100);
-    expect(behind).toBeGreaterThan(-400);
-    expect(d2.velocity.dot(p.velocity)).toBeGreaterThan(0);
-    fly(h, 'loop', 40);
-    h.run(0.3);
-    expect(obj(h, 'o_loop')).toBe('complete');
-    // out of the loop the drone is ahead of the jet, in gun range
-    const ahead2 = d2.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize());
-    expect(ahead2).toBeGreaterThan(300);
-    expect(ahead2).toBeLessThan(1200);
-    killGroup(h, 'loop_drone');
     h.run(1);
+    expect(obj(h, 'o_kill')).toBe('complete');
     expect(h.runner.state).toBe('success');
   });
 
-  it('drill 2 waits for straight and level: no drone behind while the jet is still diving, fast and high', { timeout: 60_000 }, () => {
+  it('a drone that gets away after the Immelmann is not a kill: the next one waits for straight and level, fast and high (the hint says so)', { timeout: 60_000 }, () => {
     const h = harness(T03(), 'pilot', undefined, flatLand(10));
     const p = h.world.player!;
     cruise(h, 350, 4);
-    const d1 = drone(h, 'imm_drone')!;
-    cruise(h, 350, 30, () => d1.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize()) < -700);
-    fly(h, 'immelmann', 30);
-    killGroup(h, 'imm_drone');
-    // dive in afterburner: soon fast (> 280 kt) and still high (> 700 m), but not level
+    const first = drone(h, 'imm_drone')!;
+    passAndImmelmann(h, first);
+    expect(obj(h, 'o_imm')).toBe('complete');
+    // it reaches its target and blows up (no attacker): not the player's kill
+    killGroup(h, 'imm_drone', false);
+    h.run(0.5);
+    expect(obj(h, 'o_kill')).toBe('active');
+    expect(h.runner.state).toBe('running');
+    // dive in afterburner: soon fast (> 280 kt) and still high (> 2,300 ft), but not level: no drone yet
     let sawFastHighDive = false;
+    const hints = new Set<string>();
     h.run(12, () => {
       shieldPlayer(h);
       p.input.throttle = 1;
       p.input.roll = 0;
       p.input.pitch = attitude(p).gamma > -25 * DEG ? -0.3 : 0;
+      if (h.runner.hint) hints.add(h.runner.hint);
       if (p.flight.ias > 290 * KT && p.position.y > 900 && attitude(p).gamma < -15 * DEG) sawFastHighDive = true;
-      expect(drone(h, 'loop_drone'), `t=${h.world.time.toFixed(1)}: drone while diving`).toBeNull();
+      expect(drone(h, 'imm_drone'), `t=${h.world.time.toFixed(1)}: drone while diving`).toBeNull();
       return p.position.y < 900;
     });
     expect(sawFastHighDive).toBe(true);
-    // pull out and fly level: now it comes, behind the jet
-    levelFlight(h, 350, 60, () => drone(h, 'loop_drone') !== null);
-    expect(drone(h, 'loop_drone')).not.toBeNull();
-    expect(Math.abs(attitude(p).gamma)).toBeLessThan(10 * DEG);
-  });
-
-  it('a drone that gets away after the loop is not a kill: the drill sends another one behind the jet', { timeout: 60_000 }, () => {
-    const h = harness(T03(), 'pilot', undefined, flatLand(10));
-    const p = h.world.player!;
-    cruise(h, 350, 4);
-    const d1 = drone(h, 'imm_drone')!;
-    cruise(h, 350, 30, () => d1.position.clone().sub(p.position).dot(_f.copy(p.velocity).setY(0).normalize()) < -700);
-    fly(h, 'immelmann', 30);
-    killGroup(h, 'imm_drone');
-    cruise(h, 400, 60, () => drone(h, 'loop_drone') !== null);
-    const first = drone(h, 'loop_drone')!;
-    fly(h, 'loop', 40);
-    h.run(0.3);
-    expect(obj(h, 'o_loop')).toBe('complete');
-    // it reaches its target and blows up (no attacker): not the player's kill
-    killGroup(h, 'loop_drone', false);
-    h.run(0.5);
-    expect(obj(h, 'o_kill2')).toBe('active');
-    expect(h.runner.state).toBe('running');
-    levelFlight(h, 350, 30, () => drone(h, 'loop_drone') !== null);
-    const next = drone(h, 'loop_drone');
+    // the hint names the gate's numbers (playtest r1, 1.4-l: it said 2,000 ft and 300 knots for a 700 m / 280 kt gate)
+    expect([...hints].join(' | ')).toMatch(/straight and level above 2,300 ft, over 280 knots/);
+    // pull out and fly level: now it comes, head-on again
+    levelFlight(h, 350, 60, () => drone(h, 'imm_drone') !== null);
+    const next = drone(h, 'imm_drone');
     expect(next).not.toBeNull();
     expect(next!.id).not.toBe(first.id);
+    expect(ahead(h, next!)).toBeGreaterThan(2000);
+    expect(next!.velocity.dot(p.velocity)).toBeLessThan(0);
     // the player's own kill completes it
-    killGroup(h, 'loop_drone');
+    killGroup(h, 'imm_drone');
     h.run(1);
-    expect(obj(h, 'o_kill2')).toBe('complete');
+    expect(obj(h, 'o_kill')).toBe('complete');
     expect(h.runner.state).toBe('success');
   });
 
-  it('a drone shot down before the Immelmann does not count: a new one comes head-on', () => {
+  it('a drone shot down before the Immelmann does not count: a new one comes head-on', { timeout: 60_000 }, () => {
     const h = harness(T03(), 'pilot', undefined, flatLand(10));
     cruise(h, 350, 4);
     const first = drone(h, 'imm_drone')!;
@@ -306,13 +283,13 @@ describe('t03 Vertical Reversals', () => {
     const second = drone(h, 'imm_drone');
     expect(second).not.toBeNull();
     expect(second!.id).not.toBe(first.id);
-    expect(obj(h, 'o_kill1')).toBe('pending');
+    expect(obj(h, 'o_kill')).toBe('pending');
     expect(h.runner.state).toBe('running');
   });
 });
 
-describe('t03 Vertical Reversals, flown by the mission bot', () => {
-  it('on the real LINZ coast with the stick and the gun, no shortcuts: Immelmann, gun kill, loop, gun kill', { timeout: 300_000 }, () => {
+describe('t03 Turn and Gun, flown by the mission bot', () => {
+  it('on the real LINZ coast with the stick and the gun, no shortcuts: the Immelmann, then the gun kill from behind', { timeout: 300_000 }, () => {
     const def = missionById('t03')!;
     const terrain = new TerrainQueryImpl(runSync(generateTerrain({ theater: def.theater, seed: def.seed, resolution: 512, features: allFeatures(def.theater, []), pads: terrainPadsFor(def) })));
     let won = 0;
@@ -320,17 +297,15 @@ describe('t03 Vertical Reversals, flown by the mission bot', () => {
     for (const seed of [0, 1, 2, 3, 4, 5]) {
       const r = runPlaythrough('t03', 'pilot', seed, terrain, { maxT: 720, log: true });
       const at = (re: RegExp) => r.events.find((e) => re.test(e))?.trim().split(' ')[0] ?? '-';
-      log.push(`seed ${seed}: ${r.state}@${r.t}s immelmann@${at(/HUD IMMELMANN$/)} loop@${at(/HUD LOOP$/)}`);
+      log.push(`seed ${seed}: ${r.state}@${r.t}s immelmann@${at(/HUD IMMELMANN$/)} kill@${at(/DESTROYED Drone \d+ by PLAYER/)}`);
       if (r.state !== 'success') continue;
       won++;
       expect(r.alive, `seed ${seed}`).toBe(true);
-      // the manoeuvres were recognised by the mission's own detector, in the lesson's order
+      // the manoeuvre was recognised by the mission's own detector, then the drone was gunned
       const imm = r.events.findIndex((e) => /HUD IMMELMANN$/.test(e));
-      const loop = r.events.findIndex((e) => /HUD LOOP$/.test(e));
+      const kill = r.events.findIndex((e) => /DESTROYED Drone \d+ by PLAYER/.test(e));
       expect(imm, `seed ${seed}: no Immelmann`).toBeGreaterThanOrEqual(0);
-      expect(loop, `seed ${seed}: no loop`).toBeGreaterThan(imm);
-      // both drones shot down by the player (the only weapon aboard is the gun)
-      expect(r.events.filter((e) => /DESTROYED Drone \d+ by PLAYER/.test(e)).length, `seed ${seed}`).toBeGreaterThanOrEqual(2);
+      expect(kill, `seed ${seed}: no kill after the Immelmann`).toBeGreaterThan(imm);
       expect(r.events.some((e) => /LAUNCH /.test(e) && /PLAYER/.test(e)), `seed ${seed}: a missile left the jet`).toBe(false);
     }
     expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
