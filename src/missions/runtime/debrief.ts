@@ -3,7 +3,8 @@
  * specific tips built from how the sortie went, and the medals earned (MEDALS catalogue, exported
  * through src/missions/index.ts for the UI).
  */
-import type { MissionResult } from '../../core/contracts';
+import type { MissionDef, MissionResult } from '../../core/contracts';
+import { TRAINING_MISSIONS } from '../content/training';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
 import type { AircraftType, SamType } from '../../core/types';
 import { fixedDifficulty } from '../difficulty';
@@ -109,6 +110,19 @@ export function hasAirToAirObjective(script: Pick<MissionScript, 'objectives' | 
   return script.objectives.some((o) => (o.kind === 'destroy' || o.kind === 'intercept') && o.groups.some((id) => air.has(id)));
 }
 
+/**
+ * The fallback tip after a loss: the lessons this mission asks for (MissionDef.lessons, the ones the
+ * Training screen points at), by the number and name players see; a mission without any (a lesson,
+ * Instant Action) gets the general advice.
+ */
+export function lessonTip(def: Pick<MissionDef, 'lessons'>): string {
+  const lessons = (def.lessons ?? []).map((id) => TRAINING_MISSIONS.find((m) => m.id === id)).filter((m): m is MissionDef => !!m);
+  if (lessons.length === 0) return 'Fly Training first: each lesson prepares a campaign mission.';
+  const names = lessons.map((m) => `Training ${String(m.index).padStart(2, '0')}, ${m.title}`);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `Fly ${list} first: ${names.length === 1 ? 'it prepares' : 'they prepare'} this mission.`;
+}
+
 /** 1–3 specific tips for the debrief. */
 export function buildTips(s: MissionState, r: MissionResult): string[] {
   const tips: string[] = [];
@@ -134,7 +148,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
       );
     else if (samType === 'zsu23') add('Shilkas shred anything low and close: stay above 5,000 ft or more than 3 km from the flak.');
     else if (w === 'm_igla') add('The boat\'s heat-seeker: turn hard across it (beam it), come out of afterburner and press CMS late, in the last 3 seconds. Turning into it makes it worse.');
-    else if (IR_MUNITIONS.has(w)) add('Heat-seeker: pop FLARES and break hard into the missile, and come out of afterburner.');
+    else if (IR_MUNITIONS.has(w)) add('Heat-seeker: turn hard across it (beam it), come out of afterburner and press CMS late, in the last 3 seconds. Turning into it makes it worse.');
     else if (samType) add('SAM launch: beam it — turn 90° to the missile and drop CHAFF every few seconds from about 6 s to impact. Diving after the launch is too late: be low before it.');
     else if (RADAR_MUNITIONS.has(w)) add('Radar missile: put it on your wing (beam), drop CHAFF — and shoot first: a clean F-35 sees them long before they see you.');
     else if (w === 'gun') add('Guns kill: don’t let a bandit sit behind you — keep your speed up and turn into him.');
@@ -175,7 +189,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
     if (r.grade === 'S' && r.difficulty !== 'veteran' && !fixedDifficulty(s.def)) add('Perfect sortie — try it on a harder difficulty.');
   }
   if (tips.length === 0) {
-    if (!r.success) add('Fly Training first: T02 teaches the lock and SHOOT cue, T05 and T06 how to survive SAMs.');
+    if (!r.success) add(lessonTip(s.def));
     // the time tip only when there was time to gain, and the AMRAAM advice only where there is something to shoot
     else if (r.time > parTimeFor(s.def))
       add(hasAirToAirObjective(s.script) ? 'Faster missions score higher: fly the steering cue and use the AMRAAM’s reach.' : 'Faster missions score higher: fly the steering cue.');

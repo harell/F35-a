@@ -376,6 +376,15 @@ export const WEAPON_INFO: Record<WeaponId, { name: string; short: string; kind: 
   aargm: { name: 'AGM-88G AARGM-ER', short: 'AARGM', kind: 'agm' },
 };
 
+/**
+ * The anti-radiation rule, the same in every lesson, briefing and hint (playtest 2026-10-10, 1.4-h:
+ * three rules had grown apart). Fired from far out, a disciplined crew shuts its radar down before the
+ * AARGM arrives and is back on the air seconds later (sim/sam/SamSystem.ts, armDiscipline); fired close
+ * in, the jet is on top of the site while it is quiet. AARGM_CLOSE_RANGE (m) is the "about 10 km".
+ */
+export const AARGM_CLOSE_RANGE = 10_000;
+export const AARGM_RULE = 'fire it inside about 10 km while its radar is on, then press straight in behind it';
+
 export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; rwrSymbol: string }> = {
   f35a: { name: 'F-35A Lightning II', nato: 'F-35A', rwrSymbol: '35' },
   mig29: { name: 'MiG-29', nato: 'Fulcrum', rwrSymbol: '29' },

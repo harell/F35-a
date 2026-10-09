@@ -282,7 +282,7 @@ describe('sead_stealth loadout carries the StormBreakers', () => {
       if (ag) withIt++;
       expect(validateMission(m), m.id).toEqual([]);
     }
-    expect(withIt).toBeGreaterThanOrEqual(3); // t06, Instant Action strike and SAM gauntlet
+    expect(withIt).toBeGreaterThanOrEqual(2); // Instant Action strike and SAM gauntlet (t06 flies g03's sead_precision)
   });
 });
 

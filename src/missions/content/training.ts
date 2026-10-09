@@ -5,16 +5,15 @@
  *   T02 Air-to-air — training Shaheds head-on: an AMRAAM, a row stepped through with FIRE, then
  *       the AIM-9X inside 2 km                                                                   → g01
  *   T03 Turn and gun — a Shahed head-on, an Immelmann, then g01's gun pass from behind           → g01
- *   T04 Maritime strike — StormBreaker on moving boats, AARGM-ER on a radar, gun (trainingStrike.ts) → g02
- *   T05 Gulf Defence — missile defence drills against the IRGC air-defence boat (trainingDefence.ts) → g02
- *   T06 Live SAMs — live SA-6 + Shilka, chaff / flares / notching / terrain masking, JDAM          → g03
- *   T07 Small Targets — sewer rats in Herne Bay: StormBreaker at a stop, JDAM on a swimmer, the
- *       houses a JDAM takes on a street (trainingSmallTargets.ts)                                → g03
+ *   T04 Maritime strike — StormBreaker on moving boats, AARGM-ER on a radar, a gun pass (trainingStrike.ts) → g02
+ *   T05 Gulf Defence — three missile-defence drills against the IRGC air-defence boat (trainingDefence.ts) → g02
+ *   T06 Live SAMs — live SA-6 + Shilka on g03's loadout: low, an AARGM-ER close in, a StormBreaker  → g03
+ *   T07 Small Targets — sewer rats in Herne Bay: a StormBreaker while they stop (trainingSmallTargets.ts) → g03
  * Ids match the numbers players see. Saves from before this order hold the SA-6 lesson as 't03':
  * progress.ts moves it to 't06' once (LESSON_IDS_VERSION).
  */
 import type { MissionDef } from '../../core/contracts';
-import { LOADOUTS } from '../../core/data';
+import { AARGM_RULE, LOADOUTS } from '../../core/data';
 import { SHAHED_SPEED } from '../../sim/drone/oneWay';
 import type { Condition } from '../schema';
 import { NEVER, P, flight, mission, site, target } from './common';
@@ -194,8 +193,25 @@ export const T02: MissionDef = mission({
 /* ───────────────────────── T06 — Live SAMs ───────────────────────── */
 
 const sa6 = P.rangSW;
-/** The fuel depot on Motutapu (centre of the two tanks). */
+const shilka = P.rangS;
+/** The fuel tank on Motutapu, behind Rangitoto from the SA-6 (6 km from it). */
 const depot = { x: 13000, z: -8900 };
+/**
+ * g03's way through a SAM, on g03's loadout (playtest 2026-10-10, 1.4-a: the lesson used to fly a JDAM,
+ * which no campaign mission carries, round a 60 km route that dodged the SA-6 by range, with 200 s
+ * of nothing). The jet starts over the western harbour 20 km from the SA-6 and goes low over the water
+ * (under the SA-6's 80 m floor, out of the Shilka's 2.5 km reach), fires an AARGM-ER inside 10 km while
+ * the radar is on and presses straight in behind it, then puts a StormBreaker on the tank.
+ */
+export const T06_SAM = {
+  start: { x: -11000, z: 1800 },
+  /** Down low over the harbour off the city, 8 km from the SA-6. */
+  low: { x: 1000, z: -1500 },
+  sa6,
+  shilka,
+  depot,
+} as const;
+const T06_HEADING = Math.round((Math.atan2(T06_SAM.low.x - T06_SAM.start.x, -(T06_SAM.low.z - T06_SAM.start.z)) * 180) / Math.PI);
 
 export const T06: MissionDef = mission({
   // 't03' before the campaign order (#271): old saves are migrated (progress.ts)
@@ -203,40 +219,31 @@ export const T06: MissionDef = mission({
   kind: 'training',
   index: 6,
   title: 'Live SAMs',
-  subtitle: 'Survive a live SA-6 and JDAM a fuel depot',
+  subtitle: 'Past a live SA-6 with an AARGM-ER',
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
-    'Live-fire SAM training. An SA-6 battery and a Shilka on Rangitoto cover a fuel depot on Motutapu, the island behind it. The missiles are real. The steering cue takes you north round the SA-6, beyond the range its radar can pick up a clean F-35, to an IP north-east of Motutapu: run in from there.',
-    'Radars that see you show on the RWR; threat rings are on the TSD. A clean F-35 is hard to see, but not invisible. If a SAM launches: turn to put the missile on your wing (beam it) and press CMS every two or three seconds from about 6 s to impact: one press drops chaff and flares together, at launch they are wasted, and a held button wears them out. The notch works best low, but be low before the shot: a dive after the launch is too late. Do not run: the missile is faster. Against a heat-seeker, the same hard turn across it, afterburner off, and CMS late, in the last three seconds.',
-    'Better still, deny the shot: below 300 ft the volcano blocks the radar line of sight. Then the strike: climb high, tap WPN to select the JDAM, TGT to designate the fuel tanks, and release the moment IN RANGE shows (STEER means turn toward the target first). The bomb flies itself; you turn for home. There is no rearming, so make each release count.',
+    'Live-fire SAM training, with what you carry over Waiheke: two AARGM-ERs and two StormBreakers. An SA-6 on Rangitoto guards a fuel tank on Motutapu, the island behind it, and a Shilka anti-aircraft gun sits on Rangitoto\'s south shore. The missiles are real.',
+    `Get down low over the harbour: below 250 ft the SA-6 can't engage you. Keep 3 km from the Shilka. Then the AARGM-ER: select it with WPN, designate the SA-6 with TGT, and ${AARGM_RULE}. Fired from far out, it only quiets the radar for a few seconds.`,
+    'Last, a StormBreaker on the fuel tank: TGT, climb, release when IN RANGE shows. If a missile comes, turn 90° to put it on your wing (beam it) and press CMS, which drops chaff and flares together, every 2–3 s from about 6 s to impact.',
   ],
-  recommendedLoadout: 'strike_stealth',
-  allowedLoadouts: ['strike_stealth', 'sead_stealth', 'strike_beast'],
-  player: { x: -13000, z: -1500, altitude: 3500, heading: 80, speed: 230 },
+  recommendedLoadout: 'sead_precision',
+  allowedLoadouts: ['sead_precision'],
+  player: { x: T06_SAM.start.x, z: T06_SAM.start.z, altitude: 900, heading: T06_HEADING, speed: 240 },
   script: {
     autoHints: true,
-    parTime: 360,
+    parTime: 180,
     awacs: { initialPictureAt: -1 },
-    sams: [site('sa6', 'sa6', 'sa6', sa6, { heading: 240 }), site('zsu', 'aaa', 'zsu23', P.rangS)],
-    // the depot sits behind Rangitoto from the SA-6, 6 km from it, so a JDAM released from the IP side
-    // stays outside the SA-6's reach on a stealthy jet; it used to sit 3 km from the SA-6 on Rangitoto's
-    // eastern slope, where every release point was inside it (playtest 2026-10-02, 1.1-e, issue #57)
-    ground: [target('fuel1', 'depot', 'fuel', { x: 12800, z: -9000 }), target('fuel2', 'depot', 'fuel', { x: 13200, z: -8800 })],
+    sams: [site('sa6', 'sa6', 'sa6', sa6, { heading: 240 }), site('zsu', 'aaa', 'zsu23', shilka)],
+    ground: [target('fuel', 'depot', 'fuel', depot)],
     objectives: [
-      { id: 'o_depot', kind: 'destroy', groups: ['depot'], label: 'Destroy the fuel depot with a JDAM', primary: true },
-      { id: 'o_sa6', kind: 'destroy', groups: ['sa6'], label: 'Destroy the SA-6', primary: false },
-      { id: 'o_aaa', kind: 'destroy', groups: ['aaa'], label: 'Destroy the Shilka', primary: false },
+      { id: 'o_sa6', kind: 'destroy', groups: ['sa6'], label: 'AARGM-ER on the SA-6: inside 10 km, radar on', primary: true },
+      { id: 'o_depot', kind: 'destroy', groups: ['depot'], label: 'StormBreaker on the fuel tank behind it', primary: true },
     ],
     waypoints: [
-      // round the north of the SA-6 ring (≥ 15 km from it) to an IP north-east of Motutapu, 18 km from the
-      // SA-6: beyond the range its radar picks up a clean F-35 (at the cued altitudes the route is in its
-      // line of sight, so this works by range, not terrain masking). The old IP over North Head was 6 km
-      // from the SA-6 in plain sight across the channel (issue #57)
-      { id: 'wp_north', label: 'Long Bay', kind: 'nav', x: -4000, z: -17000, altitude: 3000 },
-      { id: 'wp_gulf', label: 'Tiritiri', kind: 'nav', x: 10000, z: -24000, altitude: 6000 },
-      { id: 'wp_ip', label: 'IP Motutapu', kind: 'ip', x: 22000, z: -16000, altitude: 7500 },
-      { id: 'wp_depot', label: 'Fuel depot', kind: 'target', x: depot.x, z: depot.z, objective: 'o_depot' },
+      { id: 'wp_low', label: 'Harbour: down low', kind: 'nav', x: T06_SAM.low.x, z: T06_SAM.low.z, altitude: 60, radius: 1500 },
+      { id: 'wp_sa6', label: 'SA-6', kind: 'target', x: sa6.x, z: sa6.z, objective: 'o_sa6' },
+      { id: 'wp_depot', label: 'Fuel tank', kind: 'target', x: depot.x, z: depot.z, objective: 'o_depot' },
     ],
     triggers: [
       {
@@ -244,15 +251,20 @@ export const T06: MissionDef = mission({
         when: { kind: 'sam_engaged' },
         actions: [{ kind: 'hint', text: 'SAM LAUNCH! Beam it 90° and press CMS every 2–3 s from ~6 s to impact', duration: 9 }],
       },
+      {
+        id: 't_silent',
+        when: { kind: 'group_destroyed', group: 'sa6' },
+        actions: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. SA-6 is down. Now the tank on Motutapu: StormBreaker.', priority: 2 }],
+      },
     ],
     hints: [
-      { id: 'h1', text: 'The RWR shows radars looking at you. The SA-6 ring is on the TSD — its missiles reach 20 km', when: { kind: 'time', t: 3 }, duration: 8 },
-      { id: 'h2', text: 'Stay clean and in the bays: the SA-6 only sees a stealthy F-35 at ~10 km', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 24000 }, duration: 7 },
-      { id: 'h3', text: 'Go low: below 300 ft the volcano blocks the radar line of sight', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 14000, above: 300 }, duration: 8 },
-      { id: 'h4', text: 'Tap WPN to select the JDAM, TGT to designate the fuel tanks, release the moment IN RANGE shows', when: { kind: 'area', x: depot.x, z: depot.z, radius: 13000 }, duration: 9 },
-      { id: 'h5', text: 'Missile on the MAWS: count down the time-to-impact. CMS from ~6 s, a press every 2–3 s', when: { kind: 'missile_inbound' }, duration: 7 },
+      { id: 'h1', text: 'The SA-6 reaches 20 km. Go LOW over the harbour: under 250 ft it can\'t engage you', when: { kind: 'time', t: 3 }, duration: 9 },
+      { id: 'h2', text: 'AARGM (WPN), TGT the SA-6: fire inside 10 km while its radar is on, then press straight in', when: { kind: 'area', x: sa6.x, z: sa6.z, radius: 13000 }, duration: 9 },
+      { id: 'h3', text: 'The Shilka shreds anything low and close: keep 3 km from it', when: { kind: 'area', x: shilka.x, z: shilka.z, radius: 5000, below: 3000 }, duration: 7 },
+      { id: 'h4', text: 'StormBreaker (WPN), TGT the fuel tank: climb, release the moment IN RANGE shows', when: { kind: 'player_fired' }, duration: 9 },
+      { id: 'h5', text: 'Missile coming: beam it, a CMS press every 2–3 s from ~6 s to impact', when: { kind: 'missile_inbound' }, duration: 7 },
     ],
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get in, drop a JDAM on the depot, get out alive.', priority: 2 }],
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Live SAM training over Rangitoto. The SA-6 is real. Get low, kill its radar, bomb the tank.', priority: 2 }],
     successText: 'SAM qualification complete. Next: small targets, before Waiheke.',
   },
 });

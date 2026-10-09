@@ -10,7 +10,7 @@
  *
  * Pure data and functions (no DOM): tests/ui-codex.test.ts checks every rating against the computed hits.
  */
-import { LOADOUTS } from '../../core/data';
+import { AARGM_RULE, LOADOUTS } from '../../core/data';
 import type { WeaponId } from '../../core/types';
 import { WEAPON_BREVITY, WEAPON_HUD } from '../../hud/hmd/format';
 import { AIRCRAFT_HEALTH, GROUND_TARGET_DATA, SAM_SITE_DATA } from '../../sim/damage/tables';
@@ -202,7 +202,7 @@ function buildWeapons(): WeaponEntry[] {
       inspect: 'Long body strakes and a big rocket motor. A passive radar receiver in the nose, plus a second seeker for the last 3 km.',
       needs: 'Needs a radar that\'s switched on (a MUD SPIKE) within 45° of your nose, or a designated radar site.',
       hud: [[`${hud('aargm')} 2`, 'Selected, 2 left'], ['MUD SPIKE 6', 'A ground radar is on: a valid target'], [brev('aargm'), 'Flashes as it launches'], ['MIN RANGE · NO TARGET', `Inside ${km(MUNITIONS.aargm.minRange)} km, or no radar switched on`]],
-      how: ['Wait for a MUD SPIKE. That radar is your target.', 'Designate it, or point within 45° of it and fire.', 'Fire from outside the SAM\'s reach: medium SAMs 20 km, short-range SAMs 12 km.'],
+      how: ['Wait for a MUD SPIKE. That radar is your target.', 'Designate it, or point within 45° of it and fire.', `${AARGM_RULE[0].toUpperCase()}${AARGM_RULE.slice(1)}: fired from far out, the crew switches off and is back on the air seconds later.`],
       avoid: ['Crews switch the radar off when it\'s coming. It then gets one chance to find the site.', 'It can\'t lock anything without a radar.'],
       terms: [['MUD SPIKE', 'The warning that a ground radar (a SAM site or anti-aircraft gun) is tracking you. That radar is what the AARGM homes on.']],
       range: munitionRange('aargm', 55),
@@ -357,7 +357,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     kind: 'warning', id: 'missile', cat: 'thr', name: 'MISSILE', chip: 'MISSILE 6s', level: 'red', sound: 'missile', voice: 'b_missile', voiceText: 'Missile',
     line: 'A missile is coming at you, any type, within 15 km. Act now.',
     trigger: 'The jet\'s missile approach warning sees a missile heading for you. A red ring appears around your flight path marker, with an arrow per missile (orange means heat-seeker) and 1–3 chevrons as it closes. The seconds to impact count down.',
-    how: ['A SAM\'s radar missile: turn 90° to it (beam it) and press CMS every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it is too late. Running away doesn\'t: the missile is faster.', 'A SAM\'s heat-seeker (orange arrow; the air-defence boats): the same hard turn across it, afterburner off, CMS late, in the last 3 s. Turning into it makes it worse.', 'A fighter\'s missile flies longer: beam it and dive, chaff late; against its heat-seeker, flares and a hard break into it.', 'Three chevrons means under 4 s to impact.'],
+    how: ['A SAM\'s radar missile: turn 90° to it (beam it) and press CMS every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it is too late. Running away doesn\'t: the missile is faster.', 'A heat-seeker (orange arrow; the air-defence boats, a fighter\'s short-range missile): the same hard turn across it, afterburner off, CMS late, in the last 3 s. Turning into it makes it worse.', 'A fighter\'s radar missile flies longer: beam it and dive, chaff late.', 'Three chevrons means under 4 s to impact.'],
     notes: ['This is the only warning for shoulder-fired missiles and for long-range fighter missiles in midcourse.', 'The tone sweeps down, and it speeds up as the missile gets closer.'],
   },
   {

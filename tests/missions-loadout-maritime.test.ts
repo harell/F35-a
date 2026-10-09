@@ -57,7 +57,7 @@ describe('strike_maritime: the loadout', () => {
     expect(l.chaff).toBe(LOADOUTS.sead_stealth.chaff);
   });
 
-  it('only g02, its lesson T04 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
+  it('only g02, its lesson T04, T07 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
     const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
     expect(instant.length).toBeGreaterThanOrEqual(4);
     expect(missionById('g02')!.allowedLoadouts).toContain(FULL);
@@ -65,7 +65,8 @@ describe('strike_maritime: the loadout', () => {
     // T04 Maritime Strike teaches g02's weapons, so it flies g02's load
     expect(missionById('t04')!.recommendedLoadout).toBe(FULL);
     for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
-      if (m.id === 'g02' || m.id === 't04') continue;
+      // (t07: g03's StormBreaker release, learned with bombs to spare)
+      if (m.id === 'g02' || m.id === 't04' || m.id === 't07') continue;
       expect(m.allowedLoadouts, m.id).not.toContain(FULL);
       expect(m.recommendedLoadout, m.id).not.toBe(FULL);
       expect(hangarLoadouts(m).cards, m.id).not.toContain(FULL);

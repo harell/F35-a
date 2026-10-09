@@ -305,6 +305,23 @@ describe('#64: training debrief', () => {
     expect(downed('t05', 'm_9m330').some((t) => /Training 05/.test(t))).toBe(false);
   });
 
+  it('a fighter\'s heat-seeker gets the same advice as the boat\'s: beam it, AB off, CMS late, never a break into it (1.4-o)', () => {
+    const s = new MissionState(byId('g01'), { createAi: stubAi({ created: [], retasked: [] }), difficulty: DIFFICULTIES.pilot, events: new EventBus() });
+    s.playerDied = true;
+    s.stats.downReason = 'shot';
+    s.stats.lastHitBy = 'aircraft' as never;
+    s.stats.lastHitWeapon = 'r73' as never;
+    const tips = buildTips(s, { ...win('g01', 100), success: false, reason: 'Shot down' });
+    expect(tips[0]).toMatch(/turn hard across it/);
+    expect(tips[0]).toMatch(/CMS late/);
+    expect(tips.join(' ')).not.toMatch(/break hard into|break into it/);
+  });
+
+  it('a loss with nothing more specific points at the mission\'s own lessons (1.4-p)', () => {
+    const tips = buildTips(state('g02'), { ...win('g02', 100), success: false, reason: 'Aborted' });
+    expect(tips).toContain('Fly Training 04, Maritime Strike and Training 05, Gulf Defence first: they prepare this mission.');
+  });
+
   it('the time tip only shows over par', () => {
     const par = byId('g01').script.parTime!;
     expect(buildTips(state('g01'), win('g01', par - 30)).some((t) => /Faster missions/.test(t))).toBe(false);

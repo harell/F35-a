@@ -6,12 +6,13 @@
  *  - AMRAAM: tap the TD box (or TGT) to lock → point the nose (±30° lock cone) → wait for SHOOT
  *    → fire → crank 50°;
  *  - AIM-9X / gun: seeker tone / pipper;
- *  - AARGM: designate an emitting SAM, fire on SHOOT (never sent to a bomb while an AARGM cue is up);
+ *  - AARGM: designate an emitting SAM, close in to AARGM_CLOSE_RANGE, fire on SHOOT and press in
+ *    (AARGM_RULE; never sent to a bomb while an AARGM cue is up);
  *  - SDB / JDAM: designate with TGT, release IN RANGE;
  *  - an A/A weapon selected while a surface objective is near: which A/G store to select.
  * Texts stay short; the HUD decides visibility (Settings.hints).
  */
-import { WEAPON_INFO } from '../../core/data';
+import { AARGM_CLOSE_RANGE, WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { stallSpeedIas } from '../../sim/flight/performance';
@@ -142,9 +143,10 @@ const AUTO: AutoHint[] = [
       // seconds apart is the defence, and a dive after the launch adds nothing to the beam (the round
       // arrives in ~10 s). Against the boat's heat-seeker (real flight model, 48 rounds each): a hard turn
       // across it + CMS late 3 hit, CMS alone 5, the turn alone 12, nothing 15, a break INTO it 29 (head-on,
-      // the end game's worst aspect). A fighter's missile (not measured; a longer flight) keeps the old advice.
-      if (shooter && shooter.kind === 'sam') return ir ? 'IR MISSILE! Beam it hard, AB off, CMS late' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
-      return ir ? 'IR MISSILE! CMS, break into it, AB off' : 'MISSILE! Beam it 90°, dive, CMS late';
+      // the end game's worst aspect), so a heat-seeker gets the beam whoever fired it (1.4-o). A fighter's
+      // radar missile (not measured; a longer flight) keeps the old advice.
+      if (ir) return 'IR MISSILE! Beam it hard, AB off, CMS late';
+      return shooter && shooter.kind === 'sam' ? 'MISSILE! Beam it 90°, CMS every 2–3 s' : 'MISSILE! Beam it 90°, dive, CMS late';
     },
   },
   {
@@ -205,9 +207,10 @@ const AUTO: AutoHint[] = [
       if (w === 'aargm') {
         const e = hostileDesignated(p, s);
         if (!e || !armTargetable(e)) return 'AARGM homes on radars: designate an emitting SAM with TGT, then fire';
+        if (Math.hypot(e.position.x - p.position.x, e.position.z - p.position.z) > AARGM_CLOSE_RANGE) return 'Close in: fire the AARGM inside 10 km, while its radar is on';
         const z = h.zone(p, s);
-        if (z && z.shoot) return 'SHOOT — fire the AARGM: it keeps homing even if the radar shuts down';
-        return 'Close in: fire the AARGM when SHOOT shows';
+        if (z && z.shoot) return 'SHOOT — fire the AARGM, then press straight in while its radar is quiet';
+        return 'Fire the AARGM when SHOOT shows: its radar must be on';
       }
       if (w === 'gbu31' || w === 'gbu53') {
         const b = s.world.combat.bombImpactPoint(p, s.world);

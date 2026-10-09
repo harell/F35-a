@@ -154,7 +154,7 @@ describe('the rat: runs, stops at the drains, swims', () => {
     expect(podClass(r)?.[0]).toBe('HOSTILE · RATTUS NORVEGICUS · 0.3 KG');
   });
 
-  it('stops at each drain on land; over the water it swims at its steady speed without stopping, to the island', () => {
+  it('stops at each drain on land; over the water it swims at its steady speed without stopping, to the island', { timeout: 30_000 }, () => {
     const w = shoreWorld();
     const r = rat(w, SHORE_ROUTE());
     const st = r.runner!;

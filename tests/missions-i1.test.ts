@@ -330,7 +330,8 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     const t06 = byId('t06');
     const t3 = [...t06.briefing, ...(t06.script.hints ?? []).map((x) => x.text), ...t06.script.triggers.flatMap((tr) => tr.actions.map((a) => ('text' in a ? a.text : '')))].join(' ');
     // (one CMS control drops chaff and flares together on every input: #62)
-    for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /6 s to impact/i, /every (two or three|2–3) s/i, /300 ft/]) expect(t3).toMatch(k);
+    // (250 ft: under the SA-6's 80 m engagement floor, the low run-in T06 teaches since playtest 2026-10-10)
+    for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /6 s to impact/i, /every (two or three|2–3) s/i, /250 ft/]) expect(t3).toMatch(k);
   });
 });
 

@@ -219,8 +219,7 @@ export function buildCodex(opts: { initial?: string | null } = {}): CodexView {
       const t = h('table', { class: 'cx-table' });
       t.innerHTML =
         '<thead><tr><th>Missile type</th><th>Fired by</th><th>What works</th></tr></thead><tbody>' +
-        '<tr><td>Heat-seeking missiles</td><td>Air-defence boats</td><td>A hard turn across it, CMS late (last 3 s)</td></tr>' +
-        '<tr><td>Heat-seeking missiles</td><td>Fighters\' short-range missiles</td><td>Flares, then break hard into it</td></tr>' +
+        '<tr><td>Heat-seeking missiles</td><td>Air-defence boats, fighters\' short-range missiles</td><td>A hard turn across it, afterburner off, CMS late (last 3 s)</td></tr>' +
         '<tr><td>Radar missiles</td><td>Most SAMs</td><td>Turn 90° to it, CMS every 2–3 s from about 6 s</td></tr>' +
         '<tr><td>Radar missiles</td><td>Fighters\' long-range missiles</td><td>Chaff, then turn 90° to it and dive</td></tr></tbody>';
       out.push(card('What it works against', t, h('p', { class: 'cx-note', text: 'An orange arrow in the MISSILE ring means a heat-seeker. One press drops both kinds, so you don\'t need to choose.' })));

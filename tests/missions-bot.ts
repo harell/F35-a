@@ -8,7 +8,8 @@
  *  - air-to-ground: picks the next live target of an active objective (primary first; a Tor
  *    guarding it goes first), selects AARGM against emitters / SDB II / JDAM, designates it
  *    with the sensors a human has (the target must be a contact), releases on the launch-zone cue
- *    (the StormBreaker glides from far out and also follows a mover);
+ *    (the StormBreaker glides from far out and also follows a mover; the AARGM goes as the game teaches
+ *    it, AARGM_RULE: from low and inside ARM_RELEASE, and the bot presses on to the next target behind it);
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
  *  - weather: under an overcast deck (cloudBase) it attacks from below the cloud, as a human must to
  *    see the target (g03's target only appears under the deck), and plans its releases for that height;
@@ -19,7 +20,7 @@
  */
 import { Vector3 } from 'three';
 import { AKL } from '../src/core/auckland';
-import { DIFFICULTIES } from '../src/core/data';
+import { AARGM_CLOSE_RANGE, DIFFICULTIES } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import type { MissionDef, MissionResult, MissionRunnerApi } from '../src/core/contracts';
 import { isHostile, type Difficulty, type LoadoutId, type WeaponId } from '../src/core/types';
@@ -50,6 +51,9 @@ type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
 const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu31'];
 /** Height above a small target (m) the bot attacks it from, with no deck overhead (t07's rats). */
 const SMALL_TARGET_ALT = 1_200;
+
+/** The bot's AARGM release range (m): inside the rule the game teaches (AARGM_CLOSE_RANGE), with a margin. */
+export const ARM_RELEASE = AARGM_CLOSE_RANGE - 2_000;
 
 /** SDB-class glide bombs (GBU-53/B): pressed in to SDB_PRESS_RANGE. */
 const isSdb = (w: AgWeapon): boolean => w === 'gbu53';
@@ -288,7 +292,8 @@ export class MissionBot {
       if (!wt) continue; // e.g. only AARGMs left and a silent / optical site
       // a moving boat is only covered by a bomb aimed at it, not by a blast meant for its neighbour
       const boat = isBoat(t);
-      const busy = isSdb(wt) && (boat ? this.bombOnTheWay(t) : this.bombInbound(t));
+      // (an AARGM on its way: on to the next target, as the rule says, not an egress)
+      const busy = wt === 'aargm' ? this.bombOnTheWay(t) : isSdb(wt) && (boat ? this.bombOnTheWay(t) : this.bombInbound(t));
       let d = t.position.distanceTo(p.position);
       if (boat) d += boatRank(t) * 1e6 + (this.bombOnTheWay(t) ? 1e7 : 0);
       if ((bestBusy && !busy) || (busy === bestBusy && d < bestD)) {
@@ -849,8 +854,9 @@ export class MissionBot {
    */
   private releaseRange(weapon: AgWeapon, t?: AnyEntity): number {
     if (t && isSmallGround(t) && this.deck === null) return 4_000;
-    if (this.deck !== null) return weapon === 'gbu31' ? 4_000 : isSdb(weapon) ? 6_000 : 15_000;
-    return weapon === 'gbu31' ? 9_500 : isSdb(weapon) ? 21_000 : 28_000;
+    if (weapon === 'aargm') return ARM_RELEASE;
+    if (this.deck !== null) return weapon === 'gbu31' ? 4_000 : 6_000;
+    return weapon === 'gbu31' ? 9_500 : 21_000;
   }
 
   /**
@@ -885,7 +891,7 @@ export class MissionBot {
       }
     }
     // under an overcast deck the run-in is short (the target is found from below the cloud, close in)
-    const out = rel + (this.deck !== null || isSmallGround(t) ? 2_000 : 7_000);
+    const out = rel + (this.deck !== null || isSmallGround(t) || weapon === 'aargm' ? 2_000 : 7_000);
     const ip = new Vector3(t.position.x + Math.sin(best) * out, 0, t.position.z - Math.cos(best) * out);
     this.ips.set(t.id, ip);
     return ip;
@@ -967,6 +973,8 @@ export class MissionBot {
     let alt = Math.min(8_500, Math.max(ground + 7_000, t.position.y + 7_000));
     if (this.deck !== null) alt = Math.min(alt, this.deck - 300);
     else if (isSmallGround(t)) alt = t.position.y + SMALL_TARGET_ALT;
+    // an AARGM run-in: no climb into the site's envelope (the lesson's "low, then the AARGM close in")
+    if (weapon === 'aargm') alt = Math.min(alt, Math.max(p.position.y, ground + 100));
     // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
     // until it stops (a release now would land where it was), instead of overflying it into the defences
     if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) {
@@ -1001,7 +1009,8 @@ export class MissionBot {
     let ok: boolean;
     if (weapon === 'aargm') {
       const z = c.launchZone(p, w);
-      ok = !!z && z.shoot;
+      // (while its radar is on, as the rule says; a silent site only known from before, once close in)
+      ok = !!z && z.shoot && R <= ARM_RELEASE && t.kind === 'sam' && (t.radarOn || R <= ARM_RELEASE - 2_000);
     } else {
       const b = c.bombImpactPoint(p, w);
       // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
