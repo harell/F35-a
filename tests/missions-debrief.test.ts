@@ -15,8 +15,8 @@ import { AKL } from '../src/core/auckland';
 import { DIFFICULTIES } from '../src/core/data';
 import type { MissionDef, MissionResult } from '../src/core/contracts';
 import { PLAYABLE_CAMPAIGNS, TRAINING, buildInstantMissionSeeded, missionById, nextMissionLabel, validateMission } from '../src/missions';
-import { computeScore, type ScoreInput } from '../src/missions/runtime/scoring';
-import { buildTips, hasAirToAirObjective } from '../src/missions/runtime/debrief';
+import { computeScore, gradeRank, type ScoreInput } from '../src/missions/runtime/scoring';
+import { buildTips, hasAirToAirObjective, hasShootingObjective } from '../src/missions/runtime/debrief';
 import { MissionState } from '../src/missions/runtime/state';
 import { flatLand, harness, killGroup, shieldPlayer, stubAi } from './missions-helpers';
 
@@ -90,6 +90,35 @@ describe('#64: no fight, no credit', () => {
     expect(r.medals!.map((m) => m.id)).not.toContain('no_hits');
     // the debrief says why it is a C (review: the notes box was empty)
     expect(r.tips).toContain('You won without firing a shot: S and A grades need you in the fight — engage the bandits yourself.');
+  });
+
+  it("end to end: T05's drills (nothing to shoot) passed without a shot aren't an idle win; skipped drills grade lower (r3.1 R31-3)", () => {
+    const run = (skip: number) => {
+      const h = harness(byId('t05'));
+      h.run(1, () => shieldPlayer(h));
+      h.runner.objectives.forEach((o, i) => {
+        o.state = 'complete';
+        if (i < skip) o.skipped = true;
+      });
+      h.run(1, () => shieldPlayer(h));
+      expect(h.runner.state).toBe('success');
+      const r = h.runner.result(h.world);
+      expect(r.shotsFired).toBe(0);
+      return r;
+    };
+    const passed = run(0);
+    // T05's boats count as hostiles: the old rule called the pass a no-fight win, capped at C
+    expect(passed.tips!.some((t) => /without firing a shot|need you in the fight/.test(t)), JSON.stringify(passed.tips)).toBe(false);
+    expect(['S', 'A', 'B']).toContain(passed.grade);
+    const skipped = run(2);
+    expect(skipped.reason).toMatch(/^Drills 1–2 skipped/);
+    expect(skipped.tips!.some((t) => /without firing a shot/.test(t))).toBe(false);
+    expect(gradeRank(skipped.grade)).toBeLessThan(gradeRank(passed.grade));
+  });
+
+  it('only T01 (no hostiles) and T05 (the defence drills) have nothing to shoot', () => {
+    const all = [...CAMPAIGN, ...TRAINING];
+    expect(all.filter((m) => !hasShootingObjective(m.script)).map((m) => m.id)).toEqual(['t01', 't05']);
   });
 
   it('end to end: one shot that hit nothing still caps at C, gets no Untouchable, and the tip says why', () => {

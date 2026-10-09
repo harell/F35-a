@@ -114,12 +114,31 @@ export function sightseeingRows(r: MissionResultExt): [string, string, string][]
   return rows;
 }
 
+type DebriefOutcome = Pick<MissionResult, 'success' | 'campaignComplete' | 'freeFlight'> & Partial<Pick<MissionResult, 'objectives'>>;
+
+/**
+ * A lesson the coach moved the player on from (drills skipped, ObjectiveStatus.skipped): it ended,
+ * but wasn't passed, and isn't recorded as flown (playtest r3.1 R31-3).
+ */
+export function lessonIncomplete(r: DebriefOutcome): boolean {
+  return r.success && !!r.objectives?.some((o) => o.skipped);
+}
+
+/** The debrief's headline. */
+export function debriefBanner(r: DebriefOutcome): string {
+  if (r.freeFlight) return 'FLIGHT OVER';
+  if (!r.success) return 'MISSION FAILED';
+  if (lessonIncomplete(r)) return 'LESSON INCOMPLETE';
+  return r.campaignComplete ? 'CAMPAIGN COMPLETE' : 'MISSION ACCOMPLISHED';
+}
+
 /**
  * The debrief's primary (highlighted, focused) button: the campaign ending after the last win, NEXT
- * when there is a next mission or lesson, MENU after any other win, RETRY after a failure.
+ * when there is a next mission or lesson, MENU after any other win, RETRY after a failure or a lesson
+ * with skipped drills (NEXT stays, as a plain button).
  */
-export function debriefPrimary(r: Pick<MissionResult, 'success' | 'campaignComplete'>, hasNext: boolean): 'ending' | 'next' | 'retry' | 'menu' {
-  if (!r.success) return 'retry';
+export function debriefPrimary(r: DebriefOutcome, hasNext: boolean): 'ending' | 'next' | 'retry' | 'menu' {
+  if (!r.success || lessonIncomplete(r)) return 'retry';
   if (r.campaignComplete) return 'ending';
   return hasNext ? 'next' : 'menu';
 }
@@ -161,7 +180,7 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
     // ── left: banner + grade + score ──
     const left = h('div', { class: 'db-left' });
     // free flight (A Stroll in the Park): 'FLIGHT OVER', no grade or score, nothing to beat
-    const banner = r.freeFlight ? 'FLIGHT OVER' : r.success ? (r.campaignComplete ? 'CAMPAIGN COMPLETE' : 'MISSION ACCOMPLISHED') : 'MISSION FAILED';
+    const banner = debriefBanner(r);
     left.innerHTML =
       `<div class="db-banner"><span class="db-b-line"></span><span class="db-b-t">${banner}</span><span class="db-b-line"></span></div>` +
       `<div class="db-mission">${escapeHtml(r.title)}</div>` +
@@ -310,6 +329,11 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       next.addEventListener('click', () => finish('next'));
       foot.appendChild(next);
       focusEl = next;
+    } else if (nextLabel !== null && lessonIncomplete(r)) {
+      // drills skipped: RETRY leads, the next lesson is still there
+      const next = h('button', { class: 'ui-btn', attrs: { type: 'button' }, html: `<span>${escapeHtml(nextLabel)}</span>${icon('next')}` });
+      next.addEventListener('click', () => finish('next'));
+      foot.appendChild(next);
     }
     el.appendChild(foot);
     host.present(el, { bg: true, back: () => (closeSheet?.() ? undefined : finish('menu')), focus: focusEl });

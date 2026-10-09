@@ -31,7 +31,7 @@ import { activateObjective, createObjectives, failOpenObjectives, markObjectiveT
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
-import { awardMedals, buildTips, codexTopic, deathReason } from './runtime/debrief';
+import { awardMedals, buildTips, codexTopic, deathReason, hasShootingObjective } from './runtime/debrief';
 import { WinchesterWatch } from './runtime/winchester';
 import { costSummary } from './runtime/costs';
 import { WithdrawalMonitor } from './runtime/withdrawal';
@@ -294,9 +294,11 @@ class MissionRunnerImpl implements MissionRunnerApi {
       time,
       parTime: parTimeFor(this.def),
       kills: { ...s.kills },
-      enemiesSpawned: s.enemiesSpawned,
+      // nothing to shoot (T05's drills: the boats only fire practice rounds): not a fight the grade weighs
+      enemiesSpawned: hasShootingObjective(s.script) ? s.enemiesSpawned : 0,
       objectiveBonus: sum.bonus,
-      primaryDone: sum.primaryDone,
+      // a drill the coach moved the player on from wasn't passed
+      primaryDone: sum.primaryDone - sum.primarySkipped,
       primaryTotal: sum.primaryTotal,
       secondaryDone: sum.secondaryDone,
       secondaryTotal: sum.secondaryTotal,

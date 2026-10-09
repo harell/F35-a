@@ -111,6 +111,15 @@ export function hasAirToAirObjective(script: Pick<MissionScript, 'objectives' | 
 }
 
 /**
+ * The mission gives the player something to shoot: a destroy, intercept or protect objective. T05's
+ * missile drills (boats firing practice rounds, nothing to kill) and T01's rings don't, so winning
+ * them without a shot is no idle win (playtest r3.1 R31-3).
+ */
+export function hasShootingObjective(script: Pick<MissionScript, 'objectives'>): boolean {
+  return script.objectives.some((o) => o.kind === 'destroy' || o.kind === 'destroy_sams' || o.kind === 'intercept' || o.kind === 'protect');
+}
+
+/**
  * The fallback tip after a loss: the lessons this mission asks for (MissionDef.lessons, the ones the
  * Training screen points at), by the number and name players see; a mission without any (a lesson,
  * Instant Action) gets the general advice.
@@ -171,7 +180,7 @@ export function buildTips(s: MissionState, r: MissionResult): string[] {
   }
 
   // a win capped at C because the player wasn't in the fight: say so first, it explains the grade
-  const idle = r.success && noFight({ enemiesSpawned: s.enemiesSpawned, hits: r.hits, kills: r.kills });
+  const idle = r.success && hasShootingObjective(s.script) && noFight({ enemiesSpawned: s.enemiesSpawned, hits: r.hits, kills: r.kills });
   if (idle)
     add(`You won without ${r.shotsFired > 0 ? 'landing a hit' : 'firing a shot'}: S and A grades need you in the fight — engage the bandits yourself.`);
 

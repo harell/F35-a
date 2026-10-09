@@ -347,12 +347,15 @@ export function objectiveSummary(s: MissionState): {
   primaryTotal: number;
   primaryDone: number;
   primaryFailed: ObjectiveRt | null;
+  /** Of primaryDone, the ones the coach moved the player on from (ObjectiveStatus.skipped). */
+  primarySkipped: number;
   secondaryTotal: number;
   secondaryDone: number;
   bonus: number;
 } {
   let primaryTotal = 0;
   let primaryDone = 0;
+  let primarySkipped = 0;
   let secondaryTotal = 0;
   let secondaryDone = 0;
   let bonus = 0;
@@ -362,6 +365,7 @@ export function objectiveSummary(s: MissionState): {
     if (o.def.primary) {
       primaryTotal++;
       if (done) primaryDone++;
+      if (done && o.status.skipped) primarySkipped++;
       if (o.status.state === 'failed' && !primaryFailed) primaryFailed = o;
     } else {
       secondaryTotal++;
@@ -369,7 +373,7 @@ export function objectiveSummary(s: MissionState): {
     }
     if (done && !o.status.skipped) bonus += earnedBonus(o);
   }
-  return { primaryTotal, primaryDone, primaryFailed, secondaryTotal, secondaryDone, bonus };
+  return { primaryTotal, primaryDone, primaryFailed, primarySkipped, secondaryTotal, secondaryDone, bonus };
 }
 
 /** Debrief tallies of protect objectives that ask for one (`tally`): survivors of the group. */
