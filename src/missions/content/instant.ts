@@ -324,6 +324,14 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
           delay: 50,
           actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. From stand-off range StormBreakers glide up to two minutes. Stay clear of the defences meanwhile.`, priority: 2 }],
         },
+        {
+          // after an AARGM kills a site the run out to a stand-off release point was 107-115 s of silence
+          // on Veteran (playtest 2026-10-10, #283): Darkstar speaks up partway through it
+          id: 't_sam_down',
+          when: { kind: 'player_kills', count: 1, category: 'sam' },
+          delay: 45,
+          actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Their air defence has a hole in it now. Set up your stand-off run on the parked jets.`, priority: 2 }],
+        },
       ];
       break;
     }

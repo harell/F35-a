@@ -161,13 +161,14 @@ const IA_IDS = ['ia_strike_auckland', 'ia_sam_gauntlet_auckland', 'ia_dogfight_a
  * longest dead stretch of any run (tests/missions-pacing.ts). Every run has to end: Strike on Veteran used to circle out of bombs until the
  * sweep gave up (4 of 6), Defend on Pilot once (playtest r1, 1.3-h and 1.3-i).
  */
-async function wins(id: string, diff: Difficulty): Promise<{ won: number; samShot: number; underFire: number; hit: number; dead: number; log: string }> {
+async function wins(id: string, diff: Difficulty): Promise<{ won: number; samShot: number; underFire: number; hit: number; dead: number; quietRuns: number; log: string }> {
   const log: string[] = [];
   let won = 0;
   let samShot = 0;
   let underFire = 0;
   let hit = 0;
   let dead = 0;
+  let quietRuns = 0;
   for (let seed = 0; seed < 6; seed++) {
     const r = runPlaythrough(id, diff, seed, terrainFor(id), { maxT: 900, log: true });
     await yieldToVitest();
@@ -182,10 +183,11 @@ async function wins(id: string, diff: Difficulty): Promise<{ won: number; samSho
     if (hurt) hit++;
     const quiet = longestDeadStretch(r.events, r.t);
     dead = Math.max(dead, quiet.length);
+    if (quiet.length > MAX_DEAD_STRETCH) quietRuns++;
     log.push(`${id} ${diff} seed ${seed}: ${r.state}@${Math.round(r.t)}s ${r.reason ?? ''}, ${shots} SAM rounds and ${rounds} in all at the jet${hurt ? ', hit' : ''}, longest silence ${deadStretchText(quiet)}`);
     expect(r.state, log.join('\n')).not.toBe('running');
   }
-  return { won, samShot, underFire, hit, dead, log: log.join('\n') };
+  return { won, samShot, underFire, hit, dead, quietRuns, log: log.join('\n') };
 }
 
 /**
@@ -232,6 +234,9 @@ describe('Instant Action balance bands over 6 seeds (issue #60, playtest r1 and 
         }
         // Strike's glide isn't silent (playtest r2, 2.3-e: 106-127 s in 17 of 18 runs)
         if (id === 'ia_strike_auckland' && diff !== 'veteran') expect(r.dead, r.log).toBeLessThanOrEqual(MAX_DEAD_STRETCH);
+        // nor is Veteran's run out to the stand-off point after an AARGM kill (playtest 2026-10-10: 4 of 6
+        // runs over the bar; with Darkstar's call 45 s after the first SAM kill, 1 of 6)
+        if (id === 'ia_strike_auckland' && diff === 'veteran') expect(r.quietRuns, r.log).toBeLessThanOrEqual(1);
       }
       // the Gauntlet is flown through SAMs: one fires at the jet in most runs (r1: none on Recruit, 6 of 6)
       if (id === 'ia_sam_gauntlet_auckland') {
