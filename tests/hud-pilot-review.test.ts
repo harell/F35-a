@@ -12,7 +12,7 @@ import type { CameraMode } from '../src/core/types';
 import { createHud } from '../src/hud/Hud';
 import { buildMock, type Scenario } from '../src/hud/dev/mockWorld';
 import { installPath2D, makeFakeCanvas, overlaps, textBox, type Box, type TextRec } from '../src/hud/dev/fakeCanvas';
-import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
+import { computeLayout, controlRects, makeLayout } from '../src/hud/hmd/layout';
 import { entityLabel, groundLabel } from '../src/hud/hmd/format';
 import { AircraftEntity, GroundTargetEntity, MissileEntity } from '../src/sim/entities';
 import type { MunitionDef } from '../src/sim/entities';
@@ -208,6 +208,38 @@ describe('#116 collisions: brevity, seeker and gun labels vs the target box', ()
 });
 
 describe('#116 collisions: incoming missiles, waterline, wingmen, bank arc, CIV labels', () => {
+  it('r1 1.2-j: the off-screen cue\'s text never prints under a touch control (AD BOAT read "D BOAT" under the throttle)', () => {
+    const bad: string[] = [];
+    let seen = 0;
+    for (const view of ['hud', 'cockpit', 'chase'] as CameraMode[]) {
+      for (const off of [0.9, Math.PI / 2, 2.4]) {
+        for (let a = 0; a < 16; a++) {
+          const r = rig('ag', view);
+          const p = r.mock.player;
+          const fuel = r.mock.world.ground.find((g) => g.type === 'fuel')!;
+          const ang = (a / 16) * Math.PI * 2;
+          const dir = new Vector3(Math.sin(ang) * Math.sin(off), Math.cos(ang) * Math.sin(off), -Math.cos(off)).applyQuaternion(p.quaternion);
+          fuel.position.copy(p.position).addScaledVector(dir, 9000);
+          p.radar.designatedId = fuel.id;
+          p.radar.lockedId = null;
+          const texts = r.run(1 / 30);
+          const rects = controlRects();
+          expect(rects.length).toBeGreaterThan(0);
+          const deg = texts.find((t) => t.size === 12.5 && /^\d+°$/.test(t.text));
+          if (!deg) continue;
+          seen++;
+          // the cue's block: the angle-off line and the lines under it, on the same centre
+          for (const t of texts.filter((o) => Math.abs(o.x - deg.x) < 0.5 && o.y >= deg.y - 0.5 && o.y <= deg.y + 45)) {
+            const b = textBox(t);
+            for (const rc of rects) if (overlaps(b, { x0: rc.x, y0: rc.y, x1: rc.x + rc.w, y1: rc.y + rc.h }, 0)) bad.push(`${view} ${a * 22.5}° ${((off * 180) / Math.PI) | 0}° off: "${t.text}"@${t.x | 0},${t.y | 0}`);
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(60);
+    expect(bad).toEqual([]);
+  }, 60_000);
+
   it('1.2-d: the off-screen cue\'s text never runs into an incoming missile\'s arrow / TTI, whatever its bearing', () => {
     const bad: string[] = [];
     for (const view of ['hud', 'cockpit'] as CameraMode[]) {
