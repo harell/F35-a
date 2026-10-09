@@ -73,6 +73,8 @@ const TAC_PICK_RADIUS = 26;
 
 /** Seconds a lesson's objectives summary waits for the column to stay clear of hints before it shows. */
 const OBJ_SETTLE = 0.4;
+/** Back from a hint with less than this (s) of its time left, a lesson's summary is done: no short flash of the rest. */
+const OBJ_MIN_RUN = 2;
 
 /** A rect in CSS px: left, top, width, height. */
 export type HudRect = [number, number, number, number];
@@ -602,12 +604,14 @@ export const createHud: CreateHud = (canvas, events) => {
         // a lesson's hint outranks the objectives summary: when both (and the damage block between them)
         // don't fit under the radio, the summary waits, its time held, until no hint is up — even if a
         // radio call ends meanwhile, so it doesn't toggle with the radio — and then a moment longer,
-        // so a hint that arrives just after doesn't flash it (playtest 2026-10-02, 4.2-c)
+        // so a hint that arrives just after doesn't flash it (playtest 2026-10-02, 4.2-c); a remainder
+        // under OBJ_MIN_RUN is dropped rather than flashed
         if (ctx.mission?.def?.kind === 'training') {
           const need = hintHeight(f, L.colW);
           if (need === 0) st.objYield = false;
           else if (!st.objYield) st.objYield = drawObjectives(f, L.colX, colY, false, L.colW, 6, true) + damageHeight(f) + need > hintMax;
           objHold = st.objYield || st.objFree < OBJ_SETTLE;
+          if (!objHold && st.objHold && st.objShow < OBJ_MIN_RUN) st.objShow = 0;
         }
         if (!objHold) colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
         colY = drawDamage(f, L.colX, colY);

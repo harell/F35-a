@@ -11,7 +11,9 @@
  *  - SDB / JDAM: designate with TGT, release IN RANGE (a StormBreaker at a target too small to track
  *    on the move, g03's stoat or t07's rats: once it stops);
  *  - an A/A weapon selected while a surface objective is near: which A/G store to select.
- * Texts stay short; the HUD decides visibility (Settings.hints).
+ * A mission's scripted hints come first: a weapon hint waits while a scripted hint naming the selected
+ * weapon has yet to show (the lesson's own step on it). Texts stay short; the HUD decides visibility
+ * (Settings.hints).
  */
 import { AARGM_CLOSE_RANGE, WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
@@ -242,6 +244,9 @@ const AUTO: AutoHint[] = [
   },
 ];
 
+/** The built-in rules that coach the selected weapon: they wait for the script's own step on it (scriptTeaches). */
+const WEAPON_RULES: ReadonlySet<string> = new Set(['aa', 'ag']);
+
 /** Built-in rule by id (allocation-free lookup; evaluated at 10 Hz). */
 function ruleById(id: string): AutoHint | null {
   for (let i = 0; i < AUTO.length; i++) if (AUTO[i].id === id) return AUTO[i];
@@ -381,6 +386,17 @@ export class HintSystem {
     return false;
   }
 
+  /**
+   * A scripted hint that names weapon `w` has yet to show: the lesson teaches that weapon at its own
+   * step, so the built-in hints on it wait for that (playtest r2 2.1-f: T06's 'Close in: fire the AARGM'
+   * showed at 1.3 s, before its 'Go LOW', and again at 2,950 ft, before its own AARGM step).
+   */
+  private scriptTeaches(w: WeaponId): boolean {
+    const name = WEAPON_INFO[w].short;
+    for (const h of this.s.script.hints ?? []) if (!this.scriptedDone.has(h.id) && h.text.includes(name)) return true;
+    return false;
+  }
+
   private tryAuto(p: AircraftEntity, alwaysOnly: boolean): boolean {
     const s = this.s;
     const t = s.time;
@@ -389,6 +405,7 @@ export class HintSystem {
       if (!alwaysOnly && rule.always) continue;
       if (!rule.always && (this.shows.get(rule.id) ?? 0) >= MAX_SHOWS) continue;
       if (t - (this.lastShown.get(rule.id) ?? -999) < (rule.cooldown ?? COOLDOWN)) continue;
+      if (WEAPON_RULES.has(rule.id) && this.scriptTeaches(p.selectedWeapon)) continue;
       const text = rule.test(p, s, this);
       if (!text) continue;
       this.shows.set(rule.id, (this.shows.get(rule.id) ?? 0) + 1);
