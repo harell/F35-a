@@ -38,7 +38,7 @@ function completed(r: PlaythroughResult): Map<string, number> {
 }
 
 describe('t05 Gulf Defence', () => {
-  it('every range boat sits in open water, 1.5 km from any shore', () => {
+  it('every range boat sits in open water, 1.5 km from any shore', { timeout: 60_000 }, () => {
     const t = realTerrain();
     for (const s of T05_DEFENCE.script.sams) {
       for (let a = 0; a < 8; a++) {

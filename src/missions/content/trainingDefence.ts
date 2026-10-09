@@ -29,8 +29,8 @@ const DS = 'DARKSTAR';
 
 /** The drills' boats and points (m). Boats in open water at least 1.5 km from any shore (LINZ coast). */
 export const DEFENCE = {
-  /** 13 km south-west of drill 1's boat at 10,000 ft, nose on it: the first shot comes within half a minute. */
-  start: { x: 14000, z: -25000 },
+  /** 13.5 km west of drill 1's boat at 10,000 ft, nose on it (and outside drill 2's ring): the first shot comes within half a minute. */
+  start: { x: 16000, z: -21000 },
   /** Drill 1: one boat. */
   b1: { x: 26000, z: -30000 },
   /** Drill 2: one boat, and the IP 8.5 km east of it where the jet gets down low first. */
