@@ -361,4 +361,20 @@ describe('combat: RWR & MAWS', () => {
     w.run(0.1);
     expect(w.combat.irSeekerState(f35).state).toBe('off');
   });
+
+  it('IR seeker: the boresight search never takes civil traffic; a designated civil contact is still the player\'s call', () => {
+    // playtest 2026-10-10: a Shahed too cold to see at range left the player's AIM-9X searching, and it
+    // locked a sightseeing helicopter 3.8 km ahead (g01: 'CIVILIAN HELICOPTER DOWN')
+    const w = new FakeWorld();
+    const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 3000, 0), heading: 0, speed: 250, loadout: 'a2a_beast' });
+    const heli = w.spawnAircraft({ type: 'h130', team: 'neutral', position: v3(200, 3000, -2500), heading: 0, speed: 60 });
+    w.combat.selectWeapon(f35, 'aim9x', w);
+    w.run(0.3);
+    expect(w.combat.irSeekerState(f35).state).toBe('search');
+    f35.radar.designatedId = heli.id;
+    w.run(0.3);
+    const s = w.combat.irSeekerState(f35);
+    expect(s.state).toBe('locked');
+    expect(s.targetId).toBe(heli.id);
+  });
 });

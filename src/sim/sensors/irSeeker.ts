@@ -4,7 +4,8 @@
  * With an IR missile selected the seeker is slaved to the designated target (HMD cue, up to the
  * missile's off-boresight gimbal: 90° AIM-9X, 60° R-73) and locks when the target's IR
  * signature is strong enough at that range (tail aspect / afterburner easier). With no usable
- * designation it searches a ±25° boresight cone for the hottest-in-range hostile.
+ * designation it searches a ±25° boresight cone for the hottest-in-range hostile (never civil traffic:
+ * the player shoots that only by designating it).
  */
 import { Vector3 } from 'three';
 import { forwardOf } from '../../core/math';
@@ -50,9 +51,11 @@ export function updateIrSeeker(ctx: CombatCtx, ac: AircraftEntity, st: AcCombatS
   const des = ctx.world.getEntity(ac.radar.designatedId);
   if (des && des.kind === 'aircraft' && irSeekerSees(ctx, def, ac, des, gimbalCos) > -2) targetId = des.id;
   if (targetId === null) {
+    // the boresight search takes hostiles only: civil traffic is shot only by designating it (a Shahed too
+    // cold to see at 3.8 km left the player's AIM-9X on a sightseeing helicopter, playtest 2026-10-10)
     let best = -2;
     for (const t of ctx.world.aircraft) {
-      if (t === ac) continue;
+      if (t === ac || !isHostile(ac.team, t.team)) continue;
       const c = irSeekerSees(ctx, def, ac, t, BORESIGHT_COS);
       if (c > best) {
         best = c;
