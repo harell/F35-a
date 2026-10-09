@@ -125,6 +125,8 @@ describe('pod camera pose', () => {
     expect(d).toBeLessThanOrEqual(300);
     const toEye = eye.clone().sub(pose.look).normalize();
     expect(pose.position.clone().sub(pose.look).normalize().dot(toEye)).toBeGreaterThan(0.99999);
+    // looked at mid-body (~0.1 m tall), not 0.2 m over the ground
+    expect(pose.look.y - 34).toBeLessThan(0.08);
     // the 0.38 m stoat spans over a third of the 82 px window
     const fov = podFov(POD_ZOOM[ZOOM].span, d);
     expect(spanPx(pose, pose.look, 0.38, 82, fov)).toBeGreaterThan(82 / 3);

@@ -337,10 +337,14 @@ export function podFov(span: number, dist: number): number {
   return Math.min(TARGET_CAM_FOV, (2 * Math.atan(span / (2 * dist)) * 180) / Math.PI);
 }
 
-/** Look-at height (m above the entity origin) of a pod shot: the middle of the vehicle / site. */
+/**
+ * Look-at height (m above the entity origin) of a pod shot: the middle of the vehicle / site; for an
+ * animal under a metre across (g03's stoat, t07's rats: a 0.2 m radius, a body ~0.1 m tall) 0.3 of its
+ * radius, so at ZOOM its body sits in the crosshair's gap instead of under the lower arm.
+ */
 export function podLookY(t: CamTarget): number {
   if (t.kind === 'sam') return SAM_FRAMING[t.type as SamType]?.lookY ?? 2.5;
-  return groundLookY(t.radius);
+  return t.radius < 1 ? t.radius * 0.3 : groundLookY(t.radius);
 }
 
 /**
