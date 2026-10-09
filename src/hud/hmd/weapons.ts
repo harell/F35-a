@@ -6,6 +6,7 @@
  */
 import { DEG, G, dirFromHeadingPitch, forwardOf, rightOf, toKnots, upOf } from '../../core/math';
 import type { Vector3 } from 'three';
+import type { MissileEntity } from '../../sim/entities';
 import type { WeaponId } from '../../core/types';
 import type { BombCue } from '../../sim/api';
 import { dlzLayout, makeDlzGeometry } from './dlz';
@@ -264,6 +265,33 @@ export function placeCueLine(f: HudFrame, text: string, size: number, yPref: num
 
 /* ───────────────────────── Centre cue lines (SHOOT / IN RANGE / FOX 3) ───────────────────────── */
 
+/** Newest live player missile (or bomb) guiding on `targetId`. */
+export function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | null {
+  let best: MissileEntity | null = null;
+  for (const m of f.world.missiles) {
+    if (!m.alive || m.shooterId !== f.p.id || m.targetId !== targetId) continue;
+    if (!best || m.age < best.age) best = m;
+  }
+  return best;
+}
+
+/** "AMRAAM AWAY": the cue while our missile guides on the target (not "MISSILE …", the inbound warning's word). */
+const AWAY = Object.fromEntries(Object.entries(WEAPON_HUD).map(([k, v]) => [k, `${v} AWAY`])) as Record<WeaponId, string>;
+
+/**
+ * SHOOT is held back while a missile aimed at the player is this close to impact (s): defence first,
+ * the DAS ring and the MISSILE warning own the moment (playtest r1 1.2-f).
+ */
+export const SHOOT_HOLD_TTI = 10;
+
+/** A missile inbound on the player with under SHOOT_HOLD_TTI seconds to go. */
+function defending(f: HudFrame): boolean {
+  const inc = f.p.incoming;
+  if (!inc) return false;
+  for (let i = 0; i < inc.length; i++) if (inc[i].timeToImpact < SHOOT_HOLD_TTI) return true;
+  return false;
+}
+
 interface CueLine {
   text: string;
   size: number;
@@ -301,12 +329,16 @@ export function planCues(f: HudFrame): number {
   const { pal, st, p, L } = f;
   const z = f.zone;
   // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
-  // never lands on the target box that the pipper is tracking)
-  if (z && z.shoot && !WEAPON_IS_BOMB[z.weapon]) addCue('SHOOT', 20, pal.bright, 4);
+  // never lands on the target box that the pipper is tracking). Our missile already guiding on the
+  // target: AMRAAM AWAY instead, steady, so a second missile isn't wasted on it (playtest r1 1.2-g);
+  // the gun keeps its SHOOT. Nothing while a missile inbound is close (defending: 1.2-f).
+  const sel = p.selectedWeapon;
+  const own = f.target && sel !== 'gun' && !WEAPON_IS_BOMB[sel] ? ownMissileOn(f, f.target.id) : null;
+  if (own && own.def.category !== 'bomb') addCue(AWAY[own.def.id as WeaponId] ?? AWAY.aim120, 15, pal.main, 0);
+  else if (z && z.shoot && !WEAPON_IS_BOMB[z.weapon] && !defending(f)) addCue('SHOOT', 20, pal.bright, 4);
   // bombs: release cue. The GPS cue (REL n / IN RANGE, the wording the briefings and hints use) shows
   // in every view, chase included; the CCIP cue goes with its pipper, which only the HMD draws
-  const w = p.selectedWeapon;
-  if (WEAPON_IS_BOMB[w]) {
+  if (WEAPON_IS_BOMB[sel]) {
     const bi = bombInfo(f);
     if (bi) {
       if (p.radar.groundPoint) {

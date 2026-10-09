@@ -669,6 +669,37 @@ describe('bomb release cue in every view (playtest 1.3-a: none in the default ch
 
   it('the AMRAAM SHOOT cue and its mini DLZ still work in chase', () => {
     const r = rig('lock', 'chase');
+    r.mock.world.missiles.length = 0; // (the scene's own AMRAAM in flight reads AMRAAM AWAY)
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
+  });
+
+  it('our AMRAAM in flight at the target: AMRAAM AWAY, steady, instead of SHOOT (playtest r1 1.2-g)', () => {
+    for (const v of ['cockpit', 'hud', 'chase'] as const) {
+      const r = rig('lock', v);
+      const own = r.mock.world.missiles.filter((m) => m.shooterId === r.mock.player.id);
+      expect(own.length, v).toBe(1);
+      const texts = textsOver(r, 0.5);
+      expect(find(texts, 'SHOOT').length, v).toBe(0);
+      // drawn in every frame (no blink): a cue, not an invitation
+      expect(find(texts, 'AMRAAM AWAY').length, v).toBe(15);
+      // it hits (or is gone): SHOOT is back for the next shot
+      own[0].alive = false;
+      const after = textsOver(r, 0.5);
+      expect(find(after, 'AMRAAM AWAY').length, v).toBe(0);
+      expect(find(after, 'SHOOT').length, v).toBeGreaterThan(0);
+    }
+  });
+
+  it('no SHOOT while a missile inbound is under 10 s from impact: defence first (playtest r1 1.2-f)', () => {
+    const r = rig('lock', 'hud');
+    r.mock.world.missiles.length = 0;
+    const p = r.mock.player;
+    p.incoming = [{ missileId: 9999, bearing: 2, elevation: 0, distance: 5000, timeToImpact: 8, guidance: 'radar' }];
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBe(0);
+    // further out, the shot comes first
+    p.incoming[0].timeToImpact = 14;
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
+    p.incoming = [];
     expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
   });
 });

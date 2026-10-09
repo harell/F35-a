@@ -247,7 +247,7 @@ describe('#116 collisions: incoming missiles, waterline, wingmen, bank arc, CIV 
         const texts = r.run(1 / 30);
         const tti = find(texts, '32')[0];
         expect(tti, `${view} b ${b}`).toBeTruthy();
-        for (const c of [...find(texts, 'SHOOT'), ...find(texts, 'FOX 3')]) expect(overlaps(textBox(c), textBox(tti), 0), `${view} ${c.text} b ${b}`).toBe(false);
+        for (const c of [...find(texts, 'SHOOT'), ...find(texts, 'AMRAAM AWAY'), ...find(texts, 'FOX 3')]) expect(overlaps(textBox(c), textBox(tti), 0), `${view} ${c.text} b ${b}`).toBe(false);
       }
     }
   });
@@ -268,7 +268,7 @@ describe('#116 collisions: incoming missiles, waterline, wingmen, bank arc, CIV 
         const ny = ((1 - nose.y) / 2) * H;
         expect(Math.abs(ny - (L.cueY + dy))).toBeLessThan(2);
         const w: Box = { x0: nx - 15, y0: ny - 1, x1: nx + 15, y1: ny + 6 };
-        const cue = [...find(texts, /^REL \d+$/), ...find(texts, 'SHOOT'), ...find(texts, 'IN RANGE')];
+        const cue = [...find(texts, /^REL \d+$/), ...find(texts, 'SHOOT'), ...find(texts, 'AMRAAM AWAY'), ...find(texts, 'IN RANGE')];
         expect(cue.length, `${scene} dy ${dy}`).toBeGreaterThan(0);
         for (const c of cue) expect(overlaps(textBox(c), w, 0), `${scene} ${c.text} dy ${dy}`).toBe(false);
       }

@@ -16,7 +16,7 @@ import { glideTimeToGo, type MunitionDefLike } from '../../sim/weapons/dlz';
 import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
 import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
 import { hitsBankOrWaterline } from './flight';
-import { reticle } from './weapons';
+import { ownMissileOn, reticle } from './weapons';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
@@ -860,16 +860,6 @@ function slideOffColumns(f: HudFrame, x: number, hw: number, top: number, bot: n
     }
   }
   return x;
-}
-
-/** Newest live player missile guiding on `targetId`. */
-function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | null {
-  let best: MissileEntity | null = null;
-  for (const m of f.world.missiles) {
-    if (!m.alive || m.shooterId !== f.p.id || m.targetId !== targetId) continue;
-    if (!best || m.age < best.age) best = m;
-  }
-  return best;
 }
 
 /** "TTI 42" for our bomb on its target, "T 12" for a missile (seconds to impact, cached strings). */

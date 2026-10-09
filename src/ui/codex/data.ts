@@ -157,7 +157,7 @@ function buildWeapons(): WeaponEntry[] {
       line: 'Your long-range air-to-air missile. One hit kills any fighter. It does nothing to ground targets.',
       inspect: 'Clipped mid-body fins let four fit in the internal bays. Yellow band: live warhead. Brown band: live rocket motor.',
       needs: 'Needs a radar track on an enemy aircraft. A full lock is optional: without one it fires as a TWS shot (see Terms).',
-      hud: [[`${hud('aim120')} 4`, 'Selected, 4 left'], ['LOCKING → LOCK', 'Your radar lock is building, then held'], ['SHOOT', 'Good shot: fire now'], [brev('aim120'), 'Flashes as it launches'], ['NO TARGET · OUT OF RANGE · MIN RANGE', 'Why it didn\'t fire']],
+      hud: [[`${hud('aim120')} 4`, 'Selected, 4 left'], ['LOCKING → LOCK', 'Your radar lock is building, then held'], ['SHOOT', 'Good shot: fire now'], [brev('aim120'), 'Flashes as it launches'], [`${hud('aim120')} AWAY`, 'Your missile is on its way to the boxed target: no need for a second'], ['NO TARGET · OUT OF RANGE · MIN RANGE', 'Why it didn\'t fire']],
       how: ['Select AMRAAM. The radar switches to search mode (74 km).', 'Tap the target box to lock. The lock builds while the target is within ±30° of your nose.', 'Fire on SHOOT. Inside 10 km it rarely misses, and once it launches you can turn away.'],
       avoid: ['It does nothing to ground targets.', 'A fighter that turns 90° to it and drops chaff can make it miss.'],
       terms: [T_TWS, ['Lock', 'Your radar holds one target and feeds the missile the best course updates. The target gets a SPIKE warning.']],
@@ -447,7 +447,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
   {
     kind: 'warning', id: 'cues', cat: 'cue', name: 'SHOOT · IN RANGE · REL · CCIP', chip: 'SHOOT', level: 'hud', sound: 'none',
     line: 'The HUD tells you when a shot or release will work.',
-    trigger: 'SHOOT blinks when an air-to-air shot is good. For bombs: REL n counts seconds to release, IN RANGE means release now, STEER LEFT/RIGHT corrects your line, and BOMB AWAY confirms the release. With nothing designated, CCIP shows where a bomb would land, and PICKLE means drop now.',
+    trigger: 'SHOOT blinks when an air-to-air shot is good; while your missile is on its way to the target it reads AMRAAM AWAY (9X AWAY, AARGM AWAY) instead, and with an enemy missile under 10 s from you it waits: defend first. For bombs: REL n counts seconds to release, IN RANGE means release now, STEER LEFT/RIGHT corrects your line, and BOMB AWAY confirms the release. With nothing designated, CCIP shows where a bomb would land, and PICKLE means drop now.',
     how: ['Fire on SHOOT. Release on IN RANGE.', 'Follow STEER until it clears.'],
     notes: ['After each shot the brevity call flashes: FOX 3, FOX 2, RIFLE, MAGNUM, GUNS.'],
   },

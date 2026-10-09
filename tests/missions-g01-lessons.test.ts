@@ -180,8 +180,12 @@ describe("g01's own hints agree with T02", () => {
     h.run(0.1);
     p.input.fireWeapon = false;
     expect(h.world.missiles.some((m) => m.alive && m.shooterId === p.id && m.targetId === d.id)).toBe(true);
+    const shot = seen.length;
     h.run(4, note);
     expect(seen.join(' | ')).not.toMatch(/crank|PITBULL/i);
+    // the missile in flight: AMRAAM AWAY, and SHOOT no longer invites a second missile (r1 1.2-g)
+    expect(seen.slice(shot).join(' | ')).toMatch(/^AMRAAM AWAY/);
+    expect(seen.slice(shot).join(' | ')).not.toMatch(/SHOOT/);
   });
 });
 
