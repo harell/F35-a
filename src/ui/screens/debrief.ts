@@ -217,12 +217,14 @@ function debriefScreen(host: UiHost, r: MissionResult, nextLabel: string | null,
       right.appendChild(h('div', { class: 'db-h', text: 'Objectives' }));
       const ul = h('ul', { class: 'db-obj' });
       for (const o of r.objectives) {
-        const ok = o.state === 'complete';
+        // a drill the coach moved the player on from is done, but not passed
+        const ok = o.state === 'complete' && !o.skipped;
         const fail = o.state === 'failed';
+        const badge = o.skipped ? '<span class="badge">SKIPPED</span>' : o.primary ? '' : '<span class="badge">BONUS</span>';
         ul.appendChild(
           h('li', {
             class: `${ok ? 'is-ok' : fail ? 'is-fail' : 'is-open'} ${o.primary ? '' : 'is-bonus'}`,
-            html: `<span class="db-oi">${icon(ok ? 'check' : fail ? 'close' : 'clock')}</span><span>${escapeHtml(o.label)}</span>${o.primary ? '' : '<span class="badge">BONUS</span>'}`,
+            html: `<span class="db-oi">${icon(ok ? 'check' : fail ? 'close' : 'clock')}</span><span>${escapeHtml(o.label)}</span>${badge}`,
           }),
         );
       }

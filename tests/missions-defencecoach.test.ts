@@ -12,7 +12,7 @@ import type { MissionDef } from '../src/core/contracts';
 import { mission, site } from '../src/missions/content/common';
 import { validateMission } from '../src/missions/validate';
 import { COACH_TEXT, drillRecords, isDrillDefeat, type MissileRecord } from '../src/missions/runtime/defenceCoach';
-import { DRILL_MOVE_ON } from '../src/missions/runtime/objectives';
+import { DRILL_MOVE_ON, skippedDrillsText } from '../src/missions/runtime/objectives';
 import type { MissionState } from '../src/missions/runtime/state';
 import { LOADOUTS } from '../src/core/data';
 import { harness, type Harness } from './missions-helpers';
@@ -185,7 +185,9 @@ describe('drill bookkeeping', () => {
     const def = drillFixture({ noHarass: true });
     const o = def.script.objectives[0];
     if (o.kind !== 'missile_drill') throw new Error('fixture');
-    Object.assign(o, { inARow: true, maxAgl: 200, moveOn: 4 });
+    // the lesson's only primary, as in t05: the mission ends when the drill does
+    Object.assign(o, { inARow: true, maxAgl: 200, moveOn: 4, primary: true });
+    def.script.objectives.splice(1);
     const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
     h.run(1);
     const log = (h.runner as unknown as { s: MissionState }).s.missileLog;
@@ -198,9 +200,27 @@ describe('drill bookkeeping', () => {
     log.push(rec({ group: 'boats', missileId: 105, launchT: 1, endT: 2, outcome: 'hit' }));
     h.run(0.5);
     expect(stateOf()).toBe('complete');
+    expect(h.of('hud:message').map((m) => m.text)).toContain('DRILL SKIPPED — MOVING ON');
+    h.run(20);
     const radio = h.of('radio').map((r) => r.text).join(' | ');
     expect(radio).toContain(DRILL_MOVE_ON);
     expect(radio).not.toMatch(/Objective complete/);
+    // marked skipped (r2, 2.3-h): the lesson ends saying so, not "All objectives complete"
+    expect(h.runner.objectives[0].skipped).toBe(true);
+    expect(h.runner.state).toBe('success');
+    const r = h.runner.result(h.world);
+    expect(r.reason).toBe('Drill 1 skipped: fly Drill fixture again');
+    expect(r.objectives[0].skipped).toBe(true);
+    expect(radio).toContain('Drill 1 skipped: fly Drill fixture again.');
+  });
+
+  it('skippedDrillsText names the skipped drills by their place in the lesson', () => {
+    const o = (...skipped: boolean[]) => skipped.map((s) => ({ skipped: s }));
+    expect(skippedDrillsText(o(false, false, false), 'Gulf Defence')).toBeNull();
+    expect(skippedDrillsText(o(false, true, false), 'Gulf Defence')).toBe('Drill 2 skipped: fly Gulf Defence again');
+    expect(skippedDrillsText(o(true, true, false), 'Gulf Defence')).toBe('Drills 1–2 skipped: fly Gulf Defence again');
+    expect(skippedDrillsText(o(true, false, true), 'Gulf Defence')).toBe('Drills 1 and 3 skipped: fly Gulf Defence again');
+    expect(skippedDrillsText(o(true, true, true), 'Gulf Defence')).toBe('Drills 1–3 skipped: fly Gulf Defence again');
   });
 
   it('refill_cms tops the dispensers up to the loadout', () => {

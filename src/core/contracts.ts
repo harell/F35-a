@@ -355,6 +355,11 @@ export interface ObjectiveStatus {
   progress?: { done: number; total: number };
   /** The hostile group a protect objective counts on its HUD line ("STRIKERS 3"): its jets left in the fight. */
   threat?: { label: string; left: number };
+  /**
+   * Complete without being passed: the coach moved the player on ('missile_drill' `moveOn`). It earns no
+   * bonus, the debrief names it, and a lesson with one is not recorded as flown (progress.ts applyResult).
+   */
+  skipped?: boolean;
 }
 
 export interface MissionResult {

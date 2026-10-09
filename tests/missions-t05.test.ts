@@ -86,6 +86,9 @@ describe('t05 Gulf Defence', () => {
       log.push(`seed ${seed}: ${r.state}@${r.t}s moved on ${moved}× ${[...completed(r)].map(([k, v]) => `${k}@${v}`).join(' ')}`);
       expect(r.state, log.join('\n')).toBe('success');
       expect(moved, log.join('\n')).toBeGreaterThanOrEqual(1);
+      // ...and says which drills he skipped instead of "All objectives complete" (r2, 2.3-h)
+      expect(r.reason, log.join('\n')).toMatch(/^Drills? [\d–, and]+ skipped: fly Gulf Defence again$/);
+      expect(r.result!.objectives.filter((o) => o.skipped).length, log.join('\n')).toBeGreaterThanOrEqual(moved);
     }
   });
 

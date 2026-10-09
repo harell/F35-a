@@ -2,8 +2,8 @@
  * F35-A — campaign progress (localStorage 'f35a.progress.v1').
  *
  * The first campaign mission and every training mission are always unlocked; completing a
- * campaign mission unlocks the next one. Best score/grade per mission (successful runs) plus
- * career totals.
+ * campaign mission unlocks the next one. Best score/grade per mission (successful runs; not a lesson
+ * finished with skipped drills) plus career totals.
  */
 import type { CampaignProgress, MissionDef, MissionResult } from '../core/contracts';
 import { isDeathReason } from './runtime/reasons';
@@ -183,10 +183,13 @@ export function applyResult(p: CampaignProgress, r: MissionResult, campaigns: Ca
   else next.failStreak![r.missionId] = (next.failStreak![r.missionId] ?? 0) + 1;
   next.totals.airKills += r.kills.air;
   next.totals.groundKills += r.kills.sam + r.kills.ground;
-  if (r.success) next.totals.missions += 1;
+  // a lesson finished with drills the coach moved the player on from isn't passed: no best result, so it
+  // isn't flown (trainingTarget, lessonsFor's checklist) and the debrief says to fly it again
+  const passed = r.success && !r.objectives.some((o) => o.skipped);
+  if (passed) next.totals.missions += 1;
   if (!r.success && isDeathReason(r.reason)) next.totals.deaths += 1;
 
-  if (r.success) {
+  if (passed) {
     const prev = next.best[r.missionId];
     const better = !prev || r.score > prev.score || (r.score === prev.score && gradeRank(r.grade) > gradeRank(prev.grade));
     if (better) next.best[r.missionId] = { score: r.score, grade: r.grade, difficulty: r.difficulty };

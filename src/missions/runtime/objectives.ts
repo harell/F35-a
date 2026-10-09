@@ -269,6 +269,7 @@ export function updateObjectives(s: MissionState, dt: number): void {
           // the coach moves the player on: no "objective complete" call for a drill not passed
           s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. ${DRILL_MOVE_ON}`, priority: 2 });
           s.hud('DRILL SKIPPED — MOVING ON', 'info', 3);
+          st.skipped = true;
           setState(s, o, 'complete', false);
         }
         break;
@@ -366,7 +367,7 @@ export function objectiveSummary(s: MissionState): {
       secondaryTotal++;
       if (done) secondaryDone++;
     }
-    if (done) bonus += earnedBonus(o);
+    if (done && !o.status.skipped) bonus += earnedBonus(o);
   }
   return { primaryTotal, primaryDone, primaryFailed, secondaryTotal, secondaryDone, bonus };
 }
@@ -383,4 +384,18 @@ export function protectTallies(s: MissionState): { label: string; saved: number;
     out.push({ label: def.tally, saved, total: g.expected });
   }
   return out;
+}
+
+/**
+ * The end reason of a lesson finished with drills the coach moved the player on from ('missile_drill'
+ * `moveOn`), naming them by their place in the lesson's objective list ("Drills 1–2 skipped: fly Gulf
+ * Defence again"); null when none was skipped.
+ */
+export function skippedDrillsText(objectives: readonly Pick<ObjectiveStatus, 'skipped'>[], title: string): string | null {
+  const nums = objectives.flatMap((o, i) => (o.skipped ? [i + 1] : []));
+  if (nums.length === 0) return null;
+  const last = nums[nums.length - 1];
+  const contiguous = last - nums[0] === nums.length - 1;
+  const which = nums.length === 1 ? `Drill ${nums[0]}` : contiguous ? `Drills ${nums[0]}–${last}` : `Drills ${nums.slice(0, -1).join(', ')} and ${last}`;
+  return `${which} skipped: fly ${title} again`;
 }

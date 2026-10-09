@@ -27,7 +27,7 @@ import { Callouts, sameFlight, type DownReason } from './runtime/callouts';
 import type { MissionResultExt, TeamKill } from './runtime/resultExt';
 import { evalCondition } from './runtime/conditions';
 import { HintSystem } from './runtime/hints';
-import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
+import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, skippedDrillsText, updateObjectives } from './runtime/objectives';
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
@@ -698,10 +698,14 @@ class MissionRunnerImpl implements MissionRunnerApi {
       this.fail(`Objective failed: ${sum.primaryFailed.def.label}`);
       return;
     }
-    if (sum.primaryTotal > 0 && sum.primaryDone === sum.primaryTotal) this.succeed(REASONS.success);
+    if (sum.primaryTotal > 0 && sum.primaryDone === sum.primaryTotal) {
+      // a lesson whose drills the coach moved the player on from ends saying so, not "qualification complete"
+      const skipped = skippedDrillsText(s.objectives.map((o) => o.status), s.def.title);
+      this.succeed(skipped ?? REASONS.success, skipped);
+    }
   }
 
-  private succeed(reason: string): void {
+  private succeed(reason: string, skipped: string | null = null): void {
     const s = this.s;
     if (s.state !== 'running') return;
     s.state = 'success';
@@ -709,7 +713,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.endTime = s.time;
     this.hints.clear();
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Mission complete, RTB.`, voice: 'a_mission_complete', priority: URGENT_PRIORITY });
-    if (s.script.successText) s.radio.push({ from: s.awacsCallsign, text: s.script.successText, priority: 2 });
+    if (skipped) s.radio.push({ from: s.awacsCallsign, text: `${skipped}.`, priority: 2 });
+    else if (s.script.successText) s.radio.push({ from: s.awacsCallsign, text: s.script.successText, priority: 2 });
     s.hud('MISSION COMPLETE', 'good', 5);
     s.events.emit('mission:end', { success: true, reason });
     // steer home if the mission has an RTB waypoint

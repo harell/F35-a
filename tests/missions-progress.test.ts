@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MissionResult } from '../src/core/contracts';
-import { PLAYABLE_CAMPAIGNS, TRAINING, failStreak, lessonsFor, loadProgress, nextMissionAfter, nextMissionLabel, recordResult, saveProgress } from '../src/missions';
+import { PLAYABLE_CAMPAIGNS, TRAINING, failStreak, lessonsFor, loadProgress, nextMissionAfter, nextMissionLabel, recordResult, saveProgress, trainingTarget } from '../src/missions';
 import { LESSON_IDS_VERSION, PROGRESS_KEY, sanitizeProgress } from '../src/missions/progress';
 
 /** The first playable campaign's missions (the IRGC campaign: g01–g03). */
@@ -161,6 +161,22 @@ describe('campaign progress', () => {
     expect(again.best.t06).toEqual(sa6);
     // a save already in the new scheme is left alone
     expect(sanitizeProgress({ ...old, lessonIds: LESSON_IDS_VERSION }, [CAMPAIGN], TRAINING).best.t03).toEqual(sa6);
+  });
+
+  it('a lesson finished with skipped drills is not passed: no best result, still a lesson to fly (r2, 2.3-h)', () => {
+    const won = { score: 1, grade: 'B' as const, difficulty: 'pilot' as const };
+    const before = { ...loadProgress(), best: { t01: won, t02: won, t03: won, g01: won, t04: won } };
+    expect(trainingTarget(before)?.lessons.map((m) => m.id)).toEqual(['t05']);
+    const drills = (skipped: boolean[]) => skipped.map((sk, i) => ({ id: `o_d${i + 1}`, label: `Drill ${i + 1}`, state: 'complete' as const, primary: true, ...(sk ? { skipped: true } : {}) }));
+    const moved = recordResult(before, result('t05', { reason: 'Drills 1–2 skipped: fly Gulf Defence again', objectives: drills([true, true, false]) }));
+    expect(moved.best.t05).toBeUndefined();
+    expect(moved.totals.missions).toBe(before.totals.missions);
+    expect(trainingTarget(moved)?.lessons.map((m) => m.id)).toEqual(['t05']);
+    // flown again with every drill passed: now it counts
+    const passed = recordResult(moved, result('t05', { objectives: drills([false, false, false]) }));
+    expect(passed.best.t05).toBeDefined();
+    expect(passed.totals.missions).toBe(before.totals.missions + 1);
+    expect(trainingTarget(passed)?.lessons).toEqual([]);
   });
 
   it("NEXT after a lesson: only the lessons the next campaign mission wants, then that mission", () => {
