@@ -163,6 +163,7 @@ Follow the Sky Tower / Spark Arena pattern (read their files first):
 
 ## Lessons (add dated one-liners; delete ones that stop being true)
 
+- 2026-10-09: Hand-placed water over the real terrain still drowns the LiDAR ground under it (the LINZ coastline has no inland lakes, so `AKL_LAKES` keep their 18 m bowl): the Panmure Basin's circle sat 770 m off its bed and dug an 800 m hole into Pakuranga. Put any hand-placed shape that replaces the ground onto what `linzHeight` shows there (a lake bed is flat; fit the circle to it) and off the real houses and streets, and let tests sample both (`tests/world-linz.test.ts` inland water, `tests/world-corridor-houses.test.ts` lakes); Lake Pupuke's circle had overhung Takapuna too.
 - 2026-10-07: Commons search works from the cloud container as HTML (`commons.wikimedia.org/w/index.php?search=<q>&ns6=1&fulltext=1`) where the API returns 429; fetch thumbnails at a standard width (1280, then 960, 1920) and back off a few seconds on a 429. The File: page HTML gives the author and licence for the credits.
 - 2026-10-07: Commons searches mix namesakes: "BNZ Tower" returned Wellington's BNZ Centre and the Old Bank Arcade. Check each photo is the place before reading anything off it.
 - 2026-10-07: Signs move, so date every sign source: the 2023 mesh has Deloitte on both 80 Queen St and 1 Queen St, the Tower Centre's TOWER is NZX's now, Zurich House is Jarden House. A night photo of the waterfront settled which crowns glow (the HSBC Tower's band stays dark under its lit sign).
