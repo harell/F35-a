@@ -1216,10 +1216,34 @@ describe('a long hint pages at a clause, not mid-sentence (playtest r2 2.1-m)', 
     }
   });
 
+  // g02's boats hint (r3.1 R31-5): at 844×390 (27 characters, 2 or 3 lines) it paged '…Kill the missile
+  // boats before they' | 'count down', as the clause didn't fit on the first page's last line
+  const BOATS = 'Boats: TGT, StormBreaker, release early. Kill the missile boats before they count down';
+  const KILL = 'Kill the missile boats before they count down';
+
+  it("g02's boats hint at 844×390 pages at 'release early.', the last clause whole on the next page", () => {
+    for (const room of [2, 3]) {
+      const b = hintPages(BOATS, 27, room);
+      expect(b.length, `27×${room}: ${JSON.stringify(b)}`).toBe(2);
+      expect(b[0][b[0].length - 1].endsWith('early.'), `27×${room}: ${JSON.stringify(b)}`).toBe(true);
+      expect(b[1].join(' ')).toBe(KILL);
+    }
+  });
+
+  it('at any width the last clause fits on a page, no page ends inside it', () => {
+    for (let chars = 16; chars <= 44; chars++) {
+      for (const room of [2, 3]) {
+        if (hintPages(KILL, chars, room).length > 1) continue;
+        const b = hintPages(BOATS, chars, room);
+        for (const pg of b.slice(0, -1)) expect(/[:,.]$/.test(pg[pg.length - 1]), `${chars}×${room}: ${JSON.stringify(b)}`).toBe(true);
+      }
+    }
+  });
+
   it('at any width: no word lost, no page over its lines, never a page ending on "for" / "pull"', () => {
     for (let chars = 16; chars <= 44; chars++) {
       for (const room of [2, 3]) {
-        for (const text of [THROTTLE, IMMELMANN]) {
+        for (const text of [THROTTLE, IMMELMANN, BOATS]) {
           const pages = hintPages(text, chars, room);
           expect(pages.flat().join(' '), `${chars}×${room}`).toBe(text);
           for (const pg of pages) expect(pg.length, `${chars}×${room}`).toBeLessThanOrEqual(room);

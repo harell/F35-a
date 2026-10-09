@@ -542,11 +542,26 @@ function hintLines(f: HudFrame, hint: string, maxW: number): string[] {
 /** A word that ends a clause: a page of a long hint may end after it. */
 const CLAUSE_END = /[:;,.!?—–]$/;
 const pageCache = new Map<string, string[][]>();
+/** Lines words[a, b) take, wrapped at `maxChars`. */
+function lineCount(words: string[], a: number, b: number, maxChars: number): number {
+  let lines = 1;
+  let len = 0;
+  for (let k = a; k < b; k++) {
+    const w = words[k].length;
+    if (len && len + 1 + w > maxChars) {
+      lines++;
+      len = w;
+    } else len = len ? len + 1 + w : w;
+  }
+  return lines;
+}
+
 /**
  * A long hint in pages of `room` lines of `maxChars`. A page that would end mid-clause ends at the
- * last clause mark (: ; , — or a sentence end) instead, when the words after it fit on one line, so
- * a page never stops on '…past the detent for' with 'AFTERBURNER' alone on the next (playtest r2
- * 2.1-m). Cached like wrap().
+ * last clause mark (: ; , — or a sentence end) instead, when the words after it fit on one line or
+ * their whole clause fits on the next page, so a page never stops on '…past the detent for' with
+ * 'AFTERBURNER' alone on the next (playtest r2 2.1-m), nor on '…the missile boats before they' with
+ * 'count down' (r3.1 R31-5). Cached like wrap().
  */
 export function hintPages(text: string, maxChars: number, room: number): string[][] {
   const key = `${maxChars}|${room}|${text}`;
@@ -569,14 +584,12 @@ export function hintPages(text: string, maxChars: number, room: number): string[
     }
     let end = j;
     if (j < words.length && !CLAUSE_END.test(words[j - 1])) {
-      let tail = words[j - 1].length;
-      for (let k = j - 1; k > i && tail <= maxChars; k--) {
-        if (CLAUSE_END.test(words[k - 1])) {
-          end = k;
-          break;
-        }
-        tail += 1 + words[k - 1].length;
-      }
+      // the page's last clause mark (after words[k - 1]) and the clause it starts, words[k, c)
+      let k = j - 1;
+      while (k > i && !CLAUSE_END.test(words[k - 1])) k--;
+      let c = j + 1;
+      while (c < words.length && !CLAUSE_END.test(words[c - 1])) c++;
+      if (k > i && (lineCount(words, k, j, maxChars) === 1 || lineCount(words, k, c, maxChars) <= room)) end = k;
     }
     pages.push(wrap(words.slice(i, end).join(' '), maxChars));
     i = end;
