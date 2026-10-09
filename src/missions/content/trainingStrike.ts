@@ -26,12 +26,12 @@ const DS = 'DARKSTAR';
 export const STRIKE = {
   /**
    * Off Takapuna at 10,000 ft, about 9 km from the first boat: inside a StormBreaker's reach from there
-   * (~11.5 km), so the first release comes within seconds; the second boat is 3 km further up the Gulf.
+   * (~11.5 km), so the first release comes within seconds; the second boat is 1.5 km further up the Gulf.
    */
   start: { x: 1500, z: -7500 },
   /**
-   * Drill 1: two boats sailing a loop on the tanker's route up the Gulf; the second starts on it 3 km behind the
-   * first, coming back down (from further up the Gulf its StormBreaker glided 75 s: r2, 2.3-d).
+   * Drill 1: two boats sailing a loop on the tanker's route up the Gulf; the second starts on it 1.5 km beyond
+   * the first (from 6 km beyond, its StormBreaker glided 75 s: r2, 2.3-d).
    */
   d1Path: [
     { x: 7000, z: -15000 },
@@ -39,8 +39,8 @@ export const STRIKE = {
     { x: 8600, z: -26000 },
     { x: 8400, z: -21000 },
   ],
-  /** Drill 1's second boat: on the loop's first leg, 3 km beyond the first. */
-  d1Second: { x: 7700, z: -18000 },
+  /** Drill 1's second boat: on the loop's first leg, 1.5 km beyond the first. */
+  d1Second: { x: 7350, z: -16500 },
   /** Drill 2: the air-defence boat, at anchor 6 km north of the start. */
   d2: { x: 3500, z: -13000 },
   /** Drill 3: the gun boat, 3 km beyond the air-defence boat. */
@@ -80,7 +80,7 @@ export const T04_STRIKE: MissionDef = mission({
     groups: [],
     ground: [
       target('sb1', 'd1', 'suicide_boat', STRIKE.d1Path[0], { name: 'Range boat 1', path: [...STRIKE.d1Path], speed: BOAT_SPEED, loop: true }),
-      target('sb2', 'd1', 'suicide_boat', STRIKE.d1Second, { name: 'Range boat 2', path: [...STRIKE.d1Path], speed: BOAT_SPEED, loop: true }),
+      target('sb2', 'd1', 'suicide_boat', STRIKE.d1Second, { name: 'Range boat 2', path: [...STRIKE.d1Path.slice(1), STRIKE.d1Path[0]], speed: BOAT_SPEED, loop: true }),
       target('gb', 'd3', 'suicide_boat', STRIKE.d3Path[0], { name: 'Range boat 4', path: [...STRIKE.d3Path], speed: BOAT_SPEED, loop: true, spawn: done('o_d2') }),
     ],
     // at anchor, and a range crew that keeps its radar on: the AARGM fired by the rule homes all the way in

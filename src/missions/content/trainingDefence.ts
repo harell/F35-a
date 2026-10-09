@@ -22,8 +22,9 @@
  * spend them) that fires only its heat-seekers (`irOnly`): its radar rounds don't count towards the drill,
  * and four of them cost ~55 s before the first heat-seeker (playtest r2, 2.3-j). Its heat-seekers are
  * restocked once spent (`restock`): four rounds beaten and missed in turn left the drill with neither two
- * in a row nor four misses, and nothing more to fire (a soft lock, r2). Flares and chaff are topped up every 30 s and after each drill: a held button still
- * empties them in one engagement (the coach's "chaff empty").
+ * in a row nor four misses, and nothing more to fire (a soft lock, r2). Flares and chaff are topped up
+ * every 30 s and after each drill: a held button still empties them in one engagement (the coach's "chaff
+ * empty").
  */
 import type { MissionDef } from '../../core/contracts';
 import { mission, site } from './common';
