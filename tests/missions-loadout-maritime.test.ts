@@ -142,7 +142,7 @@ describe('strike_maritime: a mission that allows it', () => {
     expect(texts).toContain('2');
     h.world.combat.selectWeapon(p, 'aargm', h.world);
     texts = smsTexts(p);
-    expect(texts).toContain('AGM-88G');
+    expect(texts).toContain('AARGM');
     expect(texts).toContain('QTY 2');
   });
 });

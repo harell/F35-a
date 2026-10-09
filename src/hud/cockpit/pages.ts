@@ -259,14 +259,17 @@ function stationCount(stores: StoreStation[], w: WeaponId): number {
   return n;
 }
 
-/** The page's title line: the selected weapon's designation. */
+/**
+ * The page's title line: the selected weapon's designation, the AARGM's short name (the one the FIRE
+ * button, the HMD, the lessons and briefings use; playtest r2 F11: the page read AGM-88G).
+ */
 export const WEAPON_NAME: Record<WeaponId, string> = {
   gun: 'GAU-22',
   aim120: 'AIM-120D',
   aim9x: 'AIM-9X',
   gbu31: 'GBU-31',
   gbu53: 'GBU-53',
-  aargm: 'AGM-88G',
+  aargm: 'AARGM',
 };
 
 /** A station's tag on the planform (4 characters at most): the HMD's weapon name, the GBU-53's number. */

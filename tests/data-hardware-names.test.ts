@@ -35,13 +35,21 @@ describe('hardware names (#211)', () => {
     expect(CODEX_WEAPONS.find((w) => w.id === 'gun')?.name).toBe(WEAPON_INFO.gun.name);
   });
 
-  it('one bomb, one short name: the GBU-53/B reads GBU-53 on the FIRE button, the HMD, the SMS page and its missile label (r1 1.2-h)', () => {
+  it('one weapon, one short name: the GBU-53/B reads GBU-53 and the AARGM-ER AARGM on the FIRE button, the HMD, the SMS page and its missile label (r1 1.2-h, r2 F11)', () => {
     const short = WEAPON_INFO.gbu53.short;
     expect(short).toBe('GBU-53');
     expect(WEAPON_INFO.gbu53.name.startsWith(short)).toBe(true);
     expect(WEAPON_HUD.gbu53).toBe(short);
     expect(WEAPON_NAME.gbu53).toBe(short);
     expect(MUNITIONS.gbu53.short).toBe(short);
+    // the AARGM likewise (r2 F11: AARGM on the FIRE button, AGM-88G on the SMS page): its name, as the
+    // lessons and briefings say it, in its full name 'AGM-88G AARGM-ER'
+    const arm = WEAPON_INFO.aargm.short;
+    expect(arm).toBe('AARGM');
+    expect(WEAPON_INFO.aargm.name).toContain(arm);
+    expect(WEAPON_HUD.aargm).toBe(arm);
+    expect(WEAPON_NAME.aargm).toBe(arm);
+    expect(MUNITIONS.aargm.short).toBe(arm);
     // and every player weapon's missile label is its stores-list short name
     for (const id of ['aim120', 'gbu31', 'gbu53', 'aargm'] as const) expect(MUNITIONS[id].short, id).toBe(WEAPON_INFO[id].short);
   });
