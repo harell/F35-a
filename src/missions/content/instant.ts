@@ -199,8 +199,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'sam_gauntlet': {
       loadout = 'sead_stealth';
-      // not strike_stealth: its two JDAMs can't finish three depot targets 250 m apart (0/12, playtest 2026-10-10)
-      allowed = ['sead_stealth', 'strike_beast'];
+      // the SEAD fit alone: strike_stealth's two JDAMs can't finish three depot targets 250 m apart
+      // (0/12, playtest 2026-10-10); strike_beast, no AARGM and an RCS the belt sees from afar, lost
+      // 0/12 on Pilot and Veteran, sead_precision (no AMRAAM for the CAP) 0/12 too (playtest r2, 2.3-b)
+      allowed = ['sead_stealth'];
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
@@ -270,8 +272,9 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // SEAD fit (issue #60): 4 SDBs take the 3 parked jets in one sortie (the 2 JDAMs of
       // strike_stealth needed a second pass through the SA-6 ring), the AARGMs answer the SA-6
       loadout = 'sead_stealth';
-      // not strike_stealth: its two JDAMs can't finish three depot targets 250 m apart (0/12, playtest 2026-10-10)
-      allowed = ['sead_stealth', 'strike_beast'];
+      // the SEAD fit alone: strike_beast (no AARGM, seen from afar) lost 0/12 on Pilot and Veteran, shot
+      // down by the SA-6 or out of time, and sead_precision (no AMRAAM for the CAP) lost too (playtest r2, 2.3-b)
+      allowed = ['sead_stealth'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
       if (!features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);

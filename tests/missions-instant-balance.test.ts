@@ -230,6 +230,15 @@ describe('Instant Action balance bands over 6 seeds (issue #60, playtest r1; was
     expect(IA_STRIKE_TIME_LIMIT).toBeGreaterThanOrEqual(2 * 335);
     expect(def.briefing.join(' ')).toContain(`${IA_STRIKE_TIME_LIMIT / 60} minutes`);
   });
+  it('Gauntlet and Strike offer the SEAD fit alone: no loadout that loses every run', () => {
+    // playtest r2 (2.3-b): strike_beast (no AARGM, 60× the RCS) lost 0/12 on Pilot and Veteran in each,
+    // shot down by the SA-6s or out of time; sead_precision, with no AMRAAM for the CAP, lost too
+    for (const id of ['ia_sam_gauntlet_auckland', 'ia_strike_auckland']) {
+      const def = missionById(id)!;
+      expect(def.allowedLoadouts, id).toEqual(['sead_stealth']);
+      expect(def.recommendedLoadout, id).toBe('sead_stealth');
+    }
+  });
   it('Gauntlet: a clock ends a stalled sortie (the briefing says how long), and the CAP pair flies a notch below the difficulty', () => {
     // playtest r2 (2.3-c): a Pilot jet Winchester after the CAP extended for 493 s with its bombs aboard,
     // and a parked jet hung the sweep at 900 s; the bot's slowest win takes 559 s
