@@ -43,6 +43,7 @@ import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { spawnFloor } from '../src/missions/runtime/spawner';
 import { cloudBase } from '../src/core/weather';
 import { isSmallGround } from '../src/sim/weapons/small';
+import { SAM_DATA } from '../src/sim/sam/samData';
 
 const DEG = Math.PI / 180;
 const _h = new Vector3();
@@ -53,6 +54,11 @@ type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
 const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu31'];
 /** Height above a small target (m) the bot attacks it from, with no deck overhead (t07's rats). */
 const SMALL_TARGET_ALT = 1_200;
+
+/** A SAM site's lowest engagement height (m, SamTypeData.altMin) the bot's defence dives under: the SA-6's 80 m is a floor, a Tor's or AD boat's 10 m is not. */
+const NO_FLOOR = 50;
+/** Top of the ground clutter (m AGL): a radar's low-altitude detection loss starts below it (sim/sam/SamSystem.ts `detects`). */
+const CLUTTER_TOP = 600;
 
 /** The bot's AARGM release range (m): inside the rule the game teaches (AARGM_CLOSE_RANGE), with a margin. */
 export const ARM_RELEASE = AARGM_CLOSE_RANGE - 2_000;
@@ -559,6 +565,12 @@ export class MissionBot {
   /**
    * SAM defence as taught in T06: beam it (turn 90° to the launching site's radar), descend into
    * the ground clutter, CHAFF in the last seconds (FLARES against IR missiles), last-ditch break.
+   * Against a radar site with no floor to get under (an AD boat's or a Tor's, 10 m) a jet above the
+   * clutter beams at its height: the dive can't reach the clutter in time and costs the height a
+   * stand-off release needs (playtest r2, 2.3-f: in g02 the bot beaming 9M330 long shots from 12–14 km
+   * dived from 4 km to 2 km, released its next StormBreakers from 9 km instead of 12, inside the
+   * escort's reach, and on Veteran did worse, 3/6, than the same bot reacting 1.7 s later, 5/6). Low
+   * down it still dives: there the clutter helps (holding 300 m, g03's south way on Veteran fell from 2/6 to 1/6).
    */
   private samDefence(dt: number): void {
     const p = this.p;
@@ -571,6 +583,7 @@ export class MissionBot {
     const site = m && m.kind === 'missile' ? w.getEntity(m.shooterId) : null;
     const ref = site ? site.position : m ? m.position : p.position;
     const ground = p.position.y - p.flight.agl;
+    const holdHeight = urgent.guidance !== 'ir' && !!site && site.kind === 'sam' && SAM_DATA[site.type].altMin < NO_FLOOR && p.flight.agl > CLUTTER_TOP;
     const it = this.pilot.begin(p, Math.min(60, this.defenceAgl - 20));
     // beam: perpendicular to the radar line of sight, on the side we are already turning to
     _q.set(p.position.x - ref.x, 0, p.position.z - ref.z).normalize();
@@ -579,7 +592,7 @@ export class MissionBot {
     _h.multiplyScalar(this.beamSide);
     turnLimited(p, _h, 100);
     it.allowInverted = false;
-    dirWithElevation(_h, gammaForAltitude(p, ground + this.defenceAgl, 0.3, 3), it.dir);
+    dirWithElevation(_h, gammaForAltitude(p, holdHeight ? p.position.y : ground + this.defenceAgl, 0.3, 3), it.dir);
     it.speed = 290;
     it.allowAb = urgent.guidance !== 'ir';
     it.gMax = urgent.timeToImpact < 2.5 ? 9 : 7;

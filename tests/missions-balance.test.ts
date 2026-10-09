@@ -157,14 +157,18 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
   // The bot won 24/24 by rippling all eight StormBreakers in the first 20–39 s, before any missile boat counted
   // down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes a second pass against a ~3.9-minute
   // launch, and Recruit flies a suicide boat fewer. Pilot and Veteran also meet the AD boats' harassment
-  // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws SAM shots, the bot breaks to
-  // defend and reaches the second wave late; Veteran adds a third boat ahead of the suicide wave, inside the real
-  // envelope of the opening release. With Pilot's salvo grace (a pair is one hit) and the bot turning in on a
-  // boat whose IP it is already inside (playtest r1, 1.3-d), 6 seeds: Recruit 6/6, Pilot 6/6, Veteran 3/6. The
-  // bands are the measured floors less one seed, and the campaign's: Recruit ≥ 75 %, Veteran ≥ 25 %.
+  // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws long shots that catch a jet
+  // flying straight on and fall short of one that turns away (tests/sim-boats.test.ts); Veteran adds a third boat
+  // ahead of the suicide wave, 12–13 km from the bot's opening release. With Pilot's salvo grace (a pair is one
+  // hit) and the bot turning in on a boat whose IP it is already inside (playtest r1, 1.3-d), 6 seeds: Recruit 6/6,
+  // Pilot 6/6, Veteran 3/6. Playtest r2 (2.3-f): Veteran's 3/6 was the bot diving into the clutter as it beamed
+  // those long shots, from 4 km to 2 km, so its next release went from 9 km, inside the escort's reach (the same bot
+  // reacting 1.7 s later dived less and won 5/6). Beaming at its height above the clutter (an AD boat has no
+  // radar floor to get under): Recruit 6/6, Pilot 6/6 and Veteran 6/6, untouched, and the casual proxy 6/6 on both. The bands are
+  // the measured floors less one seed.
   const run = (d: Difficulty, seed: number, opts: Parameters<typeof runPlaythrough>[4] = {}) => runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600, ...opts });
 
-  it('Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 2/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+  it('Recruit ≥ 5/6, Pilot ≥ 5/6, Veteran ≥ 5/6 (was 3/6), never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran'];
     const won: Record<string, number> = {};
@@ -183,7 +187,7 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
     const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
     expect(won.recruit, table).toBeGreaterThanOrEqual(5);
     expect(won.pilot, table).toBeGreaterThanOrEqual(5);
-    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(5);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
   });
@@ -192,7 +196,7 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
   // 6 Pilot runs: Pilot's harassing pair beamed it south, away from the missile boats, and it flew on out to
   // its IP 28 km from them before turning in, so its second ripple went at 165 s from 18 km and the boats
   // launched first. Turning in from inside the IP: 6/6, the boats sunk ~35 s before their countdown.
-  it('the casual proxy (2.5 s reactions) wins Pilot ≥ 3/6 (was 0/6)', { timeout: 300_000 }, async () => {
+  it('the casual proxy (2.5 s reactions) wins Pilot ≥ 5/6 (was 0/6)', { timeout: 300_000 }, async () => {
     const log: string[] = [];
     let won = 0;
     for (const seed of [0, 1, 2, 3, 4, 5]) {
@@ -201,7 +205,7 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
       if (r.state === 'success') won++;
       log.push(`casual pilot seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
     }
-    expect(won, log.join('\n')).toBeGreaterThanOrEqual(3);
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
   });
 
   // The second way (1.3-f): the briefing's AARGM-ER at the first escort as the opening shot
@@ -279,8 +283,9 @@ describe('g03 Stoat of Emergency: several ways in (#198, #200; playtest 2026-10-
     expect(won['golden veteran'], table).toBeLessThanOrEqual(won['golden pilot']);
   });
 
-  it('not a walkover: straight over the top of every SAM (high) still fails on Pilot', { timeout: 600_000 }, async () => {
-    // above the cloud nothing is revealed; diving through it from 43,000 ft at the end meets every site at once
+  it('not a walkover: straight over the top of every SAM (high) loses at least half its runs on Pilot', { timeout: 600_000 }, async () => {
+    // above the cloud nothing is revealed; diving through it from 43,000 ft at the end meets every site at once.
+    // 1/4 until playtest r2, 2/4 since the bot beams the boats' rounds at its height above the clutter (2.3-f)
     const log: string[] = [];
     let won = 0;
     for (const seed of [0, 1, 2, 3]) {
@@ -289,6 +294,6 @@ describe('g03 Stoat of Emergency: several ways in (#198, #200; playtest 2026-10-
       if (r.state === 'success') won++;
       log.push(`high seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
     }
-    expect(won, log.join('\n')).toBeLessThanOrEqual(1);
+    expect(won, log.join('\n')).toBeLessThanOrEqual(2);
   });
 });
