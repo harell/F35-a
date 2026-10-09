@@ -89,7 +89,7 @@ export const T07_SMALL: MissionDef = mission({
   briefing: [
     "Training, with live rats. Last night's rain overloaded Herne Bay's old sewers and flushed the rats out. Two are running down Wallace Street and Hamilton Road to the beach, to swim for Watchman Island, 600 metres offshore, which the local trappers keep pest-free. No rat reaches the island.",
     'A rat is too small for the StormBreaker to track while it runs, so release while it stops at a drain to sniff. A rat that gets past its drains swims, and the bomb can\'t find a swimmer either. The stoat on Waiheke needs the same release.',
-    'Tap WPN to select the StormBreaker (GBU-53 on the button), TGT to designate a rat, and tap the target camera to zoom the pod onto it. Release on a stop, the moment IN RANGE shows.',
+    'Check the FIRE button reads GBU-53, the StormBreaker (WPN changes weapon). TGT picks a rat; tap the target camera to zoom the pod onto it. Release on a stop, the moment IN RANGE shows.',
   ],
   // g03's bomb on g02's load: StormBreakers to spare while the release is learned (g03's own load, two
   // StormBreakers and two AARGM-ERs, is allowed too)
@@ -133,7 +133,7 @@ export const T07_SMALL: MissionDef = mission({
     ],
     hints: [
       { id: 'h_pod', text: 'TGT designates a rat. Tap the target camera to ZOOM the pod: it is 20 cm long', when: { kind: 'time', t: 5 }, duration: 9 },
-      { id: 'h_stops', text: 'StormBreaker (GBU-53 on WPN): release while the rat STOPS at a drain. Running, the bomb can\'t track it', when: { kind: 'area', x: STREETS.x, z: STREETS.z, radius: 7000 }, duration: 9 },
+      { id: 'h_stops', text: 'StormBreaker: release while the rat STOPS at a drain. Running, the bomb can\'t track it', when: { kind: 'area', x: STREETS.x, z: STREETS.z, radius: 7000 }, duration: 9 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Herne Bay is all yours. Two rats on the streets: catch them at the drains.', priority: 2 }],
     successText: 'Two rats, none on the island. That is the release the stoat needs, Viper.',

@@ -3,12 +3,14 @@
  * validator (unique ids, bounds, references, loadouts, pads, safe player starts).
  */
 import { describe, expect, it } from 'vitest';
-import type { InstantActionOptions } from '../src/core/contracts';
+import type { InstantActionOptions, MissionDef } from '../src/core/contracts';
+import { WEAPON_INFO } from '../src/core/data';
 import { CAMPAIGNS, TRAINING, buildInstantMission, buildInstantMissionSeeded, missionById, terrainPadsFor, validateMission } from '../src/missions';
 import { mergePads } from '../src/missions/pads';
 import { P, target } from '../src/missions/content/common';
-import type { TheaterId } from '../src/core/types';
+import type { TheaterId, WeaponId } from '../src/core/types';
 import { seadFixture } from './missions-helpers';
+import { FakeWorld, FlatTerrain, v3 } from './combat-helpers';
 
 const CAMPAIGN = CAMPAIGNS.flatMap((c) => c.missions);
 const ALL = [...CAMPAIGN, ...TRAINING];
@@ -91,6 +93,57 @@ describe('missions: campaign & training content', () => {
       script: { ...g01.script, objectives: [...g01.script.objectives, { id: 'o_x', kind: 'destroy' as const, groups: ['nope'], label: 'x', primary: false }] },
     };
     expect(validateMission(bad).some((e) => e.includes('unknown group "nope"'))).toBe(true);
+  });
+});
+
+/** Everything a mission says to the player in words: briefing, objectives, hints, triggered hints and radio calls. */
+function playerTexts(m: MissionDef): { at: string; text: string }[] {
+  return [
+    ...m.briefing.map((text, i) => ({ at: `briefing ${i + 1}`, text })),
+    ...m.script.objectives.map((o) => ({ at: o.id, text: o.label })),
+    ...(m.script.hints ?? []).map((h) => ({ at: h.id, text: h.text })),
+    ...(m.script.triggers ?? []).flatMap((t) => t.actions.flatMap((a) => ('text' in a && typeof a.text === 'string' ? [{ at: t.id, text: a.text }] : []))),
+    ...(m.script.opening ?? []).flatMap((a) => ('text' in a && typeof a.text === 'string' ? [{ at: 'opening', text: a.text }] : [])),
+  ];
+}
+
+/**
+ * Does `text` send the player to WPN for `weapon`? WPN cycles (sim/weapons/loadouts.ts), so pressing it
+ * for the weapon already on the FIRE button moves off it. A sentence naming the weapon may still say
+ * what WPN does ("WPN changes weapon") or how far to press it ("WPN until FIRE reads …").
+ */
+function sendsToWpnFor(text: string, weapon: Exclude<WeaponId, 'gun'>): boolean {
+  const info = WEAPON_INFO[weapon];
+  const names = [info.short, info.name.split(' ').at(-1)!];
+  return text
+    .split(/(?<=[.!?])\s/)
+    .some((s) => names.some((n) => s.includes(n)) && /\bWPN\b(?! (changes|until))/.test(s));
+}
+
+describe('missions: lesson texts and the weapon the jet already has (playtest r2, 2.1-c)', () => {
+  it('no lesson tells the player to tap WPN for the weapon it starts with on any allowed loadout', () => {
+    const w = new FakeWorld({ difficulty: 'pilot', terrain: new FlatTerrain(0) });
+    for (const m of TRAINING) {
+      for (const loadout of m.allowedLoadouts) {
+        const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 2000, 0), heading: 0, speed: 200, loadout });
+        const start = p.selectedWeapon;
+        if (start === 'gun') continue;
+        for (const { at, text } of playerTexts(m)) expect(sendsToWpnFor(text, start), `${m.id} ${loadout} (${start}) ${at}: "${text}"`).toBe(false);
+      }
+    }
+  });
+
+  it("T02's last drill: the AIM-9X comes up on its own once the AMRAAMs are gone, so no text sends the player to WPN for it", () => {
+    const t02 = missionById('t02')!;
+    for (const { at, text } of playerTexts(t02)) expect(sendsToWpnFor(text, 'aim9x'), `${at}: "${text}"`).toBe(false);
+  });
+
+  it('the check catches the old wording', () => {
+    expect(sendsToWpnFor('Tap WPN to select the StormBreaker (GBU-53 on the button), TGT to designate a boat.', 'gbu53')).toBe(true);
+    expect(sendsToWpnFor("StormBreaker (GBU-53 on WPN): release while the rat STOPS at a drain.", 'gbu53')).toBe(true);
+    expect(sendsToWpnFor('Last drone, head-on: this one is for the AIM-9X (WPN selects it)', 'aim9x')).toBe(true);
+    expect(sendsToWpnFor('Then the AARGM-ER: select it with WPN, designate the SA-6 with TGT.', 'aargm')).toBe(true);
+    expect(sendsToWpnFor('Check the FIRE button reads GBU-53, the StormBreaker (WPN changes weapon).', 'gbu53')).toBe(false);
   });
 });
 
