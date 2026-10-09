@@ -8,6 +8,7 @@ import { evalCondition } from './conditions';
 import { retaskGroup } from './spawner';
 import { aliveCount, deadCount, difficultyAtLeast, drivenOffCount, type MissionState, type ObjectiveRt } from './state';
 import { POINTS } from './scoring';
+import { drillRecords, isDrillDefeat } from './defenceCoach';
 
 export function createObjectives(s: MissionState): void {
   for (const def of s.script.objectives) {
@@ -36,6 +37,7 @@ export function earnedBonus(o: ObjectiveRt): number {
 function setState(s: MissionState, o: ObjectiveRt, state: ObjectiveStatus['state'], announce = true): void {
   if (o.status.state === state) return;
   o.status.state = state;
+  if (state === 'active') o.openedAt = s.time;
   if (state === 'pending') return;
   s.events.emit('objective', { id: o.def.id, label: o.def.label, state });
   if (!announce) return;
@@ -105,6 +107,21 @@ export function updateObjectives(s: MissionState, dt: number): void {
 
     switch (def.kind) {
       case 'destroy': {
+        if (def.byPlayer) {
+          // only the player's own kills (a drill): what got away or crashed doesn't count
+          let need = 0;
+          let done = 0;
+          for (const id of def.groups) {
+            const g = s.groups.get(id);
+            if (!g) continue;
+            need += g.expected;
+            for (const m of g.members) if (!m.alive && s.playerKills.has(m.id)) done++;
+          }
+          if (def.count !== undefined) need = Math.min(def.count, need);
+          st.progress = { done: Math.min(done, need), total: need };
+          if (need > 0 && done >= need) setState(s, o, 'complete');
+          break;
+        }
         // bandits that bugged out / ran home count as defeated (never a stalled mission)
         const pr = groupsProgress(s, def.groups, true);
         const need = def.count !== undefined ? Math.min(def.count, pr.total) : pr.total;
@@ -221,12 +238,39 @@ export function updateObjectives(s: MissionState, dt: number): void {
         if (o.accum >= def.seconds) setState(s, o, 'complete');
         break;
       }
+      case 'missile_drill': {
+        // (in the order they ended: a hit breaks an in-a-row streak)
+        const recs = drillRecords(s, def.groups, o.openedAt ?? 0, def.guidance).sort((a, b) => a.endT - b.endT);
+        let defeated = 0;
+        let hits = 0;
+        let best = 0;
+        for (const r of recs) {
+          if (r.outcome === 'hit') {
+            hits++;
+            if (def.inARow) defeated = 0;
+          } else if (isDrillDefeat(r) && (def.maxAgl === undefined || r.agl <= def.maxAgl)) defeated++;
+          best = Math.max(best, defeated);
+        }
+        // (a streak that reached the mark counts even if a hit ended in the same tick)
+        if (def.inARow && best >= def.defeat) defeated = best;
+        st.progress = { done: Math.min(defeated, def.defeat), total: def.defeat };
+        if (def.maxHits !== undefined && hits > def.maxHits) setState(s, o, 'failed');
+        else if (defeated >= def.defeat) setState(s, o, 'complete');
+        break;
+      }
       case 'rtb': {
         if (p && p.alive) {
           const dx = p.position.x - def.x;
           const dz = p.position.z - def.z;
           if (dx * dx + dz * dz <= def.radius * def.radius) setState(s, o, 'complete');
         }
+        break;
+      }
+      case 'maneuver': {
+        // only one flown after the objective opened counts
+        const n = s.maneuvers.counts[def.maneuver];
+        o.base ??= n;
+        if (n > o.base) setState(s, o, 'complete');
         break;
       }
     }

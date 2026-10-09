@@ -190,6 +190,11 @@ export class AircraftEntity implements Entity {
   damage = { engine: 0, hydraulics: 0, fuelLeak: 0, fire: false, avionics: 0 };
   lastDamageTime = -999;
   lastAttackerId: number | null = null;
+  /**
+   * Practice rounds (training, MissionScript.practiceRounds): weapons that hit this jet do no damage;
+   * each hit is reported as 'practice:hit' instead. Flying into the ground still kills.
+   */
+  practiceRounds = false;
 
   loadout: LoadoutId | null = null;
   stores: StoreStation[] = [];
@@ -485,6 +490,13 @@ export class SamSiteEntity implements Entity {
    * of its type's SamTypeData.closeCue: a mission can give a fixed site the AD boat's tracker (g03's island SAMs).
    */
   closeCue?: { range: number; bayRange: number } | null;
+  /**
+   * The AD boat's long harassing shots (SamTypeData.harass, DifficultyParams.adBoatHarass) are off for
+   * this site: a training boat (t05) fires only inside its real envelope.
+   */
+  noHarass?: boolean;
+  /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
+  holdFire?: boolean;
 
   constructor(
     readonly id: number,

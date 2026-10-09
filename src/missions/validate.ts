@@ -122,7 +122,11 @@ export function validateMission(def: MissionDef): string[] {
     switch (a.kind) {
       case 'spawn':
       case 'reveal':
+      case 'hold_fire':
         checkGroup(a.group, where);
+        break;
+      case 'respawn':
+        if (!sc.groups.some((g) => g.id === a.group)) err(`${where} respawns "${a.group}", which is not an aircraft group`);
         break;
       case 'retask':
         checkGroup(a.group, where);
@@ -148,7 +152,10 @@ export function validateMission(def: MissionDef): string[] {
     const where = `group ${g.id}`;
     inWorld(g.x, g.z, where);
     if (!(g.count >= 1)) err(`${where} count < 1`);
-    if (!(g.altitude >= 100)) err(`${where} altitude below 100 m`);
+    // a group placed relative to the player has its altitude above the player (spawnAirGroup keeps it clear of the ground)
+    if (g.relative === 'player') {
+      if (!(Math.abs(g.altitude) <= 3000)) err(`${where} is more than 3 km above or below the player`);
+    } else if (!(g.altitude >= 100)) err(`${where} altitude below 100 m`);
     if (g.oneWay) {
       // one-way drones (Shahed-136) cruise at about 51 m/s
       if (!(g.speed >= 30)) err(`${where} drone speed below 30 m/s`);
@@ -223,6 +230,12 @@ export function validateMission(def: MissionDef): string[] {
         break;
       case 'bridge':
         if (def.theater !== 'auckland') err(`${where} needs the Harbour Bridge (Auckland theatre)`);
+        break;
+      case 'missile_drill':
+        if (!sc.defenceCoach) err(`${where} needs script.defenceCoach (the coach keeps the missile log it counts)`);
+        if (o.groups.length === 0) err(`${where} has no groups`);
+        o.groups.forEach((g) => checkGroup(g, where));
+        if (!(o.defeat >= 1)) err(`${where} defeat must be ≥ 1`);
         break;
     }
   }

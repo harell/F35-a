@@ -104,7 +104,8 @@ describe('HUD text budget lint (mission content vs the phone layout)', () => {
     const L = computeLayout(makeLayout(), 667, 375, noSafe, tan30, false);
     const chars = Math.max(16, Math.floor((L.colW - 16 * L.u) / (11.5 * L.u * CHAR_W)));
     const defend = [...(hintsSrc as string).matchAll(/'((?:IR )?MISSILE![^']*)'/g)].map((m) => m[1]);
-    expect(defend.length).toBe(2);
+    // a SAM's round and a fighter's, radar and IR (runtime/hints.ts)
+    expect(defend.length).toBe(4);
     for (const h of defend) expect(wrap(h, chars).length, `hint "${h}"`).toBeLessThanOrEqual(2);
   });
 

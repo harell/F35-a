@@ -87,12 +87,15 @@ export const G02: MissionDef = mission({
   // AARGM-ER for each air-defence boat's radar. No AMRAAM (nothing hostile flies), no GBU-31
   // (it can't hit a moving boat: #65's c08 trap).
   allowedLoadouts: ['strike_maritime'],
+  // Maritime Strike (the StormBreaker, AARGM-ER and gun on boats), then Gulf Defence: beating the
+  // air-defence boats' missiles, where players got stuck (the debrief points there too)
+  lessons: ['t04', 't05'],
   player: g02Start,
   // eight bombs for five to seven boats: the gun covers the spare boats (#77)
   gunAmmo: 360,
   script: {
     // the built-in hints: the first mission that shoots back gets the MISSILE! defence prompt (beam
-    // it, dive, CMS late), and the first air-to-ground one the TGT / IN RANGE steps (player feedback
+    // it, CMS every few seconds), and the first air-to-ground one the TGT / IN RANGE steps (player feedback
     // 2026-10-08: stuck here on Recruit, unable to evade the AD boats' missiles)
     autoHints: true,
     parTime: 300,
