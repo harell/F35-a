@@ -10,10 +10,11 @@ import { AKL, BRIDGE_SPAN_T } from '../../core/auckland';
 import { airfieldFeature } from '../../core/airfields';
 import type { IntelMarker, MissionDef, SceneryFeature } from '../../core/contracts';
 import { AIRCRAFT_INFO, SAM_INFO } from '../../core/data';
-import type { AircraftType, GroundTargetType, SamType } from '../../core/types';
+import type { AircraftType, Difficulty, GroundTargetType, SamType } from '../../core/types';
 import { SAM_DATA } from '../../sim/sam/samData';
 import type { AircraftGroupDef, Condition, GroundTargetDef, MissionScript, SamSiteDef, XZ } from '../schema';
 import { emptyScript } from '../schema';
+import { difficultyAtLeast } from '../runtime/state';
 
 /** Same terrain seed for every Auckland mission so the city looks the same all campaign. */
 export const AKL_SEED = 1840;
@@ -165,7 +166,8 @@ export function target(
 
 /**
  * Briefing-map markers derived from the script: known SAM rings, enemy air groups present at
- * the start, ground-target groups (centroid), friendly flights, airbases.
+ * the start, ground-target groups (centroid), friendly flights, airbases. Each keeps its item's
+ * minDifficulty, so the briefing shows the threats of the difficulty being flown (intelFor).
  */
 export function autoIntel(script: MissionScript, features: SceneryFeature[]): IntelMarker[] {
   const out: IntelMarker[] = [];
@@ -179,13 +181,15 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     const known = s.known ?? !s.emcon;
     if (!known || (s.team ?? 'red') !== 'red' || (s.spawn && s.spawn.kind !== 'start')) continue;
     const d = SAM_DATA[s.type];
-    out.push({ kind: 'sam', label: SAM_INFO[s.type].nato.split(' ')[0], x: s.x, z: s.z, radius: d.engageMax });
+    out.push({ kind: 'sam', label: SAM_INFO[s.type].nato.split(' ')[0], x: s.x, z: s.z, radius: d.engageMax, minDifficulty: s.minDifficulty });
   }
-  const groundGroups = new Map<string, { xs: number; zs: number; n: number; type: GroundTargetType; team: string; name?: string }>();
+  const groundGroups = new Map<string, { xs: number; zs: number; n: number; type: GroundTargetType; team: string; name?: string; min?: Difficulty }>();
   for (const g of script.ground) {
-    const e = groundGroups.get(g.group) ?? { xs: 0, zs: 0, n: 0, type: g.type, team: g.team ?? 'red', name: g.name };
+    const e = groundGroups.get(g.group) ?? { xs: 0, zs: 0, n: 0, type: g.type, team: g.team ?? 'red', name: g.name, min: g.minDifficulty };
     e.xs += g.x;
     e.zs += g.z;
+    // the group is there on the easiest difficulty any of its members is
+    if (e.n > 0 && !difficultyAtLeast(g.minDifficulty ?? 'recruit', e.min)) e.min = g.minDifficulty;
     e.n++;
     groundGroups.set(g.group, e);
   }
@@ -204,16 +208,16 @@ export function autoIntel(script: MissionScript, features: SceneryFeature[]): In
     const x = Math.round(e.xs / e.n);
     const z = Math.round(e.zs / e.n);
     // a neutral ship (g02's tanker) is the one being protected, not a strike target: mark it friendly, by name
-    if (e.team === 'neutral') out.push({ kind: 'friendly', label: e.name ?? label[e.type], x, z });
-    else out.push({ kind: e.team === 'blue' ? 'friendly' : 'target', label: label[e.type], x, z });
+    if (e.team === 'neutral') out.push({ kind: 'friendly', label: e.name ?? label[e.type], x, z, minDifficulty: e.min });
+    else out.push({ kind: e.team === 'blue' ? 'friendly' : 'target', label: label[e.type], x, z, minDifficulty: e.min });
   }
   for (const g of script.groups) {
     if (g.spawn && g.spawn.kind !== 'start') continue;
     if (g.team === 'blue') {
       if (g.role === 'wingman') continue;
-      out.push({ kind: 'friendly', label: `${g.callsign ?? 'Friendly'} flight`, x: g.x, z: g.z });
+      out.push({ kind: 'friendly', label: `${g.callsign ?? 'Friendly'} flight`, x: g.x, z: g.z, minDifficulty: g.minDifficulty });
     } else {
-      out.push({ kind: 'air', label: `${g.count}× ${AIRCRAFT_INFO[g.type].name}`, x: g.x, z: g.z });
+      out.push({ kind: 'air', label: `${g.count}× ${AIRCRAFT_INFO[g.type].name}`, x: g.x, z: g.z, minDifficulty: g.minDifficulty });
     }
   }
   return out;

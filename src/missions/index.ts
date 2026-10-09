@@ -141,7 +141,7 @@ export function nextMissionLabel(id: string, progress?: CampaignProgress): strin
   return TRAINING.some((m) => m.id === id) && next.index === 1 ? 'Start the campaign' : 'Next mission';
 }
 
-export { TRAINING_DIFFICULTY, fixedDifficulty, missionDifficulty } from './difficulty';
+export { TRAINING_DIFFICULTY, fixedDifficulty, intelFor, missionDifficulty } from './difficulty';
 
 /** Any campaign's mission or training mission by id (or null). */
 export function findMission(id: string): MissionDef | null {

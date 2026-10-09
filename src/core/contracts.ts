@@ -279,6 +279,8 @@ export interface IntelMarker {
   z: number;
   /** Threat ring radius (m) for SAMs. */
   radius?: number;
+  /** Only there on this difficulty and harder (the script item's minDifficulty): intelFor filters by it. */
+  minDifficulty?: Difficulty;
 }
 
 export interface MissionDef {
