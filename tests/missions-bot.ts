@@ -1089,6 +1089,11 @@ export interface PlaythroughResult {
   launches: { t: number; weapon: string; targetId: number | null; group: string | null }[];
   /** The probe flown instead of the plain bot (opts.probe; tests/missions-probes.ts) and the gun rounds fired in it. */
   probe?: { label: string; gunRounds: number };
+  /**
+   * The jeopardy the jet was in: enemy rounds (missiles and SAMs) launched at it, and its lowest health
+   * as a share of full (%). A win with 0 rounds and 100 % was never in danger (playtest 2026-10-10).
+   */
+  threat: { rounds: number; minHp: number };
 }
 
 export function runPlaythrough(
@@ -1138,7 +1143,9 @@ export function runPlaythrough(
   let friendlyLost = 0;
   let playerKills = 0;
   const launches: PlaythroughResult['launches'] = [];
+  const threat = { rounds: 0, minHp: 100 };
   events.on('munition:launch', (e) => {
+    if (e.targetId === p.id && e.shooter !== p) threat.rounds++;
     if (e.shooter !== p) return;
     const tgt = world.getEntity(e.targetId);
     launches.push({ t: world.time, weapon: e.missile.def.id, targetId: e.targetId, group: (tgt as { groupId?: string } | undefined)?.groupId ?? null });
@@ -1174,6 +1181,7 @@ export function runPlaythrough(
     world.step(dt);
     runner.update(world, dt);
     probe?.afterStep();
+    threat.minHp = Math.min(threat.minHp, Math.round((100 * Math.max(0, p.health)) / p.maxHealth));
     if (i % 30 === 0) jitterRed();
     if (opts.log && i % 300 === 0 && p.alive) {
       const des = world.getEntity(p.radar.designatedId);
@@ -1212,6 +1220,7 @@ export function runPlaythrough(
     modes: Object.fromEntries(Object.entries(modes).map(([k, v]) => [k, Math.round(v)])),
     events: log,
     launches,
+    threat,
     ...(probe ? { probe: { label: probe.label, gunRounds: probe.gunRounds } } : {}),
   };
   runner.dispose?.();

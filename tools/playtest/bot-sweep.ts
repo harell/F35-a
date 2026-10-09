@@ -9,8 +9,9 @@
  *       [--loadout=sead_stealth] [--log] [--nojitter] [--park[=start|far] | --gunonly | --route=<name>]
  *       [--reaction=<s>] [--nodefend]
  *
- * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run and a
- * win-rate table per mission × difficulty; --json writes every PlaythroughResult (minus the raw
+ * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run, a
+ * win-rate table per mission × difficulty and a threat table (enemy rounds at the jet, its lowest health, wins
+ * never in danger: is the mission a walkover?); --json writes every PlaythroughResult (minus the raw
  * MissionResult) for the playtest ledger. --jobs splits the runs over child processes.
  *   --loadout   fly this loadout instead of each mission's recommended one; missions that don't
  *               allow it are skipped (their cells read "skip" and the table says why)
@@ -140,7 +141,7 @@ if (args.shard) {
           if (!line.startsWith('{')) continue;
           const r = JSON.parse(line) as Row;
           rows.push(r);
-          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
+          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  rounds=${r.threat.rounds} minhp=${r.threat.minHp}%  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
         }
       });
       return new Promise<void>((resolve) => child.on('close', () => resolve()));
@@ -159,6 +160,20 @@ if (args.shard) {
     console.log(`${m.padEnd(w)}${cells.join('')}`);
   }
   if (skipped.length) console.log(`skip = ${loadout} is not an allowed loadout there (${skipped.join(', ')}); those missions were not flown`);
+  // jeopardy: was the jet ever in danger? (playtest 2026-10-10: Pilot wins nobody shot at read as walkovers)
+  console.log(`\nthreat (enemy rounds at the jet per run, average · lowest health % · wins never shot at or hit)`);
+  for (const m of missions) {
+    if (skipped.includes(m)) continue;
+    const cells = diffs.map((d) => {
+      const rs = rows.filter((r) => r.mission === m && r.diff === d);
+      if (!rs.length) return '-'.padEnd(17);
+      const avg = rs.reduce((n, r) => n + r.threat.rounds, 0) / rs.length;
+      const low = Math.min(...rs.map((r) => r.threat.minHp));
+      const calm = rs.filter((r) => r.state === 'success' && r.threat.rounds === 0 && r.threat.minHp === 100).length;
+      return `${avg.toFixed(1)} · ${low}% · ${calm}`.padEnd(17);
+    });
+    console.log(`${m.padEnd(w)}${cells.join('')}`);
+  }
   if (probe?.kind === 'gunonly') {
     // gun-only: did the fights reach the gun? (rounds fired, and runs that fired any, per cell)
     console.log(`\ngun rounds fired (total / runs that fired)`);
