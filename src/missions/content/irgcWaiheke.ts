@@ -152,7 +152,7 @@ export const G03: MissionDef = mission({
   weather: 'overcast',
   briefing: [
     "Tasking from the Waiheke Trap Line volunteers: one stoat on the Onetangi dunes, heading east for a nest of NZ dotterel chicks. It gets there in just over five minutes. It stops at three bait stations on the way: those stops are your drop windows, because a StormBreaker can't track it while it runs.",
-    'The Guard holds the island: an SA-6 on Motuihe, a Shilka (ZSU-23-4) gun on the ridge above the beach, and air-defence boats north of Rakino, off Onetangi and in the Tāmaki Strait. Inside 7 to 9 km they see you, stealth or not. On Veteran a second SA-6 on Rakino guards the way round the north.',
+    'The Guard holds the island: an SA-6 on Motuihe, a Shilka (ZSU-23-4) gun on the ridge above the beach, and IRGC Navy air-defence boats north of Rakino, off Onetangi and in the Tāmaki Strait. Inside 7 to 9 km they see you, stealth or not. On Veteran a second SA-6 on Rakino guards the way round the north.',
     `There is more than one way in: low down the Tāmaki Strait, under the SA-6's radar floor (no AARGM needed); round the north, an AARGM for each boat in your way; or straight across after an AARGM at the Motuihe SA-6. You carry two AARGM-ERs and two StormBreakers (GBU-53). With an AARGM, ${AARGM_RULE}.`,
     'Find the stoat from under the cloud (its base is about 6,000 ft), within 6 km of the nest. It is the only authorised target on the island.',
   ],
