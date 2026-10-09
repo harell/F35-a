@@ -57,7 +57,7 @@ Clarity can't see inside the WebGL canvas, so the useful data is the custom even
 
 **Touch (default):** throttle lever on the left (drag past the detent for afterburner; double-tap toggles MIL/AB), floating side-stick on the right.
 **FIRE** releases the selected weapon, **GUN** fires the gun, **CMS** drops flares and chaff, **WPN** cycles weapons, **TGT** designates/locks and steps through the selected weapon's targets (air with an A/A missile, ground with an A/G weapon, both with the gun, nearest in front first; civil traffic only once no hostile is left; the HUD warns, e.g. `AIR TGT: GUN OR A-A`, when the selected weapon can't engage the boxed target),
-**CAM** changes view (long-press for padlock), **RDR** toggles radar emission (EMCON). Drag the empty centre of the screen to look around; tap a target box to designate it.
+**CAM** changes view (you start in the chase view; the cockpit is one tap away, and Settings → Default view sets where missions start; long-press for padlock), **RDR** toggles radar emission (EMCON). Drag the empty centre of the screen to look around; tap a target box to designate it.
 
 **Keyboard:** arrows/WASD pitch & roll · Q/E yaw · Shift/R and Ctrl/F throttle · Tab afterburner · Space gun · Enter/B fire · 1/N weapon · T target ·
 X countermeasures · C camera · V radar · I civil traffic (CIV boxes) on/off · P/Esc pause · mouse-drag look. **Gamepad:** standard mapping.

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CampaignProgress } from '../src/core/contracts';
 import { DIFFICULTIES } from '../src/core/data';
 import { loadSettings } from '../src/core/settings';
+import { sortieHomeView } from '../src/game/views';
 import type { Settings } from '../src/core/types';
 import { MEDAL_LIST, TRAINING, failStreak, recordResult } from '../src/missions';
 import {
@@ -85,6 +86,16 @@ describe('briefing difficulty picker', () => {
     // URL-only overrides on the live object (e.g. ?quality=low) are not written to storage
     expect(saved.quality).toBe(loadSettings().quality);
     expect(JSON.parse(g.localStorage!.getItem('f35a.settings.v1')!).quality).not.toBe('low');
+  });
+  it('a new player starts in the chase view; a saved cockpit choice stays cockpit (r1 1.2-c)', () => {
+    expect(loadSettings().defaultView).toBe('chase');
+    expect(sortieHomeView(false, loadSettings().defaultView, null)).toBe('chase');
+    g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ defaultView: 'cockpit', difficulty: 'recruit' }));
+    expect(loadSettings().defaultView).toBe('cockpit');
+    expect(sortieHomeView(false, loadSettings().defaultView, null)).toBe('cockpit');
+    // settings saved without the field (an older save) take the new default
+    g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ difficulty: 'recruit' }));
+    expect(loadSettings().defaultView).toBe('chase');
   });
   it("a saved difficulty 'ace' (the removed fourth level) loads as 'veteran'", () => {
     g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ difficulty: 'ace' }));

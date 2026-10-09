@@ -2,7 +2,7 @@
  * First-time flow polish (issue #70, playtest 2026-10-02 round 4: 4.2-b, 4.2-c, 4.2-f):
  *  - tilt chosen but no orientation data: Input flies the touch stick, so the hints and {controls} texts
  *    describe the stick and a toast says tilt is unavailable;
- *  - T01's first hint stays on screen for its whole duration in the default cockpit view at 844x390
+ *  - T01's first hint stays on screen for its whole duration in the cockpit view at 844x390 (the tightest layout)
  *    (it was drawn ~2.4 s of its 7 s while the radio pill and the opening objectives filled the column);
  *  - the cockpit stores (SMS) page isn't covered by the touch controls in either handed layout.
  */

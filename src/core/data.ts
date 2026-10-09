@@ -209,7 +209,10 @@ export const DEFAULT_SETTINGS: Settings = {
   hudColor: 'green',
   fov: 60,
   showFps: false,
-  defaultView: 'cockpit',
+  // new players start in the chase view, the city in sight below the nose (playtest r1 1.2-c): the
+  // cockpit's panel takes the bottom third of the screen. The cockpit is one tap away on CAM, and a
+  // saved choice is kept (loadSettings merges the saved object over these).
+  defaultView: 'chase',
   targetCam: true,
   missileCam: 'dynamic',
   hdTerrain: true,

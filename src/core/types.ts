@@ -355,7 +355,7 @@ export interface Settings {
   fov: number;
   /** Show FPS counter. */
   showFps: boolean;
-  /** Default camera when a mission starts. */
+  /** Default camera when a mission starts (chase for a new player, core/data.ts DEFAULT_SETTINGS). */
   defaultView: 'cockpit' | 'hud' | 'chase';
   /** Target camera: small picture-in-picture view of the designated / locked target. */
   targetCam: boolean;
