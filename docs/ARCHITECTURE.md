@@ -196,7 +196,9 @@ thinning with slant range (`aerialHouseShare`, the same curve as `scatterKeep` i
 `houseRadius` as the `uAerialHouseR` uniform) and is gone beyond their radius, where both sides are lit as flat ground.
 At night the procedural ground still runs under the photo for its lamps and lit windows, and the photo gives half its
 colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
-sit on the warmer procedural colour instead of a cool grey square.
+sit on the warmer procedural colour instead of a cool grey square. The other way round, the procedural lawns, parks and pitches (`terrainStyle().garden`) are a muted green half
+way from a fresh lime to the photo's lawns, so the square's edge (Ponsonby Rd, Newmarket) is no hard break from
+grey-green photo to lime lots.
 
 **Real houses under the photo (#121).** Where the photo covers the Devonport peninsula and the gulf islands, the house
 scatter draws the real houses instead (`src/world/scenery/aucklandHouses.ts`, `auckland-houses.bin`, ≈ 17,000 houses at

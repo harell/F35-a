@@ -3,7 +3,7 @@
  * Voronoi crackle, not a leafy suburban city (worst from combat altitude)".
  */
 import { describe, expect, it } from 'vitest';
-import { Color } from 'three';
+import { Color, SRGBColorSpace } from 'three';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { allFeatures } from '../src/world/scenery/Scenery';
 import { bakeColorRows } from '../src/world/terrain/bake';
@@ -39,7 +39,9 @@ describe('far-field suburb colour (combat altitude)', () => {
       expect(mix.canopy).toBeGreaterThanOrEqual(0.3);
       expect(mix.canopy).toBeLessThanOrEqual(0.45);
       const c = suburbFarAlbedo(style, mix);
-      expect(c.g / c.r).toBeGreaterThan(1.1); // green, not khaki (old: < 1.05)
+      // green, not khaki (the old formula: 0.97), as green as the aerial photo's land (1.07) less a margin: the lawns are
+      // graded toward the photo (R11-3), so the bare mix is no longer the 1.12 of the lime lawns
+      expect(c.g / c.r).toBeGreaterThan(1.04);
       expect(c.g / c.b).toBeGreaterThan(1.35);
       expect(lum(c)).toBeGreaterThan(0.07);
       expect(lum(c)).toBeLessThan(0.15);
@@ -48,6 +50,18 @@ describe('far-field suburb colour (combat altitude)', () => {
     const leafy = suburbFarAlbedo(style, LEAFY_MIX);
     const bare = suburbFarAlbedo(style, BARE_MIX);
     expect(lum(leafy)).toBeLessThan(lum(bare));
+  });
+
+  it('lawns are a muted green near the aerial photo’s, not lime (playtest r1 R11-3: a hard colour break at its edge)', () => {
+    // the photo's lawns (linear): its land pixels greener than grey and lighter than their median (the darker half is
+    // trees), measured from auckland-aerial-2048.webp
+    const photoLawn = new Color(0.104, 0.118, 0.101);
+    const g = style.garden;
+    const hsl = g.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace);
+    expect(hsl.s).toBeLessThan(0.25); // (sRGB) 0x55803a, the lime of before: 0.38
+    expect(g.g).toBeGreaterThan(Math.max(g.r, g.b)); // still green
+    expect(g.g / g.b).toBeLessThan(2.6); // was 5.1 (the photo's lawns: 1.2)
+    expect(lum(g)).toBeLessThan(lum(photoLawn) * 1.3); // was 1.5×
   });
 
   it('NZ roof palette: corrugated-iron red, terracotta, charcoal / grey and off-white', () => {
