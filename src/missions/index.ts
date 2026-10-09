@@ -84,6 +84,15 @@ export function lessonsFor(missionId: string): MissionDef[] {
 }
 
 /**
+ * The first campaign mission (in campaign order) that wants lesson `id` (MissionDef.lessons): what the
+ * lesson prepares for. Null for anything that isn't a lesson some campaign mission asks for.
+ */
+export function missionForLesson(id: string): MissionDef | null {
+  for (const c of PLAYABLE_CAMPAIGNS) for (const m of c.missions) if (m.lessons?.includes(id)) return m;
+  return null;
+}
+
+/**
  * The campaign mission the player is training for (the first playable campaign's first mission not
  * yet won; null once every one is) and the lessons it wants that aren't flown yet. `flown` says
  * which lessons count as flown (default: those with a result in `p`).
