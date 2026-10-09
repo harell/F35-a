@@ -3,9 +3,9 @@
  * one small target on the Onetangi dunes.
  *
  * The layout's promise (playtest 2026-10-10, r1): several ways in, none of them free. The straight line
- * passes the Motuihe SA-6, each detour meets a patrol boat, the ZSU covers the drop pass at the end of
- * every route (and on Veteran the airstrip SA-6 too), and the target can't be found from above the
- * cloud; the stoat's stops leave a jet that finds it at 3:00 two drop windows. These are checked on the
+ * passes the Motuihe SA-6, each detour meets a patrol boat (and on Veteran the north way an SA-6 on
+ * Rakino too), the ZSU covers the drop pass at the end of every route, and the target can't be found
+ * from above the cloud; the stoat's stops leave a jet that finds it at 3:00 two drop windows. These are checked on the
  * real LINZ coast; the bot's route probes (#198, tests/missions-balance.test.ts) measure the ways in flight.
  */
 import { describe, expect, it } from 'vitest';
