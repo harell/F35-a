@@ -3,11 +3,11 @@
  * rewritten every frame. Each wake is a flat V on the water behind the stern: two Kelvin arms
  * diverging at ~19° (the angle that reads from altitude, whatever the speed), plus the churned
  * propeller wash down the middle, brightest at the stern. Length and brightness grow with speed
- * (wakeLength / wakeIntensity); a hull below ~0.5 m/s leaves none. Additive, so wakes that cross
- * just add up; dimmed at night and into the fog. Allocation-free: fixed typed arrays.
+ * (wakeLength / wakeIntensity); a hull below ~0.5 m/s leaves none. Alpha-blended white water, not
+ * additive light: an additive V read as two glowing cyan beams from above (#276, R32-6). Greyed at
+ * night and faded into the fog. Allocation-free: fixed typed arrays.
  */
 import {
-  AdditiveBlending,
   BufferAttribute,
   DoubleSide,
   DynamicDrawUsage,
@@ -64,16 +64,18 @@ float vnoise(vec2 p) {
 void main() {
   // broken-up foam rather than a flat decal
   float n = vnoise(vWorld * 0.21 + vec2(uTime * 0.13, 0.0)) * 0.6 + vnoise(vWorld * 0.07 - vec2(0.0, uTime * 0.05)) * 0.4;
-  vec3 c = vec3(0.9, 0.94, 0.95) * vShade * (0.55 + 0.9 * n) * uDim;
+  // foam covers the water rather than lighting it; crossing wakes stack their cover, not their light
+  float a = clamp(vShade * (0.45 + 0.75 * n), 0.0, 0.85);
+  vec3 c = vec3(0.86, 0.89, 0.89) * uDim;
   #ifdef USE_FOG
     #ifdef FOG_EXP2
       float fogF = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
     #else
       float fogF = smoothstep(fogNear, fogFar, vFogDepth);
     #endif
-    c *= 1.0 - fogF;
+    a *= 1.0 - fogF;
   #endif
-  gl_FragColor = vec4(c, 1.0);
+  gl_FragColor = vec4(c, a);
 }`;
 
 /** Wake length (m) behind a hull of length `hull` m at `speed` m/s: ~250 m for a ship at 11 kn or a ferry at 20 kn. */
@@ -162,7 +164,6 @@ export class WakeBatch {
       uniforms: UniformsUtils.merge([UniformsLib.fog, { uDim: { value: 1 }, uTime: { value: 0 } }]),
       transparent: true,
       depthWrite: false,
-      blending: AdditiveBlending,
       side: DoubleSide,
       fog: true,
       toneMapped: false,
