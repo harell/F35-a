@@ -150,6 +150,7 @@ const PULSE_FRAG = /* glsl */ `
 uniform vec3 uColor;
 uniform float uAlpha;
 uniform float uSphere;
+uniform float uGain;
 varying vec2 vUv;
 varying vec3 vN;
 varying vec3 vV;
@@ -164,7 +165,7 @@ void main() {
     a = smoothstep(0.0, 0.35, r) * (1.0 - smoothstep(0.55, 1.0, r)) * uAlpha;
   }
   if (a < 0.003) discard;
-  gl_FragColor = vec4(uColor, a);
+  gl_FragColor = vec4(uColor, a * uGain);
 }`;
 
 interface Pulse {
@@ -185,7 +186,11 @@ export class Pulses {
   private readonly ringGeo: BufferGeometry;
   private readonly sphereGeo: BufferGeometry;
 
-  constructor(rings = 8, spheres = 4) {
+  /**
+   * @param gain brightness of the additive shock spheres: the effects' pulses share GpuParticles glowGain
+   *             (dimmed in the PiP, #282 R31-10); the normal-blended rings keep their own, at 1
+   */
+  constructor(rings = 8, spheres = 4, gain: { value: number } = { value: 1 }) {
     this.group.name = 'pulses';
     // ring with uv.x = radial coordinate 0 (inner) → 1 (outer)
     const rg = new RingGeometry(0.55, 1, 48, 1);
@@ -202,7 +207,7 @@ export class Pulses {
       const mat = new ShaderMaterial({
         vertexShader: PULSE_VERT,
         fragmentShader: PULSE_FRAG,
-        uniforms: { uColor: { value: new Color(1, 1, 1) }, uAlpha: { value: 0 }, uSphere: { value: sphere ? 1 : 0 } },
+        uniforms: { uColor: { value: new Color(1, 1, 1) }, uAlpha: { value: 0 }, uSphere: { value: sphere ? 1 : 0 }, uGain: sphere ? gain : { value: 1 } },
         transparent: true,
         depthWrite: false,
         side: DoubleSide,

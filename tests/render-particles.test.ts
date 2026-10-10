@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { Vector3, type Mesh, type ShaderMaterial } from 'three';
 import { GpuParticles, STRIDE, glowGain, particlePosition, resetSpawn, spawnParams } from '../src/render/effects/GpuParticles';
 import { Ribbons, type RibbonStyle } from '../src/render/effects/Ribbons';
 import { SpriteBatch } from '../src/render/effects/SpriteBatch';
+import { Pulses } from '../src/render/effects/Props';
 
 describe('render particle pool', () => {
   it('ring buffer overwrites the oldest slot and tracks dirty ranges', () => {
@@ -126,5 +127,23 @@ describe('additive glow gain (#282 R31-10)', () => {
     smoke.dispose();
     sprites.dispose();
     lights.dispose();
+  });
+
+  it('the additive air-shock spheres share it too; the normal-blended ground rings keep their own', () => {
+    const pulses = new Pulses(2, 2, glowGain);
+    const mats = pulses.group.children.map((m) => (m as Mesh).material as ShaderMaterial);
+    expect(mats).toHaveLength(4);
+    expect(mats[0].fragmentShader).toContain('uGain');
+    // rings first, then spheres (Pulses constructor order)
+    for (const m of mats.slice(0, 2)) {
+      expect(m.uniforms.uSphere.value).toBe(0);
+      expect(m.uniforms.uGain).not.toBe(glowGain);
+      expect(m.uniforms.uGain.value).toBe(1);
+    }
+    for (const m of mats.slice(2)) {
+      expect(m.uniforms.uSphere.value).toBe(1);
+      expect(m.uniforms.uGain).toBe(glowGain);
+    }
+    pulses.dispose();
   });
 });

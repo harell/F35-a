@@ -64,9 +64,10 @@ export interface WeaponShotView extends TargetCamRect {
 }
 
 /**
- * Additive effects glow brightness (fire particles, Effects' glow sprites) in the PiP pass, against 1 in the main view
- * (#282 R31-10): a fireball over the target stacks to orange-yellow instead of white, so the window
- * still shows the kill and the target under it.
+ * Additive effects glow brightness in the PiP pass, against 1 in the main view (#282 R31-10): a fireball
+ * over the target stacks to orange-yellow instead of white, so the window still shows the kill and the
+ * target under it. It covers every additive fire particle, effects glow sprite and air-shock sphere
+ * (effects glowGain): tracers, muzzle and AAA flashes, motor glows, flares and wreck glows too.
  */
 export const PIP_GLOW_GAIN = 0.35;
 

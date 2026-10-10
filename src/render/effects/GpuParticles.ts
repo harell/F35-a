@@ -104,10 +104,13 @@ export function particlePosition(p: ParticleSpawn, age: number, wind: { x: numbe
 }
 
 /**
- * Brightness of the effects' additive glow (fire particles and Effects' glow sprites), one uniform
- * shared by their materials: 1 in the main view. The target camera pass lowers it for its draw (TargetCam
- * PIP_GLOW_GAIN, #282 R31-10): the zoomed window is filled by a kill's flash and fireball, and stacked
- * additive fire there blew out to white instead of reading as an orange ball over the target.
+ * Brightness of the effects' additive glow, one uniform shared by their materials: every additive fire
+ * particle, every glow sprite of Effects' batch and the air-shock spheres (Props Pulses), so tracers,
+ * muzzle and AAA flashes, motor glows, flares and wreck glows as well as the fireball. 1 in the main
+ * view; the target camera pass lowers it for its draw (TargetCam PIP_GLOW_GAIN, #282 R31-10): the zoomed
+ * window is filled by a kill's flash and fireball, and stacked additive fire there blew out to white
+ * instead of reading as an orange ball over the target. An effect that must stay bright in the PiP needs
+ * a batch of its own.
  */
 export const glowGain = { value: 1 };
 

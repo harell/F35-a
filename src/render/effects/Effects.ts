@@ -237,7 +237,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const ribbons = new Ribbons(Math.round(5000 * ps), 96, 9);
   const sprites = new SpriteBatch(1200, glowTexture(), 12, glowGain);
   const debris = new Debris(Math.round(80 * ps));
-  const pulses = new Pulses(8, 4);
+  const pulses = new Pulses(8, 4, glowGain);
   const cones = new VaporCones(3);
   // impact craters (#201): g03's stoat leaves nothing but the hole the bomb dug
   const craters = new Craters();
