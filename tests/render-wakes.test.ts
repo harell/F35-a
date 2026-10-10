@@ -4,7 +4,7 @@
  * no per-ship wake meshes left in the models. Scene-graph checks: no WebGL.
  */
 import { describe, expect, it } from 'vitest';
-import { InstancedMesh, Matrix4, Mesh, PerspectiveCamera, Scene, Vector3, type InstancedBufferGeometry, type Object3D } from 'three';
+import { InstancedMesh, Matrix4, Mesh, NormalBlending, PerspectiveCamera, Scene, Vector3, type InstancedBufferGeometry, type Object3D } from 'three';
 import { QUALITY_PRESETS } from '../src/core/data';
 import type { EnvironmentApi, FrameContext, MissionRunnerApi } from '../src/core/contracts';
 import type { QualitySettings, TheaterId, VesselClass } from '../src/core/types';
@@ -40,6 +40,17 @@ describe('wake shape', () => {
     expect(wakeLength(10, 34)).toBeGreaterThan(200);
     // capped for very fast hulls
     expect(wakeLength(40, 34)).toBeLessThanOrEqual(4 * 34 + 150);
+  });
+
+  it('draws white water over the sea, not additive light (#276 R32-6: two glowing cyan beams from above)', () => {
+    const b = new WakeBatch(4);
+    expect(b.material.blending).toBe(NormalBlending);
+    expect(b.material.transparent).toBe(true);
+    expect(b.material.depthWrite).toBe(false);
+    // the foam's cover goes in alpha (and fades into the fog there), never an opaque 1.0
+    expect(b.material.fragmentShader).toMatch(/gl_FragColor = vec4\(c, a\)/);
+    expect(b.material.fragmentShader).toMatch(/a \*= 1\.0 - fogF/);
+    b.dispose();
   });
 
   it('puts every wake in one instanced mesh, starting at the stern and pointing aft', () => {
