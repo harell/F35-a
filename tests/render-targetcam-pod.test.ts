@@ -7,7 +7,7 @@ import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { cloudBetween } from '../src/sim/sensors/los';
 import { AircraftEntity, GroundTargetEntity, SamSiteEntity } from '../src/sim/entities';
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
-import { pipView, podMask, podReadout, resetPip, resetPodZoom, stepPod, tapPip } from '../src/hud/hmd/pip';
+import { fitReadout, pipView, podMask, podReadout, resetPip, resetPodZoom, stepPod, tapPip } from '../src/hud/hmd/pip';
 import { TargetCam } from '../src/render/TargetCam';
 import { POD_CLEAR_K, POD_RANGE, POD_STANDOFF, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
 
@@ -251,6 +251,20 @@ describe('pod line of sight', () => {
   it('the TGT readout names the target as the PCD does', () => {
     expect(podReadout(new SamSiteEntity(3, 'sa6', 'red'), false)).toBe('TGT SA-6');
     expect(podReadout(new SamSiteEntity(3, 'sa6', 'red'), true)).toBe('LOCK SA-6');
+  });
+
+  it('a long readout shrinks, then drops whole words, never cuts one in half (#282 F11)', () => {
+    const pen = { textWidth: (s: string, size: number) => s.length * size * 0.6 }; // monospace, as Pen
+    const out = { text: '', size: 0 };
+    const text = 'TGT SUICIDE BOAT'; // 16 chars: 96 px at 10, 76.8 px at 8
+    fitReadout(text, 100, pen, out);
+    expect(out).toEqual({ text, size: 10 });
+    fitReadout(text, 80, pen, out);
+    expect(out).toEqual({ text, size: 8 });
+    fitReadout(text, 70, pen, out);
+    expect(out).toEqual({ text: 'TGT SUICIDE', size: 8 });
+    fitReadout(text, 10, pen, out);
+    expect(out).toEqual({ text: 'TGT', size: 8 });
   });
 });
 

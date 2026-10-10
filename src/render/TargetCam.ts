@@ -17,13 +17,16 @@
  * the line of sight from the player's jet, framing the zoom step (pose.ts podCamPose), and draws at most
  * POD_RANGE past the target; with no line of sight (rect.mask) the pass is skipped and the HUD draws the
  * window MASKED.
+ * The pass dims the additive glow (effects glowGain → PIP_GLOW_GAIN, #282 R31-10): a kill seen in the
+ * zoomed window fills it with flash and fireball, and stacked additive fire blew it out to white.
  */
 import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
 import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, podSpan } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
-import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
+import { glowGain } from './effects/GpuParticles';
+import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, weaponHoldPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
 export interface TargetCamRect {
@@ -47,15 +50,28 @@ export interface TargetCamRect {
 /** The weapon window's shot (hud/hmd/wpnCam.ts wpnView): the weapon, its last state and its target. */
 export interface WeaponShotView extends TargetCamRect {
   focusId: number | null;
-  /** Still flying (false: the outcome hold, the camera stays where it was and watches the target). */
+  /**
+   * Still flying (false: the outcome hold; after a miss or an air kill the camera stays where it was and
+   * watches the target; a surface hit freezes on the impact, `hit`).
+   */
   flying: boolean;
+  /** A surface hit: the hold freezes on the impact point (weaponHoldPose, #282 F12). */
+  hit: boolean;
   len: number;
   pos: Vector3;
   vel: Vector3;
   tgt: Vector3;
 }
 
-/** After the weapon is gone the held shot keeps at least this far from what it watches (m): out of the fireball. */
+/**
+ * Additive effects glow brightness in the PiP pass, against 1 in the main view (#282 R31-10): a fireball
+ * over the target stacks to orange-yellow instead of white, so the window still shows the kill and the
+ * target under it. It covers every additive fire particle, effects glow sprite and air-shock sphere
+ * (effects glowGain): tracers, muzzle and AAA flashes, motor glows, flares and wreck glows too.
+ */
+export const PIP_GLOW_GAIN = 0.35;
+
+/** After a miss the held shot keeps at least this far from the target it watches (m). */
 const HOLD_MIN_DIST = 160;
 
 /** Is `a` the object `o` or one of its ancestors? */
@@ -83,6 +99,8 @@ export class TargetCam {
   private readonly wPose = makePose();
   private wKey: number | null = null;
   private wHas = false;
+  /** The hold is frozen on the impact (weaponHoldPose). */
+  private wHeld = false;
   /** visible flags of the omitted objects, restored after the pass */
   private readonly shown: boolean[] = [];
   /** objects hidden for the pass (the omit list, or its parts round a kept landmark) */
@@ -173,8 +191,10 @@ export class TargetCam {
 
   /**
    * Render the weapon window (hud/hmd/wpnCam.ts): a chase shot behind the player's weapon while it
-   * flies; after the outcome the camera stays where it was and watches the target (the wreck, or the
-   * target flying on after a miss). Same cost as the target shot, which isn't rendered meanwhile.
+   * flies; after a surface hit the shot freezes on the impact point (weaponHoldPose: the target and the
+   * fireball in frame, #282 F12); after a miss or an air kill the camera stays where it was and watches the
+   * target (flying on, or the falling wreck). Same cost as the target shot, which isn't rendered
+   * meanwhile.
    */
   renderWeapon(renderer: WebGLRenderer, scene: Scene, view: WeaponShotView, far: number, range = 0, omit: readonly Object3D[] = NONE): boolean {
     if (view.vw < 2 || view.vh < 2 || view.focusId === null) {
@@ -185,8 +205,15 @@ export class TargetCam {
       this.wKey = view.focusId;
       this.wHas = false;
     }
-    if (view.flying || !this.wHas) weaponCamPose(view.pos, view.vel, view.tgt, view.len, this.wPose);
-    if (!view.flying) {
+    if (view.flying || !this.wHas) {
+      weaponCamPose(view.pos, view.vel, view.tgt, view.len, this.wPose);
+      this.wHeld = false;
+    }
+    if (view.hit) {
+      // freeze on the impact: the weapon's last position, where the fireball blooms (#282 F12)
+      if (!this.wHeld) weaponHoldPose(this.wPose, view.pos, this.wPose);
+      this.wHeld = true;
+    } else if (!view.flying) {
       const t = view.targetId === null ? null : this.world.getEntity(view.targetId);
       this.wPose.look.copy(t ? t.position : view.tgt);
       const d = this.wPose.position.distanceTo(this.wPose.look);
@@ -232,6 +259,8 @@ export class TargetCam {
     renderer.setViewport(rect.vx, yGl, rect.vw, rect.vh);
     const autoClear = renderer.autoClear;
     renderer.autoClear = true;
+    const gain = glowGain.value;
+    glowGain.value = PIP_GLOW_GAIN;
     // Game turns renderer.info.autoReset off, so this pass adds to the frame's world + cockpit counts
     const info = renderer.info.render;
     const calls0 = renderer.info.autoReset ? 0 : info.calls;
@@ -246,6 +275,7 @@ export class TargetCam {
     } finally {
       for (let i = 0; i < this.hidden.length; i++) this.hidden[i].visible = this.shown[i];
       renderer.autoClear = autoClear;
+      glowGain.value = gain;
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, _size.x, _size.y);
       renderer.shadowMap.autoUpdate = autoShadow;

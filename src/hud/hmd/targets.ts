@@ -923,20 +923,52 @@ export function bombTimeToGo(m: MissileEntity, target: { x: number; y: number; z
 
 /* ───────────────────────── Own missiles in flight ───────────────────────── */
 
-export function drawOwnMissiles(f: HudFrame): void {
+/** Motor-glow marker colours (#282 F3): a warm halo and a hot core, like the 3D plume they stand in for. */
+const MOTOR_HALO = 'rgba(255,168,72,0.5)';
+const MOTOR_CORE = '#fff2d2';
+
+/**
+ * Does the player's own missile get the HUD motor-glow marker (#282 F3)? Right after launch an AMRAAM
+ * flies down the line of sight to the boxed target (244 m out and ~4° low at 1.5 s), so the target box
+ * and LOCK strokes, drawn on the HUD canvas over the 3D view, hide its motor glow. The marker redraws
+ * the glow over them while the motor burns, from any camera at the jet (`nearJet`: the cockpit, and the
+ * chase view, which sees the plume ~5° under the box too); not from a far outside camera or the weapon's.
+ * The warm colours stand in for the 3D plume: they are not symbology.
+ */
+export function showsMotorGlow(m: MissileEntity, playerId: number, nearJet: boolean): boolean {
+  return nearJet && m.alive && m.motorBurning && m.shooterId === playerId;
+}
+
+/** Own missiles in flight: a ring each, and the motor glow over the box while it burns (`nearJet`: showsMotorGlow). */
+export function drawOwnMissiles(f: HudFrame, nearJet: boolean): void {
   const { world, p, pen, pal, L } = f;
   const u = L.u;
   pen.setDash('solid');
   pen.begin();
   let any = false;
+  let glow = false;
   for (const m of world.missiles) {
     if (!m.alive || m.shooterId !== p.id) continue;
     f.proj.point(m.position, f.sp);
     if (!drawable(f)) continue;
     pen.circle(f.sp.x, f.sp.y, 3.5 * u);
     any = true;
+    if (showsMotorGlow(m, p.id, nearJet)) glow = true;
   }
   if (any) pen.strokeGlow(pal.main, 1.3);
+  if (!glow) return;
+  // drawn after the designated box and the LOCK cue, so the glow sits on top of their strokes
+  for (const m of world.missiles) {
+    if (!showsMotorGlow(m, p.id, nearJet)) continue;
+    f.proj.point(m.position, f.sp);
+    if (!drawable(f)) continue;
+    pen.begin();
+    pen.circle(f.sp.x, f.sp.y, 2.4 * u);
+    pen.fillPlain(MOTOR_HALO);
+    pen.begin();
+    pen.circle(f.sp.x, f.sp.y, 1.1 * u);
+    pen.fillPlain(MOTOR_CORE);
+  }
 }
 
 /* ───────────────────────── Friendlies ───────────────────────── */

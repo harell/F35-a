@@ -10,11 +10,12 @@
  *    grows to 1.6× (setting 'dynamic'; 'compact' keeps the slot's size) and shows a chase shot behind
  *    the weapon (render/TargetCam.ts renderWeapon). It stays open until the outcome unless the time to
  *    impact climbs past 5 s again (the target turned away).
- *  - OUTCOME: a hit holds SPLASH 1.6 s; a kill of the target camera's own target holds the camera's
- *    DESTROYED hold instead (3 s, 6 s for a ship) and the camera doesn't replay it. Hits less than 1.6 s
- *    apart count up (SPLASH ×N). MISSED / DECOYED / LOST / NO TGT hold 2 s in amber, then the slot goes
- *    back to the target camera, still on its live target. A result gives way at once when another
- *    weapon enters its last 3 s (it stays as an amber chip).
+ *  - OUTCOME: a hit holds SPLASH 1.6 s over the impact (the shot freezes there, #282 F12); a kill of
+ *    the target camera's own target holds the camera's DESTROYED hold instead (3 s, 6 s for a ship) and
+ *    the camera doesn't replay it. Hits less than 1.6 s apart count up (SPLASH ×N). MISSED / DECOYED /
+ *    LOST / NO TGT hold 2 s in amber, then the slot goes back to the target camera, still on its live
+ *    target. A result gives way at once when another weapon enters its last 3 s (it stays as an amber
+ *    chip).
  *  - Several weapons: one window, on the next to hit (lowest time to impact, held ≥ 2 s; a tap on the
  *    window cycles and pins one). The others are chips under it, by time to impact; from 4 weapons up
  *    grouped by target, 3 rows at most, then "+N".
@@ -60,10 +61,12 @@ export type WpnLook = 'closed' | 'strip' | 'video';
 export interface WpnTrack {
   /** Missile entity id. */
   readonly id: number;
-  /** "AIM-120D", "GBU-53/B". */
+  /** MunitionDef.short, the HMD weapon column's name: "AMRAAM", "9X", "GBU-53". */
   readonly name: string;
   readonly guidance: Guidance;
   readonly bomb: boolean;
+  /** Fired at an aircraft (a hit leaves a fast falling wreck: the hold follows it, not the impact point). */
+  readonly air: boolean;
   /** Weapon length (m): the chase shot's distance. */
   readonly len: number;
   /** The target it was fired at (a decoyed missile keeps it); null = a GPS aim point. */
@@ -96,6 +99,13 @@ export interface WpnTrack {
 export function isHitOutcome(o: WpnOutcome): boolean {
   return o === 'hit' || o === 'kill' || o === 'impact';
 }
+/**
+ * The held shot freezes on the impact (#282 F12): a surface hit, a bomb's or a missile's on a ship, vehicle or
+ * SAM. An air kill leaves a wreck falling at 200–300 m/s, which the hold follows instead.
+ */
+export function wpnFreezes(t: WpnTrack): boolean {
+  return isHitOutcome(t.outcome) && (t.bomb || !t.air);
+}
 export function isResultOutcome(o: WpnOutcome): boolean {
   return o === 'miss' || o === 'decoyed' || o === 'lost' || o === 'notgt';
 }
@@ -119,7 +129,7 @@ export class WpnTracker {
   readonly tracks: WpnTrack[] = [];
   /** Settled ids (a weapon still flying after NO TGT is not picked up again). */
   private readonly done = new Set<number>();
-  private readonly ended: { id: number; reason: string }[] = [];
+  private readonly ended: { id: number; reason: string; pos: Vector3 | null }[] = [];
   /** Focus and look of the last plan (wasVideo of an outcome). */
   focusId: number | null = null;
   video = false;
@@ -132,9 +142,12 @@ export class WpnTracker {
     this.video = false;
   }
 
-  /** 'munition:end' of one of the player's weapons. */
-  onEnd(id: number, reason: string): void {
-    this.ended.push({ id, reason });
+  /**
+   * 'munition:end' of one of the player's weapons. `position`: the detonation point (the last scan saw the
+   * weapon a frame earlier, 20–40 m short for an AMRAAM); the held shot freezes on it (#282 F12).
+   */
+  onEnd(id: number, reason: string, position?: Vector3): void {
+    this.ended.push({ id, reason, pos: position ? position.clone() : null });
   }
 
   find(id: number | null): WpnTrack | null {
@@ -156,6 +169,7 @@ export class WpnTracker {
     for (const e of this.ended) {
       const t = this.find(e.id);
       if (!t || t.outcome !== 'flight') continue;
+      if (e.pos) t.pos.copy(e.pos);
       const tgt = getEntity(t.targetId);
       let o: WpnOutcome;
       if (tgt && !tgt.alive) o = 'kill';
@@ -176,11 +190,13 @@ export class WpnTracker {
         const bomb = m.def.category === 'bomb';
         t = {
           id: m.id,
-          // the designation only ('AIM-120D', 'GBU-53/B'): the full name ('AIM-120D AMRAAM', #211) plus
-          // '▲ SAME TGT' would overrun the 146 px strip on a phone
-          name: m.def.name.split(' ')[0],
+          // MunitionDef.short, the HMD weapon column's name ('AMRAAM', '9X', 'GBU-53'; #282: the strip and
+          // the result card read 'AIM-120D', 'GBU-53/B'); the full name plus '▲ SAME TGT' would overrun
+          // the 146 px strip on a phone
+          name: m.def.short,
           guidance: m.def.guidance,
           bomb,
+          air: target?.kind === 'aircraft',
           len: m.def.length || 3,
           targetId: orig,
           label: target ? entityLabel(target) || target.name.toUpperCase() : orig === null ? 'GPS PT' : 'TGT',
@@ -367,6 +383,8 @@ export interface WpnView {
   focusId: number | null;
   targetId: number | null;
   flying: boolean;
+  /** A surface hit: a bomb's, or a missile's on a ship / vehicle / SAM (the 3D pass freezes on the impact). */
+  hit: boolean;
   len: number;
   readonly pos: Vector3;
   readonly vel: Vector3;
@@ -391,6 +409,7 @@ export const wpnView: WpnView = {
   focusId: null,
   targetId: null,
   flying: false,
+  hit: false,
   len: 3,
   pos: new Vector3(),
   vel: new Vector3(),
@@ -425,6 +444,7 @@ export function resetWpn(): void {
   wpnView.vw = wpnView.vh = wpnView.sw = 0;
   wpnView.focusId = null;
   wpnView.targetId = null;
+  wpnView.hit = false;
 }
 
 function ease(t: number): number {
@@ -508,6 +528,7 @@ export function stepWpn(
   v.focusId = focus?.id ?? null;
   v.targetId = focus?.targetId ?? null;
   v.flying = focus?.outcome === 'flight';
+  v.hit = !!focus && wpnFreezes(focus);
   if (focus) {
     v.len = focus.len;
     v.pos.copy(focus.pos);
