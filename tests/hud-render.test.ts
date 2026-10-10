@@ -1323,3 +1323,43 @@ describe('NEXT slot with the bandits in reach', () => {
     expect(find(r.run(0.1), /^swarm$/i).length).toBe(1);
   });
 });
+
+describe("own missile's motor glow over the target box (#282 F3)", () => {
+  /** Arcs drawn within 2 px of the player's AMRAAM, 1.5 s after launch: 244 m ahead and ~4° low, under the box. */
+  function glowArcs(view: CameraMode, burning: boolean, camAway = 0): number {
+    const r = rig('lock', view);
+    const p = r.mock.player;
+    const su = r.mock.world.aircraft.find((a) => a.id === p.radar.designatedId)!;
+    const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+    const m = new MissileEntity(970, def, 'blue', p.id, su.id);
+    const los = new Vector3().subVectors(su.position, p.position).normalize();
+    m.position.copy(p.position).addScaledVector(los, 244);
+    m.position.y -= 17;
+    m.velocity.copy(los).multiplyScalar(900);
+    m.motorBurning = burning;
+    (r.mock.world.missiles as MissileEntity[]).push(m);
+    if (camAway) {
+      r.camera.position.addScaledVector(los, -camAway);
+      r.camera.updateMatrixWorld();
+    }
+    r.run(0.1);
+    const proj = new Projector();
+    proj.update(r.camera, r.W, r.H);
+    const sp = { x: 0, y: 0, depth: 0, front: false, onScreen: false, dirX: 0, dirY: 0, offAxis: 0 };
+    proj.point(m.position, sp);
+    expect(sp.onScreen).toBe(true);
+    return r.fake.arcs.filter((a) => Math.hypot(a.x - sp.x, a.y - sp.y) < 2).length;
+  }
+
+  it('draws a halo and a core on the missile (over its ring) while the motor burns, from the cockpit and the chase view', () => {
+    for (const view of ['hud', 'chase'] as const) {
+      const off = glowArcs(view, false);
+      expect(off).toBeGreaterThanOrEqual(1); // the own-missile ring
+      expect(glowArcs(view, true)).toBe(off + 2);
+    }
+  });
+
+  it('no glow from an outside camera far from the jet', () => {
+    expect(glowArcs('chase', true, 400)).toBe(glowArcs('chase', false, 400));
+  });
+});

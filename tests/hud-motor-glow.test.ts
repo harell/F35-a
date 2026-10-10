@@ -31,7 +31,7 @@ describe('own missile motor glow on the HMD (#282 F3)', () => {
     expect(showsMotorGlow(missile(7, true), PLAYER, true)).toBe(false);
   });
 
-  it('only in the pilot-eye (HMD) views, not from an outside camera', () => {
+  it('only from a camera at the jet (cockpit, chase), not from a far outside camera', () => {
     expect(showsMotorGlow(missile(PLAYER, true), PLAYER, false)).toBe(false);
   });
 

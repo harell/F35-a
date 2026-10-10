@@ -59,7 +59,7 @@ import { COCKPIT_REST_PITCH, TEST_HOOKS } from '../core/data';
 import { cloudBase } from '../core/weather';
 import { beginDrawn, drawnLast, type DrawnCue } from './hmd/drawn';
 
-/** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit). */
+/** An outside camera this close to the jet (m) draws the gun funnel and cross too (chase, orbit), and the own missile's motor glow. */
 const GUN_DIR_CAM_RANGE = 120;
 
 const _q = new Quaternion();
@@ -553,7 +553,7 @@ export const createHud: CreateHud = (canvas, events) => {
       drawWaypoint(f);
       if (TEST_HOOKS) drawnLast.steer.next = !waypointNamed(f);
       drawFriendlies(f);
-      drawOwnMissiles(f);
+      drawOwnMissiles(f, hmd || (ctx.viewMode !== 'missile' && ctx.camera.position.distanceToSquared(p.position) < GUN_DIR_CAM_RANGE * GUN_DIR_CAM_RANGE));
       if (hmd) drawAirToGround(f);
       g2.globalAlpha = 1;
       drawGcas(f);
