@@ -598,6 +598,45 @@ export function podReadout(t: AnyEntity, locked: boolean): string {
   return (locked ? 'LOCK ' : 'TGT ') + entityLabel(t);
 }
 
+/** Font sizes the pod's TGT readout tries, largest first, before it drops words. */
+const READOUT_SIZES = [10, 9, 8] as const;
+const readoutCuts = new Map<string, readonly string[]>();
+/** "TGT SUICIDE BOAT" → ["TGT SUICIDE BOAT", "TGT SUICIDE", "TGT"]: the line cut at word boundaries (cached). */
+function wordCuts(text: string): readonly string[] {
+  let cuts = readoutCuts.get(text);
+  if (!cuts) {
+    const list = [text];
+    for (let i = text.lastIndexOf(' '); i > 0; i = text.lastIndexOf(' ', i - 1)) list.push(text.slice(0, i));
+    readoutCuts.set(text, (cuts = list));
+  }
+  return cuts;
+}
+/**
+ * Fit the pod's TGT readout into `room` px: the whole line at the largest READOUT_SIZES size that fits,
+ * else whole words dropped from the end at the smallest size, never a word cut in half ("TGT SUICIDE BO",
+ * #282 F11). Writes into `out` (no allocation per frame).
+ */
+export function fitReadout(text: string, room: number, pen: { textWidth(s: string, size: number): number }, out: { text: string; size: number }): void {
+  for (const size of READOUT_SIZES) {
+    if (pen.textWidth(text, size) <= room) {
+      out.text = text;
+      out.size = size;
+      return;
+    }
+  }
+  const cuts = wordCuts(text);
+  const size = READOUT_SIZES[READOUT_SIZES.length - 1];
+  out.size = size;
+  out.text = cuts[cuts.length - 1];
+  for (const c of cuts) {
+    if (pen.textWidth(c, size) <= room) {
+      out.text = c;
+      return;
+    }
+  }
+}
+const readoutFit = { text: '', size: 10 };
+
 /** Text of the masked pod window. */
 export const POD_MASKED = 'MASKED';
 
@@ -650,9 +689,8 @@ function drawPodPip(f: HudFrame, t: AnyEntity, locked: boolean): void {
   const zoom = POD_ZOOM[v.zoom]?.name ?? '';
   pen.text(zoom, x + w - 6 * u, y + 9 * u, pal.bright, 9, 'right');
   const room = w - 18 * u - pen.textWidth(zoom, 9);
-  let name = podReadout(t, locked);
-  while (name.length > 4 && pen.textWidth(name, 10) > room) name = name.slice(0, -1);
-  pen.text(name, x + 6 * u, y + 9 * u, locked ? pal.bright : pal.white, 10, 'left');
+  fitReadout(podReadout(t, locked), room, pen, readoutFit);
+  pen.text(readoutFit.text, x + 6 * u, y + 9 * u, locked ? pal.bright : pal.white, readoutFit.size, 'left');
   const cls = podClass(t);
   if (cls) {
     const line = cls.find((c) => pen.textWidth(c, 8) <= w - 12 * u);
