@@ -221,10 +221,10 @@ export const createHud: CreateHud = (canvas, events) => {
       if (!isPlayer(attackerId) || target.team === playerTeam) return;
       if (target.kind === 'aircraft' || target.kind === 'sam' || target.kind === 'ground') st.addHit(target.id, false);
     }),
-    events.on('munition:end', ({ missile, targetId, reason }) => {
+    events.on('munition:end', ({ missile, targetId, reason, position }) => {
       st.threats.onMunitionEnd(missile.id, targetId, reason, st.playerId);
       if (missile.shooterId !== st.playerId) return;
-      wpnState.tracker.onEnd(missile.id, reason);
+      wpnState.tracker.onEnd(missile.id, reason, position);
       if (missile.def.guidance === 'anti_radiation') {
         const o = armOutcomeText(curWorld?.getEntity(targetId) ?? null, reason === 'hit' || reason === 'proximity');
         if (o) st.messages.push(o.text, o.tone, 3);

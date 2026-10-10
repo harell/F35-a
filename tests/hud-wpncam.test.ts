@@ -24,6 +24,7 @@ import {
   rangeText,
   resetWpn,
   secText,
+  wpnFreezes,
   wpnView,
   type WpnPlanInput,
   type WpnTrack,
@@ -40,6 +41,7 @@ function track(o: Partial<WpnTrack> = {}): WpnTrack {
     name: 'AMRAAM',
     guidance: 'active_radar',
     bomb: false,
+    air: true,
     len: 3.65,
     targetId: 7,
     label: 'MIG-29',
@@ -233,12 +235,16 @@ describe('weapon window tracker', () => {
     expect(t.name).toBe('AMRAAM');
     expect(t.tti).toBeCloseTo(6, 3);
     // the warhead kills it: the sim reports 'munition:end' and the target is dead
+    // it flew on 30 m after the last scan: the detonation point is the event's (#282 F12)
+    m.position.set(0, 5000, -30);
     m.alive = false;
     w.mig.alive = false;
-    tr.onEnd(m.id, 'proximity');
+    tr.onEnd(m.id, 'proximity', new Vector3(0, 5000, -30));
     tr.update(w.missiles, 1, w.lookup, 7, null);
     expect(t.outcome).toBe('kill');
     expect(t.hold).toBe(WPN_SPLASH_HOLD);
+    expect(t.pos.z).toBe(-30);
+    expect(t.air).toBe(true);
   });
 
   it('a kill of the target camera’s target holds its DESTROYED hold (6 s for a ship)', () => {
@@ -312,6 +318,16 @@ describe('weapon window tracker', () => {
 const ZERO3 = new Vector3();
 
 describe('weapon window chase shot', () => {
+  it('freezes on the impact for a surface hit only; an air kill follows the falling wreck (#282 F12)', () => {
+    expect(wpnFreezes(track({ bomb: true, air: false, outcome: 'kill' }))).toBe(true);
+    expect(wpnFreezes(track({ bomb: true, air: false, targetId: null, outcome: 'impact' }))).toBe(true);
+    expect(wpnFreezes(track({ air: false, label: 'MSL BOAT', outcome: 'hit' }))).toBe(true);
+    expect(wpnFreezes(track({ air: true, outcome: 'kill' }))).toBe(false);
+    expect(wpnFreezes(track({ air: true, outcome: 'hit' }))).toBe(false);
+    expect(wpnFreezes(track({ bomb: true, air: false, outcome: 'miss' }))).toBe(false);
+    expect(wpnFreezes(track({ bomb: true, air: false }))).toBe(false);
+  });
+
   it('behind and above the weapon, looking down its flight path towards the target', () => {
     const pose = makePose();
     weaponCamPose(new Vector3(0, 5000, 0), new Vector3(0, 0, -800), new Vector3(500, 5000, -4000), 3.65, pose);
@@ -445,18 +461,20 @@ describe('weapon window in the HUD (one slot, one owner)', () => {
     r.run(0.3);
     m.alive = false;
     mig.alive = false;
-    r.mock.events.emit('munition:end', { missile: m, position: m.position, reason: 'proximity', targetId: mig.id });
+    const det = m.position.clone().add(new Vector3(0, 0, -25));
+    r.mock.events.emit('munition:end', { missile: m, position: det, reason: 'proximity', targetId: mig.id });
     let texts = r.run(0.5);
     expect(r.read().outcome).toBe('kill');
     expect(texts.some((t) => t.text === 'SPLASH')).toBe(true);
-    // the 3D pass freezes on the impact: the missile's last position (#282 F12)
+    // an air kill: the 3D pass follows the falling wreck, not a frozen impact shot; the shot's last
+    // weapon position is the detonation point (#282 F12)
     expect(wpnView.flying).toBe(false);
-    expect(wpnView.hit).toBe(true);
-    expect(wpnView.pos.distanceTo(m.position)).toBeLessThan(1e-6);
+    expect(wpnView.hit).toBe(false);
+    expect(wpnView.pos.distanceTo(det)).toBeLessThan(1e-6);
     texts = r.run(1.5);
     expect(texts.some((t) => t.text === 'DESTROYED')).toBe(true);
     expect(r.read().owns).toBe(true);
-    expect(wpnView.hit).toBe(true);
+    expect(wpnView.hit).toBe(false);
     r.run(1.5);
     expect(r.read().look).toBe('closed');
     r.hud.dispose();

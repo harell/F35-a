@@ -12,7 +12,7 @@ import type { EntityRendererApi, EnvironmentApi, FrameContext, MissionRunnerApi 
 import { PIP_GLOW_GAIN, TargetCam, targetCamOmitFor } from '../src/render/TargetCam';
 import { glowGain } from '../src/render/effects/GpuParticles';
 import { createEntityRenderer } from '../src/render/EntityRenderer';
-import { TARGET_CAM_GROUND_K, TARGET_CAM_MIN_FAR, framingDistance, targetCamFar, targetCamGroundDepth } from '../src/render/targetCam/pose';
+import { TARGET_CAM_GROUND_K, TARGET_CAM_MIN_FAR, WEAPON_HOLD_DIST, framingDistance, targetCamFar, targetCamGroundDepth } from '../src/render/targetCam/pose';
 import { AircraftEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
 import type { SimWorld } from '../src/sim/api';
 import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from '../src/game/testParams';
@@ -290,5 +290,43 @@ describe('EntityRenderer.prepareView distance cut', () => {
     r.update(ctx); // the next frame's main view
     expect(visible()).toEqual([true, true, true]);
     r.dispose();
+  });
+});
+
+describe('TargetCam.renderWeapon hold (#282 F12)', () => {
+  it('a surface hit freezes the shot on the impact for the whole hold; the next hit gets its own', () => {
+    const { renderer } = fakeRenderer();
+    const cam = new TargetCam(fakeWorld(mig()), fakeEntities().entities);
+    const impact = new Vector3(300, 0, -2000);
+    const view = {
+      ...rect,
+      targetId: null,
+      focusId: 1 as number | null,
+      flying: true,
+      hit: false,
+      len: 3.6,
+      pos: new Vector3(300, 30, -1985),
+      vel: new Vector3(0, -15, -250),
+      tgt: impact.clone(),
+    };
+    cam.renderWeapon(renderer, {} as Scene, view, MAIN_FAR);
+    // the hit: frozen 90 m out, looking at the detonation point
+    view.flying = false;
+    view.hit = true;
+    view.pos.copy(impact);
+    cam.renderWeapon(renderer, {} as Scene, view, MAIN_FAR);
+    const held = cam.camera.position.clone();
+    expect(held.distanceTo(impact)).toBeCloseTo(WEAPON_HOLD_DIST, 3);
+    // later hold frames keep the pose
+    view.pos.set(900, 0, -2500);
+    cam.renderWeapon(renderer, {} as Scene, view, MAIN_FAR);
+    expect(cam.camera.position.distanceTo(held)).toBeLessThan(1e-9);
+    // the window moves to another weapon's hit: a new pose on its impact
+    const next = new Vector3(1000, 0, -3000);
+    view.focusId = 2;
+    view.pos.copy(next);
+    view.tgt.copy(next);
+    cam.renderWeapon(renderer, {} as Scene, view, MAIN_FAR);
+    expect(cam.camera.position.distanceTo(next)).toBeCloseTo(WEAPON_HOLD_DIST, 3);
   });
 });

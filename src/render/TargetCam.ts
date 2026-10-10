@@ -50,9 +50,12 @@ export interface TargetCamRect {
 /** The weapon window's shot (hud/hmd/wpnCam.ts wpnView): the weapon, its last state and its target. */
 export interface WeaponShotView extends TargetCamRect {
   focusId: number | null;
-  /** Still flying (false: the outcome hold, the camera stays where it was and watches the target). */
+  /**
+   * Still flying (false: the outcome hold; after a miss or an air kill the camera stays where it was and
+   * watches the target; a surface hit freezes on the impact, `hit`).
+   */
   flying: boolean;
-  /** The outcome is a hit: the hold freezes on the impact point instead (weaponHoldPose, #282 F12). */
+  /** A surface hit: the hold freezes on the impact point (weaponHoldPose, #282 F12). */
   hit: boolean;
   len: number;
   pos: Vector3;
@@ -187,9 +190,10 @@ export class TargetCam {
 
   /**
    * Render the weapon window (hud/hmd/wpnCam.ts): a chase shot behind the player's weapon while it
-   * flies; after a hit the shot freezes on the impact point (weaponHoldPose: the target and the fireball in
-   * frame, #282 F12); after a miss the camera stays where it was and watches the target flying on. Same
-   * cost as the target shot, which isn't rendered meanwhile.
+   * flies; after a surface hit the shot freezes on the impact point (weaponHoldPose: the target and the
+   * fireball in frame, #282 F12); after a miss or an air kill the camera stays where it was and watches the
+   * target (flying on, or the falling wreck). Same cost as the target shot, which isn't rendered
+   * meanwhile.
    */
   renderWeapon(renderer: WebGLRenderer, scene: Scene, view: WeaponShotView, far: number, range = 0, omit: readonly Object3D[] = NONE): boolean {
     if (view.vw < 2 || view.vh < 2 || view.focusId === null) {
