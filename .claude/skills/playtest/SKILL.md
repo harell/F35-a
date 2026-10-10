@@ -69,6 +69,7 @@ Scores:  stability 8 · balance 5 · clarity 7 (stale) · …   Overall: 6.6 / 1
 Then decide:
 - **PASS:** overall ≥ pass mark, no open blocker or major, and every dimension the diff touched was scored this run (`charters.md` section 5). Go to wrap-up.
 - **TIME UP:** last round reached, or the next round doesn't fit the budget. Go to wrap-up.
+  Read `date -u` before you call time up, and compare it with the deadline in the ledger header. Write only times that have passed into the ledger; a planned end time ("finish by 00:20") is not one. On 2026-10-10 a planned time went into the retro, and the run was called two hours early.
 - Otherwise go to Developer.
 
 Don't make up a score to keep the loop going. Don't hold one back to make it look rigorous either. The score follows from the evidence and the anchors.
