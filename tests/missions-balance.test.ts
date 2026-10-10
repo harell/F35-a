@@ -142,6 +142,9 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
   // chase (ai-playerbot.ts gunChaseFloor) it measured, 6 seeds with jitter: Recruit 3/6, Pilot 6/6
   // (no jitter: 2/6, 5/6). Recruit then flew nine drones (G01_SWARM.recruitCount): 5/6, Pilot 6/6,
   // Veteran 6/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
+  // Playtest r4: once Winchester the bot flies the briefed gun pass from behind (MissionBot.gunPass)
+  // instead of circling the swarm; 12 seeds went from Recruit 10/12, Pilot 11/12, Veteran 9/12 to
+  // 12/12, 12/12, 11/12.
   it('Recruit ≥ 4/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     await new Promise((r) => setTimeout(r, 0));
@@ -150,6 +153,20 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
     const pil = wins('g01', 'pilot', seeds);
     expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(4);
     expect(pil.won, pil.log.join('\n')).toBeGreaterThanOrEqual(5);
+  });
+
+  it('gun passes, not circles: with six missiles (a2a_dogfight) the bot guns the other three Shaheds on Recruit, ≥ 5/6 (was 0/6)', { timeout: 300_000 }, async () => {
+    // a2a_dogfight isn't one of g01's loadouts: it measures the bot's gun work, three or four gun kills
+    // a run. The bot used to meet the swarm head-on and turn circles round it (one or two gun kills)
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await breathe();
+      const r = runPlaythrough('g01', 'recruit', seed, terrainFor('g01'), { maxT: 900, loadout: 'a2a_dogfight' });
+      if (r.state === 'success') won++;
+      log.push(`g01 recruit a2a_dogfight seed ${seed}: ${r.state}@${r.t}s kills=${r.playerKills} ${JSON.stringify(r.modes)}`);
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
   });
 });
 

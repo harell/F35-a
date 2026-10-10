@@ -50,7 +50,7 @@ const _h = new Vector3();
 const _q = new Vector3();
 const _pt = new Vector3();
 
-/** Gun pass on a one-way drone (gun-only probe): the set-up point on its track, this far behind it (m)... */
+/** Gun pass on a one-way drone (gunPass): the set-up point on its track, this far behind it (m)... */
 const PASS_SETUP = 2_500;
 /** ...this far below it (m: the briefing's 400 ft, G01_GUN_PASS.belowFt)... */
 const PASS_BELOW = 120;
@@ -393,10 +393,12 @@ export class MissionBot {
     const surfaceNeeded = this.agLoadout && this.objectiveTargets('surface').length > 0;
     const airNeeded = this.objectiveTargets('air').length > 0;
     // 2b. Winchester against one-way drones (Shaheds, unarmed): a gun pass risks nothing but the
-    //     warhead, so a competent pilot presses on with the gun instead of going home (IRGC g01)
+    //     warhead, so a competent pilot presses on with the gun instead of going home (IRGC g01),
+    //     with the briefed gun pass from behind the drone (gunPass)
     const guns = !fuelLow && this.gunWork(aa);
     this.air.opts.rtbWhenWinchester = !guns;
-    if (guns) return bandit ? this.fight('GUNS', dt) : this.huntDrone(dt);
+    const drone = guns ? this.nearestDrone() : null;
+    if (drone) return this.gunPass(drone, dt, 'GUNS');
 
     // a hot bandit (closing fast — DARKSTAR's "threat … hot" call)
     const isHot = (b: { e: AircraftEntity; d: number } | null): boolean => {
@@ -766,6 +768,14 @@ export class MissionBot {
     return targets.length > 0 && targets.every((t) => t.kind === 'aircraft' && !!t.oneWay);
   }
 
+  /** The nearest one-way drone an active objective wants (null: none). */
+  private nearestDrone(): AircraftEntity | null {
+    let drone: AircraftEntity | null = null;
+    for (const t of this.objectiveTargets('air'))
+      if (t.kind === 'aircraft' && t.oneWay && (!drone || t.position.distanceTo(this.p.position) < drone.position.distanceTo(this.p.position))) drone = t;
+    return drone;
+  }
+
   /** No drone on the scope yet (gun work): head for the nearest one at its height. */
   private huntDrone(dt: number): void {
     let best: AnyEntity | null = null;
@@ -791,10 +801,8 @@ export class MissionBot {
     this.air.opts.rtbWhenWinchester = false;
     if (this.p.incoming.length > 0 || this.nearestBandit(true)) return this.fight('GUNONLY', dt);
     // a one-way drone the mission wants: the briefed gun pass from behind (g01)
-    let drone: AircraftEntity | null = null;
-    for (const t of this.objectiveTargets('air'))
-      if (t.kind === 'aircraft' && t.oneWay && (!drone || t.position.distanceTo(this.p.position) < drone.position.distanceTo(this.p.position))) drone = t;
-    if (drone) return this.gunPass(drone, dt);
+    const drone = this.nearestDrone();
+    if (drone) return this.gunPass(drone, dt, 'GUNONLY');
     if (this.nearestBandit() || this.objectiveTargets('air').length === 0) return this.fight('GUNONLY', dt);
     this.huntDrone(dt);
     this.mode = 'GUNONLY:HUNT';
@@ -804,14 +812,16 @@ export class MissionBot {
    * A gun pass on a one-way drone as g01's briefing teaches it (G01_GUN_PASS): get on its track
    * PASS_SETUP behind it, PASS_BELOW under it, close from behind at a modest overtake, and inside
    * PASS_IN, heading its way, hand over to the air-to-air bot's pipper tracking and trigger. An
-   * overshoot comes round to the set-up point again. The air-to-air bot alone met the swarm head-on
-   * at 275 m/s and turned circles round it at 100–180 m/s: 9 rounds and no hit in 150 s.
+   * overshoot comes round to the set-up point again. `mode` names it in the bot's modes (GUNS when
+   * Winchester, GUNONLY in the probe). The air-to-air bot alone met the swarm head-on at 275 m/s
+   * and turned circles round it at 100–180 m/s (9 rounds and no hit in 150 s), so the bot needed
+   * its missiles for all but one or two Shaheds: g01 on a2a_dogfight (six missiles) was 0/6 on Recruit.
    */
-  private gunPass(t: AircraftEntity, dt: number): void {
+  private gunPass(t: AircraftEntity, dt: number, mode: string): void {
     const p = this.p;
     _h.set(t.velocity.x, 0, t.velocity.z);
     const v = _h.length();
-    if (v < 1) return this.fight('GUNONLY', dt);
+    if (v < 1) return this.fight(mode, dt);
     _h.divideScalar(v); // the drone's track
     _q.set(t.position.x - p.position.x, 0, t.position.z - p.position.z); // jet → drone
     const R = _q.length();
@@ -821,16 +831,16 @@ export class MissionBot {
     const vh = Math.hypot(p.velocity.x, p.velocity.z);
     const ourWay = p.velocity.x * _h.x + p.velocity.z * _h.z > 0.8 * vh;
     const onScope = p.radar.contacts.some((c) => c.id === t.id);
-    if (behind && ourWay && onScope && R < PASS_IN) return this.fight('GUNONLY', dt);
+    if (behind && ourWay && onScope && R < PASS_IN) return this.fight(mode, dt);
     const alt = t.position.y - PASS_BELOW;
     if (behind && along > PASS_IN * 0.6) {
       // on its track: close from behind, faster the further out (about 100 kt overtake at the end)
-      this.nav(t.position, alt, 'GUNONLY:PASS', dt, false, GUN_PASS_MIN_AGL, v + Math.max(25, Math.min(110, (R - 700) * 0.08)));
+      this.nav(t.position, alt, `${mode}:PASS`, dt, false, GUN_PASS_MIN_AGL, v + Math.max(25, Math.min(110, (R - 700) * 0.08)));
       return;
     }
     // overshot, or meeting it head-on or abeam: round to the set-up point on its track
     _pt.copy(t.position).addScaledVector(_h, -PASS_SETUP);
-    this.nav(_pt, alt, 'GUNONLY:SETUP', dt, false, GUN_PASS_MIN_AGL, 200);
+    this.nav(_pt, alt, `${mode}:SETUP`, dt, false, GUN_PASS_MIN_AGL, 200);
   }
 
   private fight(mode: string, dt: number): void {
