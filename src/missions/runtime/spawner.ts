@@ -431,6 +431,7 @@ export function spawnSamSite(s: MissionState, def: SamSiteDef): void {
     noArmShutdown: def.noArmShutdown,
     irOnly: def.irOnly,
     restock: def.restock,
+    irReach: def.irReach,
     boat:
       def.type === 'ad_boat'
         ? { path: def.path?.map((p) => new Vector3(p.x, 0, p.z)), speed: def.speed, loop: def.loop, escortGroup: def.escort, escortAft: def.escortAft, escortRight: def.escortRight }

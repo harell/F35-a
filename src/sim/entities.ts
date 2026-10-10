@@ -505,6 +505,12 @@ export class SamSiteEntity implements Entity {
    * the last has ended, so a drill graded on them (t05's drill 3) always has another round to end it.
    */
   restock?: boolean;
+  /**
+   * A range boat: its shoulder-launched heat-seekers fire only inside this range (m), and only at a jet closing on
+   * it or crossing it, never at one flying away (a round fired up the tail of a jet passing 3 km off falls short of
+   * it, so a drill graded on those rounds would pass a pilot who never defends: t05's drill 3).
+   */
+  irReach?: number;
   /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
   holdFire?: boolean;
 

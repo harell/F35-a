@@ -612,7 +612,7 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
     return;
   }
   const def = ctx.defs[mp.missile];
-  const reach = mp.range * ctx.world.difficulty.samRangeScale;
+  const reach = Math.min(mp.range * ctx.world.difficulty.samRangeScale, s.irReach ?? Infinity);
   let best: AircraftEntity | null = null;
   let bestD = Infinity;
   _eye.copy(s.position);
@@ -621,6 +621,8 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
     if (!t.alive || !isHostile(s.team, t.team)) continue;
     const d = t.position.distanceTo(s.position);
     if (d < mp.minRange || d > reach || d >= bestD) continue;
+    // a range boat holds its round while the jet flies away from it (SamSiteEntity.irReach)
+    if (s.irReach !== undefined && openingFrom(t, s.position, d)) continue;
     if (t.position.y - ctx.world.terrain.surfaceHeightAt(t.position.x, t.position.z) < 10) continue;
     if (d > def.seekerRange * Math.sqrt(irIntensity(t, s.position))) continue;
     if (!lineOfSight(ctx.world.terrain, _eye, t.position)) continue;
@@ -642,6 +644,17 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
   si.mpAcquire = 0;
   s.lastLaunchTime = ctx.time;
   revealLaunch(ctx, s);
+}
+
+/** Past the beam, flying away (the fraction of its speed that opens the range from the site). */
+const OPENING = 0.2;
+
+/** The jet `d` m from `from` is flying away from it, past the beam: a heat-seeker fired now chases its tail. */
+function openingFrom(t: AircraftEntity, from: Vector3, d: number): boolean {
+  const v = t.velocity.length();
+  if (v < 1 || d < 1) return false;
+  const radial = ((t.position.x - from.x) * t.velocity.x + (t.position.y - from.y) * t.velocity.y + (t.position.z - from.z) * t.velocity.z) / d;
+  return radial > OPENING * v;
 }
 
 /**

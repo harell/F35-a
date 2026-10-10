@@ -611,14 +611,18 @@ export class MissionBot {
    * The student's leg to the steering cue: at a boat (a target waypoint) it flies in until it is shot
    * at; after each defence (or an overflight inside 1.5 km) it extends out to 8 km and turns back in to
    * draw the next shot. An orbit round the boat is a beam: it never shoots at one, and the drill stalls.
+   * A heat-seeker drill's cue is the pass point beside its boat: the bot flies through it and 3 km on,
+   * out of the crew's reach, and turns back for the next pass, as the briefing says (circling the point
+   * pulled the jet up into a loop over it that outflew the rounds, defended or not: playtest r4).
    */
   private drillLeg(wp: { kind: string; position: Vector3 }, dt: number): void {
     const p = this.p;
     const alt = Math.max(120, wp.position.y);
-    if (wp.kind !== 'target' || this.irDrill()) return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
+    if (wp.kind !== 'target') return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
+    const ir = this.irDrill();
     const d = Math.hypot(p.position.x - wp.position.x, p.position.z - wp.position.z);
-    if (d < 1_500) this.extending = true;
-    else if (d > 8_000) this.extending = false;
+    if (d < (ir ? 500 : 1_500)) this.extending = true;
+    else if (d > (ir ? 3_000 : 8_000)) this.extending = false;
     // out, or back in, as a level turn (a reversal straight at the point is flown as a climb that
     // bleeds the jet to 150 kt at 15,000 ft before it is back in)
     const sign = this.extending ? -1 : 1;
@@ -628,7 +632,7 @@ export class MissionBot {
     this.nav(aim, alt, this.extending ? 'EXTEND' : 'DRILL', dt, false, 100);
   }
 
-  /** The open drill is a heat-seeker drill (the shoulder-launched missile fires at any aspect: no racetrack). */
+  /** The open drill is a heat-seeker drill (its cue is a pass point beside the boat, not the boat). */
   private irDrill(): boolean {
     for (const st of this.runner.objectives) {
       if (st.state !== 'active') continue;

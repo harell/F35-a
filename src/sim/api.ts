@@ -241,6 +241,8 @@ export interface SamSpawn {
   irOnly?: boolean;
   /** Its heat-seekers are restocked once spent (SamSiteEntity.restock). */
   restock?: boolean;
+  /** Its heat-seekers fire only inside this range at a jet that isn't flying away (SamSiteEntity.irReach). */
+  irReach?: number;
 }
 
 /**

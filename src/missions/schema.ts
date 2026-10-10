@@ -279,6 +279,12 @@ export interface SamSiteDef {
   irOnly?: boolean;
   /** 'ad_boat': a range boat whose heat-seekers are restocked once all are spent (t05's heat-seeker drill never runs dry). */
   restock?: boolean;
+  /**
+   * 'ad_boat': its heat-seeker crew fires only inside this range (m), and only at a jet closing on the boat or
+   * crossing it, never at one flying away: every round it fires can reach a jet that flies on (a range boat that
+   * grades the defence, not the geometry: t05's drill 3).
+   */
+  irReach?: number;
 }
 
 /**
