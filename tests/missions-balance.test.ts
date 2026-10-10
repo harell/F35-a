@@ -183,11 +183,13 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
   // reacting 1.7 s later dived less and won 5/6). Beaming at its height above the clutter (an AD boat has no
   // radar floor to get under): Recruit 6/6, Pilot 6/6 and Veteran 6/6, untouched, a walkover. Since then (playtest r2)
   // a harbour picket on Pilot and Veteran sits 6–7 km from the opening release and Veteran's third escort is cued on
-  // the jet's run-in (G02_ESCORT_CUE): Recruit 6/6 untouched, Pilot 5/6 (one jet shot down; 10–12 rounds at the jet every run), Veteran 1/6, the casual proxy on Pilot 6/6 (hit in 2), --nodefend on Pilot 1/6 (hit in 5) and the AARGM opening on Pilot 6/6. The bands are the measured floors less one seed, with ceilings so a
-  // walkover fails.
+  // the jet's run-in (G02_ESCORT_CUE): Recruit 6/6 untouched, Pilot 5/6 (one jet shot down; 10–12 rounds at the jet every run), Veteran 1/6, the casual proxy on Pilot 6/6 (hit in 2), --nodefend on Pilot 1/6 (hit in 5) and the AARGM opening on Pilot 6/6. Veteran's 1/6 was the bot
+  // beaming that escort's long shot a second before its opening release (playtest r4, the test after this one); pickling
+  // first: Veteran 5/6 (12–16 rounds at the jet, one shot down), the rest unchanged. The bands are the measured floors
+  // less one seed, with ceilings so a walkover fails.
   const run = (d: Difficulty, seed: number, opts: Parameters<typeof runPlaythrough>[4] = {}) => runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600, ...opts });
 
-  it('Recruit ≥ 5/6, Pilot ≥ 4/6 and never 6/6 untouched, Veteran ≤ 5/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+  it('Recruit ≥ 5/6, Pilot ≥ 4/6 and never 6/6 untouched, Veteran 4–5/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran'];
     const won: Record<string, number> = {};
@@ -208,12 +210,34 @@ describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways 
     const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
     expect(won.recruit, table).toBeGreaterThanOrEqual(5);
     expect(won.pilot, table).toBeGreaterThanOrEqual(4);
-    expect(won.veteran, table).toBeGreaterThanOrEqual(1);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(4);
     // not a walkover: Pilot doesn't win every run untouched, and Veteran doesn't win every run
     expect(pilotUntouched, table).toBeLessThanOrEqual(5);
     expect(won.veteran, table).toBeLessThanOrEqual(5);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+  });
+
+  // Playtest r4: Veteran's cued escort fires a long shot (from 13 km, over 10 s from the jet) a second before the
+  // bot's opening release. The bot beamed it first, for 25 s, so its ripple went at 45–49 s, its bombs landed as the
+  // suicide boats reached the tanker, and it won 1/6, while the casual proxy, too slow to react, released first and won
+  // 6/6. A pilot on the run-in with REL 3 or less on the HUD pickles first and beams after.
+  it('Veteran: the escort’s long shot just before the release cue doesn’t hold the opening ripple', { timeout: 300_000 }, async () => {
+    const log: string[] = [];
+    const late: string[] = [];
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('veteran', seed, { log: true });
+      const shot = r.events.find((l) => / LAUNCH \S+ sam -> /.test(l));
+      const shotT = shot ? Number(shot.trim().split(/\s+/)[0]) : Infinity;
+      const bomb = r.launches.find((l) => l.weapon === 'gbu53');
+      const line = `veteran seed ${seed}: ${r.state}@${r.t}s, first SAM shot at ${shotT} s, first StormBreaker at ${bomb ? Math.round(bomb.t) : '-'} s`;
+      log.push(line);
+      // the escort's shot comes on the run-in, and the ripple goes with it, not after a long defence
+      expect(shotT, line).toBeLessThan(30);
+      if (!bomb || bomb.t > shotT + 5) late.push(line);
+    }
+    expect(late, log.join('\n')).toEqual([]);
   });
 
   // The casual player's proxy (bot-sweep --reaction=2.5: 2.5 s to react to any missile warning) lost all

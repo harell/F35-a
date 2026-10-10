@@ -128,6 +128,8 @@ export const OUT_THREAT_RANGE = 25_000;
 /** A ripple in progress is finished (its last release this recent, s) unless a SAM shot is this close to impact (s). */
 const RIPPLE_WINDOW = 6;
 const SAM_BREAK_TTI = 10;
+/** A glide-bomb ripple whose release cue counts down this close (REL n on the HUD, s) is started before a long SAM shot is beamed. */
+const RIPPLE_PRESS = 3;
 /**
  * Out of missiles with a bandit inside this range and in front of the nose: take the gun shot (m).
  * (3 km in any aspect started gun fights with Su-27s that ended crippled and crashed: ia_defend Pilot 3/6.)
@@ -541,14 +543,22 @@ export class MissionBot {
 
   /**
    * A long SAM shot (more than SAM_BREAK_TTI s from impact) doesn't pull a pilot off a ripple he has
-   * started: the next bomb goes first, then the break. (An AD boat's nuisance shot comes about 3 s into
-   * a stand-off ripple, #115.)
+   * started, nor off a run-in whose glide-bomb cue counts down to within RIPPLE_PRESS s (REL 3 on the
+   * HUD): the next bomb goes first, then the break. A pilot already beaming keeps beaming. (An AD boat's
+   * nuisance shot comes about 3 s into a stand-off ripple, #115. Playtest r4: g02 Veteran's cued escort
+   * fired 1 s before the opening release; the bot beamed it for 25 s, its bombs landed as the suicide
+   * boats reached the tanker and it won 1/6, while the casual proxy, too slow to react, released first
+   * and won 6/6.)
    */
   private finishingRipple(): boolean {
-    if (this.world.time - this.lastRelease > RIPPLE_WINDOW) return false;
     let tti = Infinity;
     for (const m of this.p.incoming) tti = Math.min(tti, m.timeToImpact);
-    return tti > SAM_BREAK_TTI;
+    if (tti <= SAM_BREAK_TTI) return false;
+    if (this.world.time - this.lastRelease <= RIPPLE_WINDOW) return true;
+    const p = this.p;
+    if (this.beamSide !== 0 || !isSdb(p.selectedWeapon as AgWeapon) || p.radar.designatedId === null || p.velocity.length() < 210) return false;
+    const cue = this.world.combat.bombImpactPoint(p, this.world);
+    return !!cue && !cue.bombAway && cue.timeToRelease >= 0 && cue.timeToRelease <= RIPPLE_PRESS && Math.hypot(cue.point.x - p.position.x, cue.point.z - p.position.z) <= SDB_PRESS_RANGE;
   }
 
   /** When each SAM round was first on the warning (world time), for samReaction. */

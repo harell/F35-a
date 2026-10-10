@@ -69,8 +69,10 @@ const g02Start = { x: -15000, z: -2700, altitude: 3000, heading: 68, speed: 250,
 /**
  * Veteran's third escort's picture of the jet (SamSiteDef.closeCue; the AD boat's own is 9 km): the mother
  * ship cues it on a jet inside `range` m whatever its shaping, so its rounds meet the jet running in to the
- * opening release, not only its open bay (playtest r2). The range is sharp: up to 13.4 km Veteran was 6/6
- * untouched; at 13.5 km the bot defends before its opening ripple and wins 1/6 (four tankers lost, one jet).
+ * opening release, not only its open bay (playtest r2). At 13.5 km its first pair comes from 13 km a second or
+ * two before the opening release: a pilot on the run-in pickles, then beams (the bot: Veteran 5/6, 12–16 rounds
+ * at the jet; playtest r4). The range is sharp: from 14 km the pair comes before the release cue, and beaming it
+ * first costs the opening ripple and the tanker (14 km: 1/6, 15 km: 0/6).
  */
 export const G02_ESCORT_CUE = { range: 13_500, bayRange: 12_000 } as const;
 
