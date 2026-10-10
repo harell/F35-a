@@ -923,20 +923,51 @@ export function bombTimeToGo(m: MissileEntity, target: { x: number; y: number; z
 
 /* ───────────────────────── Own missiles in flight ───────────────────────── */
 
+/** Motor-glow marker colours (#282 F3): a warm halo and a hot core, like the 3D plume they stand in for. */
+const MOTOR_HALO = 'rgba(255,168,72,0.5)';
+const MOTOR_CORE = '#fff2d2';
+
+/**
+ * Does the player's own missile get the HUD motor-glow marker (#282 F3)? Right after launch an AMRAAM
+ * flies down the line of sight to the boxed target (244 m out and ~4° low at 1.5 s), so the target box
+ * and LOCK strokes, drawn on the HUD canvas over the 3D view, hide its motor glow. The marker redraws
+ * the glow over them while the motor burns, in the pilot's-eye (HMD) views only: from an outside camera
+ * the box and the plume are far apart.
+ */
+export function showsMotorGlow(m: MissileEntity, playerId: number, hmd: boolean): boolean {
+  return hmd && m.alive && m.motorBurning && m.shooterId === playerId;
+}
+
 export function drawOwnMissiles(f: HudFrame): void {
   const { world, p, pen, pal, L } = f;
   const u = L.u;
+  const hmd = f.mode === 'hmd';
   pen.setDash('solid');
   pen.begin();
   let any = false;
+  let glow = false;
   for (const m of world.missiles) {
     if (!m.alive || m.shooterId !== p.id) continue;
     f.proj.point(m.position, f.sp);
     if (!drawable(f)) continue;
     pen.circle(f.sp.x, f.sp.y, 3.5 * u);
     any = true;
+    if (showsMotorGlow(m, p.id, hmd)) glow = true;
   }
   if (any) pen.strokeGlow(pal.main, 1.3);
+  if (!glow) return;
+  // drawn after the designated box and the LOCK cue, so the glow sits on top of their strokes
+  for (const m of world.missiles) {
+    if (!showsMotorGlow(m, p.id, hmd)) continue;
+    f.proj.point(m.position, f.sp);
+    if (!drawable(f)) continue;
+    pen.begin();
+    pen.circle(f.sp.x, f.sp.y, 2.4 * u);
+    pen.fillPlain(MOTOR_HALO);
+    pen.begin();
+    pen.circle(f.sp.x, f.sp.y, 1.1 * u);
+    pen.fillPlain(MOTOR_CORE);
+  }
 }
 
 /* ───────────────────────── Friendlies ───────────────────────── */
