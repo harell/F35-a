@@ -59,12 +59,13 @@ void main() {
 
 const FRAG = /* glsl */ `
 uniform sampler2D uMap;
+uniform float uGain;
 varying vec2 vUv;
 varying vec4 vColor;
 #include <fog_pars_fragment>
 void main() {
   float a = texture2D(uMap, vUv).a * vColor.a;
-  vec3 c = vColor.rgb * a;
+  vec3 c = vColor.rgb * a * uGain;
   #ifdef USE_FOG
     #ifdef FOG_EXP2
       float fogF = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
@@ -94,6 +95,8 @@ export class SpriteBatch {
     readonly capacity: number,
     map: Texture | null = glowTexture(),
     renderOrder = 12,
+    /** Brightness uniform: the effects' batch shares GpuParticles glowGain (dimmed in the PiP, #282 R31-10). */
+    gain: { value: number } = { value: 1 },
   ) {
     const g = new InstancedBufferGeometry();
     g.setAttribute('position', new BufferAttribute(new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]), 3));
@@ -123,6 +126,7 @@ export class SpriteBatch {
       toneMapped: false,
     });
     this.material.uniforms.uMap.value = map;
+    this.material.uniforms.uGain = gain;
     this.mesh = new Mesh(g, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = renderOrder;

@@ -103,6 +103,14 @@ export function particlePosition(p: ParticleSpawn, age: number, wind: { x: numbe
   return out.set(p.x + vtx * age + (p.vx - vtx) * e, p.y + vty * age + (p.vy - vty) * e, p.z + vtz * age + (p.vz - vtz) * e);
 }
 
+/**
+ * Brightness of the effects' additive glow (fire particles and Effects' glow sprites), one uniform
+ * shared by their materials: 1 in the main view. The target camera pass lowers it for its draw (TargetCam
+ * PIP_GLOW_GAIN, #282 R31-10): the zoomed window is filled by a kill's flash and fireball, and stacked
+ * additive fire there blew out to white instead of reading as an orange ball over the target.
+ */
+export const glowGain = { value: 1 };
+
 const VERT = /* glsl */ `
 attribute vec3 aP0;
 attribute vec3 aV0;
@@ -198,13 +206,14 @@ void main() {
 
 const FRAG_GLOW = /* glsl */ `
 uniform sampler2D uMap;
+uniform float uGain;
 varying vec2 vUv;
 varying vec4 vColor;
 #include <fog_pars_fragment>
 void main() {
   float a = texture2D(uMap, vUv).a * vColor.a;
   if (a < 0.003) discard;
-  vec3 col = vColor.rgb * a;
+  vec3 col = vColor.rgb * a * uGain;
   #ifdef USE_FOG
     #ifdef FOG_EXP2
       float fogF = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
@@ -269,6 +278,8 @@ export class GpuParticles {
       toneMapped: mode === 'normal',
     });
     this.material.uniforms.uMap.value = map;
+    // after the merge (it clones uniforms): the glow materials share the one gain object
+    if (mode === 'additive') this.material.uniforms.uGain = glowGain;
     this.mesh = new Mesh(g, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = renderOrder;

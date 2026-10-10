@@ -17,12 +17,15 @@
  * the line of sight from the player's jet, framing the zoom step (pose.ts podCamPose), and draws at most
  * POD_RANGE past the target; with no line of sight (rect.mask) the pass is skipped and the HUD draws the
  * window MASKED.
+ * The pass dims the additive glow (effects glowGain → PIP_GLOW_GAIN, #282 R31-10): a kill seen in the
+ * zoomed window fills it with flash and fireball, and stacked additive fire blew it out to white.
  */
 import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
 import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, podSpan } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
+import { glowGain } from './effects/GpuParticles';
 import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
@@ -54,6 +57,13 @@ export interface WeaponShotView extends TargetCamRect {
   vel: Vector3;
   tgt: Vector3;
 }
+
+/**
+ * Additive effects glow brightness (fire particles, Effects' glow sprites) in the PiP pass, against 1 in the main view
+ * (#282 R31-10): a fireball over the target stacks to orange-yellow instead of white, so the window
+ * still shows the kill and the target under it.
+ */
+export const PIP_GLOW_GAIN = 0.35;
 
 /** After the weapon is gone the held shot keeps at least this far from what it watches (m): out of the fireball. */
 const HOLD_MIN_DIST = 160;
@@ -232,6 +242,8 @@ export class TargetCam {
     renderer.setViewport(rect.vx, yGl, rect.vw, rect.vh);
     const autoClear = renderer.autoClear;
     renderer.autoClear = true;
+    const gain = glowGain.value;
+    glowGain.value = PIP_GLOW_GAIN;
     // Game turns renderer.info.autoReset off, so this pass adds to the frame's world + cockpit counts
     const info = renderer.info.render;
     const calls0 = renderer.info.autoReset ? 0 : info.calls;
@@ -246,6 +258,7 @@ export class TargetCam {
     } finally {
       for (let i = 0; i < this.hidden.length; i++) this.hidden[i].visible = this.shown[i];
       renderer.autoClear = autoClear;
+      glowGain.value = gain;
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, _size.x, _size.y);
       renderer.shadowMap.autoUpdate = autoShadow;

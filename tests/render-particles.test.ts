@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { GpuParticles, STRIDE, particlePosition, resetSpawn, spawnParams } from '../src/render/effects/GpuParticles';
+import { GpuParticles, STRIDE, glowGain, particlePosition, resetSpawn, spawnParams } from '../src/render/effects/GpuParticles';
 import { Ribbons, type RibbonStyle } from '../src/render/effects/Ribbons';
 import { SpriteBatch } from '../src/render/effects/SpriteBatch';
 
@@ -102,5 +102,29 @@ describe('render sprite batch', () => {
     s.begin(0.002);
     expect(s.count).toBe(0);
     s.dispose();
+  });
+});
+
+describe('additive glow gain (#282 R31-10)', () => {
+  it('fire particles and the effects glow sprites share one gain uniform; smoke and nav lights do not', () => {
+    const fire = new GpuParticles(4, 'additive', null, 0);
+    const smoke = new GpuParticles(4, 'normal', null, 0);
+    const sprites = new SpriteBatch(4, null, 12, glowGain);
+    const lights = new SpriteBatch(4, null);
+    expect(fire.material.uniforms.uGain).toBe(glowGain);
+    expect(sprites.material.uniforms.uGain).toBe(glowGain);
+    // a batch made without one (EntityRenderer's nav lights) keeps its own, at full brightness
+    expect(lights.material.uniforms.uGain).not.toBe(glowGain);
+    expect(lights.material.uniforms.uGain.value).toBe(1);
+    expect(fire.material.fragmentShader).toContain('uGain');
+    expect(sprites.material.fragmentShader).toContain('uGain');
+    expect(smoke.material.fragmentShader).not.toContain('uGain');
+    expect(smoke.material.uniforms.uGain).toBeUndefined();
+    // the main view draws the glow at full brightness
+    expect(glowGain.value).toBe(1);
+    fire.dispose();
+    smoke.dispose();
+    sprites.dispose();
+    lights.dispose();
   });
 });

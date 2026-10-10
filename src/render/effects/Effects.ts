@@ -17,7 +17,7 @@ import type { ExplosionSize } from '../../core/types';
 import type { AircraftEntity, GroundTargetEntity, MissileEntity, MunitionDef } from '../../sim/entities';
 import { shipDims, shipMatrix } from '../visuals/shipMotion';
 import { AIRCRAFT_SPECS, type AircraftSpec } from '../models/specs';
-import { GpuParticles, resetSpawn, spawnParams, type ParticleSpawn } from './GpuParticles';
+import { GpuParticles, glowGain, resetSpawn, spawnParams, type ParticleSpawn } from './GpuParticles';
 import { Ribbons, type RibbonStyle } from './Ribbons';
 import { SpriteBatch, pixelScale } from './SpriteBatch';
 import { Debris, Pulses, VaporCones } from './Props';
@@ -235,7 +235,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const smoke = new GpuParticles(Math.round(6000 * ps), 'normal', smokeTexture(), 10);
   const fire = new GpuParticles(Math.round(4000 * ps), 'additive', fireTexture(), 11);
   const ribbons = new Ribbons(Math.round(5000 * ps), 96, 9);
-  const sprites = new SpriteBatch(1200, glowTexture(), 12);
+  const sprites = new SpriteBatch(1200, glowTexture(), 12, glowGain);
   const debris = new Debris(Math.round(80 * ps));
   const pulses = new Pulses(8, 4);
   const cones = new VaporCones(3);

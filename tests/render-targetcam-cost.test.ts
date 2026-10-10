@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
 import { Group, PerspectiveCamera, Scene, Vector3, type WebGLRenderer } from 'three';
 import { QUALITY_PRESETS } from '../src/core/data';
 import type { EntityRendererApi, EnvironmentApi, FrameContext, MissionRunnerApi } from '../src/core/contracts';
-import { TargetCam, targetCamOmitFor } from '../src/render/TargetCam';
+import { PIP_GLOW_GAIN, TargetCam, targetCamOmitFor } from '../src/render/TargetCam';
+import { glowGain } from '../src/render/effects/GpuParticles';
 import { createEntityRenderer } from '../src/render/EntityRenderer';
 import { TARGET_CAM_GROUND_K, TARGET_CAM_MIN_FAR, framingDistance, targetCamFar, targetCamGroundDepth } from '../src/render/targetCam/pose';
 import { AircraftEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
@@ -178,6 +179,30 @@ describe('TargetCam.render cost on low quality', () => {
     expect(seen).toHaveLength(1);
     expect(cam.lastStats).toEqual({ calls: 0, triangles: 0 });
     expect(cam.lastTargetId).toBeNull();
+  });
+});
+
+describe('TargetCam pass: the additive glow (#282 R31-10)', () => {
+  it('draws fire and glow sprites dimmed in the PiP, and restores the main view brightness after', () => {
+    const { renderer } = fakeRenderer();
+    const gains: number[] = [];
+    const draw = renderer.render.bind(renderer);
+    renderer.render = (scene, cam) => {
+      gains.push(glowGain.value);
+      draw(scene, cam);
+    };
+    const cam = new TargetCam(fakeWorld(mig()), fakeEntities().entities);
+    expect(PIP_GLOW_GAIN).toBeGreaterThan(0.2);
+    expect(PIP_GLOW_GAIN).toBeLessThan(0.6);
+    expect(cam.render(renderer, {} as Scene, rect, MAIN_FAR)).toBe(true);
+    expect(gains).toEqual([PIP_GLOW_GAIN]);
+    expect(glowGain.value).toBe(1);
+    // restored even when the draw throws
+    renderer.render = () => {
+      throw new Error('lost context');
+    };
+    expect(() => cam.render(renderer, {} as Scene, rect, MAIN_FAR)).toThrow('lost context');
+    expect(glowGain.value).toBe(1);
   });
 });
 
