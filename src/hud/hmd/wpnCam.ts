@@ -60,7 +60,7 @@ export type WpnLook = 'closed' | 'strip' | 'video';
 export interface WpnTrack {
   /** Missile entity id. */
   readonly id: number;
-  /** "AIM-120D", "GBU-53/B". */
+  /** Short name, as the FIRE button reads: "AMRAAM", "GBU-53". */
   readonly name: string;
   readonly guidance: Guidance;
   readonly bomb: boolean;
@@ -176,9 +176,10 @@ export class WpnTracker {
         const bomb = m.def.category === 'bomb';
         t = {
           id: m.id,
-          // the designation only ('AIM-120D', 'GBU-53/B'): the full name ('AIM-120D AMRAAM', #211) plus
-          // '▲ SAME TGT' would overrun the 146 px strip on a phone
-          name: m.def.name.split(' ')[0],
+          // the short name the FIRE button and the HMD's weapon column use ('AMRAAM', 'GBU-53'; #282:
+          // the strip and the result card read 'AIM-120D', 'GBU-53/B'); the full name plus '▲ SAME TGT'
+          // would overrun the 146 px strip on a phone
+          name: m.def.short,
           guidance: m.def.guidance,
           bomb,
           len: m.def.length || 3,

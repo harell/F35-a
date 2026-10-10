@@ -37,7 +37,7 @@ let nextId = 100;
 function track(o: Partial<WpnTrack> = {}): WpnTrack {
   return {
     id: nextId++,
-    name: 'AIM-120D',
+    name: 'AMRAAM',
     guidance: 'active_radar',
     bomb: false,
     len: 3.65,
@@ -148,7 +148,7 @@ describe('weapon window planner', () => {
 
   it('eight weapons: one window, the others grouped by target, at most 3 rows (+N)', () => {
     const labels = ['SUICIDE BOAT', 'SUICIDE BOAT', 'SUICIDE BOAT', 'MSL BOAT', 'MSL BOAT', 'MSL BOAT', 'AD BOAT', 'AD BOAT'];
-    const ts = labels.map((label, i) => track({ label, tti: 20 + i, bomb: true, guidance: 'tri_mode', name: 'GBU-53/B' }));
+    const ts = labels.map((label, i) => track({ label, tti: 20 + i, bomb: true, guidance: 'tri_mode', name: 'GBU-53' }));
     const p = planWpn(ts, inp());
     expect(p.flying).toBe(8);
     expect(p.focus).toBe(ts[0]);
@@ -205,7 +205,7 @@ function fakeWorld() {
       shooterId: 1,
       targetId: 7,
       originalTargetId: 7,
-      def: { name: 'AIM-120D', guidance: 'active_radar', category: 'aam', length: 3.65 },
+      def: { name: 'AIM-120D AMRAAM', short: 'AMRAAM', guidance: 'active_radar', category: 'aam', length: 3.65 },
       position: new Vector3(0, 5000, 0),
       velocity: new Vector3(0, 0, -1000),
       targetPoint: new Vector3(),
@@ -229,6 +229,8 @@ describe('weapon window tracker', () => {
     tr.update(w.missiles, 1, w.lookup, 1, null);
     const t = tr.find(m.id)!;
     expect(t.label).toBe('MIG-29');
+    // the short name, as the FIRE button and the HMD's weapon column read (#282), not 'AIM-120D'
+    expect(t.name).toBe('AMRAAM');
     expect(t.tti).toBeCloseTo(6, 3);
     // the warhead kills it: the sim reports 'munition:end' and the target is dead
     m.alive = false;
@@ -372,7 +374,7 @@ describe('weapon window in the HUD (one slot, one owner)', () => {
     expect(pipView.open).toBe(true);
     // flush under the target camera window
     expect(w.rect![1]).toBe(pipView.y + pipView.h);
-    expect(texts.some((t) => t.text === 'AIM-120D ▲ SAME TGT')).toBe(true);
+    expect(texts.some((t) => t.text === 'AMRAAM ▲ SAME TGT')).toBe(true);
     expect(texts.some((t) => /^T-\d/.test(t.text))).toBe(true);
     r.hud.dispose();
   });
