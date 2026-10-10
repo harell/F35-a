@@ -28,7 +28,7 @@ import {
   type WpnPlanInput,
   type WpnTrack,
 } from '../src/hud/hmd/wpnCam';
-import { makePose, weaponCamPose } from '../src/render/targetCam/pose';
+import { WEAPON_HOLD_DIST, WEAPON_HOLD_ELEV, makePose, weaponCamPose, weaponHoldPose } from '../src/render/targetCam/pose';
 import type { AnyEntity, MissileEntity } from '../src/sim/entities';
 
 installPath2D();
@@ -309,6 +309,8 @@ describe('weapon window tracker', () => {
   });
 });
 
+const ZERO3 = new Vector3();
+
 describe('weapon window chase shot', () => {
   it('behind and above the weapon, looking down its flight path towards the target', () => {
     const pose = makePose();
@@ -317,6 +319,30 @@ describe('weapon window chase shot', () => {
     expect(pose.position.y).toBeGreaterThan(5000);
     expect(pose.look.z).toBeLessThan(-50); // ahead
     expect(pose.look.x).toBeGreaterThan(0); // turned part of the way to the target
+  });
+
+  it('a hit freezes the shot on the impact point: close, from the chase side, looking down on it (#282 F12)', () => {
+    // a glide bomb's shallow run at a boat on the water: the chase camera ends up low behind the bomb
+    const impact = new Vector3(300, 0, -2000);
+    const pose = makePose();
+    weaponCamPose(new Vector3(300, 2, -1985), new Vector3(0, -15, -250), impact, 3.6, pose);
+    expect(Math.atan2(pose.position.y, pose.position.z - impact.z)).toBeLessThan(WEAPON_HOLD_ELEV);
+    weaponHoldPose(pose, impact, pose);
+    expect(pose.look.distanceTo(impact)).toBeCloseTo(0, 6);
+    expect(pose.position.distanceTo(impact)).toBeCloseTo(WEAPON_HOLD_DIST, 3);
+    expect(pose.position.z).toBeGreaterThan(impact.z); // still on the side the bomb came from
+    const elev = Math.asin((pose.position.y - impact.y) / WEAPON_HOLD_DIST);
+    expect(elev).toBeCloseTo(WEAPON_HOLD_ELEV, 6); // lifted: the sea round the impact, not the coast behind
+    // a steep dive keeps its own angle
+    const steep = makePose();
+    steep.position.set(0, 60, 20);
+    weaponHoldPose(steep, ZERO3, steep);
+    expect(steep.position.y / steep.position.z).toBeCloseTo(3, 6);
+    // straight down: a defined up vector
+    steep.position.set(0, 50, 0);
+    weaponHoldPose(steep, ZERO3, steep);
+    expect(steep.position.y).toBeCloseTo(WEAPON_HOLD_DIST, 6);
+    expect(Math.abs(steep.up.y)).toBeLessThan(1e-9);
   });
 });
 
@@ -423,9 +449,14 @@ describe('weapon window in the HUD (one slot, one owner)', () => {
     let texts = r.run(0.5);
     expect(r.read().outcome).toBe('kill');
     expect(texts.some((t) => t.text === 'SPLASH')).toBe(true);
+    // the 3D pass freezes on the impact: the missile's last position (#282 F12)
+    expect(wpnView.flying).toBe(false);
+    expect(wpnView.hit).toBe(true);
+    expect(wpnView.pos.distanceTo(m.position)).toBeLessThan(1e-6);
     texts = r.run(1.5);
     expect(texts.some((t) => t.text === 'DESTROYED')).toBe(true);
     expect(r.read().owns).toBe(true);
+    expect(wpnView.hit).toBe(true);
     r.run(1.5);
     expect(r.read().look).toBe('closed');
     r.hud.dispose();

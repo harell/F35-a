@@ -485,3 +485,35 @@ export function weaponCamPose(
   out.up.set(0, 1, 0);
   return out;
 }
+
+/**
+ * The held shot after a hit stays this far from the impact point (m): close enough that the target and the
+ * fireball fill the window (a 46° shot 90 m out frames ~75 m), out of the fireball. #282 F12: it backed off
+ * 160 m along the bomb's shallow glide path and the result card sat over a wide view of the coast.
+ */
+export const WEAPON_HOLD_DIST = 90;
+/** …and looks down on it at least this steeply (rad): the sea around the impact, not the skyline behind. */
+export const WEAPON_HOLD_ELEV = (20 * Math.PI) / 180;
+const _wh = new Vector3();
+
+/**
+ * Freeze the weapon window on the impact (#282 F12): from the chase camera's side of the impact point (the
+ * pose it had on the last frame of flight), WEAPON_HOLD_DIST out and at least WEAPON_HOLD_ELEV above,
+ * looking at the impact point. Set once at the hit and kept for the whole hold, so the fireball blooms in
+ * frame. `chase` may be `out`.
+ */
+export function weaponHoldPose(chase: CamPose, impact: { x: number; y: number; z: number }, out: CamPose): CamPose {
+  _wh.set(chase.position.x - impact.x, chase.position.y - impact.y, chase.position.z - impact.z);
+  const flat = Math.hypot(_wh.x, _wh.z);
+  if (flat < 1e-3) _wh.set(0, 1, 0);
+  else if (Math.atan2(_wh.y, flat) < WEAPON_HOLD_ELEV) {
+    const k = Math.cos(WEAPON_HOLD_ELEV) / flat;
+    _wh.set(_wh.x * k, Math.sin(WEAPON_HOLD_ELEV), _wh.z * k);
+  } else _wh.normalize();
+  out.look.set(impact.x, impact.y, impact.z);
+  out.position.copy(out.look).addScaledVector(_wh, WEAPON_HOLD_DIST);
+  // straight down: any horizontal up keeps lookAt defined
+  if (flat < 1e-3) out.up.set(0, 0, -1);
+  else out.up.set(0, 1, 0);
+  return out;
+}

@@ -26,7 +26,7 @@ import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, podSpan } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
 import { glowGain } from './effects/GpuParticles';
-import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
+import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, weaponHoldPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
 export interface TargetCamRect {
@@ -52,6 +52,8 @@ export interface WeaponShotView extends TargetCamRect {
   focusId: number | null;
   /** Still flying (false: the outcome hold, the camera stays where it was and watches the target). */
   flying: boolean;
+  /** The outcome is a hit: the hold freezes on the impact point instead (weaponHoldPose, #282 F12). */
+  hit: boolean;
   len: number;
   pos: Vector3;
   vel: Vector3;
@@ -65,7 +67,7 @@ export interface WeaponShotView extends TargetCamRect {
  */
 export const PIP_GLOW_GAIN = 0.35;
 
-/** After the weapon is gone the held shot keeps at least this far from what it watches (m): out of the fireball. */
+/** After a miss the held shot keeps at least this far from the target it watches (m). */
 const HOLD_MIN_DIST = 160;
 
 /** Is `a` the object `o` or one of its ancestors? */
@@ -93,6 +95,8 @@ export class TargetCam {
   private readonly wPose = makePose();
   private wKey: number | null = null;
   private wHas = false;
+  /** The hold is frozen on the impact (weaponHoldPose). */
+  private wHeld = false;
   /** visible flags of the omitted objects, restored after the pass */
   private readonly shown: boolean[] = [];
   /** objects hidden for the pass (the omit list, or its parts round a kept landmark) */
@@ -183,8 +187,9 @@ export class TargetCam {
 
   /**
    * Render the weapon window (hud/hmd/wpnCam.ts): a chase shot behind the player's weapon while it
-   * flies; after the outcome the camera stays where it was and watches the target (the wreck, or the
-   * target flying on after a miss). Same cost as the target shot, which isn't rendered meanwhile.
+   * flies; after a hit the shot freezes on the impact point (weaponHoldPose: the target and the fireball in
+   * frame, #282 F12); after a miss the camera stays where it was and watches the target flying on. Same
+   * cost as the target shot, which isn't rendered meanwhile.
    */
   renderWeapon(renderer: WebGLRenderer, scene: Scene, view: WeaponShotView, far: number, range = 0, omit: readonly Object3D[] = NONE): boolean {
     if (view.vw < 2 || view.vh < 2 || view.focusId === null) {
@@ -195,8 +200,15 @@ export class TargetCam {
       this.wKey = view.focusId;
       this.wHas = false;
     }
-    if (view.flying || !this.wHas) weaponCamPose(view.pos, view.vel, view.tgt, view.len, this.wPose);
-    if (!view.flying) {
+    if (view.flying || !this.wHas) {
+      weaponCamPose(view.pos, view.vel, view.tgt, view.len, this.wPose);
+      this.wHeld = false;
+    }
+    if (view.hit) {
+      // freeze on the impact: the weapon's last position, where the fireball blooms (#282 F12)
+      if (!this.wHeld) weaponHoldPose(this.wPose, view.pos, this.wPose);
+      this.wHeld = true;
+    } else if (!view.flying) {
       const t = view.targetId === null ? null : this.world.getEntity(view.targetId);
       this.wPose.look.copy(t ? t.position : view.tgt);
       const d = this.wPose.position.distanceTo(this.wPose.look);

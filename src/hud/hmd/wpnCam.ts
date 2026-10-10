@@ -10,11 +10,12 @@
  *    grows to 1.6× (setting 'dynamic'; 'compact' keeps the slot's size) and shows a chase shot behind
  *    the weapon (render/TargetCam.ts renderWeapon). It stays open until the outcome unless the time to
  *    impact climbs past 5 s again (the target turned away).
- *  - OUTCOME: a hit holds SPLASH 1.6 s; a kill of the target camera's own target holds the camera's
- *    DESTROYED hold instead (3 s, 6 s for a ship) and the camera doesn't replay it. Hits less than 1.6 s
- *    apart count up (SPLASH ×N). MISSED / DECOYED / LOST / NO TGT hold 2 s in amber, then the slot goes
- *    back to the target camera, still on its live target. A result gives way at once when another
- *    weapon enters its last 3 s (it stays as an amber chip).
+ *  - OUTCOME: a hit holds SPLASH 1.6 s over the impact (the shot freezes there, #282 F12); a kill of
+ *    the target camera's own target holds the camera's DESTROYED hold instead (3 s, 6 s for a ship) and
+ *    the camera doesn't replay it. Hits less than 1.6 s apart count up (SPLASH ×N). MISSED / DECOYED /
+ *    LOST / NO TGT hold 2 s in amber, then the slot goes back to the target camera, still on its live
+ *    target. A result gives way at once when another weapon enters its last 3 s (it stays as an amber
+ *    chip).
  *  - Several weapons: one window, on the next to hit (lowest time to impact, held ≥ 2 s; a tap on the
  *    window cycles and pins one). The others are chips under it, by time to impact; from 4 weapons up
  *    grouped by target, 3 rows at most, then "+N".
@@ -368,6 +369,8 @@ export interface WpnView {
   focusId: number | null;
   targetId: number | null;
   flying: boolean;
+  /** The outcome is a hit (the 3D pass freezes on the impact point). */
+  hit: boolean;
   len: number;
   readonly pos: Vector3;
   readonly vel: Vector3;
@@ -392,6 +395,7 @@ export const wpnView: WpnView = {
   focusId: null,
   targetId: null,
   flying: false,
+  hit: false,
   len: 3,
   pos: new Vector3(),
   vel: new Vector3(),
@@ -426,6 +430,7 @@ export function resetWpn(): void {
   wpnView.vw = wpnView.vh = wpnView.sw = 0;
   wpnView.focusId = null;
   wpnView.targetId = null;
+  wpnView.hit = false;
 }
 
 function ease(t: number): number {
@@ -509,6 +514,7 @@ export function stepWpn(
   v.focusId = focus?.id ?? null;
   v.targetId = focus?.targetId ?? null;
   v.flying = focus?.outcome === 'flight';
+  v.hit = !!focus && isHitOutcome(focus.outcome);
   if (focus) {
     v.len = focus.len;
     v.pos.copy(focus.pos);
