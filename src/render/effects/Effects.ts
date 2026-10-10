@@ -1,10 +1,10 @@
 /**
  * Effects — all combat "juice": missile smoke trails (ribbons + puffs) and motor glows, explosions
- * (flash, fireball, smoke, sparks, debris, ground shockwave, water splash columns), burning wrecks &
- * tall smoke columns, falling-wreck fire trails, gun tracers, muzzle flashes, bullet impacts, flares
- * (burning cores + smoke arcs), chaff glitter, contrails, wingtip vortices, LEX vapour, transonic
- * vapour cones, damage smoke, ship funnel exhaust, the fires riding a sinking hull down and the fire
- * burning on a damaged Sky Tower.
+ * (flash, fireball, smoke, sparks, debris, ground shockwave, water splash columns and spray rings),
+ * burning wrecks & tall smoke columns, falling-wreck fire trails, gun tracers, muzzle flashes, bullet
+ * impacts, flares (burning cores + smoke arcs), chaff glitter, contrails, wingtip vortices, LEX vapour,
+ * transonic vapour cones, damage smoke, ship funnel exhaust, the fires riding a sinking hull down, the
+ * fire burning on a damaged Sky Tower and on a damaged SAM site still fighting (an AD boat's deck).
  *
  * Budgets: particle capacities and emission rates scale with QualitySettings.particleScale and with
  * distance to the camera. Everything is pooled; the per-frame path allocates nothing.
@@ -71,6 +71,16 @@ export const LANDMARK_FIRE = {
 };
 
 /**
+ * How hard a damaged, still fighting SAM site (an air-defence boat, an SA-6 a near miss hurt) burns:
+ * 0 intact or dead, else 0.4 for a scratch up to 1 near the end. A fire on its deck and a smoke
+ * column show the player the hit landed (playtest r2 F2: an AD boat sailed on with no sign of it).
+ */
+export function siteBurn(e: { alive: boolean; health: number; maxHealth: number }): number {
+  if (!e.alive || e.health >= e.maxHealth || e.maxHealth <= 0) return 0;
+  return 0.4 + 0.6 * Math.min(1, 1 - e.health / e.maxHealth);
+}
+
+/**
  * Air-kill payoff tuning (i1 review: kills were 1-3 px at BVR ranges). Minimum on-screen sizes are
  * in device pixels; `scale` is the fireball size in metres for an aircraft of the given length.
  */
@@ -83,6 +93,35 @@ export const AIR_KILL = {
   secondaries: 3,
   scale: (length: number) => Math.max(36, length * 2.8),
 };
+
+/**
+ * A missile launch read from the cockpit (playtest r1 1.2-b: an AMRAAM shot showed nothing in front of
+ * the canopy). An AIM-120 drops from a bay under and behind the pilot and lights 0.3 s later, so for
+ * its first seconds it is a small thing low ahead of the nose. An air-launched missile's ignition
+ * flash rides with it, bigger and longer (`flashMinPx`, `flashLife` s); its motor glow keeps a larger
+ * size and a `glowMinPx` minimum for `glowHold` s after release, easing to the usual 6 px by `glowS`;
+ * its smoke puffs come every frame and `puffK` × bigger meanwhile. All in the existing particle and
+ * sprite batches: no draw call added.
+ */
+export const LAUNCH_FX = { glowHold: 1.2, glowS: 2, glowMinPx: 18, flashMinPx: 28, flashLife: 0.3, puffK: 1.6 };
+
+/** 1 for an air-launched missile in its first LAUNCH_FX.glowHold s, easing to 0 at glowS (0 for a SAM). */
+export function launchBoost(m: Pick<MissileEntity, 'age' | 'def'>): number {
+  if (m.def.category === 'sam') return 0;
+  return Math.max(0, Math.min(1, (LAUNCH_FX.glowS - m.age) / (LAUNCH_FX.glowS - LAUNCH_FX.glowHold)));
+}
+
+/**
+ * The motor glow of a burning missile at its tail (the sprite pass): a bright dot from far away, at
+ * least 6 px (9 for a SAM), bigger in its first seconds (launchBoost).
+ */
+export function motorGlow(sprites: Pick<SpriteBatch, 'add'>, m: MissileEntity, tail: Vector3, t: number, nightK: number): void {
+  const fl = 0.85 + 0.15 * Math.sin(t * 60 + m.id);
+  const k = launchBoost(m);
+  const base = m.def.category === 'sam' ? 9 : 6;
+  const s = Math.max(1.2, (m.def.diameter || 0.2) * 9) * (1 + k);
+  sprites.add(tail.x, tail.y, tail.z, 4 * fl * nightK, 3.1 * fl * nightK, 1.9 * fl * nightK, 1, s, base + (LAUNCH_FX.glowMinPx - base) * k);
+}
 
 function trailStyleFor(def: MunitionDef): RibbonStyle | null {
   if (def.category === 'bomb' || def.smoke <= 0.01) return null;
@@ -229,6 +268,8 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const landmarkAcc = new Map<object, { f: number; s: number }>();
   /** Fire / smoke accumulators of a hit ship still afloat (per ship id: the escorted tanker after its first hit). */
   const burnAcc = new Map<number, { f: number; s: number }>();
+  /** Fire / smoke accumulators of a damaged SAM site still fighting (per site id, siteBurn). */
+  const siteAcc = new Map<number, { f: number; s: number }>();
   const trailStyles = new Map<string, RibbonStyle | null>();
 
   const now = () => world.time;
@@ -420,7 +461,6 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
   const DUST_COL = new Color(0x9b8a6c);
   const FIREBALL_CORE: RGB = [1, 0.5, 0.12];
   const SHOCK_COL = new Color(0xfff2d8);
-  const FOAM_COL = new Color(0xf0f4f5);
 
   /** A vessel (a ship, a fast boat, an air-defence boat): a munition that hit it went off on its hull. */
   function onHull(id: number | null): boolean {
@@ -546,7 +586,39 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       col1(P, C.steam, 0);
       smoke.spawn(P, t);
     }
-    pulses.fire('ring', x, 0.3, z, w, h * 1.3, 4, FOAM_COL, 0.75);
+    sprayRing(x, z, w, h * 0.5, d, t);
+  }
+
+  /**
+   * A ring of white spray thrown out low over the water round a burst from radius `r0` (m), the fastest
+   * `out` m/s. On the sea an explosion used to lay a flat translucent foam / dust disc there that read as
+   * a sticker on the water (playtest r2 F10): spray has height, catches the light and falls back.
+   */
+  function sprayRing(x: number, z: number, r0: number, out: number, d: number, t: number): void {
+    const n = count(24, d);
+    for (let i = 0; i < n; i++) {
+      resetSpawn(P);
+      const a = (i / n) * 6.283 + rnd() * 0.25;
+      const sp = out * (0.7 + 0.3 * rnd());
+      P.x = x + Math.cos(a) * r0;
+      P.y = 0.6;
+      P.z = z + Math.sin(a) * r0;
+      P.vx = Math.cos(a) * sp;
+      P.vz = Math.sin(a) * sp;
+      P.vy = out * (0.35 + 0.25 * rnd());
+      P.drag = 1.2;
+      P.grav = -9.8;
+      P.size0 = r0 * 0.5 + 1;
+      P.size1 = r0 * 1.4 + 3;
+      P.sizeCurve = 1.5;
+      P.life = 1.4 + rnd() * 0.8;
+      P.variant = (rnd() * 4) | 0;
+      P.rot = rnd() * 6;
+      col0(P, C.water, 0.95);
+      col1(P, C.steam, 0);
+      P.fadeIn = 0.02;
+      smoke.spawn(P, t);
+    }
   }
 
   function waterSplash(x: number, y: number, z: number, S: number, d: number, t: number): void {
@@ -594,7 +666,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       col1(P, C.steam, 0);
       smoke.spawn(P, t);
     }
-    pulses.fire('ring', x, 0.3, z, S * 0.2, S * 2.5, 2.5, FOAM_COL, 0.55);
+    sprayRing(x, z, S * 0.2, S * 1.4, d, t);
     void y;
   }
 
@@ -1107,6 +1179,53 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     }
   }
 
+  /** Fire on the deck and a smoke column on every damaged SAM site still fighting (siteBurn). */
+  function updateSiteDamage(t: number, dt: number): void {
+    for (const s of world.sams) {
+      const k = siteBurn(s);
+      if (k <= 0) {
+        if (siteAcc.size) siteAcc.delete(s.id);
+        continue;
+      }
+      let acc = siteAcc.get(s.id);
+      if (!acc) siteAcc.set(s.id, (acc = { f: 0, s: 0 }));
+      const p = s.position;
+      const y = p.y + (s.type === 'ad_boat' ? 2.5 : 1); // on the boat's deck / the site's vehicles
+      const d = distCam(p.x, y, p.z);
+      acc.f += dt * 12 * k * ps * lodK(d);
+      while (acc.f >= 1) {
+        acc.f -= 1;
+        fireLick(p.x + (rnd() - 0.5) * 4, y + rnd(), p.z + (rnd() - 0.5) * 4, (rnd() - 0.5) * 1.5, 2 + rnd() * 3, (rnd() - 0.5) * 1.5, (1.8 + rnd() * 2) * k, 0.5 + rnd() * 0.4, 1, 2);
+      }
+      acc.s += dt * (1 + 1.5 * k) * ps * Math.max(0.5, lodK(d));
+      const v = s.velocity;
+      while (acc.s >= 1) {
+        acc.s -= 1;
+        resetSpawn(P);
+        P.x = p.x + (rnd() - 0.5) * 4;
+        P.y = y + 2 + rnd() * 2;
+        P.z = p.z + (rnd() - 0.5) * 4;
+        P.vx = v.x * 0.6 + (rnd() - 0.5) * 2;
+        P.vy = 6 + rnd() * 4;
+        P.vz = v.z * 0.6 + (rnd() - 0.5) * 2;
+        P.drag = 0.3;
+        P.grav = 3.5;
+        P.size0 = 4 * k;
+        P.size1 = (20 + rnd() * 18) * k;
+        P.sizeCurve = 1.6;
+        P.life = 12 + rnd() * 6;
+        P.rot = rnd() * 6.28;
+        P.rotSpeed = (rnd() - 0.5) * 0.15;
+        P.variant = (rnd() * 4) | 0;
+        col0(P, C.smokeDark, 0.8);
+        col1(P, C.smokeGrey, 0);
+        P.fadeIn = 0.04;
+        P.minPx = 3;
+        smoke.spawn(P, t);
+      }
+    }
+  }
+
   function schedule(delay: number, x: number, y: number, z: number, size: ExplosionSize, surface: 'air' | 'ground' | 'water'): void {
     const d = delayed.find((e) => !e.active);
     if (!d) return;
@@ -1206,12 +1325,14 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         const type = (entity as { type: string }).type;
         const bigFire = type === 'fuel';
         const gy = groundAt(p.x, p.z);
+        // a boat (an AD, missile or suicide boat): its secondaries go off in the water, not as dust rings
+        const surf = world.terrain.isWater(p.x, p.z) ? 'water' : 'ground';
         // tall, long-lived fire + smoke column readable from several km
         startFire(p.x, gy, p.z, bigFire ? 2.8 : 1.7, bigFire ? 170 : 120);
         groundPillar(p.x, gy, p.z, bigFire ? 1.6 : 1);
         const n = bigFire ? 4 : 3;
         for (let i = 0; i < n; i++)
-          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', 'ground');
+          schedule(0.5 + rnd() * 2.5 * (i + 1), p.x + (rnd() - 0.5) * 24, gy + 2, p.z + (rnd() - 0.5) * 24, i === 0 ? (bigFire ? 'huge' : 'large') : i === 1 ? 'medium' : 'small', surf);
       }
     }),
     events.on('landmark:destroyed', ({ landmark }) => {
@@ -1392,27 +1513,37 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       const burning = m.motorBurning;
       const tail = missileTail(m, _v);
       const d = distCam(tail.x, tail.y, tail.z);
+      const boost = launchBoost(m);
       if (burning && !fx.motor) {
-        // motor ignition flash
+        // motor ignition flash; an air launch's rides with the missile, so it lights the air under the
+        // nose instead of being left behind the jet (LAUNCH_FX)
         resetSpawn(P);
         P.x = tail.x;
         P.y = tail.y;
         P.z = tail.z;
-        P.life = 0.15;
-        P.size0 = 3;
-        P.size1 = 5;
+        if (boost > 0) {
+          P.vx = m.velocity.x;
+          P.vy = m.velocity.y;
+          P.vz = m.velocity.z;
+          P.drag = 0.01;
+        }
+        P.life = boost > 0 ? LAUNCH_FX.flashLife : 0.15;
+        P.size0 = boost > 0 ? 5 : 3;
+        P.size1 = boost > 0 ? 9 : 5;
         col0(P, [1, 0.85, 0.6], 1, 5);
         col1(P, [1, 0.5, 0.2], 0, 2);
-        P.minPx = AIR_KILL.fireballMinPx;
+        P.minPx = boost > 0 ? LAUNCH_FX.flashMinPx : AIR_KILL.fireballMinPx;
         fire.spawn(P, t);
       }
       if (burning && fx.style) {
         if (fx.ribbon < 0 || !ribbons.isActive(fx.ribbon)) fx.ribbon = ribbons.alloc(fx.style);
         ribbons.emit(fx.ribbon, tail.x, tail.y, tail.z, t);
-        // volumetric puffs close to the camera (ribbons collapse when seen end-on, e.g. chase view)
-        if (d < 2500 && rnd() < (d < 900 ? 1 : 0.5) * Math.max(0.5, ps)) {
+        // volumetric puffs close to the camera (ribbons collapse when seen end-on, e.g. chase view and
+        // the cockpit), every frame and bigger just after an air launch
+        if (d < 2500 && (boost > 0 || rnd() < (d < 900 ? 1 : 0.5) * Math.max(0.5, ps))) {
           const s = fx.style;
-          smallPuff(tail.x, tail.y, tail.z, m.velocity.x * 0.03, m.velocity.y * 0.03, m.velocity.z * 0.03, [s.r, s.g, s.b], Math.min(0.85, s.alpha * 0.8), s.width * 1.5, s.width * 3.5 + s.growth * s.life * 0.35, s.life * 0.5);
+          const k = 1 + (LAUNCH_FX.puffK - 1) * boost;
+          smallPuff(tail.x, tail.y, tail.z, m.velocity.x * 0.03, m.velocity.y * 0.03, m.velocity.z * 0.03, [s.r, s.g, s.b], Math.min(0.85, s.alpha * 0.8), s.width * 1.5 * k, (s.width * 3.5 + s.growth * s.life * 0.35) * k, s.life * 0.5);
         }
         // exhaust tongue
         if (d < 700) {
@@ -1738,10 +1869,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
     // missile motor glows (visible as bright dots from far away)
     for (const m of world.missiles) {
       if (!m.alive || !m.motorBurning) continue;
-      missileTail(m, _v);
-      const fl = 0.85 + 0.15 * Math.sin(t * 60 + m.id);
-      const s = Math.max(1.2, (m.def.diameter || 0.2) * 9);
-      sprites.add(_v.x, _v.y, _v.z, 4 * fl * nightK, 3.1 * fl * nightK, 1.9 * fl * nightK, 1, s, m.def.category === 'sam' ? 9 : 6);
+      motorGlow(sprites, m, missileTail(m, _v), t, nightK);
     }
     // flares: blinding cores
     for (const dc of world.decoys) {
@@ -1819,6 +1947,7 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
         scanDecoys(t, dt);
         updateFires(t, dt);
         updateLandmarkDamage(t, dt);
+        updateSiteDamage(t, dt);
         updateShips(t, dt);
         craters.update(t);
         debris.update(dt, groundAt, debrisTrail);

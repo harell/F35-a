@@ -20,7 +20,7 @@ import type { WeaponId } from '../core/types';
 import { loadHudFont } from './font';
 import { drawVesselCounters } from './hmd/escort';
 import { drawExternalBlock, drawInset, drawMissileCam } from './hmd/external';
-import { WARNING_INFO, WEAPON_BREVITY, killText } from './hmd/format';
+import { WARNING_INFO, WEAPON_BREVITY, armOutcomeText, killText } from './hmd/format';
 import { classifyHudMessage } from './hmd/feeds';
 import { drawAltColumn, drawBankScale, drawFpm, drawHeadingTape, drawLadder, drawSpeedColumn, drawWaterline } from './hmd/flight';
 import { HudState, makeFrame, type HudMode, type HudFrame } from './hmd/frame';
@@ -73,6 +73,8 @@ const TAC_PICK_RADIUS = 26;
 
 /** Seconds a lesson's objectives summary waits for the column to stay clear of hints before it shows. */
 const OBJ_SETTLE = 0.4;
+/** Back from a hint with less than this (s) of its time left, a lesson's summary is done: no short flash of the rest. */
+const OBJ_MIN_RUN = 2;
 
 /** A rect in CSS px: left, top, width, height. */
 export type HudRect = [number, number, number, number];
@@ -221,7 +223,12 @@ export const createHud: CreateHud = (canvas, events) => {
     }),
     events.on('munition:end', ({ missile, targetId, reason }) => {
       st.threats.onMunitionEnd(missile.id, targetId, reason, st.playerId);
-      if (missile.shooterId === st.playerId) wpnState.tracker.onEnd(missile.id, reason);
+      if (missile.shooterId !== st.playerId) return;
+      wpnState.tracker.onEnd(missile.id, reason);
+      if (missile.def.guidance === 'anti_radiation') {
+        const o = armOutcomeText(curWorld?.getEntity(targetId) ?? null, reason === 'hit' || reason === 'proximity');
+        if (o) st.messages.push(o.text, o.tone, 3);
+      }
     }),
     events.on('player:hit', ({ amount }) => hitFlash(st.g, amount)),
     events.on('warning', ({ id, active }) => {
@@ -232,6 +239,7 @@ export const createHud: CreateHud = (canvas, events) => {
       const w = missile.def.id as WeaponId;
       st.brevity = WEAPON_BREVITY[w] ?? '';
       st.brevityAge = 0;
+      st.launched = w;
     }),
     events.on('mission:end', ({ success }) => {
       // a protected asset lost just now failed the mission: show how it went
@@ -306,7 +314,7 @@ export const createHud: CreateHud = (canvas, events) => {
       }
       if (dirty) clear();
       dirty = false;
-      st.step(ctx.dt, ctx.paused);
+      st.step(ctx.dt, ctx.paused, holdsMessage(ctx.player));
       if (TEST_HOOKS) beginDrawn(st.frame);
       if (!ctx.world || !ctx.camera) {
         // no session (teardown): forget everything from the previous mission
@@ -527,7 +535,7 @@ export const createHud: CreateHud = (canvas, events) => {
       // info block + inset): every label placed after this dodges them, the ladder knocks out under them
       reserveFixedZones(f);
       // 2) reserve the centre cue + message slots (they dodge the protected symbols + fixed blocks)
-      const critical = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
+      const critical = holdsMessage(p);
       if (!zoomed) {
         const below = planCues(f);
         const cur = st.messages.current;
@@ -602,12 +610,14 @@ export const createHud: CreateHud = (canvas, events) => {
         // a lesson's hint outranks the objectives summary: when both (and the damage block between them)
         // don't fit under the radio, the summary waits, its time held, until no hint is up — even if a
         // radio call ends meanwhile, so it doesn't toggle with the radio — and then a moment longer,
-        // so a hint that arrives just after doesn't flash it (playtest 2026-10-02, 4.2-c)
+        // so a hint that arrives just after doesn't flash it (playtest 2026-10-02, 4.2-c); a remainder
+        // under OBJ_MIN_RUN is dropped rather than flashed
         if (ctx.mission?.def?.kind === 'training') {
           const need = hintHeight(f, L.colW);
           if (need === 0) st.objYield = false;
           else if (!st.objYield) st.objYield = drawObjectives(f, L.colX, colY, false, L.colW, 6, true) + damageHeight(f) + need > hintMax;
           objHold = st.objYield || st.objFree < OBJ_SETTLE;
+          if (!objHold && st.objHold && st.objShow < OBJ_MIN_RUN) st.objShow = 0;
         }
         if (!objHold) colY = drawObjectives(f, L.colX, colY, false, L.colW, 6);
         colY = drawDamage(f, L.colX, colY);
@@ -726,7 +736,7 @@ export const createHud: CreateHud = (canvas, events) => {
         };
       },
       stepClock(ctx) {
-        st.step(ctx.dt, false);
+        st.step(ctx.dt, false, holdsMessage(ctx.player));
         const p = ctx.player;
         if (p && p.id !== st.playerId) {
           st.resetPlayer();
@@ -745,6 +755,11 @@ export const createHud: CreateHud = (canvas, events) => {
 };
 
 /** The DAS window's frame: a thin ring round the hole in the panel and its 'DAS' tag on top (#116). */
+/** A life-critical warning (PULL UP, MISSILE, STALL) holds the centre message back (priority 4+ shows through). */
+function holdsMessage(p: FrameContext['player']): boolean {
+  return !!p && (p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled);
+}
+
 function drawDasFrame(f: HudFrame): void {
   const { pen, pal, L } = f;
   const d = dasWindow;

@@ -15,14 +15,26 @@ export interface PodZoomStep {
 
 /**
  * Zoom steps, widest first (a tap on the window cycles them). WIDE: a site and its surroundings; NARROW:
- * one vehicle or building; ZOOM: about 2 m of ground, so a 0.3 m object fills ~15 % of the window height
- * (≈ 12 px in the 82 px HMD window, ≥ 8 px in the smallest 54 px one) at any slant range.
+ * one vehicle or building; ZOOM: about 1 m of ground, half that on an animal (podSpan), so g03's 0.38 m
+ * stoat fills about half the window at any slant range.
  */
 export const POD_ZOOM: readonly PodZoomStep[] = [
   { name: 'WIDE', span: 150 },
   { name: 'NARROW', span: 30 },
-  { name: 'ZOOM', span: 2 },
+  { name: 'ZOOM', span: 1 },
 ];
+
+/**
+ * ZOOM's span (m) on an animal under a metre across (g03's stoat, t07's rats): at 1 m the 0.38 m stoat
+ * was a 10 × 20 px dark blob in the window (playtest r2 F6); at 0.5 m it fills about half of it.
+ */
+export const POD_ZOOM_SMALL = 0.5;
+
+/** The span (m) zoom step `i` shows of a target of `radius` m: POD_ZOOM's, closer at ZOOM on a small one. */
+export function podSpan(i: number, radius: number): number {
+  const step = POD_ZOOM[i] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
+  return step.name === 'ZOOM' && radius < 0.5 ? POD_ZOOM_SMALL : step.span;
+}
 
 /** The step a new pod shot opens at. */
 export const POD_ZOOM_DEFAULT = 1;

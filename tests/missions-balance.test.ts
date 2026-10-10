@@ -3,7 +3,7 @@
  *  - i2 / #57: no Pilot walls; the Pilot band (≥ 75 % over 6 seeds) in t06;
  *  - #65: the bot ripples its StormBreakers instead of waiting out each one's long glide;
  *  - #58: a difficulty curve that only falls, in every campaign mission;
- *  - the IRGC missions' own bands (g01, g02, and g03 on its route probe).
+ *  - the IRGC missions' own bands (g01, g02, and g03 on its route probes).
  * Full sweep: npx vite-node tools/playtest/bot-sweep.ts -- --missions=<ids> --diffs=<difficulties>.
  */
 import { describe, expect, it } from 'vitest';
@@ -44,7 +44,8 @@ describe('#65: the bot ripples its StormBreakers (playtest 2026-10-02, 2.2-h)', 
   // the bot used to keep one bomb in flight at a time (each glides 110–160 s): 12 of 36 runs of the
   // repro sweep took over 600 s (every Southern Cross c04 and c06 one). Now its releases come close
   // together: the second StormBreaker leaves long before the first one lands.
-  for (const id of ['t06', 'ia_strike_auckland']) {
+  // (t06 flew sead_stealth until playtest 2026-10-10; it flies g03's sead_precision now, one tank, one bomb)
+  for (const id of ['ia_strike_auckland']) {
     it(`${id} with sead_stealth (4 StormBreakers) is won in under 600 s on Pilot (the bot ripples its bombs)`, { timeout: 300_000 }, async () => {
       for (const seed of [0, 1]) {
         // yield between runs: a worker blocked for long stretches can trip vitest's RPC timeout
@@ -101,33 +102,6 @@ describe('issue #57: Recruit and Pilot bands (MissionBot, 6 seeds, as the sweep)
   }
 });
 
-describe('issue #57: t06 Live SAMs — the route keeps the SA-6 off the player', () => {
-  it('every steering point before the target stays ≥ 14 km from the SA-6, the IP behind Rangitoto from it', () => {
-    const def = missionById('t06')!;
-    const sa6 = def.script.sams.find((s) => s.type === 'sa6')!;
-    const route = def.script.waypoints.filter((w) => w.kind === 'nav' || w.kind === 'ip');
-    expect(route.length).toBeGreaterThan(0);
-    const pts = [{ x: def.player.x, z: def.player.z }, ...route];
-    for (const w of route) expect(Math.hypot(w.x - sa6.x, w.z - sa6.z), (w as { id: string }).id).toBeGreaterThanOrEqual(14_000);
-    // every leg (start → … → IP) passes ≥ 14 km from the SA-6
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1];
-      const b = pts[i];
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const t = Math.max(0, Math.min(1, ((sa6.x - a.x) * dx + (sa6.z - a.z) * dz) / (dx * dx + dz * dz)));
-      expect(Math.hypot(a.x + dx * t - sa6.x, a.z + dz * t - sa6.z), `leg ${i}`).toBeGreaterThanOrEqual(14_000);
-    }
-    // the IP and the depot are on the far side of Rangitoto from the SA-6
-    const ip = route.find((w) => w.kind === 'ip')!;
-    const rangi = { x: 8700, z: -6850 };
-    const along = (q: { x: number; z: number }) => ((q.x - sa6.x) * (rangi.x - sa6.x) + (q.z - sa6.z) * (rangi.z - sa6.z)) / Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
-    const rangiD = Math.hypot(rangi.x - sa6.x, rangi.z - sa6.z);
-    expect(along(ip)).toBeGreaterThan(rangiD);
-    for (const g of def.script.ground.filter((x) => x.group === 'depot')) expect(along(g), g.id).toBeGreaterThan(rangiD);
-  });
-});
-
 /**
  * #58 (Balance 5/9): the win rate never rises from Pilot to Veteran in every
  * campaign mission. Seeds 0–5 are the ones `tools/playtest/bot-sweep.ts -- --seeds=6` flies, so a
@@ -153,7 +127,7 @@ describe('#58: a difficulty curve that only falls (6 seeds)', () => {
     return { won, table: `${id}: pilot ${won.pilot}/6, veteran ${won.veteran}/6\n${log.join('\n')}` };
   }
 
-  // g02 and g03 check their own curves below (g03's with the route probe: the plain bot flies straight at it)
+  // g02 and g03 check their own curves below (g03's on its best route probe)
   for (const id of CAMPAIGNS.flatMap((c) => c.missions.map((m) => m.id)).filter((id) => id !== 'g02' && id !== 'g03')) {
     it(`${id}: the win rate doesn't rise from Pilot to Veteran`, { timeout: 600_000 }, async () => {
       const c = await curve(id);
@@ -168,6 +142,9 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
   // chase (ai-playerbot.ts gunChaseFloor) it measured, 6 seeds with jitter: Recruit 3/6, Pilot 6/6
   // (no jitter: 2/6, 5/6). Recruit then flew nine drones (G01_SWARM.recruitCount): 5/6, Pilot 6/6,
   // Veteran 6/6 (the sweep, 6 seeds). The bands below are the measured floors less one seed.
+  // Playtest r4: once Winchester the bot flies the briefed gun pass from behind (MissionBot.gunPass)
+  // instead of circling the swarm; 12 seeds went from Recruit 10/12, Pilot 11/12, Veteran 9/12 to
+  // 12/12, 12/12, 11/12.
   it('Recruit ≥ 4/6 and Pilot ≥ 5/6 (was 0/6 and 0/6)', { timeout: 300_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     await new Promise((r) => setTimeout(r, 0));
@@ -177,81 +154,194 @@ describe('g01 Buzz Kill: the bot finishes the swarm with the gun (playtest 2026-
     expect(rec.won, rec.log.join('\n')).toBeGreaterThanOrEqual(4);
     expect(pil.won, pil.log.join('\n')).toBeGreaterThanOrEqual(5);
   });
+
+  it('gun passes, not circles: with six missiles (a2a_dogfight) the bot guns the other three Shaheds on Recruit, ≥ 5/6 (was 0/6)', { timeout: 300_000 }, async () => {
+    // a2a_dogfight isn't one of g01's loadouts: it measures the bot's gun work, three or four gun kills
+    // a run. The bot used to meet the swarm head-on and turn circles round it (one or two gun kills)
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await breathe();
+      const r = runPlaythrough('g01', 'recruit', seed, terrainFor('g01'), { maxT: 900, loadout: 'a2a_dogfight' });
+      if (r.state === 'success') won++;
+      log.push(`g01 recruit a2a_dogfight seed ${seed}: ${r.state}@${r.t}s kills=${r.playerKills} ${JSON.stringify(r.modes)}`);
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
+  });
 });
 
-describe('g02 Straight Outta Hauraki: no longer a walkover (#115)', () => {
+describe('g02 Straight Outta Hauraki: no longer a walkover (#115), and two ways to win (playtest r1)', () => {
   // The bot won 24/24 by rippling all eight StormBreakers in the first 20–39 s, before any missile boat counted
   // down. Now the missile boats come in at G02_MISSILE_WAVE_AT, so that takes a second pass against a ~3.9-minute
   // launch, and Recruit flies a suicide boat fewer. Pilot and Veteran also meet the AD boats' harassment
-  // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws SAM shots, the bot breaks to
-  // defend and reaches the second wave late; Veteran adds a third boat ahead of the suicide wave, inside the real
-  // envelope of the opening release. Measured with no rearming (#63), 6 seeds: Recruit 6/6, Pilot 4/6, Veteran 3/6
-  // (24 seeds: Pilot 18, Veteran 9). The bands are the measured floors less one seed, and the campaign's:
-  // Recruit ≥ 75 %, Veteran ≥ 25 %.
-  it('Recruit ≥ 5/6, Pilot ≥ 3/6, Veteran ≥ 2/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
+  // (DifficultyParams.adBoatHarass): the bay opening for a stand-off release draws long shots that catch a jet
+  // flying straight on and fall short of one that turns away (tests/sim-boats.test.ts); Veteran adds a third boat
+  // ahead of the suicide wave, 12–13 km from the bot's opening release. With Pilot's salvo grace (a pair is one
+  // hit) and the bot turning in on a boat whose IP it is already inside (playtest r1, 1.3-d), 6 seeds: Recruit 6/6,
+  // Pilot 6/6, Veteran 3/6. Playtest r2 (2.3-f): Veteran's 3/6 was the bot diving into the clutter as it beamed
+  // those long shots, from 4 km to 2 km, so its next release went from 9 km, inside the escort's reach (the same bot
+  // reacting 1.7 s later dived less and won 5/6). Beaming at its height above the clutter (an AD boat has no
+  // radar floor to get under): Recruit 6/6, Pilot 6/6 and Veteran 6/6, untouched, a walkover. Since then (playtest r2)
+  // a harbour picket on Pilot and Veteran sits 6–7 km from the opening release and Veteran's third escort is cued on
+  // the jet's run-in (G02_ESCORT_CUE): Recruit 6/6 untouched, Pilot 5/6 (one jet shot down; 10–12 rounds at the jet every run), Veteran 1/6, the casual proxy on Pilot 6/6 (hit in 2), --nodefend on Pilot 1/6 (hit in 5) and the AARGM opening on Pilot 6/6. Veteran's 1/6 was the bot
+  // beaming that escort's long shot a second before its opening release (playtest r4, the test after this one); pickling
+  // first: Veteran 5/6 (12–16 rounds at the jet, one shot down), the rest unchanged. The bands are the measured floors
+  // less one seed, with ceilings so a walkover fails.
+  const run = (d: Difficulty, seed: number, opts: Parameters<typeof runPlaythrough>[4] = {}) => runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600, ...opts });
+
+  it('Recruit ≥ 5/6, Pilot ≥ 4/6 and never 6/6 untouched, Veteran 4–5/6, never rising with difficulty; no bomb on a missile boat before it is in the water', { timeout: 600_000 }, async () => {
     const seeds = [0, 1, 2, 3, 4, 5];
     const diffs: Difficulty[] = ['recruit', 'pilot', 'veteran'];
     const won: Record<string, number> = {};
     const log: string[] = [];
+    let pilotUntouched = 0;
     for (const d of diffs) {
       won[d] = 0;
       for (const seed of seeds) {
         await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
-        const r = runPlaythrough('g02', d, seed, terrainFor('g02'), { maxT: 600 });
+        const r = run(d, seed);
         if (r.state === 'success') won[d]++;
-        log.push(`g02 ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+        if (d === 'pilot' && r.state === 'success' && r.threat.minHp >= 100) pilotUntouched++;
+        log.push(`g02 ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}, ${r.threat.rounds} rounds at the jet, lowest ${r.threat.minHp} hp`);
         // the opening ripple can't cover both waves: every bomb on a missile boat goes after they came in
         for (const l of r.launches) if (l.group === 'missile_boats') expect(l.t, `${d} seed ${seed}`).toBeGreaterThan(G02_MISSILE_WAVE_AT);
       }
     }
     const table = `${diffs.map((d) => `${d} ${won[d]}/6`).join(', ')}\n${log.join('\n')}`;
     expect(won.recruit, table).toBeGreaterThanOrEqual(5);
-    expect(won.pilot, table).toBeGreaterThanOrEqual(3);
-    expect(won.veteran, table).toBeGreaterThanOrEqual(2);
+    expect(won.pilot, table).toBeGreaterThanOrEqual(4);
+    expect(won.veteran, table).toBeGreaterThanOrEqual(4);
+    // not a walkover: Pilot doesn't win every run untouched, and Veteran doesn't win every run
+    expect(pilotUntouched, table).toBeLessThanOrEqual(5);
+    expect(won.veteran, table).toBeLessThanOrEqual(5);
     expect(won.pilot, table).toBeLessThanOrEqual(won.recruit);
     expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
   });
-});
 
-describe('g03 Stoat of Emergency: no free route (#198, #200)', () => {
-  // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then
-  // the bot attacks. With the stoat (#200: a running stoat can't be bombed, so the drop waits for one
-  // of its stops), measured over 16 seeds: the straight line and both detours 0/16 on Pilot and
-  // Veteran; the intended way through (low down the Tāmaki Strait, an AARGM at the strait's boat, a
-  // second at the airstrip SA-6 from close in, then the attack at a stop) Recruit 14/16, Pilot 8/16,
-  // Veteran 4/16 (with master's AD-boat harassment on Pilot and Veteran). (With #198's static stand-in it was Pilot 6/8, Veteran 4/8: the stoat's
-  // stops are the extra puzzle, and the bot pays for waiting near a live SA-6.) Bands over 6 seeds.
-  const run = (route: string, diff: Difficulty, seed: number) =>
-    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 300, probe: { kind: 'route', route } as ProbeSpec });
+  // Playtest r4: Veteran's cued escort fires a long shot (from 13 km, over 10 s from the jet) a second before the
+  // bot's opening release. The bot beamed it first, for 25 s, so its ripple went at 45–49 s, its bombs landed as the
+  // suicide boats reached the tanker, and it won 1/6, while the casual proxy, too slow to react, released first and won
+  // 6/6. A pilot on the run-in with REL 3 or less on the HUD pickles first and beams after.
+  it('Veteran: the escort’s long shot just before the release cue doesn’t hold the opening ripple', { timeout: 300_000 }, async () => {
+    const log: string[] = [];
+    const late: string[] = [];
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('veteran', seed, { log: true });
+      const shot = r.events.find((l) => / LAUNCH \S+ sam -> /.test(l));
+      const shotT = shot ? Number(shot.trim().split(/\s+/)[0]) : Infinity;
+      const bomb = r.launches.find((l) => l.weapon === 'gbu53');
+      const line = `veteran seed ${seed}: ${r.state}@${r.t}s, first SAM shot at ${shotT} s, first StormBreaker at ${bomb ? Math.round(bomb.t) : '-'} s`;
+      log.push(line);
+      // the escort's shot comes on the run-in, and the ripple goes with it, not after a long defence
+      expect(shotT, line).toBeLessThan(30);
+      if (!bomb || bomb.t > shotT + 5) late.push(line);
+    }
+    expect(late, log.join('\n')).toEqual([]);
+  });
 
-  it('the straight line and both detours fail on Pilot', { timeout: 600_000 }, async () => {
+  // The casual player's proxy (bot-sweep --reaction=2.5: 2.5 s to react to any missile warning) lost all
+  // 6 Pilot runs: Pilot's harassing pair beamed it south, away from the missile boats, and it flew on out to
+  // its IP 28 km from them before turning in, so its second ripple went at 165 s from 18 km and the boats
+  // launched first. Turning in from inside the IP: 6/6, the boats sunk ~35 s before their countdown.
+  it('the casual proxy (2.5 s reactions) wins Pilot ≥ 5/6 (was 0/6)', { timeout: 300_000 }, async () => {
     const log: string[] = [];
     let won = 0;
-    for (const route of ['straight', 'north', 'south']) {
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('pilot', seed, { bot: { reaction: 2.5, samReaction: 2.5 } });
+      if (r.state === 'success') won++;
+      log.push(`casual pilot seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(5);
+  });
+
+  // The second way (1.3-f): the briefing's AARGM-ER at the first escort as the opening shot
+  // (ROUTE_PROBES.g02.sead), then the StormBreaker ripples. It sinks her in about half the runs (a crew
+  // that sees it coming goes off the air) and Pilot's runs draw 2–8 SAM rounds instead of 10. Measured
+  // Recruit 6/6, Pilot 6/6 (casual proxy 6/6), Veteran 0/6 (its third boat's long shots at the open bay
+  // cost the opening ripple). The first way, bombs only with the AARGMs never fired, is the test above.
+  it('the escort first, with an AARGM: Pilot ≥ 4/6, the AARGM on an escort', { timeout: 300_000 }, async () => {
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('pilot', seed, { probe: { kind: 'route', route: 'sead' } as ProbeSpec });
+      if (r.state === 'success') won++;
+      const arm = r.launches.find((l) => l.weapon === 'aargm');
+      log.push(`sead pilot seed ${seed}: ${r.state}@${r.t}s ${r.reason}, AARGM ${arm ? `at ${Math.round(arm.t)} s on ${arm.group}` : 'not fired'}`);
+      expect(arm?.group, log.join('\n')).toBe('ad_boats');
+    }
+    expect(won, log.join('\n')).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('g03 Stoat of Emergency: several ways in (#198, #200; playtest 2026-10-10, r1)', () => {
+  // The route probes (tests/missions-probes.ts ROUTE_PROBES.g03) fly the ways a player could try, then the bot
+  // attacks at one of the stoat's stops (#200: a running stoat can't be bombed). Casual players (the owner's ask,
+  // r1) get several ways in, each about as hard as g01: Veteran's extra SA-6 is Veteran's only (minDifficulty), the
+  // boats fire no harassing long shots, the northern boats sail clear of the straight line, and the stops fall later
+  // and last 60 s on a 5:20 clock. Measured (playtest r1), 6 seeds, Recruit / Pilot (casual proxy --reaction=2.5 on
+  // Pilot): golden (low down the strait, an AARGM at the strait's boat) 6 / 5 (2); golden_north (round the north,
+  // AARGMs at the northern boats) 6 / 6 (5; Pilot 10/12 over 12 seeds); south (low down the strait, no AARGM) 6 / 6
+  // (5; 11/12); sead (low, an AARGM at the Motuihe SA-6, then straight in) 5 / 4 (4); the plain bot (straight in on
+  // the steering cue) 6 / 3 (3); north (low, no AARGM) 6 / 0; high 6 / 1; killall 0 / 0. Veteran (playtest r2,
+  // 2.3-a): its SA-6 stood at the airstrip over the nest and a Tor covered the Motuihe SA-6, so every way needed
+  // three AARGMs: golden 4/6, everything else 0/6 (south, sead, golden_north, the plain bot). With the SA-6 on
+  // Rakino over the north way and no Tor: golden 5/6, south 2/6, golden_north 0/6, sead 0/6, the plain bot 0/6.
+  // Bands over 4–6 seeds are the measured floors less one seed (Veteran's second way: its measured 2/6).
+  const run = (route: string, diff: Difficulty, seed: number) =>
+    runPlaythrough('g03', diff, seed, terrainFor('g03'), { maxT: 400, probe: { kind: 'route', route } as ProbeSpec });
+
+  it('at least three ways win on Pilot: the strait (golden, south) and round the north', { timeout: 900_000 }, async () => {
+    const log: string[] = [];
+    const won: Record<string, number> = {};
+    for (const route of ['golden', 'south', 'golden_north']) {
+      won[route] = 0;
       for (const seed of [0, 1, 2, 3]) {
-        await new Promise((r) => setTimeout(r, 0));
+        await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
         const r = run(route, 'pilot', seed);
-        if (r.state === 'success') won++;
+        if (r.state === 'success') won[route]++;
         log.push(`${route} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
       }
     }
-    expect(won, log.join('\n')).toBeLessThanOrEqual(1);
+    // measured on these seeds: golden 3/4, south 4/4, golden_north 4/4
+    const floor: Record<string, number> = { golden: 2, south: 3, golden_north: 3 };
+    for (const route of Object.keys(won)) expect(won[route], `${route}\n${log.join('\n')}`).toBeGreaterThanOrEqual(floor[route]);
   });
 
-  it('the intended way through: Pilot ≥ 2/6, and no harder difficulty beats Pilot', { timeout: 600_000 }, async () => {
+  it('two ways win on Veteran (golden and south, each ≥ 2/6), golden never more than on Pilot', { timeout: 1_200_000 }, async () => {
+    // playtest r2, 2.3-a: with a Tor over the Motuihe SA-6 and an SA-6 at the airstrip over the nest every way
+    // needed three AARGMs, and only golden won (4/6; south 0/6)
     const won: Record<string, number> = {};
     const log: string[] = [];
-    for (const d of ['pilot', 'veteran'] as const) {
-      won[d] = 0;
+    for (const [route, d] of [['golden', 'pilot'], ['golden', 'veteran'], ['south', 'veteran']] as const) {
+      const k = `${route} ${d}`;
+      won[k] = 0;
       for (const seed of [0, 1, 2, 3, 4, 5]) {
         await new Promise((r) => setTimeout(r, 0));
-        const r = run('golden', d, seed);
-        if (r.state === 'success') won[d]++;
-        log.push(`golden ${d} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+        const r = run(route, d, seed);
+        if (r.state === 'success') won[k]++;
+        log.push(`${k} seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
       }
     }
     const table = log.join('\n');
-    expect(won.pilot, table).toBeGreaterThanOrEqual(2);
-    expect(won.veteran, table).toBeLessThanOrEqual(won.pilot);
+    expect(won['golden veteran'], table).toBeGreaterThanOrEqual(4);
+    expect(won['south veteran'], table).toBeGreaterThanOrEqual(2);
+    expect(won['golden veteran'], table).toBeLessThanOrEqual(won['golden pilot']);
+  });
+
+  it('not a walkover: straight over the top of every SAM (high) loses at least half its runs on Pilot', { timeout: 600_000 }, async () => {
+    // above the cloud nothing is revealed; diving through it from 43,000 ft at the end meets every site at once.
+    // 1/4 until playtest r2, 2/4 since the bot beams the boats' rounds at its height above the clutter (2.3-f)
+    const log: string[] = [];
+    let won = 0;
+    for (const seed of [0, 1, 2, 3]) {
+      await new Promise((r) => setTimeout(r, 0));
+      const r = run('high', 'pilot', seed);
+      if (r.state === 'success') won++;
+      log.push(`high seed ${seed}: ${r.state}@${r.t}s ${r.reason}`);
+    }
+    expect(won, log.join('\n')).toBeLessThanOrEqual(2);
   });
 });

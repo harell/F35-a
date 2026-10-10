@@ -2,15 +2,15 @@
  * F35-A UI — mission briefing: intel map (left) + tabs BRIEFING / OBJECTIVES / HANGAR (right),
  * loadout picker limited to allowedLoadouts (default recommendedLoadout) with store diagrams and a
  * stealth rating bar, difficulty picker (3 levels, saved to settings; a training lesson shows its
- * fixed Pilot instead, see missionDifficulty), FLY / BACK.
+ * fixed Pilot instead, see missionDifficulty; the map and Known threats follow it, intelFor), FLY / BACK.
  */
-import type { MissionDef } from '../../core/contracts';
+import type { IntelMarker, MissionDef } from '../../core/contracts';
 import { DIFFICULTIES, LOADOUTS, THEATER_INFO, TIME_OF_DAY_INFO, WEAPON_INFO } from '../../core/data';
 import type { Difficulty, LoadoutId, Settings } from '../../core/types';
 import { icon } from '../art/icons';
 import { storesDiagramSvg } from '../art/storesDiagram';
 import { escapeHtml, h } from '../dom';
-import { fixedDifficulty, missionDifficulty, missionGunAmmo } from '../../missions';
+import { fixedDifficulty, intelFor, missionDifficulty, missionGunAmmo } from '../../missions';
 import { formatTime, pad2, stealthRating, storeLines } from '../format';
 import { hangarLoadouts } from '../hangar';
 import type { UiHost } from '../host';
@@ -58,11 +58,8 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     const canvas = h('canvas', { class: 'br-map-canvas', attrs: { role: 'img', 'aria-label': `Intel map for ${m.title}` } });
     const sweep = h('div', { class: 'br-map-sweep' });
     const legend = h('div', { class: 'br-legend' });
-    legend.innerHTML =
-      `<span class="lg lg-start">START</span><span class="lg lg-route">ROUTE</span>` +
-      (m.intel.some((i) => i.kind === 'sam') ? `<span class="lg lg-sam">SAM</span>` : '') +
-      (m.intel.some((i) => i.kind === 'air') ? `<span class="lg lg-air">AIR</span>` : '') +
-      (m.intel.some((i) => i.kind === 'target') ? `<span class="lg lg-tgt">TARGET</span>` : '');
+    /** The mission as briefed: its intel for the difficulty being flown (intelFor, playtest r2 2.1-b). */
+    let shown: MissionDef = m;
     mapWrap.append(canvas, sweep, legend);
     const expand = h('button', { class: 'ui-btn icon-only br-map-expand', attrs: { type: 'button', 'aria-label': 'Enlarge map' }, html: icon('display') });
     expand.addEventListener('click', () => {
@@ -114,28 +111,26 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       objList.appendChild(h('li', { class: bonus ? 'is-bonus' : '', html: `<span class="obj-mark">${bonus ? icon('star') : icon('target')}</span><span>${escapeHtml(bonus ? t.replace(/^bonus:\s*/i, '') : t)}</span>${bonus ? '<span class="badge obj-bonus">BONUS</span>' : ''}` }));
     });
     obj.appendChild(objList);
-    const threats = m.intel.filter((i) => i.kind === 'sam' || i.kind === 'air');
-    if (threats.length) {
-      obj.appendChild(h('div', { class: 'br-sub', text: 'Known threats' }));
-      const tl = h('div', { class: 'threat-list' });
-      const counted = new Map<string, { kind: string; label: string; radius?: number; n: number }>();
-      for (const t of threats) {
-        const key = `${t.kind}|${t.label}`;
-        const e = counted.get(key);
-        if (e) e.n++;
-        else counted.set(key, { kind: t.kind, label: t.label, radius: t.radius, n: 1 });
-      }
-      for (const t of counted.values()) {
-        tl.appendChild(
-          h('span', {
-            class: `chip threat-${t.kind}`,
-            html: `${icon(t.kind === 'sam' ? 'sam' : 'jet')}${t.n > 1 ? `${t.n}× ` : ''}${escapeHtml(t.label)}${t.radius ? ` · ${Math.round(t.radius / 1000)} km` : ''}`,
-          }),
-        );
-      }
-      obj.appendChild(tl);
-    }
+    const threatsEl = h('div');
+    obj.appendChild(threatsEl);
     pageEls.set('obj', obj);
+    /** Legend and Known threats for the difficulty being flown; the map follows on its next draw. */
+    const syncIntel = () => {
+      shown = { ...m, intel: intelFor(m, settings.difficulty) };
+      legend.innerHTML =
+        `<span class="lg lg-start">START</span><span class="lg lg-route">ROUTE</span>` +
+        (shown.intel.some((i) => i.kind === 'sam') ? `<span class="lg lg-sam">SAM</span>` : '') +
+        (shown.intel.some((i) => i.kind === 'air') ? `<span class="lg lg-air">AIR</span>` : '') +
+        (shown.intel.some((i) => i.kind === 'target') ? `<span class="lg lg-tgt">TARGET</span>` : '');
+      threatsEl.replaceChildren();
+      const threats = knownThreats(shown.intel);
+      if (!threats.length) return;
+      threatsEl.appendChild(h('div', { class: 'br-sub', text: 'Known threats' }));
+      const tl = h('div', { class: 'threat-list' });
+      for (const t of threats) tl.appendChild(h('span', { class: `chip threat-${t.kind}`, html: `${icon(t.kind === 'sam' ? 'sam' : 'jet')}${escapeHtml(t.text)}` }));
+      threatsEl.appendChild(tl);
+    };
+    syncIntel();
 
     // hangar / loadouts
     const hangar = h('div', { class: 'br-page br-hangar ui-scroll' });
@@ -212,6 +207,8 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       closeSheet = openDifficultySheet(el, settings, () => {
         closeSheet = null;
         syncDiff();
+        syncIntel();
+        redraw();
         for (const c of cardEls) {
           const gun = c.querySelector('.lo-gun');
           if (gun) gun.textContent = gunLine(c.dataset.id as LoadoutId);
@@ -235,7 +232,7 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
       const w = mapWrap.clientWidth;
       const hh = mapWrap.clientHeight;
       if (w < 10 || hh < 10) return;
-      drawIntelMap(canvas, m, w, hh, Math.min(2, window.devicePixelRatio || 1));
+      drawIntelMap(canvas, shown, w, hh, Math.min(2, window.devicePixelRatio || 1));
     };
     window.addEventListener('resize', redraw);
     host.present(el, { bg: true, back: () => (closeSheet?.() ? undefined : finish(null)), focus: fly });
@@ -243,6 +240,21 @@ export function showBriefing(host: UiHost, m: MissionDef, settings: Settings): P
     // the real coastline may still be downloading (prefetched at app start): redraw when it lands
     if (!aucklandLinz()) void loadAucklandLinz().then((ok) => ok && redraw());
   });
+}
+
+/** The Known threats chips ('2× SA-6 · 20 km'): SAM and air markers, alike ones counted together (a later wave's apart). */
+export function knownThreats(intel: readonly IntelMarker[]): { kind: 'sam' | 'air'; text: string }[] {
+  const counted = new Map<string, { kind: 'sam' | 'air'; label: string; radius?: number; later: boolean; n: number }>();
+  for (const t of intel) {
+    if (t.kind !== 'sam' && t.kind !== 'air') continue;
+    const later = !!t.later;
+    const key = `${t.kind}|${t.label}|${later}`;
+    const e = counted.get(key);
+    if (e) e.n++;
+    else counted.set(key, { kind: t.kind, label: t.label, radius: t.radius, later, n: 1 });
+  }
+  // a later wave's threats get their own chip (r3.1 R31-7: g02's wave-2 escort went unlisted)
+  return [...counted.values()].map((t) => ({ kind: t.kind, text: `${t.n > 1 ? `${t.n}× ` : ''}${t.label}${t.radius ? ` · ${Math.round(t.radius / 1000)} km` : ''}${t.later ? ' · later' : ''}` }));
 }
 
 /** Footer chip of a mission that flies at a fixed difficulty (training: Pilot): not a button. */

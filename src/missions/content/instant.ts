@@ -36,6 +36,8 @@ interface Layout {
   target: XZ;
   /** SAM belt positions, ordered along the route (first = nearest the player). */
   belt: XZ[];
+  /** Gauntlet: a site on the belt's flank, covering the stand-off run-ins round the end of the belt. */
+  flank: XZ;
   features: SceneryFeature[];
   /** Target is an airbase feature (runway heading) — for the strike layout. */
   airbase: { at: XZ; heading: number } | null;
@@ -50,6 +52,8 @@ function aucklandLayout(): Layout {
     enemyHeading: 240,
     target: P.waiC,
     belt: [P.rangSW, P.brownsIs, P.motuS, P.motuihe, P.waiW, P.rangE, P.waiS, P.motuN],
+    // in the hills east of Maraetai, south of the Tāmaki Strait: the run-in south of the belt was a free one
+    flank: { x: 26000, z: 6000 },
     features: [...BASE_FEATURES],
     airbase: { at: P.waiAirstrip, heading: WAIHEKE_RUNWAY_HDG },
     // the raid comes in low from the Firth of Thames, over Whitford and Flat Bush
@@ -146,6 +150,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
   let player = lay.player;
   let waypoints: WaypointDef[] | null = null;
   let objectiveText: string[] | undefined;
+  let timeLimit: number | undefined;
   const script: Partial<MissionScript> = {};
 
   switch (opts.mode) {
@@ -164,8 +169,8 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       briefing = [
         "Everyone's friendly. It's New Zealand. No bandits, no SAMs: just you, the jet and Auckland.",
         'Fly where you like and take in the sights. The steering cue offers a tour: the Harbour Bridge, the Sky Tower, North Head, Rangitoto, Mission Bay, the Museum, Eden Park, Mt Eden, One Tree Hill, the airport and home to Whenuapai. Airliners climb out over the city and ships sail the harbour: civilians going about their day, boxed CIV on the HUD.',
-        // (playtest 1.1-d: until the suburbs' streets are baked from LINZ data, say so)
-        "The CBD, the motorways and the main roads follow Auckland's real streets. The suburbs between them are stylised, so your own street isn't there yet.",
+        // (say where the real houses and streets are: the LINZ bakes #121, #126 and the neighbourhood models; the rest is stylised)
+        "Real houses and streets cover the flight corridor from Whenuapai over Mt Albert and Mt Roskill to the airport, Herne Bay, Mission Bay, Devonport and Waiheke, with the CBD's real towers. Elsewhere the suburbs are stylised for now, so your own street may not be there yet.",
         'The jet is clean, radar off, for the slowest and quietest flight. Pull the throttle back and the autothrottle holds 150 knots (A/T by the speed box) so the jet never sinks. Want to practise on the scenery? Pick a loaded jet in the hangar: nothing counts against you. Terrain and buildings still do, so mind the ground.',
         'The flight ends when you quit from the pause menu (or meet the ground).',
       ];
@@ -180,12 +185,16 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
       // the player has fired.
       if (n >= 3) groups.push(wingmen(1, lay.player, { loadout: 'a2a_beast', orders: WING_ORDERS }));
       const flights = enemyFlights(opts, n, lay, rng);
+      // one more bandit on Pilot (playtest r2, 2.3-e): with Veteran's number the bot won every Pilot
+      // run untouched, while Veteran's sharper bandits won a third of theirs
+      const last = flights[flights.length - 1];
+      last.countFor = { pilot: last.count + 1 };
       groups.push(...flights);
       objectives.push({ id: 'o_kill', kind: 'destroy', groups: flights.map((f) => f.id), label: n > 1 ? 'Splash all the bandits' : 'Splash the bandit', primary: true });
       briefing = [
-        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit). Weapons free — splash them all.`,
+        `About ${n} hostile fighter${n > 1 ? 's' : ''} inbound (fewer on Recruit, one more on Pilot). Weapons free — splash them all.`,
         opts.enemyType === 'mixed' ? 'Mixed types: MiG-29s and Su-27s.' : '',
-        n >= 3 ? 'Viper 2 is on your wing It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
+        n >= 3 ? 'Viper 2 is on your wing. It holds fire until you open up: the first shot is yours.' : 'You are on your own.',
         'The default load adds an AIM-9X on each outer pylon for the close fight, at a little stealth. Stealth loadout: stay unseen and shoot first. Beast mode carries more missiles but they see you from much farther out.',
       ].filter(Boolean);
       script.scaleEnemyTotal = true;
@@ -194,7 +203,10 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     }
     case 'sam_gauntlet': {
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
+      // the SEAD fit alone: strike_stealth's two JDAMs can't finish three depot targets 250 m apart
+      // (0/12, playtest 2026-10-10); strike_beast, no AARGM and an RCS the belt sees from afar, lost
+      // 0/12 on Pilot and Veteran, sead_precision (no AMRAAM for the CAP) 0/12 too (playtest r2, 2.3-b)
+      allowed = ['sead_stealth'];
       const count = Math.max(2, Math.min(lay.belt.length, n + 1));
       for (let i = 0; i < count; i++) {
         const type = BELT_TYPES[i % BELT_TYPES.length];
@@ -202,6 +214,11 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         // difficulty (it took the SA-8's slot), the second only on Veteran and up
         sams.push(site(`sam${i + 1}`, 'belt', type, lay.belt[i], { emcon: i >= 3 && rng() < 0.35, ...(type === 'sa15' && i % 4 === 3 ? { minDifficulty: 'veteran' as const } : {}) }));
       }
+      // an SA-6 on the flank on every difficulty (playtest r1, 1.3-g): round the south end of the belt a
+      // stand-off release from 22 km went unopposed (no SAM fired at the jet on Recruit). With the south
+      // covered the bot's run-in goes north, between Rangitoto's and Waiheke's SA-6s, and draws fire
+      const flank = count >= 3;
+      if (flank) sams.push(site('sam_flank', 'belt', 'sa6', lay.flank));
       ground.push(
         target('fuel1', 'target', 'fuel', { x: lay.target.x - 120, z: lay.target.z }),
         target('fuel2', 'target', 'fuel', { x: lay.target.x + 120, z: lay.target.z + 60 }),
@@ -216,24 +233,52 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         const capType = pickType(opts, rng);
         groups.push(
           flight('cap', capType, 2, lay.enemyAt, 6000, lay.enemyHeading, 240, 'cap', {
+            // a pair, a notch below the difficulty's skill, and one jet on Recruit (playtest r2, 2.3-c):
+            // at full skill the pair shot the bot down in Pilot's losses, or left a Winchester jet
+            // running from it with its bombs aboard; a single jet left Pilot untouched (6/6, 0-1 rounds
+            // at the jet), and one launched two minutes after the other changed nothing
+            countFor: { recruit: 1 },
+            skillOffset: -0.2,
             spawn: { kind: 'time', t: 120 },
             task: { kind: 'patrol', x: lay.target.x, z: lay.target.z, radius: 8000, altitude: 6000 },
           }),
         );
       }
       briefing = [
-        `A belt of ${count} SAM sites guards a depot. Some sites are silent until you are close.`,
-        ...(n >= 4 ? ['Two fighters launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
+        `A belt of ${count} SAM sites guards a depot${flank ? ', and an SA-6 in the hills south of the Tāmaki Strait covers the way round its south end' : ''}. Some sites are silent until you are close.`,
+        ...(n >= 4 ? ['Two fighters (one on Recruit) launch to cover the depot about two minutes in: keep your AMRAAMs for them.'] : []),
         'Kill the depot. Kill the belt if you can. Stay low, stay stealthy, fire AARGMs at anything that emits.',
+        `The depot is being emptied: in ${IA_GAUNTLET_TIME_LIMIT / 60} minutes there is nothing left to hit.`,
       ];
       script.parTime = 420;
+      // a clock (playtest r2, 2.3-c): a jet that spent its AMRAAMs on the CAP extended from it for 8
+      // minutes with its bombs aboard, and a parked one hung the sweep at 900 s
+      timeLimit = IA_GAUNTLET_TIME_LIMIT;
+      // the run-in and the StormBreakers' two-minute glide are quiet: Darkstar calls the belt up (the
+      // CAP comes at 120 s), and the depot's crews moving a minute after the belt opens fire (about
+      // halfway through a stand-off glide)
+      script.triggers = [
+        {
+          id: 't_belt',
+          when: { kind: 'time', t: 35 },
+          actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. SAM radars up from Rangitoto to Waiheke${flank ? ' and south of the strait' : ''}. Your bay doors will give you away.`, priority: 2 }],
+        },
+        {
+          id: 't_depot',
+          when: { kind: 'sam_engaged' },
+          delay: 60,
+          actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Trucks are leaving the depot. Finish it before they empty it.`, priority: 2 }],
+        },
+      ];
       break;
     }
     case 'strike': {
       // SEAD fit (issue #60): 4 SDBs take the 3 parked jets in one sortie (the 2 JDAMs of
       // strike_stealth needed a second pass through the SA-6 ring), the AARGMs answer the SA-6
       loadout = 'sead_stealth';
-      allowed = ['sead_stealth', 'strike_stealth', 'strike_beast'];
+      // the SEAD fit alone: strike_beast (no AARGM, seen from afar) lost 0/12 on Pilot and Veteran, shot
+      // down by the SA-6 or out of time, and sead_precision (no AMRAAM for the CAP) lost too (playtest r2, 2.3-b)
+      allowed = ['sead_stealth'];
       const ab = lay.airbase!;
       const rw = (v: number, u: number) => runwayPoint(ab.at, ab.heading, v, u);
       if (!features.includes(FEATURES.waihekeStrip)) features.push(FEATURES.waihekeStrip);
@@ -263,9 +308,31 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
         'Enemy airfield. Destroy the parked jets on the apron.',
         `Shilkas guard the runway and fighters hold a CAP overhead.${n >= 2 ? ' An SA-6 covers the field from the east end of Waiheke.' : ''}`,
         'SEAD loadout: four small-diameter bombs for the jets, AARGMs for any radar that lights you up.',
+        `The jets are being fuelled: in ${IA_STRIKE_TIME_LIMIT / 60} minutes they are gone.`,
       ];
-      // one glide bomb per pass, then egress and come round: the bot's wins take 550-600 s on this fit
+      // the bot's wins take 205-335 s (the JDAM fit's passes the longest): a par with room for a second look
       script.parTime = 600;
+      // a clock (playtest r1, 1.3-h): a jet out of bombs with a parked jet left (Veteran's Tor shoots
+      // glide bombs down) used to circle for ever
+      timeLimit = IA_STRIKE_TIME_LIMIT;
+      // the StormBreakers' glide from a stand-off release was 106-127 s of silence in 17 of 18 bot runs
+      // (playtest r2, 2.3-e): Darkstar speaks up partway through it
+      script.triggers = [
+        {
+          id: 't_glide',
+          when: { kind: 'player_fired', weapon: 'gbu53' },
+          delay: 50,
+          actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. From stand-off range StormBreakers glide up to two minutes. Stay clear of the defences meanwhile.`, priority: 2 }],
+        },
+        {
+          // after an AARGM kills a site the run out to a stand-off release point was 107-115 s of silence
+          // on Veteran (playtest 2026-10-10, #283): Darkstar speaks up partway through it
+          id: 't_sam_down',
+          when: { kind: 'player_kills', count: 1, category: 'sam' },
+          delay: 45,
+          actions: [{ kind: 'radio', from: DS_CALL, text: `${PLAYER_CALL}, Darkstar. Their air defence has a hole in it now. Set up your stand-off run on the parked jets.`, priority: 2 }],
+        },
+      ];
       break;
     }
     case 'defend': {
@@ -303,6 +370,7 @@ export function buildInstantMissionSeeded(opts: InstantActionOptions, seed: numb
     allowedLoadouts: allowed,
     player,
     features,
+    timeLimit,
     script: { triggers: [], ...script, groups, sams, ground, objectives, waypoints: waypoints ?? defaultWaypoints(opts, lay, objectives) },
   });
 }
@@ -368,8 +436,10 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
   const groups: AircraftGroupDef[] = [
     flight('strikers', strikeType, strikers, from, low, inbound, 235, 'fighter', {
       maxCount: 4,
-      // three bombers at most below Veteran (issue #60: at 8, Pilot went 4/6 with four, 5/6 with three)
-      ...(strikers > 3 ? { countFor: { recruit: 3, pilot: 3 } } : {}),
+      // three bombers at most below Veteran (issue #60: at 8, Pilot went 4/6 with four, 5/6 with three);
+      // below that Pilot and Veteran send one more (playtest r1, 1.3-i: Veteran won 6/6, its two bombers
+      // no match; r2, 2.3-e: Pilot won every ~100 s raid with the jet hit once in 8 runs)
+      countFor: strikers > 3 ? { recruit: 3, pilot: 3 } : { pilot: strikers + 1, veteran: strikers + 1 },
       formation: 'echelon',
       spacing: 400,
       enemyLoadout: 'strike',
@@ -448,7 +518,7 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
     successText: 'Wiri is still standing. The airport keeps its fuel.',
     briefing: [
       "A strike package is going for the Wiri oil terminal, Auckland's fuel supply at the end of the Marsden Point pipeline: the airport's jet fuel comes from these tanks.",
-      `About ${strikers} Flankers${strikers > 3 ? ' (three below Veteran)' : ''} loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
+      `About ${strikers} Flankers${strikers > 3 ? ' (three below Veteran)' : ' (one more on Pilot and Veteran)'} loaded with KAB-500 guided bombs come in low, then climb to bomb from about 13,000 ft${escorts > 0 ? `, with ${escorts} fighters as escort` : ''}. Each bomber that gets through can wreck a tank or two.`,
       `Keep at least ${DEFEND_MIN_TANKS} of the ${total} tanks standing until the strikers are dead or running. The tanks are friendly: never bomb or strafe them.`,
       ...(wings > 0 ? [`${wings > 1 ? 'Vipers 2 and 3 are' : 'Viper 2 is'} on your wing and takes the escort. The bombers are yours.`] : []),
       ...(n >= DEFEND_BEAST_FROM ? ["Beast mode recommended: a raid this size, bombers and escort, takes more than the stealth fit's four AMRAAMs."] : []),
@@ -460,9 +530,24 @@ function defendScenario(opts: InstantActionOptions, n: number, lay: Layout, rng:
  * Defend from this enemy count on recommends Beast mode (6 AMRAAMs and 2 AIM-9Xs, issue #60): at 8
  * the 4 strikers and 2 escorts left the stealth fit's 4 AMRAAMs a bomber short, and the bot was
  * 0/3 on Pilot (Winchester, then gunned by the last striker); with Beast 4/6, and 5/6 with the
- * raid capped at three bombers below Veteran.
+ * raid capped at three bombers below Veteran. From 4 (the default raid: two bombers and two escorts,
+ * a third bomber on Veteran) since playtest r1 (1.3-i): on the stealth fit the bot went Winchester
+ * at ~85 s on Pilot and a striker that kept its bombs left the sortie hanging; Beast won Pilot 6/6.
  */
-export const DEFEND_BEAST_FROM = 6;
+export const DEFEND_BEAST_FROM = 4;
+
+/**
+ * Strike's clock (s): the parked jets are gone when it runs out. Over twice the bot's slowest win
+ * (335 s): it ends a sortie that has stalled (out of bombs with a jet still on the apron), not a slow one.
+ */
+export const IA_STRIKE_TIME_LIMIT = 720;
+
+/**
+ * The SAM Gauntlet's clock (s): the depot is empty when it runs out. Well over the bot's slowest win
+ * (559 s, Pilot; most take 270-370 s): it ends a sortie that has stalled (Winchester and running from
+ * the CAP with the bombs aboard, or parked), not a slow one.
+ */
+export const IA_GAUNTLET_TIME_LIMIT = 720;
 
 /** Instant Action mission (fresh random seed each time). */
 export function buildInstantMission(opts: InstantActionOptions): MissionDef {

@@ -24,6 +24,7 @@ import { GroundTargetEntity, MissileEntity } from '../src/sim/entities';
 import { paletteFor } from '../src/hud/hmd/palette';
 import { PLAYER_LOCK_CONE } from '../src/sim/sensors/Sensors';
 import { gunOvershoot } from '../src/hud/hmd/weapons';
+import { hintPages } from '../src/hud/hmd/overlays';
 
 installPath2D();
 
@@ -669,6 +670,37 @@ describe('bomb release cue in every view (playtest 1.3-a: none in the default ch
 
   it('the AMRAAM SHOOT cue and its mini DLZ still work in chase', () => {
     const r = rig('lock', 'chase');
+    r.mock.world.missiles.length = 0; // (the scene's own AMRAAM in flight reads AMRAAM AWAY)
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
+  });
+
+  it('our AMRAAM in flight at the target: AMRAAM AWAY, steady, instead of SHOOT (playtest r1 1.2-g)', () => {
+    for (const v of ['cockpit', 'hud', 'chase'] as const) {
+      const r = rig('lock', v);
+      const own = r.mock.world.missiles.filter((m) => m.shooterId === r.mock.player.id);
+      expect(own.length, v).toBe(1);
+      const texts = textsOver(r, 0.5);
+      expect(find(texts, 'SHOOT').length, v).toBe(0);
+      // drawn in every frame (no blink): a cue, not an invitation
+      expect(find(texts, 'AMRAAM AWAY').length, v).toBe(15);
+      // it hits (or is gone): SHOOT is back for the next shot
+      own[0].alive = false;
+      const after = textsOver(r, 0.5);
+      expect(find(after, 'AMRAAM AWAY').length, v).toBe(0);
+      expect(find(after, 'SHOOT').length, v).toBeGreaterThan(0);
+    }
+  });
+
+  it('no SHOOT while a missile inbound is under 10 s from impact: defence first (playtest r1 1.2-f)', () => {
+    const r = rig('lock', 'hud');
+    r.mock.world.missiles.length = 0;
+    const p = r.mock.player;
+    p.incoming = [{ missileId: 9999, bearing: 2, elevation: 0, distance: 5000, timeToImpact: 8, guidance: 'radar' }];
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBe(0);
+    // further out, the shot comes first
+    p.incoming[0].timeToImpact = 14;
+    expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
+    p.incoming = [];
     expect(find(textsOver(r, 0.5), 'SHOOT').length).toBeGreaterThan(0);
   });
 });
@@ -969,11 +1001,48 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     const oor = cueTexts({ bombAway: true });
     expect(oor).toContain('BOMB AWAY');
     expect(oor).not.toContain('OUT OF RANGE');
-    // a second bomb is still cued (a target can take two StormBreakers)
+    // in range or counting down too: AWAY, as the missiles do, not a cue inviting a second bomb on the
+    // same target (playtest r2 2.2 F7: IN RANGE blinked on the boat a StormBreaker was heading for)
     const again = cueTexts({ inRange: true, timeToRelease: 0, bombAway: true });
-    expect(again).toContain('IN RANGE');
-    expect(again).not.toContain('BOMB AWAY');
-    expect(cueTexts({ timeToRelease: 12, bombAway: true })).toContain('REL 12');
+    expect(again).toContain('BOMB AWAY');
+    expect(again).not.toContain('IN RANGE');
+    expect(cueTexts({ timeToRelease: 12, bombAway: true })).not.toContain('REL 12');
+    expect(cueTexts({ inRange: true, timeToRelease: 0 })).toContain('IN RANGE');
+  });
+
+  it('names the bomb guiding onto the designated target: GBU-53 AWAY (playtest r2 2.2 F7)', () => {
+    const r = rig('ag', 'hud');
+    const p = r.mock.player;
+    const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+    const bi = { point: ship.position.clone(), inRange: true, timeToRelease: 0, offAxis: false, steer: 0, bombAway: true };
+    (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => bi;
+    const def = { id: 'gbu53', name: 'GBU-53/B', short: 'GBU-53', category: 'bomb', guidance: 'tri_mode' } as MissileEntity['def'];
+    const m = new MissileEntity(902, def, 'blue', p.id, ship.id);
+    m.position.copy(ship.position).add(new Vector3(0, 3000, 6000));
+    (r.mock.world.missiles as MissileEntity[]).push(m);
+    const texts = textsOver(r, 1).map((t) => t.text);
+    expect(texts).toContain('GBU-53 AWAY');
+    expect(texts).not.toContain('IN RANGE');
+  });
+});
+
+describe('AMRAAM AWAY after a launch at a swarm (playtest r2 2.2 F4)', () => {
+  it('holds AMRAAM AWAY a moment after FIRE although the box has stepped to the next drone, then SHOOT for it', () => {
+    const r = rig('lock', 'hud');
+    const p = r.mock.player;
+    const first = r.mock.world.getEntity(p.radar.lockedId)!;
+    const next = r.mock.world.aircraft.find((a) => a.type === 'su35')!;
+    const def = { id: 'aim120', name: 'AIM-120D', short: 'AMRAAM', category: 'aam', guidance: 'active_radar' } as MissileEntity['def'];
+    r.run(1 / 30);
+    r.mock.events.emit('munition:launch', { missile: new MissileEntity(951, def, 'blue', p.id, first.id), shooter: p } as never);
+    // the box steps to the next drone straight after the launch (g01's swarm)
+    p.radar.lockedId = next.id;
+    p.radar.designatedId = next.id;
+    const soon = textsOver(r, 0.6).map((t) => t.text);
+    expect(soon).toContain('AMRAAM AWAY');
+    expect(soon).not.toContain('SHOOT');
+    r.run(1);
+    expect(textsOver(r, 0.5).map((t) => t.text)).toContain('SHOOT');
   });
 });
 
@@ -1045,6 +1114,20 @@ describe('gun closure cue', () => {
     expect(gunOvershoot(300, -20)).toBe(false); // opening
   });
 
+  it('no OVERSHOOT in a head-on pass, the one the lessons say to let go by (playtest r2 2.1-e)', () => {
+    const r = rig('gun', 'hud');
+    const p = r.mock.player;
+    // 300 m ahead, flying at the jet at 100 kt: T03's head-on pass
+    const mig = place(r, 300, 154);
+    mig.velocity.copy(p.velocity).normalize().multiplyScalar(-100 * kt);
+    const { texts, vc } = gunVcs(r);
+    expect(vc.length, 'Vc still drawn').toBe(1);
+    expect(find(texts, 'OVERSHOOT').length).toBe(0);
+    // the same range and closure from behind it: OVERSHOOT
+    place(r, 300, 154);
+    expect(find(gunVcs(r).texts, 'OVERSHOOT').length).toBe(1);
+  });
+
   for (const view of ['hud', 'chase'] as const) {
     it(`${view}: Vc (knots) by the gun cue inside 3 km of an air target, OVERSHOOT only when about to overshoot, clear of every text`, () => {
       const r = rig('gun', view);
@@ -1071,6 +1154,104 @@ describe('gun closure cue', () => {
       expect(find(texts, 'OVERSHOOT').length).toBe(0);
     });
   }
+});
+
+describe('AARGM cue: SHOOT only as AARGM_RULE says (playtest r2 2.1-a: SHOOT from 18.5 km)', () => {
+  /** The AARGM selected and the SA-6 designated `km` ahead (ground range), its radar `on`. */
+  const arm = (km: number, on: boolean, inboundTti?: number) => {
+    const r = rig('lock', 'hud');
+    const p = r.mock.player;
+    if (inboundTti !== undefined) {
+      r.mock.world.missiles.length = 0;
+      p.incoming = [{ missileId: 9999, bearing: 2, elevation: 0, distance: 5000, timeToImpact: inboundTti, guidance: 'radar' }];
+    }
+    p.stores.push({ weapon: 'aargm', count: 2, internal: true });
+    p.selectedWeapon = 'aargm';
+    const sa6 = r.mock.world.sams[0];
+    const fwd = p.velocity.clone().setY(0).normalize();
+    sa6.position.copy(p.position).addScaledVector(fwd, km * 1000).setY(0);
+    sa6.radarOn = on;
+    p.radar.lockedId = null;
+    p.radar.designatedId = sa6.id;
+    return textsOver(r, 0.5);
+  };
+
+  it('beyond 10 km: CLOSE IN, never SHOOT (the launch zone reaches ~20 km)', () => {
+    for (const km of [18.5, 13]) {
+      const texts = arm(km, true);
+      expect(find(texts, 'SHOOT').length, `${km} km`).toBe(0);
+      expect(find(texts, 'CLOSE IN').length, `${km} km`).toBeGreaterThan(0);
+    }
+  });
+
+  it('inside 10 km: SHOOT with the radar on, RADAR OFF (no SHOOT) with it off', () => {
+    let texts = arm(8, true);
+    expect(find(texts, 'SHOOT').length).toBeGreaterThan(0);
+    expect(find(texts, 'CLOSE IN').length).toBe(0);
+    texts = arm(8, false);
+    expect(find(texts, 'SHOOT').length).toBe(0);
+    expect(find(texts, 'RADAR OFF').length).toBeGreaterThan(0);
+  });
+
+  it('a missile inbound under 10 s holds CLOSE IN and RADAR OFF back, as it does SHOOT (playtest r3.1 R31-4)', () => {
+    for (const [km, on, cue] of [[13, true, 'CLOSE IN'], [8, false, 'RADAR OFF'], [8, true, 'SHOOT']] as const) {
+      expect(find(arm(km, on, 8), cue).length, `${cue}, inbound`).toBe(0);
+      expect(find(arm(km, on, 14), cue).length, `${cue}, inbound further out`).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('a long hint pages at a clause, not mid-sentence (playtest r2 2.1-m)', () => {
+  const THROTTLE = 'THROTTLE (left thumb): slide up for power, past the detent for AFTERBURNER';
+  const IMMELMANN = 'IMMELMANN: it passes under you, count three, full AFTERBURNER, pull up. Over the top: roll upright';
+
+  it("the phone-width breaks the review saw ('…the detent for' | 'AFTERBURNER', '…AFTERBURNER, pull' | 'up.') end at the comma before", () => {
+    for (const [chars, room] of [[23, 3], [25, 3], [35, 2]]) {
+      const t = hintPages(THROTTLE, chars, room);
+      expect(t.length, `${chars}×${room}`).toBe(2);
+      expect(t[0][t[0].length - 1].endsWith('power,'), `${chars}×${room}: ${JSON.stringify(t)}`).toBe(true);
+      expect(t[1][0].startsWith('past'), `${chars}×${room}`).toBe(true);
+      const m = hintPages(IMMELMANN, chars, room);
+      for (const pg of m.slice(0, -1)) expect(/[:,.]$/.test(pg[pg.length - 1]), `${chars}×${room}: ${JSON.stringify(m)}`).toBe(true);
+    }
+  });
+
+  // g02's boats hint (r3.1 R31-5): at 844×390 (27 characters, 2 or 3 lines) it paged '…Kill the missile
+  // boats before they' | 'count down', as the clause didn't fit on the first page's last line
+  const BOATS = 'Boats: TGT, StormBreaker, release early. Kill the missile boats before they count down';
+  const KILL = 'Kill the missile boats before they count down';
+
+  it("g02's boats hint at 844×390 pages at 'release early.', the last clause whole on the next page", () => {
+    for (const room of [2, 3]) {
+      const b = hintPages(BOATS, 27, room);
+      expect(b.length, `27×${room}: ${JSON.stringify(b)}`).toBe(2);
+      expect(b[0][b[0].length - 1].endsWith('early.'), `27×${room}: ${JSON.stringify(b)}`).toBe(true);
+      expect(b[1].join(' ')).toBe(KILL);
+    }
+  });
+
+  it('at any width the last clause fits on a page, no page ends inside it', () => {
+    for (let chars = 16; chars <= 44; chars++) {
+      for (const room of [2, 3]) {
+        if (hintPages(KILL, chars, room).length > 1) continue;
+        const b = hintPages(BOATS, chars, room);
+        for (const pg of b.slice(0, -1)) expect(/[:,.]$/.test(pg[pg.length - 1]), `${chars}×${room}: ${JSON.stringify(b)}`).toBe(true);
+      }
+    }
+  });
+
+  it('at any width: no word lost, no page over its lines, never a page ending on "for" / "pull"', () => {
+    for (let chars = 16; chars <= 44; chars++) {
+      for (const room of [2, 3]) {
+        for (const text of [THROTTLE, IMMELMANN, BOATS]) {
+          const pages = hintPages(text, chars, room);
+          expect(pages.flat().join(' '), `${chars}×${room}`).toBe(text);
+          for (const pg of pages) expect(pg.length, `${chars}×${room}`).toBeLessThanOrEqual(room);
+          for (const pg of pages.slice(0, -1)) expect(/ (for|pull)$/.test(' ' + pg[pg.length - 1]), `${chars}×${room}: ${JSON.stringify(pages)}`).toBe(false);
+        }
+      }
+    }
+  });
 });
 
 describe('target waypoint labels with the bandits in reach', () => {

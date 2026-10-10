@@ -77,8 +77,8 @@ export type Condition =
   | { kind: 'munitions_clear'; group: string }
   /** Another trigger has fired. */
   | { kind: 'trigger'; id: string }
-  /** Player fired at least `count` weapons of any kind. */
-  | { kind: 'player_fired'; count?: number }
+  /** Player fired at least `count` weapons of any kind (gun bursts count), or launched / released `count` of `weapon`. */
+  | { kind: 'player_fired'; count?: number; weapon?: WeaponId }
   /**
    * At least `count` (default 1) of the player's bombs / missiles have been shot down by the point
    * defence of a SAM site in `group` (SA-8 / SA-15 interceptors).
@@ -273,6 +273,18 @@ export interface SamSiteDef {
   escortRight?: number;
   /** 'ad_boat': no long harassing shots outside its envelope (a training boat, t05). */
   noHarass?: boolean;
+  /** The crew never shuts its radar down against an inbound anti-radiation missile (a range target: t04's AARGM drill). */
+  noArmShutdown?: boolean;
+  /** 'ad_boat': only the shoulder-launched heat-seekers fire, its radar SAM holds (t05's heat-seeker drill). */
+  irOnly?: boolean;
+  /** 'ad_boat': a range boat whose heat-seekers are restocked once all are spent (t05's heat-seeker drill never runs dry). */
+  restock?: boolean;
+  /**
+   * 'ad_boat': its heat-seeker crew fires only inside this range (m), and only at a jet closing on the boat or
+   * crossing it, never at one flying away: every round it fires can reach a jet that flies on (a range boat that
+   * grades the defence, not the geometry: t05's drill 3).
+   */
+  irReach?: number;
 }
 
 /**
@@ -414,9 +426,11 @@ export type ObjectiveDef = ObjectiveBase &
        * player by the sites of `groups` since it opened have been defeated (only `guidance` ones, and only
        * with the jet below `maxAgl` m when the missile ended, when given). `inARow`: that many in a row,
        * a hit starts the count again (luck alone rarely strings them together). With `maxHits`, it fails
-       * once more hits than that land.
+       * once more hits than that land. With `moveOn`, the coach lets the player move on once that many of
+       * the drill's missiles have not counted (a hit, or a defeat above `maxAgl`): a radio call, and the
+       * drill completes (a casual player who hasn't got it yet is never stuck on one drill).
        */
-    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number; inARow?: boolean }
+    { kind: 'missile_drill'; groups: string[]; defeat: number; guidance?: 'radar' | 'ir'; maxAgl?: number; maxHits?: number; inARow?: boolean; moveOn?: number }
     | /** Fly a vertical manoeuvre (loop / Immelmann) after the objective opens (runtime/maneuvers.ts). */
     { kind: 'maneuver'; maneuver: ManeuverId }
   );
@@ -525,7 +539,8 @@ export interface MissionScript {
   /**
    * Scale the TOTAL of the non-fixed red aircraft groups by difficulty.enemyCountScale instead of
    * each group on its own (Instant Action: 4 bandits in pairs → 3 on Recruit; per-group
-   * rounding would leave pairs unchanged). Groups that lose all members don't spawn.
+   * rounding would leave pairs unchanged). Groups that lose all members don't spawn. A group with a
+   * `countFor` size on the difficulty flown keeps that size and stays out of the total.
    */
   scaleEnemyTotal?: boolean;
   /** Opening radio calls at mission start (convenience for a 'start' trigger). */
@@ -536,16 +551,10 @@ export interface MissionScript {
   campaignFinale?: boolean;
   /**
    * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
-   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` (one
-   * group, or several: t07's waves) the player killed, under `removed.label`.
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
+   * player killed, under `removed.label`.
    */
-  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string | string[] } };
-  /**
-   * Count the homes the player's bombs hit (runtime/collateral.ts, t07): every building within half a
-   * weapon's blast radius of where it went off on land. Each one is called on the radio, listed in the
-   * debrief and costs score and grade (scoring.ts POINTS.home).
-   */
-  collateral?: boolean;
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower

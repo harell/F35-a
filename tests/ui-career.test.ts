@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CampaignProgress } from '../src/core/contracts';
 import { DIFFICULTIES } from '../src/core/data';
 import { loadSettings } from '../src/core/settings';
+import { sortieHomeView } from '../src/game/views';
 import type { Settings } from '../src/core/types';
 import { MEDAL_LIST, TRAINING, failStreak, recordResult } from '../src/missions';
 import {
@@ -22,7 +23,7 @@ import {
   recordMedals,
   setDifficulty,
 } from '../src/ui/career';
-import { RECRUIT_OFFER_AFTER, debriefPrimary } from '../src/ui/screens/debrief';
+import { RECRUIT_OFFER_AFTER, debriefBanner, debriefPrimary, lessonIncomplete } from '../src/ui/screens/debrief';
 import { countNote } from '../src/ui/screens/instantAction';
 
 class MemStorage {
@@ -86,6 +87,16 @@ describe('briefing difficulty picker', () => {
     expect(saved.quality).toBe(loadSettings().quality);
     expect(JSON.parse(g.localStorage!.getItem('f35a.settings.v1')!).quality).not.toBe('low');
   });
+  it('a new player starts in the chase view; a saved cockpit choice stays cockpit (r1 1.2-c)', () => {
+    expect(loadSettings().defaultView).toBe('chase');
+    expect(sortieHomeView(false, loadSettings().defaultView, null)).toBe('chase');
+    g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ defaultView: 'cockpit', difficulty: 'recruit' }));
+    expect(loadSettings().defaultView).toBe('cockpit');
+    expect(sortieHomeView(false, loadSettings().defaultView, null)).toBe('cockpit');
+    // settings saved without the field (an older save) take the new default
+    g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ difficulty: 'recruit' }));
+    expect(loadSettings().defaultView).toBe('chase');
+  });
   it("a saved difficulty 'ace' (the removed fourth level) loads as 'veteran'", () => {
     g.localStorage!.setItem('f35a.settings.v1', JSON.stringify({ difficulty: 'ace' }));
     expect(loadSettings().difficulty).toBe('veteran');
@@ -113,6 +124,18 @@ describe('debrief primary button', () => {
     expect(debriefPrimary({ success: true, campaignComplete: true }, false)).toBe('ending');
     expect(debriefPrimary({ success: false }, false)).toBe('retry');
     expect(debriefPrimary({ success: false }, true)).toBe('retry');
+  });
+
+  it("a lesson ended with skipped drills: 'LESSON INCOMPLETE' and RETRY first, not NEXT (playtest r3.1 R31-3)", () => {
+    const drill = (skipped: boolean) => ({ id: 'd', label: 'Drill', state: 'complete' as const, primary: true, skipped });
+    const passed = { success: true, objectives: [drill(false), drill(false)] };
+    const skipped = { success: true, objectives: [drill(true), drill(false)] };
+    expect(debriefBanner(passed)).toBe('MISSION ACCOMPLISHED');
+    expect(debriefPrimary(passed, true)).toBe('next');
+    expect(debriefBanner(skipped)).toBe('LESSON INCOMPLETE');
+    expect(lessonIncomplete(skipped)).toBe(true);
+    expect(debriefPrimary(skipped, true)).toBe('retry');
+    expect(debriefBanner({ ...skipped, success: false })).toBe('MISSION FAILED');
   });
 });
 

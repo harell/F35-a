@@ -16,10 +16,11 @@ import { glideTimeToGo, type MunitionDefLike } from '../../sim/weapons/dlz';
 import { NumText, WEAPON_IS_BOMB, entityLabel, mmss, trackLabel, trackShort } from './format';
 import { altColumnBottom, speedColumnBottom, zoneExt } from './zones';
 import { hitsBankOrWaterline } from './flight';
-import { reticle } from './weapons';
+import { ownMissileOn, reticle } from './weapons';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
 import { edgeOfEllipse } from './projector';
+import { controlRects } from './layout';
 import { protectedSites } from './sites';
 import { TEST_HOOKS } from '../../core/data';
 import { noteSteer, noteSteerDiamond, noteSteerName } from './drawn';
@@ -775,7 +776,7 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
     // never over the speed / altitude columns or the DLZ scale (#62: "145° MIG-29" into the speed box)
     tx = slideOffColumns(f, tx, hw, ty - 8 * u, ty + below);
     tx = Math.max(L.left + hw, Math.min(L.right - hw, tx));
-    ty = Math.max(L.row2Y + 8 * u, Math.min(maxTy, ty));
+    ty = aboveControls(f, tx, hw, Math.max(L.row2Y + 8 * u, Math.min(maxTy, ty)), below);
     if (c === last - 1) break;
     const x0 = tx - hw;
     const x1 = tx + hw;
@@ -795,8 +796,9 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
     for (let pass = 0; pass < 2 && !found; pass++) {
       if (pass === 1 && !blockedCue(f, bx, by, hw, below, false)) break;
       for (let k = 1; k <= 12; k++) {
-        const y = Math.max(L.row2Y + 8 * u, Math.min(maxTy, by + (k & 1 ? -1 : 1) * Math.ceil(k / 2) * 12 * u));
-        const x = Math.max(L.left + hw, Math.min(L.right - hw, slideOffColumns(f, bx, hw, y - 8 * u, y + below)));
+        const y0 = Math.max(L.row2Y + 8 * u, Math.min(maxTy, by + (k & 1 ? -1 : 1) * Math.ceil(k / 2) * 12 * u));
+        const x = Math.max(L.left + hw, Math.min(L.right - hw, slideOffColumns(f, bx, hw, y0 - 8 * u, y0 + below)));
+        const y = aboveControls(f, x, hw, y0, below);
         if (!blockedCue(f, x, y, hw, below, pass === 0) && !(x - hw < ax1 && x + hw > ax0 && y - 8 * u < ay1 && y + below > ay0)) {
           tx = x;
           ty = y;
@@ -811,6 +813,23 @@ function drawOffscreenCue(f: HudFrame, t: AnyEntity, dist: number): void {
   pen.text(rng, tx, ty + 28 * u, pal.dim, 10.5);
   if (tl) pen.text(tl, tx, ty + 41 * u, pal.main, 10.5);
   f.occ.add(tx - hw, ty - 8 * u, tx + hw, ty + below, 1);
+}
+
+/**
+ * The top line of the off-screen cue's text block centred on x, lifted clear of the live touch
+ * controls it would print under (the canvas draws below them: "AD BOAT" read "D BOAT" under the
+ * throttle, playtest r1 1.2-j).
+ */
+function aboveControls(f: HudFrame, x: number, hw: number, ty: number, below: number): number {
+  const u = f.L.u;
+  const rects = controlRects();
+  for (let pass = 0; pass < 2; pass++) {
+    for (const rc of rects) {
+      if (x + hw <= rc.x || x - hw >= rc.x + rc.w || ty + below <= rc.y - 2 * u || ty - 8 * u >= rc.y + rc.h) continue;
+      ty = rc.y - 2 * u - below;
+    }
+  }
+  return ty;
 }
 
 /**
@@ -860,16 +879,6 @@ function slideOffColumns(f: HudFrame, x: number, hw: number, top: number, bot: n
     }
   }
   return x;
-}
-
-/** Newest live player missile guiding on `targetId`. */
-function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | null {
-  let best: MissileEntity | null = null;
-  for (const m of f.world.missiles) {
-    if (!m.alive || m.shooterId !== f.p.id || m.targetId !== targetId) continue;
-    if (!best || m.age < best.age) best = m;
-  }
-  return best;
 }
 
 /** "TTI 42" for our bomb on its target, "T 12" for a missile (seconds to impact, cached strings). */

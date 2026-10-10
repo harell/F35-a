@@ -235,6 +235,14 @@ export interface SamSpawn {
   closeCue?: { range: number; bayRange: number } | null;
   /** No long harassing shots (SamSiteEntity.noHarass). */
   noHarass?: boolean;
+  /** The radar stays on under an anti-radiation missile (SamSiteEntity.noArmShutdown). */
+  noArmShutdown?: boolean;
+  /** Only the site's shoulder-launched heat-seekers fire (SamSiteEntity.irOnly). */
+  irOnly?: boolean;
+  /** Its heat-seekers are restocked once spent (SamSiteEntity.restock). */
+  restock?: boolean;
+  /** Its heat-seekers fire only inside this range at a jet that isn't flying away (SamSiteEntity.irReach). */
+  irReach?: number;
 }
 
 /**

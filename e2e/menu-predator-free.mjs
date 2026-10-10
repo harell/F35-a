@@ -1,8 +1,9 @@
 /**
  * The main menu's Predator Free 2050 day counter (#211), on a phone in landscape (844×390, touch)
  * and on a desktop (1280×720, mouse): the line sits under the menu list, right-aligned; the explainer
- * opens on hover (desktop), keyboard focus and tap, closes on a tap elsewhere, and on the phone
- * covers no menu item.
+ * opens on hover (desktop), keyboard focus and tap, closes on a tap elsewhere, and sits just above
+ * the counter, right-aligned with it, on screen (playtest r3 R32-9: on the phone it had opened far
+ * to the left of the list).
  *
  *   node e2e/menu-predator-free.mjs [--base=http://localhost:5173/]
  *
@@ -23,7 +24,6 @@ const check = (cond, msg, extra = '') => {
   console.log(`${cond ? '  ✓' : '  ✗'} ${msg}${extra ? ` — ${extra}` : ''}`);
   if (!cond) failures++;
 };
-const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 async function menu(name, opts) {
   console.log(`\n[${name}]`);
@@ -35,7 +35,7 @@ async function menu(name, opts) {
   await page.click('.scr-splash');
   await page.waitForSelector('.scr-main:not(.is-leaving)', { timeout: 10000 });
   if (await page.$('.mm-onboard')) {
-    await page.click('.mm-onboard .mo-btns .ui-btn.ghost');
+    await page.click('.mm-onboard .mo-skip');
     await page.waitForSelector('.mm-onboard', { state: 'detached' });
   }
   await page.waitForTimeout(1800);
@@ -52,9 +52,9 @@ async function menu(name, opts) {
   await page.screenshot({ path: `e2e/screenshots/ui/pf-${name}-closed.png` });
   const popVisible = () => page.$eval('.mm-pf-pop', (e) => getComputedStyle(e).display !== 'none');
   const popBox = () => page.$eval('.mm-pf-pop', (e) => e.getBoundingClientRect().toJSON());
-  const coversItem = async () => {
+  const byCounter = async () => {
     const pb = await popBox();
-    return items.some((it) => overlaps(pb, it));
+    return Math.abs(pb.x + pb.width - (lb.x + lb.width)) <= 2 && pb.y + pb.height <= lb.y + 1 && pb.y + pb.height >= lb.y - 12;
   };
   const onScreen = async () => {
     const pb = await popBox();
@@ -65,7 +65,7 @@ async function menu(name, opts) {
     await page.tap('.mm-pf');
     await page.waitForTimeout(150);
     check(await popVisible(), 'a tap opens the explainer');
-    check(!(await coversItem()), 'the explainer covers no menu item');
+    check(await byCounter(), 'the explainer opens just above the counter, right-aligned with it');
     check(await onScreen(), 'the explainer is fully on screen');
     await page.screenshot({ path: `e2e/screenshots/ui/pf-${name}-open.png` });
     await page.tap('.mm-pf');
@@ -81,6 +81,7 @@ async function menu(name, opts) {
     await page.hover('.mm-pf');
     await page.waitForTimeout(150);
     check(await popVisible(), 'hover opens the explainer');
+    check(await byCounter(), 'the explainer opens just above the counter, right-aligned with it');
     check(await onScreen(), 'the explainer is fully on screen');
     await page.screenshot({ path: `e2e/screenshots/ui/pf-${name}-hover.png` });
     await page.mouse.move(5, 5);

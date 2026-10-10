@@ -155,8 +155,7 @@ export const createInput: CreateInput = (root, initialSettings) => {
       const changedWeapon = shown.weapon !== '' && w !== shown.weapon;
       shown.weapon = w;
       shown.count = n;
-      const label = w === 'gun' ? 'GUN' : WEAPON_INFO[w]?.short ?? String(w).toUpperCase();
-      const sub = w === 'gun' ? String(n) : `×${n}`;
+      const { label, sub } = fireButtonLabel(w, n);
       touch.fire.setLabel(label, sub);
       touch.fire.setDisabled(n <= 0);
       touch.fire.el.setAttribute('aria-label', `Fire ${label} ${sub}`);
@@ -345,3 +344,13 @@ export const createInput: CreateInput = (root, initialSettings) => {
   };
   return api;
 };
+
+/**
+ * The FIRE button's label for the selected weapon and its rounds left. With the gun selected it reads
+ * FIRE over 'GUN n', so it isn't a second identical 'GUN n' beside the GUN button (playtest 2026-10-10,
+ * R31-8: a casual player couldn't tell which to press).
+ */
+export function fireButtonLabel(w: WeaponId, n: number): { label: string; sub: string } {
+  if (w === 'gun') return { label: 'FIRE', sub: `GUN ${n}` };
+  return { label: WEAPON_INFO[w]?.short ?? String(w).toUpperCase(), sub: `×${n}` };
+}

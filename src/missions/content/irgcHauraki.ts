@@ -6,14 +6,16 @@
  * short clock (they reach her about 2 minutes in; two on Recruit), three Peykaap II missile boats on
  * the long one (they come in a minute into the mission, too late for the opening ripple, and are in
  * launch range 3–4 minutes in; a Kowsar can't be shot down: kill the boat first) and two air-defence
- * boats escorting the waves, the only boats that shoot back, and they see a stealth jet up close
- * (SamTypeData.closeCue). Two hits sink the tanker.
+ * boats escorting the waves, with a third on Pilot and Veteran as a picket in the inner harbour under the
+ * jet's run-in: the only boats that shoot back, and they see a stealth jet up close (SamTypeData.closeCue).
+ * Two hits sink the tanker.
  *
  * The geometry is tuned on the real LINZ coast (tests/missions-g02.test.ts): every boat starts in
  * open water with a clear run to the tanker, and the clocks above hold untouched.
  */
 import type { MissionDef } from '../../core/contracts';
 import type { XZ } from '../schema';
+import { AARGM_RULE } from '../../core/data';
 import { mission, target, site } from './common';
 
 const DS = 'DARKSTAR';
@@ -64,6 +66,16 @@ export const G02_MISSILE_WAVE_AT = 60;
  */
 const g02Start = { x: -15000, z: -2700, altitude: 3000, heading: 68, speed: 250, fuel: 0.9 };
 
+/**
+ * Veteran's third escort's picture of the jet (SamSiteDef.closeCue; the AD boat's own is 9 km): the mother
+ * ship cues it on a jet inside `range` m whatever its shaping, so its rounds meet the jet running in to the
+ * opening release, not only its open bay (playtest r2). At 13.5 km its first pair comes from 13 km a second or
+ * two before the opening release: a pilot on the run-in pickles, then beams (the bot: Veteran 5/6, 12–16 rounds
+ * at the jet; playtest r4). The range is sharp: from 14 km the pair comes before the release cue, and beaming it
+ * first costs the opening ripple and the tanker (14 km: 1/6, 15 km: 0/6).
+ */
+export const G02_ESCORT_CUE = { range: 13_500, bayRange: 12_000 } as const;
+
 const S = G02_GROUPS;
 const chase = { chase: G02_TANKER.group };
 const wave2 = { kind: 'time', t: G02_MISSILE_WAVE_AT } as const;
@@ -78,9 +90,9 @@ export const G02: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
-    `The tanker ${G02_TANKER.name} has sailed from the Ports of Auckland for Singapore and is heading out through the Rangitoto Channel into the Hauraki Gulf. The Guard's rusting mother ship has put the IRGC Navy's fast boats in the water to stop her. Clear the way.`,
-    'Suicide boats are racing down the Gulf straight at her: they reach her in about two minutes. Peykaap II missile boats come in from the north about a minute into the fight, too late for your first release. They stop at launch range three to four minutes from now and count down, and a Kowsar sea-skimmer cannot be shot down: kill each boat before its countdown ends. An air-defence boat rides with each wave, with a Tor-type radar SAM good to 20,000 ft and 12 km and shoulder-launched missiles inside 5 km. They are the only boats that shoot at you. Stealth will not hide you from them up close: their trackers pick you up inside about 9 km, and inside 12 km the moment your bay opens. On Pilot and Veteran an open bay is seen from about 20 km, and they fire long shots at it to make you turn: those rounds fall short of a jet that breaks away and catch one that flies straight on.',
-    'Two hits sink her: a ram, a Kowsar, or one of your own bombs. You carry two weapons that hit a moving boat. A GBU-53/B StormBreaker tracks any boat; it glides slowly from long range, so release early on the suicide boats. An AARGM-ER homes on a radar: one for each of the two escorts, fired while its radar is on (Veteran sends a third boat ahead of the wave: that one is for the gun). No air-to-air missiles today: nothing hostile flies. You start at 10,000 ft with every boat out of reach: height is range, so climb on the way in or press in under the escorts\' missiles. A bomb aimed at a boat alongside the tanker can hit her instead. Close in on those with the gun: you have 360 rounds today. On Veteran seven boats and two escorts are more than your bombs comfortably cover: sink the escorts first and the rest are gun passes without their missiles.',
+    `The tanker ${G02_TANKER.name} is leaving through the Rangitoto Channel for Singapore. The Guard's mother ship has put fast boats in the water to stop her. Two hits sink her: a ram, a missile or your own bomb.`,
+    'Two clocks. Suicide boats race down the Gulf and reach her in about two minutes. Missile boats arrive from the north after a minute and fire three to four minutes in: their missiles cannot be shot down, so sink the boats first. An air-defence boat rides with each wave, and on Pilot and Veteran another guards the harbour: the only boats that shoot at you.',
+    `StormBreakers track a moving boat but glide slowly: release early on the suicide boats. Open on each escort with an AARGM-ER: ${AARGM_RULE}. A bomb alongside the tanker can hit her: gun those boats, and Veteran's third escort. Tip: you start out of reach: climb on the way in.`,
   ],
   recommendedLoadout: 'strike_maritime',
   // air-to-ground only, the weapons that kill a moving boat (#136): StormBreakers for any boat, an
@@ -123,9 +135,14 @@ export const G02: MissionDef = mission({
       // air-defence boats: one rides with each wave (the second comes in with the missile boats)
       site('ad1', S.ad, 'ad_boat', { x: 4900, z: -11300 }, { escort: S.suicide }),
       site('ad2', S.ad, 'ad_boat', { x: 7470, z: -18440 }, { escort: S.missile, spawn: wave2 }),
-      // Veteran: a third rides ahead of the suicide wave on the jet's side of the channel, so the opening release
-      // falls inside its real envelope, not just its nuisance fire (the AARGM-ERs cover two of the three)
-      site('ad3', S.ad, 'ad_boat', { x: 2400, z: -6900 }, { escort: S.suicide, escortAft: -4000, escortRight: 2500, minDifficulty: 'veteran' }),
+      // Veteran: a third rides ahead of the suicide wave on the jet's side of the channel, cued on the jet as it runs
+      // in to the opening release (G02_ESCORT_CUE)
+      site('ad3', S.ad, 'ad_boat', { x: 2400, z: -6900 }, { escort: S.suicide, escortAft: -4000, escortRight: 2500, minDifficulty: 'veteran', closeCue: G02_ESCORT_CUE }),
+      // Pilot and Veteran: a picket in the inner harbour off the city, 11.5 km from the start (outside its reach), under the jet's run-in:
+      // the stand-off release on the suicide boats (15–16 km out, 4 km up) falls 6–7 km from it, inside its real
+      // envelope (playtest r2: with the escorts alone the bot won 6/6 untouched on every difficulty). Killing it
+      // with an AARGM, or a run-in clear of it, opens the stand-off again
+      site('ad_h', S.ad, 'ad_boat', { x: -3500, z: -2500 }, { minDifficulty: 'pilot' }),
     ],
     objectives: [
       {

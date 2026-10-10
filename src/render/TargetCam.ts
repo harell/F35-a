@@ -13,16 +13,17 @@
  * city, roads, scatter and night lights are merged world-wide meshes a far plane can't cull).
  * The Sky Tower shot (pipView.landmark: the tower hit or collapsing) keeps the tower's own visual
  * (EnvironmentApi.targetCamLandmarks) when its scenery group is left out.
- * A ground target or SAM site is shown through the targeting pod (#199, rect.pod): the camera looks along
- * the line of sight from the player's jet, framing the zoom step (pose.ts podCamPose); with no line of
- * sight (rect.mask) the pass is skipped and the HUD draws the window MASKED.
+ * A ground target or SAM site is shown through the targeting pod (#199, rect.pod): the camera looks down
+ * the line of sight from the player's jet, framing the zoom step (pose.ts podCamPose), and draws at most
+ * POD_RANGE past the target; with no line of sight (rect.mask) the pass is skipped and the HUD draws the
+ * window MASKED.
  */
 import { PerspectiveCamera, Vector2, Vector3, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import type { EntityRendererApi } from '../core/contracts';
-import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget } from '../core/pod';
+import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, podSpan } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
-import { TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
+import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
 export interface TargetCamRect {
@@ -110,7 +111,7 @@ export class TargetCam {
   /**
    * Render the PiP. Call after the main pass (and the cockpit pass).
    * @param far    far plane of the main camera (the fog reaches the horizon colour there)
-   * @param range  metres drawn past the target (QualitySettings.targetCamRange); 0 = up to `far`
+   * @param range  metres drawn past the target (QualitySettings.targetCamRange); 0 = up to `far` (the pod: at most POD_RANGE)
    * @param omit   objects hidden for this pass (EnvironmentApi.targetCamOmit on low quality)
    * @param keep   landmark visuals kept in a landmark shot even inside `omit` (EnvironmentApi.targetCamLandmarks)
    * @returns true if something was drawn
@@ -134,9 +135,12 @@ export class TargetCam {
         this.lastPod = 'MASKED';
         return false;
       }
-      const step = POD_ZOOM[rect.zoom ?? POD_ZOOM_DEFAULT] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
-      podCamPose(t as CamTarget, eye, step.span, this.pose, this.surfaceAt);
-      fov = podFov(step.span, this.pose.position.distanceTo(this.pose.look));
+      const zoom = rect.zoom ?? POD_ZOOM_DEFAULT;
+      const step = POD_ZOOM[zoom] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
+      const span = podSpan(zoom, (t as CamTarget).radius);
+      podCamPose(t as CamTarget, eye, span, this.pose, this.surfaceAt);
+      fov = podFov(span, this.pose.position.distanceTo(this.pose.look));
+      range = range > 0 ? Math.min(range, POD_RANGE) : POD_RANGE;
       this.lastPod = step.name;
     } else if (lm) landmarkCamPose(lm, this.world.time, this.pose, this.surfaceAt);
     else targetCamPose(t as CamTarget, this.world.time, this.pose, this.surfaceAt, this.waterAt);

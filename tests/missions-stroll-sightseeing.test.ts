@@ -249,10 +249,11 @@ describe('A Stroll in the Park: the Sky Tower as an obstacle (1.1-l)', () => {
 });
 
 describe('A Stroll in the Park: the briefing (1.1-d)', () => {
-  it('says only the CBD, motorways and main roads are real streets, and the jet is clean', () => {
+  it('names where the real houses and streets are (the rest is stylised), and the jet is clean', () => {
     const text = stroll().briefing.join(' ');
-    expect(text).toMatch(/CBD, the motorways and the main roads follow Auckland's real streets/);
-    expect(text).toMatch(/suburbs between them are stylised/);
+    expect(text).toMatch(/Real houses and streets cover the flight corridor/);
+    for (const place of ['Herne Bay', 'Mission Bay', 'Devonport', 'Waiheke']) expect(text).toContain(place);
+    expect(text).toMatch(/Elsewhere the suburbs are stylised/);
     expect(text).toMatch(/The jet is clean, radar off/);
     expect(text).not.toMatch(/loaded to the teeth/);
   });

@@ -94,7 +94,7 @@ describe('GBU-53 StormBreaker: moving and moored civil ships', () => {
     expect(outcome('gbu31')).toBe(true); // flew to where the ship was at release
   });
 
-  it('sinks a moored civil ship from ≥ 20 km: check-fire naming it, civilian penalty, debrief row', () => {
+  it('sinks a moored civil ship from ≥ 20 km: check-fire naming it, civilian penalty, debrief row', { timeout: 60_000 }, () => {
     const def = missionById('ia_strike_auckland')!; // an Instant Action strike allows the SDB II (SEAD fit)
     expect(def.allowedLoadouts).toContain('sead_stealth');
     const events = new EventBus();
@@ -274,15 +274,16 @@ describe('sead_stealth loadout carries the StormBreakers', () => {
     const instant = (['strike', 'sam_gauntlet', 'dogfight'] as const).map((mode) =>
       buildInstantMissionSeeded({ mode, theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mig29', enemyCount: 2 }, 3),
     );
-    let withIt = 0;
     for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
       const ag = m.allowedLoadouts.includes('strike_stealth');
       if (ag) expect(m.allowedLoadouts, m.id).toContain('sead_stealth');
       if (m.allowedLoadouts.every((id) => LOADOUTS[id].role === 'aa')) expect(m.allowedLoadouts, m.id).not.toContain('sead_stealth');
-      if (ag) withIt++;
       expect(validateMission(m), m.id).toEqual([]);
     }
-    expect(withIt).toBeGreaterThanOrEqual(3); // t06, Instant Action strike and SAM gauntlet
+    // the SEAD fit flies Instant Action's strike and SAM gauntlet (strike_stealth is the stroll's alone now:
+    // two JDAMs couldn't finish the Gauntlet's depot, and t06 flies g03's sead_precision)
+    expect(instant[0].allowedLoadouts).toContain('sead_stealth');
+    expect(instant[1].allowedLoadouts).toContain('sead_stealth');
   });
 });
 

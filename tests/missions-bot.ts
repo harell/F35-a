@@ -8,7 +8,9 @@
  *  - air-to-ground: picks the next live target of an active objective (primary first; a Tor
  *    guarding it goes first), selects AARGM against emitters / SDB II / JDAM, designates it
  *    with the sensors a human has (the target must be a contact), releases on the launch-zone cue
- *    (the StormBreaker glides from far out and also follows a mover);
+ *    (the StormBreaker glides from far out and also follows a mover; the AARGM goes as the game teaches
+ *    it, AARGM_RULE: from low and inside ARM_RELEASE, and the bot presses on to the next target behind it;
+ *    a glide bomb wanted from inside an SA-6's or Tor's ring is flown out to its IP low and back in);
  *  - navigation: follows the mission's steering cue (runner.currentWaypoint) at its altitude;
  *  - weather: under an overcast deck (cloudBase) it attacks from below the cloud, as a human must to
  *    see the target (g03's target only appears under the deck), and plans its releases for that height;
@@ -19,12 +21,12 @@
  */
 import { Vector3 } from 'three';
 import { AKL } from '../src/core/auckland';
-import { DIFFICULTIES } from '../src/core/data';
+import { AARGM_CLOSE_RANGE, DIFFICULTIES } from '../src/core/data';
 import { EventBus } from '../src/core/events';
 import type { MissionDef, MissionResult, MissionRunnerApi } from '../src/core/contracts';
 import { isHostile, type Difficulty, type LoadoutId, type WeaponId } from '../src/core/types';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
-import type { AircraftEntity, AnyEntity, MissileEntity } from '../src/sim/entities';
+import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../src/sim/entities';
 import { isBoat } from '../src/sim/boats';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
@@ -32,6 +34,7 @@ import { createAiBrain } from '../src/ai';
 import { Autopilot, gammaForAltitude } from '../src/ai/pilot/Autopilot';
 import { dirWithElevation } from '../src/ai/geom';
 import { createMissionRunner, missionById, missionDifficulty } from '../src/missions';
+import { DEFAULT_AO } from '../src/missions/MissionRunner';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
 import { mulberry32 } from '../src/core/math';
 import { Probe, type ProbeSpec } from './missions-probes';
@@ -40,16 +43,45 @@ import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { spawnFloor } from '../src/missions/runtime/spawner';
 import { cloudBase } from '../src/core/weather';
 import { isSmallGround } from '../src/sim/weapons/small';
+import { SAM_DATA } from '../src/sim/sam/samData';
 
 const DEG = Math.PI / 180;
 const _h = new Vector3();
 const _q = new Vector3();
+const _pt = new Vector3();
+
+/** Gun pass on a one-way drone (gunPass): the set-up point on its track, this far behind it (m)... */
+const PASS_SETUP = 2_500;
+/** ...this far below it (m: the briefing's 400 ft, G01_GUN_PASS.belowFt)... */
+const PASS_BELOW = 120;
+/** ...and the air-to-air bot's pipper tracking takes the pass inside this range (m). */
+const PASS_IN = 1_300;
+/** Lowest the gun pass flies (m above the surface; the air-to-air bot's own floor on a slow target). */
+const GUN_PASS_MIN_AGL = 80;
 
 type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
 /** In order of preference (as the game's hints: AARGM for emitters, then SDB II, JDAM). */
 const AG: AgWeapon[] = ['aargm', 'gbu53', 'gbu31'];
 /** Height above a small target (m) the bot attacks it from, with no deck overhead (t07's rats). */
 const SMALL_TARGET_ALT = 1_200;
+
+/** A SAM site's lowest engagement height (m, SamTypeData.altMin) the bot's defence dives under: the SA-6's 80 m is a floor, a Tor's or AD boat's 10 m is not. */
+const NO_FLOOR = 50;
+/** Top of the ground clutter (m AGL): a radar's low-altitude detection loss starts below it (sim/sam/SamSystem.ts `detects`). */
+const CLUTTER_TOP = 600;
+
+/** The bot's AARGM release range (m): inside the rule the game teaches (AARGM_CLOSE_RANGE), with a margin. */
+export const ARM_RELEASE = AARGM_CLOSE_RANGE - 2_000;
+/**
+ * Height above the surface an AARGM attack is flown at (m), and the autopilot's floor there: under the
+ * SA-6's 80 m floor, as T06 teaches ("get down low", then the AARGM close in), as low as the jet goes
+ * (the g03 golden route's legs). Flown at height, the rule's last 10 km lay inside the SA-6's envelope:
+ * IA Strike Veteran, whose Tor sits 3.8 km from the SA-6, went 0/6 (playtest r1).
+ */
+const ARM_RUN_IN_AGL = 45;
+const ARM_MIN_AGL = 25;
+/** A stand-off hold turns back towards its target this far inside the edge of the AO (m). */
+const HOLD_AO_MARGIN = 8_000;
 
 /** SDB-class glide bombs (GBU-53/B): pressed in to SDB_PRESS_RANGE. */
 const isSdb = (w: AgWeapon): boolean => w === 'gbu53';
@@ -96,6 +128,8 @@ export const OUT_THREAT_RANGE = 25_000;
 /** A ripple in progress is finished (its last release this recent, s) unless a SAM shot is this close to impact (s). */
 const RIPPLE_WINDOW = 6;
 const SAM_BREAK_TTI = 10;
+/** A glide-bomb ripple whose release cue counts down this close (REL n on the HUD, s) is started before a long SAM shot is beamed. */
+const RIPPLE_PRESS = 3;
 /**
  * Out of missiles with a bandit inside this range and in front of the nose: take the gun shot (m).
  * (3 km in any aspect started gun fights with Su-27s that ended crippled and crashed: ia_defend Pilot 3/6.)
@@ -143,6 +177,11 @@ export interface MissionBotOptions {
   rtb?: boolean;
   /** Defend against SAM rounds (default true). false: a probe of a pilot who ignores the warning (t05's drills). */
   defend?: boolean;
+  /**
+   * Seconds a SAM round is on the warning before the bot starts defending (default 0: at once). A
+   * casual player's proxy (bot-sweep --reaction sets it with `reaction`).
+   */
+  samReaction?: number;
 }
 
 export class MissionBot {
@@ -155,6 +194,8 @@ export class MissionBot {
   private orbitSign = 1;
   private readonly ips = new Map<number, Vector3>();
   private readonly runIn = new Set<number>();
+  /** Targets whose run-in starts at the IP, however close the jet is (insideSamRing at the start). */
+  private readonly viaIp = new Set<number>();
   private readonly opts: Required<MissionBotOptions>;
   /** The briefed loadout carries air-to-ground stores. */
   private readonly agLoadout: boolean;
@@ -176,12 +217,12 @@ export class MissionBot {
   /** Student: extending away from the drill's boat before turning back in (an orbit draws no shot). */
   private extending = false;
   /**
-   * A vertical-manoeuvre lesson (a 'maneuver' objective, t03): the bot flies the drill as taught,
-   * with the stick (full afterburner, full back stick; for an Immelmann, roll upright over the top),
-   * then guns the drone. `vStick` is the manoeuvre in progress.
+   * A vertical-manoeuvre lesson (a 'maneuver' objective, t03's Immelmann): the bot flies the drill as
+   * taught, with the stick (full afterburner, full back stick, roll upright over the top), then guns
+   * the drone. `vStick` is the Immelmann in progress.
    */
   private readonly vertical: boolean;
-  private vStick: { kind: 'loop' | 'immelmann'; phase: 'pull' | 'roll'; climbed: boolean; since: number } | null = null;
+  private vStick: { phase: 'pull' | 'roll'; climbed: boolean; since: number } | null = null;
 
   constructor(
     private readonly runner: MissionRunnerApi,
@@ -189,7 +230,7 @@ export class MissionBot {
     private readonly p: AircraftEntity,
     opts: MissionBotOptions = {},
   ) {
-    this.opts = { reaction: 0.8, rtb: true, defend: true, ...opts };
+    this.opts = { reaction: 0.8, rtb: true, defend: true, samReaction: 0, ...opts };
     this.agLoadout = this.agLeft() > 0;
     this.deck = cloudBase(runner.def.weather);
     this.student = !!runner.def.script.defenceCoach;
@@ -239,14 +280,8 @@ export class MissionBot {
   /** Best A/G weapon we carry for a target (null = none suitable). */
   private weaponFor(t: AnyEntity): AgWeapon | null {
     const c = this.world.combat;
-    // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker for one on land,
-    // released at a stop; a JDAM only for one in the water (its blast catches a swimmer, and on a street
-    // it takes the houses: t07's lesson). On land with no StormBreaker left, wait for it to swim.
-    if (isSmallGround(t)) {
-      const swimming = this.world.terrain.isWater(t.position.x, t.position.z);
-      const w: AgWeapon = swimming ? 'gbu31' : 'gbu53';
-      return c.remaining(this.p, w) > 0 ? w : null;
-    }
+    // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker, released at a stop
+    if (isSmallGround(t)) return c.remaining(this.p, 'gbu53') > 0 ? 'gbu53' : null;
     for (const w of AG) {
       if (c.remaining(this.p, w) <= 0) continue;
       if (w === 'aargm' && !(t.kind === 'sam' && (t.radarOn || t.known) && t.type !== 'zsu23')) continue;
@@ -289,7 +324,8 @@ export class MissionBot {
       if (!wt) continue; // e.g. only AARGMs left and a silent / optical site
       // a moving boat is only covered by a bomb aimed at it, not by a blast meant for its neighbour
       const boat = isBoat(t);
-      const busy = isSdb(wt) && (boat ? this.bombOnTheWay(t) : this.bombInbound(t));
+      // (an AARGM on its way: on to the next target, as the rule says, not an egress)
+      const busy = wt === 'aargm' ? this.bombOnTheWay(t) : isSdb(wt) && (boat ? this.bombOnTheWay(t) : this.bombInbound(t));
       let d = t.position.distanceTo(p.position);
       if (boat) d += boatRank(t) * 1e6 + (this.bombOnTheWay(t) ? 1e7 : 0);
       if ((bestBusy && !busy) || (busy === bestBusy && d < bestD)) {
@@ -342,8 +378,8 @@ export class MissionBot {
     const bandit = this.nearestBandit();
     const fuelLow = p.flight.fuel < AIRCRAFT_PERF[p.type].internalFuel * 0.18;
 
-    // 1. missile inbound: a SAM shot is defended against; everything else: the calibrated air-to-air bot
-    if (p.incoming.length > 0 && !(this.opts.defend === false && this.samShot())) {
+    // 1. missile inbound: a SAM shot is defended against (after samReaction); everything else: the calibrated air-to-air bot
+    if (p.incoming.length > 0 && !(this.opts.defend === false && this.samShot()) && !this.samUnseen()) {
       if (!this.samShot()) return this.fight('DEFEND', dt);
       if (this.student) return this.studentDefence(dt);
       if (!this.finishingRipple()) return this.samDefence(dt);
@@ -359,10 +395,12 @@ export class MissionBot {
     const surfaceNeeded = this.agLoadout && this.objectiveTargets('surface').length > 0;
     const airNeeded = this.objectiveTargets('air').length > 0;
     // 2b. Winchester against one-way drones (Shaheds, unarmed): a gun pass risks nothing but the
-    //     warhead, so a competent pilot presses on with the gun instead of going home (IRGC g01)
+    //     warhead, so a competent pilot presses on with the gun instead of going home (IRGC g01),
+    //     with the briefed gun pass from behind the drone (gunPass)
     const guns = !fuelLow && this.gunWork(aa);
     this.air.opts.rtbWhenWinchester = !guns;
-    if (guns) return bandit ? this.fight('GUNS', dt) : this.huntDrone(dt);
+    const drone = guns ? this.nearestDrone() : null;
+    if (drone) return this.gunPass(drone, dt, 'GUNS');
 
     // a hot bandit (closing fast — DARKSTAR's "threat … hot" call)
     const isHot = (b: { e: AircraftEntity; d: number } | null): boolean => {
@@ -505,14 +543,35 @@ export class MissionBot {
 
   /**
    * A long SAM shot (more than SAM_BREAK_TTI s from impact) doesn't pull a pilot off a ripple he has
-   * started: the next bomb goes first, then the break. (An AD boat's nuisance shot comes about 3 s into
-   * a stand-off ripple, #115.)
+   * started, nor off a run-in whose glide-bomb cue counts down to within RIPPLE_PRESS s (REL 3 on the
+   * HUD): the next bomb goes first, then the break. A pilot already beaming keeps beaming. (An AD boat's
+   * nuisance shot comes about 3 s into a stand-off ripple, #115. Playtest r4: g02 Veteran's cued escort
+   * fired 1 s before the opening release; the bot beamed it for 25 s, its bombs landed as the suicide
+   * boats reached the tanker and it won 1/6, while the casual proxy, too slow to react, released first
+   * and won 6/6.)
    */
   private finishingRipple(): boolean {
-    if (this.world.time - this.lastRelease > RIPPLE_WINDOW) return false;
     let tti = Infinity;
     for (const m of this.p.incoming) tti = Math.min(tti, m.timeToImpact);
-    return tti > SAM_BREAK_TTI;
+    if (tti <= SAM_BREAK_TTI) return false;
+    if (this.world.time - this.lastRelease <= RIPPLE_WINDOW) return true;
+    const p = this.p;
+    if (this.beamSide !== 0 || !isSdb(p.selectedWeapon as AgWeapon) || p.radar.designatedId === null || p.velocity.length() < 210) return false;
+    const cue = this.world.combat.bombImpactPoint(p, this.world);
+    return !!cue && !cue.bombAway && cue.timeToRelease >= 0 && cue.timeToRelease <= RIPPLE_PRESS && Math.hypot(cue.point.x - p.position.x, cue.point.z - p.position.z) <= SDB_PRESS_RANGE;
+  }
+
+  /** When each SAM round was first on the warning (world time), for samReaction. */
+  private readonly samSeen = new Map<number, number>();
+
+  /** The most urgent inbound round is a SAM shot the bot hasn't reacted to yet (on the warning < samReaction s). */
+  private samUnseen(): boolean {
+    if (this.opts.samReaction <= 0 || !this.samShot()) return false;
+    let best = this.p.incoming[0];
+    for (const m of this.p.incoming) if (m.timeToImpact < best.timeToImpact) best = m;
+    const first = this.samSeen.get(best.missileId) ?? this.world.time;
+    this.samSeen.set(best.missileId, first);
+    return this.world.time - first < this.opts.samReaction;
   }
 
   /** The most urgent inbound missile was fired by a SAM site. */
@@ -528,6 +587,12 @@ export class MissionBot {
   /**
    * SAM defence as taught in T06: beam it (turn 90° to the launching site's radar), descend into
    * the ground clutter, CHAFF in the last seconds (FLARES against IR missiles), last-ditch break.
+   * Against a radar site with no floor to get under (an AD boat's or a Tor's, 10 m) a jet above the
+   * clutter beams at its height: the dive can't reach the clutter in time and costs the height a
+   * stand-off release needs (playtest r2, 2.3-f: in g02 the bot beaming 9M330 long shots from 12–14 km
+   * dived from 4 km to 2 km, released its next StormBreakers from 9 km instead of 12, inside the
+   * escort's reach, and on Veteran did worse, 3/6, than the same bot reacting 1.7 s later, 5/6). Low
+   * down it still dives: there the clutter helps (holding 300 m, g03's south way on Veteran fell from 2/6 to 1/6).
    */
   private samDefence(dt: number): void {
     const p = this.p;
@@ -540,6 +605,7 @@ export class MissionBot {
     const site = m && m.kind === 'missile' ? w.getEntity(m.shooterId) : null;
     const ref = site ? site.position : m ? m.position : p.position;
     const ground = p.position.y - p.flight.agl;
+    const holdHeight = urgent.guidance !== 'ir' && !!site && site.kind === 'sam' && SAM_DATA[site.type].altMin < NO_FLOOR && p.flight.agl > CLUTTER_TOP;
     const it = this.pilot.begin(p, Math.min(60, this.defenceAgl - 20));
     // beam: perpendicular to the radar line of sight, on the side we are already turning to
     _q.set(p.position.x - ref.x, 0, p.position.z - ref.z).normalize();
@@ -548,7 +614,7 @@ export class MissionBot {
     _h.multiplyScalar(this.beamSide);
     turnLimited(p, _h, 100);
     it.allowInverted = false;
-    dirWithElevation(_h, gammaForAltitude(p, ground + this.defenceAgl, 0.3, 3), it.dir);
+    dirWithElevation(_h, gammaForAltitude(p, holdHeight ? p.position.y : ground + this.defenceAgl, 0.3, 3), it.dir);
     it.speed = 290;
     it.allowAb = urgent.guidance !== 'ir';
     it.gMax = urgent.timeToImpact < 2.5 ? 9 : 7;
@@ -567,21 +633,28 @@ export class MissionBot {
    * The student's leg to the steering cue: at a boat (a target waypoint) it flies in until it is shot
    * at; after each defence (or an overflight inside 1.5 km) it extends out to 8 km and turns back in to
    * draw the next shot. An orbit round the boat is a beam: it never shoots at one, and the drill stalls.
+   * A heat-seeker drill's cue is the pass point beside its boat: the bot flies through it and 3 km on,
+   * out of the crew's reach, and turns back for the next pass, as the briefing says (circling the point
+   * pulled the jet up into a loop over it that outflew the rounds, defended or not: playtest r4).
    */
   private drillLeg(wp: { kind: string; position: Vector3 }, dt: number): void {
     const p = this.p;
     const alt = Math.max(120, wp.position.y);
-    if (wp.kind !== 'target' || this.irDrill()) return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
+    if (wp.kind !== 'target') return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
+    const ir = this.irDrill();
     const d = Math.hypot(p.position.x - wp.position.x, p.position.z - wp.position.z);
-    if (d < 1_500) this.extending = true;
-    else if (d > 8_000) this.extending = false;
-    if (!this.extending) return this.nav(wp.position, alt, 'DRILL', dt, false, 100);
-    _q.set(p.position.x - wp.position.x, 0, p.position.z - wp.position.z).normalize();
-    _h.copy(wp.position).addScaledVector(_q, 14_000);
-    this.nav(_h, alt, 'EXTEND', dt, false, 100);
+    if (d < (ir ? 500 : 1_500)) this.extending = true;
+    else if (d > (ir ? 3_000 : 8_000)) this.extending = false;
+    // out, or back in, as a level turn (a reversal straight at the point is flown as a climb that
+    // bleeds the jet to 150 kt at 15,000 ft before it is back in)
+    const sign = this.extending ? -1 : 1;
+    _h.set((wp.position.x - p.position.x) * sign, 0, (wp.position.z - p.position.z) * sign);
+    turnLimited(p, _h, 60);
+    const aim = _q.copy(p.position).addScaledVector(_h.normalize(), 5_000);
+    this.nav(aim, alt, this.extending ? 'EXTEND' : 'DRILL', dt, false, 100);
   }
 
-  /** The open drill is a heat-seeker drill (the shoulder-launched missile fires at any aspect: no racetrack). */
+  /** The open drill is a heat-seeker drill (its cue is a pass point beside the boat, not the boat). */
   private irDrill(): boolean {
     for (const st of this.runner.objectives) {
       if (st.state !== 'active') continue;
@@ -633,28 +706,26 @@ export class MissionBot {
   }
 
   /**
-   * The vertical-reversal drills (t03), as the briefing teaches them: an open Immelmann objective —
-   * fly straight and hold fire while the head-on drone passes under, extend until it is ~700 m
-   * behind, then the Immelmann; an open loop objective — the drone is behind: loop at once; a drone
-   * to kill — the gun (the air-to-air bot's gun attack); otherwise straight and level, fast (the next
-   * drone only comes above 280 kt and 700 m).
+   * The turn-and-gun drill (t03), as the briefing teaches it: an open Immelmann objective — fly
+   * straight and hold fire while the head-on drone passes under, extend until it is ~700 m behind,
+   * then the Immelmann; a drone to kill — the gun (the air-to-air bot's gun attack); otherwise
+   * straight and level, fast (a new drone only comes above 280 kt and 700 m: T03_READY).
    */
   private verticalDrill(dt: number): void {
     const p = this.p;
     const w = this.world;
     if (this.vStick) return this.stickManeuver();
-    let open: 'loop' | 'immelmann' | null = null;
+    let open = false;
     for (const st of this.runner.objectives) {
       if (st.state !== 'active') continue;
       const o = this.runner.def.script.objectives.find((x) => x.id === st.id);
-      if (o && o.kind === 'maneuver') open = o.maneuver;
+      if (o && o.kind === 'maneuver' && o.maneuver === 'immelmann') open = true;
     }
     let drone: AircraftEntity | null = null;
     for (const a of w.aircraft) if (a.alive && isHostile(p.team, a.team) && (!drone || a.position.distanceTo(p.position) < drone.position.distanceTo(p.position))) drone = a;
     _h.copy(p.velocity).setY(0).normalize();
     const along = drone ? _q.subVectors(drone.position, p.position).dot(_h) : 0;
-    if (open === 'immelmann' && drone && along < -700) return this.startStick('immelmann');
-    if (open === 'loop' && drone) return this.startStick('loop');
+    if (open && drone && along < -700) return this.startStick();
     if (!open && drone) {
       this.air.opts.rtbWhenWinchester = false;
       return this.fight('GUNS', dt);
@@ -665,16 +736,16 @@ export class MissionBot {
     this.nav(far ? new Vector3(0, 0, 0) : _q.clone(), 1_500, 'VLEVEL', dt, false, 300, 185);
   }
 
-  private startStick(kind: 'loop' | 'immelmann'): void {
-    this.vStick = { kind, phase: 'pull', climbed: false, since: this.world.time };
+  private startStick(): void {
+    this.vStick = { phase: 'pull', climbed: false, since: this.world.time };
     this.stickManeuver();
   }
 
-  /** Full afterburner, full back stick; an Immelmann rolls upright once over the top on its back. */
+  /** The Immelmann: full afterburner, full back stick, and roll upright once over the top on its back. */
   private stickManeuver(): void {
     const p = this.p;
     const s = this.vStick!;
-    this.mode = s.kind === 'loop' ? 'LOOP' : 'IMMELMANN';
+    this.mode = 'IMMELMANN';
     this.clearTriggers();
     const v = Math.max(1, p.velocity.length());
     const gamma = Math.asin(p.velocity.y / v);
@@ -687,8 +758,7 @@ export class MissionBot {
     if (s.phase === 'pull') {
       inp.pitch = 1;
       inp.roll = 0;
-      if (s.kind === 'immelmann' && s.climbed && upY < -0.5 && gamma < 15 * DEG) s.phase = 'roll';
-      if (s.kind === 'loop' && s.climbed && Math.abs(gamma) < 15 * DEG && upY > 0.5) done = true;
+      if (s.climbed && upY < -0.5 && gamma < 15 * DEG) s.phase = 'roll';
     } else {
       inp.pitch = 0;
       inp.roll = 1;
@@ -708,6 +778,14 @@ export class MissionBot {
     return targets.length > 0 && targets.every((t) => t.kind === 'aircraft' && !!t.oneWay);
   }
 
+  /** The nearest one-way drone an active objective wants (null: none). */
+  private nearestDrone(): AircraftEntity | null {
+    let drone: AircraftEntity | null = null;
+    for (const t of this.objectiveTargets('air'))
+      if (t.kind === 'aircraft' && t.oneWay && (!drone || t.position.distanceTo(this.p.position) < drone.position.distanceTo(this.p.position))) drone = t;
+    return drone;
+  }
+
   /** No drone on the scope yet (gun work): head for the nearest one at its height. */
   private huntDrone(dt: number): void {
     let best: AnyEntity | null = null;
@@ -720,6 +798,59 @@ export class MissionBot {
       }
     }
     if (best) this.nav(best.position, Math.max(600, best.position.y + 300), 'HUNT', dt);
+  }
+
+  /**
+   * The gun-only probe's hands (tests/missions-probes.ts): only the gun, and pressing on with it. A
+   * bandit on the scope (or a missile inbound) is the air-to-air bot's, which never goes home
+   * Winchester here; with nothing on the scope the jet heads for the nearest air target the mission
+   * wants (DARKSTAR's picture, as gun work does). Alone, the air-to-air bot turned for home whenever
+   * its radar was empty: in g01 the Shaheds drop off it 20 km out and every run fired 0 rounds.
+   */
+  gunOnly(dt: number): void {
+    this.air.opts.rtbWhenWinchester = false;
+    if (this.p.incoming.length > 0 || this.nearestBandit(true)) return this.fight('GUNONLY', dt);
+    // a one-way drone the mission wants: the briefed gun pass from behind (g01)
+    const drone = this.nearestDrone();
+    if (drone) return this.gunPass(drone, dt, 'GUNONLY');
+    if (this.nearestBandit() || this.objectiveTargets('air').length === 0) return this.fight('GUNONLY', dt);
+    this.huntDrone(dt);
+    this.mode = 'GUNONLY:HUNT';
+  }
+
+  /**
+   * A gun pass on a one-way drone as g01's briefing teaches it (G01_GUN_PASS): get on its track
+   * PASS_SETUP behind it, PASS_BELOW under it, close from behind at a modest overtake, and inside
+   * PASS_IN, heading its way, hand over to the air-to-air bot's pipper tracking and trigger. An
+   * overshoot comes round to the set-up point again. `mode` names it in the bot's modes (GUNS when
+   * Winchester, GUNONLY in the probe). The air-to-air bot alone met the swarm head-on at 275 m/s
+   * and turned circles round it at 100–180 m/s (9 rounds and no hit in 150 s), so the bot needed
+   * its missiles for all but one or two Shaheds: g01 on a2a_dogfight (six missiles) was 0/6 on Recruit.
+   */
+  private gunPass(t: AircraftEntity, dt: number, mode: string): void {
+    const p = this.p;
+    _h.set(t.velocity.x, 0, t.velocity.z);
+    const v = _h.length();
+    if (v < 1) return this.fight(mode, dt);
+    _h.divideScalar(v); // the drone's track
+    _q.set(t.position.x - p.position.x, 0, t.position.z - p.position.z); // jet → drone
+    const R = _q.length();
+    const along = _q.dot(_h); // > 0: the jet is behind the drone
+    const lateral = Math.sqrt(Math.max(0, R * R - along * along));
+    const behind = along > 0 && lateral < 0.6 * along;
+    const vh = Math.hypot(p.velocity.x, p.velocity.z);
+    const ourWay = p.velocity.x * _h.x + p.velocity.z * _h.z > 0.8 * vh;
+    const onScope = p.radar.contacts.some((c) => c.id === t.id);
+    if (behind && ourWay && onScope && R < PASS_IN) return this.fight(mode, dt);
+    const alt = t.position.y - PASS_BELOW;
+    if (behind && along > PASS_IN * 0.6) {
+      // on its track: close from behind, faster the further out (about 100 kt overtake at the end)
+      this.nav(t.position, alt, `${mode}:PASS`, dt, false, GUN_PASS_MIN_AGL, v + Math.max(25, Math.min(110, (R - 700) * 0.08)));
+      return;
+    }
+    // overshot, or meeting it head-on or abeam: round to the set-up point on its track
+    _pt.copy(t.position).addScaledVector(_h, -PASS_SETUP);
+    this.nav(_pt, alt, `${mode}:SETUP`, dt, false, GUN_PASS_MIN_AGL, 200);
   }
 
   private fight(mode: string, dt: number): void {
@@ -836,9 +967,10 @@ export class MissionBot {
    * below it; at a small target, from SMALL_TARGET_ALT, close in so the bomb lands inside its stop).
    */
   private releaseRange(weapon: AgWeapon, t?: AnyEntity): number {
-    if (t && isSmallGround(t) && this.deck === null) return weapon === 'gbu31' ? 1_400 : 4_000;
-    if (this.deck !== null) return weapon === 'gbu31' ? 4_000 : isSdb(weapon) ? 6_000 : 15_000;
-    return weapon === 'gbu31' ? 9_500 : isSdb(weapon) ? 21_000 : 28_000;
+    if (t && isSmallGround(t) && this.deck === null) return 4_000;
+    if (weapon === 'aargm') return ARM_RELEASE;
+    if (this.deck !== null) return weapon === 'gbu31' ? 4_000 : 6_000;
+    return weapon === 'gbu31' ? 9_500 : 21_000;
   }
 
   /**
@@ -859,10 +991,7 @@ export class MissionBot {
       for (const s of this.world.sams) {
         if (!s.alive || s.team === this.p.team || s === t) continue;
         const d = Math.hypot(s.position.x - rx, s.position.z - rz);
-        // (an AD boat sees a jet at 9 km whatever its shaping: under a deck, where the run-in is short
-        // and close, its reach counts as the Tor's; elsewhere the bot keeps its old reading)
-        const reach = s.type === 'sa6' ? 14_000 : s.type === 'sa15' || (s.type === 'ad_boat' && this.deck !== null) ? 10_000 : 4_000;
-        score -= Math.max(0, reach - d);
+        score -= Math.max(0, this.samReach(s) - d);
       }
       // prefer run-ins from our side of the target
       const toUs = Math.hypot(this.p.position.x - rx, this.p.position.z - rz);
@@ -873,10 +1002,46 @@ export class MissionBot {
       }
     }
     // under an overcast deck the run-in is short (the target is found from below the cloud, close in)
-    const out = rel + (this.deck !== null || isSmallGround(t) ? 2_000 : 7_000);
+    const out = rel + (this.deck !== null || isSmallGround(t) || weapon === 'aargm' ? 2_000 : 7_000);
     const ip = new Vector3(t.position.x + Math.sin(best) * out, 0, t.position.z - Math.cos(best) * out);
     this.ips.set(t.id, ip);
     return ip;
+  }
+
+  /** How far a site reaches the jet (m), as the bot reads its TSD ring. */
+  private samReach(s: SamSiteEntity): number {
+    // (an AD boat sees a jet at 9 km whatever its shaping: under a deck, where the run-in is short
+    // and close, its reach counts as the Tor's; elsewhere the bot keeps its old reading)
+    return s.type === 'sa6' ? 14_000 : s.type === 'sa15' || (s.type === 'ad_boat' && this.deck !== null) ? 10_000 : 4_000;
+  }
+
+  /**
+   * The jet is inside the ring of a live SA-6 or Tor other than `t`, not counting one with our AARGM on
+   * its way (pressed straight in behind it, as the rule says: t06's StormBreaker run).
+   */
+  private insideSamRing(t: AnyEntity): boolean {
+    const p = this.p.position;
+    for (const s of this.world.sams) {
+      if (!s.alive || s.team === this.p.team || s === t || (s.type !== 'sa6' && s.type !== 'sa15') || this.bombOnTheWay(s)) continue;
+      if (Math.hypot(s.position.x - p.x, s.position.z - p.z) < this.samReach(s)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * A boat on a clock (g02) with the jet already between its IP and it, on the IP's side (within
+   * 60° of the run-in bearing): a human turns in and presses, not back out to the IP and round
+   * again. Flying out to the IP after a SAM defence had left the jet inside it cost the casual
+   * proxy's second ripple ~45 s and the tanker on Pilot (playtest r1, 1.3-d).
+   */
+  private insideRunIn(t: AnyEntity, ip: Vector3, R: number): boolean {
+    if (!isBoat(t)) return false;
+    const ix = ip.x - t.position.x;
+    const iz = ip.z - t.position.z;
+    const ipR = Math.hypot(ix, iz);
+    if (R >= ipR || R < 1) return false;
+    const cos = (ix * (this.p.position.x - t.position.x) + iz * (this.p.position.z - t.position.z)) / (ipR * R);
+    return cos > Math.cos(60 * DEG);
   }
 
   private strike(t: AnyEntity, dt: number): void {
@@ -900,8 +1065,11 @@ export class MissionBot {
       // stand-off weapon on its way: hold (a gentle orbit) where we are
       const it2 = this.pilot.begin(p, 150);
       const V1 = p.velocity.length();
-      // a wide, gentle turn that keeps the energy (a tight orbit at 25,000 ft bleeds it all)
-      _h.set(p.velocity.x - p.velocity.z * 0.25, 0, p.velocity.z + p.velocity.x * 0.25);
+      // a wide, gentle turn that keeps the energy (a tight orbit at 25,000 ft bleeds it all), and back
+      // towards the target near the edge of the AO (a hold off an IP to the north drifted out of it)
+      const edge = (this.runner.def.script.aoHalfSize ?? DEFAULT_AO) - HOLD_AO_MARGIN;
+      if (Math.abs(p.position.x) > edge || Math.abs(p.position.z) > edge) _h.set(t.position.x - p.position.x, 0, t.position.z - p.position.z);
+      else _h.set(p.velocity.x - p.velocity.z * 0.25, 0, p.velocity.z + p.velocity.x * 0.25);
       dirWithElevation(_h, V1 < 220 ? -0.04 : gammaForAltitude(p, Math.max(p.position.y, ground + 3_000), 0.1, 8), it2.dir);
       it2.speed = 260;
       it2.allowAb = V1 < 200;
@@ -913,13 +1081,16 @@ export class MissionBot {
       return;
     }
     if (inFlight > 0) {
-      const it2 = this.pilot.begin(p, 150);
+      // (after an AARGM: still low, under the floor, until it lands)
+      const low = weapon === 'aargm';
+      const it2 = this.pilot.begin(p, low ? ARM_MIN_AGL : 150);
       // turn away
       _h.set(p.position.x - t.position.x, 0, p.position.z - t.position.z);
       turnLimited(p, _h, 70);
       it2.allowInverted = false;
       const V2 = p.velocity.length();
-      dirWithElevation(_h, V2 < 220 ? -0.05 : gammaForAltitude(p, Math.min(p.position.y, ground + 7_000), 0.2, 6), it2.dir);
+      const egressAlt = low ? ground + ARM_RUN_IN_AGL : Math.min(p.position.y, ground + 7_000);
+      dirWithElevation(_h, V2 < 220 ? -0.05 : gammaForAltitude(p, egressAlt, 0.2, 6), it2.dir);
       it2.speed = 280;
       it2.allowAb = V2 < 220;
       it2.gMax = 5;
@@ -929,20 +1100,26 @@ export class MissionBot {
       this.pilot.fly(p, w, dt);
       return;
     }
-    const it = this.pilot.begin(p, 150);
+    // a stand-off glide bomb with the jet inside an SA-6's or Tor's ring (after an AARGM pass close in):
+    // out to the IP, low while in the ring, and the stand-off run-in from there, not a pop-up into the
+    // ring (IA Strike Veteran: the pop-up at the parked jets met the SA-6 6 km beyond them)
+    if (isSdb(weapon) && this.deck === null && !isSmallGround(t) && !this.runIn.has(t.id) && this.insideSamRing(t)) this.viaIp.add(t.id);
     // leg 1: to the IP unless we are already inside the run-in
     const ipD = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
-    const runIn = this.runIn.has(t.id) || ipD < 3_000 || R < rel + 2_000;
+    const runIn = this.runIn.has(t.id) || ipD < 3_000 || (!this.viaIp.has(t.id) && R < rel + 2_000) || this.insideRunIn(t, ip, R);
     if (runIn) this.runIn.add(t.id);
+    const low = weapon === 'aargm' || (!runIn && this.viaIp.has(t.id) && this.insideSamRing(t));
+    const it = this.pilot.begin(p, low ? ARM_MIN_AGL : 150);
     const aim = runIn ? t.position : ip;
     _h.set(aim.x - p.position.x, 0, aim.z - p.position.z);
     let alt = Math.min(8_500, Math.max(ground + 7_000, t.position.y + 7_000));
     if (this.deck !== null) alt = Math.min(alt, this.deck - 300);
     else if (isSmallGround(t)) alt = t.position.y + SMALL_TARGET_ALT;
+    // an AARGM attack, or the way out of a ring to the IP: down low under the SA-6's floor (T06's lesson)
+    if (low) alt = ground + ARM_RUN_IN_AGL;
     // a target too small to track on the move (g03's stoat) that is running: hold at the IP, circling,
-    // until it stops (a release now would land where it was), instead of overflying it into the defences.
-    // Not with a JDAM at a swimmer (t07): its blast does the work
-    if (isSmallGround(t) && t.velocity.lengthSq() > 0.25 && weapon !== 'gbu31') {
+    // until it stops (a release now would land where it was), instead of overflying it into the defences
+    if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) {
       const it3 = this.pilot.begin(p, 150);
       const dIp = Math.hypot(ip.x - p.position.x, ip.z - p.position.z);
       if (dIp > 1_500) _h.set(ip.x - p.position.x, 0, ip.z - p.position.z);
@@ -974,14 +1151,14 @@ export class MissionBot {
     let ok: boolean;
     if (weapon === 'aargm') {
       const z = c.launchZone(p, w);
-      ok = !!z && z.shoot;
+      // (while its radar is on, as the rule says; a silent site only known from before, once close in)
+      ok = !!z && z.shoot && R <= ARM_RELEASE && t.kind === 'sam' && (t.radarOn || R <= ARM_RELEASE - 2_000);
     } else {
       const b = c.bombImpactPoint(p, w);
       // like the hint says: an SDB II is pressed in to ~20 km (a max-range glide arrives slow)
       ok = !!b && b.inRange && (!isSdb(weapon) || R <= SDB_PRESS_RANGE);
-      // a target too small to track on the move (g03's stoat): released only while it stands still
-      // (a JDAM at a swimmer, t07: any time, its blast does the work)
-      if (isSmallGround(t) && t.velocity.lengthSq() > 0.25 && weapon !== 'gbu31') ok = false;
+      // a target too small to track on the move (g03's stoat, t07's rats): released only while it stands still
+      if (isSmallGround(t) && t.velocity.lengthSq() > 0.25) ok = false;
     }
     if (ok) {
       p.input.fireWeapon = true;
@@ -1012,6 +1189,11 @@ export interface PlaythroughResult {
   launches: { t: number; weapon: string; targetId: number | null; group: string | null }[];
   /** The probe flown instead of the plain bot (opts.probe; tests/missions-probes.ts) and the gun rounds fired in it. */
   probe?: { label: string; gunRounds: number };
+  /**
+   * The jeopardy the jet was in: enemy rounds (missiles and SAMs) launched at it, and its lowest health
+   * as a share of full (%). A win with 0 rounds and 100 % was never in danger (playtest 2026-10-10).
+   */
+  threat: { rounds: number; minHp: number };
 }
 
 export function runPlaythrough(
@@ -1061,7 +1243,9 @@ export function runPlaythrough(
   let friendlyLost = 0;
   let playerKills = 0;
   const launches: PlaythroughResult['launches'] = [];
+  const threat = { rounds: 0, minHp: 100 };
   events.on('munition:launch', (e) => {
+    if (e.targetId === p.id && e.shooter !== p) threat.rounds++;
     if (e.shooter !== p) return;
     const tgt = world.getEntity(e.targetId);
     launches.push({ t: world.time, weapon: e.missile.def.id, targetId: e.targetId, group: (tgt as { groupId?: string } | undefined)?.groupId ?? null });
@@ -1084,6 +1268,14 @@ export function runPlaythrough(
       const who = e.shooter === p ? 'PLAYER' : e.shooter.kind === 'aircraft' ? e.shooter.callsign : e.shooter.kind;
       log.push(`${T()} LAUNCH ${e.missile.def.id} ${who} -> ${tgt ? (tgt.kind === 'aircraft' ? tgt.callsign : tgt.kind) : '-'} ${tgt ? (tgt.position.distanceTo(e.shooter.position) / 1000).toFixed(1) + 'km' : ''}`);
     });
+    // how each of the player's weapons ended, and by how much a miss missed (a target SAM: radar on or off)
+    events.on('munition:end', (e) => {
+      if (e.missile.shooterId !== p.id) return;
+      const tgt = world.getEntity(e.targetId);
+      const miss = tgt ? ` ${Math.round(tgt.position.distanceTo(e.position))}m` : '';
+      const radar = tgt && tgt.kind === 'sam' ? (tgt.radarOn ? ' radar on' : ` radar off (${tgt.state})`) : '';
+      log.push(`${T()} END ${e.missile.def.id} ${e.reason}${miss}${radar}`);
+    });
   }
   const modes: Record<string, number> = {};
   const dt = 1 / 60;
@@ -1097,6 +1289,7 @@ export function runPlaythrough(
     world.step(dt);
     runner.update(world, dt);
     probe?.afterStep();
+    threat.minHp = Math.min(threat.minHp, Math.round((100 * Math.max(0, p.health)) / p.maxHealth));
     if (i % 30 === 0) jitterRed();
     if (opts.log && i % 300 === 0 && p.alive) {
       const des = world.getEntity(p.radar.designatedId);
@@ -1135,6 +1328,7 @@ export function runPlaythrough(
     modes: Object.fromEntries(Object.entries(modes).map(([k, v]) => [k, Math.round(v)])),
     events: log,
     launches,
+    threat,
     ...(probe ? { probe: { label: probe.label, gunRounds: probe.gunRounds } } : {}),
   };
   runner.dispose?.();

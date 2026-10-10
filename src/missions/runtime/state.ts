@@ -166,6 +166,8 @@ export class MissionState {
   samEngaged = false;
   /** The player's bombs / missiles shot down by a SAM site's point defence, by the site's group id. */
   readonly munitionsShotDown = new Map<string, number>();
+  /** The player's launches and releases so far, by weapon id (the `player_fired` condition's `weapon`). */
+  readonly playerLaunches = new Map<string, number>();
   /** Stunt bonus points (Harbour Bridge). */
   bonus = 0;
   /** Neutral civil traffic the player destroyed (airliners + ships; each costs POINTS.civilian). */
@@ -178,8 +180,6 @@ export class MissionState {
   civilianTrainKills = 0;
   /** Of which named superyachts (#145), by name, in the order they were lost. */
   readonly civilianYachts: string[] = [];
-  /** Homes inside the damage ring of the player's bombs (MissionScript.collateral, runtime/collateral.ts). */
-  homesHit = 0;
   /** A scripted 'strike' action is applying damage (its own radio covers it: no kill callouts). */
   scriptedStrike = false;
 

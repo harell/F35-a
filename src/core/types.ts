@@ -120,7 +120,6 @@ export type LoadoutId =
   /** 2× AARGM-ER + 2× GBU-53/B, no air-to-air missile: open a gap, then one precise shot (g03, #197). */
   | 'sead_precision'
   /** 4× GBU-53/B + 1× GBU-31 internal, 2× GBU-31 on the wing pylons: both bombs side by side (t07). */
-  | 'strike_mixed'
   | 'a2a_beast'
   /** 4× AIM-120D internal + 2× AIM-9X on the outer pylons: Instant Action Dogfight's default (#116). */
   | 'a2a_dogfight'
@@ -260,7 +259,7 @@ export interface DifficultyParams {
   playerMissileHitsToKill: number;
   /**
    * Seconds after a missile hit on the player in which further missile hits do no damage (unset: none):
-   * a salvo counts as one of playerMissileHitsToKill. Recruit only.
+   * a salvo counts as one of playerMissileHitsToKill. Recruit and Pilot.
    */
   playerMissileHitGrace?: number;
   /** Fuel burn multiplier. */
@@ -356,7 +355,7 @@ export interface Settings {
   fov: number;
   /** Show FPS counter. */
   showFps: boolean;
-  /** Default camera when a mission starts. */
+  /** Default camera when a mission starts (chase for a new player, core/data.ts DEFAULT_SETTINGS). */
   defaultView: 'cockpit' | 'hud' | 'chase';
   /** Target camera: small picture-in-picture view of the designated / locked target. */
   targetCam: boolean;

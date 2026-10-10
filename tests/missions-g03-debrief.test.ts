@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
-import { DIFFICULTIES } from '../src/core/data';
+import { AARGM_RULE, DIFFICULTIES } from '../src/core/data';
 import { createSimWorld } from '../src/sim/World';
 import { createCombatSystemSeeded } from '../src/sim/weapons/CombatSystem';
 import { createAiBrain } from '../src/ai';
@@ -112,9 +112,9 @@ describe('the words (#201)', () => {
     expect([...senders].sort()).toEqual(['DARKSTAR', G03_VOLUNTEERS].sort());
     const text = G03.briefing.join(' ');
     expect(text).toMatch(/Waiheke Trap Line volunteers/);
-    expect(text).toMatch(/You will not destroy them all, and you will not need to/);
+    expect(text).toMatch(/There is more than one way in/);
     expect(text).toMatch(/only authorised target/);
-    expect(text).toMatch(/fire it close in/);
+    expect(text).toContain(AARGM_RULE);
   });
 
   it('the volunteers call the bait stations and the moment it stands up; DARKSTAR types the contact', { timeout: 120_000 }, () => {
@@ -122,7 +122,8 @@ describe('the words (#201)', () => {
     m.tick(1);
     const s = m.stoat()!;
     // designated all along: at the first stop it stands up and the volunteers say so
-    for (let i = 0; i < 160 && m.runner.state === 'running'; i++) {
+    // (the first stop starts at about 1:28: G03_STOAT)
+    for (let i = 0; i < 220 && m.runner.state === 'running'; i++) {
       m.p.radar.designatedId = s.id;
       m.tick(0.5);
       if (m.radio.some((x) => /first station/.test(x.text)) && m.radio.some((x) => /stood up/.test(x.text))) break;

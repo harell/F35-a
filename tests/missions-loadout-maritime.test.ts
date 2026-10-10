@@ -57,7 +57,7 @@ describe('strike_maritime: the loadout', () => {
     expect(l.chaff).toBe(LOADOUTS.sead_stealth.chaff);
   });
 
-  it('only g02, its lesson T04 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
+  it('only g02, its lesson T04, T07 and the Stroll offer it: no other campaign, training or Instant Action mission does', () => {
     const instant = ['dogfight', 'sam_gauntlet', 'strike', 'defend'].flatMap((mode) => missionById(`ia_${mode}_auckland`) ?? []);
     expect(instant.length).toBeGreaterThanOrEqual(4);
     expect(missionById('g02')!.allowedLoadouts).toContain(FULL);
@@ -65,7 +65,8 @@ describe('strike_maritime: the loadout', () => {
     // T04 Maritime Strike teaches g02's weapons, so it flies g02's load
     expect(missionById('t04')!.recommendedLoadout).toBe(FULL);
     for (const m of [...CAMPAIGNS.flatMap((c) => c.missions), ...TRAINING, ...instant]) {
-      if (m.id === 'g02' || m.id === 't04') continue;
+      // (t07: g03's StormBreaker release, learned with bombs to spare)
+      if (m.id === 'g02' || m.id === 't04' || m.id === 't07') continue;
       expect(m.allowedLoadouts, m.id).not.toContain(FULL);
       expect(m.recommendedLoadout, m.id).not.toBe(FULL);
       expect(hangarLoadouts(m).cards, m.id).not.toContain(FULL);
@@ -128,20 +129,20 @@ describe('strike_maritime: a mission that allows it', () => {
     expect(p.gunAmmo).toBe(180);
   });
 
-  it('the cockpit stores page shows them: SDB II 8 and AARGM 2 on the stations, QTY of the selected weapon', () => {
+  it('the cockpit stores page shows them: G53 8 and AARG 2 on the stations, QTY of the selected weapon', () => {
     const h = harness(offering(), 'pilot', FULL);
     const p = h.world.player!;
     let texts = smsTexts(p);
     expect(texts).toContain('GBU-53');
     expect(texts).toContain('QTY 8');
-    // station boxes: label (first four letters of the HUD name) and count
-    expect(texts).toContain('SDB ');
+    // station boxes: tag (pages.ts STATION_TAG: the GBU-53's number, as its title line reads) and count
+    expect(texts).toContain('G53');
     expect(texts).toContain('8');
     expect(texts).toContain('AARG');
     expect(texts).toContain('2');
     h.world.combat.selectWeapon(p, 'aargm', h.world);
     texts = smsTexts(p);
-    expect(texts).toContain('AGM-88G');
+    expect(texts).toContain('AARGM');
     expect(texts).toContain('QTY 2');
   });
 });

@@ -196,7 +196,9 @@ thinning with slant range (`aerialHouseShare`, the same curve as `scatterKeep` i
 `houseRadius` as the `uAerialHouseR` uniform) and is gone beyond their radius, where both sides are lit as flat ground.
 At night the procedural ground still runs under the photo for its lamps and lit windows, and the photo gives half its
 colour to that ground (`AERIAL_NIGHT_MIX`; the photo-topped decks and roofs give it to their own colour), so the lamps
-sit on the warmer procedural colour instead of a cool grey square.
+sit on the warmer procedural colour instead of a cool grey square. The other way round, the procedural lawns, parks and pitches (`terrainStyle().garden`) are a muted green half
+way from a fresh lime to the photo's lawns, so the square's edge (Ponsonby Rd, Newmarket) is no hard break from
+grey-green photo to lime lots.
 
 **Real houses under the photo (#121).** Where the photo covers the Devonport peninsula and the gulf islands, the house
 scatter draws the real houses instead (`src/world/scenery/aucklandHouses.ts`, `auckland-houses.bin`, ≈ 17,000 houses at
@@ -250,7 +252,7 @@ drops them past radius + 6 km. A tile's arrival: its houses join `HouseSource` (
 in the same texture (`setHouseMask` / `updateHouseMask`: no sampler unit to spare) and paints no procedural
 streets there, nor lots where the 3D houses are drawn (gardens round them); as they thin out (`realHouseShare`, the
 scatter's curve) and past where the scatter's capacity runs out (`TileScatter.reach`: a dense real suburb fills the
-medium tier's 3,600 houses within about a kilometre) the lots' roofs come back as the mid-range mosaic and the far
+medium tier's 6,000 houses within about 1.4 km, about as far as the high tier's 7,500 over its wider radius) the lots' roofs come back as the mid-range mosaic and the far
 average, without the grid's streets. Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
 tiles come and go: +1 draw call) and the trees keep off them. The scatter tiles under a changed tile regenerate
 (`TileScatter.invalidate`), drawn as they were until then. The service worker never precaches the tiles and keeps them
@@ -439,8 +441,7 @@ prices the sortie against one volunteer's trap (`MissionScript.costSummary`, uni
 
 T07's sewer rats (`'rat'`, `src/missions/content/trainingSmallTargets.ts`) run on the same runner: down a Herne Bay
 street with a stop at each drain, then swimming (`RunnerState.swimming`: a steady speed, no stops, so a StormBreaker
-can't track them) for Watchman Island. The lesson counts the homes inside the player's bombs' damage ring
-(`MissionScript.collateral`, `src/missions/runtime/collateral.ts`).
+can't track them) for Watchman Island. The lesson is g03's release on two of them: a StormBreaker while the rat stops.
 
 Every munition that goes off on land digs a crater sized by its warhead (`craterRadius` in
 `src/render/effects/Effects.ts`), and a bomb going off in the water throws up a splash column, hit or miss.
@@ -449,31 +450,37 @@ Every munition that goes off on land digs a crater sized by its warhead (`crater
 
 The target camera window (`src/render/TargetCam.ts`, laid out by `src/hud/hmd/pip.ts`) shows aircraft and ships in
 its cinematic shots near the target, but a ground target or SAM site through the targeting pod (`src/core/pod.ts`):
-the camera sits on the line of sight from the player's jet (`podCamPose` in `src/render/targetCam/pose.ts`) and frames
-one of three zoom steps (WIDE 150 m, NARROW 30 m, ZOOM 2 m top to bottom; a tap on the window cycles them), so a
-target a few tenths of a metre long is still a dozen pixels tall. With no line of sight (terrain, or the overcast
+the camera sits on the line of sight from the player's jet, 200 m up it from the target or at the jet when that is
+closer (`podCamPose` and `POD_STANDOFF` in `src/render/targetCam/pose.ts`), looking down it as the pod does, with the
+lens narrowed to one of three zoom steps (WIDE 150 m, NARROW 30 m, ZOOM 1 m top to bottom, 0.5 m on a target under
+a metre across: `podSpan`; a tap on the window cycles them), so g03's 0.38 m stoat fills about half the window at
+ZOOM. With no line of sight (terrain, or the overcast
 deck between the jet and the target: `cloudBetween()` in `src/sim/sensors/los.ts`) nothing is rendered and the window
 reads MASKED. Small ground targets are framed size-aware in the orbit shot too (`groundMinFraming`).
 
-## Waiheke air defences: no free route (g03)
+## Waiheke air defences: several ways in (g03)
 
 The IRGC campaign's g03 "Stoat of Emergency" (`src/missions/content/irgcWaiheke.ts`, epic #196) sends the jet from
-west Auckland through a layered air-defence network to one small target on the Onetangi dunes, on a 4:00 clock
-(`timeLimit`) with 2 AARGM-ER and 2 GBU-53/B (`sead_precision`). The layout is built so no single route is free: an
-SA-6 and a Tor on Motuihe (the Tor's point defence covers the SA-6), an SA-6 at the Waiheke airstrip and a ZSU-23-4 on
-the ridge (the nest is inside both, so every route ends in a fight), and three patrolling AD boats over the water north
-and south (`SamSiteDef.path` + `loop`). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
+west Auckland through a layered air-defence network to one small target on the Onetangi dunes, on a 5:20 clock
+(`timeLimit`) with 2 AARGM-ER and 2 GBU-53/B (`sead_precision`). The layout gives a casual player several ways in, none
+of them free (playtest 2026-10-10, r1): an SA-6 on Motuihe on the straight line, a ZSU-23-4 on the ridge over the nest
+(every route ends in a fight), and three patrolling AD boats over the water north of Rakino, off Onetangi and in the
+Tāmaki Strait (`SamSiteDef.path` + `loop`; `noHarass`, so no long shots at the drop the reveal radius already forces
+close in). Veteran adds an SA-6 on Rakino over the way round the north (`minDifficulty`), 14 km from the nest, so the
+north meets three radars there and the strait and the straight line leave an AARGM to spare (playtest r2: with a
+Veteran Tor over the Motuihe SA-6 and the SA-6 at the airstrip over the nest, every way needed three AARGMs). The island radars carry a close-in cue of their own (`SamSiteDef.closeCue` →
 `SamSiteEntity.closeCue`, which overrides the type's `SamTypeData.closeCue`): it holds a jet beaming them low in the
 notch, where the radar alone would lose it. The weather is overcast; the deck height is `OVERCAST_DECK` in
 `src/core/weather.ts` (shared with `world/clouds/Clouds.ts`), and the target spawns only once the player has been under
 it within 6 km of the nest (an `area` spawn condition with `below`), so neither a high transit nor a stand-off release
-finds it. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast, and the bot's route
-probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`) measure it in
-flight: every naive route (straight, either detour, the wide way, above the SAMs, killing every site) loses on Pilot,
-the intended path (low down the Tāmaki Strait, an AARGM at the strait's boat, a second at the airstrip SA-6 from close
-in, then the attack at one of the stoat's stops) wins about half the time on Pilot (`tests/missions-balance.test.ts`). Under an overcast deck the bot
-attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the campaign's finale
-while the campaign is being built (no `campaignFinale`).
+finds it. The stoat's three 60 s stops start at about 1:28, 2:43 and 3:58, so a jet that finds it at 3:00 still has two
+drop windows. `tests/missions-g03.test.ts` checks the rings each route crosses on the real LINZ coast and the stops, and
+the bot's route probes (`tools/playtest/bot-sweep.ts --route=<name>`, `ROUTE_PROBES` in `tests/missions-probes.ts`)
+measure the ways in flight (`tests/missions-balance.test.ts`): low down the Tāmaki Strait (`golden`, `south`), round
+the north with an AARGM for each boat (`golden_north`) and straight across behind an AARGM at the Motuihe SA-6 (`sead`)
+each win on Pilot, while over the top of every SAM (`high`) or killing every site first (`killall`) loses. Under an
+overcast deck the bot attacks from below the cloud and plans short run-ins (`MissionBot.deck`). No IRGC mission is the
+campaign's finale while the campaign is being built (no `campaignFinale`).
 
 ## Frame / sim order (Game.ts)
 

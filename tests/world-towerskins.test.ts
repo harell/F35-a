@@ -103,6 +103,57 @@ describe('CBD tower skins', () => {
     }
   });
 
+  it('bracing is a lattice: per module one straight diagonal each way, every end on an edge of the band or a node', () => {
+    // R32-3: members that followed the LiDAR walls broke into loose sticks that missed the face's edges
+    let faces = 0;
+    for (const s of CBD_TOWER_SKINS) {
+      const t = tower(s.n);
+      const parts = skinParts(t.parts.filter((p) => p.kind !== 'spire') as never, 0);
+      for (const br of s.braces ?? []) {
+        const k = Math.round(((((br.face - s.box.face) % 360) + 360) % 360) / 90) % 4;
+        const a = ((s.box.face + 90 * k) * Math.PI) / 180;
+        const rx = -Math.cos(a), rz = -Math.sin(a);
+        // the beams buildBraces draws, as (t across, h up) on the face, their run-on ends trimmed back
+        const segs: [number, number, number, number][] = [];
+        const rec = {
+          beam: (_f: unknown, ax: number, ay: number, az: number, bx: number, by: number, bz: number, w: number) => {
+            const ta = (ax - s.box.x) * rx + (az - s.box.z) * rz, tb = (bx - s.box.x) * rx + (bz - s.box.z) * rz;
+            const e = w / 2 / Math.hypot(tb - ta, by - ay);
+            segs.push([ta + (tb - ta) * e, ay - s.dy + (by - ay) * e, tb - (tb - ta) * e, by - s.dy - (by - ay) * e]);
+          },
+          quad: () => {},
+        };
+        buildBraces(rec as never, { ...s, braces: [br], lines: [] }, parts, 0);
+        const name = `${t.name} brace on ${br.face}° t ${br.t}`;
+        const diag = segs.filter(([t0, , t1]) => Math.abs(t1 - t0) > 0.5);
+        expect(diag.length, name).toBeGreaterThanOrEqual(4);
+        const ts = diag.flatMap(([t0, , t1]) => [t0, t1]);
+        const hs = diag.flatMap(([, h0, , h1]) => [h0, h1]);
+        const tl = Math.min(...ts), tr = Math.max(...ts), lo = Math.min(...hs), hi = Math.max(...hs);
+        // the band keeps its measured width, give or take the kit's corner
+        expect(tr - tl, name).toBeGreaterThan(br.t[1] - br.t[0] - 4);
+        const onNode = (h: number) => Math.abs(((((h - br.node) % br.module) + br.module + br.module / 2) % br.module) - br.module / 2) < 0.1;
+        const modules = new Map<number, number[]>();
+        for (const [t0, h0, t1, h1] of diag) {
+          // both ends on the band's side edges, or on its top or bottom
+          for (const [tt, hh] of [[t0, h0], [t1, h1]]) {
+            const edge = Math.abs(tt - tl) < 0.1 || Math.abs(tt - tr) < 0.1 || Math.abs(hh - lo) < 0.1 || Math.abs(hh - hi) < 0.1;
+            expect(edge, `${name}: end (${tt.toFixed(1)}, ${hh.toFixed(1)})`).toBe(true);
+          }
+          // and it spans its module: node to node, or to the band's top or bottom
+          expect(onNode(Math.min(h0, h1)) || Math.abs(Math.min(h0, h1) - lo) < 0.1, name).toBe(true);
+          expect(onNode(Math.max(h0, h1)) || Math.abs(Math.max(h0, h1) - hi) < 0.1, name).toBe(true);
+          const m = Math.floor(((h0 + h1) / 2 - br.node) / br.module);
+          modules.set(m, [...(modules.get(m) ?? []), Math.sign((t1 - t0) * (h1 - h0))]);
+        }
+        // every module has its X: one rising diagonal and one falling
+        for (const [m, dirs] of modules) expect(dirs.sort(), `${name} module ${m}`).toEqual([-1, 1]);
+        faces++;
+      }
+    }
+    expect(faces).toBeGreaterThan(0);
+  });
+
   it('every sign has a cell in the logo atlas, its night look in the bottom half', () => {
     expect(ATLAS_USED).toBeLessThanOrEqual(ATLAS_H / 2);
     const used = new Set(CBD_TOWER_SKINS.flatMap((s) => (s.signs ?? []).map((g) => g.logo)));

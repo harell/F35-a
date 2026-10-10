@@ -291,7 +291,7 @@ describe('i1: a strike package keeps its route', () => {
 });
 
 describe('i1: hints follow the selected weapon (SEAD)', () => {
-  it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; SDB II → names the SDB II', () => {
+  it('AARGM selected on the SA-6 → an AARGM hint, never "JDAM"; GBU-53 → names the GBU-53', () => {
     // the reviewers' case: AARGM selected, SA-6 designated, the EW radar (a ground target) in range
     const h = harness(seadFixture());
     const p = h.world.player!;
@@ -308,7 +308,7 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
     const all = [...texts];
     expect(all.some((t) => /AARGM/.test(t))).toBe(true);
     expect(all.filter((t) => /JDAM/.test(t))).toEqual([]);
-    // SDB II selected, nothing designated → the hint names the real store
+    // GBU-53 selected, nothing designated → the hint names the real store
     const h2 = harness(seadFixture());
     const p2 = h2.world.player!;
     const t2 = new Set<string>();
@@ -318,18 +318,20 @@ describe('i1: hints follow the selected weapon (SEAD)', () => {
       if (p2.radar.designatedId !== null) h2.world.combat.designate(p2, null, h2.world);
       if (h2.runner.hint) t2.add(h2.runner.hint);
     });
-    expect([...t2].some((t) => /SDB/.test(t))).toBe(true);
+    expect([...t2].some((t) => /GBU-53/.test(t))).toBe(true);
     expect([...t2].filter((t) => /JDAM/.test(t))).toEqual([]);
   });
 
-  it('training T02 teaches the lock drill (designate → nose within 30° → SHOOT → crank)', () => {
+  it('training T02 teaches the lock drill on a Shahed (the box → nose within 30° → SHOOT → fire; no crank, it never shoots back)', () => {
     const t02 = byId('t02');
     const all = [...t02.briefing, ...(t02.script.hints ?? []).map((x) => x.text)].join(' ');
-    for (const k of [/TD box/, /30°/, /SHOOT/, /crank/i, /PITBULL/]) expect(all).toMatch(k);
+    for (const k of [/box around it/, /30°/, /SHOOT/, /FIRE/]) expect(all).toMatch(k);
+    for (const k of [/TD box/, /crank/i, /PITBULL/]) expect(all).not.toMatch(k);
     const t06 = byId('t06');
     const t3 = [...t06.briefing, ...(t06.script.hints ?? []).map((x) => x.text), ...t06.script.triggers.flatMap((tr) => tr.actions.map((a) => ('text' in a ? a.text : '')))].join(' ');
     // (one CMS control drops chaff and flares together on every input: #62)
-    for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /6 s to impact/i, /every (two or three|2–3) s/i, /300 ft/]) expect(t3).toMatch(k);
+    // (250 ft: under the SA-6's 80 m engagement floor, the low run-in T06 teaches since playtest 2026-10-10)
+    for (const k of [/beam/i, /\bCMS\b/, /chaff and flares/i, /6 s to impact/i, /every (two or three|2–3) s/i, /250 ft/]) expect(t3).toMatch(k);
   });
 });
 
@@ -339,8 +341,11 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
     h.run(1);
     const sa6 = h.world.sams.find((s) => s.groupId === 'rangi_sa6')!;
     const p = h.world.player!;
-    for (let i = 0; i < 4 && p.alive; i++) h.world.applyDamage(p, 9999, sa6.id, 'm_3m9');
-    h.run(1);
+    // separate salvos: on Recruit and Pilot rounds inside playerMissileHitGrace of a hit count as one
+    for (let i = 0; i < 4 && p.alive; i++) {
+      h.world.applyDamage(p, 9999, sa6.id, 'm_3m9');
+      h.run(3.5);
+    }
     const r = h.runner.result(h.world);
     expect(r.success).toBe(false);
     expect(r.reason).toBe('Shot down by an SA-6 Gainful');
@@ -424,10 +429,11 @@ describe('i1: debrief — reason, tips, medals, campaign ending', () => {
 describe('i1: Instant Action honours the difficulty', () => {
   const opts = { mode: 'dogfight', theater: 'auckland', timeOfDay: 'day', weather: 'clear', enemyType: 'mixed', enemyCount: 4 } as const;
 
-  it("4 bandits → 3 on Recruit, 4 on Pilot / Veteran", () => {
+  // Pilot flies one bandit more (playtest r2, 2.3-e: at Veteran's 4 the bot won every Pilot run untouched)
+  it("4 bandits → 3 on Recruit, 5 on Pilot, 4 on Veteran", () => {
     const count = (d: 'recruit' | 'pilot' | 'veteran') => harness(buildInstantMissionSeeded(opts, 9), d).world.aircraft.filter((a) => a.team === 'red').length;
     expect(count('recruit')).toBe(3);
-    expect(count('pilot')).toBe(4);
+    expect(count('pilot')).toBe(5);
     expect(count('veteran')).toBe(4);
     expect(scaleTotal([2, 2], 0.75)).toEqual([2, 1]);
     expect(scaleTotal([2, 2], 1.5)).toEqual([3, 3]);
@@ -493,9 +499,9 @@ describe('i1: late fixes — SDB press-in', () => {
     };
     const far = hintsAt(24_000);
     expect(far.some((t) => /press in to 20 km/.test(t)), JSON.stringify(far)).toBe(true);
-    expect(far.some((t) => /release the SDB/.test(t))).toBe(false);
+    expect(far.some((t) => /release the GBU-53/.test(t))).toBe(false);
     const near = hintsAt(18_000);
-    expect(near.some((t) => /release the SDB/.test(t)), JSON.stringify(near)).toBe(true);
+    expect(near.some((t) => /release the GBU-53/.test(t)), JSON.stringify(near)).toBe(true);
     expect(near.some((t) => /press in/.test(t))).toBe(false);
   });
 });

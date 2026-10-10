@@ -5,6 +5,7 @@
  */
 import { Vector3 } from 'three';
 import type { FrameContext } from '../../core/contracts';
+import type { WeaponId } from '../../core/types';
 import type { LaunchZone, SimWorld } from '../../sim/api';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { KillFeed, MessageQueue, RadioQueue, type MessageTone } from './feeds';
@@ -44,6 +45,8 @@ export class HudState {
   weaponAge = 99;
   brevity = '';
   brevityAge = 99;
+  /** The weapon of the player's last release (brevityAge is its age): its AWAY cue holds a moment after it. */
+  launched: WeaponId | null = null;
   /** Seconds since a new warning appeared (master warning flash). */
   warnAge = 99;
   /** Seconds left to show the objective summary. */
@@ -102,7 +105,8 @@ export class HudState {
     slot.y = NaN;
   }
 
-  step(dt: number, paused: boolean): void {
+  /** `holdMessage`: a life-critical warning holds the centre message back (`MessageQueue.update`). */
+  step(dt: number, paused: boolean, holdMessage = false): void {
     this.clock += dt;
     this.frame++;
     if (paused) return;
@@ -115,7 +119,7 @@ export class HudState {
     if (!this.objHold) this.objShow = Math.max(0, this.objShow - dt);
     this.objFree = this.objYield ? 0 : this.objFree + dt;
     this.radio.update(dt);
-    this.messages.update(dt);
+    this.messages.update(dt, holdMessage);
     this.kills.update(dt);
     for (const h of this.hits) {
       if (!h.active) continue;

@@ -8,8 +8,9 @@
  *   park:far    the same, parked where the exploit charter parks (35 km south-west of the city, 13 km
  *               up; `FAR` in tests/missions-balance.test.ts): out of the fight entirely.
  *   gunonly     the player's stores are emptied every step (nothing can add missiles or bombs back)
- *               and the air-to-air bot presses on with the gun instead of going home (the gun-only
- *               probe of runBalanceMission, tests/ai-playerbot.ts). Counts the rounds fired.
+ *               and the jet presses on with the gun instead of going home: it heads for the air
+ *               targets the mission wants, and the air-to-air bot fights what is on the scope with the
+ *               gun (MissionBot.gunOnly). Counts the rounds fired.
  *   route:<r>   (#198) the jet flies a fixed route a player could try (ROUTE_PROBES: the straight line,
  *               a detour, high above everything, or the intended way through with its AARGM shots),
  *               then the mission bot takes over for the attack at the end. A missile inbound is the
@@ -57,12 +58,13 @@ export const KILL_ALL = 'killall';
  *  - north / south: round the defences low over the water, either side of the islands;
  *  - wide: round Waiheke's east end in burner, outside every ring until the end;
  *  - high: above every SAM ceiling (43,000 ft) to overhead the nest;
- *  - golden: the intended way through: out of the harbour and down the Tāmaki Strait as low as the jet
- *    goes (the Motuihe SA-6 sees down it but can't engage under its 80 m floor; the Tor stands 8 km off),
- *    an AARGM at the strait's patrol boat, a second at the airstrip SA-6 from inside 7 km (fired from
- *    far out it only silences the radar for seconds), then the attack from under the cloud at one of the
- *    stoat's stops (#200: the bot holds off while it runs);
- *  - golden_north: the same idea round the north (AARGMs at the two northern boats), slower and less sure.
+ *  - golden: low down the Tāmaki Strait as low as the jet goes (the Motuihe SA-6 sees down it but can't
+ *    engage under its 80 m floor), an AARGM at the strait's patrol boat, then the attack from under the
+ *    cloud at one of the stoat's stops (#200: the bot holds off while it runs);
+ *  - golden_north: the same idea round the north (AARGMs at the two northern boats; on Veteran the
+ *    Rakino SA-6 is a third radar there);
+ *  - sead: the straight line, low, with an AARGM at the Motuihe SA-6 from inside 7 km (fired from far
+ *    out it only silences the radar for seconds), then straight in to the attack.
  */
 export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
   g03: {
@@ -90,7 +92,7 @@ export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
       { x: 11_000, z: 1_500, alt: 45, minAgl: 25, speed: 260 },
       { x: 16_000, z: 3_700, alt: 45, minAgl: 25, speed: 260, shoot: 'ad_s' },
       { x: 22_000, z: 3_500, alt: 45, minAgl: 25, speed: 260 },
-      { x: 26_000, z: -1_000, alt: 45, minAgl: 25, speed: 260, shoot: 'strip_sa6', within: 7_000 },
+      { x: 26_000, z: -1_000, alt: 45, minAgl: 25, speed: 260 },
     ],
     golden_north: [
       { x: -4_000, z: -2_000, alt: 150, speed: 320 },
@@ -101,6 +103,18 @@ export const ROUTE_PROBES: Record<string, Record<string, RouteLeg[]>> = {
       { x: 21_000, z: -10_500, alt: 150, minAgl: 40, speed: 300, shoot: 'ad_n2' },
       { x: 25_000, z: -8_500, alt: 60, minAgl: 40, speed: 300 },
     ],
+    sead: [
+      { x: -4_000, z: -2_000, alt: 150, speed: 320 },
+      { x: 6_000, z: -3_500, alt: 45, minAgl: 25, speed: 260 },
+      { x: 14_000, z: -5_000, alt: 45, minAgl: 25, speed: 260, shoot: 'mot_sa6', within: 7_000 },
+      { x: 22_000, z: -6_500, alt: 600 },
+    ],
+  },
+  // g02's second way (playtest r1, 1.3-f): the escort first, with an AARGM-ER on the way in (the
+  // briefing's "one for each escort"), then the bot's StormBreaker ripples. The plain bot is the
+  // first way: bombs only, its AARGMs never fired
+  g02: {
+    sead: [{ x: -2_000, z: -7_000, alt: 4_000, shoot: 'ad1' }],
   },
 };
 
@@ -198,7 +212,7 @@ export class Probe {
 
   /**
    * The bot's turn (every 3rd step): true when the probe flew the jet itself (parked: nothing at all;
-   * gun-only: the air-to-air bot, never going home Winchester; a route: its legs), false to let the
+   * gun-only: MissionBot.gunOnly, never going home Winchester; a route: its legs), false to let the
    * mission bot fly.
    */
   fly(dt: number): boolean {
@@ -207,10 +221,7 @@ export class Probe {
       return true;
     }
     if (this.spec.kind === 'route') return this.spec.route === KILL_ALL ? this.killAll(dt) : this.route(dt);
-    const air = this.bot.air;
-    this.bot.mode = 'GUNONLY';
-    air.opts.rtbWhenWinchester = false;
-    air.update(this.p, this.world, dt);
+    this.bot.gunOnly(dt);
     return true;
   }
 

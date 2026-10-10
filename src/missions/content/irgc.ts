@@ -130,14 +130,14 @@ export const G01: MissionDef = mission({
   briefing: [
     '13:40. The Guard\'s rusting mother ship, lying off the Hauraki Gulf, has launched a swarm of Shahed-136 one-way attack drones. They crossed the coast at Howick in a tight triangle and are droning in over the eastern suburbs, nose on the tallest tree in Auckland, the Sky Tower. Impact in under four minutes.',
     'Shaheds are dumb: a fixed course at 1,000 ft and 100 knots, no weapons, no reaction to you. But there are more of them than the eight missiles you carry at most. The gun is not optional today: you have extra rounds.',
-    'Take the swarm head-on with missiles at range, then turn in behind for gun passes. Come in from behind at about 200 knots, closing at about 100 (the Vc by your gun pipper), and fire short bursts at 550 to 700 m. Sit about 400 ft below the drone: at that speed the jet flies nose-high and the pipper rides above your flight path, so level behind a drone it sits above it. From 400 ft below, the drone rises into the pipper at about 600 m. Closing too fast? OVERSHOOT: pull up and come round. Kill them beyond 150 m or the warhead blast will hit you too.',
+    `Take the swarm head-on with missiles at range, then turn in behind for gun passes: about ${G01_GUN_PASS.approachKt} knots, about ${G01_GUN_PASS.belowFt} ft below the drone, short bursts at ${G01_GUN_PASS.burstFrom} to ${G01_GUN_PASS.burstTo} m. Training 03 shows how. Kill them beyond 150 m or the warhead blast will hit you too.`,
     'The tower can take one hit. A second brings it down. Chasing the last drone into the CBD, remember your own missile can bring the tower down too: close in with the gun instead. Every drone you shoot down falls on someone\'s house. Shoot them down early.',
   ],
   recommendedLoadout: 'a2a_beast',
   // air-to-air only, and every air-to-air missile the game has: the player meets both, the AIM-120
   // and the AIM-9X, on the same jet (#136). g02 introduces the air-to-ground weapons.
   allowedLoadouts: ['a2a_beast'],
-  // flying the jet, the lock, SHOOT cue, AIM-9X and gun, then turning round on a slow drone (the Immelmann and the loop)
+  // flying the jet; the lock, SHOOT cue and AIM-9X on Shaheds; turning round on a slow drone (the Immelmann) for the gun pass
   lessons: ['t01', 't02', 't03'],
   player: g01Start,
   // the gun is required (10 drones, at most 8 missiles): more than the real 180 rounds (#77)

@@ -56,7 +56,22 @@ describe('bot-sweep --park / --gunonly (tests/missions-probes.ts)', () => {
     const r = runPlaythrough('g01', 'recruit', 0, flat(0), { maxT: 90, probe: { kind: 'gunonly' } });
     expect(r.probe?.label).toBe('gunonly');
     expect(r.launches).toEqual([]);
-    expect(Object.keys(r.modes)).toEqual(['GUNONLY']);
+    for (const m of Object.keys(r.modes)) expect(m).toMatch(/^GUNONLY/);
+  });
+
+  it('gun-only in g01: the jet goes after the swarm and guns Shaheds down (was 0 rounds: home with an empty radar)', { timeout: 120_000 }, async () => {
+    // the air-to-air bot alone turned for home whenever its radar was empty, and the Shaheds drop off
+    // it 20 km out: every gun-only run orbited Whenuapai and fired 0 rounds (playtest r4)
+    const rows: string[] = [];
+    for (const seed of [0, 1]) {
+      await new Promise((r) => setTimeout(r, 0)); // yield: vitest's worker RPC times out on long blocks
+      const r = runPlaythrough('g01', 'pilot', seed, flat(0), { maxT: 240, probe: { kind: 'gunonly' } });
+      const row = `seed ${seed}: ${r.state} t=${r.t} rounds=${r.probe?.gunRounds} kills=${r.playerKills} modes=${JSON.stringify(r.modes)}`;
+      rows.push(row);
+      expect(r.launches, row).toEqual([]);
+      expect(r.probe!.gunRounds, row).toBeGreaterThan(0);
+      expect(r.playerKills, row).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it('no probe: the plain bot, no probe field', { timeout: 60_000 }, () => {

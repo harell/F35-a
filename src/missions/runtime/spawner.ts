@@ -428,6 +428,10 @@ export function spawnSamSite(s: MissionState, def: SamSiteDef): void {
     known: def.known ?? !def.emcon,
     closeCue: def.closeCue,
     noHarass: def.noHarass,
+    noArmShutdown: def.noArmShutdown,
+    irOnly: def.irOnly,
+    restock: def.restock,
+    irReach: def.irReach,
     boat:
       def.type === 'ad_boat'
         ? { path: def.path?.map((p) => new Vector3(p.x, 0, p.z)), speed: def.speed, loop: def.loop, escortGroup: def.escort, escortAft: def.escortAft, escortRight: def.escortRight }
@@ -514,7 +518,8 @@ export function buildGroups(s: MissionState): void {
     g.expected = scaledCount(def, scale, diff);
   }
   if (sc.scaleEnemyTotal) {
-    const list = sc.groups.filter((d) => d.team === 'red' && !d.fixedCount && difficultyAtLeast(diff, d.minDifficulty));
+    // a group sized for this difficulty (countFor) keeps that size; the rest scale as one total
+    const list = sc.groups.filter((d) => d.team === 'red' && !d.fixedCount && d.countFor?.[diff] === undefined && difficultyAtLeast(diff, d.minDifficulty));
     const counts = scaleTotal(
       list.map((d) => d.count),
       scale,

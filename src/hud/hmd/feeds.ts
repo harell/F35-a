@@ -222,15 +222,21 @@ export class MessageQueue {
     }
   }
 
-  update(dt: number): void {
+  /**
+   * `held`: a life-critical warning (MISSILE, PULL UP, STALL) holds the slot back, so a message below
+   * priority 4 isn't on screen: it doesn't age (nor does good news waiting behind it) and shows when
+   * the warning is over (playtest r3.1: an AARGM's HIT — DAMAGED aged out unseen during the defence).
+   */
+  update(dt: number, held = false): void {
     for (let i = this.queue.length - 1; i >= 0; i--) {
       const q = this.queue[i];
-      q.wait += dt;
+      if (!held || q.priority < 2) q.wait += dt;
       // info waits maxWait, good news a bit longer; warn / bad / mission end never expire in the queue
       if (q.priority < 3 && q.wait > this.maxWait * (q.priority >= 2 ? 1.6 : 1)) this.queue.splice(i, 1);
     }
     const cur = this.current;
     if (!cur) return this.advance();
+    if (held && cur.priority < 4) return;
     cur.age += dt;
     // a backlog of more important messages: don't linger
     if (this.queue.length >= 2 && cur.age > 1.2) cur.duration = Math.min(cur.duration, cur.age + 0.3);

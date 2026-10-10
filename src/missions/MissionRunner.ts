@@ -27,11 +27,11 @@ import { Callouts, sameFlight, type DownReason } from './runtime/callouts';
 import type { MissionResultExt, TeamKill } from './runtime/resultExt';
 import { evalCondition } from './runtime/conditions';
 import { HintSystem } from './runtime/hints';
-import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, updateObjectives } from './runtime/objectives';
+import { activateObjective, createObjectives, failOpenObjectives, markObjectiveTargets, objectiveSummary, protectTallies, skippedDrillsText, updateObjectives } from './runtime/objectives';
 import { URGENT_PRIORITY } from './runtime/radio';
 import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
-import { awardMedals, buildTips, codexTopic, deathReason } from './runtime/debrief';
+import { awardMedals, buildTips, codexTopic, deathReason, hasShootingObjective } from './runtime/debrief';
 import { WinchesterWatch } from './runtime/winchester';
 import { costSummary } from './runtime/costs';
 import { WithdrawalMonitor } from './runtime/withdrawal';
@@ -45,7 +45,6 @@ import { CivilShipping } from './runtime/shipping';
 import { SuperyachtTraffic } from './runtime/superyachts';
 import { TrainTraffic } from './runtime/trains';
 import { LandmarkWatch } from './runtime/landmarks';
-import { HomesWatch } from './runtime/collateral';
 import { SightseeingLog } from './runtime/sightseeing';
 import { updateManeuvers, type ManeuverId } from './runtime/maneuvers';
 import { FREE_FLIGHT_SPEED_FLOOR, setSpeedFloor } from '../sim/flight/FlightModel';
@@ -60,7 +59,8 @@ const LEVEL_PITCH = 10 * (Math.PI / 180);
 const LEVEL_UP_Y = 0.95;
 /** Seconds outside the AO before the mission fails. */
 const AO_GRACE = 30;
-const DEFAULT_AO = 38_000;
+/** Area of operations half-size (m) when the mission sets none (script.aoHalfSize). */
+export const DEFAULT_AO = 38_000;
 /** Free flight has no AO: past this half-size (m, near the edge of the 88 km terrain) a nudge back towards the city. */
 const FREE_FLIGHT_EDGE = 42_000;
 /** Seconds before a patrolling enemy fighter group is vectored onto the player. */
@@ -102,8 +102,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly trains: TrainTraffic | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
-  /** Homes hit by the player's bombs (script.collateral, t07). */
-  private readonly homes: HomesWatch | null;
   /** Free flight: tour stops, distance and passes for the debrief. */
   private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
@@ -154,7 +152,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts = civilTraffic ? new SuperyachtTraffic(this.s) : null;
     this.trains = civilTraffic ? new TrainTraffic(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
-    this.homes = def.script.collateral ? new HomesWatch(this.s) : null;
     this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
@@ -181,7 +178,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.callouts.detach();
     this.coach?.detach();
     this.landmarks.detach();
-    this.homes?.detach();
     s.radio.clear();
     this.hints.clear();
     s.world = null as unknown as SimWorld;
@@ -223,7 +219,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts?.setup();
     this.trains?.setup();
     this.landmarks.setup();
-    this.homes?.setup();
     this.callouts.attach();
     this.coach?.attach();
     // ground-level steering for target waypoints without an explicit altitude
@@ -299,9 +294,11 @@ class MissionRunnerImpl implements MissionRunnerApi {
       time,
       parTime: parTimeFor(this.def),
       kills: { ...s.kills },
-      enemiesSpawned: s.enemiesSpawned,
+      // nothing to shoot (T05's drills: the boats only fire practice rounds): not a fight the grade weighs
+      enemiesSpawned: hasShootingObjective(s.script) ? s.enemiesSpawned : 0,
       objectiveBonus: sum.bonus,
-      primaryDone: sum.primaryDone,
+      // a drill the coach moved the player on from wasn't passed
+      primaryDone: sum.primaryDone - sum.primarySkipped,
       primaryTotal: sum.primaryTotal,
       secondaryDone: sum.secondaryDone,
       secondaryTotal: sum.secondaryTotal,
@@ -310,7 +307,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
       damageTaken,
       friendlyLosses: s.friendlyLosses,
       civilianKills: s.civilianKills,
-      homesHit: s.homesHit,
       bonus: s.bonus,
       scoreMultiplier: s.difficulty.scoreMultiplier,
       flightKills: s.flightKills,
@@ -344,7 +340,6 @@ class MissionRunnerImpl implements MissionRunnerApi {
     if (s.civilianHeliKills > 0) (r as MissionResultExt).civilianHeliKills = s.civilianHeliKills;
     if (s.civilianTrainKills > 0) (r as MissionResultExt).civilianTrainKills = s.civilianTrainKills;
     if (s.civilianYachts.length) (r as MissionResultExt).civilianYachts = [...s.civilianYachts];
-    if (s.homesHit > 0) (r as MissionResultExt).homesHit = s.homesHit;
     const saved = protectTallies(s);
     if (saved.length) (r as MissionResultExt).saved = saved;
     // free flight: a crash ends the sortie but isn't a failed mission (no tips, no medals)
@@ -359,8 +354,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
         for (const st of p?.stores ?? []) if (st.weapon === w) left += st.count;
         if (n - left > 0) fired[w] = n - left;
       }
-      let removed = 0;
-      for (const id of typeof cs.removed.group === 'string' ? [cs.removed.group] : cs.removed.group) removed += s.groups.get(id)?.members.filter((m) => !m.alive).length ?? 0;
+      const removed = s.groups.get(cs.removed.group)?.members.filter((m) => !m.alive).length ?? 0;
       (r as MissionResultExt).costSummary = costSummary(time, fired, cs.comparison, { label: cs.removed.label, count: removed });
     }
     r.tips = r.freeFlight ? [] : buildTips(s, r);
@@ -706,10 +700,14 @@ class MissionRunnerImpl implements MissionRunnerApi {
       this.fail(`Objective failed: ${sum.primaryFailed.def.label}`);
       return;
     }
-    if (sum.primaryTotal > 0 && sum.primaryDone === sum.primaryTotal) this.succeed(REASONS.success);
+    if (sum.primaryTotal > 0 && sum.primaryDone === sum.primaryTotal) {
+      // a lesson whose drills the coach moved the player on from ends saying so, not "qualification complete"
+      const skipped = skippedDrillsText(s.objectives.map((o) => o.status), s.def.title);
+      this.succeed(skipped ?? REASONS.success, skipped);
+    }
   }
 
-  private succeed(reason: string): void {
+  private succeed(reason: string, skipped: string | null = null): void {
     const s = this.s;
     if (s.state !== 'running') return;
     s.state = 'success';
@@ -717,7 +715,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     s.endTime = s.time;
     this.hints.clear();
     s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}. Mission complete, RTB.`, voice: 'a_mission_complete', priority: URGENT_PRIORITY });
-    if (s.script.successText) s.radio.push({ from: s.awacsCallsign, text: s.script.successText, priority: 2 });
+    if (skipped) s.radio.push({ from: s.awacsCallsign, text: `${skipped}.`, priority: 2 });
+    else if (s.script.successText) s.radio.push({ from: s.awacsCallsign, text: s.script.successText, priority: 2 });
     s.hud('MISSION COMPLETE', 'good', 5);
     s.events.emit('mission:end', { success: true, reason });
     // steer home if the mission has an RTB waypoint

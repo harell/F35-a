@@ -6,15 +6,21 @@
  *  - AMRAAM: tap the TD box (or TGT) to lock → point the nose (±30° lock cone) → wait for SHOOT
  *    → fire → crank 50°;
  *  - AIM-9X / gun: seeker tone / pipper;
- *  - AARGM: designate an emitting SAM, fire on SHOOT (never sent to a bomb while an AARGM cue is up);
- *  - SDB / JDAM: designate with TGT, release IN RANGE;
+ *  - AARGM: designate an emitting SAM, close in to AARGM_CLOSE_RANGE, fire on SHOOT and press in
+ *    (AARGM_RULE; never sent to a bomb while an AARGM cue is up);
+ *  - SDB / JDAM: designate with TGT, release IN RANGE (a StormBreaker at a target too small to track
+ *    on the move, g03's stoat or t07's rats: once it stops);
  *  - an A/A weapon selected while a surface objective is near: which A/G store to select.
- * Texts stay short; the HUD decides visibility (Settings.hints).
+ * A mission's scripted hints come first: a weapon hint waits while a scripted hint naming the selected
+ * weapon has yet to show (the lesson's own step on it). Texts stay short; the HUD decides visibility
+ * (Settings.hints).
  */
-import { WEAPON_INFO } from '../../core/data';
+import { AARGM_CLOSE_RANGE, WEAPON_INFO } from '../../core/data';
 import { isHostile, type WeaponId } from '../../core/types';
 import type { AircraftEntity, AnyEntity } from '../../sim/entities';
 import { stallSpeedIas } from '../../sim/flight/performance';
+import { aargmCue } from '../../sim/weapons/fit';
+import { STILL_SPEED, isSmallGround } from '../../sim/weapons/small';
 import { evalCondition } from './conditions';
 import { controlPrefsVersion, formatControls, savedControlPrefs, withActiveScheme } from './controlsText';
 import { aircraftHudName } from './names';
@@ -142,9 +148,10 @@ const AUTO: AutoHint[] = [
       // seconds apart is the defence, and a dive after the launch adds nothing to the beam (the round
       // arrives in ~10 s). Against the boat's heat-seeker (real flight model, 48 rounds each): a hard turn
       // across it + CMS late 3 hit, CMS alone 5, the turn alone 12, nothing 15, a break INTO it 29 (head-on,
-      // the end game's worst aspect). A fighter's missile (not measured; a longer flight) keeps the old advice.
-      if (shooter && shooter.kind === 'sam') return ir ? 'IR MISSILE! Beam it hard, AB off, CMS late' : 'MISSILE! Beam it 90°, CMS every 2–3 s';
-      return ir ? 'IR MISSILE! CMS, break into it, AB off' : 'MISSILE! Beam it 90°, dive, CMS late';
+      // the end game's worst aspect), so a heat-seeker gets the beam whoever fired it (1.4-o). A fighter's
+      // radar missile (not measured; a longer flight) keeps the old advice.
+      if (ir) return 'IR MISSILE! Beam it hard, AB off, CMS late';
+      return shooter && shooter.kind === 'sam' ? 'MISSILE! Beam it 90°, CMS every 2–3 s' : 'MISSILE! Beam it 90°, dive, CMS late';
     },
   },
   {
@@ -184,13 +191,16 @@ const AUTO: AutoHint[] = [
       const r = e.position.distanceTo(p.position);
       if (w === 'aim9x') return r < 8_000 ? 'Look at the bandit: fire the AIM-9X on the lock TONE' : null;
       if (w === 'gun') return r < 1_500 ? 'GUNS: pipper on the bandit, fire inside 1,200 m' : null;
-      // AMRAAM: supporting a shot in flight → crank
+      // AMRAAM: supporting a shot in flight → crank. Not against a one-way drone (a Shahed): it never
+      // shoots back, and at the ranges it is shot at the missile's own seeker has it (T02, playtest r1
+      // 1.4-c); one missile is enough for it (the HUD's AMRAAM AWAY, playtest r1 1.2-g)
+      const drone = !!e.oneWay;
       for (const m of s.world.missiles) {
-        if (m.alive && m.shooterId === p.id && m.targetId === e.id && m.def.id === 'aim120') return 'Crank 50° off the bandit — keep it on the radar until the missile goes PITBULL';
+        if (m.alive && m.shooterId === p.id && m.targetId === e.id && m.def.id === 'aim120') return drone ? 'AMRAAM AWAY — one is enough: TGT for the next drone' : 'Crank 50° off the bandit — keep it on the radar until the missile goes PITBULL';
       }
       if (p.radar.lockedId !== e.id && !inLockCone(p, e)) return 'Point the nose at the TD box: the lock builds inside 30°';
       const z = h.zone(p, s);
-      if (z && z.shoot) return 'SHOOT — fire the AMRAAM, then crank 50°';
+      if (z && z.shoot) return drone ? 'SHOOT — fire the AMRAAM' : 'SHOOT — fire the AMRAAM, then crank 50°';
       if (z && z.range <= z.rMax && z.range >= z.rMin) return 'IN RANGE — wait for SHOOT: closer shots hit';
       return p.radar.lockedId === e.id ? 'Locked. Close in until SHOOT flashes' : null;
     },
@@ -203,13 +213,18 @@ const AUTO: AutoHint[] = [
       if (w === 'aargm') {
         const e = hostileDesignated(p, s);
         if (!e || !armTargetable(e)) return 'AARGM homes on radars: designate an emitting SAM with TGT, then fire';
-        const z = h.zone(p, s);
-        if (z && z.shoot) return 'SHOOT — fire the AARGM: it keeps homing even if the radar shuts down';
-        return 'Close in: fire the AARGM when SHOOT shows';
+        if (Math.hypot(e.position.x - p.position.x, e.position.z - p.position.z) > AARGM_CLOSE_RANGE) return 'Close in: fire the AARGM inside 10 km, while its radar is on';
+        if (aargmCue(p, e, h.zone(p, s)) === 'shoot') return 'SHOOT — fire the AARGM, then press straight in while its radar is quiet';
+        return 'Fire the AARGM when SHOOT shows: its radar must be on';
       }
       if (w === 'gbu31' || w === 'gbu53') {
         const b = s.world.combat.bombImpactPoint(p, s.world);
         if (!p.radar.groundPoint) return `Tap TGT to designate a ground target for the ${name}`;
+        // a target too small to track on the move (g03's stoat, t07's rats): a StormBreaker waits for it to stop
+        const e = hostileDesignated(p, s);
+        if (w === 'gbu53' && e && isSmallGround(e) && e.velocity.lengthSq() > STILL_SPEED * STILL_SPEED) return `Wait for it to stop: the ${name} can't track a target this small on the move`;
+        // our bomb is already guiding onto it: the HUD's <WPN> AWAY, not a call for a second (r2 2.2 F7)
+        if (b && b.bombAway) return `${name} AWAY: it flies itself to the target. TGT for the next one`;
         if (b && b.inRange) {
           // an SDB lobbed from its 30 km maximum glides for 3+ minutes and arrives slow — easy
           // meat for a Tor / Osa: press in to ~20 km first
@@ -231,6 +246,9 @@ const AUTO: AutoHint[] = [
   },
 ];
 
+/** The built-in rules that coach the selected weapon: they wait for the script's own step on it (scriptTeaches). */
+const WEAPON_RULES: ReadonlySet<string> = new Set(['aa', 'ag']);
+
 /** Built-in rule by id (allocation-free lookup; evaluated at 10 Hz). */
 function ruleById(id: string): AutoHint | null {
   for (let i = 0; i < AUTO.length; i++) if (AUTO[i].id === id) return AUTO[i];
@@ -239,6 +257,7 @@ function ruleById(id: string): AutoHint | null {
 
 /** Minimal launch-zone shape used by the hints (CombatLaunchZone carries rShoot too). */
 interface ZoneLike {
+  weapon: WeaponId;
   shoot: boolean;
   range: number;
   rMin: number;
@@ -369,6 +388,17 @@ export class HintSystem {
     return false;
   }
 
+  /**
+   * A scripted hint that names weapon `w` has yet to show: the lesson teaches that weapon at its own
+   * step, so the built-in hints on it wait for that (playtest r2 2.1-f: T06's 'Close in: fire the AARGM'
+   * showed at 1.3 s, before its 'Go LOW', and again at 2,950 ft, before its own AARGM step).
+   */
+  private scriptTeaches(w: WeaponId): boolean {
+    const name = WEAPON_INFO[w].short;
+    for (const h of this.s.script.hints ?? []) if (!this.scriptedDone.has(h.id) && h.text.includes(name)) return true;
+    return false;
+  }
+
   private tryAuto(p: AircraftEntity, alwaysOnly: boolean): boolean {
     const s = this.s;
     const t = s.time;
@@ -377,6 +407,7 @@ export class HintSystem {
       if (!alwaysOnly && rule.always) continue;
       if (!rule.always && (this.shows.get(rule.id) ?? 0) >= MAX_SHOWS) continue;
       if (t - (this.lastShown.get(rule.id) ?? -999) < (rule.cooldown ?? COOLDOWN)) continue;
+      if (WEAPON_RULES.has(rule.id) && this.scriptTeaches(p.selectedWeapon)) continue;
       const text = rule.test(p, s, this);
       if (!text) continue;
       this.shows.set(rule.id, (this.shows.get(rule.id) ?? 0) + 1);

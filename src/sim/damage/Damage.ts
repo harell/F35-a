@@ -241,6 +241,8 @@ export class DamageSystem {
       t.radarOn = false;
       t.trackedTargetId = null;
       size = SAM_SITE_DATA[t.type].explosion === 'huge' ? 'huge' : 'large';
+      // an air-defence boat goes up as spray, like the other boats (it laid a dust ring on the sea: r2 F10)
+      if (t.boat) surface = 'water';
     } else {
       t.speed = 0;
       const data = GROUND_TARGET_DATA[t.type];

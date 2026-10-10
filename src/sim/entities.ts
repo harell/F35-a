@@ -490,6 +490,27 @@ export class SamSiteEntity implements Entity {
    * this site: a training boat (t05) fires only inside its real envelope.
    */
   noHarass?: boolean;
+  /**
+   * The crew never shuts its radar down against an inbound anti-radiation missile (SamTypeData.armDiscipline
+   * is ignored): a range target, so the AARGM drill (t04) is passed by the rule it teaches.
+   */
+  noArmShutdown?: boolean;
+  /**
+   * Only the site's shoulder-launched heat-seekers (SamTypeData.manpads) fire: its radar SAM tracks but holds
+   * (t05's heat-seeker drill, which grades only those).
+   */
+  irOnly?: boolean;
+  /**
+   * A range boat: its shoulder-launched heat-seekers (SamTypeData.manpads) are restocked once all are spent and
+   * the last has ended, so a drill graded on them (t05's drill 3) always has another round to end it.
+   */
+  restock?: boolean;
+  /**
+   * A range boat: its shoulder-launched heat-seekers fire only inside this range (m), and only at a jet closing on
+   * it or crossing it, never at one flying away (a round fired up the tail of a jet passing 3 km off falls short of
+   * it, so a drill graded on those rounds would pass a pilot who never defends: t05's drill 3).
+   */
+  irReach?: number;
   /** Cease fire: the site tracks but launches nothing more (mission action 'hold_fire': a training boat whose drill is done). */
   holdFire?: boolean;
 

@@ -42,7 +42,7 @@
 .mm-item.is-rec { border-color: rgba(var(--green-rgb), 0.45); }
 .mm-onboard {
   position: absolute; z-index: 5; left: 0; right: 0; margin: 0 auto; bottom: max(14px, var(--pad-b));
-  width: min(520px, calc(100% - 28px)); box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  width: min(640px, calc(100% - 28px)); box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
   background: linear-gradient(180deg, rgba(10, 34, 26, 0.96), rgba(8, 20, 28, 0.96)); border: 1px solid rgba(var(--green-rgb), 0.5);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 26px rgba(var(--green-rgb), 0.15);
   animation: item-in 420ms var(--ease) 350ms both;
@@ -52,7 +52,14 @@
 .mo-k .ico { width: 14px; height: 14px; }
 .mo-t { font: 800 16px/1.2 var(--sans); letter-spacing: 0.06em; color: #eef8ff; }
 .mo-s { font: 400 12px/1.4 var(--sans); color: var(--dim); }
-.mo-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.mo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mo-skip { min-height: 32px; margin: -6px -8px -6px 0; padding: 0 10px; font-size: 11px; color: var(--dim); }
+.mo-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.mo-btns > .ui-btn { flex: 1 1 auto; }
+/* sightseeing: a clear second choice beside Start training (green, the card's colour), not a ghost (r2 2.1-k) */
+.mo-look { min-height: 48px; padding: 0 14px; letter-spacing: 0.1em; color: #dffbea; border-color: rgba(var(--green-rgb), 0.6); background: linear-gradient(180deg, rgba(var(--green-rgb), 0.2), rgba(var(--green-rgb), 0.06)); }
+.mo-look:hover { border-color: rgba(var(--green-rgb), 0.9); background-color: rgba(var(--green-rgb), 0.12); }
+.mo-look .ico { color: var(--green); }
 
 /* ───────── campaign: training nudge ───────── */
 .ml-nudge { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 2px 0 10px; border-color: rgba(var(--green-rgb), 0.4); }

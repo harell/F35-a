@@ -51,7 +51,7 @@ export function worldConfig(q: QualitySettings): WorldConfig {
     case 0:
       return { hfResolution: 1024, hdTerrain: false, aerial: 0, landUse: false, patchQuads: 6, lodRange: 2.4, anisotropy: 2, treeRadius: 1600, treeMax: Math.round(1500 * (d / 0.35)), houseRadius: 1500, houseMax: 1800 };
     case 1:
-      return { hfResolution: 1024, hdTerrain: false, aerial: q.aerialPhoto ? 2048 : 0, landUse: true, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 2400, houseMax: 3600 };
+      return { hfResolution: 1024, hdTerrain: false, aerial: q.aerialPhoto ? 2048 : 0, landUse: true, patchQuads: 12, lodRange: 2.6, anisotropy: 4, treeRadius: 2200, treeMax: Math.round(2500 * (d / 0.7)), houseRadius: 2400, houseMax: 6000 };
     default:
       return { hfResolution: 2048, hdTerrain: q.hdTerrain, aerial: q.aerialPhoto ? 4096 : 0, landUse: true, patchQuads: 16, lodRange: 2.6, anisotropy: 8, treeRadius: 3000, treeMax: Math.round(4500 * d), houseRadius: 3400, houseMax: 7500 };
   }
@@ -75,9 +75,12 @@ export function terrainStyle(_theater: TheaterId): TerrainStyle {
   return {
     rockColor: c(0x5f5a52), snowColor: c(0xf4f6fa), snowLine: 1e6, rockSlope: 0.42, outsideColor: c(0x6f9a46), fields: 1,
     // Auckland roofs: charcoal & grey corrugated iron, terracotta tiles, red-painted iron,
-    // off-white, a few muted greens. Lawns are a fresh NZ green, canopy a dark bush green.
+    // off-white, a few muted greens. Canopy a dark bush green. Lawns (and parks, pitches, the lots' gardens) a muted
+    // green, half way (linear green and blue) from a fresh lime 0x55803a to the aerial photo's lawns and a little less
+    // red (the far suburbs stay green, not khaki), so where the photo fades into the procedural suburbs and in the far
+    // field they don't read as lime paddocks (playtest r1 R11-3).
     roofs: six([0x3a3d40, 0x6e7074, 0x8a4a38, 0x7a2e26, 0xbdb9ae, 0x3f4d3c]),
-    garden: c(0x55803a), canopy: c(0x263f20),
+    garden: c(0x52724a), canopy: c(0x263f20),
     sand: c(0xd2bf92), blackSand: c(0x2f2d2b), shoreRock: c(0x3e3a35), blackSandX: -18_000,
     // Waiheke vineyards (Oneroa → Onetangi)
     vineyard: [27_500, -5_200, 8_500, 3_000],

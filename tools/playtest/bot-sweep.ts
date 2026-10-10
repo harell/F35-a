@@ -7,9 +7,11 @@
  *   npx vite-node tools/playtest/bot-sweep.ts -- [--missions=g01,g02|irgc|campaigns|training|all]
  *       [--diffs=recruit,pilot,veteran] [--seeds=3] [--maxT=900] [--jobs=4] [--json=out.json]
  *       [--loadout=sead_stealth] [--log] [--nojitter] [--park[=start|far] | --gunonly | --route=<name>]
+ *       [--reaction=<s>] [--nodefend]
  *
- * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run and a
- * win-rate table per mission × difficulty; --json writes every PlaythroughResult (minus the raw
+ * Defaults: every playable campaign mission and training, pilot, 3 seeds, all cores. Prints one line per run, a
+ * win-rate table per mission × difficulty and a threat table (enemy rounds at the jet, its lowest health, wins
+ * never in danger: is the mission a walkover?); --json writes every PlaythroughResult (minus the raw
  * MissionResult) for the playtest ledger. --jobs splits the runs over child processes.
  *   --loadout   fly this loadout instead of each mission's recommended one; missions that don't
  *               allow it are skipped (their cells read "skip" and the table says why)
@@ -23,11 +25,14 @@
  *   --park[=start|far]  park-and-wait probe instead of the bot: the jet stays at its start (or 35 km
  *               south-west, 13 km up), no input, no shot, kept unhurt and fuelled. Is the mission won,
  *               or an objective credited, by waiting?
- *   --gunonly   gun-only probe: the stores are emptied every step and the air-to-air bot presses on
- *               with the gun; rows count `gunRounds`, and a rounds table follows the win rates
- *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g03: straight, north,
+ *   --gunonly   gun-only probe: the stores are emptied every step and the jet presses on with the gun,
+ *               hunting the mission's air targets; rows count `gunRounds`, and a rounds table follows the win rates
+ *   --route=<name>  route probe (#198): fly one of the mission's ROUTE_PROBES (g02: sead; g03: straight, north,
  *               south, wide, high, golden, golden_north), then the bot attacks; `killall` attacks every
  *               SAM site first. "Is there a free way round?" and "does the intended way work?"
+ *   --reaction=<s>  the bot's reaction to a missile warning, air-to-air and SAM (MissionBotOptions.reaction,
+ *               default 0.8 s, and samReaction, default 0): a casual player's proxy is ~2.5 s
+ *   --nodefend  the bot doesn't defend against SAM rounds (a player who ignores the warning)
  *   (tests/missions-probes.ts; every row's `probe` says which ran: bot, park:start, park:far, gunonly, route:<name>,
  *   and with --log the event log starts with a PROBE line)
  * Mission ids include Instant Action (`ia_<mode>_auckland`, e.g. ia_strike_auckland): the id seeds
@@ -87,6 +92,8 @@ const log = 'log' in args;
 const jitter = !('nojitter' in args);
 /** --park / --gunonly (null: the plain mission bot). */
 const probe = parseProbe(args);
+/** --reaction / --nodefend: the bot flies slower or careless (a casual player's proxy); unset: the competent bot. */
+const bot = { ...(args.reaction ? { reaction: Number(args.reaction), samReaction: Number(args.reaction) } : {}), ...('nodefend' in args ? { defend: false } : {}) };
 for (const id of missions) if (!missionById(id)) throw new Error(`no mission ${id}`);
 /** Missions that don't allow the --loadout (skipped). */
 const skipped = loadout ? missions.filter((id) => !missionById(id)!.allowedLoadouts.includes(loadout)) : [];
@@ -111,7 +118,7 @@ if (args.shard) {
       terrains.set(r.mission, t);
     }
     const t0 = Date.now();
-    const { result: _, probe: pr, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT, loadout, log, jitter, probe });
+    const { result: _, probe: pr, ...rest } = runPlaythrough(r.mission, r.diff, r.seed, t, { maxT, loadout, log, jitter, probe, bot });
     const dead = log ? longestDeadStretch(rest.events, rest.t) : undefined;
     const row: Row = { ...rest, probe: probeLabel(probe), gunRounds: pr?.gunRounds, loadout: loadout ?? missionById(r.mission)!.recommendedLoadout, wallMs: Date.now() - t0, dead };
     process.stdout.write(JSON.stringify(row) + '\n');
@@ -134,13 +141,13 @@ if (args.shard) {
           if (!line.startsWith('{')) continue;
           const r = JSON.parse(line) as Row;
           rows.push(r);
-          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
+          console.log(`${r.state === 'success' ? 'WIN ' : r.state === 'failed' ? 'LOSS' : 'HUNG'} ${r.mission.padEnd(5)} ${r.diff.padEnd(8)} seed ${r.seed}  t=${Math.round(r.t)}s  kills=${r.playerKills}  rounds=${r.threat.rounds} minhp=${r.threat.minHp}%  ${r.reason ?? ''}  (${(r.wallMs / 1000).toFixed(1)} s)`);
         }
       });
       return new Promise<void>((resolve) => child.on('close', () => resolve()));
     }),
   );
-  const flags = [probe ? `probe ${probeLabel(probe)}` : '', loadout ? `loadout ${loadout}` : '', log ? 'log' : '', jitter ? '' : 'no jitter'].filter(Boolean).join(', ');
+  const flags = [probe ? `probe ${probeLabel(probe)}` : '', loadout ? `loadout ${loadout}` : '', args.reaction ? `reaction ${args.reaction} s` : '', 'nodefend' in args ? 'no SAM defence' : '', log ? 'log' : '', jitter ? '' : 'no jitter'].filter(Boolean).join(', ');
   console.log(`\nwin rate (${seeds} seeds, maxT ${maxT} s${flags ? `, ${flags}` : ''}), ${rows.length}/${runs.length} runs in ${((Date.now() - t0) / 1000).toFixed(0)} s on ${n} jobs`);
   const w = Math.max(9, ...missions.map((m) => m.length + 2));
   console.log(`${'mission'.padEnd(w)}${diffs.map((d) => d.padEnd(9)).join('')}`);
@@ -153,6 +160,20 @@ if (args.shard) {
     console.log(`${m.padEnd(w)}${cells.join('')}`);
   }
   if (skipped.length) console.log(`skip = ${loadout} is not an allowed loadout there (${skipped.join(', ')}); those missions were not flown`);
+  // jeopardy: was the jet ever in danger? (playtest 2026-10-10: Pilot wins nobody shot at read as walkovers)
+  console.log(`\nthreat (enemy rounds at the jet per run, average · lowest health % · wins never shot at or hit)`);
+  for (const m of missions) {
+    if (skipped.includes(m)) continue;
+    const cells = diffs.map((d) => {
+      const rs = rows.filter((r) => r.mission === m && r.diff === d);
+      if (!rs.length) return '-'.padEnd(17);
+      const avg = rs.reduce((n, r) => n + r.threat.rounds, 0) / rs.length;
+      const low = Math.min(...rs.map((r) => r.threat.minHp));
+      const calm = rs.filter((r) => r.state === 'success' && r.threat.rounds === 0 && r.threat.minHp === 100).length;
+      return `${avg.toFixed(1)} · ${low}% · ${calm}`.padEnd(17);
+    });
+    console.log(`${m.padEnd(w)}${cells.join('')}`);
+  }
   if (probe?.kind === 'gunonly') {
     // gun-only: did the fights reach the gun? (rounds fired, and runs that fired any, per cell)
     console.log(`\ngun rounds fired (total / runs that fired)`);

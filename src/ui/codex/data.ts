@@ -10,7 +10,7 @@
  *
  * Pure data and functions (no DOM): tests/ui-codex.test.ts checks every rating against the computed hits.
  */
-import { LOADOUTS } from '../../core/data';
+import { AARGM_RULE, LOADOUTS } from '../../core/data';
 import type { WeaponId } from '../../core/types';
 import { WEAPON_BREVITY, WEAPON_HUD } from '../../hud/hmd/format';
 import { AIRCRAFT_HEALTH, GROUND_TARGET_DATA, SAM_SITE_DATA } from '../../sim/damage/tables';
@@ -157,7 +157,7 @@ function buildWeapons(): WeaponEntry[] {
       line: 'Your long-range air-to-air missile. One hit kills any fighter. It does nothing to ground targets.',
       inspect: 'Clipped mid-body fins let four fit in the internal bays. Yellow band: live warhead. Brown band: live rocket motor.',
       needs: 'Needs a radar track on an enemy aircraft. A full lock is optional: without one it fires as a TWS shot (see Terms).',
-      hud: [[`${hud('aim120')} 4`, 'Selected, 4 left'], ['LOCKING → LOCK', 'Your radar lock is building, then held'], ['SHOOT', 'Good shot: fire now'], [brev('aim120'), 'Flashes as it launches'], ['NO TARGET · OUT OF RANGE · MIN RANGE', 'Why it didn\'t fire']],
+      hud: [[`${hud('aim120')} 4`, 'Selected, 4 left'], ['LOCKING → LOCK', 'Your radar lock is building, then held'], ['SHOOT', 'Good shot: fire now'], [brev('aim120'), 'Flashes as it launches'], [`${hud('aim120')} AWAY`, 'Your missile is on its way to the boxed target: no need for a second'], ['NO TARGET · OUT OF RANGE · MIN RANGE', 'Why it didn\'t fire']],
       how: ['Select AMRAAM. The radar switches to search mode (74 km).', 'Tap the target box to lock. The lock builds while the target is within ±30° of your nose.', 'Fire on SHOOT. Inside 10 km it rarely misses, and once it launches you can turn away.'],
       avoid: ['It does nothing to ground targets.', 'A fighter that turns 90° to it and drops chaff can make it miss.'],
       terms: [T_TWS, ['Lock', 'Your radar holds one target and feeds the missile the best course updates. The target gets a SPIKE warning.']],
@@ -202,7 +202,7 @@ function buildWeapons(): WeaponEntry[] {
       inspect: 'Long body strakes and a big rocket motor. A passive radar receiver in the nose, plus a second seeker for the last 3 km.',
       needs: 'Needs a radar that\'s switched on (a MUD SPIKE) within 45° of your nose, or a designated radar site.',
       hud: [[`${hud('aargm')} 2`, 'Selected, 2 left'], ['MUD SPIKE 6', 'A ground radar is on: a valid target'], [brev('aargm'), 'Flashes as it launches'], ['MIN RANGE · NO TARGET', `Inside ${km(MUNITIONS.aargm.minRange)} km, or no radar switched on`]],
-      how: ['Wait for a MUD SPIKE. That radar is your target.', 'Designate it, or point within 45° of it and fire.', 'Fire from outside the SAM\'s reach: medium SAMs 20 km, short-range SAMs 12 km.'],
+      how: ['Wait for a MUD SPIKE. That radar is your target.', 'Designate it, or point within 45° of it and fire.', `${AARGM_RULE[0].toUpperCase()}${AARGM_RULE.slice(1)}: fired from far out, the crew switches off and is back on the air seconds later.`],
       avoid: ['Crews switch the radar off when it\'s coming. It then gets one chance to find the site.', 'It can\'t lock anything without a radar.'],
       terms: [['MUD SPIKE', 'The warning that a ground radar (a SAM site or anti-aircraft gun) is tracking you. That radar is what the AARGM homes on.']],
       range: munitionRange('aargm', 55),
@@ -357,7 +357,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
     kind: 'warning', id: 'missile', cat: 'thr', name: 'MISSILE', chip: 'MISSILE 6s', level: 'red', sound: 'missile', voice: 'b_missile', voiceText: 'Missile',
     line: 'A missile is coming at you, any type, within 15 km. Act now.',
     trigger: 'The jet\'s missile approach warning sees a missile heading for you. A red ring appears around your flight path marker, with an arrow per missile (orange means heat-seeker) and 1–3 chevrons as it closes. The seconds to impact count down.',
-    how: ['A SAM\'s radar missile: turn 90° to it (beam it) and press CMS every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it is too late. Running away doesn\'t: the missile is faster.', 'A SAM\'s heat-seeker (orange arrow; the air-defence boats): the same hard turn across it, afterburner off, CMS late, in the last 3 s. Turning into it makes it worse.', 'A fighter\'s missile flies longer: beam it and dive, chaff late; against its heat-seeker, flares and a hard break into it.', 'Three chevrons means under 4 s to impact.'],
+    how: ['A SAM\'s radar missile: turn 90° to it (beam it) and press CMS every few seconds from about 6 s to impact. Flying low before the shot helps; diving after it is too late. Running away doesn\'t: the missile is faster.', 'A heat-seeker (orange arrow; the air-defence boats, a fighter\'s short-range missile): the same hard turn across it, afterburner off, CMS late, in the last 3 s. Turning into it makes it worse.', 'A fighter\'s radar missile flies longer: beam it and dive, chaff late.', 'Three chevrons means under 4 s to impact.'],
     notes: ['This is the only warning for shoulder-fired missiles and for long-range fighter missiles in midcourse.', 'The tone sweeps down, and it speeds up as the missile gets closer.'],
   },
   {
@@ -447,7 +447,7 @@ export const CODEX_WARNINGS: WarningEntry[] = [
   {
     kind: 'warning', id: 'cues', cat: 'cue', name: 'SHOOT · IN RANGE · REL · CCIP', chip: 'SHOOT', level: 'hud', sound: 'none',
     line: 'The HUD tells you when a shot or release will work.',
-    trigger: 'SHOOT blinks when an air-to-air shot is good. For bombs: REL n counts seconds to release, IN RANGE means release now, STEER LEFT/RIGHT corrects your line, and BOMB AWAY confirms the release. With nothing designated, CCIP shows where a bomb would land, and PICKLE means drop now.',
+    trigger: 'SHOOT blinks when an air-to-air shot is good; while your missile is on its way to the target it reads AMRAAM AWAY (9X AWAY, AARGM AWAY) instead, and with an enemy missile under 10 s from you it waits: defend first. For bombs: REL n counts seconds to release, IN RANGE means release now, STEER LEFT/RIGHT corrects your line, and BOMB AWAY confirms the release. With nothing designated, CCIP shows where a bomb would land, and PICKLE means drop now.',
     how: ['Fire on SHOOT. Release on IN RANGE.', 'Follow STEER until it clears.'],
     notes: ['After each shot the brevity call flashes: FOX 3, FOX 2, RIFLE, MAGNUM, GUNS.'],
   },

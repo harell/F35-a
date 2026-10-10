@@ -29,11 +29,15 @@ describe('applyDamage — difficulty scaling', () => {
     expect(tw.of('player:down')).toEqual([{ reason: 'shot' }]);
   });
 
-  it('pilot: first missile hit survivable, second kills', () => {
+  it('pilot: first missile hit survivable, a second in the same salvo does nothing, the next salvo kills', () => {
     const { tw, player, enemy } = setup('pilot');
     tw.world.applyDamage(player, 150, enemy.id, 'm_3m9');
     expect(player.alive).toBe(true);
     expect(player.health).toBeLessThan(80);
+    const h1 = player.health;
+    tw.world.applyDamage(player, 150, enemy.id, 'm_3m9');
+    expect(player.health).toBe(h1);
+    run(tw.world, 3.5);
     tw.world.applyDamage(player, 150, enemy.id, 'm_3m9');
     expect(player.alive).toBe(false);
   });

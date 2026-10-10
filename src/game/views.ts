@@ -1,9 +1,10 @@
 /**
  * F35-A — the view a sortie starts in and returns to (after the padlock or missile camera).
  *
- * Free flight (A Stroll in the Park, #113) starts in chase view: at sightseeing heights the cockpit's
- * coaming and PCD hide the city below the horizon. A view the player picks during a free flight
- * (cockpit, HUD or chase) is kept for the next free flight in the same game session.
+ * Missions start in the settings' default view (chase for a new player, Settings.defaultView). Free
+ * flight (A Stroll in the Park, #113) starts in chase view whatever that setting says: at sightseeing
+ * heights the cockpit's coaming and PCD hide the city below the horizon. A view the player picks during
+ * a free flight (cockpit, HUD or chase) is kept for the next free flight in the same game session.
  */
 import type { CameraMode, Settings } from '../core/types';
 

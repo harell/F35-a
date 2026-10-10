@@ -279,6 +279,10 @@ export interface IntelMarker {
   z: number;
   /** Threat ring radius (m) for SAMs. */
   radius?: number;
+  /** Only there on this difficulty and harder (the script item's minDifficulty): intelFor filters by it. */
+  minDifficulty?: Difficulty;
+  /** Not there at the start: it comes with a later wave (g02's second AD boat escorts wave 2). */
+  later?: boolean;
 }
 
 export interface MissionDef {
@@ -355,6 +359,11 @@ export interface ObjectiveStatus {
   progress?: { done: number; total: number };
   /** The hostile group a protect objective counts on its HUD line ("STRIKERS 3"): its jets left in the fight. */
   threat?: { label: string; left: number };
+  /**
+   * Complete without being passed: the coach moved the player on ('missile_drill' `moveOn`). It earns no
+   * bonus, the debrief names it, and a lesson with one is not recorded as flown (progress.ts applyResult).
+   */
+  skipped?: boolean;
 }
 
 export interface MissionResult {

@@ -11,7 +11,8 @@ import { silhouetteSvg } from '../art/planform';
 import { escapeHtml, h } from '../dom';
 import { formatScore, gradeTone, missionState, pad2, suggestedMissionIndex } from '../format';
 import type { UiHost } from '../host';
-import { lessonsLeft } from '../career';
+import { lessonsLeft, suggestedLesson } from '../career';
+import { missionForLesson } from '../../missions';
 import { screenHeader } from '../widgets';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered', overcast: 'Overcast' } as const;
@@ -45,10 +46,20 @@ function card(m: MissionDef, progress: CampaignProgress, onPick: (m: MissionDef,
     `<div class="mc-tod">${icon(m.timeOfDay)}</div></div>` +
     `<div class="mc-body"><div class="mc-title">${escapeHtml(m.title)}</div>` +
     `<div class="mc-sub">${escapeHtml(m.subtitle)}</div>` +
-    `<div class="mc-meta"><span>${icon(m.timeOfDay)}${TIME_OF_DAY_INFO[m.timeOfDay].label}</span><span>${icon(m.weather)}${WEATHER_LABEL[m.weather]}</span></div></div>` +
+    `<div class="mc-meta">${meta(m)}</div></div>` +
     `<div class="mc-foot">${foot}</div>`;
   b.addEventListener('click', () => onPick(m, b));
   return b;
+}
+
+/**
+ * A card's meta line: a lesson names the campaign mission it prepares for (playtest 2026-10-10, 1.4-j:
+ * the list didn't say which lessons go with which mission); a mission its time of day and weather.
+ */
+function meta(m: MissionDef): string {
+  const forMission = m.kind === 'training' ? missionForLesson(m.id) : null;
+  if (forMission) return `<span>${icon('flag')}For ${escapeHtml(forMission.title)}</span>`;
+  return `<span>${icon(m.timeOfDay)}${TIME_OF_DAY_INFO[m.timeOfDay].label}</span><span>${icon(m.weather)}${WEATHER_LABEL[m.weather]}</span>`;
 }
 
 function listScreen(
@@ -107,7 +118,9 @@ function listScreen(
       g.push(m);
       groups.set(m.theater, g);
     }
-    const suggested = missions[suggestedMissionIndex([...missions].sort((a, b) => a.index - b.index), progress)];
+    // training: the next campaign mission's own next lesson (suggestedLesson), else the first unflown one
+    const wanted = kind === 'training' ? suggestedLesson(progress) : null;
+    const suggested = wanted ?? missions[suggestedMissionIndex([...missions].sort((a, b) => a.index - b.index), progress)];
     let suggestedEl: HTMLElement | null = null;
     const onPick = (m: MissionDef, cardEl: HTMLElement) => {
       if (missionState(m, progress) === 'locked') {

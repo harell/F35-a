@@ -157,7 +157,7 @@ describe('two-wave MiG CAP lethality ladder (sweepFixture(), competent scripted 
 });
 
 describe('AI behaviour fixes', () => {
-  it('unarmed training drones keep flying their task instead of bugging out supersonic (t02)', () => {
+  it('an unarmed target drone keeps flying its task instead of bugging out supersonic (a MiG-29 with no weapons)', () => {
     const { world } = makeAiWorld('pilot', undefined, 2);
     const drone = world.spawnAircraft({
       type: 'mig29',

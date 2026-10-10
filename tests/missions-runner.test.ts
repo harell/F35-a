@@ -267,11 +267,14 @@ describe('MissionRunner: setup', () => {
     expect(pop.known).toBe(false);
   });
 
-  it('strips unarmed training drones', () => {
-    const h = harness(byId('t02'));
-    const drone = h.world.aircraft.find((a) => a.groupId === 'drone1')!;
-    expect(drone.stores.every((s) => s.count === 0)).toBe(true);
-    expect(drone.gunAmmo).toBe(0);
+  it('strips an unarmed group (Kiwi flight carries a strike loadout, flies with nothing)', () => {
+    const h = harness(PROTECT_FIXTURE);
+    const kiwi = h.world.aircraft.filter((a) => a.groupId === 'kiwi');
+    expect(kiwi).toHaveLength(2);
+    for (const a of kiwi) {
+      expect(a.stores.every((s) => s.count === 0)).toBe(true);
+      expect(a.gunAmmo).toBe(0);
+    }
   });
 });
 

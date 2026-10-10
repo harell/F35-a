@@ -12,6 +12,7 @@ import type { MissionDef } from '../src/core/contracts';
 import { mission, site } from '../src/missions/content/common';
 import { validateMission } from '../src/missions/validate';
 import { COACH_TEXT, drillRecords, isDrillDefeat, type MissileRecord } from '../src/missions/runtime/defenceCoach';
+import { DRILL_MOVE_ON, skippedDrillsText } from '../src/missions/runtime/objectives';
 import type { MissionState } from '../src/missions/runtime/state';
 import { LOADOUTS } from '../src/core/data';
 import { harness, type Harness } from './missions-helpers';
@@ -20,7 +21,7 @@ import { FlatTerrain, steerToward } from './combat-helpers';
 /** Out in the Gulf (the world origin is the Sky Tower: rounds fired from there hit it). */
 const BOAT = { x: 8000, z: -20000 };
 
-function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: boolean } = {}): MissionDef {
+function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: boolean; irOnly?: boolean; restock?: boolean } = {}): MissionDef {
   return mission({
     id: 'fx_drill',
     kind: 'training',
@@ -39,7 +40,7 @@ function drillFixture(opts: { practice?: boolean; coach?: boolean; noHarass?: bo
       awacs: { silent: true },
       groups: [],
       ground: [],
-      sams: [site('boat', 'boats', 'ad_boat', BOAT, opts.noHarass ? { noHarass: true } : {})],
+      sams: [site('boat', 'boats', 'ad_boat', BOAT, { ...(opts.noHarass ? { noHarass: true } : {}), ...(opts.irOnly ? { irOnly: true } : {}), ...(opts.restock ? { restock: true } : {}) })],
       objectives: [
         { id: 'o_drill', kind: 'missile_drill', groups: ['boats'], defeat: 2, label: 'Defeat two missiles', primary: false },
         { id: 'o_stay', kind: 'survive', seconds: 900, label: 'Keep flying', primary: true },
@@ -180,6 +181,48 @@ describe('drill bookkeeping', () => {
     for (const o of ['short', 'void', 'hit'] as const) expect(isDrillDefeat(rec({ outcome: o }))).toBe(false);
   });
 
+  it('moveOn: after that many missiles that did not count, the coach moves the player on and the drill completes', () => {
+    const def = drillFixture({ noHarass: true });
+    const o = def.script.objectives[0];
+    if (o.kind !== 'missile_drill') throw new Error('fixture');
+    // the lesson's only primary, as in t05: the mission ends when the drill does
+    Object.assign(o, { inARow: true, maxAgl: 200, moveOn: 4, primary: true });
+    def.script.objectives.splice(1);
+    const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
+    h.run(1);
+    const log = (h.runner as unknown as { s: MissionState }).s.missileLog;
+    const stateOf = () => h.runner.objectives.find((x) => x.id === 'o_drill')!.state;
+    // three hits and a defeat too high to count: not yet; a short round counts for nothing
+    log.push(rec({ group: 'boats', missileId: 101, launchT: 1, endT: 2, outcome: 'hit' }), rec({ group: 'boats', missileId: 102, launchT: 1, endT: 2, outcome: 'chaff', agl: 2000 }));
+    log.push(rec({ group: 'boats', missileId: 103, launchT: 1, endT: 2, outcome: 'hit' }), rec({ group: 'boats', missileId: 104, launchT: 1, endT: 2, outcome: 'short' }));
+    h.run(0.5);
+    expect(stateOf()).toBe('active');
+    log.push(rec({ group: 'boats', missileId: 105, launchT: 1, endT: 2, outcome: 'hit' }));
+    h.run(0.5);
+    expect(stateOf()).toBe('complete');
+    expect(h.of('hud:message').map((m) => m.text)).toContain('DRILL SKIPPED — MOVING ON');
+    h.run(20);
+    const radio = h.of('radio').map((r) => r.text).join(' | ');
+    expect(radio).toContain(DRILL_MOVE_ON);
+    expect(radio).not.toMatch(/Objective complete/);
+    // marked skipped (r2, 2.3-h): the lesson ends saying so, not "All objectives complete"
+    expect(h.runner.objectives[0].skipped).toBe(true);
+    expect(h.runner.state).toBe('success');
+    const r = h.runner.result(h.world);
+    expect(r.reason).toBe('Drill 1 skipped: fly Drill fixture again');
+    expect(r.objectives[0].skipped).toBe(true);
+    expect(radio).toContain('Drill 1 skipped: fly Drill fixture again.');
+  });
+
+  it('skippedDrillsText names the skipped drills by their place in the lesson', () => {
+    const o = (...skipped: boolean[]) => skipped.map((s) => ({ skipped: s }));
+    expect(skippedDrillsText(o(false, false, false), 'Gulf Defence')).toBeNull();
+    expect(skippedDrillsText(o(false, true, false), 'Gulf Defence')).toBe('Drill 2 skipped: fly Gulf Defence again');
+    expect(skippedDrillsText(o(true, true, false), 'Gulf Defence')).toBe('Drills 1–2 skipped: fly Gulf Defence again');
+    expect(skippedDrillsText(o(true, false, true), 'Gulf Defence')).toBe('Drills 1 and 3 skipped: fly Gulf Defence again');
+    expect(skippedDrillsText(o(true, true, true), 'Gulf Defence')).toBe('Drills 1–3 skipped: fly Gulf Defence again');
+  });
+
   it('refill_cms tops the dispensers up to the loadout', () => {
     const def = drillFixture();
     def.script.triggers.push({ id: 't', when: { kind: 'time', t: 1 }, actions: [{ kind: 'refill_cms' }] });
@@ -190,6 +233,35 @@ describe('drill bookkeeping', () => {
     h.run(1.5);
     expect(p.chaff).toBe(LOADOUTS.a2a_stealth.chaff);
     expect(p.flares).toBe(LOADOUTS.a2a_stealth.flares);
+  });
+
+  it('irOnly + restock: a range boat fires only heat-seekers, and more than its four (t05 drill 3 never runs dry)', { timeout: 60_000 }, () => {
+    const shots = (restock: boolean): Record<string, number> => {
+      const def = drillFixture({ noHarass: true, irOnly: true, restock });
+      def.player = { ...def.player, x: BOAT.x + 2_000, z: BOAT.z, altitude: 1_500, heading: 0 };
+      const h = harness(def, 'pilot', undefined, new FlatTerrain(0));
+      const p = h.world.player!;
+      const n: Record<string, number> = {};
+      h.events.on('munition:launch', (e) => {
+        if (e.targetId === p.id) n[e.missile.def.id] = (n[e.missile.def.id] ?? 0) + 1;
+      });
+      // round and round the boat 2 km off at 1,500 m: inside its heat-seekers' reach (on the beam) the whole time
+      const v = new Vector3();
+      h.run(120, () => {
+        const dx = p.position.x - BOAT.x;
+        const dz = p.position.z - BOAT.z;
+        const d = Math.hypot(dx, dz) || 1;
+        v.set(dz / d - (dx / d) * (d - 2_000) / 1_000, (1_500 - p.position.y) / 2000, -dx / d - (dz / d) * (d - 2_000) / 1_000);
+        steerToward(p, v, 6, 1 / 60, 230);
+      });
+      return n;
+    };
+    const once = shots(false);
+    expect(once.m_9m330 ?? 0).toBe(0);
+    expect(once.m_igla).toBe(4);
+    const restocked = shots(true);
+    expect(restocked.m_9m330 ?? 0).toBe(0);
+    expect(restocked.m_igla).toBeGreaterThan(4);
   });
 
   it('noHarass: a boat that has tracked the jet fires no long shots past its 12 km envelope (Pilot)', { timeout: 60_000 }, () => {

@@ -449,7 +449,8 @@ describe('air-defence boat: close-in cue (#115)', { timeout: 60_000 }, () => {
   });
 
   it('harassing (DifficultyParams.adBoatHarass): an open bay out to 24 km × the strength is tracked, and the boat fires past its 12 km envelope', () => {
-    // the same 13 km release that is safe above now draws a track and a missile (a nuisance shot: it cannot reach)
+    // the same 13 km release that is safe above now draws a track and a missile (a long shot: it falls short of a
+    // jet that turns away, below)
     const near = cue(16_000, { bay: true, harass: 1, seconds: 20 });
     expect(near.trackedAt).toBeGreaterThan(0);
     expect(near.fired).toBe(true);
@@ -458,6 +459,55 @@ describe('air-defence boat: close-in cue (#115)', { timeout: 60_000 }, () => {
     expect(cue(26_000, { bay: true, harass: 1, seconds: 20 }).fired).toBe(false);
     // off (0) it is the plain cue again
     expect(cue(16_000, { bay: true, harass: 0, seconds: 20 }).trackedAt).toBe(-1);
+  });
+
+  /**
+   * Pilot: the boat cues on the open bay from 21.6 km and fires out to 18 km. A jet 4 km up at 250 m/s, bay open,
+   * never defending, flown by hand from 16 km out (the flight model alone would wander): straight on at the boat,
+   * or breaking away (a 180° turn at 20°/s) `breakAfter` s after the first shot. How each long shot (fired from
+   * beyond the 10.8 km envelope) ended, with its launch range.
+   */
+  function longShots(breakAfter: number | null): { range: number; end: string }[] {
+    const w = createSimWorld({ terrain: new SeaTerrain(-20), difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(3) });
+    const ad = w.spawnSam({ type: 'ad_boat', team: 'red', position: new Vector3(0, 0, 0), known: true, boat: {} });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(0, 4_000, 16_000), heading: 0, speed: 250, loadout: 'a2a_stealth' });
+    const envelope = SAM_DATA.ad_boat.engageMax * DIFFICULTIES.pilot.samRangeScale;
+    const long = new Map<number, { range: number; end: string }>();
+    let firstShot = -1;
+    w.events.on('munition:launch', (e) => {
+      const range = p.position.distanceTo(ad.position);
+      if (e.shooter !== ad || range <= envelope) return;
+      long.set(e.missile.id, { range: Math.round(range), end: 'flying' });
+      if (firstShot < 0) firstShot = w.time;
+    });
+    w.events.on('munition:end', (e) => {
+      const shot = long.get(e.missile.id);
+      if (shot) shot.end = e.reason;
+    });
+    let hdg = Math.PI; // towards the boat (-z)
+    const at = p.position.clone();
+    const vel = new Vector3();
+    run(w, 40, () => {
+      if (breakAfter !== null && firstShot >= 0 && w.time > firstShot + breakAfter) hdg = Math.max(0, hdg - ((20 * Math.PI) / 180) * DT);
+      vel.set(Math.sin(hdg) * 250, 0, Math.cos(hdg) * 250);
+      at.addScaledVector(vel, DT);
+      p.position.copy(at);
+      p.velocity.copy(vel);
+      p.bayDoors = 1;
+      p.health = p.maxHealth;
+    });
+    return [...long.values()];
+  }
+
+  it('a harassing long shot catches a jet that flies straight on, and falls short of one that breaks away (playtest r2, 2.3-f)', () => {
+    // what g02's briefing tells the player. The bot's egress after its release is such a break, so on Pilot a
+    // stand-off release costs nothing but the turn (bot-sweep --nodefend: untouched)
+    const on = longShots(null);
+    expect(on.length, JSON.stringify(on)).toBeGreaterThan(0);
+    expect(on.some((s) => s.end === 'hit' || s.end === 'proximity'), JSON.stringify(on)).toBe(true);
+    const away = longShots(3);
+    expect(away.length, JSON.stringify(away)).toBeGreaterThan(0);
+    expect(away.some((s) => s.end === 'hit' || s.end === 'proximity'), JSON.stringify(away)).toBe(false);
   });
 });
 

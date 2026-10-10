@@ -15,7 +15,8 @@
  *    wharf a ship is moored at) blocks part of the circle, the camera swings to and fro over the
  *    widest stretch of open water instead of flying through the city.
  *  - the pod (EOTS) view of a ground target / SAM site (#199, podCamPose): on the line of sight from the
- *    player's jet, looking along it, at the distance that frames the zoom step (core/pod.ts POD_ZOOM).
+ *    player's jet, looking down it from a stand-off up the line (POD_STANDOFF, or the jet when it is
+ *    closer), with the lens narrowed to frame the zoom step (core/pod.ts POD_ZOOM).
  *
  * Small ground targets (a radius well under a metre) are framed size-aware: closer than the usual 16 m
  * and looked at at their own height (groundMinFraming, groundLookY).
@@ -293,8 +294,26 @@ export function targetCamPose(
 
 /* ───────────────────────── Pod (EOTS) shot (#199) ───────────────────────── */
 
-/** The pod camera keeps at least this far above the surface (m): it frames ~2 m of ground at ZOOM. */
+/** The pod camera keeps at least this far above the surface (m). */
 export const POD_MIN_AGL = 0.8;
+
+/**
+ * The pod camera sits at least this far up the line of sight from the target (m), or at the jet when
+ * it is closer, and podFov narrows the lens to the zoom step: it looks down at the target from the
+ * jet's side as the pod does, clear of the ground round the target. Framing ZOOM's ~1 m from its own
+ * distance (3 m out, 0.3 m up on a 6° line) put the camera in the grass, and the 0.38 m g03 stoat
+ * never showed (playtest r1 1.2-d). Inside the stoat's draw range (300 m on low quality, the model's
+ * farScale) so the pass still draws it.
+ */
+export const POD_STANDOFF = 200;
+
+/**
+ * The pod pass draws this far past the target at most (m), whatever the quality preset: its narrow
+ * view ends on the ground just behind the target, so terrain patches and models further out are
+ * culled instead of drawn for a few pixels (the pass cost almost a whole main pass, r1 1.2-d); the
+ * haze reaches the horizon colour at the far plane (targetCamFar keeps nearer ground in the frame).
+ */
+export const POD_RANGE = 2_000;
 
 /**
  * Camera distance (m) at which the target camera's vertical field of view shows `span` metres top to
@@ -318,18 +337,22 @@ export function podFov(span: number, dist: number): number {
   return Math.min(TARGET_CAM_FOV, (2 * Math.atan(span / (2 * dist)) * 180) / Math.PI);
 }
 
-/** Look-at height (m above the entity origin) of a pod shot: the middle of the vehicle / site. */
+/**
+ * Look-at height (m above the entity origin) of a pod shot: the middle of the vehicle / site; for an
+ * animal under a metre across (g03's stoat, t07's rats: a 0.2 m radius, a body ~0.1 m tall) 0.3 of its
+ * radius, so at ZOOM its body sits in the crosshair's gap instead of under the lower arm.
+ */
 export function podLookY(t: CamTarget): number {
   if (t.kind === 'sam') return SAM_FRAMING[t.type as SamType]?.lookY ?? 2.5;
-  return groundLookY(t.radius);
+  return t.radius < 1 ? t.radius * 0.3 : groundLookY(t.radius);
 }
 
 /**
  * Pod (EOTS) shot of a ground target / SAM site: on the line of sight from the player's eye to the
- * target, looking along it as the pod does, at the distance that frames `span` metres in the target
- * camera's FOV (podDistance: the zoom step) — but outside the target (POD_CLEAR_K × its radius: a
- * hangar framed 2 m across would put the camera inside it; podFov narrows the lens to match) and
- * never further out than the jet itself. Level horizon; straight down, north is up.
+ * target, looking along it as the pod does, POD_STANDOFF up the line (further for a zoom step whose
+ * span needs more: podDistance; and outside a big target, POD_CLEAR_K × its radius) but never
+ * further out than the jet itself. podFov narrows the lens to frame the step from there. Level
+ * horizon; straight down, north is up.
  * @param eye  the player's jet
  * @param span the zoom step's field (m top to bottom, core/pod.ts POD_ZOOM)
  */
@@ -339,7 +362,7 @@ export function podCamPose(t: CamTarget, eye: { x: number; y: number; z: number 
   const slant = _fwd.length();
   if (slant < 1e-3) _fwd.set(0, 1, 0);
   else _fwd.multiplyScalar(1 / slant);
-  const d = Math.min(Math.max(podDistance(span), t.radius * POD_CLEAR_K), Math.max(1, slant * 0.95));
+  const d = Math.min(Math.max(POD_STANDOFF, podDistance(span), t.radius * POD_CLEAR_K), Math.max(1, slant * 0.95));
   out.position.copy(out.look).addScaledVector(_fwd, d);
   if (surfaceAt) {
     const floor = surfaceAt(out.position.x, out.position.z) + POD_MIN_AGL;

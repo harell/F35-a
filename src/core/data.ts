@@ -80,7 +80,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
   pilot: {
     id: 'pilot',
     label: 'Pilot',
-    description: 'Balanced. Competent enemies and dangerous SAMs — see them first, shoot first, defend every missile. No Auto-GCAS: the ground is yours to hit.',
+    description: 'Balanced. Competent enemies and dangerous SAMs — see them first, shoot first, defend every missile. Two missile hits to kill (a salvo counts as one). No Auto-GCAS: the ground is yours to hit.',
     playerDamageScale: 0.65,
     aiSkill: 0.5,
     aiReactionTime: 2.0,
@@ -96,6 +96,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyParams> = {
     enemyCountScale: 1,
     scoreMultiplier: 1,
     playerMissileHitsToKill: 2,
+    // a salvo is one hit here too (playtest 2026-10-10, 1.3-e): an AD boat's pair 2 s apart was both of
+    // Pilot's hits at once, the bot's only losses in g02 and most of g03's
+    playerMissileHitGrace: 3,
     fuelBurnScale: 0.8,
     adBoatHarass: 1,
   },
@@ -206,7 +209,10 @@ export const DEFAULT_SETTINGS: Settings = {
   hudColor: 'green',
   fov: 60,
   showFps: false,
-  defaultView: 'cockpit',
+  // new players start in the chase view, the city in sight below the nose (playtest r1 1.2-c): the
+  // cockpit's panel takes the bottom third of the screen. The cockpit is one tap away on CAM, and a
+  // saved choice is kept (loadSettings merges the saved object over these).
+  defaultView: 'chase',
   targetCam: true,
   missileCam: 'dynamic',
   hdTerrain: true,
@@ -302,26 +308,6 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
-  // t07's loadout (Small Targets): both bombs side by side, so the lesson is which one to drop where.
-  // Four StormBreakers on a BRU-61 in one bay and a JDAM in the other, two more JDAMs on the wing
-  // pylons (nothing shoots back over Herne Bay, so the pylons' stealth cost doesn't matter). Offered
-  // only where a mission lists it.
-  strike_mixed: {
-    id: 'strike_mixed',
-    name: 'Mixed Strike',
-    description: '4× GBU-53/B StormBreaker + 1× GBU-31 JDAM internal, 2× GBU-31 JDAM on the wing pylons, no air-to-air missiles. The small bomb for a small target, the big one where its blast can do the work.',
-    rcsMultiplier: 20,
-    stores: [
-      // the JDAM first: it takes a main bay station, and the StormBreakers pair up on the rest
-      { weapon: 'gbu31', count: 1, internal: true },
-      { weapon: 'gbu53', count: 4, internal: true },
-      { weapon: 'gbu31', count: 2, internal: false },
-    ],
-    gunAmmo: 180,
-    flares: 24,
-    chaff: 24,
-    role: 'ag',
-  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',
@@ -389,9 +375,19 @@ export const WEAPON_INFO: Record<WeaponId, { name: string; short: string; kind: 
   aim120: { name: 'AIM-120D AMRAAM', short: 'AMRAAM', kind: 'aam' },
   aim9x: { name: 'AIM-9X Sidewinder', short: 'AIM-9X', kind: 'aam' },
   gbu31: { name: 'GBU-31 JDAM', short: 'JDAM', kind: 'bomb' },
-  gbu53: { name: 'GBU-53/B StormBreaker', short: 'SDB II', kind: 'bomb' },
+  // short: the designation, as the SMS page reads ("StormBreaker" doesn't fit the FIRE button; r1 1.2-h)
+  gbu53: { name: 'GBU-53/B StormBreaker', short: 'GBU-53', kind: 'bomb' },
   aargm: { name: 'AGM-88G AARGM-ER', short: 'AARGM', kind: 'agm' },
 };
+
+/**
+ * The anti-radiation rule, the same in every lesson, briefing and hint (playtest 2026-10-10, 1.4-h:
+ * three rules had grown apart). Fired from far out, a disciplined crew shuts its radar down before the
+ * AARGM arrives and is back on the air seconds later (sim/sam/SamSystem.ts, armDiscipline); fired close
+ * in, the jet is on top of the site while it is quiet. AARGM_CLOSE_RANGE (m) is the "about 10 km".
+ */
+export const AARGM_CLOSE_RANGE = 10_000;
+export const AARGM_RULE = 'fire it inside about 10 km while its radar is on, then press straight in behind it';
 
 export const AIRCRAFT_INFO: Record<AircraftType, { name: string; nato: string; rwrSymbol: string }> = {
   f35a: { name: 'F-35A Lightning II', nato: 'F-35A', rwrSymbol: '35' },

@@ -537,7 +537,7 @@ function updateSite(ctx: CombatCtx, s: SamSiteEntity, dt: number): void {
       }
       if (!tgt) break;
       s.trackProgress = Math.min(1, s.trackProgress + dt / Math.max(0.1, world.difficulty.samReactionTime * data.reaction));
-      if (s.trackProgress >= 1 && si.refireTimer <= 0 && s.missilesReady > 0 && si.engageable && !s.holdFire && liveGuided(ctx, s) < data.channels) {
+      if (s.trackProgress >= 1 && si.refireTimer <= 0 && s.missilesReady > 0 && si.engageable && !s.holdFire && !s.irOnly && liveGuided(ctx, s) < data.channels) {
         s.state = 'launch';
         si.salvoLeft = Math.min(data.salvo, s.missilesReady, data.channels - liveGuided(ctx, s));
         si.salvoTimer = 0;
@@ -605,12 +605,14 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
     if (n) updateEndgame(ctx, s, si, dt, si.mpMissiles);
   }
   if (si.mpTimer > 0) si.mpTimer -= dt;
+  // a range boat (t05's heat-seeker drill): a fresh load once the last round has ended
+  if (si.mpRounds <= 0 && s.restock && si.mpMissiles.length === 0) si.mpRounds = mp.rounds;
   if (si.mpRounds <= 0 || si.mpTimer > 0 || s.holdFire) return;
   if (!scanNow) {
     return;
   }
   const def = ctx.defs[mp.missile];
-  const reach = mp.range * ctx.world.difficulty.samRangeScale;
+  const reach = Math.min(mp.range * ctx.world.difficulty.samRangeScale, s.irReach ?? Infinity);
   let best: AircraftEntity | null = null;
   let bestD = Infinity;
   _eye.copy(s.position);
@@ -619,6 +621,8 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
     if (!t.alive || !isHostile(s.team, t.team)) continue;
     const d = t.position.distanceTo(s.position);
     if (d < mp.minRange || d > reach || d >= bestD) continue;
+    // a range boat holds its round while the jet flies away from it (SamSiteEntity.irReach)
+    if (s.irReach !== undefined && openingFrom(t, s.position, d)) continue;
     if (t.position.y - ctx.world.terrain.surfaceHeightAt(t.position.x, t.position.z) < 10) continue;
     if (d > def.seekerRange * Math.sqrt(irIntensity(t, s.position))) continue;
     if (!lineOfSight(ctx.world.terrain, _eye, t.position)) continue;
@@ -640,6 +644,17 @@ function updateManpads(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: 
   si.mpAcquire = 0;
   s.lastLaunchTime = ctx.time;
   revealLaunch(ctx, s);
+}
+
+/** Past the beam, flying away (the fraction of its speed that opens the range from the site). */
+const OPENING = 0.2;
+
+/** The jet `d` m from `from` is flying away from it, past the beam: a heat-seeker fired now chases its tail. */
+function openingFrom(t: AircraftEntity, from: Vector3, d: number): boolean {
+  const v = t.velocity.length();
+  if (v < 1 || d < 1) return false;
+  const radial = ((t.position.x - from.x) * t.velocity.x + (t.position.y - from.y) * t.velocity.y + (t.position.z - from.z) * t.velocity.z) / d;
+  return radial > OPENING * v;
 }
 
 /**
@@ -683,6 +698,8 @@ function handleEmcon(ctx: CombatCtx, s: SamSiteEntity, data: SamTypeData, si: Sa
     if (data.pointDefense && s.missilesReady > 0) si.armShutTti = disciplined ? 2 : -1; // fight it; hide only at the last moment
     else if (disciplined) si.armShutTti = (6 + 10 * skill) * (0.75 + 0.5 * ctx.rng());
     else si.armShutTti = ctx.rng() < 0.5 ? -1 : 1 + 2 * ctx.rng(); // panics too late (or never)
+    // a range target (t04's AARGM drill): it stays on the air
+    if (s.noArmShutdown) si.armShutTti = -1;
   }
   if (arm && s.radarOn && !si.armShutdown && now >= si.armNoticeAt && si.armShutTti > 0 && arm.tti <= si.armShutTti) {
     // keep guiding missiles that arrive well before the ARM, as long as it is not about to hit

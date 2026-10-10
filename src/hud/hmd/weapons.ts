@@ -6,6 +6,7 @@
  */
 import { DEG, G, dirFromHeadingPitch, forwardOf, rightOf, toKnots, upOf } from '../../core/math';
 import type { Vector3 } from 'three';
+import type { MissileEntity } from '../../sim/entities';
 import type { WeaponId } from '../../core/types';
 import type { BombCue } from '../../sim/api';
 import { dlzLayout, makeDlzGeometry } from './dlz';
@@ -14,7 +15,7 @@ import { blink, type HudFrame } from './frame';
 import { TEST_HOOKS } from '../../core/data';
 import { noteCue, noteFunnelBar, notePipper } from './drawn';
 import { colText } from './flight';
-import { weaponMismatch } from '../../sim/weapons/fit';
+import { aargmCue, weaponMismatch } from '../../sim/weapons/fit';
 
 const dlzGeom = makeDlzGeometry();
 const tofTxt = new NumText(0, 'TOF ');
@@ -196,7 +197,7 @@ export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): vo
   const u = L.u;
   const g = dlzLayout(z, top, bottom, dlzGeom, st.dlzScale);
   st.dlzScale = g.scaleMax;
-  const col = z.shoot ? pal.bright : pal.main;
+  const col = shootNow(f) ? pal.bright : pal.main;
   pen.setDash('solid');
   // scale top tick + label
   pen.begin();
@@ -264,6 +265,48 @@ export function placeCueLine(f: HudFrame, text: string, size: number, yPref: num
 
 /* ───────────────────────── Centre cue lines (SHOOT / IN RANGE / FOX 3) ───────────────────────── */
 
+/** Newest live player missile (or bomb) guiding on `targetId`. */
+export function ownMissileOn(f: HudFrame, targetId: number): MissileEntity | null {
+  let best: MissileEntity | null = null;
+  for (const m of f.world.missiles) {
+    if (!m.alive || m.shooterId !== f.p.id || m.targetId !== targetId) continue;
+    if (!best || m.age < best.age) best = m;
+  }
+  return best;
+}
+
+/** "AMRAAM AWAY": the cue while our missile guides on the target (not "MISSILE …", the inbound warning's word). */
+const AWAY = Object.fromEntries(Object.entries(WEAPON_HUD).map(([k, v]) => [k, `${v} AWAY`])) as Record<WeaponId, string>;
+/** Seconds the AWAY cue holds after a missile release, whatever the box shows by then. */
+const AWAY_HOLD = 1.5;
+
+/** "GBU-53 AWAY" for our bomb guiding onto the designated target ("BOMB AWAY" onto a designated point). */
+function bombAwayText(f: HudFrame): string {
+  const b = f.target ? ownMissileOn(f, f.target.id) : null;
+  return b && b.def.category === 'bomb' ? (AWAY[b.def.id as WeaponId] ?? 'BOMB AWAY') : 'BOMB AWAY';
+}
+
+/**
+ * SHOOT is held back while a missile aimed at the player is this close to impact (s): defence first,
+ * the DAS ring and the MISSILE warning own the moment (playtest r1 1.2-f).
+ */
+export const SHOOT_HOLD_TTI = 10;
+
+/** The zone says SHOOT now; the AARGM only inside AARGM_CLOSE_RANGE of a radar that is on (aargmCue). */
+export function shootNow(f: HudFrame): boolean {
+  const z = f.zone;
+  if (!z || !z.shoot) return false;
+  return z.weapon !== 'aargm' || aargmCue(f.p, f.target, z) === 'shoot';
+}
+
+/** A missile inbound on the player with under SHOOT_HOLD_TTI seconds to go. */
+function defending(f: HudFrame): boolean {
+  const inc = f.p.incoming;
+  if (!inc) return false;
+  for (let i = 0; i < inc.length; i++) if (inc[i].timeToImpact < SHOOT_HOLD_TTI) return true;
+  return false;
+}
+
 interface CueLine {
   text: string;
   size: number;
@@ -301,19 +344,35 @@ export function planCues(f: HudFrame): number {
   const { pal, st, p, L } = f;
   const z = f.zone;
   // SHOOT (also for the gun: the pipper goes bright in range, the word lives in the cue slot so it
-  // never lands on the target box that the pipper is tracking)
-  if (z && z.shoot && !WEAPON_IS_BOMB[z.weapon]) addCue('SHOOT', 20, pal.bright, 4);
+  // never lands on the target box that the pipper is tracking). Our missile already guiding on the
+  // target: AMRAAM AWAY instead, steady, so a second missile isn't wasted on it (playtest r1 1.2-g);
+  // the gun keeps its SHOOT. No shot cue while a missile inbound is close (defending: 1.2-f). The AARGM
+  // says SHOOT only as AARGM_RULE does, inside 10 km of a radar that is on (r2 2.1-a): CLOSE IN before.
+  // Just fired, AWAY holds AWAY_HOLD s even when the box has already stepped to the next drone of a
+  // swarm (r2 2.2 F4: g01 went straight from FIRE back to SHOOT), then SHOOT for that one.
+  const sel = p.selectedWeapon;
+  const own = f.target && sel !== 'gun' && !WEAPON_IS_BOMB[sel] ? ownMissileOn(f, f.target.id) : null;
+  const arm = aargmCue(p, f.target, z);
+  const fired = st.launched && st.launched !== 'gun' && !WEAPON_IS_BOMB[st.launched] && st.brevityAge <= AWAY_HOLD ? st.launched : null;
+  if (own && own.def.category !== 'bomb') addCue(AWAY[own.def.id as WeaponId] ?? AWAY.aim120, 15, pal.main, 0);
+  else if (fired) addCue(AWAY[fired], 15, pal.main, 0);
+  // the shot cues (SHOOT, and the AARGM's CLOSE IN / RADAR OFF) wait while defending (r3.1 R31-4)
+  else if (!defending(f)) {
+    if (arm === 'close') addCue('CLOSE IN', 17, pal.main, 0);
+    else if (arm === 'quiet') addCue('RADAR OFF', 15, pal.warn, 0);
+    else if (z && shootNow(f) && !WEAPON_IS_BOMB[z.weapon]) addCue('SHOOT', 20, pal.bright, 4);
+  }
   // bombs: release cue. The GPS cue (REL n / IN RANGE, the wording the briefings and hints use) shows
   // in every view, chase included; the CCIP cue goes with its pipper, which only the HMD draws
-  const w = p.selectedWeapon;
-  if (WEAPON_IS_BOMB[w]) {
+  if (WEAPON_IS_BOMB[sel]) {
     const bi = bombInfo(f);
     if (bi) {
       if (p.radar.groundPoint) {
-        if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
+        // our bomb is still guiding onto it: GBU-53 AWAY, as the missiles do, not IN RANGE inviting a
+        // second bomb on the same boat (r2 2.2 F7), nor STEER read as "turn back for the bomb"
+        if (bi.bombAway) addCue(bombAwayText(f), 15, pal.main, 0);
+        else if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
         else if (bi.timeToRelease >= 0) addCue(relTxt.get(Math.ceil(bi.timeToRelease)), 17, pal.main, 0);
-        // our bomb is still guiding onto it: nothing to steer for (STEER read as "turn back for the bomb")
-        else if (bi.bombAway) addCue('BOMB AWAY', 15, pal.main, 0);
         // target outside the bomb's release cone: which way to turn
         else if (bi.offAxis) addCue(bi.steer < 0 ? 'STEER LEFT' : 'STEER RIGHT', 17, pal.warn, 0);
         else addCue('OUT OF RANGE', 15, pal.warn, 0);
@@ -517,6 +576,16 @@ export const GUN_OVERSHOOT_MIN = 150;
 export function gunOvershoot(range: number, closure: number): boolean {
   return closure > 0 && (range - GUN_OVERSHOOT_MIN) / closure < GUN_OVERSHOOT_TIME;
 }
+
+/**
+ * The target flies toward the jet (aspect over 90°: the jet is in its front hemisphere). A head-on
+ * pass is one the lessons say to let go by (T03, g01), not a gun pass to slow for: no OVERSHOOT then
+ * (playtest r2 2.1-e: "Vc 471 OVERSHOOT" through T03's head-on pass).
+ */
+export function headOnAspect(p: { position: Vector3 }, t: { position: Vector3; velocity: Vector3 }): boolean {
+  const v = t.velocity;
+  return v.x * (p.position.x - t.position.x) + v.y * (p.position.y - t.position.y) + v.z * (p.position.z - t.position.z) > 0;
+}
 const gunVcTxt = new NumText(0, 'Vc ');
 
 /** Closure rate (m/s, positive = closing) between the player and `t`. */
@@ -531,7 +600,7 @@ export function closureRate(p: { position: Vector3; velocity: Vector3 }, t: { po
 
 /**
  * Gun closure cue beside the anchor (the LCOS pipper, or the gun cross without one): "Vc 140", and
- * OVERSHOOT under it when closing too fast (gunOvershoot). Drawn after the target box and its labels
+ * OVERSHOOT under it when closing too fast (gunOvershoot) from behind its wing line (headOnAspect). Drawn after the target box and its labels
  * (drawGunCues), so it tries right, left, below, above the anchor for a spot clear of everything
  * registered, them included (playtest 2.1-d: "Vc" into the drone's name), then registers itself.
  */
@@ -544,7 +613,7 @@ function drawGunClosure(f: HudFrame, ax: number, ay: number, ar: number): void {
   const u = L.u;
   const closure = closureRate(p, t);
   const kt = toKnots(closure);
-  const over = gunOvershoot(range, closure);
+  const over = gunOvershoot(range, closure) && !headOnAspect(p, t);
   const vc = gunVcTxt.get(kt);
   const lh = 12 * u;
   const w = Math.max(pen.textWidth(vc, 11), over ? pen.textWidth('OVERSHOOT', 11) : 0) + 2 * u;

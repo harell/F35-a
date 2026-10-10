@@ -236,6 +236,7 @@ export function validateMission(def: MissionDef): string[] {
         if (o.groups.length === 0) err(`${where} has no groups`);
         o.groups.forEach((g) => checkGroup(g, where));
         if (!(o.defeat >= 1)) err(`${where} defeat must be ≥ 1`);
+        if (o.moveOn !== undefined && !(o.moveOn >= 1)) err(`${where} moveOn must be ≥ 1`);
         break;
     }
   }

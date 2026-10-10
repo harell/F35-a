@@ -109,6 +109,17 @@ export function lessonsLeft(p: CampaignProgress): { mission: MissionDef; lessons
   return t && t.lessons.length > 0 ? t : null;
 }
 
+/**
+ * The lesson the Training list suggests: the first unflown lesson of the next campaign mission's own
+ * (MissionDef.lessons), else the first it still wants from earlier missions. After g01 won without its
+ * lessons this is g02's first lesson, not T01 (playtest 2026-10-10, 1.4-j). Null when nothing is wanted.
+ */
+export function suggestedLesson(p: CampaignProgress): MissionDef | null {
+  const t = lessonsLeft(p);
+  if (!t) return null;
+  return t.lessons.find((l) => t.mission.lessons?.includes(l.id)) ?? t.lessons[0];
+}
+
 /** Every lesson the next campaign mission wants is flown: the campaign nudge and the RECOMMENDED badge go. */
 export function basicTrainingDone(p: CampaignProgress): boolean {
   return lessonsLeft(p) === null;

@@ -280,7 +280,8 @@
   .cx-head h2 { font-size: 17px; }
   .cx-line { font-size: 13px; }
   .cx-viewer { aspect-ratio: 21 / 8; }
-  .cx-pview { aspect-ratio: 21 / 9; }
+  /* a pest's stage starts under its header (~180 px down at 844 × 390): short enough to show the whole animal */
+  .cx-pview { aspect-ratio: 21 / 9; max-height: 46vh; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cx-sheet, .cx-sheet.is-out { animation: none; }

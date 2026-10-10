@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Scene, Vector3, type WebGLRenderer } from 'three';
-import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, nextPodZoom } from '../src/core/pod';
+import { POD_ZOOM, POD_ZOOM_DEFAULT, POD_ZOOM_SMALL, isPodTarget, nextPodZoom, podSpan } from '../src/core/pod';
 import { OVERCAST_DECK, cloudBase } from '../src/core/weather';
 import type { EntityRendererApi } from '../src/core/contracts';
 import type { SimWorld, TerrainQuery } from '../src/sim/api';
@@ -9,7 +9,7 @@ import { AircraftEntity, GroundTargetEntity, SamSiteEntity } from '../src/sim/en
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { pipView, podMask, podReadout, resetPip, resetPodZoom, stepPod, tapPip } from '../src/hud/hmd/pip';
 import { TargetCam } from '../src/render/TargetCam';
-import { POD_CLEAR_K, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
+import { POD_CLEAR_K, POD_RANGE, POD_STANDOFF, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
 
 const noSafe = { top: 0, right: 0, bottom: 0, left: 0 };
 const tan30 = Math.tan(Math.PI / 6);
@@ -69,7 +69,7 @@ describe('pod camera pose', () => {
       const pose = podCamPose(t, eye, step.span, makePose());
       expect(pose.look.toArray()).toEqual([200, 30 + podLookY(t), -400]);
       const d = pose.position.distanceTo(pose.look);
-      expect(d).toBeCloseTo(Math.max(podDistance(step.span), t.radius * POD_CLEAR_K), 5);
+      expect(d).toBeCloseTo(Math.max(POD_STANDOFF, podDistance(step.span), t.radius * POD_CLEAR_K), 5);
       // the lens shows the step's span from there
       expect(2 * d * Math.tan((podFov(step.span, d) * Math.PI) / 360)).toBeCloseTo(step.span, 5);
       // on the jet → target line: the camera looks the way the pod does
@@ -111,6 +111,27 @@ describe('pod camera pose', () => {
     expect(Math.abs(pose.up.y)).toBeLessThan(0.01);
   });
 
+  it('a small target ~4 km out at ZOOM: looked down at from up the line of sight, filling a good part of the window (r1 1.2-d)', () => {
+    // g03's geometry: the stoat on a 34 m field, the jet 4.2 km west at 450 m
+    const t = tiny();
+    t.position.set(27867, 34, -6744);
+    const eye = new Vector3(27867 - 4200, 450, -6744 + 600);
+    const pose = podCamPose(t, eye, POD_ZOOM[ZOOM].span, makePose(), () => 34);
+    const d = pose.position.distanceTo(pose.look);
+    // the stand-off up the line, not a camera in the grass 3 m from the stoat
+    expect(d).toBeCloseTo(POD_STANDOFF, 6);
+    expect(pose.position.y - 34).toBeGreaterThan(15);
+    // inside the stoat model's draw range (6 km × farScale 0.05 on low quality)
+    expect(d).toBeLessThanOrEqual(300);
+    const toEye = eye.clone().sub(pose.look).normalize();
+    expect(pose.position.clone().sub(pose.look).normalize().dot(toEye)).toBeGreaterThan(0.99999);
+    // looked at mid-body (~0.1 m tall), not 0.2 m over the ground
+    expect(pose.look.y - 34).toBeLessThan(0.08);
+    // the 0.38 m stoat spans over a third of the 82 px window
+    const fov = podFov(POD_ZOOM[ZOOM].span, d);
+    expect(spanPx(pose, pose.look, 0.38, 82, fov)).toBeGreaterThan(82 / 3);
+  });
+
   it('ZOOM shows a 0.3 m object from 5 km at a readable size in the HMD window', () => {
     const L = computeLayout(makeLayout(), 844, 390, noSafe, tan30, false, { pip: true });
     expect(L.pipH).toBeGreaterThan(54);
@@ -127,6 +148,28 @@ describe('pod camera pose', () => {
     // WIDE: the same object is a speck (why ZOOM exists)
     const wide = podCamPose(t, eye, POD_ZOOM[0].span, makePose(), () => 0);
     expect(spanPx(wide, at, 0.3, L.pipH)).toBeLessThan(1);
+  });
+});
+
+describe('ZOOM on an animal (playtest r2 F6)', () => {
+  it('closes to half a metre on a target under a metre across; every other step and target as before', () => {
+    expect(POD_ZOOM_SMALL).toBe(0.5);
+    expect(podSpan(ZOOM, tiny().radius)).toBe(POD_ZOOM_SMALL);
+    expect(podSpan(ZOOM, 9)).toBe(POD_ZOOM[ZOOM].span);
+    for (let i = 0; i < POD_ZOOM.length; i++) if (i !== ZOOM) expect(podSpan(i, tiny().radius)).toBe(POD_ZOOM[i].span);
+  });
+
+  it("g03's stoat ~4 km out fills about half the 82 px window at ZOOM (it was a 10 x 20 px blob)", () => {
+    const t = tiny();
+    t.position.set(27867, 34, -6744);
+    const eye = new Vector3(27867 - 4200, 450, -6744 + 600);
+    const span = podSpan(ZOOM, t.radius);
+    const pose = podCamPose(t, eye, span, makePose(), () => 34);
+    const fov = podFov(span, pose.position.distanceTo(pose.look));
+    // the 0.38 m animal against the window's height (its length lies across the wider window)
+    const px = spanPx(pose, pose.look, 0.38, 82, fov);
+    expect(px).toBeGreaterThan(82 * 0.6);
+    expect(px).toBeLessThan(82);
   });
 });
 
@@ -249,11 +292,25 @@ describe('TargetCam pod pass', () => {
     expect(cam.lastTargetId).toBe(9);
     const look = sam.position.clone().setY(sam.position.y + podLookY(sam));
     const d = cam.camera.position.distanceTo(look);
-    expect(d).toBeCloseTo(Math.max(podDistance(POD_ZOOM[2].span), sam.radius * POD_CLEAR_K), 3);
-    // the narrow lens: ZOOM's 2 m top to bottom from out there
+    expect(d).toBeCloseTo(Math.max(POD_STANDOFF, podDistance(POD_ZOOM[2].span), sam.radius * POD_CLEAR_K), 3);
+    // the narrow lens: ZOOM's span top to bottom from out there
     expect(2 * d * Math.tan((cam.camera.fov * Math.PI) / 360)).toBeCloseTo(POD_ZOOM[2].span, 3);
     const toEye = player.position.clone().sub(look).normalize();
     expect(cam.camera.position.clone().sub(look).normalize().dot(toEye)).toBeGreaterThan(0.9999);
+  });
+
+  it('the pod pass ends POD_RANGE past the target, whatever the quality (the orbit keeps the main far plane)', () => {
+    const { cam, renderer, sam } = setup();
+    for (const zoom of [0, 1, 2]) {
+      cam.render(renderer, new Scene(), rect({ pod: true, zoom }), 30_000);
+      const d = cam.camera.position.distanceTo(sam.position);
+      expect(cam.camera.far, `zoom ${zoom}`).toBeLessThanOrEqual(d + POD_RANGE + 1);
+      // low quality's longer range is cut to the pod's too
+      cam.render(renderer, new Scene(), rect({ pod: true, zoom }), 30_000, 8_000);
+      expect(cam.camera.far, `zoom ${zoom} low`).toBeLessThanOrEqual(d + POD_RANGE + 1);
+    }
+    cam.render(renderer, new Scene(), rect({}), 30_000);
+    expect(cam.camera.far).toBe(30_000);
   });
 
   it('masked: nothing is rendered (no cost) and the pass says MASKED', () => {
