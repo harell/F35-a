@@ -48,6 +48,16 @@ import { SAM_DATA } from '../src/sim/sam/samData';
 const DEG = Math.PI / 180;
 const _h = new Vector3();
 const _q = new Vector3();
+const _pt = new Vector3();
+
+/** Gun pass on a one-way drone (gun-only probe): the set-up point on its track, this far behind it (m)... */
+const PASS_SETUP = 2_500;
+/** ...this far below it (m: the briefing's 400 ft, G01_GUN_PASS.belowFt)... */
+const PASS_BELOW = 120;
+/** ...and the air-to-air bot's pipper tracking takes the pass inside this range (m). */
+const PASS_IN = 1_300;
+/** Lowest the gun pass flies (m above the surface; the air-to-air bot's own floor on a slow target). */
+const GUN_PASS_MIN_AGL = 80;
 
 type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
 /** In order of preference (as the game's hints: AARGM for emitters, then SDB II, JDAM). */
@@ -768,6 +778,59 @@ export class MissionBot {
       }
     }
     if (best) this.nav(best.position, Math.max(600, best.position.y + 300), 'HUNT', dt);
+  }
+
+  /**
+   * The gun-only probe's hands (tests/missions-probes.ts): only the gun, and pressing on with it. A
+   * bandit on the scope (or a missile inbound) is the air-to-air bot's, which never goes home
+   * Winchester here; with nothing on the scope the jet heads for the nearest air target the mission
+   * wants (DARKSTAR's picture, as gun work does). Alone, the air-to-air bot turned for home whenever
+   * its radar was empty: in g01 the Shaheds drop off it 20 km out and every run fired 0 rounds.
+   */
+  gunOnly(dt: number): void {
+    this.air.opts.rtbWhenWinchester = false;
+    if (this.p.incoming.length > 0 || this.nearestBandit(true)) return this.fight('GUNONLY', dt);
+    // a one-way drone the mission wants: the briefed gun pass from behind (g01)
+    let drone: AircraftEntity | null = null;
+    for (const t of this.objectiveTargets('air'))
+      if (t.kind === 'aircraft' && t.oneWay && (!drone || t.position.distanceTo(this.p.position) < drone.position.distanceTo(this.p.position))) drone = t;
+    if (drone) return this.gunPass(drone, dt);
+    if (this.nearestBandit() || this.objectiveTargets('air').length === 0) return this.fight('GUNONLY', dt);
+    this.huntDrone(dt);
+    this.mode = 'GUNONLY:HUNT';
+  }
+
+  /**
+   * A gun pass on a one-way drone as g01's briefing teaches it (G01_GUN_PASS): get on its track
+   * PASS_SETUP behind it, PASS_BELOW under it, close from behind at a modest overtake, and inside
+   * PASS_IN, heading its way, hand over to the air-to-air bot's pipper tracking and trigger. An
+   * overshoot comes round to the set-up point again. The air-to-air bot alone met the swarm head-on
+   * at 275 m/s and turned circles round it at 100–180 m/s: 9 rounds and no hit in 150 s.
+   */
+  private gunPass(t: AircraftEntity, dt: number): void {
+    const p = this.p;
+    _h.set(t.velocity.x, 0, t.velocity.z);
+    const v = _h.length();
+    if (v < 1) return this.fight('GUNONLY', dt);
+    _h.divideScalar(v); // the drone's track
+    _q.set(t.position.x - p.position.x, 0, t.position.z - p.position.z); // jet → drone
+    const R = _q.length();
+    const along = _q.dot(_h); // > 0: the jet is behind the drone
+    const lateral = Math.sqrt(Math.max(0, R * R - along * along));
+    const behind = along > 0 && lateral < 0.6 * along;
+    const vh = Math.hypot(p.velocity.x, p.velocity.z);
+    const ourWay = p.velocity.x * _h.x + p.velocity.z * _h.z > 0.8 * vh;
+    const onScope = p.radar.contacts.some((c) => c.id === t.id);
+    if (behind && ourWay && onScope && R < PASS_IN) return this.fight('GUNONLY', dt);
+    const alt = t.position.y - PASS_BELOW;
+    if (behind && along > PASS_IN * 0.6) {
+      // on its track: close from behind, faster the further out (about 100 kt overtake at the end)
+      this.nav(t.position, alt, 'GUNONLY:PASS', dt, false, GUN_PASS_MIN_AGL, v + Math.max(25, Math.min(110, (R - 700) * 0.08)));
+      return;
+    }
+    // overshot, or meeting it head-on or abeam: round to the set-up point on its track
+    _pt.copy(t.position).addScaledVector(_h, -PASS_SETUP);
+    this.nav(_pt, alt, 'GUNONLY:SETUP', dt, false, GUN_PASS_MIN_AGL, 200);
   }
 
   private fight(mode: string, dt: number): void {

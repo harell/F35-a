@@ -8,8 +8,9 @@
  *   park:far    the same, parked where the exploit charter parks (35 km south-west of the city, 13 km
  *               up; `FAR` in tests/missions-balance.test.ts): out of the fight entirely.
  *   gunonly     the player's stores are emptied every step (nothing can add missiles or bombs back)
- *               and the air-to-air bot presses on with the gun instead of going home (the gun-only
- *               probe of runBalanceMission, tests/ai-playerbot.ts). Counts the rounds fired.
+ *               and the jet presses on with the gun instead of going home: it heads for the air
+ *               targets the mission wants, and the air-to-air bot fights what is on the scope with the
+ *               gun (MissionBot.gunOnly). Counts the rounds fired.
  *   route:<r>   (#198) the jet flies a fixed route a player could try (ROUTE_PROBES: the straight line,
  *               a detour, high above everything, or the intended way through with its AARGM shots),
  *               then the mission bot takes over for the attack at the end. A missile inbound is the
@@ -211,7 +212,7 @@ export class Probe {
 
   /**
    * The bot's turn (every 3rd step): true when the probe flew the jet itself (parked: nothing at all;
-   * gun-only: the air-to-air bot, never going home Winchester; a route: its legs), false to let the
+   * gun-only: MissionBot.gunOnly, never going home Winchester; a route: its legs), false to let the
    * mission bot fly.
    */
   fly(dt: number): boolean {
@@ -220,10 +221,7 @@ export class Probe {
       return true;
     }
     if (this.spec.kind === 'route') return this.spec.route === KILL_ALL ? this.killAll(dt) : this.route(dt);
-    const air = this.bot.air;
-    this.bot.mode = 'GUNONLY';
-    air.opts.rtbWhenWinchester = false;
-    air.update(this.p, this.world, dt);
+    this.bot.gunOnly(dt);
     return true;
   }
 
