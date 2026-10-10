@@ -1,6 +1,7 @@
 /**
- * Real suburbs 7/9 (#126): the real houses and local streets of the Whenuapai → Airport corridor, streamed in 2 km
- * tiles (src/world/terrain/data/corridor/, tools/linz/corridor-houses.py + corridor-houses.ts; corridorHouses.ts).
+ * Real suburbs 7/9 (#126): the real houses and local streets of the Whenuapai → Airport corridor and East Auckland
+ * (#274), streamed in 2 km tiles (src/world/terrain/data/corridor/, tools/linz/corridor-houses.py + corridor-houses.ts;
+ * corridorHouses.ts).
  */
 import { describe, expect, it } from 'vitest';
 import SPOT from './fixtures/corridor-house-spotchecks.json';
@@ -53,6 +54,9 @@ const AVONDALE = [-6081, 5270] as const;
 const MANGERE = [3282, 13259] as const;
 const WHENUAPAI = [-11776, -6422] as const;
 const AIRPORT = [2139, 18147] as const;
+/** East Auckland (#274), east of the corridor's box (its edge, lon 174.86, at x ≈ 8712). */
+const EAST_EDGE_X = 8712;
+const EAST = { Howick: [15040, 5050], Pakuranga: [9799, 7123], Botany: [13318, 9309], 'Bucklands Beach': [13100, 2800], 'Half Moon Bay': [12142, 3917] } as const;
 
 /** A stream over the shipped tiles that reads them from disk at once (the browser fetches them). */
 function diskStream(houseRadius: number, log: [number, number][] = []): CorridorHouses {
@@ -195,6 +199,37 @@ describe('corridor tiles (src/world/terrain/data/corridor)', () => {
     }
     // dense suburbs: 20–40 km of streets in a tile of 4.2 km² (besides the arterials and motorways)
     expect(km).toBeGreaterThan(4 * 18);
+  });
+});
+
+describe('East Auckland (#274)', () => {
+  it('draws Howick, Pakuranga, Botany, Bucklands Beach and Half Moon Bay from their real houses and streets', () => {
+    // (Howick: the issue's repro point, where the playtest's R11-4 found 0 tiles and 0 houses)
+    for (const [name, [x, z]] of Object.entries(EAST)) {
+      const [i, j] = tileAt(x, z);
+      expect(M.tiles.some((t) => t[0] === i && t[1] === j), name).toBe(true);
+      const t = tile(i, j);
+      // a suburb's houses within 300 m (Botany's: round its town centre, a #124 mall site)
+      expect(housesIn(t.houses, x - 300, z - 300, x + 300, z + 300).length, name).toBeGreaterThan(80);
+      expect(t.roads.length, name).toBeGreaterThan(20);
+      // the coverage is set there: the procedural grid steps aside
+      expect(housesCover(t.houses, x, z), name).toBe(true);
+    }
+  });
+
+  it("keeps the corridor's houses in the tiles it shares with it, and adds its own", () => {
+    const t = tile(...tileAt(EAST.Pakuranga[0], EAST.Pakuranga[1]));
+    let west = 0, east = 0;
+    for (let k = 0; k < t.houses.count; k++) {
+      if (t.houses.x[k] < EAST_EDGE_X - 20) west++;
+      else if (t.houses.x[k] > EAST_EDGE_X + 20) east++;
+    }
+    expect(west).toBeGreaterThan(200);
+    expect(east).toBeGreaterThan(1000);
+  });
+
+  it('has its own spot checks among the fixture’s', () => {
+    expect(SPOT.filter((s) => s.x > EAST_EDGE_X && s.z < 15000).length).toBeGreaterThanOrEqual(15);
   });
 });
 

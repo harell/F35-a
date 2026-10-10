@@ -1,9 +1,11 @@
 /**
- * Real suburbs 7/9 (#126): the real houses and local streets of the whole Whenuapai → Airport corridor, streamed in
- * TILE m squares as the house scatter's radius reaches them.
+ * Real suburbs 7/9 (#126): the real houses and local streets of the whole Whenuapai → Airport corridor, and of the
+ * areas added next to it since (#274: East Auckland), streamed in TILE m squares as the house scatter's radius reaches
+ * them.
  *
  * The bake (tools/linz/corridor-houses.py + corridor-houses.ts) fits every LINZ building outline of the corridor (the
- * box of epic #119's count inside the Auckland 2024 LiDAR Part 1 sheets) as #121 fits Devonport's (aucklandHouses.ts:
+ * box of epic #119's count inside the Auckland 2024 LiDAR Part 1 sheets; an added area's box inside its own sheets,
+ * corridor-houses.py AREAS) as #121 fits Devonport's (aucklandHouses.ts:
  * an oriented rectangle, a LiDAR eave and ridge, the 2024 photo's roof colour), and takes the LINZ road sections there
  * as local road ribbons (#127 phase B: kind ROAD_LOCAL). It writes one gzip file per tile under
  * src/world/terrain/data/corridor/ (akl-corridor-<i>_<j>.bin: Vite hashes them; the service worker caches them on first
@@ -40,6 +42,8 @@ export interface CorridorManifest {
   bounds: [number, number, number, number];
   /** [i, j, houses, gzip bytes] per tile (its square: i·tile … (i+1)·tile, j·tile …). */
   tiles: [number, number, number, number][];
+  /** The areas baked into the tiles after the corridor (#274: corridor-houses.py AREAS), in order. */
+  areas?: string[];
 }
 
 export interface CorridorTile {
