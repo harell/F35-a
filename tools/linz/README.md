@@ -496,8 +496,9 @@ houses alone 7.32 B).
 
 # Real suburbs 7/9: the corridor's real houses and streets, streamed (#126)
 
-`corridor-houses.py` and `corridor-houses.ts` bake every house and local street from Whenuapai to Auckland Airport into
-136 tiles of 2,048 m, `src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin` (gzip; ≈ 2.4 MB in all, the same on
+`corridor-houses.py` and `corridor-houses.ts` bake every house and local street from Whenuapai to Auckland Airport (and,
+since #274, East Auckland: below) into 167 tiles of 2,048 m, `src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin`
+(gzip; ≈ 2.9 MB in all, the same on
 every tier), and their manifest `corridor.json` (bundled: tiles, bytes, the shared roof palette). The game fetches a tile
 as the house scatter's radius reaches it (`src/world/scenery/corridorHouses.ts`); the service worker caches it on first
 use and never precaches it (`public/sw.js` `ON_DEMAND`). Same licence and attribution as above.
@@ -543,6 +544,34 @@ exclusions (CBD region 2,155, Devonport 8,443, sites 12,891, aerodromes 320, wat
 outlines cut into 4,661 pieces). Streets: 28,483 sections → 14,159 ribbon pieces, 2,109 km. **2,357,689 B gzip** in all
 (8.24 B a house): the houses alone 2.16 MB (7.57 B a house), the streets 179 kB, coverage and cell tables ≈ 82 kB raw.
 A tile: median 15.0 kB, p90 36.8 kB, max 46.7 kB.
+
+## East Auckland, added to the corridor's tiles (#274)
+
+The playtest of 2026-10-10 (R11-4) found East Auckland drawn as the procedural grid: no Picton Street, no Cockle Bay. The
+same fit now covers it as an **added area** (`corridor-houses.py` `AREAS['east']`): the box lon 174.86 … 174.96, lat
+−36.98 … −36.84 (Glendowie's east, Pakuranga, Howick, Bucklands Beach, Half Moon Bay, Cockle Bay, Botany, East Tāmaki),
+next to the corridor's box, inside 9 Part 1 sheets with Part 2 filling their gaps along the east coast.
+
+```sh
+AREA=east python3 tools/linz/corridor-houses.py /home/user/work/east                   # → corridor-houses.json (area: east)
+LINZ_API_KEY=… npx vite-node tools/linz/corridor-houses.ts /home/user/work/east        # → its tiles, merged into the shipped ones
+```
+
+- **Palette**: an added area's roofs are quantised to the shipped `corridor.json` palette (no k-means of its own), so
+  the corridor's tiles stay byte for byte.
+- **Tiles**: the area's new tiles join the manifest; a tile it shares with the corridor is decoded (losslessly: each
+  value re-encodes to its byte), keeps its houses, streets and coverage, and gains the area's. The other tiles are not
+  rewritten. Its spot checks (20) join the fixture's. The manifest lists the added areas (`areas`); adding one twice is
+  refused, and the corridor's own bake starts the tiles over, so the added areas are baked again after it, in order.
+- **Next areas** (#274's list: the East Coast Bays and Albany, Manukau, Manurewa and Papakura) are another `AREAS` row
+  each, baked the same way, one stack layer each. Their boxes must not overlap the corridor's or an earlier area's.
+
+2026-10-10: 152,004 outlines in the 9 sheets (78,600 outside the box, 5,115 under 20 m², 13 over 20,000 m²); 67,256
+houses fitted (2,223 outlines gone since 2017, 1,203 LiDAR-only buildings since); dropped: sites 818, water 6, landmark
+footprints 3; 530 big outlines cut into 1,217 pieces. Streets: 8,036 sections → 4,710 ribbon pieces, 628 km. 39 tiles
+written (31 new, 8 shared with the corridor along x ≈ 8.2–10.2 km): 622,892 B gzip with the shared tiles' corridor
+houses. The manifest: **167 tiles, 353,134 houses, 2,929,187 B gzip** in all. Fit 7 min on 4 processes (4 of them the
+first run's aerial STAC index, 17,739 items), tiles 1 min.
 
 ## Real tree canopy (#123)
 

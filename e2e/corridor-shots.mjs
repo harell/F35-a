@@ -44,6 +44,8 @@ const VIEWS = {
   mangere_500: { cam: [3280, 500, 12400], look: [3280, 0, 13300] },
   // the isthmus from 3 km
   isthmus_3km: { cam: [-7000, 3000, 0], look: [-3000, 0, 7000] },
+  // Howick from 450 m (#274: the playtest's R11-4 camera, East Auckland's added tiles)
+  howick_450: { cam: [15040, 450, 3400], look: [15040, 0, 5050] },
 };
 if (args.cam && args.look) VIEWS.custom = { cam: String(args.cam).split(',').map(Number), look: String(args.look).split(',').map(Number) };
 fs.mkdirSync(out, { recursive: true });

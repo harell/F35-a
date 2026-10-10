@@ -240,8 +240,9 @@ them, and are drawn as one unlit mesh (`akl-local-roads`, two vertices across, t
 streets of the covered land, which #121 left as plain garden ground. Without the data file nothing changes.
 
 **The corridor's real houses and streets, streamed (#126).** From Whenuapai to Auckland Airport (the box of epic #119's
-count inside the 2024 LiDAR Part 1 sheets: ≈ 286,000 houses) the real houses and their LINZ streets ship as 136 tiles of
-2,048 m (`src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin`, ≈ 2.4 MB gzip in all, baked by
+count inside the 2024 LiDAR Part 1 sheets: ≈ 286,000 houses) and in East Auckland (#274, an area added to the same tiles:
+≈ 67,000 houses from Pakuranga to Howick and Botany) the real houses and their LINZ streets ship as 167 tiles of
+2,048 m (`src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin`, ≈ 2.9 MB gzip in all, baked by
 `tools/linz/corridor-houses.py` + `.ts`; #121's record format, #127's local road ribbons) and a bundled manifest
 (`corridor.json`: tiles, bytes, the shared roof palette). `CorridorHouses` (`corridorHouses.ts`, built by
 `createCorridorHouses` in `corridorTiles.ts` from the Environment) fetches the tiles whose square comes within the house

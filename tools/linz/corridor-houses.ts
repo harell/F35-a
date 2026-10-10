@@ -7,6 +7,11 @@
  *   python3 tools/linz/corridor-houses.py <work dir>                  # outlines + LiDAR roofs + photo colours
  *   LINZ_API_KEY=… npx vite-node tools/linz/corridor-houses.ts <work dir>
  *
+ * An added area (#274: corridor-houses.py AREAS, e.g. AREA=east) is baked into the shipped tiles instead of over them:
+ * its tiles join the manifest, a tile it shares with the corridor (or an area added before) keeps its houses, roads and
+ * coverage and gains the area's, and its spot checks join the fixture's. Its roofs already use the shipped palette. The
+ * corridor's own bake starts the tiles over, so the added areas (the manifest's `areas`) are baked again after it.
+ *
  * Houses: reprojected with the game's geoToWorld; dropped in the water of the game's LINZ coastline, in the CBD region
  * (the LINZ buildings stand there: aucklandBuildings.ts), on #121's coverage (Devonport's own file), on the landmark
  * and hero sites (siteRings, siteBlocker: #124's hospitals, malls, stations and schools, the hero neighbourhoods, the
@@ -77,6 +82,7 @@ interface InHouse {
   m2: number;
 }
 const input = JSON.parse(fs.readFileSync(path.join(WORK, 'corridor-houses.json'), 'utf8')) as {
+  area?: string;
   palette: number[][];
   houses: InHouse[];
   tally: Record<string, number>;
@@ -136,6 +142,12 @@ const coverAt = (x: number, z: number) => inCorridor(x, z) && isLand(x, z) && !i
 
 // ── Houses ──
 const palette = input.palette.map(([r, g, b]) => (r << 16) | (g << 8) | b);
+/** An area added to the shipped tiles (#274), not the corridor's whole bake. */
+const ADD = (input.area ?? 'corridor') !== 'corridor';
+const shipped: CorridorManifest | null = ADD ? JSON.parse(fs.readFileSync(path.join(OUT, 'corridor.json'), 'utf8')) : null;
+if (shipped && JSON.stringify(shipped.palette) !== JSON.stringify(palette)) throw new Error(`${input.area}: its palette is not the shipped corridor.json's`);
+// (twice would add its houses to the shared tiles twice: re-bake from the tiles as they were before it)
+if (shipped?.areas?.includes(input.area!)) throw new Error(`${input.area} is already in the tiles: git checkout ${path.relative(ROOT, OUT)} first`);
 const T = CORRIDOR_TILE;
 const tkey = (i: number, j: number) => `${i}_${j}`;
 const byTile = new Map<string, HouseRecord[]>();
@@ -275,22 +287,46 @@ console.log(`roads: ${secs.length} LINZ sections (${skipped} footpaths, motorway
 
 // ── Tiles ──
 fs.mkdirSync(OUT, { recursive: true });
-for (const f of fs.readdirSync(OUT)) if (f.endsWith('.bin')) fs.unlinkSync(path.join(OUT, f));
+if (!ADD) {
+  // the corridor's whole bake starts over: the areas added since must be baked again after it, in order
+  const was = fs.existsSync(path.join(OUT, 'corridor.json')) ? (JSON.parse(fs.readFileSync(path.join(OUT, 'corridor.json'), 'utf8')) as CorridorManifest).areas : undefined;
+  if (was?.length) console.warn(`the added areas ${was.join(', ')} are dropped: bake them again (AREA=<area> corridor-houses.py, then this)`);
+  for (const f of fs.readdirSync(OUT)) if (f.endsWith('.bin')) fs.unlinkSync(path.join(OUT, f));
+}
 const N = T / CORRIDOR_CELL;
 const tiles: CorridorManifest['tiles'] = [];
+// an added area: the shipped tiles it shares, decoded back to records (lossless: each value re-encodes to its byte)
+const paletteIndex = new Map(palette.map((c, k) => [c, k] as const).reverse());
+const shippedTiles = new Map((shipped?.tiles ?? []).map((t) => [tkey(t[0], t[1]), t] as const));
+const merged = new Map<string, { recs: HouseRecord[]; bits: Uint8Array; roads: RoadLine[] }>();
+for (const k of byTile.keys()) {
+  if (!shippedTiles.has(k)) continue;
+  const [i, j] = k.split('_').map(Number);
+  const old = decodeCorridorTile(new Uint8Array(zlib.gunzipSync(fs.readFileSync(path.join(OUT, tileName(i, j))))), palette);
+  const h = old.houses;
+  if (h.cover.x0 !== i * T || h.cover.z0 !== j * T || h.cover.cols !== N || h.cover.rows !== N) throw new Error(`tile ${k}: unexpected coverage grid`);
+  const recs: HouseRecord[] = [];
+  for (let n = 0; n < h.count; n++) {
+    const c = paletteIndex.get(h.color[n]);
+    if (c === undefined) throw new Error(`tile ${k}: a roof colour off the palette`);
+    recs.push({ x: h.x[n], z: h.z[n], w: h.w[n], d: h.d[n], dir: h.dir[n], eave: h.eave[n], rise: h.rise[n], c });
+  }
+  merged.set(k, { recs, bits: h.cover.bits, roads: old.roads });
+}
 let tx0 = Infinity, tz0 = Infinity, tx1 = -Infinity, tz1 = -Infinity;
 let total = 0, totalRaw = 0, housesTotal = 0, roadBytes = 0, coverBytes = 0, nHouses = 0;
 const sizes: number[] = [];
 const keys = [...new Set([...byTile.keys()])].sort();
 for (const k of keys) {
   const [i, j] = k.split('_').map(Number);
-  const recs = byTile.get(k)!;
-  const bits = new Uint8Array(N * N);
+  const old = merged.get(k);
+  const recs = [...(old?.recs ?? []), ...byTile.get(k)!];
+  const bits = old ? Uint8Array.from(old.bits) : new Uint8Array(N * N);
   for (let b = 0; b < N; b++)
     for (let a = 0; a < N; a++) if (coverAt(i * T + (a + 0.5) * CORRIDOR_CELL, j * T + (b + 0.5) * CORRIDOR_CELL)) bits[b * N + a] = 1;
   const cover = { x0: i * T, z0: j * T, cell: CORRIDOR_CELL, cols: N, rows: N, bits };
   const hb = encodeHouses(recs, [], cover);
-  const rl = roadsByTile.get(k) ?? [];
+  const rl = [...(old?.roads ?? []), ...(roadsByTile.get(k) ?? [])];
   const rb = rl.length ? encodeRoads({ region: new Float32Array(0), lines: rl }, 0.5) : new Uint8Array(0);
   const raw = encodeCorridorTile(hb, rb);
   decodeCorridorTile(raw, palette); // (round trip)
@@ -309,15 +345,31 @@ for (const k of keys) {
   tx1 = Math.max(tx1, (i + 1) * T);
   tz1 = Math.max(tz1, (j + 1) * T);
 }
-const manifest: CorridorManifest = { version: CORRIDOR_VERSION, tile: T, cell: CORRIDOR_CELL, palette, bounds: [tx0, tz0, tx1, tz1], tiles };
+const written = tiles.length;
+// an added area: the shipped tiles it does not touch stay as they are
+for (const t of shippedTiles.values()) {
+  if (byTile.has(tkey(t[0], t[1]))) continue;
+  tiles.push(t);
+  tx0 = Math.min(tx0, t[0] * T);
+  tz0 = Math.min(tz0, t[1] * T);
+  tx1 = Math.max(tx1, (t[0] + 1) * T);
+  tz1 = Math.max(tz1, (t[1] + 1) * T);
+}
+tiles.sort((a, b) => (tkey(a[0], a[1]) < tkey(b[0], b[1]) ? -1 : 1));
+const areas = ADD ? [...(shipped!.areas ?? []), input.area!] : undefined;
+const manifest: CorridorManifest = { version: CORRIDOR_VERSION, tile: T, cell: CORRIDOR_CELL, palette, bounds: [tx0, tz0, tx1, tz1], tiles, ...(areas ? { areas } : {}) };
 fs.writeFileSync(path.join(OUT, 'corridor.json'), JSON.stringify(manifest) + '\n');
+if (ADD) console.log(`${input.area}: ${written} tiles written (${written - merged.size} new, ${merged.size} shared with the shipped ones); the manifest now ${tiles.length} tiles, ${tiles.reduce((n, t) => n + t[2], 0)} houses, ${tiles.reduce((n, t) => n + t[3], 0)} B gzip`);
 
-// spot checks: random outlines, their centroid (the bake keeps the houses where LINZ traced them)
-let seed = 126;
+// spot checks: random outlines, their centroid (the bake keeps the houses where LINZ traced them); an added area's join
+// the shipped ones
+let seed = ADD ? 274 : 126;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
-const spots: { id: number; x: number; z: number; w: number; d: number; eave: number }[] = [];
+type Spot = { id: number; x: number; z: number; w: number; d: number; eave: number };
+const spots: Spot[] = ADD ? (JSON.parse(fs.readFileSync(FIXTURE, 'utf8')) as Spot[]) : [];
+const want = spots.length + (ADD ? SPOTS / 2 : SPOTS);
 const pool = kept.filter(({ h }) => h.m2 >= 60 && h.m2 <= 400);
-while (spots.length < SPOTS && pool.length) {
+while (spots.length < want && pool.length) {
   const k = Math.floor(rnd() * pool.length);
   const { h, x, z } = pool.splice(k, 1)[0];
   spots.push({ id: h.id, x: +x.toFixed(2), z: +z.toFixed(2), w: h.w, d: h.d, eave: h.eave });
@@ -326,7 +378,7 @@ fs.writeFileSync(FIXTURE, JSON.stringify(spots, null, 1) + '\n');
 
 sizes.sort((a, b) => a - b);
 const hash = crypto.createHash('sha1').update(JSON.stringify(manifest)).digest('hex').slice(0, 8);
-console.log(`tiles: ${tiles.length} of ${T} m (manifest ${hash}); houses ${nHouses}; gzip ${total} B (${(total / nHouses).toFixed(2)} B a house; raw ${totalRaw} B)`);
+console.log(`tiles: ${written} of ${T} m written (manifest ${hash}); houses ${nHouses}; gzip ${total} B (${(total / nHouses).toFixed(2)} B a house; raw ${totalRaw} B)`);
 console.log(`  houses alone ${housesTotal} B gzip (${(housesTotal / nHouses).toFixed(2)} B a house), roads ${roadBytes} B gzip, coverage + cell tables ≈ ${coverBytes} B raw`);
 console.log(`  bytes a tile: min ${sizes[0]}, median ${sizes[sizes.length >> 1]}, p90 ${sizes[Math.floor(sizes.length * 0.9)]}, max ${sizes[sizes.length - 1]}`);
 console.log(`wrote ${path.relative(ROOT, OUT)}/ (${tiles.length} tiles + corridor.json) and ${path.relative(ROOT, FIXTURE)} (${spots.length} spot checks)`);

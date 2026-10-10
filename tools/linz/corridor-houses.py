@@ -3,7 +3,8 @@ Real suburbs 7/9 (#126), step 1: real houses along the whole Whenuapai → Airpo
 outlines, the 2024 LiDAR and the 2024 aerial photo, fitted exactly as #121's houses are (tools/linz/houses.py: an
 oriented rectangle per outline, a LiDAR roof, the photo's roof colour).
 
-    python3 tools/linz/corridor-houses.py [<work dir>]       (default /home/user/work/corridor)
+    python3 tools/linz/corridor-houses.py [<work dir>]                     (default /home/user/work/corridor)
+    AREA=east python3 tools/linz/corridor-houses.py /home/user/work/east   (an area added to the corridor's tiles: AREAS)
 
 The corridor: the box of epic #119's count (lon 174.58 … 174.86, lat −37.03 … −36.76: Whenuapai, Hobsonville, Te Atatū,
 Henderson, Avondale, Mt Albert, Mt Roskill, Onehunga, Māngere, the airport, the isthmus and the North Shore's south)
@@ -27,6 +28,10 @@ photo here to register them to (#121's per-block lean field is left out).
 
 Output: <work>/corridor-houses.json (lon/lat; read by corridor-houses.ts) with the palette (k-means, PALETTE colours at
 the city square's exposure, as houses.py), the corridor's outline (lon/lat rings) and a tally.
+
+Areas added later (#274, AREAS): the same fit over another box and its sheets, next to the corridor's box (not over it).
+Their roofs are quantised to the shipped corridor.json palette instead of a k-means of their own, so the corridor's
+tiles stay as they are; corridor-houses.ts adds the area's tiles to the manifest and merges the tiles both share.
 """
 import importlib.util
 import json
@@ -67,13 +72,25 @@ sys.path.insert(0, HERE)
 H = load('houses', os.path.join(HERE, 'houses.py'), ['houses.py', os.path.join(ROOT, 'houses'), AERIAL])
 A = load('aerial', os.path.join(HERE, 'aerial.py'))
 
-BOX = (174.58, -37.03, 174.86, -36.76)  # lon0, lat0, lon1, lat1 (#119's count: 358,687 outlines)
-CORRIDOR_SHEETS = [
-    'BA31_10000_0303', 'BA31_10000_0304', 'BA31_10000_0305', 'BA31_10000_0403', 'BA31_10000_0404', 'BA31_10000_0405',
-    'BA31_10000_0503', 'BA31_10000_0504', 'BA31_10000_0505', 'BA32_10000_0301', 'BA32_10000_0302', 'BA32_10000_0401',
-    'BA32_10000_0402', 'BA32_10000_0501', 'BA32_10000_0502', 'BB31_10000_0105', 'BB32_10000_0101', 'BB32_10000_0102',
-    'BB32_10000_0201',
-]
+AREAS = {
+    # the corridor (#126): the box of epic #119's count (358,687 outlines) inside the Part 1 sheets
+    'corridor': dict(box=(174.58, -37.03, 174.86, -36.76), parts=(1,), sheets=[
+        'BA31_10000_0303', 'BA31_10000_0304', 'BA31_10000_0305', 'BA31_10000_0403', 'BA31_10000_0404', 'BA31_10000_0405',
+        'BA31_10000_0503', 'BA31_10000_0504', 'BA31_10000_0505', 'BA32_10000_0301', 'BA32_10000_0302', 'BA32_10000_0401',
+        'BA32_10000_0402', 'BA32_10000_0501', 'BA32_10000_0502', 'BB31_10000_0105', 'BB32_10000_0101', 'BB32_10000_0102',
+        'BB32_10000_0201',
+    ]),
+    # East Auckland (#274): Glendowie's east, Pakuranga, Howick, Bucklands Beach, Half Moon Bay, Cockle Bay, Botany and
+    # East Tāmaki, east of the corridor's box; Part 2 fills the Part 1 sheets' gaps along the east coast
+    'east': dict(box=(174.86, -36.98, 174.96, -36.84), parts=(1, 2), sheets=[
+        'BA32_10000_0402', 'BA32_10000_0403', 'BA32_10000_0404', 'BA32_10000_0502', 'BA32_10000_0503', 'BA32_10000_0504',
+        'BB32_10000_0102', 'BB32_10000_0103', 'BB32_10000_0104',
+    ]),
+}
+AREA = os.environ.get('AREA', 'corridor')
+BOX = AREAS[AREA]['box']  # lon0, lat0, lon1, lat1
+CORRIDOR_SHEETS = AREAS[AREA]['sheets']
+MANIFEST = os.path.join(HERE, '../../src/world/terrain/data/corridor/corridor.json')
 MIN_AREA = 20.0
 MAX_AREA = 20000.0   # m²: larger outlines (a port shed, the airport's terminals) are left to their own sites
 OV = 16              # the aerial's COG overview read: 1.2 m
@@ -137,7 +154,7 @@ def main():
     corr = corridor()
     CORR = corr
     shapely.prepare(CORR)
-    print(f'corridor: {corr.area / 1e6:.1f} km² ({len(CORRIDOR_SHEETS)} sheets)', flush=True)
+    print(f'{AREA}: {corr.area / 1e6:.1f} km² ({len(CORRIDOR_SHEETS)} sheets)', flush=True)
     grade = os.path.join(AERIAL, 'aerial-grade.json')
     k = json.load(open(grade))['exposure'] if os.path.exists(grade) else H.EXPOSURE_FALLBACK
 
@@ -158,7 +175,7 @@ def main():
                 xs.append(x)
                 zs.append(z)
         A.mosaic(AERIAL, f'corridor-{s}', min(xs), min(zs), max(xs), max(zs), OV)
-        H.AREAS[s] = dict(box=None, parts=(1,), photos=(f'corridor-{s}',))
+        H.AREAS[s] = dict(box=None, parts=AREAS[AREA]['parts'], photos=(f'corridor-{s}',))
         feats = json.load(open(os.path.join(OUTLINES, f'{s}.json')))['features']
         for f in feats:
             fid = int(str(f['id']).split('.')[-1])
@@ -209,13 +226,17 @@ def main():
                  pitched=sum(1 for h in houses if h['roof'] == 'pitched'))
     print(f'tally: {tally}', flush=True)
 
-    # roof colours at the city square's exposure, quantised to the corridor's own palette (as houses.py)
+    # roof colours at the city square's exposure, quantised to the corridor's own palette (as houses.py); an added area
+    # takes the shipped one
     have = np.array([h['rgb'] is not None for h in houses])
     raw = np.array([h['rgb'] if h['rgb'] is not None else [128, 128, 128] for h in houses], np.float64) / 255
     graded = H.lin_to_srgb(H.srgb_to_lin(raw) * k)
-    rng = np.random.default_rng(1)
-    sample = graded[have][rng.permutation(int(have.sum()))[:60000]]
-    pal, _ = kmeans2(sample, PALETTE, seed=rng, minit='++', iter=30)
+    if AREA == 'corridor':
+        rng = np.random.default_rng(1)
+        sample = graded[have][rng.permutation(int(have.sum()))[:60000]]
+        pal, _ = kmeans2(sample, PALETTE, seed=rng, minit='++', iter=30)
+    else:
+        pal = np.array([[(c >> 16) & 255, (c >> 8) & 255, c & 255] for c in json.load(open(MANIFEST))['palette']], np.float64) / 255
     idx = np.zeros(len(houses), np.int64)
     for s in range(0, len(houses), 20000):
         d = ((graded[s:s + 20000, None, :] - pal[None, :, :]) ** 2).sum(2)
@@ -232,7 +253,7 @@ def main():
         e, n = np.asarray(g.exterior.coords).T
         lon, lat = H.to_wgs.transform(e, n)
         rings.append([[round(a, 7), round(b, 7)] for a, b in zip(lon, lat)])
-    json.dump(dict(palette=palette, houses=houses, tally=tally, exposure=k, corridor=rings, sheets=CORRIDOR_SHEETS),
+    json.dump(dict(area=AREA, palette=palette, houses=houses, tally=tally, exposure=k, corridor=rings, sheets=CORRIDOR_SHEETS),
               open(os.path.join(WORK, 'corridor-houses.json'), 'w'))
     print(f'houses: {len(houses)} in {time.time() - t0:.0f} s; wrote {os.path.join(WORK, "corridor-houses.json")}', flush=True)
 
