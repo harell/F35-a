@@ -76,9 +76,10 @@ export class Callouts {
         const t = this.s.world.getEntity(e.targetId);
         if (!t || !t.alive || e.missile.def.id !== 'aim120') return;
         // fired before the calibrated SHOOT cue (CombatLaunchZone.rShoot) → a long, low-Pk shot
-        const z = this.s.world.combat.launchZoneFor(p, 'aim120', t, this.s.world) as { range: number; rShoot?: number; rMax: number };
+        // (a SHOOT the player saw lit and still held out to rMax isn't a long shot)
+        const z = this.s.world.combat.launchZoneFor(p, 'aim120', t, this.s.world) as { range: number; rShoot?: number; rMax: number; shoot: boolean };
         const shootRange = z.rShoot && z.rShoot > 0 ? z.rShoot : z.rMax * 0.7;
-        if (z.range > shootRange * 1.08) st.longShots++;
+        if (!z.shoot && z.range > shootRange * 1.08) st.longShots++;
       }),
       ev.on('munition:end', (e) => {
         if (!this.guard()) return;

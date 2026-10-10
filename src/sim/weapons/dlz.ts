@@ -564,30 +564,40 @@ export function launchZoneFor(
   out.targetId = target.id;
   _los.copy(_rel).divideScalar(Math.max(1, range));
   cz.rShoot = def.category === 'aam' ? pkShootRange(ctx, ac, def, target, out, _los, locked) : out.rMax;
-  if (remaining(ac, weapon) <= 0) return out;
   // the human player's SHOOT cue means "high Pk now" (calibrated range); AI shot doctrine keeps
-  // reading the kinematic zone and picks its own point between rNe and rMax
+  // reading the kinematic zone and picks its own point between rNe and rMax. Once lit, the player's
+  // SHOOT holds out to rMax (AcCombatState.shootLatch).
   const human = ac.isPlayer && !ac.ai;
-  const inZone = out.range >= out.rMin * lo && out.range <= (human ? cz.rShoot : out.rMax);
-  if (!inZone) return out;
-  switch (def.guidance) {
-    case 'ir':
-      out.shoot = target.kind === 'aircraft' && hooks.irLockedOn(ac, target.id);
-      break;
-    case 'semi_active':
-      out.shoot = locked;
-      break;
-    case 'active_radar': {
-      const c = st.contacts.get(target.id);
-      const fresh = !!c && c.lastSeen >= ctx.time - 1.5 && (ac.team === 'blue' || c.ownTime >= ctx.time - 1.5);
-      out.shoot = target.kind === 'aircraft' && (locked || fresh);
-      break;
-    }
-    case 'anti_radiation':
-      out.shoot = target.kind === 'sam' && (target.radarOn || target.known);
-      break;
-    default:
-      out.shoot = true;
+  const latch = st.shootLatch;
+  if (remaining(ac, weapon) <= 0) {
+    if (human && latch.get(target.id) === weapon) latch.delete(target.id);
+    return out;
+  }
+  const held = human && latch.get(target.id) === weapon;
+  const inZone = out.range >= out.rMin * lo && out.range <= (human && !held ? cz.rShoot : out.rMax);
+  if (inZone) out.shoot = shootConditions(ctx, ac, def, target, hooks, locked);
+  if (human) {
+    if (out.shoot) latch.set(target.id, weapon);
+    else if (held) latch.delete(target.id);
   }
   return out;
+}
+
+/** The seeker / lock half of SHOOT, once the target is inside the zone. */
+function shootConditions(ctx: CombatCtx, ac: AircraftEntity, def: CombatMunitionDef, target: AnyEntity, hooks: ZoneHooks, locked: boolean): boolean {
+  switch (def.guidance) {
+    case 'ir':
+      return target.kind === 'aircraft' && hooks.irLockedOn(ac, target.id);
+    case 'semi_active':
+      return locked;
+    case 'active_radar': {
+      const c = acState(ac).contacts.get(target.id);
+      const fresh = !!c && c.lastSeen >= ctx.time - 1.5 && (ac.team === 'blue' || c.ownTime >= ctx.time - 1.5);
+      return target.kind === 'aircraft' && (locked || fresh);
+    }
+    case 'anti_radiation':
+      return target.kind === 'sam' && (target.radarOn || target.known);
+    default:
+      return true;
+  }
 }
