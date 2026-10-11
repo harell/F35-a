@@ -7,6 +7,7 @@
 import type { AircraftType, GroundTargetType, SamType, WarningId, WeaponId } from '../../core/types';
 import type { AnyEntity } from '../../sim/entities';
 import { isSuperyachtId } from '../../core/superyachts';
+import { HELI_NAMES } from '../../sim/civil/heli';
 
 export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   f35a: 'F-35A',
@@ -18,7 +19,6 @@ export const AIRCRAFT_LABEL: Record<AircraftType, string> = {
   shahed136: 'SHAHED-136',
   aw169: 'AW169',
   bell429: 'BELL 429',
-  h130: 'H130',
 };
 
 /** Short type codes for crowded places (TSD, RWR). */
@@ -32,7 +32,6 @@ export const AIRCRAFT_SHORT: Record<AircraftType, string> = {
   shahed136: 'UAV',
   aw169: 'CIV',
   bell429: 'CIV',
-  h130: 'CIV',
 };
 
 export const SAM_LABEL: Record<SamType, string> = {
@@ -135,6 +134,8 @@ export function entityLabel(e: AnyEntity | null | undefined): string {
   if (!e) return '';
   switch (e.kind) {
     case 'aircraft':
+      // a civil helicopter by its own name ("WESTPAC RESCUE 1", "POLICE EAGLE"), not its type
+      if (e.heli) return HELI_NAMES[e.heli.livery].label;
       return AIRCRAFT_LABEL[e.type] ?? e.type.toUpperCase();
     case 'sam':
       return SAM_LABEL[e.type] ?? e.type.toUpperCase();
@@ -180,6 +181,7 @@ export function trackLabel(e: AnyEntity | null | undefined): string {
 /** Short contact label for crowded places (HMD contact boxes, TSD): the mission tag, else the short type code. */
 export function trackShort(e: AnyEntity): string {
   if (e.kind !== 'aircraft') return '';
+  if (e.heli) return HELI_NAMES[e.heli.livery].short;
   return e.hudTag || (AIRCRAFT_SHORT[e.type] ?? '');
 }
 

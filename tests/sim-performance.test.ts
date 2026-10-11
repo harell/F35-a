@@ -50,7 +50,7 @@ describe('performance helpers (AI)', () => {
     for (const type of Object.keys(AIRCRAFT_PERF) as (keyof typeof AIRCRAFT_PERF)[]) {
       // the civil helicopters (#144) fly a scripted profile while alive (sim/civil/heli.ts); their numbers only fly
       // the falling wreck (no thrust, no lift to speak of), so they don't trim like aeroplanes
-      if (type === 'aw169' || type === 'bell429' || type === 'h130') continue;
+      if (type === 'aw169' || type === 'bell429') continue;
       const tw = makeWorld('pilot');
       // the Shahed flies a scripted profile while alive (sim/drone/oneWay.ts) and its flight-model
       // numbers only fly the wreck: trim it at its own cruise point

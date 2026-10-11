@@ -43,7 +43,6 @@ export const ENGINE_PROFILES: Record<AircraftType, EngineProfile> = {
   // civil helicopters: turboshaft whine and a low rumble standing in for the rotor beat
   aw169: { whine: 0.55, fan: 0.3, roar: 0.15, rumble: 0.9, ref: 25, maxDist: 2500 },
   bell429: { whine: 0.5, fan: 0.25, roar: 0.12, rumble: 0.8, ref: 22, maxDist: 2200 },
-  h130: { whine: 0.45, fan: 0.2, roar: 0.1, rumble: 0.7, ref: 20, maxDist: 2000 },
 };
 
 export interface EngineDrive {

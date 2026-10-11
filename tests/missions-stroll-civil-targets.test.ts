@@ -80,20 +80,25 @@ describe('A Stroll in the Park: civil targets', () => {
     expect(Math.min(...civil.map((a) => a.position.distanceTo(p.position)))).toBeGreaterThan(15_000);
     for (const a of civil) expect(p.radar.contacts.some((c) => c.id === a.id), a.callsign).toBe(true);
     // TGT steps to a civil aircraft: an airliner, or one of the civil helicopters (#144), which broadcast ADS-B too.
-    // The superyachts moored near the tour's start (#145) are civil contacts of the EOTS too, so it may box one of
-    // them on the way: a few presses reach an aircraft.
+    // It steps nearest first, and the superyachts moored near the tour's start (#145), the harbour's ships and the trains
+    // are civil contacts of the EOTS too, so it may box some of them on the way (the helicopters start anywhere on their
+    // routes).
     const helis = m.world.aircraft.filter((a) => a.heli && a.alive);
     expect(helis.length).toBeGreaterThan(0);
     for (const h of helis) expect(p.radar.contacts.some((c) => c.id === h.id), h.callsign).toBe(true);
     const air = new Set([...civil, ...helis].map((a) => a.id));
     const boxed: (number | null)[] = [];
-    for (let i = 0; i < 12 && !air.has(p.radar.designatedId ?? -1); i++) {
+    for (let i = 0; i < p.radar.contacts.length + 1 && !air.has(p.radar.designatedId ?? -1); i++) {
       m.world.combat.cycleTarget(p, m.world);
       boxed.push(p.radar.designatedId);
     }
     expect(air.has(p.radar.designatedId ?? -1), `boxed ${boxed.join(', ')}`).toBe(true);
-    // anything boxed on the way was a civil yacht
-    for (const id of boxed) if (id !== null && !air.has(id)) expect(isSuperyachtId((m.world.getEntity(id) as { vessel?: string }).vessel)).toBe(true);
+    // anything boxed on the way was civil on the surface: a superyacht, a ship or a train
+    for (const id of boxed) {
+      if (id === null || air.has(id)) continue;
+      const e = m.world.getEntity(id) as { kind: string; team: string; type?: string };
+      expect(e.kind === 'ground' && e.team === 'neutral' && (e.type === 'ship' || e.type === 'train'), `boxed ${id}`).toBe(true);
+    }
     m.runner.dispose?.();
   });
 

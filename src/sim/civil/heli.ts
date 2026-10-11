@@ -1,15 +1,20 @@
 /**
- * F35-A — scripted civil helicopter flights (#144): the rescue helicopter, the police "Eagle" and sightseeing
- * machines, neutral traffic like the airliners (route.ts). While alive a helicopter flies a kinematic profile, never
- * the flight model (the world skips stepFlight for it); shot down, `alive` goes false and the flight model takes over
- * as a falling wreck from the velocity the profile last set.
+ * F35-A — scripted civil helicopter flights (#144): the real rescue and police helicopters over Auckland, neutral
+ * traffic like the airliners (route.ts). While alive a helicopter flies a kinematic profile, never the flight model
+ * (the world skips stepFlight for it); shot down, `alive` goes false and the flight model takes over as a falling
+ * wreck from the velocity the profile last set. Nothing respawns it: a new session spawns the fleet again.
  *
- *  shuttle  a cyclic list of pads (core/sites.ts HELIPADS): on the pad (rotors turning, a dwell), lift-off to 30 m,
- *           transit climbing to the cruise height at the cruise speed, a decelerating approach that descends towards
- *           the next pad (≈ 6° from 1.2 km out), a hover over it while turning onto the pad's heading, touch-down,
- *           the next dwell; then the next leg.
- *  orbit    the police: a left-hand circle round a point of interest that drifts along a list of waypoints
- *           (motorways, the CBD, suburbs) at walking-car speed, at 1,000–1,500 ft, day and night.
+ * Each helicopter flies one fixed cycle of stops, round and round:
+ *  pad     on the pad (rotors turning, a dwell: the stop's own, a hospital hand-over is shorter than a base stand-by),
+ *          lift-off to 30 m, transit climbing to the cruise height at the cruise speed, a decelerating approach that
+ *          descends towards the next pad (≈ 6° from 1.2 km out), a hover over it while turning onto the pad's heading,
+ *          touch-down, the next dwell. A pad may lie off the map (Whangārei, Great Barrier): the helicopter flies the
+ *          real distance there and back.
+ *  patrol  the police: a left-hand circle round a point of interest that drifts along a list of waypoints (motorways,
+ *          the CBD, suburbs) at walking-car speed, at 1,000–1,500 ft, for the patrol's length; then on to the next
+ *          stop (back to base to refuel).
+ * A new flight can start anywhere in its cycle (placeHeli fast-forwards it), so the traffic is mid-mission when the
+ * sortie begins.
  *
  * Positions use world conventions (heading 0 = north = −Z, clockwise; y up).
  */
@@ -22,8 +27,22 @@ import { setQuatFromHPR } from '../flight/attitude';
 
 const DEG = Math.PI / 180;
 
-/** Height of each type's model origin above its skids / wheels (m): the models (render/models/aircraft/helicopters.ts) are built to it. */
-export const HELI_GEAR_HEIGHT = { aw169: 1.45, bell429: 1.3, h130: 1.3 } as const;
+/** Height of each type's model origin above its wheels / skids (m): the models (render/models/aircraft/helicopters.ts) are built to it. */
+export const HELI_GEAR_HEIGHT = { aw169: 1.45, bell429: 1.3 } as const;
+
+/** The individual helicopters (their name and registration decals: render/models/aircraft/helicopters.ts HELI_LIVERIES). */
+export type HeliLiveryId = 'westpac1' | 'westpac2' | 'northland' | 'eagle';
+
+/**
+ * What each is called, as Aucklanders know them: the callsign, the radio and kill feed's name, and the HUD's full
+ * label (designated box, target camera, TSD, PCD) and short one (crowded contact boxes). NZ Police call theirs Eagle.
+ */
+export const HELI_NAMES: Record<HeliLiveryId, { name: string; label: string; short: string }> = {
+  westpac1: { name: 'Westpac Rescue 1', label: 'WESTPAC RESCUE 1', short: 'WESTPAC 1' },
+  westpac2: { name: 'Westpac Rescue 2', label: 'WESTPAC RESCUE 2', short: 'WESTPAC 2' },
+  northland: { name: 'Northland Rescue', label: 'NORTHLAND RESCUE', short: 'NORTHLAND' },
+  eagle: { name: 'Police Eagle', label: 'POLICE EAGLE', short: 'EAGLE' },
+};
 
 /** A pad as the flight needs it: centre, surface height (m) and heading (rad). */
 export interface HeliPad {
@@ -35,34 +54,51 @@ export interface HeliPad {
   heading: number;
 }
 
+/**
+ * A police patrol: the orbit's radius (m), its height (m MSL) and airspeed (m/s), the drifting point of interest's
+ * route and speed (m/s), how long it lasts (s).
+ */
+export interface HeliPatrol {
+  route: [number, number][];
+  radius: number;
+  alt: number;
+  airspeed: number;
+  speed: number;
+  duration: number;
+}
+
+/** One stop of a cycle: land on a pad and wait `dwell` s there, or fly a patrol. */
+export type HeliStop = { pad: HeliPad; dwell: number } | { patrol: HeliPatrol };
+
 export type HeliPhase = 'parked' | 'liftoff' | 'transit' | 'approach' | 'hover' | 'landing' | 'orbit';
 
 export interface HeliFlight {
-  role: 'rescue' | 'police' | 'tour';
+  role: 'rescue' | 'police';
+  livery: HeliLiveryId;
   phase: HeliPhase;
-  /** Shuttle: the pads in order (the last leg returns to the first); `leg` is the index of the pad flown to next. */
-  pads: HeliPad[];
+  /** The cycle, flown in order and round again; `leg` is the stop flown to next (or the patrol being flown). */
+  stops: HeliStop[];
   leg: number;
-  /** Seconds on each pad before lifting off (shuttle). */
+  /** Seconds on the current pad before lifting off. */
   dwell: number;
-  /** Cruise height (m MSL; at least `minAgl` above the ground) and speed (m/s). */
+  /** Transit cruise height (m MSL; at least `minAgl` above the ground) and speed (m/s). */
   cruiseAlt: number;
   cruiseSpeed: number;
   minAgl: number;
-  /** Police orbit: radius (m), the point of interest's route and speed (m/s), where it is along it. */
-  orbit?: { radius: number; route: [number, number][]; speed: number; s: number; angle: number };
+  /** The patrol's orbit: where its point of interest is along the route (m, kept from one patrol to the next). */
+  orbit?: { radius: number; route: [number, number][]; speed: number; s: number };
   speed: number;
   heading: number;
   pitch: number;
   bank: number;
-  /** Seconds in the current phase, since spawn. */
+  /** Seconds in the current phase, since spawn (or since the fast-forward to the start point). */
   timer: number;
   age: number;
-  /** Height of the model origin above the skids (m). */
+  /** Height of the model origin above the wheels / skids (m). */
   gearHeight: number;
   /** Rotor speed 0..1 (spun up on the pad before lift-off): published as the engine rpm for sound. */
   rotor: number;
-  /** Every pad touched so far (shuttle), with the time and the touch-down point: the tests' log. */
+  /** Every pad touched so far, with the time and the touch-down point: the tests' log. */
   touchdowns: { pad: string; t: number; x: number; z: number }[];
   /** A flight never despawns (the helicopters loop); kept for symmetry with CivilFlight. */
   despawn: boolean;
@@ -85,30 +121,42 @@ const HOVER_HEIGHT = 12;
 const HOVER_DIST = 6;
 /** Rotor spin-up time (s) before lift-off. */
 const SPIN_UP = 20;
+/** Ground clearance in transit and on patrol (m). */
+const TRANSIT_AGL = 150;
+const PATROL_AGL = 250;
+/** Fast-forward step (s) when a flight starts part-way round its cycle. */
+const WARM_DT = 0.25;
 
-export interface ShuttleOptions {
-  role: 'rescue' | 'tour';
-  pads: HeliPad[];
+export interface RouteOptions {
+  role: 'rescue' | 'police';
+  livery: HeliLiveryId;
+  /** The cycle; it starts parked on the first stop, which must be a pad (the base). */
+  stops: HeliStop[];
   cruiseAlt: number;
   cruiseSpeed: number;
-  dwell: number;
   gearHeight: number;
-  /** Start on the way to pad `leg` (0..1 of the leg flown), or parked on pad `leg − 1` (−1). */
-  startLeg: number;
-  startFraction: number;
+  /** Where a patrol's point of interest starts along its route (m). */
+  patrolStart?: number;
 }
 
-export function createShuttle(o: ShuttleOptions): HeliFlight {
-  const n = o.pads.length;
-  const f: HeliFlight = {
+export function createRoute(o: RouteOptions): HeliFlight {
+  const base = o.stops[0];
+  if (!('pad' in base)) throw new Error('a helicopter cycle starts on a pad');
+  o.stops.forEach((st, i) => {
+    if ('patrol' in st && !('pad' in o.stops[(i + 1) % o.stops.length])) throw new Error('a patrol must be followed by a pad');
+  });
+  const patrol = o.stops.find((st): st is { patrol: HeliPatrol } => 'patrol' in st)?.patrol;
+  return {
     role: o.role,
+    livery: o.livery,
     phase: 'parked',
-    pads: o.pads,
-    leg: ((o.startLeg % n) + n) % n,
-    dwell: o.dwell,
+    stops: o.stops,
+    leg: 1 % o.stops.length,
+    dwell: base.dwell,
     cruiseAlt: o.cruiseAlt,
     cruiseSpeed: o.cruiseSpeed,
-    minAgl: 150,
+    minAgl: TRANSIT_AGL,
+    orbit: patrol ? { radius: patrol.radius, route: patrol.route, speed: patrol.speed, s: o.patrolStart ?? 0 } : undefined,
     speed: 0,
     heading: 0,
     pitch: 0,
@@ -120,36 +168,40 @@ export function createShuttle(o: ShuttleOptions): HeliFlight {
     touchdowns: [],
     despawn: false,
   };
-  if (o.startFraction > 0) {
-    f.phase = 'transit';
-    f.speed = o.cruiseSpeed;
-    f.rotor = 1;
-  }
-  return f;
 }
 
-export function createOrbit(route: [number, number][], alt: number, radius: number, speed: number, gearHeight: number, phase0: number): HeliFlight {
-  return {
-    role: 'police',
-    phase: 'orbit',
-    pads: [],
-    leg: 0,
-    dwell: 0,
-    cruiseAlt: alt,
-    cruiseSpeed: speed,
-    minAgl: 250,
-    orbit: { radius, route, speed: 14, s: 0, angle: phase0 },
-    speed,
-    heading: 0,
-    pitch: 0,
-    bank: 0,
-    timer: 0,
-    age: 0,
-    gearHeight,
-    rotor: 1,
-    touchdowns: [],
-    despawn: false,
-  };
+/** The pads of a flight's cycle, in order (patrols left out). */
+export function cyclePads(f: HeliFlight): HeliPad[] {
+  return f.stops.flatMap((st) => ('pad' in st ? [st.pad] : []));
+}
+
+/**
+ * About how long one round of the cycle takes (s): every leg at the cruise speed plus the climb, approach and
+ * landing, every dwell and patrol. Picks where in the cycle a new flight starts.
+ */
+export function cycleSeconds(f: HeliFlight): number {
+  let t = 0;
+  const n = f.stops.length;
+  for (let i = 0; i < n; i++) {
+    const st = f.stops[i];
+    const next = f.stops[(i + 1) % n];
+    if ('pad' in st) {
+      t += st.dwell;
+      if ('pad' in next) t += Math.hypot(next.pad.x - st.pad.x, next.pad.z - st.pad.z) / f.cruiseSpeed + 150;
+      else t += Math.hypot(next.patrol.route[0][0] - st.pad.x, next.patrol.route[0][1] - st.pad.z) / f.cruiseSpeed + 60;
+    } else {
+      const to = (next as { pad: HeliPad }).pad;
+      const r = st.patrol.route[0];
+      t += st.patrol.duration + Math.hypot(to.x - r[0], to.z - r[1]) / f.cruiseSpeed + 150;
+    }
+  }
+  return t;
+}
+
+/** The stop the flight is parked on or lifting off from (the one before `leg`). */
+function fromPad(f: HeliFlight): HeliPad {
+  const st = f.stops[(f.leg - 1 + f.stops.length) % f.stops.length];
+  return 'pad' in st ? st.pad : (f.stops[0] as { pad: HeliPad }).pad;
 }
 
 const _p = new Vector3();
@@ -174,35 +226,24 @@ export function orbitCentre(f: HeliFlight, out = _p): Vector3 {
   return out.set(r[0][0], 0, r[0][1]);
 }
 
-/** Put a freshly spawned helicopter at the start of its profile (a shuttle part-way along a leg, or on its pad). */
-export function placeHeli(ac: AircraftEntity, f: HeliFlight, terrain: TerrainQuery, startFraction = 0): void {
+/**
+ * Put a freshly spawned helicopter on its base pad (the first stop), rotors idling, then fly it `warmup` seconds on
+ * round its cycle, so it starts wherever that puts it: parked, on a leg, or on patrol. The log starts after that.
+ */
+export function placeHeli(ac: AircraftEntity, f: HeliFlight, terrain: TerrainQuery, warmup = 0): void {
   ac.heli = f;
   ac.gear = 1;
-  const pos = ac.position;
-  if (f.phase === 'orbit') {
-    const c = orbitCentre(f);
-    const o = f.orbit!;
-    pos.set(c.x + Math.cos(o.angle) * o.radius, 0, c.z + Math.sin(o.angle) * o.radius);
-    pos.y = Math.max(f.cruiseAlt, terrain.surfaceHeightAt(pos.x, pos.z) + f.minAgl);
-    // flying the circle anticlockwise on the map (a left-hand orbit): heading along the tangent
-    f.heading = headingOf(Math.sin(o.angle), -Math.cos(o.angle));
-  } else {
-    const to = f.pads[f.leg];
-    const from = f.pads[(f.leg - 1 + f.pads.length) % f.pads.length];
-    if (f.phase === 'transit') {
-      pos.set(from.x + (to.x - from.x) * startFraction, 0, from.z + (to.z - from.z) * startFraction);
-      pos.y = glideHeight(f, to, Math.hypot(to.x - pos.x, to.z - pos.z), pos, terrain);
-      f.heading = headingOf(to.x - from.x, to.z - from.z);
-    } else {
-      pos.set(from.x, from.y + f.gearHeight, from.z);
-      f.heading = from.heading;
-      f.timer = Math.max(0, f.dwell - SPIN_UP - 15);
-    }
-  }
+  const from = fromPad(f);
+  ac.position.set(from.x, from.y + f.gearHeight, from.z);
+  f.heading = from.heading;
+  f.timer = 0;
   setQuatFromHPR(ac.quaternion, f.heading, f.pitch, f.bank);
-  ac.velocity.set(Math.sin(f.heading) * f.speed, 0, -Math.cos(f.heading) * f.speed);
+  ac.velocity.set(0, 0, 0);
   ac.rates.set(0, 0, 0);
   writeFlight(ac, f, terrain);
+  for (let t = 0; t < warmup; t += WARM_DT) stepHeli(ac, WARM_DT, terrain);
+  f.age = 0;
+  f.touchdowns.length = 0;
 }
 
 /** Advance a live civil helicopter by dt. */
@@ -220,6 +261,7 @@ export function stepHeli(ac: AircraftEntity, dt: number, terrain: TerrainQuery):
 
   if (f.phase === 'orbit') {
     const o = f.orbit!;
+    const patrol = (f.stops[f.leg] as { patrol: HeliPatrol }).patrol;
     o.s += o.speed * dt;
     const c = orbitCentre(f);
     // steer onto the circle: aim at the point a little ahead on it (anticlockwise on the map)
@@ -228,12 +270,21 @@ export function stepHeli(ac: AircraftEntity, dt: number, terrain: TerrainQuery):
     const tx = c.x + Math.cos(ahead) * o.radius;
     const tz = c.z + Math.sin(ahead) * o.radius;
     turnTowards(f, headingOf(tx - pos.x, tz - pos.z), dt);
-    f.speed += clampAbs(f.cruiseSpeed - f.speed, ACCEL * dt);
+    // out to the patrol area (and between its legs) at the cruise speed, slowing to the orbit's airspeed on the circle
+    const far = Math.hypot(pos.x - c.x, pos.z - c.z) > 2 * o.radius;
+    f.speed += clampAbs((far ? f.cruiseSpeed : patrol.airspeed) - f.speed, ACCEL * dt);
     moveFlat(pos, f, dt);
-    holdHeight(pos, f, terrain, Math.max(f.cruiseAlt, terrain.surfaceHeightAt(pos.x, pos.z) + f.minAgl), dt);
+    holdHeight(pos, f, terrain, Math.max(patrol.alt, terrain.surfaceHeightAt(pos.x, pos.z) + PATROL_AGL), dt);
     pitchT = 3 * DEG;
+    // the patrol is over: back to the next pad (base, to refuel)
+    if (f.timer >= patrol.duration) {
+      f.leg = (f.leg + 1) % f.stops.length;
+      enter(f, 'transit');
+    }
   } else {
-    const to = f.pads[f.leg];
+    // parked and lifting off, the next stop may be a patrol; every later phase flies to a pad
+    const next = f.stops[f.leg];
+    const to = 'pad' in next ? next.pad : fromPad(f);
     const dx = to.x - pos.x;
     const dz = to.z - pos.z;
     const d = Math.hypot(dx, dz);
@@ -244,10 +295,9 @@ export function stepHeli(ac: AircraftEntity, dt: number, terrain: TerrainQuery):
         if (f.timer >= f.dwell) enter(f, 'liftoff');
         break;
       case 'liftoff': {
-        const from = f.pads[(f.leg - 1 + f.pads.length) % f.pads.length];
+        const from = fromPad(f);
         pos.y = Math.min(pos.y + VERTICAL_RATE * dt, from.y + f.gearHeight + LIFTOFF_HEIGHT);
-        turnTowards(f, headingOf(dx, dz), dt * 0.5);
-        if (pos.y >= from.y + f.gearHeight + LIFTOFF_HEIGHT - 0.01) enter(f, 'transit');
+        if (pos.y >= from.y + f.gearHeight + LIFTOFF_HEIGHT - 0.01) enter(f, 'pad' in next ? 'transit' : 'orbit');
         break;
       }
       case 'transit': {
@@ -290,7 +340,8 @@ export function stepHeli(ac: AircraftEntity, dt: number, terrain: TerrainQuery):
         pos.y = Math.max(yPad, pos.y - rate * dt);
         if (pos.y <= yPad + 1e-3) {
           f.touchdowns.push({ pad: to.id, t: f.age, x: pos.x, z: pos.z });
-          f.leg = (f.leg + 1) % f.pads.length;
+          f.dwell = (next as { dwell: number }).dwell;
+          f.leg = (f.leg + 1) % f.stops.length;
           f.rotor = 0.4;
           enter(f, 'parked');
         }

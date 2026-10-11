@@ -2,8 +2,10 @@
  * The civil helicopters (#144) drawn instanced: one InstancedMesh per type (one draw call each, whatever the number
  * in the air) holding the whole airframe and both rotors merged. The rotors spin in the vertex shader: every vertex
  * of a rotor carries its hub (aPivot), spin axis and rate (aSpin: xyz axis, w rad/s; 0 = airframe), and is turned
- * by uTime · rate about the hub. A wreck stops its rotors and goes dark (per-instance colour). The Eagle's
- * searchlight is a second, additive InstancedMesh, drawn only at night (one more call then, for all of them).
+ * by uTime · rate about the hub. A wreck stops its rotors and goes dark (per-instance colour). Each type's names and
+ * registrations are a second InstancedMesh (heliDecals: one texture atlas, a row per helicopter, picked per instance
+ * by iRow), so Westpac Rescue 1 and 2 share a draw call yet carry their own registrations. The Eagle's searchlight
+ * is a third, additive one, drawn only at night.
  *
  * The AircraftVisual of a helicopter keeps no meshes (AircraftPrototype.instanced): it still tracks the pose, LOD
  * distance and the nav-light anchors (the lights join the renderer's sprite batch), and this batch draws each frame
@@ -22,13 +24,15 @@ import {
   Quaternion,
   Vector3,
   type Material,
-  type MeshStandardMaterial,
+  MeshStandardMaterial,
   type Mesh,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { AircraftType } from '../../core/types';
 import type { AircraftPrototype } from '../models/aircraft/types';
 import { getVariant } from '../models/materials';
+import { heliDecals, type HeliDecals } from '../models/aircraft/helicopters';
+import type { HeliLiveryId } from '../../sim/civil/heli';
 
 /** Most helicopters of one type drawn at once (the traffic flies at most 4 in all). */
 const CAPACITY = 8;
@@ -116,8 +120,27 @@ function spinMaterial(time: { value: number }): Material {
   });
 }
 
+/** The decal material: the atlas's row `iRow` of `uRows` (rows top-down in the canvas; the texture flips Y). */
+function decalMaterial(d: HeliDecals): Material {
+  const m = new MeshStandardMaterial({ map: d.texture, transparent: true, roughness: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uRows = { value: d.rows };
+    shader.vertexShader = 'attribute float iRow;\nuniform float uRows;\n' + shader.vertexShader.replace(
+      '#include <uv_vertex>',
+      '#include <uv_vertex>\n  vMapUv.y = (vMapUv.y + uRows - iRow - 1.0) / uRows;',
+    );
+  };
+  m.customProgramCacheKey = () => `heli-decal-${d.rows}`;
+  return m;
+}
+
 interface TypeBatch {
   mesh: InstancedMesh;
+  /** The names and registrations (null without a canvas: node tests), and each instance's atlas row. */
+  decal: InstancedMesh | null;
+  decalRows: Float32Array;
+  decalRowAttr: InstancedBufferAttribute | null;
+  decals: HeliDecals | null;
   spin: Float32Array;
   spinAttr: InstancedBufferAttribute;
   count: number;
@@ -156,6 +179,24 @@ export class HeliBatch {
     mesh.frustumCulled = false; // instances anywhere in the world: culled per instance by the visuals' LOD instead
     mesh.count = 0;
     for (let i = 0; i < CAPACITY; i++) mesh.setColorAt(i, ALIVE);
+    const decals = heliDecals(type);
+    let decal: InstancedMesh | null = null;
+    const decalRows = new Float32Array(CAPACITY);
+    let decalRowAttr: InstancedBufferAttribute | null = null;
+    if (decals?.texture) {
+      const dg = decals.geometry.clone();
+      decalRowAttr = new InstancedBufferAttribute(decalRows, 1);
+      decalRowAttr.setUsage(DynamicDrawUsage);
+      dg.setAttribute('iRow', decalRowAttr);
+      decal = new InstancedMesh(dg, decalMaterial(decals), CAPACITY);
+      decal.name = `heli:${type}:decals`;
+      decal.instanceMatrix.setUsage(DynamicDrawUsage);
+      decal.frustumCulled = false;
+      decal.renderOrder = 2;
+      decal.count = 0;
+      for (let i = 0; i < CAPACITY; i++) decal.setColorAt(i, ALIVE);
+      this.group.add(decal);
+    }
     let beam: InstancedMesh | null = null;
     const beamLocal = new Matrix4();
     const light = proto.lod0.getObjectByName('night:searchlight') as Mesh | undefined;
@@ -170,7 +211,7 @@ export class HeliBatch {
       this.group.add(beam);
     }
     this.group.add(mesh);
-    b = { mesh, spin, spinAttr, count: 0, beam, beamLocal, beamCount: 0 };
+    b = { mesh, decal, decalRows, decalRowAttr, decals, spin, spinAttr, count: 0, beam, beamLocal, beamCount: 0 };
     this.types.set(type, b);
     return b;
   }
@@ -185,13 +226,18 @@ export class HeliBatch {
     }
   }
 
-  /** Draw one helicopter of `type` at the world matrix of its (mesh-less) visual's root. */
-  add(type: AircraftType, matrix: Matrix4, alive: boolean): void {
+  /** Draw one helicopter of `type` (`livery`: its name and registration) at the world matrix of its (mesh-less) visual's root. */
+  add(type: AircraftType, matrix: Matrix4, alive: boolean, livery?: HeliLiveryId): void {
     const b = this.batch(type);
     if (b.count >= CAPACITY) return;
     const i = b.count++;
     b.mesh.setMatrixAt(i, matrix);
     b.mesh.setColorAt(i, alive ? ALIVE : WRECK);
+    if (b.decal) {
+      b.decal.setMatrixAt(i, matrix);
+      b.decal.setColorAt(i, alive ? ALIVE : WRECK);
+      b.decalRows[i] = b.decals!.row(livery);
+    }
     b.spin[i] = alive ? 1 : 0;
     if (b.beam && alive && this.night) b.beam.setMatrixAt(b.beamCount++, _m.multiplyMatrices(matrix, b.beamLocal));
   }
@@ -208,19 +254,30 @@ export class HeliBatch {
         b.beam.instanceMatrix.needsUpdate = true;
       }
       b.mesh.visible = b.count > 0;
+      if (b.decal) {
+        b.decal.count = b.count;
+        b.decal.visible = b.count > 0;
+        b.decal.instanceMatrix.needsUpdate = true;
+        if (b.decal.instanceColor) b.decal.instanceColor.needsUpdate = true;
+        b.decalRowAttr!.needsUpdate = true;
+      }
     }
   }
 
   /** Draw calls this batch issues now (tests, stats). */
   get drawCalls(): number {
     let n = 0;
-    for (const b of this.types.values()) n += (b.mesh.visible ? 1 : 0) + (b.beam?.visible ? 1 : 0);
+    for (const b of this.types.values()) n += (b.mesh.visible ? 1 : 0) + (b.decal?.visible ? 1 : 0) + (b.beam?.visible ? 1 : 0);
     return n;
   }
 
   dispose(): void {
     for (const b of this.types.values()) {
       b.mesh.geometry.dispose();
+      if (b.decal) {
+        b.decal.geometry.dispose();
+        (b.decal.material as Material).dispose();
+      }
 
     }
     this.group.removeFromParent();

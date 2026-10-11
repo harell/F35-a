@@ -317,20 +317,26 @@ runs through turns its street grid to the road (`urbanGrid.ts districtAngles`). 
 
 ## Civil helicopters (#144)
 
-Three code-built types (`aw169` Westpac Rescue, `bell429` police "Eagle", `h130` sightseeing; `src/render/models/aircraft/helicopters.ts`)
-are neutral sim entities like the airliners, spawned once per Auckland sortie by `src/missions/runtime/helicopters.ts`
-(`QualitySettings.helicopters`: 1 low, 3 medium, 4 high; seeded from the mission) and flown kinematically by
-`src/sim/civil/heli.ts` (`AircraftEntity.heli`; the world skips the flight model, the collisions skip them while alive):
-the rescue AW169 shuttles between Auckland City Hospital's rooftop pad and Waiheke's Onetangi pad (now and then North
-Shore or Middlemore), the police Bell 429 orbits a point drifting over the CBD and the motorways at 1,000–1,500 ft, and
-the sightseeing H130s shuttle between Mechanics Bay and a Waiheke vineyard. Their pads come from `HELIPADS`
-(`src/core/sites.ts`, #125). Being neutral they are off the datalink, boxed `CIV`, ranked last for designation and
-broadcast ADS-B in the stroll; shooting one down is a civilian loss ("CIVILIAN HELICOPTER DOWN", −500, −0.15 rating,
-a debrief row, `MissionResultExt.civilianHeliKills`), never a kill and never a failed sortie, and the wreck falls on
-the flight model. They are drawn instanced, one draw call per type (`src/render/visuals/HeliBatch.ts`: the airframe
-and both rotors merged, the rotors turned in the vertex shader); their `AircraftVisual` keeps no meshes
-(`AircraftPrototype.instanced`), only the pose, LOD distance and nav-light anchors, which join the shared sprite batch.
-The Eagle's searchlight is one more instanced draw, at night only.
+The real helicopters over Auckland, one of each: Westpac Rescue 1 and 2 and Northland Rescue (`aw169`, Northern
+Rescue's red and yellow) and the police Eagle (`bell429`, navy). One shared code-built airframe in two paint schemes
+matched to photos (`src/render/models/aircraft/helicopters.ts`), with each helicopter's name and registration as
+decals (`HELI_LIVERIES`, `heliDecals`). They are neutral sim entities like the airliners, spawned once per Instant Action
+sortie over Auckland (none in the campaign or training) by `src/missions/runtime/helicopters.ts` (`QualitySettings.helicopters`: 1 low, 3 medium, 4 high; seeded from
+the mission, salted on a retry) and never respawned: one shot down stays down until the next session. Each flies a
+fixed cycle of stops (`src/sim/civil/heli.ts`: `AircraftEntity.heli`; the world skips the flight model, the
+collisions skip them while alive) and starts at a random point of it (`placeHeli` fast-forwards the profile), so the
+sortie opens on traffic under way: Westpac Rescue 1 Ardmore → Onetangi (Waiheke) → Auckland City Hospital's roof →
+Ardmore; Westpac Rescue 2 Ardmore → Great Barrier → the hospital → Ardmore; Northland Rescue Whangārei → the hospital
+(Starship) → Whangārei; the Eagle from Onehunga on a 75-minute patrol orbiting a point drifting over the CBD and the
+motorways at 1,000–1,500 ft, then back to refuel. Great Barrier and Whangārei lie off the map, and the helicopters fly
+the real distance there. Their pads come from `HELIPADS` (`src/core/sites.ts`, #125). Being neutral they are off the
+datalink, boxed `CIV`, ranked last for designation and broadcast ADS-B in the stroll; shooting one down is a civilian
+loss ("CIVILIAN HELICOPTER DOWN", −500, −0.15 rating, a debrief row, `MissionResultExt.civilianHeliKills`), never a
+kill and never a failed sortie, and the wreck falls on the flight model. They are drawn instanced
+(`src/render/visuals/HeliBatch.ts`: per type the airframe and both rotors merged, the rotors turned in the vertex
+shader, and a second instanced mesh for the decals, one atlas row per helicopter); their `AircraftVisual` keeps no
+meshes (`AircraftPrototype.instanced`), only the pose, LOD distance and nav-light anchors, which join the shared
+sprite batch. The Eagle's searchlight is one more instanced draw, at night only.
 
 ## Named superyachts (#145)
 

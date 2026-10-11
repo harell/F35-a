@@ -92,7 +92,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly withdrawal: WithdrawalMonitor;
   /** Neutral airliners in and out of Auckland Airport (Auckland theatre only). */
   private readonly civil: CivilTraffic | null;
-  /** Civil helicopters (#144): spawned at the start, flying for the whole sortie. */
+  /** Civil helicopters (#144): Instant Action only, spawned at the start, flying for the whole sortie. */
   readonly helicopters: HelicopterTraffic | null;
   /** Neutral container ships and cruise liners (Auckland theatre only, gated with the airliners). */
   private readonly shipping: CivilShipping | null;
@@ -147,7 +147,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.coach = def.script.defenceCoach ? new DefenceCoach(this.s) : null;
     const civilTraffic = def.theater === 'auckland' && deps.civilTraffic !== false;
     this.civil = civilTraffic ? new CivilTraffic(this.s) : null;
-    this.helicopters = civilTraffic ? new HelicopterTraffic(this.s, deps.helicopters ?? 3) : null;
+    // the civil helicopters fly in Instant Action only: the campaign and training keep their skies to the fight
+    this.helicopters = civilTraffic && def.kind === 'instant' ? new HelicopterTraffic(this.s, deps.helicopters ?? 3) : null;
     this.shipping = civilTraffic ? new CivilShipping(this.s) : null;
     this.superyachts = civilTraffic ? new SuperyachtTraffic(this.s) : null;
     this.trains = civilTraffic ? new TrainTraffic(this.s) : null;

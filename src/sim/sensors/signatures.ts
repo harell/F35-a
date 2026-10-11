@@ -28,7 +28,6 @@ export const TYPE_RCS: Record<AircraftType, number> = {
   // civil helicopters: metal fuselage and a big rotor head (≈ 3–8 m²)
   aw169: 8,
   bell429: 5,
-  h130: 3,
 };
 
 /** Default IR signature scale by type (1 = typical fighter at MIL power). */
@@ -44,7 +43,6 @@ export const TYPE_IR: Record<AircraftType, number> = {
   // turboshafts with exhaust shrouds: a fraction of a jet's plume
   aw169: 0.35,
   bell429: 0.3,
-  h130: 0.2,
 };
 
 export interface FighterRadarSpec {
@@ -80,7 +78,6 @@ export const FIGHTER_RADAR: Record<AircraftType, FighterRadarSpec> = {
   // civil helicopters: weather radar at most
   aw169: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
   bell429: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
-  h130: { range: 0, gimbal: 0, lpi: false, irst: 0, notchResistance: 0 },
 };
 
 export function isStealthy(ac: AircraftEntity): boolean {

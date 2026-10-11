@@ -614,7 +614,6 @@ const RAW: Record<AircraftType, PerfInput> = {
   },
   aw169: helicopter('aw169', 'Leonardo AW169', 3_000, 14.6, 12.1, 8, 0.35),
   bell429: helicopter('bell429', 'Bell 429 GlobalRanger', 2_000, 13.1, 11.0, 5, 0.3),
-  h130: helicopter('h130', 'Airbus H130', 1_450, 12.6, 10.7, 3, 0.2),
 };
 
 /** Compute the derived lift-curve and fuel constants. */
@@ -658,5 +657,4 @@ export const AIRCRAFT_PERF: Readonly<Record<AircraftType, AircraftPerf>> = {
   shahed136: derive(RAW.shahed136),
   aw169: derive(RAW.aw169),
   bell429: derive(RAW.bell429),
-  h130: derive(RAW.h130),
 };
