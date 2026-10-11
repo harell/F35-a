@@ -423,6 +423,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     terrain: terrainQuery,
     sunDirection: preset.sunDir.clone(),
     isNight: preset.isNight,
+    lights: preset.lights,
     fogColor: preset.fogColor.getHex(),
     // what the low-quality target camera leaves out (the Wiri tanks are scenery-drawn, but friendly:
     // never a PiP target)

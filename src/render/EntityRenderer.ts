@@ -40,6 +40,8 @@ function boatWake(wakes: WakeBatch, kind: BoatKind, pos: Vector3, vel: Vector3):
 /** Ship nav lights are drawn out to this range (m); cabin / deck lights closer in. */
 const SHIP_LIGHTS_FAR = 16_000;
 const SHIP_DECK_LIGHTS_FAR = 7_000;
+/** The city's lamp level (EnvironmentApi.lights) above which ship cabins and ferry / train windows are lit, as Scenery's lamps. */
+const LIT = 0.01;
 /** Wake brightness at night (moonlight on the foam; 1 by day). */
 const NIGHT_WAKE = 0.45;
 const eyeCache = new Map<AircraftType, Vector3>();
@@ -126,7 +128,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       } else lights.add(_p.x, _p.y, _p.z, r * 1.6 * k, g * 1.6 * k, b * 1.6 * k, 1, 0.6, night ? 3.5 : 2);
     }
   };
-  /** Civil ships at night: nav lights by COLREGS state, cabin / deck lights up close. */
+  /** Civil ships once the city's lamps are on (dusk and night): nav lights by COLREGS state, cabin / deck lights up close. */
   const shipLightsFor = (tr: Tracked<GroundVisual>): void => {
     const v = tr.v;
     const mode = v.lightMode;
@@ -183,7 +185,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
     // faint 3D background, so no 3D markers are drawn there (they would not match the map scale)
     if (ctx.viewMode !== 'tactical') {
       aircraft.forEach(lightFor);
-      if (env.isNight) {
+      if (env.lights > LIT) {
         // the ferries first: a few dozen lights, which a harbour full of lit liners must not crowd out
         ferries?.addLights(lights, ctx.camera.position);
         trains?.addLights(lights, ctx.camera.position);
@@ -292,7 +294,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       grounds.forEach(sweepGround);
 
       // harbour ferries (render-only, placed by their timetable at sim time)
-      ferries?.setNight(env.isNight);
+      ferries?.setNight(env.lights > LIT);
       ferries?.update(t, wakes);
 
       // trains: the nearest on the timetable (sim time), the player's designated one whatever its range
@@ -302,7 +304,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       }
       if (trains && world.trains) {
         const des = world.player ? world.getEntity(world.player.radar.designatedId) : null;
-        trains.setNight(env.isNight);
+        trains.setNight(env.lights > LIT);
         trains.update(world.trains, t, cam, des && des.kind === 'ground' && des.train ? des.train.unit : -1);
       }
       wakes?.end();

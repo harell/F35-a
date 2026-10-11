@@ -35,6 +35,8 @@ const VIEWS = {
   ship_1km: { mission: 'ia_stroll_auckland', t: 60, ship: true, cam: [0, 1000, 0], look: [0, 0, 0] },
   // the harbour at night: ferry lights and faint wakes
   harbour_night: { mission: 'ia_stroll_auckland', tod: 'night', t: 620, cam: [1000, 700, -300], look: [1300, 0, -1500] },
+  // the cruise liner at Princes Wharf at dusk, from over the harbour (#276: its cabin lights come on with the city's)
+  cruise_dusk: { mission: 'ia_stroll_auckland', tod: 'dusk', t: 620, cam: [620, 70, -1060], look: [361, 15, -923] },
 };
 
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

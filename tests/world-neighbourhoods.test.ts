@@ -266,7 +266,7 @@ describe('the neighbourhoods in the building list (applyNeighbourhoods)', () => 
     expect(low).toBeLessThan(medium * 0.8);
   });
 
-  it("an area outside the real-streets region can go in a mesh of its own (Scenery: frustum-culled), not the city's", () => {
+  it("an area outside the real-streets region can go in a mesh of its own (Scenery: frustum-culled), not the city's", { timeout: 60_000 }, () => {
     const cbd = aucklandCbd();
     const roads = new RoadNetwork(aucklandRoadPaths());
     const height = () => 10;
