@@ -106,7 +106,7 @@ const world = {
     return null;
   },
 } as unknown as SimWorld & { time: number; player: AircraftEntity | null };
-const env: EnvironmentApi = { terrain, sunDirection: new Vector3(0.5, night ? -0.3 : 0.8, 0.3).normalize(), isNight: night, fogColor: sky, update() {}, dispose() {} };
+const env: EnvironmentApi = { terrain, sunDirection: new Vector3(0.5, night ? -0.3 : 0.8, 0.3).normalize(), isNight: night, lights: night ? 1 : 0, fogColor: sky, update() {}, dispose() {} };
 
 function def(id: MunitionId, cat: MunitionDef['category'], guidance: MunitionDef['guidance'], smoke: number, length: number, diameter: number, boost: number): MunitionDef {
   return { id, name: id, short: id, category: cat, guidance, launch: 'rail', mass: 100, boostTime: boost, boostAccel: 200, sustainTime: 0, sustainAccel: 0, drag: 0, glideRatio: 0, maxG: 30, seekerFov: 1, gimbalLimit: 1, seekerRange: 1, navConstant: 4, minRange: 0, maxRange: 1, fuseRadius: 10, damage: 50, blastRadius: 10, maxFlightTime: 30, flareResistance: 0, chaffResistance: 0, notchResistance: 0, smoke, length, diameter } as MunitionDef;

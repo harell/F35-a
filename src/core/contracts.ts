@@ -88,6 +88,12 @@ export interface EnvironmentApi {
   /** Unit vector pointing TO the sun (or moon at night). */
   readonly sunDirection: Vector3;
   readonly isNight: boolean;
+  /**
+   * The city's lamp level, 0 to 1: 0 by day and at dawn, about 0.2 at dusk (the first lamps on), 1 at
+   * night (SkyPreset.lights). Anything lit "when the city is" (ship cabins, ferry and train windows)
+   * reads it, not isNight.
+   */
+  readonly lights: number;
   /** Fog colour / distance for other modules that render custom materials. */
   readonly fogColor: number;
   /**

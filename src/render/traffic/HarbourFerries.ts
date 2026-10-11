@@ -87,7 +87,7 @@ const _l = new Vector3();
 
 export class HarbourFerries {
   readonly mesh: InstancedMesh;
-  /** The lit windows (visible at night only, see setNight()). */
+  /** The lit windows (visible once the city's lamps are on, at dusk and night: see setNight()). */
   readonly windows: InstancedMesh;
   private readonly routes: FerryRoute[];
   private readonly fleet: readonly { route: number; k: number }[];
@@ -113,7 +113,7 @@ export class HarbourFerries {
     this.windows.visible = false;
   }
 
-  /** Lit windows at night only (by day the hull's dark window boxes show). */
+  /** Lit windows at dusk and night (by day and at dawn the hull's dark window boxes show). */
   setNight(night: boolean): void {
     this.windows.visible = night && this.fleet.length > 0;
   }
