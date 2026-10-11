@@ -233,6 +233,28 @@ describe('pod line of sight', () => {
     expect(pipView.mask).toBe('');
   });
 
+  it("an animal's shot opens at ZOOM; the next target that isn't one gets the step from before it back", () => {
+    resetPip();
+    resetPodZoom();
+    const eye = new Vector3(4000, 1200, 0);
+    const sam = new SamSiteEntity(3, 'sa6', 'red');
+    stepPod(sam, eye, flat(), null, 1 / 60);
+    expect(pipView.zoom).toBe(POD_ZOOM_DEFAULT);
+    stepPod(tiny(), eye, flat(), null, 1 / 60);
+    expect(POD_ZOOM[pipView.zoom].name).toBe('ZOOM');
+    // a second rat: still ZOOM, the step to go back to is still the SAM's
+    stepPod(new GroundTargetEntity(6, 'rat', 'red', { radius: 0.11 }), eye, flat(), null, 1 / 60);
+    expect(POD_ZOOM[pipView.zoom].name).toBe('ZOOM');
+    stepPod(sam, eye, flat(), null, 1 / 60);
+    expect(pipView.zoom).toBe(POD_ZOOM_DEFAULT);
+    // the player's own step on a site is kept as before
+    pipView.zoom = 0;
+    stepPod(new SamSiteEntity(7, 'sa15', 'red'), eye, flat(), null, 1 / 60);
+    expect(pipView.zoom).toBe(0);
+    resetPip();
+    resetPodZoom();
+  });
+
   it('a tap inside the open pod window steps the zoom; outside it or on the cinematic shot it does not', () => {
     resetPip();
     resetPodZoom();

@@ -18,7 +18,13 @@ import { type RunnerSpawn } from '../src/sim/runner';
 import { isSmallGround } from '../src/sim/weapons/small';
 import { TRAINING, createMissionRunner, fixedDifficulty, lessonsFor, missionById, nextMissionAfter, terrainPadsFor, validateMission } from '../src/missions';
 import type { CampaignProgress } from '../src/core/contracts';
-import { T07_SMALL, T07_GROUP, T07_ISLAND, T07_RAT, T07_ROUTES, type T07Route } from '../src/missions/content/trainingSmallTargets';
+import { T07_HOME_NZD, T07_LEGAL_NZD, T07_SMALL, T07_GROUP, T07_ISLAND, T07_RAT, T07_ROUTES, type T07Route } from '../src/missions/content/trainingSmallTargets';
+import { HOME_DAMAGE_FRACTION, homesWithin, ringDistance } from '../src/missions/runtime/collateral';
+import { costSummary } from '../src/missions/runtime/costs';
+import { MUNITIONS } from '../src/sim/weapons/defs';
+import { aucklandBuildings } from '../src/world/scenery/aucklandBuildings';
+import { costRows } from '../src/ui/screens/debrief';
+import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -100,17 +106,13 @@ describe('t07 Small Targets: content', () => {
     expect(T07_SMALL.timeOfDay).toBe('day');
   });
 
-  it("flies a StormBreaker load: g02's (bombs to spare) or g03's own, never a JDAM", () => {
-    expect(T07_SMALL.recommendedLoadout).toBe('strike_maritime');
-    expect(T07_SMALL.allowedLoadouts).toEqual(['strike_maritime', 'sead_precision']);
+  it("flies g03's StormBreakers and JDAMs for a swimmer: no AARGM-ER (a rat has no radar)", () => {
+    expect(T07_SMALL.recommendedLoadout).toBe('strike_mixed');
+    expect(T07_SMALL.allowedLoadouts).toEqual(['strike_mixed']);
+    const n = (w: string) => LOADOUTS.strike_mixed.stores.filter((st) => st.weapon === w).reduce((a, st) => a + st.count, 0);
+    expect([n('gbu53'), n('gbu31'), n('aargm')]).toEqual([4, 3, 0]);
+    expect(LOADOUTS.sead_precision.stores.some((st) => st.weapon === 'gbu53')).toBe(true);
     expect(missionById('g03')?.allowedLoadouts).toContain('sead_precision');
-    for (const id of T07_SMALL.allowedLoadouts) {
-      const l = LOADOUTS[id];
-      expect(l.stores.some((st) => st.weapon === 'gbu53'), id).toBe(true);
-      expect(l.stores.some((st) => st.weapon === 'gbu31'), id).toBe(false);
-    }
-    // the old mixed load existed only for this lesson's JDAM waves
-    expect(Object.keys(LOADOUTS)).not.toContain('strike_mixed');
   });
 
   it('one wave of two rats down the streets, every route ending at Watchman Island; a short briefing', () => {
@@ -123,7 +125,42 @@ describe('t07 Small Targets: content', () => {
       expect(r.drains.length).toBeGreaterThan(0);
     }
     expect(T07_SMALL.briefing.length).toBeLessThanOrEqual(3);
-    expect(T07_SMALL.briefing.join(' ')).not.toMatch(/JDAM|GBU-31/);
+  });
+});
+
+describe('t07: homes in a bomb\'s blast', () => {
+  it('a StormBreaker on a rat at a drain hits no home; a JDAM there hits at least one; over the water none', () => {
+    const b = aucklandBuildings();
+    expect(b).not.toBeNull();
+    const sb = MUNITIONS.gbu53.blastRadius * HOME_DAMAGE_FRACTION;
+    const jdam = MUNITIONS.gbu31.blastRadius * HOME_DAMAGE_FRACTION;
+    const routes: Record<string, T07Route> = T07_ROUTES;
+    for (const [name, r] of Object.entries(routes)) {
+      for (const k of r.drains) {
+        const p = r.route[k];
+        expect(homesWithin(b!, p.x, p.z, sb), `${name} drain ${k}`).toBe(0);
+        expect(homesWithin(b!, p.x, p.z, jdam), `${name} drain ${k}`).toBeGreaterThan(0);
+      }
+    }
+    expect(homesWithin(b!, T07_ISLAND.x, T07_ISLAND.z, jdam)).toBe(0);
+  });
+
+  it('ringDistance: 0 inside a footprint, the distance to its nearest edge outside', () => {
+    const square = [0, 0, 10, 0, 10, 10, 0, 10];
+    expect(ringDistance(square, 5, 5)).toBe(0);
+    expect(ringDistance(square, 15, 5)).toBeCloseTo(5, 6);
+    expect(ringDistance(square, 13, 14)).toBeCloseTo(5, 6);
+  });
+
+  it('the bill adds the homes and the legal costs to the total, and the debrief lists both', () => {
+    const homes = { label: 'Herne Bay homes', count: 3, nzd: 3 * T07_HOME_NZD, legal: { label: 'Legal costs', nzd: 3 * T07_LEGAL_NZD } };
+    const plain = costSummary(600, { gbu31: 1 }, { label: 'A rat trap', nzd: 40 }, { label: 'Rats removed', count: 1 });
+    const billed = costSummary(600, { gbu31: 1 }, { label: 'A rat trap', nzd: 40 }, { label: 'Rats removed', count: 1 }, homes);
+    expect(plain.homes).toBeUndefined();
+    expect(billed.totalNzd - plain.totalNzd).toBeCloseTo(3 * (T07_HOME_NZD + T07_LEGAL_NZD), 3);
+    const rows = costRows({ costSummary: billed } as MissionResultExt).map((r) => r[1]);
+    expect(rows).toContain('3 × Herne Bay homes');
+    expect(rows).toContain('Legal costs');
   });
 });
 
@@ -205,12 +242,12 @@ describe('the rat: runs, stops at the drains, swims', () => {
 
 describe('bombs against a swimming rat', { timeout: 120_000 }, () => {
   /** One `weapon` at a rat 300 m out to sea, released `range` m short of it, 1,200 m up; who died and where it went off. */
-  function drop(weapon: 'gbu53', seed: number, still = false, range = 3_000) {
+  function drop(weapon: 'gbu53' | 'gbu31', seed: number, still = false, range = 3_000) {
     const w = shoreWorld(seed);
     const from = new Vector3(800, 0, 0);
     const spec: RunnerSpawn = still ? { route: [from, from.clone()], stations: [] } : { route: [from, new Vector3(3_000, 0, 0)], stations: [], swimSpeed: T07_RAT.swimSpeed };
     const r = rat(w, spec);
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_maritime' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_mixed' });
     w.combat.selectWeapon(p, weapon, w);
     const bursts: string[] = [];
     w.events.on('explosion', (e) => bursts.push(e.surface));
@@ -238,6 +275,17 @@ describe('bombs against a swimming rat', { timeout: 120_000 }, () => {
     expect(kills).toBe(0);
   });
 
+  it('a JDAM released low and close kills it, and goes off in the water', () => {
+    let kills = 0;
+    for (const seed of [1, 2, 3]) {
+      // a JDAM from 1,200 m reaches about 1.6 km (dlz.ts gpsMaxRange)
+      const r = drop('gbu31', seed, false, 1_400);
+      if (r.killed) kills++;
+      expect(r.bursts).toContain('water');
+    }
+    expect(kills).toBe(3);
+  });
+
   it('a StormBreaker that hits a small target in the water goes off as a water burst, not a fireball', () => {
     const r = drop('gbu53', 1, true);
     expect(r.killed).toBe(true);
@@ -252,7 +300,7 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     const events = new EventBus();
     const world = createSimWorld({ terrain: realTerrain(), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
     const runner = createMissionRunner(T07_SMALL, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
-    runner.setup(world, 'strike_maritime');
+    runner.setup(world, 'strike_mixed');
     const p = world.player!;
     const radio: string[] = [];
     events.on('radio', (e) => radio.push(e.text));
@@ -269,7 +317,7 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
   }
 
   /** Pin the jet `back` m south of the rat, 1,200 m up, heading north at it, and release `weapon` at it. */
-  function release(ctx: ReturnType<typeof setup>, target: GroundTargetEntity, weapon: 'gbu53', back = 3_000) {
+  function release(ctx: ReturnType<typeof setup>, target: GroundTargetEntity, weapon: 'gbu53' | 'gbu31', back = 3_000) {
     const { world, p, step } = ctx;
     world.combat.selectWeapon(p, weapon, world);
     p.position.set(target.position.x, 1_200, target.position.z + back);
@@ -304,6 +352,29 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     const res = runner.result(ctx.world) as { costSummary?: { removed: { count: number }; weapons: { weapon: string }[] } };
     expect(res.costSummary?.removed.count).toBe(2);
     expect(res.costSummary?.weapons.map((x) => x.weapon)).toEqual(['gbu53']);
+  });
+
+  it('a JDAM on a rat at a drain hits homes: check fire, the barristers, an injunction, and the homes on the bill', () => {
+    const ctx = setup();
+    const { runner, rats, step, radio, world } = ctx;
+    const r = rats()[0];
+    step(200, () => r.runner!.phase === 'stop');
+    expect(r.runner!.phase).toBe('stop');
+    release(ctx, r, 'gbu31', 1_400);
+    expect(runner.state).toBe('failed');
+    // the radio plays on after the end: check fire, the trappers' call, then "mission failed"
+    for (let i = 0; i < 12 * 60; i++) {
+      world.step(DT);
+      runner.update(world, DT);
+    }
+    const res = runner.result(world) as MissionResultExt;
+    expect(res.reason).toMatch(/injunction/);
+    expect(radio.some((t) => /check fire/i.test(t) && /house/.test(t))).toBe(true);
+    expect(radio.some((t) => /barristers/.test(t))).toBe(true);
+    const homes = res.costSummary?.homes;
+    expect(homes?.count ?? 0).toBeGreaterThan(0);
+    expect(homes?.nzd).toBe(homes!.count * T07_HOME_NZD);
+    expect(homes?.legal.nzd).toBe(homes!.count * T07_LEGAL_NZD);
   });
 
   it('a rat that reaches Watchman Island loses the sortie', () => {

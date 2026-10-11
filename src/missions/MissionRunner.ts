@@ -33,6 +33,7 @@ import { REASONS, crashedInto } from './runtime/reasons';
 import { computeScore, parTimeFor } from './runtime/scoring';
 import { awardMedals, buildTips, codexTopic, deathReason, hasShootingObjective } from './runtime/debrief';
 import { WinchesterWatch } from './runtime/winchester';
+import { HomesWatch } from './runtime/collateral';
 import { costSummary } from './runtime/costs';
 import { WithdrawalMonitor } from './runtime/withdrawal';
 import { attemptSeed, nextAttempt } from './runtime/variation';
@@ -102,6 +103,8 @@ class MissionRunnerImpl implements MissionRunnerApi {
   private readonly trains: TrainTraffic | null;
   /** The Sky Tower (Auckland theatre): destroying it fails the mission. */
   private readonly landmarks: LandmarkWatch;
+  /** Homes hit by the player's bombs (script.collateral, t07). */
+  private readonly homes: HomesWatch | null;
   /** Free flight: tour stops, distance and passes for the debrief. */
   private readonly sightseeing: SightseeingLog | null;
   private finalResult: MissionResult | null = null;
@@ -153,6 +156,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts = civilTraffic ? new SuperyachtTraffic(this.s) : null;
     this.trains = civilTraffic ? new TrainTraffic(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
+    this.homes = def.script.collateral ? new HomesWatch(this.s, (reason) => this.fail(reason)) : null;
     this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
@@ -179,6 +183,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.callouts.detach();
     this.coach?.detach();
     this.landmarks.detach();
+    this.homes?.detach();
     s.radio.clear();
     this.hints.clear();
     s.world = null as unknown as SimWorld;
@@ -220,6 +225,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts?.setup();
     this.trains?.setup();
     this.landmarks.setup();
+    this.homes?.setup();
     this.callouts.attach();
     this.coach?.attach();
     // ground-level steering for target waypoints without an explicit altitude
@@ -356,7 +362,9 @@ class MissionRunnerImpl implements MissionRunnerApi {
         if (n - left > 0) fired[w] = n - left;
       }
       const removed = s.groups.get(cs.removed.group)?.members.filter((m) => !m.alive).length ?? 0;
-      (r as MissionResultExt).costSummary = costSummary(time, fired, cs.comparison, { label: cs.removed.label, count: removed });
+      const c = s.script.collateral;
+      const homes = c && s.homesHit > 0 ? { label: c.homesLabel, count: s.homesHit, nzd: s.homesHit * c.homeNzd, legal: { label: c.legalLabel, nzd: s.homesHit * c.legalNzd } } : undefined;
+      (r as MissionResultExt).costSummary = costSummary(time, fired, cs.comparison, { label: cs.removed.label, count: removed }, homes);
     }
     r.tips = r.freeFlight ? [] : buildTips(s, r);
     r.medals = r.freeFlight ? [] : awardMedals(s, r);

@@ -9,8 +9,12 @@
  *
  * The lesson is g03's release, with the same bomb: the GBU-53/B StormBreaker can't track a target this
  * small on the move (sim/weapons/small.ts), so release while a rat stops at a drain. Two rats, one wave
- * (playtest 2026-10-10, 1.4-b: the JDAM waves are gone, no campaign mission carries a JDAM). A rat that
- * gets past its drains swims, and a StormBreaker can't find a swimmer either.
+ * (playtest 2026-10-10, 1.4-b: the JDAM waves are gone). A rat that gets past its drains swims, and a
+ * StormBreaker can't find a swimmer either: the jet carries JDAMs for that (the owner's call, 2026-10-11),
+ * whose 60 m blast reaches the rat wherever it has paddled to since the release. On the street the same
+ * blast reaches the houses either side (runtime/collateral.ts), and a home hit fails the sortie: Herne Bay
+ * is New Zealand's most expensive suburb and its residents have lawyers. The debrief's bill prices each
+ * home at T07_HOME_NZD and adds T07_LEGAL_NZD of legal costs.
  *
  * Rat routes run down real Herne Bay streets (LINZ road centrelines, world/scenery/aucklandRoads.ts);
  * tests/missions-t07.test.ts checks them against the coast. The local trap group is fictional; no real
@@ -61,6 +65,14 @@ export const T07_ROUTES = {
   },
 } as const satisfies Record<string, T07Route>;
 
+/**
+ * A Herne Bay home on the bill (NZ$): about the suburb's average value, between CoreLogic's 2024 median
+ * (NZ$3.36 million) and OneRoof's average (NZ$3.78 million). Look it up again before changing it.
+ */
+export const T07_HOME_NZD = 3_500_000;
+/** The legal costs per home hit (NZ$): made up, for the joke. */
+export const T07_LEGAL_NZD = 750_000;
+
 /** The rats' mission group. */
 export const T07_GROUP = 'rats';
 
@@ -88,13 +100,12 @@ export const T07_SMALL: MissionDef = mission({
   weather: 'scattered',
   briefing: [
     "Training, with live rats. Last night's rain overloaded Herne Bay's old sewers and flushed the rats out. Two are running down Wallace Street and Hamilton Road to the beach, to swim for Watchman Island, 600 metres offshore, which the local trappers keep pest-free. No rat reaches the island.",
-    'A rat is too small for the StormBreaker to track while it runs, so release while it stops at a drain to sniff. A rat that gets past its drains swims, and the bomb can\'t find a swimmer either. The stoat on Waiheke needs the same release.',
-    'Check the FIRE button reads GBU-53, the StormBreaker (WPN changes weapon). TGT picks a rat; tap the target camera to zoom the pod onto it. Release on a stop, the moment IN RANGE shows.',
+    'A rat is too small for the StormBreaker to track while it runs, so release while it stops at a drain to sniff. A rat that gets past its drains swims, and the bomb can\'t find a swimmer either: that is what the JDAMs are for. A JDAM tracks nothing but its blast is big, so release it low and close, and only over the water: on the street it takes out the houses either side, and the people of Herne Bay have very good lawyers. The stoat on Waiheke needs the StormBreaker release, and there are no JDAMs on Waiheke.',
+    'Check the FIRE button reads GBU-53, the StormBreaker (WPN changes weapon). TGT picks a rat, and the target camera zooms the pod onto it. Release on a stop, the moment IN RANGE shows.',
   ],
-  // g03's bomb on g02's load: StormBreakers to spare while the release is learned (g03's own load, two
-  // StormBreakers and two AARGM-ERs, is allowed too)
-  recommendedLoadout: 'strike_maritime',
-  allowedLoadouts: ['strike_maritime', 'sead_precision'],
+  // g03's bomb for the drains, and JDAMs for a swimmer. No AARGM-ER: a rat has no radar to home on.
+  recommendedLoadout: 'strike_mixed',
+  allowedLoadouts: ['strike_mixed'],
   player: t07Start,
   script: {
     autoHints: true,
@@ -117,7 +128,7 @@ export const T07_SMALL: MissionDef = mission({
       {
         id: 't_swimming',
         when: { kind: 'area', who: { group: T07_GROUP }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: 700 },
-        actions: [{ kind: 'radio', from: TR, text: 'One is in the water and swimming. A StormBreaker won\'t find it now.', priority: 2 }],
+        actions: [{ kind: 'radio', from: TR, text: 'One is in the water and swimming. A StormBreaker won\'t find it now: JDAM, low and close.', priority: 2 }],
       },
       {
         // a rat on the island: the sortie is lost
@@ -132,11 +143,20 @@ export const T07_SMALL: MissionDef = mission({
       },
     ],
     hints: [
-      { id: 'h_pod', text: 'TGT designates a rat. Tap the target camera to ZOOM the pod: it is 20 cm long', when: { kind: 'time', t: 5 }, duration: 9 },
+      { id: 'h_pod', text: 'TGT designates a rat: the target camera ZOOMs the pod onto it. It is 20 cm long', when: { kind: 'time', t: 5 }, duration: 9 },
       { id: 'h_stops', text: 'StormBreaker: release while the rat STOPS at a drain. Running, the bomb can\'t track it', when: { kind: 'area', x: STREETS.x, z: STREETS.z, radius: 7000 }, duration: 9 },
+      { id: 'h_swim', text: 'Swimmers never stop: a StormBreaker can\'t track them. JDAM (WPN), released low and close', when: { kind: 'area', who: { group: T07_GROUP }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: 700 }, duration: 9 },
     ],
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Herne Bay is all yours. Two rats on the streets: catch them at the drains.', priority: 2 }],
     successText: 'Two rats, none on the island. That is the release the stoat needs, Viper.',
+    collateral: {
+      homeNzd: T07_HOME_NZD,
+      legalNzd: T07_LEGAL_NZD,
+      homesLabel: 'Herne Bay homes',
+      legalLabel: "Legal costs (half the street are barristers)",
+      call: { from: TR, text: 'Viper, Trappers. Those were our neighbours\' houses. Half this street are barristers: you will be hearing from them.' },
+      failReason: 'Grounded by an injunction: a JDAM hit Herne Bay homes',
+    },
     costSummary: { comparison: { label: 'A rat trap, for comparison', nzd: 40 }, removed: { label: 'Rats removed', group: T07_GROUP } },
   },
 });
