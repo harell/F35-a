@@ -30,14 +30,25 @@ export const POD_ZOOM: readonly PodZoomStep[] = [
  */
 export const POD_ZOOM_SMALL = 0.5;
 
-/** The span (m) zoom step `i` shows of a target of `radius` m: POD_ZOOM's, closer at ZOOM on a small one. */
-export function podSpan(i: number, radius: number): number {
-  const step = POD_ZOOM[i] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
-  return step.name === 'ZOOM' && radius < 0.5 ? POD_ZOOM_SMALL : step.span;
+/** An animal under a metre across (g03's stoat, t07's rats): ZOOM closes in on it, and its pod shot opens at ZOOM. */
+export function isPodAnimal(radius: number): boolean {
+  return radius < 0.5;
 }
 
-/** The step a new pod shot opens at. */
+/** The span (m) zoom step `i` shows of a target of `radius` m: POD_ZOOM's, closer at ZOOM on an animal. */
+export function podSpan(i: number, radius: number): number {
+  const step = POD_ZOOM[i] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
+  return step.name === 'ZOOM' && isPodAnimal(radius) ? POD_ZOOM_SMALL : step.span;
+}
+
+/** The step a new pod shot opens at (an animal's opens at POD_ZOOM_ANIMAL: hud/hmd/pip.ts stepPod). */
 export const POD_ZOOM_DEFAULT = 1;
+
+/**
+ * The step an animal's pod shot opens at: ZOOM. At NARROW a 20 cm rat is a few pixels, and players
+ * didn't know a tap zooms the window (playtest 2026-10-11).
+ */
+export const POD_ZOOM_ANIMAL = 2;
 
 /** Next zoom step (WIDE → NARROW → ZOOM → WIDE). */
 export function nextPodZoom(i: number): number {

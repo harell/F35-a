@@ -26,7 +26,7 @@
  *    pass is skipped and the window reads MASKED over a dark frame (stepPod, checked 4× a second).
  */
 import { Vector3 } from 'three';
-import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, nextPodZoom } from '../../core/pod';
+import { POD_ZOOM, POD_ZOOM_ANIMAL, POD_ZOOM_DEFAULT, isPodAnimal, isPodTarget, nextPodZoom } from '../../core/pod';
 import { COLLAPSE } from '../../core/skyTower';
 import type { AircraftType, SamType } from '../../core/types';
 import type { TerrainQuery } from '../../sim/api';
@@ -220,7 +220,10 @@ export interface PipView {
   vh: number;
   /** The pod (EOTS) view of a ground target / SAM site (stepPod), not the cinematic shot. */
   pod: boolean;
-  /** Pod zoom step (index into core/pod.ts POD_ZOOM); kept across targets, a tap on the window cycles it. */
+  /**
+   * Pod zoom step (index into core/pod.ts POD_ZOOM); kept across targets, a tap on the window cycles it.
+   * An animal's shot opens at ZOOM, and the next target that isn't one gets the step from before it back.
+   */
   zoom: number;
   /** Pod view with no line of sight ('' = clear): nothing is rendered and the window reads MASKED. */
   mask: PodMask;
@@ -270,6 +273,7 @@ export function resetPip(): void {
 /** Back to the default zoom step (a new sortie / a new jet). */
 export function resetPodZoom(): void {
   pipView.zoom = POD_ZOOM_DEFAULT;
+  pod.kept = -1;
 }
 
 /** Seconds between two line-of-sight checks of the pod (a terrain ray march: not every frame). */
@@ -277,8 +281,11 @@ export const POD_LOS_PERIOD = 0.25;
 /** The pod's line of sight ends this far above the target's origin (m). */
 const POD_LOS_LIFT = 1.5;
 
-/** Pod bookkeeping: the target the line of sight was last checked for, and how long ago. */
-const pod = { id: null as number | null, age: 0 };
+/**
+ * Pod bookkeeping: the target the line of sight was last checked for, how long ago, and the zoom step
+ * to go back to after an animal's shot opened at ZOOM (-1: none).
+ */
+const pod = { id: null as number | null, age: 0, kept: -1 };
 const _losTgt = new Vector3();
 
 /**
@@ -305,6 +312,13 @@ export function stepPod(subject: PipSubject | null, eye: Vector3, terrain: Terra
   if (subject.id !== pod.id) {
     pod.id = subject.id;
     pod.age = Infinity;
+    if (subject.kind === 'ground' && isPodAnimal(subject.radius)) {
+      if (pod.kept < 0) pod.kept = pipView.zoom;
+      pipView.zoom = POD_ZOOM_ANIMAL;
+    } else if (pod.kept >= 0) {
+      pipView.zoom = pod.kept;
+      pod.kept = -1;
+    }
   }
   pod.age += dt;
   if (pod.age < POD_LOS_PERIOD) return;

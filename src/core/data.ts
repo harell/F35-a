@@ -308,6 +308,19 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
+  // t07's loadout: the full internal StormBreaker load and nothing else. A rat has no radar for an
+  // AARGM-ER to home on, and no campaign mission carries a JDAM, so neither rides along unused.
+  strike_sdb: {
+    id: 'strike_sdb',
+    name: 'Precision Strike (Stealth)',
+    description: '8× GBU-53/B StormBreaker internal, nothing else. Datalinked glide bombs for targets with no radar to home on.',
+    rcsMultiplier: 1,
+    stores: [{ weapon: 'gbu53', count: 8, internal: true }],
+    gunAmmo: 180,
+    flares: 24,
+    chaff: 24,
+    role: 'ag',
+  },
   a2a_beast: {
     id: 'a2a_beast',
     name: 'Beast Mode (Air)',

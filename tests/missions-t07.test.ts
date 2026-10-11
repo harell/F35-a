@@ -100,15 +100,12 @@ describe('t07 Small Targets: content', () => {
     expect(T07_SMALL.timeOfDay).toBe('day');
   });
 
-  it("flies a StormBreaker load: g02's (bombs to spare) or g03's own, never a JDAM", () => {
-    expect(T07_SMALL.recommendedLoadout).toBe('strike_maritime');
-    expect(T07_SMALL.allowedLoadouts).toEqual(['strike_maritime', 'sead_precision']);
+  it("flies StormBreakers only, g03's bomb: no AARGM-ER (a rat has no radar) and no JDAM", () => {
+    expect(T07_SMALL.recommendedLoadout).toBe('strike_sdb');
+    expect(T07_SMALL.allowedLoadouts).toEqual(['strike_sdb']);
+    expect(LOADOUTS.strike_sdb.stores).toEqual([{ weapon: 'gbu53', count: 8, internal: true }]);
+    expect(LOADOUTS.sead_precision.stores.some((st) => st.weapon === 'gbu53')).toBe(true);
     expect(missionById('g03')?.allowedLoadouts).toContain('sead_precision');
-    for (const id of T07_SMALL.allowedLoadouts) {
-      const l = LOADOUTS[id];
-      expect(l.stores.some((st) => st.weapon === 'gbu53'), id).toBe(true);
-      expect(l.stores.some((st) => st.weapon === 'gbu31'), id).toBe(false);
-    }
     // the old mixed load existed only for this lesson's JDAM waves
     expect(Object.keys(LOADOUTS)).not.toContain('strike_mixed');
   });
@@ -210,7 +207,7 @@ describe('bombs against a swimming rat', { timeout: 120_000 }, () => {
     const from = new Vector3(800, 0, 0);
     const spec: RunnerSpawn = still ? { route: [from, from.clone()], stations: [] } : { route: [from, new Vector3(3_000, 0, 0)], stations: [], swimSpeed: T07_RAT.swimSpeed };
     const r = rat(w, spec);
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_maritime' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_sdb' });
     w.combat.selectWeapon(p, weapon, w);
     const bursts: string[] = [];
     w.events.on('explosion', (e) => bursts.push(e.surface));
@@ -252,7 +249,7 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     const events = new EventBus();
     const world = createSimWorld({ terrain: realTerrain(), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
     const runner = createMissionRunner(T07_SMALL, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
-    runner.setup(world, 'strike_maritime');
+    runner.setup(world, 'strike_sdb');
     const p = world.player!;
     const radio: string[] = [];
     events.on('radio', (e) => radio.push(e.text));
