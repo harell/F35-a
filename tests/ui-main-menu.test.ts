@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MAIN_MENU_ITEMS, ONBOARD_BUTTONS, SIGHTSEEING_LABEL } from '../src/ui/screens/mainMenu';
-import { TRAINING, missionById, missionForLesson } from '../src/missions';
+import { missionById } from '../src/missions';
 import { suggestedLesson } from '../src/ui/career';
 import type { CampaignProgress } from '../src/core/contracts';
 
@@ -26,13 +26,7 @@ describe('main menu: sightseeing', () => {
   });
 });
 
-describe('training list: each lesson names the mission it prepares for (playtest 2026-10-10, 1.4-j)', () => {
-  it('every lesson belongs to a campaign mission, and the first campaign mission\'s lessons come first', () => {
-    for (const t of TRAINING) expect(missionForLesson(t.id), t.id).not.toBeNull();
-    expect(missionForLesson('t01')?.id).toBe('g01');
-    expect(missionForLesson('g01')).toBeNull();
-  });
-
+describe('campaign nudge suggestion (playtest 2026-10-10, 1.4-j)', () => {
   it('after g01 is won without its lessons, the suggestion is g02\'s first lesson, not T01', () => {
     const p: CampaignProgress = { unlocked: ['g01', 'g02'], best: {}, totals: { missions: 1, airKills: 10, groundKills: 0, deaths: 0 } };
     p.best.g01 = { grade: 'B', score: 1000, difficulty: 'pilot' } as CampaignProgress['best'][string];

@@ -319,11 +319,20 @@ export interface MissionDef {
    */
   gunAmmo?: number | Partial<Record<Difficulty, number>>;
   /**
-   * Campaign missions: the training lessons that teach what this mission asks for that no earlier
-   * mission did (an earlier mission's lessons count too). The campaign nudge and a lesson's NEXT
-   * button send a player through these just before the mission, not through all of training up front.
+   * Campaign missions: this mission's training pack, in the order to fly it (the Training screen shows
+   * one pack per mission). It holds the lessons that teach what this mission asks for that no earlier
+   * mission did, and may repeat an earlier pack's lesson when that skill is this mission's main threat
+   * or weapon (a JDAM lesson in every JDAM strike's pack); an earlier mission's lessons still count
+   * towards it. Rules (validateLessonPacks): at least one lesson of its own, no `foundation` lesson
+   * repeated. The campaign nudge and a lesson's NEXT button send a player through these just before
+   * the mission, not through all of training up front.
    */
   lessons?: string[];
+  /**
+   * Training lessons: a general skill every mission needs (Basic Flight), so it sits in the first pack
+   * that asks for it and is never repeated in a later one (validateLessonPacks).
+   */
+  foundation?: boolean;
   /** Mission-specific script (spawns, objectives, triggers) — schema owned by src/missions/schema.ts. */
   script: MissionScript;
 }

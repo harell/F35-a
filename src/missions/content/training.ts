@@ -42,6 +42,7 @@ export const T01: MissionDef = mission({
   index: 1,
   title: 'Basic Flight',
   subtitle: 'Stick, throttle, turns — six rings over the city',
+  foundation: true,
   timeOfDay: 'day',
   weather: 'clear',
   briefing: [
@@ -379,5 +380,5 @@ export const T03: MissionDef = mission({
   },
 });
 
-/** In `index` order: what the Training screen lists and the NEXT lesson button walks. */
+/** In `index` order (the T01–T07 players see): the order the NEXT lesson button walks. The Training screen groups them by mission (trainingPacks). */
 export const TRAINING_MISSIONS: MissionDef[] = [T01, T02, T03, T04_STRIKE, T05_DEFENCE, T06, T07_SMALL];
