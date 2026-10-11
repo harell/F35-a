@@ -29,7 +29,7 @@ import type { CombatCtx } from './context';
 import { acState } from './context';
 import { MUNITIONS } from './defs';
 import { updateCountermeasurePrograms, updateDecoys } from './countermeasures';
-import { ccipPoint, gpsMaxRange, gpsReleaseGeometry, launchZoneFor, munitionForRelease, type CombatLaunchZone, type ZoneHooks } from './dlz';
+import { ccipPoint, gpsMaxRange, gpsMinRange, gpsReleaseGeometry, launchZoneFor, munitionForRelease, type CombatLaunchZone, type ZoneHooks } from './dlz';
 import { updateMissiles } from './flight';
 import { gunLeadPoint, updateAircraftGun, updateProjectiles } from './gun';
 import * as loadouts from './loadouts';
@@ -111,7 +111,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
     }
   };
 
-  const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0, offAxis: false, steer: 0 as -1 | 0 | 1, bombAway: false };
+  const bombResult = { point: new Vector3(), inRange: false, timeToRelease: 0, offAxis: false, steer: 0 as -1 | 0 | 1, bombAway: false, tooClose: false };
 
   const api: CombatSystemApi & { aiSalt: number } = {
     aiSalt: aiSaltFor(seed),
@@ -230,7 +230,9 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
         r.point.copy(gp);
         r.offAxis = geo.offAxis;
         r.steer = geo.offAxis ? geo.side : 0;
-        r.inRange = geo.reachable && horiz <= rMax;
+        // a JDAM too close in flies long (gpsMinRange): no IN RANGE, TOO CLOSE instead
+        r.tooClose = geo.reachable && horiz < gpsMinRange(def, rMax);
+        r.inRange = geo.reachable && horiz <= rMax && !r.tooClose;
         const gs = horiz > 1 ? (ac.velocity.x * dx + ac.velocity.z * dz) / horiz : 0;
         r.timeToRelease = r.inRange ? 0 : geo.reachable && gs > 5 ? (horiz - rMax) / gs : -1;
         // one of our bombs still guiding onto this target (its entity, or the designated point)
@@ -253,6 +255,7 @@ export function createCombatSystemSeeded(seed: number): CombatSystemApi {
       r.offAxis = false;
       r.steer = 0;
       r.bombAway = false;
+      r.tooClose = false;
       r.inRange = ac.position.y - r.point.y > 60;
       r.timeToRelease = 0;
       return r;

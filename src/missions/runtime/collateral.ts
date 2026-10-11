@@ -6,8 +6,10 @@
  * the homes inside a bomb's damage ring instead: every building with any part of its footprint within
  * HOME_DAMAGE_FRACTION × the weapon's blast radius of where one of the player's bombs or missiles
  * went off on land. Each impact calls "check fire" on the radio with the count, then the mission's own
- * call, and the sortie fails with the mission's reason; the debrief's bill prices the homes and the
- * legal costs (runtime/costs.ts).
+ * call, and the target camera holds on the crater (the 'mission:collateral' event). The sortie goes on,
+ * but its grade is F (scoring.ts), and the debrief's bill prices the homes and the legal costs
+ * (runtime/costs.ts). It used to fail the sortie at once, which a new player read as the game quitting
+ * on them (playtest 2026-10-11).
  *
  * With the munitions' blast radii (sim/weapons/defs.ts) a 2,000 lb JDAM (60 m blast) reaches homes 30 m
  * out and a StormBreaker (14 m) 7 m: dropped on a street, the JDAM takes out several houses and the
@@ -63,7 +65,6 @@ export class HomesWatch {
 
   constructor(
     private readonly s: MissionState,
-    private readonly fail: (reason: string) => void,
     /** The building list (default: the installed LINZ and neighbourhood buildings). */
     private readonly buildings: () => readonly Building[] | null = aucklandBuildings,
   ) {}
@@ -102,7 +103,7 @@ export class HomesWatch {
       priority: 4,
     });
     s.radio.push({ from: c.call.from, text: c.call.text, priority: 4 });
-    this.fail(c.failReason);
+    s.events.emit('mission:collateral', { position: at.clone(), homes: n });
     return n;
   }
 }

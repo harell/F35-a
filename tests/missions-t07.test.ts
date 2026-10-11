@@ -354,25 +354,34 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     expect(res.costSummary?.weapons.map((x) => x.weapon)).toEqual(['gbu53']);
   });
 
-  it('a JDAM on a rat at a drain hits homes: check fire, the barristers, an injunction, and the homes on the bill', () => {
+  it('a JDAM on a rat at a drain hits homes: check fire, the barristers, the sortie goes on, grade F, the homes on the bill', () => {
     const ctx = setup();
     const { runner, rats, step, radio, world } = ctx;
-    const r = rats()[0];
-    step(200, () => r.runner!.phase === 'stop');
-    expect(r.runner!.phase).toBe('stop');
-    release(ctx, r, 'gbu31', 1_400);
-    expect(runner.state).toBe('failed');
-    // the radio plays on after the end: check fire, the trappers' call, then "mission failed"
-    for (let i = 0; i < 12 * 60; i++) {
-      world.step(DT);
-      runner.update(world, DT);
-    }
-    const res = runner.result(world) as MissionResultExt;
-    expect(res.reason).toMatch(/injunction/);
+    const [a, b] = rats();
+    const collateral: number[] = [];
+    world.events.on('mission:collateral', (e) => collateral.push(e.homes));
+    step(200, () => a.runner!.phase === 'stop');
+    expect(a.runner!.phase).toBe('stop');
+    release(ctx, a, 'gbu31', 1_400);
+    // the blast reaches the rat and the houses either side; the sortie goes on
+    expect(a.alive).toBe(false);
+    expect(collateral.length).toBe(1);
+    expect(collateral[0]).toBeGreaterThan(0);
+    expect(runner.state).toBe('running');
+    step(8);
     expect(radio.some((t) => /check fire/i.test(t) && /house/.test(t))).toBe(true);
     expect(radio.some((t) => /barristers/.test(t))).toBe(true);
+    // the other rat, done right: the lesson is won, but the grade is F
+    if (b.alive) {
+      step(200, () => b.runner!.phase === 'stop');
+      release(ctx, b, 'gbu53');
+    }
+    step(2);
+    expect(runner.state).toBe('success');
+    const res = runner.result(world) as MissionResultExt;
+    expect(res.grade).toBe('F');
     const homes = res.costSummary?.homes;
-    expect(homes?.count ?? 0).toBeGreaterThan(0);
+    expect(homes?.count).toBe(collateral[0]);
     expect(homes?.nzd).toBe(homes!.count * T07_HOME_NZD);
     expect(homes?.legal.nzd).toBe(homes!.count * T07_LEGAL_NZD);
   });

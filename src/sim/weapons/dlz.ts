@@ -207,6 +207,20 @@ const gpsCache = new Map<number, number>();
 const MUN_INDEX: Record<string, number> = { gbu31: 1, gbu53: 3, kab500: 4 };
 
 /**
+ * Share of gpsMaxRange inside which a GPS bomb (the JDAM: `guidance` 'gps') released level flies long: it
+ * can't push over steeply enough to come down on the point, and lands a kilometre or two past it.
+ * Measured on a still target (playtest 2026-10-11): from 1,000 m at 200 m/s it hits from 1.0 to 1.44 km
+ * (rMax), from 1,500 m at 220 m/s from 1.3 to 1.98 km, from 2,500 m at 220 m/s from 2.0 to 3.16 km;
+ * 0.6–0.7 of rMax, so 0.7. The glide bombs (StormBreaker, 'tri_mode') turn hard enough to have none.
+ */
+export const GPS_MIN_FRACTION = 0.7;
+
+/** Min horizontal range (m) of a GPS bomb released level (0 for the glide bombs): GPS_MIN_FRACTION × gpsMaxRange. */
+export function gpsMinRange(def: CombatMunitionDef, rMax: number): number {
+  return def.guidance === 'gps' ? GPS_MIN_FRACTION * rMax : 0;
+}
+
+/**
  * Max horizontal reach (m) of a GPS glide weapon released level at `speed` from `height` above
  * the target (target elevation `targetAlt`). Same best-glide law as the in-flight guidance.
  */

@@ -557,8 +557,8 @@ export interface MissionScript {
   costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
   /**
    * Count the homes the player's bombs hit (runtime/collateral.ts, t07): every building within half a
-   * weapon's blast radius of where it went off on land. A hit calls "check fire", then `call`, and fails
-   * the sortie with `failReason`. The debrief's bill (with costSummary) prices each home at `homeNzd`
+   * weapon's blast radius of where it went off on land. A hit calls "check fire", then `call`, and the
+   * sortie's grade drops to F. The debrief's bill (with costSummary) prices each home at `homeNzd`
    * and adds `legalNzd` of legal costs per home, under `homesLabel` and `legalLabel`.
    */
   collateral?: {
@@ -567,7 +567,6 @@ export interface MissionScript {
     homesLabel: string;
     legalLabel: string;
     call: { from: string; text: string };
-    failReason: string;
   };
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
