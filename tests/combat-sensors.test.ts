@@ -367,7 +367,7 @@ describe('combat: RWR & MAWS', () => {
     // locked a sightseeing helicopter 3.8 km ahead (g01: 'CIVILIAN HELICOPTER DOWN')
     const w = new FakeWorld();
     const f35 = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: v3(0, 3000, 0), heading: 0, speed: 250, loadout: 'a2a_beast' });
-    const heli = w.spawnAircraft({ type: 'h130', team: 'neutral', position: v3(200, 3000, -2500), heading: 0, speed: 60 });
+    const heli = w.spawnAircraft({ type: 'aw169', team: 'neutral', position: v3(200, 3000, -2500), heading: 0, speed: 60 });
     w.combat.selectWeapon(f35, 'aim9x', w);
     w.run(0.3);
     expect(w.combat.irSeekerState(f35).state).toBe('search');

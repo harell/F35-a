@@ -229,7 +229,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         tr.seen = frame;
         const vis = tr.v.update(ac, t, dt, cam, lodCfg, env.isNight);
         tr.v.root.visible = vis && (!ac.isPlayer || playerVisible || !ac.alive);
-        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive);
+        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive, ac.heli?.livery);
       }
       helis.end();
       aircraft.forEach(sweepAircraft);
@@ -342,7 +342,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         if (!tr) continue;
         // (update() sets every aircraft's visibility again for the main camera)
         tr.v.root.visible = ac.position.distanceToSquared(camPos) <= max2 && tr.v.update(ac, t, 0, camPos, lodCfg, env.isNight);
-        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive);
+        if (tr.v.proto.instanced && tr.v.root.visible) helis.add(ac.type, tr.v.root.matrixWorld, ac.alive, ac.heli?.livery);
       }
       helis.end();
       for (const m of world.missiles) missiles.get(m.id)?.v.update(m, t, camPos);

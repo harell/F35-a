@@ -89,7 +89,6 @@ export const NATO_AIR: Record<AircraftType, string> = {
   // civil helicopters: no reporting name (pipName shows the callsign)
   aw169: '',
   bell429: '',
-  h130: '',
 };
 
 export const NATO_SAM: Record<SamType, string> = {

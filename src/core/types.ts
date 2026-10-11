@@ -60,9 +60,8 @@ export type AircraftType =
   | 'su57' // Su-57 Felon (low observable)
   | 'a320' // Airbus A320neo airliner (neutral civilian traffic)
   | 'shahed136' // HESA Shahed-136 one-way attack drone (flies a scripted route, see sim/drone)
-  | 'aw169' // Leonardo AW169 twin-engine helicopter: Westpac Rescue (neutral civil traffic, sim/civil/heli.ts)
-  | 'bell429' // Bell 429 GlobalRanger: NZ Police "Eagle" (neutral civil traffic)
-  | 'h130'; // Airbus H130 single-engine helicopter: harbour and Waiheke sightseeing (neutral civil traffic)
+  | 'aw169' // Leonardo AW169 twin-engine helicopter: Westpac Rescue 1 and 2, Northland Rescue (neutral civil traffic, sim/civil/heli.ts)
+  | 'bell429'; // Bell 429 GlobalRanger: NZ Police "Eagle" (neutral civil traffic)
 
 export type SamType =
   | 'sa6' // 2K12 Kub — Straight Flush radar + 3 launchers, semi-active radar missiles

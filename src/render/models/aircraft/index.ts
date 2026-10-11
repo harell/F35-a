@@ -10,7 +10,7 @@ import { buildFlanker } from './flanker';
 import { buildSu57 } from './su57';
 import { buildA320 } from './a320';
 import { buildShahed136 } from './shahed136';
-import { buildAW169, buildBell429, buildH130 } from './helicopters';
+import { buildAW169, buildBell429 } from './helicopters';
 
 const cache = new Map<AircraftType, AircraftPrototype>();
 
@@ -24,7 +24,6 @@ const BUILDERS: Record<AircraftType, () => AircraftPrototype> = {
   shahed136: buildShahed136,
   aw169: buildAW169,
   bell429: buildBell429,
-  h130: buildH130,
 };
 
 export function getAircraftPrototype(type: AircraftType): AircraftPrototype {
