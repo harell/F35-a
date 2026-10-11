@@ -19,6 +19,8 @@ import { HELI_LIVERIES, heliDecals } from '../src/render/models/aircraft/helicop
 import type { AircraftEntity } from '../src/sim/entities';
 import { helipad } from '../src/core/sites';
 import { civilLossRows } from '../src/ui/screens/debrief';
+import { entityLabel, killText, trackLabel, trackShort } from '../src/hud/hmd/format';
+import { pipName } from '../src/hud/hmd/pip';
 import { AIRCRAFT_SPECS } from '../src/render/models/specs';
 import { getAircraftPrototype } from '../src/render/models/aircraft';
 import { FlatTerrain } from './combat-helpers';
@@ -80,9 +82,9 @@ describe('helicopter traffic', () => {
     expect([QUALITY_PRESETS.low.helicopters, QUALITY_PRESETS.medium.helicopters, QUALITY_PRESETS.high.helicopters]).toEqual([1, 3, 4]);
     for (const [n, callsigns] of [
       [1, ['Westpac Rescue 1']],
-      [3, ['Westpac Rescue 1', 'Eagle', 'Northland Rescue']],
-      [4, ['Westpac Rescue 1', 'Eagle', 'Northland Rescue', 'Westpac Rescue 2']],
-      [9, ['Westpac Rescue 1', 'Eagle', 'Northland Rescue', 'Westpac Rescue 2']],
+      [3, ['Westpac Rescue 1', 'Police Eagle', 'Northland Rescue']],
+      [4, ['Westpac Rescue 1', 'Police Eagle', 'Northland Rescue', 'Westpac Rescue 2']],
+      [9, ['Westpac Rescue 1', 'Police Eagle', 'Northland Rescue', 'Westpac Rescue 2']],
     ] as const) {
       const m = setup(missionById('g01')!, n);
       m.tick(1);
@@ -90,7 +92,7 @@ describe('helicopter traffic', () => {
       expect(hs.map((h) => h.callsign)).toEqual(callsigns);
       expect(new Set(hs.map((h) => h.heli!.livery)).size).toBe(hs.length);
       for (const h of hs) {
-        expect(h.type).toBe(h.callsign === 'Eagle' ? 'bell429' : 'aw169');
+        expect(h.type).toBe(h.callsign === 'Police Eagle' ? 'bell429' : 'aw169');
         expect(h.team).toBe('neutral');
         expect(h.ai).toBeNull();
         expect(m.world.hostilesOf('blue')).not.toContain(h);
@@ -98,6 +100,22 @@ describe('helicopter traffic', () => {
       }
       m.runner.dispose?.();
     }
+  });
+
+  it('shows each by its real name on the HUD: the designated box, the contact box, the kill feed', () => {
+    const m = setup(missionById('ia_stroll_auckland')!, 4);
+    m.tick(0.1);
+    const by = (cs: string) => m.helis().find((h) => h.callsign === cs)!;
+    expect(entityLabel(by('Westpac Rescue 1'))).toBe('WESTPAC RESCUE 1');
+    expect(entityLabel(by('Westpac Rescue 2'))).toBe('WESTPAC RESCUE 2');
+    expect(entityLabel(by('Northland Rescue'))).toBe('NORTHLAND RESCUE');
+    expect(entityLabel(by('Police Eagle'))).toBe('POLICE EAGLE');
+    expect(trackLabel(by('Police Eagle'))).toBe('POLICE EAGLE');
+    expect(trackShort(by('Police Eagle'))).toBe('EAGLE');
+    expect(trackShort(by('Westpac Rescue 2'))).toBe('WESTPAC 2');
+    expect(pipName(by('Westpac Rescue 1'))).toBe('WESTPAC RESCUE 1 AW169');
+    expect(killText(by('Police Eagle'))).toBe('SPLASH POLICE EAGLE');
+    m.runner.dispose?.();
   });
 
   it('flies the real routes between real pads: Ardmore, Onetangi, the hospital roof, Onehunga, Whangārei, Great Barrier', () => {
@@ -163,8 +181,8 @@ describe('helicopter traffic', () => {
     }
   });
 
-  it('the Eagle patrols at 1,000–1,500 ft round its point of interest, then lands at Onehunga to refuel and goes again', () => {
-    const f = plan().eagle.flight;
+  it.each([7, 11, 23])('the Eagle patrols at 1,000–1,500 ft round its point of interest, then lands at Onehunga to refuel and goes again (seed %i)', (seed) => {
+    const f = plan(seed).eagle.flight;
     const patrol = f.stops.find((st): st is { patrol: HeliPatrol } => 'patrol' in st)!.patrol;
     let worst = 0;
     let orbiting = 0;
@@ -213,22 +231,24 @@ describe('helicopter traffic', () => {
     // a wreck falls, crashes and is cleared away; nothing takes its place, however long the session runs
     m.tick(10 * 60);
     expect(before[0].alive).toBe(false);
-    expect(m.helis().filter((h) => h.alive).map((h) => h.callsign)).toEqual(['Eagle', 'Northland Rescue', 'Westpac Rescue 2']);
+    expect(m.helis().filter((h) => h.alive).map((h) => h.callsign)).toEqual(['Police Eagle', 'Northland Rescue', 'Westpac Rescue 2']);
     expect(m.helis().length).toBeLessThanOrEqual(4);
     m.runner.dispose?.();
     const again = setup(missionById('ia_stroll_auckland')!, 4);
     again.tick(1);
-    expect(again.helis().filter((h) => h.alive).map((h) => h.callsign)).toEqual(['Westpac Rescue 1', 'Eagle', 'Northland Rescue', 'Westpac Rescue 2']);
+    expect(again.helis().filter((h) => h.alive).map((h) => h.callsign)).toEqual(['Westpac Rescue 1', 'Police Eagle', 'Northland Rescue', 'Westpac Rescue 2']);
     again.runner.dispose?.();
   });
 });
 
 describe('civilian, but targetable', () => {
   it('a player shoot-down is a civilian loss, not a kill, and the mission goes on; the wreck falls', () => {
-    const m = setup(missionById('g01')!);
+    const m = setup(missionById('g01')!, 4);
     m.tick(1);
     const p = m.world.player!;
-    const heli = m.helis()[0];
+    // one in the air (the fleet starts part-way round its cycles: some are parked), so that its wreck can fall
+    while (!m.helis().some((h) => h.heli!.phase === 'transit' || h.heli!.phase === 'orbit')) m.tick(10);
+    const heli = m.helis().find((h) => h.heli!.phase === 'transit' || h.heli!.phase === 'orbit')!;
     m.world.applyDamage(heli, 10_000, p.id, 'gun');
     m.tick(1);
     expect(heli.alive).toBe(false);

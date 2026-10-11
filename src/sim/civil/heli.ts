@@ -33,6 +33,17 @@ export const HELI_GEAR_HEIGHT = { aw169: 1.45, bell429: 1.3 } as const;
 /** The individual helicopters (their name and registration decals: render/models/aircraft/helicopters.ts HELI_LIVERIES). */
 export type HeliLiveryId = 'westpac1' | 'westpac2' | 'northland' | 'eagle';
 
+/**
+ * What each is called, as Aucklanders know them: the callsign, the radio and kill feed's name, and the HUD's full
+ * label (designated box, target camera, TSD, PCD) and short one (crowded contact boxes). NZ Police call theirs Eagle.
+ */
+export const HELI_NAMES: Record<HeliLiveryId, { name: string; label: string; short: string }> = {
+  westpac1: { name: 'Westpac Rescue 1', label: 'WESTPAC RESCUE 1', short: 'WESTPAC 1' },
+  westpac2: { name: 'Westpac Rescue 2', label: 'WESTPAC RESCUE 2', short: 'WESTPAC 2' },
+  northland: { name: 'Northland Rescue', label: 'NORTHLAND RESCUE', short: 'NORTHLAND' },
+  eagle: { name: 'Police Eagle', label: 'POLICE EAGLE', short: 'EAGLE' },
+};
+
 /** A pad as the flight needs it: centre, surface height (m) and heading (rad). */
 export interface HeliPad {
   id: string;
@@ -259,7 +270,9 @@ export function stepHeli(ac: AircraftEntity, dt: number, terrain: TerrainQuery):
     const tx = c.x + Math.cos(ahead) * o.radius;
     const tz = c.z + Math.sin(ahead) * o.radius;
     turnTowards(f, headingOf(tx - pos.x, tz - pos.z), dt);
-    f.speed += clampAbs(patrol.airspeed - f.speed, ACCEL * dt);
+    // out to the patrol area (and between its legs) at the cruise speed, slowing to the orbit's airspeed on the circle
+    const far = Math.hypot(pos.x - c.x, pos.z - c.z) > 2 * o.radius;
+    f.speed += clampAbs((far ? f.cruiseSpeed : patrol.airspeed) - f.speed, ACCEL * dt);
     moveFlat(pos, f, dt);
     holdHeight(pos, f, terrain, Math.max(patrol.alt, terrain.surfaceHeightAt(pos.x, pos.z) + PATROL_AGL), dt);
     pitchT = 3 * DEG;

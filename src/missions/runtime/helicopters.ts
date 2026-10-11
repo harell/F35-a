@@ -5,7 +5,7 @@
  * Each starts at a random point of its cycle, so the sortie opens on traffic already under way:
  *  - Westpac Rescue 1 (AW169 ZK-HLH): Ardmore base → Waiheke (the Onetangi Sports Park pad: 22–25 % of all the
  *    service's missions go to the island) → Auckland City Hospital → Ardmore;
- *  - Eagle (NZ Police Bell 429): from its Onehunga base (Auckland Heliport) a 75-minute patrol orbiting a slowly
+ *  - Police Eagle (NZ Police Bell 429, callsign Eagle): from its Onehunga base (Auckland Heliport) a 75-minute patrol orbiting a slowly
  *    drifting point over the CBD, the motorways and the suburbs at 1,000–1,500 ft (its searchlight on at night),
  *    then back to base to refuel;
  *  - Northland Rescue (Northern Rescue AW169, ZK-HTQ): Whangārei Hospital, 130 km north and off the map → Starship
@@ -26,7 +26,7 @@ import { HELIPADS, helipad, type Helipad } from '../../core/sites';
 import type { AircraftType } from '../../core/types';
 import type { AircraftEntity } from '../../sim/entities';
 import type { TerrainQuery } from '../../sim/api';
-import { HELI_GEAR_HEIGHT as HELI_GEAR, createRoute, cycleSeconds, placeHeli, type HeliFlight, type HeliLiveryId, type HeliPad } from '../../sim/civil/heli';
+import { HELI_GEAR_HEIGHT as HELI_GEAR, HELI_NAMES, createRoute, cycleSeconds, placeHeli, type HeliFlight, type HeliLiveryId, type HeliPad } from '../../sim/civil/heli';
 import type { MissionState } from './state';
 
 const KT = 0.514444;
@@ -148,7 +148,7 @@ export class HelicopterTraffic {
         type: 'aw169',
         livery: 'westpac1',
         name: 'AW169',
-        callsign: 'Westpac Rescue 1',
+        callsign: HELI_NAMES.westpac1.name,
         flight: createRoute({ ...rescue, livery: 'westpac1', stops: [{ pad: ardmore, dwell: dwell(10) }, { pad: onetangi, dwell: dwell(8) }, { pad: ach, dwell: dwell(6) }] }),
       });
     if (onehunga)
@@ -156,7 +156,7 @@ export class HelicopterTraffic {
         type: 'bell429',
         livery: 'eagle',
         name: 'Bell 429',
-        callsign: 'Eagle',
+        callsign: HELI_NAMES.eagle.name,
         flight: createRoute({
           role: 'police',
           livery: 'eagle',
@@ -175,7 +175,7 @@ export class HelicopterTraffic {
         type: 'aw169',
         livery: 'northland',
         name: 'AW169',
-        callsign: 'Northland Rescue',
+        callsign: HELI_NAMES.northland.name,
         flight: createRoute({ ...rescue, livery: 'northland', stops: [{ pad: whangarei, dwell: dwell(15) }, { pad: ach, dwell: dwell(8) }] }),
       });
     if (ach && ardmore)
@@ -183,7 +183,7 @@ export class HelicopterTraffic {
         type: 'aw169',
         livery: 'westpac2',
         name: 'AW169',
-        callsign: 'Westpac Rescue 2',
+        callsign: HELI_NAMES.westpac2.name,
         flight: createRoute({ ...rescue, livery: 'westpac2', stops: [{ pad: ardmore, dwell: dwell(10) }, { pad: barrier, dwell: dwell(10) }, { pad: ach, dwell: dwell(6) }] }),
       });
     return out;
