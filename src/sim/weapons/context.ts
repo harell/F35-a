@@ -119,6 +119,12 @@ export interface AcCombatState {
   lastRadio: number;
   /** Winchester call made. */
   winchester: boolean;
+  /**
+   * The human player's SHOOT, held per target (→ the weapon it lit for) once lit, until the target
+   * leaves rMin…rMax, the weapon can't fire, or the weapon changes: rShoot is worked out again every
+   * frame and can shrink faster than the range closes, which made the cue flicker (#282).
+   */
+  shootLatch: Map<number, WeaponId>;
 }
 
 const states = new WeakMap<AircraftEntity, AcCombatState>();
@@ -160,6 +166,7 @@ export function acState(ac: AircraftEntity): AcCombatState {
       irDir: new Vector3(),
       lastRadio: -999,
       winchester: false,
+      shootLatch: new Map(),
     };
     states.set(ac, s);
   }

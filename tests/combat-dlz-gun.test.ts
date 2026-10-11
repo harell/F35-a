@@ -78,6 +78,28 @@ describe('combat: dynamic launch zone', () => {
     expect(rec.w.combat.launchZone(rec.a, rec.w)).toBeNull();
   });
 
+  it("the player's SHOOT holds once lit until the target leaves rMax, then needs rShoot again (#282 R31-6)", () => {
+    const t = zone({ difficulty: 'veteran' });
+    const at = (r: number) => {
+      t.b.position.set(0, 6000, -r);
+      t.w.run(0.1);
+      return t.w.combat.launchZoneFor(t.a, 'aim120', t.b, t.w) as CombatLaunchZone;
+    };
+    const z0 = at(20000);
+    const rShoot = z0.rShoot;
+    const between = (z0.rShoot + z0.rMax) / 2;
+    expect(at(between).shoot).toBe(false); // never lit yet: in range, no SHOOT
+    expect(at(rShoot * 0.8).shoot).toBe(true);
+    // rShoot drops under the range (here: the range opens a little) → SHOOT stays lit
+    const held = at(between);
+    expect(held.range).toBeGreaterThan(held.rShoot);
+    expect(held.shoot).toBe(true);
+    // out past rMax → the latch is gone, and back inside it SHOOT waits for rShoot again
+    expect(at(z0.rMax * 1.2).shoot).toBe(false);
+    expect(at(between).shoot).toBe(false);
+    expect(at(rShoot * 0.8).shoot).toBe(true);
+  });
+
   it('SHOOT range is shorter against a hot bandit than its kinematic rMax, and shorter for a TWS than an STT shot', () => {
     const t = zone({ range: 16000 });
     t.w.run(0.3);
