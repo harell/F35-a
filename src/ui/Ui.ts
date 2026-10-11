@@ -25,7 +25,8 @@ import { showCredits } from './screens/credits';
 import { showDebrief } from './screens/debrief';
 import { showInstantAction } from './screens/instantAction';
 import { showMainMenu } from './screens/mainMenu';
-import { showCampaign, showTraining } from './screens/missionList';
+import { showCampaign } from './screens/missionList';
+import { showTraining } from './screens/trainingPacks';
 import { showPause } from './screens/pause';
 import { showSettings } from './screens/settings';
 import { showSplash } from './screens/splash';
@@ -85,7 +86,7 @@ export const createUi: CreateUi = (root, deps) => {
     showMainMenu: () => showMainMenu(host, deps.build, { settings: liveSettings, progress: readProgress }),
     showCampaigns: (campaigns, progress) => showCampaigns(host, campaigns, progress, toast),
     showCampaign: (campaign, progress) => showCampaign(host, campaign, progress, toast),
-    showTraining: (missions, progress) => showTraining(host, missions, progress, toast),
+    showTraining: (missions, progress) => showTraining(host, missions, progress),
     showInstantAction: () => showInstantAction(host),
     showBriefing: (mission, settings) => {
       live = settings;

@@ -84,12 +84,67 @@ export function lessonsFor(missionId: string): MissionDef[] {
 }
 
 /**
- * The first campaign mission (in campaign order) that wants lesson `id` (MissionDef.lessons): what the
- * lesson prepares for. Null for anything that isn't a lesson some campaign mission asks for.
+ * One campaign mission's training pack (MissionDef.lessons) as the Training screen shows it: `next` is
+ * the first lesson of the pack not flown yet (null once all are); `state` is 'complete' when every
+ * lesson is flown, 'won' when the mission was won without them, else 'open'. `suggested` marks the
+ * pack of the mission the player is training for (trainingTarget) while it has lessons left.
  */
-export function missionForLesson(id: string): MissionDef | null {
-  for (const c of PLAYABLE_CAMPAIGNS) for (const m of c.missions) if (m.lessons?.includes(id)) return m;
-  return null;
+export interface TrainingPack {
+  mission: MissionDef;
+  lessons: MissionDef[];
+  next: MissionDef | null;
+  flown: number;
+  state: 'open' | 'complete' | 'won';
+  suggested: boolean;
+}
+
+/**
+ * The playable campaigns' training packs: campaign order, except that a pack whose mission was won
+ * without all its lessons moves to the end (it's no longer what the player is preparing for). A
+ * lesson in several packs counts as flown in all of them.
+ */
+export function trainingPacks(p: CampaignProgress, campaigns: CampaignDef[] = PLAYABLE_CAMPAIGNS): TrainingPack[] {
+  const target = trainingTarget(p)?.mission;
+  const packs = campaigns.flatMap((c) => c.missions)
+    .filter((m) => (m.lessons ?? []).length > 0)
+    .map((mission): TrainingPack => {
+      const lessons = (mission.lessons ?? []).map((id) => TRAINING.find((t) => t.id === id)).filter((t): t is MissionDef => !!t);
+      const next = lessons.find((t) => !p.best[t.id]) ?? null;
+      const state = !next ? 'complete' : p.best[mission.id] ? 'won' : 'open';
+      return { mission, lessons, next, flown: lessons.filter((t) => p.best[t.id]).length, state, suggested: state === 'open' && mission === target };
+    });
+  return [...packs.filter((k) => k.state !== 'won'), ...packs.filter((k) => k.state === 'won')];
+}
+
+/**
+ * Problems with the campaigns' training packs (MissionDef.lessons), empty when there are none: an
+ * unknown or repeated lesson id, a pack with no lesson of its own (every one already in an earlier
+ * pack of its campaign), a `foundation` lesson in more than one pack of a campaign, or a lesson in no
+ * pack at all (the Training screen would never show it).
+ */
+export function validateLessonPacks(campaigns: CampaignDef[] = PLAYABLE_CAMPAIGNS, training: MissionDef[] = TRAINING): string[] {
+  const errors: string[] = [];
+  const packed = new Set<string>();
+  for (const c of campaigns) {
+    const earlier = new Set<string>();
+    for (const m of c.missions) {
+      const ids = m.lessons ?? [];
+      if (ids.length === 0) continue;
+      for (const id of ids) {
+        const lesson = training.find((t) => t.id === id);
+        if (!lesson) errors.push(`${m.id}: unknown lesson ${id}`);
+        else if (lesson.foundation && earlier.has(id)) errors.push(`${m.id}: foundation lesson ${id} repeats an earlier pack`);
+      }
+      if (new Set(ids).size !== ids.length) errors.push(`${m.id}: a lesson is listed twice`);
+      if (ids.every((id) => earlier.has(id))) errors.push(`${m.id}: no lesson of its own (every one is in an earlier pack)`);
+      for (const id of ids) {
+        earlier.add(id);
+        packed.add(id);
+      }
+    }
+  }
+  for (const t of training) if (!packed.has(t.id)) errors.push(`${t.id}: in no mission's training pack`);
+  return errors;
 }
 
 /**

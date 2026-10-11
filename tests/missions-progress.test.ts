@@ -140,9 +140,9 @@ describe('campaign progress', () => {
     // every lesson prepares for some campaign mission, and every campaign mission's lessons exist
     const wanted = new Set(PLAYABLE_CAMPAIGNS[0].missions.flatMap((m) => m.lessons ?? []));
     expect([...wanted].sort()).toEqual(TRAINING.map((m) => m.id).sort());
-    // a lesson comes before the lessons of any later campaign mission
-    const order = PLAYABLE_CAMPAIGNS[0].missions.flatMap((m) => m.lessons ?? []);
-    expect(order).toEqual(TRAINING.map((m) => m.id));
+    // a lesson comes before the lessons of any later campaign mission (a repeat in a later pack aside)
+    const order = new Set(PLAYABLE_CAMPAIGNS[0].missions.flatMap((m) => m.lessons ?? []));
+    expect([...order]).toEqual(TRAINING.map((m) => m.id));
   });
 
   it('a save from before the campaign order: its SA-6 lesson moves from t03 to t06, once', () => {

@@ -1,7 +1,7 @@
 /**
- * F35-A UI — one campaign's / training mission select: theatre sections with horizontally scrolling
- * mission cards (number, title, subtitle, time/weather/theatre, lock state, best grade + difficulty).
- * The campaign itself is picked first (campaignSelect.ts).
+ * F35-A UI — one campaign's mission select: theatre sections with horizontally scrolling mission cards
+ * (number, title, subtitle, time/weather, lock state, best grade + difficulty). The campaign itself is
+ * picked first (campaignSelect.ts); Training has its own screen (trainingPacks.ts).
  */
 import type { CampaignDef, CampaignProgress, MissionDef } from '../../core/contracts';
 import { DIFFICULTIES, THEATER_INFO, TIME_OF_DAY_INFO } from '../../core/data';
@@ -12,7 +12,6 @@ import { escapeHtml, h } from '../dom';
 import { formatScore, gradeTone, missionState, pad2, suggestedMissionIndex } from '../format';
 import type { UiHost } from '../host';
 import { lessonsLeft, suggestedLesson } from '../career';
-import { missionForLesson } from '../../missions';
 import { screenHeader } from '../widgets';
 
 const WEATHER_LABEL = { clear: 'Clear', scattered: 'Scattered', overcast: 'Overcast' } as const;
@@ -29,7 +28,7 @@ function card(m: MissionDef, progress: CampaignProgress, onPick: (m: MissionDef,
   const locked = st === 'locked';
   const b = h('button', {
     class: `mcard tod-${m.timeOfDay} wx-${m.weather} st-${st}`,
-    attrs: { type: 'button', 'aria-label': `${m.kind === 'training' ? 'Training' : 'Mission'} ${m.index}: ${m.title}${locked ? ' (locked)' : ''}` },
+    attrs: { type: 'button', 'aria-label': `Mission ${m.index}: ${m.title}${locked ? ' (locked)' : ''}` },
   });
   let foot: string;
   if (locked) foot = `<span class="mc-lock">${icon('lock')} LOCKED</span>`;
@@ -39,41 +38,24 @@ function card(m: MissionDef, progress: CampaignProgress, onPick: (m: MissionDef,
       `<span class="grade mc-grade tone-${gradeTone(best.grade)}">${best.grade}</span>` +
       `<span class="badge diff-${best.difficulty}">${d?.label ?? best.difficulty}</span>` +
       `<span class="mc-score mono">${formatScore(best.score)}</span>`;
-  } else foot = `<span class="mc-new">${icon('play')} ${m.kind === 'campaign' ? 'NEW' : 'START'}</span>`;
+  } else foot = `<span class="mc-new">${icon('play')} NEW</span>`;
   b.innerHTML =
     `<div class="mc-art"><div class="mc-sky"></div><div class="mc-clouds"></div>${jet()}` +
-    `<div class="mc-num mono">${m.kind === 'training' ? 'T' : ''}${pad2(m.index)}</div>` +
+    `<div class="mc-num mono">${pad2(m.index)}</div>` +
     `<div class="mc-tod">${icon(m.timeOfDay)}</div></div>` +
     `<div class="mc-body"><div class="mc-title">${escapeHtml(m.title)}</div>` +
     `<div class="mc-sub">${escapeHtml(m.subtitle)}</div>` +
-    `<div class="mc-meta">${meta(m)}</div></div>` +
+    `<div class="mc-meta"><span>${icon(m.timeOfDay)}${TIME_OF_DAY_INFO[m.timeOfDay].label}</span><span>${icon(m.weather)}${WEATHER_LABEL[m.weather]}</span></div></div>` +
     `<div class="mc-foot">${foot}</div>`;
   b.addEventListener('click', () => onPick(m, b));
   return b;
 }
 
-/**
- * A card's meta line: a lesson names the campaign mission it prepares for (playtest 2026-10-10, 1.4-j:
- * the list didn't say which lessons go with which mission); a mission its time of day and weather.
- */
-function meta(m: MissionDef): string {
-  const forMission = m.kind === 'training' ? missionForLesson(m.id) : null;
-  if (forMission) return `<span>${icon('flag')}For ${escapeHtml(forMission.title)}</span>`;
-  return `<span>${icon(m.timeOfDay)}${TIME_OF_DAY_INFO[m.timeOfDay].label}</span><span>${icon(m.weather)}${WEATHER_LABEL[m.weather]}</span>`;
-}
-
-function listScreen(
-  host: UiHost,
-  kind: 'campaign' | 'training',
-  title: string,
-  missions: MissionDef[],
-  progress: CampaignProgress,
-  toast: (t: string) => void,
-  trainingPick?: () => MissionDef | null,
-): Promise<MissionDef | null> {
+export function showCampaign(host: UiHost, campaign: CampaignDef, progress: CampaignProgress, toast: (t: string) => void): Promise<MissionDef | null> {
+  const missions = campaign.missions;
   return new Promise((resolve) => {
     let done = false;
-    const el = h('section', { class: `scr-missions kind-${kind}` });
+    const el = h('section', { class: 'scr-missions kind-campaign' });
     const finish = (m: MissionDef | null) => {
       if (done) return;
       done = true;
@@ -84,11 +66,11 @@ function listScreen(
     const stat = h('div', { class: 'ml-stat' });
     stat.innerHTML =
       `<span class="chip">${icon('check')} ${completed}/${missions.length}</span>` +
-      (kind === 'campaign' ? `<span class="chip">${icon('jet')} ${progress.totals.airKills}</span><span class="chip">${icon('target')} ${progress.totals.groundKills}</span>` : '');
+      `<span class="chip">${icon('jet')} ${progress.totals.airKills}</span><span class="chip">${icon('target')} ${progress.totals.groundKills}</span>`;
     el.appendChild(
       screenHeader({
-        kicker: kind === 'campaign' ? 'Campaign' : 'Flight school',
-        title,
+        kicker: 'Campaign',
+        title: campaign.name,
         back: () => finish(null),
         right: [stat],
       }),
@@ -96,8 +78,8 @@ function listScreen(
 
     const body = h('div', { class: 'scr-body ml-body ui-scroll' });
     // onboarding nudge: the lessons the next mission wants (T01–T03 before g01, T04–T05 before g02, T06–T07 before g03)
-    const prep = kind === 'campaign' && trainingPick ? lessonsLeft(progress) : null;
-    if (prep && trainingPick) {
+    const prep = lessonsLeft(progress);
+    if (prep) {
       const list = prep.lessons.map((m) => `T${pad2(m.index)} ${escapeHtml(m.title)}`).join(' · ');
       const nudge = h('div', { class: 'ml-nudge ui-panel' });
       nudge.innerHTML =
@@ -105,7 +87,7 @@ function listScreen(
         `<span class="ml-nudge-t"><b>Recommended before ${escapeHtml(prep.mission.title)}</b><em>${list}: ${prep.lessons.length > 1 ? 'they teach' : 'it teaches'} what this mission asks for.</em></span>`;
       const go = h('button', { class: 'ui-btn ghost ml-nudge-b', attrs: { type: 'button' }, html: `<span>Training</span>${icon('next')}` });
       go.addEventListener('click', () => {
-        const m = trainingPick();
+        const m = suggestedLesson(progress);
         if (m) finish(m);
       });
       nudge.appendChild(go);
@@ -118,9 +100,7 @@ function listScreen(
       g.push(m);
       groups.set(m.theater, g);
     }
-    // training: the next campaign mission's own next lesson (suggestedLesson), else the first unflown one
-    const wanted = kind === 'training' ? suggestedLesson(progress) : null;
-    const suggested = wanted ?? missions[suggestedMissionIndex([...missions].sort((a, b) => a.index - b.index), progress)];
+    const suggested = missions[suggestedMissionIndex([...missions].sort((a, b) => a.index - b.index), progress)];
     let suggestedEl: HTMLElement | null = null;
     const onPick = (m: MissionDef, cardEl: HTMLElement) => {
       if (missionState(m, progress) === 'locked') {
@@ -138,7 +118,7 @@ function listScreen(
       sec.appendChild(
         h('div', {
           class: 'ml-sec-head',
-          html: `${icon('pin')}<span class="ml-sec-t">${escapeHtml(groups.size > 1 ? info.name : info.region)}</span><span class="ml-sec-r">${list.length} ${kind === 'campaign' ? 'missions' : 'lessons'}${groups.size > 1 ? ' · ' + escapeHtml(info.region) : ''}</span>`,
+          html: `${icon('pin')}<span class="ml-sec-t">${escapeHtml(groups.size > 1 ? info.name : info.region)}</span><span class="ml-sec-r">${list.length} missions${groups.size > 1 ? ' · ' + escapeHtml(info.region) : ''}</span>`,
         }),
       );
       const row = h('div', { class: 'ml-row ui-hscroll' });
@@ -164,13 +144,3 @@ function listScreen(
     });
   });
 }
-
-/** The first lesson the next campaign mission wants that isn't flown yet (the campaign nudge's shortcut). */
-function nextTraining(progress: CampaignProgress): MissionDef | null {
-  return lessonsLeft(progress)?.lessons[0] ?? null;
-}
-
-export const showCampaign = (host: UiHost, campaign: CampaignDef, progress: CampaignProgress, toast: (t: string) => void) =>
-  listScreen(host, 'campaign', campaign.name, campaign.missions, progress, toast, () => nextTraining(progress));
-export const showTraining = (host: UiHost, missions: MissionDef[], progress: CampaignProgress, toast: (t: string) => void) =>
-  listScreen(host, 'training', 'Training', missions, progress, toast);
