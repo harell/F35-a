@@ -18,7 +18,13 @@ import { type RunnerSpawn } from '../src/sim/runner';
 import { isSmallGround } from '../src/sim/weapons/small';
 import { TRAINING, createMissionRunner, fixedDifficulty, lessonsFor, missionById, nextMissionAfter, terrainPadsFor, validateMission } from '../src/missions';
 import type { CampaignProgress } from '../src/core/contracts';
-import { T07_SMALL, T07_GROUP, T07_ISLAND, T07_RAT, T07_ROUTES, type T07Route } from '../src/missions/content/trainingSmallTargets';
+import { T07_HOME_NZD, T07_LEGAL_NZD, T07_SMALL, T07_GROUP, T07_ISLAND, T07_RAT, T07_ROUTES, type T07Route } from '../src/missions/content/trainingSmallTargets';
+import { HOME_DAMAGE_FRACTION, homesWithin, ringDistance } from '../src/missions/runtime/collateral';
+import { costSummary } from '../src/missions/runtime/costs';
+import { MUNITIONS } from '../src/sim/weapons/defs';
+import { aucklandBuildings } from '../src/world/scenery/aucklandBuildings';
+import { costRows } from '../src/ui/screens/debrief';
+import type { MissionResultExt } from '../src/missions/runtime/resultExt';
 import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { allFeatures } from '../src/world/scenery/Scenery';
@@ -119,6 +125,42 @@ describe('t07 Small Targets: content', () => {
       expect(r.drains.length).toBeGreaterThan(0);
     }
     expect(T07_SMALL.briefing.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('t07: homes in a bomb\'s blast', () => {
+  it('a StormBreaker on a rat at a drain hits no home; a JDAM there hits at least one; over the water none', () => {
+    const b = aucklandBuildings();
+    expect(b).not.toBeNull();
+    const sb = MUNITIONS.gbu53.blastRadius * HOME_DAMAGE_FRACTION;
+    const jdam = MUNITIONS.gbu31.blastRadius * HOME_DAMAGE_FRACTION;
+    const routes: Record<string, T07Route> = T07_ROUTES;
+    for (const [name, r] of Object.entries(routes)) {
+      for (const k of r.drains) {
+        const p = r.route[k];
+        expect(homesWithin(b!, p.x, p.z, sb), `${name} drain ${k}`).toBe(0);
+        expect(homesWithin(b!, p.x, p.z, jdam), `${name} drain ${k}`).toBeGreaterThan(0);
+      }
+    }
+    expect(homesWithin(b!, T07_ISLAND.x, T07_ISLAND.z, jdam)).toBe(0);
+  });
+
+  it('ringDistance: 0 inside a footprint, the distance to its nearest edge outside', () => {
+    const square = [0, 0, 10, 0, 10, 10, 0, 10];
+    expect(ringDistance(square, 5, 5)).toBe(0);
+    expect(ringDistance(square, 15, 5)).toBeCloseTo(5, 6);
+    expect(ringDistance(square, 13, 14)).toBeCloseTo(5, 6);
+  });
+
+  it('the bill adds the homes and the legal costs to the total, and the debrief lists both', () => {
+    const homes = { label: 'Herne Bay homes', count: 3, nzd: 3 * T07_HOME_NZD, legal: { label: 'Legal costs', nzd: 3 * T07_LEGAL_NZD } };
+    const plain = costSummary(600, { gbu31: 1 }, { label: 'A rat trap', nzd: 40 }, { label: 'Rats removed', count: 1 });
+    const billed = costSummary(600, { gbu31: 1 }, { label: 'A rat trap', nzd: 40 }, { label: 'Rats removed', count: 1 }, homes);
+    expect(plain.homes).toBeUndefined();
+    expect(billed.totalNzd - plain.totalNzd).toBeCloseTo(3 * (T07_HOME_NZD + T07_LEGAL_NZD), 3);
+    const rows = costRows({ costSummary: billed } as MissionResultExt).map((r) => r[1]);
+    expect(rows).toContain('3 × Herne Bay homes');
+    expect(rows).toContain('Legal costs');
   });
 });
 
@@ -275,7 +317,7 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
   }
 
   /** Pin the jet `back` m south of the rat, 1,200 m up, heading north at it, and release `weapon` at it. */
-  function release(ctx: ReturnType<typeof setup>, target: GroundTargetEntity, weapon: 'gbu53', back = 3_000) {
+  function release(ctx: ReturnType<typeof setup>, target: GroundTargetEntity, weapon: 'gbu53' | 'gbu31', back = 3_000) {
     const { world, p, step } = ctx;
     world.combat.selectWeapon(p, weapon, world);
     p.position.set(target.position.x, 1_200, target.position.z + back);
@@ -310,6 +352,29 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     const res = runner.result(ctx.world) as { costSummary?: { removed: { count: number }; weapons: { weapon: string }[] } };
     expect(res.costSummary?.removed.count).toBe(2);
     expect(res.costSummary?.weapons.map((x) => x.weapon)).toEqual(['gbu53']);
+  });
+
+  it('a JDAM on a rat at a drain hits homes: check fire, the barristers, an injunction, and the homes on the bill', () => {
+    const ctx = setup();
+    const { runner, rats, step, radio, world } = ctx;
+    const r = rats()[0];
+    step(200, () => r.runner!.phase === 'stop');
+    expect(r.runner!.phase).toBe('stop');
+    release(ctx, r, 'gbu31', 1_400);
+    expect(runner.state).toBe('failed');
+    // the radio plays on after the end: check fire, the trappers' call, then "mission failed"
+    for (let i = 0; i < 12 * 60; i++) {
+      world.step(DT);
+      runner.update(world, DT);
+    }
+    const res = runner.result(world) as MissionResultExt;
+    expect(res.reason).toMatch(/injunction/);
+    expect(radio.some((t) => /check fire/i.test(t) && /house/.test(t))).toBe(true);
+    expect(radio.some((t) => /barristers/.test(t))).toBe(true);
+    const homes = res.costSummary?.homes;
+    expect(homes?.count ?? 0).toBeGreaterThan(0);
+    expect(homes?.nzd).toBe(homes!.count * T07_HOME_NZD);
+    expect(homes?.legal.nzd).toBe(homes!.count * T07_LEGAL_NZD);
   });
 
   it('a rat that reaches Watchman Island loses the sortie', () => {

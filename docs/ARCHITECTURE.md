@@ -443,6 +443,10 @@ prices the sortie against one volunteer's trap (`MissionScript.costSummary`, uni
 T07's sewer rats (`'rat'`, `src/missions/content/trainingSmallTargets.ts`) run on the same runner: down a Herne Bay
 street with a stop at each drain, then swimming (`RunnerState.swimming`: a steady speed, no stops, so a StormBreaker
 can't track them) for Watchman Island. The lesson is g03's release on two of them: a StormBreaker while the rat stops.
+The jet also carries JDAMs for a rat that gets into the water. On land a JDAM's blast reaches the houses either side:
+`MissionScript.collateral` (`src/missions/runtime/collateral.ts`) counts every building within half a weapon's blast
+radius of a land impact, calls it on the radio and fails the sortie, and the debrief's bill prices the homes and the
+legal costs.
 
 Every munition that goes off on land digs a crater sized by its warhead (`craterRadius` in
 `src/render/effects/Effects.ts`), and a bomb going off in the water throws up a splash column, hit or miss.
