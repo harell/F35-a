@@ -8,6 +8,8 @@
  *   − 500 per civil airliner or ship the player destroyed, all × difficulty.scoreMultiplier,
  *   floored at 0.
  *
+ * Homes hit by the player's bombs (MissionScript.collateral, t07) make the grade F, the lowest, win or lose.
+ *
  * Grade: from a 0..1 performance rating that is independent of mission size (objective
  * completion, share of spawned enemies killed, time, accuracy, damage, friendly losses) so an
  * 'S' is equally hard in a small training sortie and the finale. Failure caps the grade at
@@ -70,6 +72,8 @@ export interface ScoreInput {
   friendlyLosses: number;
   /** Neutral civil traffic (airliners + ships) the player destroyed. */
   civilianKills?: number;
+  /** Homes the player's bombs hit (missions that count them): any makes the grade F. */
+  homesHit?: number;
   /** Extra stunt points (flying under the Harbour Bridge…). */
   bonus: number;
   scoreMultiplier: number;
@@ -168,6 +172,7 @@ export function computeScore(i: ScoreInput): ScoreOutput {
     const cap = contributionCap(playerShare);
     if (gradeRank(grade) > gradeRank(cap)) grade = cap;
   }
+  if ((i.homesHit ?? 0) > 0) grade = 'F';
   return {
     score,
     grade,

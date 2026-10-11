@@ -60,6 +60,8 @@ export interface GameEventMap {
   transonic: { aircraft: AircraftEntity; supersonic: boolean };
   /** Mission objective state changed. */
   objective: { id: string; label: string; state: 'active' | 'complete' | 'failed' };
+  /** The player's bomb went off among homes (MissionScript.collateral, t07): the target camera holds on it. */
+  'mission:collateral': { position: Vector3; homes: number };
   /** Mission finished. */
   'mission:end': { success: boolean; reason: string };
   /** Player took a hit (screen flash, shake, haptics). */

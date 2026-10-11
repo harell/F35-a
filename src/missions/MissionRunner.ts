@@ -156,7 +156,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
     this.superyachts = civilTraffic ? new SuperyachtTraffic(this.s) : null;
     this.trains = civilTraffic ? new TrainTraffic(this.s) : null;
     this.landmarks = new LandmarkWatch(this.s, (reason) => this.fail(reason));
-    this.homes = def.script.collateral ? new HomesWatch(this.s, (reason) => this.fail(reason)) : null;
+    this.homes = def.script.collateral ? new HomesWatch(this.s) : null;
     this.sightseeing = def.script.freeFlight ? new SightseeingLog(this.s) : null;
   }
 
@@ -314,6 +314,7 @@ class MissionRunnerImpl implements MissionRunnerApi {
       damageTaken,
       friendlyLosses: s.friendlyLosses,
       civilianKills: s.civilianKills,
+      homesHit: s.homesHit,
       bonus: s.bonus,
       scoreMultiplier: s.difficulty.scoreMultiplier,
       flightKills: s.flightKills,

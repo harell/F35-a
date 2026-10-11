@@ -45,9 +45,30 @@ export const PIP_DESTROYED_HOLD = 3;
 /** …a ship (it burns, lists and starts to settle — the sinking itself takes 60–90 s). */
 export const PIP_SHIP_HOLD = 6;
 
+/**
+ * Seconds the window opens out to WIDE after the player's bomb hit homes ('mission:collateral', t07), so
+ * the crater among the houses shows; a target destroyed by that bomb is held as long.
+ */
+export const PIP_COLLATERAL_HOLD = 6;
+
 /** How long the window holds on `t` after it is destroyed (s). */
 export function pipHold(t: AnyEntity): number {
+  if (collateral.age < PIP_COLLATERAL_HOLD) return PIP_COLLATERAL_HOLD;
   return t.kind === 'ground' && t.type === 'ship' ? PIP_SHIP_HOLD : PIP_DESTROYED_HOLD;
+}
+
+/** The homes-hit shot: time since the hit (Infinity: none) and the zoom step to go back to after it (-1: none). */
+const collateral = { age: Infinity, saved: -1 };
+const POD_WIDE = POD_ZOOM.findIndex((z) => z.name === 'WIDE');
+
+/** The player's bomb hit homes: open the pod out to WIDE on the crater for PIP_COLLATERAL_HOLD s. */
+export function pipCollateral(): void {
+  collateral.age = 0;
+}
+
+/** The homes-hit shot is on: it keeps the weapon window to its strip, as the Sky Tower cut does. */
+export function pipCollateralActive(): boolean {
+  return collateral.age < PIP_COLLATERAL_HOLD;
 }
 /** Open / close animation time (s). */
 const OPEN_TIME = 0.22;
@@ -267,6 +288,8 @@ export function resetPip(): void {
   track.deadAge = 0;
   track.shot = null;
   pod.id = null;
+  collateral.age = Infinity;
+  collateral.saved = -1;
 }
 
 /** Back to the default zoom step (a new sortie / a new jet). */
@@ -361,6 +384,15 @@ export function stepPip(
   landmark: LandmarkEntity | null = null,
   asset: PipSubject | null = null,
 ): PipSubject | null {
+  // homes hit: WIDE for the hold, then back to the step from before it
+  if (collateral.age < PIP_COLLATERAL_HOLD) {
+    if (collateral.saved < 0) collateral.saved = pipView.zoom;
+    pipView.zoom = POD_WIDE;
+    collateral.age += dt;
+  } else if (collateral.saved >= 0) {
+    pipView.zoom = collateral.saved;
+    collateral.saved = -1;
+  }
   let show: AnyEntity | null = null;
   // the target on screen just died: hold the shot for the explosion, even when the radar has already
   // moved on to the next target (the cut to it follows the hold)

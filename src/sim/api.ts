@@ -133,6 +133,8 @@ export interface BombCue {
   steer: -1 | 0 | 1;
   /** One of the jet's own guided bombs is still flying to the designated target. */
   bombAway: boolean;
+  /** A GPS bomb (JDAM) inside its minimum range: released now it flies long (dlz.ts gpsMinRange). */
+  tooClose: boolean;
 }
 
 export interface CombatSystemApi {
@@ -188,7 +190,7 @@ export interface CombatSystemApi {
    * CCIP / release cue for bombs: predicted impact point + whether release is valid. GPS / glide
    * bombs: `inRange` only within the reach and with the target where the bomb can turn to,
    * `offAxis` when it is outside the release cone around the ground track (steer toward it: `steer`
-   * +1 right, −1 left, 0 when not off axis), `bombAway` while one of `ac`'s own guided bombs is still
+   * +1 right, −1 left, 0 when not off axis), `tooClose` for a JDAM inside its minimum range, `bombAway` while one of `ac`'s own guided bombs is still
    * flying to the designated target.
    */
   bombImpactPoint(ac: AircraftEntity, world: SimWorld): BombCue | null;

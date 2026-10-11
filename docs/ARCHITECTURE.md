@@ -451,7 +451,8 @@ street with a stop at each drain, then swimming (`RunnerState.swimming`: a stead
 can't track them) for Watchman Island. The lesson is g03's release on two of them: a StormBreaker while the rat stops.
 The jet also carries JDAMs for a rat that gets into the water. On land a JDAM's blast reaches the houses either side:
 `MissionScript.collateral` (`src/missions/runtime/collateral.ts`) counts every building within half a weapon's blast
-radius of a land impact, calls it on the radio and fails the sortie, and the debrief's bill prices the homes and the
+radius of a land impact and calls it on the radio; the target camera opens out to WIDE on the crater (`pipCollateral`), the
+sortie goes on with its grade dropped to F, and the debrief's bill prices the homes and the
 legal costs.
 
 Every munition that goes off on land digs a crater sized by its warhead (`craterRadius` in
