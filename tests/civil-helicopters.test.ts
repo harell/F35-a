@@ -86,7 +86,7 @@ describe('helicopter traffic', () => {
       [4, ['Westpac Rescue 1', 'Police Eagle', 'Northland Rescue', 'Westpac Rescue 2']],
       [9, ['Westpac Rescue 1', 'Police Eagle', 'Northland Rescue', 'Westpac Rescue 2']],
     ] as const) {
-      const m = setup(missionById('g01')!, n);
+      const m = setup(missionById('ia_dogfight_auckland')!, n);
       m.tick(1);
       const hs = m.helis();
       expect(hs.map((h) => h.callsign)).toEqual(callsigns);
@@ -100,6 +100,19 @@ describe('helicopter traffic', () => {
       }
       m.runner.dispose?.();
     }
+  });
+
+  it('flies in Instant Action only: the campaign and training have none', () => {
+    for (const id of ['g01', 'g02', 'g03', 't01', 't05']) {
+      const m = setup(missionById(id)!, 4);
+      m.tick(1);
+      expect(m.helis(), id).toEqual([]);
+      m.runner.dispose?.();
+    }
+    const m = setup(missionById('ia_strike_auckland')!, 4);
+    m.tick(1);
+    expect(m.helis().length).toBe(4);
+    m.runner.dispose?.();
   });
 
   it('shows each by its real name on the HUD: the designated box, the contact box, the kill feed', () => {
@@ -243,7 +256,7 @@ describe('helicopter traffic', () => {
 
 describe('civilian, but targetable', () => {
   it('a player shoot-down is a civilian loss, not a kill, and the mission goes on; the wreck falls', () => {
-    const m = setup(missionById('g01')!, 4);
+    const m = setup(missionById('ia_dogfight_auckland')!, 4);
     m.tick(1);
     const p = m.world.player!;
     // one in the air (the fleet starts part-way round its cycles: some are parked), so that its wreck can fall

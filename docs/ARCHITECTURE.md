@@ -320,8 +320,8 @@ runs through turns its street grid to the road (`urbanGrid.ts districtAngles`). 
 The real helicopters over Auckland, one of each: Westpac Rescue 1 and 2 and Northland Rescue (`aw169`, Northern
 Rescue's red and yellow) and the police Eagle (`bell429`, navy). One shared code-built airframe in two paint schemes
 matched to photos (`src/render/models/aircraft/helicopters.ts`), with each helicopter's name and registration as
-decals (`HELI_LIVERIES`, `heliDecals`). They are neutral sim entities like the airliners, spawned once per Auckland
-sortie by `src/missions/runtime/helicopters.ts` (`QualitySettings.helicopters`: 1 low, 3 medium, 4 high; seeded from
+decals (`HELI_LIVERIES`, `heliDecals`). They are neutral sim entities like the airliners, spawned once per Instant Action
+sortie over Auckland (none in the campaign or training) by `src/missions/runtime/helicopters.ts` (`QualitySettings.helicopters`: 1 low, 3 medium, 4 high; seeded from
 the mission, salted on a retry) and never respawned: one shot down stays down until the next session. Each flies a
 fixed cycle of stops (`src/sim/civil/heli.ts`: `AircraftEntity.heli`; the world skips the flight model, the
 collisions skip them while alive) and starts at a random point of it (`placeHeli` fast-forwards the profile), so the

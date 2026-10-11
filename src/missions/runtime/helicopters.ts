@@ -1,7 +1,7 @@
 /**
  * Civil helicopters over Auckland (#144), neutral traffic like the airliners (civil.ts): the real rescue and police
- * helicopters on the routes they fly, at most one of each, spawned once at the start of every Auckland sortie
- * (seeded per sortie, salted on a retry) and never respawned: one shot down stays down until the next session.
+ * helicopters on the routes they fly, at most one of each, spawned once at the start of every Instant Action sortie
+ * over Auckland (not in the campaign or training; seeded per sortie, salted on a retry) and never respawned: one shot down stays down until the next session.
  * Each starts at a random point of its cycle, so the sortie opens on traffic already under way:
  *  - Westpac Rescue 1 (AW169 ZK-HLH): Ardmore base → Waiheke (the Onetangi Sports Park pad: 22–25 % of all the
  *    service's missions go to the island) → Auckland City Hospital → Ardmore;
