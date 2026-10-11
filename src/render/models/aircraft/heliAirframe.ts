@@ -37,6 +37,25 @@ export interface HeliLivery {
   text: number;
   /** The boom text's colour when the boom is painted differently from the cabin (default `text`). */
   boomTextColor?: number;
+  /** Engine cowling and mast fairing (default `top`). */
+  cowl?: number;
+  /** The anti-glare panel over the nose, ahead of the windscreen (default `top`). */
+  noseTop?: number;
+  /** The tail boom's lower half (default `boom`). */
+  boomLower?: number;
+  /** The fin's top and the tail rotor gearbox, the horizontal stabiliser (default `fin`). */
+  finTip?: number;
+  stab?: number;
+  /** Where along the cabin the chequered band runs (z) and its block length (m). */
+  checkZ?: [number, number];
+  checkBlock?: number;
+  /** A diagonal sweep rising towards the tail: `color` aft of the line z − 1.2·y = `from`, with an `edge` line. */
+  sweep?: { color: number; from: number; edge: number };
+  /** The cabin name decal: centre z, y, width, height (default under the windows). */
+  nameAt?: [number, number, number, number];
+  /** Registration on the fin (default) or in large letters on the cowling, and its colour (default `text`). */
+  regOn?: 'fin' | 'cowl';
+  regColor?: number;
 }
 
 export interface HeliOptions {
@@ -45,6 +64,8 @@ export interface HeliOptions {
   hoist: boolean;
   flir: boolean;
   searchlight: boolean;
+  /** Searchlight under the nose (rescue) or under the rear fuselage (police Nightsun). */
+  searchlightAt?: 'nose' | 'rear';
 }
 
 const GLASS = 0x1d2a35;
@@ -171,17 +192,25 @@ function isWindow(x: number, y: number, z: number): boolean {
 /** The livery colour of a fuselage point. */
 function paintFuselage(L: HeliLivery, x: number, y: number, z: number): number {
   if (isWindow(x, y, z)) return GLASS;
-  if (z > 3.9) return L.boom;
+  if (z > 3.9) return y < sectionAt(z).b + (sectionAt(z).t - sectionAt(z).b) * 0.45 ? (L.boomLower ?? L.boom) : L.boom;
   const [s0, s1] = L.stripeY ?? [-0.32, -0.12];
   const rise = z > 1.6 ? (z - 1.6) * 0.32 : 0;
   // a chequered band along the lower cabin (police): two rows of blocks below the break line
-  if (L.check && z > -3.9 && z < 2.6 && y < s1 + rise && y > -0.78 && Math.abs(x) > 0.7) {
-    const i = Math.floor((z + 3.9) / 0.5);
+  const [c0, c1] = L.checkZ ?? [-3.9, 2.6];
+  if (L.check && z > c0 && z < c1 && y < s1 + rise && y > -0.78 && Math.abs(x) > 0.7) {
+    const i = Math.floor((z - c0) / (L.checkBlock ?? 0.5));
     const j = y < s0 + rise ? 0 : 1;
     return (i + j) % 2 === 0 ? L.check[0] : L.check[1];
   }
   if (L.stripe && y > s0 + rise && y < s1 + rise) return L.stripe;
-  return y < s0 + rise ? L.belly : L.top;
+  if (y < s0 + rise) return L.belly;
+  if (L.noseTop !== undefined && z < -5.2) return L.noseTop;
+  if (L.sweep) {
+    const u = z - 1.2 * y;
+    if (u > L.sweep.from) return L.sweep.color;
+    if (u > L.sweep.from - 0.14) return L.sweep.edge;
+  }
+  return L.top;
 }
 
 /** Recolour a canonical (non-indexed) geometry per triangle from its centroid. */
@@ -286,7 +315,7 @@ function cowling(L: HeliLivery): BufferGeometry[] {
     const roof = sectionAt(z).t - 0.06;
     return { z, ring: superRing(0, roof + h / 2, w, h / 2 + 0.06, 3.2, 20) };
   });
-  out.push(paintTriangles(loftRings(st, { capStart: true, capEnd: true }), (x, y, z) => (z < -2.2 && y < 1.32 && Math.abs(x) > 0.45 ? DARK : L.top)));
+  out.push(paintTriangles(loftRings(st, { capStart: true, capEnd: true }), (x, y, z) => (z < -2.2 && y < 1.32 && Math.abs(x) > 0.45 ? DARK : (L.cowl ?? L.top))));
   // intake grilles and exhausts each side
   for (const s of [-1, 1]) {
     out.push(place(box(0.04, 0.24, 0.55, DARK), [s * 0.74, 1.27, -1.75]));
@@ -294,7 +323,7 @@ function cowling(L: HeliLivery): BufferGeometry[] {
     out.push(place(cylinderZ(0.12, 0.12, 0.5, 0.56, 10, 0x0c0c0d), [s * 0.5, 1.33, 1.75], [0.12, s * 0.35, 0]));
   }
   // mast fairing and the swashplate cover
-  out.push(place(cylinder(0.32, 0.46, 0.32, 14, L.top), [0, 1.6, -0.35]));
+  out.push(place(cylinder(0.32, 0.46, 0.32, 14, L.cowl ?? L.top), [0, 1.6, -0.35]));
   out.push(place(cylinder(0.14, 0.2, 0.3, 10, METAL), [0, 1.86, -0.35]));
   return out;
 }
@@ -302,27 +331,18 @@ function cowling(L: HeliLivery): BufferGeometry[] {
 /** Fin, horizontal stabiliser with end plates, ventral fin and tail skid. */
 function tail(L: HeliLivery): BufferGeometry[] {
   const out: BufferGeometry[] = [];
-  // vertical fin: swept leading edge, a thick root over the boom end
-  const fin = prismX(
-    [
-      [7.55, 0.82],
-      [8.75, 0.82],
-      [9.25, 2.35],
-      [8.85, 2.42],
-    ],
-    0.16,
-    L.fin,
-  );
-  out.push(fin);
+  // vertical fin: swept leading edge, a thick root over the boom end; its top (above y 1.95) in the tip colour
+  out.push(prismX([[7.55, 0.82], [8.75, 0.82], [9.1, 1.95], [8.6, 1.95]], 0.16, L.fin));
+  out.push(prismX([[8.6, 1.95], [9.1, 1.95], [9.25, 2.35], [8.85, 2.42]], 0.16, L.finTip ?? L.fin));
   // the tail rotor gearbox fairing (left side)
-  out.push(place(ellipsoid(0.12, 0.2, 0.32, 10, 6, L.fin), [-0.1, 1.58, 8.85]));
+  out.push(place(ellipsoid(0.12, 0.2, 0.32, 10, 6, L.finTip ?? L.fin), [-0.1, 1.58, 8.85]));
   // ventral fin and the tail skid
   out.push(prismX([[7.9, 0.62], [8.75, 0.62], [8.95, 0.05], [8.65, 0.02]], 0.1, L.fin));
   out.push(place(cylinderZ(0.03, 0.03, 8.6, 9.05, 6, METAL), [0, 0.05, 0]));
   // horizontal stabiliser at the boom, end plates
-  const stab = place(box(1.15, 0.07, 0.62, L.fin), [0.78, 0.7, 6.65]);
+  const stab = place(box(1.15, 0.07, 0.62, L.stab ?? L.fin), [0.78, 0.7, 6.65]);
   out.push(stab, mirrorX(stab.clone()));
-  for (const s of [-1, 1]) out.push(place(prismX([[6.35, 0.45], [6.95, 0.45], [7.1, 1.05], [6.65, 1.05]], 0.06, L.fin), [s * 1.37, 0, 0]));
+  for (const s of [-1, 1]) out.push(place(prismX([[6.35, 0.45], [6.95, 0.45], [7.1, 1.05], [6.65, 1.05]], 0.06, L.stab ?? L.fin), [s * 1.37, 0, 0]));
   return out;
 }
 
@@ -350,7 +370,7 @@ function gear(L: HeliLivery, kind: 'wheels' | 'skids', g: number): BufferGeometr
     for (const s of [-1, 1]) {
       // the skid tube with an upturned toe
       out.push(place(cylinderZ(0.055, 0.055, -3.6, 1.9, 8, METAL), [s * 1.25, -g + 0.06, 0]));
-      out.push(place(cylinderZ(0.055, 0.04, -4.15, -3.6, 8, METAL), [s * 1.25, -g + 0.06, 0], [-0.32, 0, 0]));
+      out.push(place(cylinderZ(0.04, 0.055, -0.55, 0, 8, METAL), [s * 1.25, -g + 0.06, -3.6], [0.32, 0, 0]));
       // cross tubes: down and out from the belly
       for (const z of [-2.5, 0.9]) {
         const h = g - 0.8;
@@ -421,8 +441,10 @@ function kit(o: HeliOptions): BufferGeometry[] {
     out.push(place(box(0.16, 0.11, 0.04, GLASS), [0, -0.95, -5.22]));
   }
   if (o.searchlight) {
-    out.push(place(cylinderZ(0.16, 0.2, -0.25, 0.1, 12, GREY), [0.55, -0.98, -3.6], [0.5, 0, 0]));
-    out.push(place(cylinderZ(0.15, 0.15, -0.27, -0.25, 12, 0xf3f0e0), [0.55, -0.98, -3.6], [0.5, 0, 0]));
+    const at: [number, number, number] = o.searchlightAt === 'rear' ? [0, -0.15, 3.2] : [0.55, -0.98, -3.6];
+    if (o.searchlightAt === 'rear') out.push(place(cylinder(0.05, 0.05, 0.3, 6, GREY), [0, 0.05, 3.2]));
+    out.push(place(cylinderZ(0.16, 0.2, -0.25, 0.1, 12, GREY), at, [0.5, 0, 0]));
+    out.push(place(cylinderZ(0.15, 0.15, -0.27, -0.25, 12, 0xf3f0e0), at, [0.5, 0, 0]));
   }
   // pitot tubes, a whip and two blade antennas, the belly beacon
   for (const s of [-1, 1]) out.push(place(cylinderZ(0.02, 0.02, -6.55, -6.0, 5, METAL), [s * 0.32, 0.05, 0]));
@@ -487,11 +509,16 @@ function sideDecals(group: Group, make: () => Mesh, z: number, y: number, xAt: n
 }
 
 export function addBranding(group: Group, L: HeliLivery): void {
-  const cab = sectionAt(-0.5).w;
-  sideDecals(group, () => textDecal(L.name, 3.0, 0.26, L.text, '900', true), -0.6, -0.03, cab);
+  const [nz, ny, nw, nh] = L.nameAt ?? [-0.6, -0.03, 3.0, 0.26];
+  // the decal sits on the skin at its height (the cabin side curves in towards the roof)
+  const nx = surfacePoint(nz, angleAtY(nz, ny))[0];
+  sideDecals(group, () => textDecal(L.name, nw, nh, L.text, '900', !L.nameAt), nz, ny, nx);
   const boomW = sectionAt(5.6).w;
-  sideDecals(group, () => textDecal(L.boomText, 2.6, 0.22, L.boomTextColor ?? L.text, '800'), 5.6, 0.66, boomW);
-  sideDecals(group, () => textDecal(L.reg, 0.95, 0.2, L.text, '700'), 8.35, 1.3, 0.085);
+  if (L.boomText) sideDecals(group, () => textDecal(L.boomText, 2.6, 0.22, L.boomTextColor ?? L.text, '800'), 5.6, 0.66, boomW);
+  if (L.regOn === 'cowl') {
+    // the last three letters, big, on the cowling side (as the Westpac AW169s carry them)
+    sideDecals(group, () => textDecal(L.reg.slice(3), 1.0, 0.3, L.regColor ?? L.text, '900'), 0.2, 1.3, 0.75);
+  } else sideDecals(group, () => textDecal(L.reg, 0.95, 0.2, L.regColor ?? L.text, '700'), 8.35, 1.3, 0.085);
 }
 
 /* ───────────────────────── build ───────────────────────── */

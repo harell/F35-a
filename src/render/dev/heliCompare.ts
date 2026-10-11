@@ -31,53 +31,67 @@ import { helipad } from '../../core/sites';
 
 /* ───────────────────────── the proposal ───────────────────────── */
 
+/** Liveries as photographed (see the review page's photo strip): ZK-IZB, an NZ Police Bell 429, NEST's S-76A ZK-ISJ. */
 export const LIVERIES: Record<string, HeliLivery> = {
   westpac: {
     id: 'westpac',
-    top: 0xd3222a,
+    top: 0xd5202a,
     belly: 0xf5c400,
-    stripe: 0xf4f4f0,
-    stripeY: [-0.3, -0.18],
-    boom: 0xf5c400,
-    fin: 0xd3222a,
+    stripe: 0,
+    stripeY: [-0.46, -0.38],
+    boom: 0xd5202a,
+    boomLower: 0xf5c400,
+    fin: 0xd5202a,
+    finTip: 0xf5c400,
+    stab: 0xf5c400,
+    cowl: 0xf5c400,
+    noseTop: 0x16181b,
     check: null,
     blade: 0x2b2d30,
-    tip: 0xf5c400,
+    tip: 0x2b2d30,
     name: 'WESTPAC RESCUE',
-    boomText: 'NORTHERN RESCUE',
-    reg: 'ZK-HLH',
+    boomText: '',
+    reg: 'ZK-IZB',
+    regOn: 'cowl',
+    regColor: 0x9a1218,
     text: 0xf4f4f0,
-    boomTextColor: 0xc4161e,
   },
   northland: {
     id: 'northland',
     top: 0xf3f3f0,
     belly: 0xf3f3f0,
-    stripe: 0xc8102e,
-    stripeY: [-0.34, -0.14],
-    boom: 0xf3f3f0,
-    fin: 0xf3f3f0,
+    stripe: 0,
+    boom: 0x1d4a3c,
+    fin: 0x1d4a3c,
+    stab: 0x1d4a3c,
+    cowl: 0xc8102e,
+    sweep: { color: 0xc8102e, from: 0.9, edge: 0x8e0b20 },
     check: null,
     blade: 0x2b2d30,
-    tip: 0xf5c400,
+    tip: 0xe9e9e6,
     name: 'NORTHLAND RESCUE',
-    boomText: 'NORTHERN RESCUE',
+    boomText: 'ELECTRICITY RESCUE',
+    boomTextColor: 0xf4f4f0,
     reg: 'ZK-HQO',
+    regColor: 0xf4f4f0,
     text: 0x1b2a4a,
   },
   eagle: {
     id: 'eagle',
-    top: 0x15203a,
-    belly: 0x15203a,
+    top: 0x141b30,
+    belly: 0x141b30,
     stripe: 0,
-    stripeY: [-0.45, -0.1],
-    boom: 0x15203a,
-    fin: 0x15203a,
-    check: [0xf2c500, 0x1d4ea6],
+    stripeY: [-0.5, -0.15],
+    boom: 0x141b30,
+    fin: 0x141b30,
+    check: [0x2c3450, 0x0e1324],
+    checkZ: [0.5, 2.7],
+    checkBlock: 0.22,
     blade: 0x2b2d30,
-    tip: 0xd8d8d4,
-    name: 'POLICE',
-    boomText: 'EAGLE',
+    tip: 0xd23a2a,
+    name: 'POLICE 1',
+    nameAt: [-1.0, 0.84, 2.3, 0.26],
+    boomText: '',
     reg: 'ZK-IPB',
     text: 0xf4f4f0,
   },
@@ -86,7 +100,7 @@ export const LIVERIES: Record<string, HeliLivery> = {
 const OPTIONS: Record<string, HeliOptions> = {
   westpac: { blades: 5, gear: 'wheels', hoist: true, flir: false, searchlight: true },
   northland: { blades: 4, gear: 'wheels', hoist: true, flir: false, searchlight: true },
-  eagle: { blades: 4, gear: 'skids', hoist: false, flir: true, searchlight: true },
+  eagle: { blades: 4, gear: 'skids', hoist: false, flir: true, searchlight: true, searchlightAt: 'rear' },
 };
 
 /** Today's model for each proposed helicopter (null: nothing like it in the game today). */
@@ -235,7 +249,11 @@ export function mountViewer(canvas: HTMLCanvasElement, onStats: (today: number |
     if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) renderer.setSize(w, h, false);
     if (!dragging && !reduce) yaw += dt * 0.12;
     if (cur) {
+      // side by side when wide, else stacked with today on top (GL viewports count from the bottom); the page's
+      // labels follow the stage's data-layout
       const wide = w > 640;
+      const layout = wide ? 'wide' : 'stacked';
+      if (canvas.parentElement && canvas.parentElement.dataset.layout !== layout) canvas.parentElement.dataset.layout = layout;
       const halves: [Side | null, number, number, number, number][] = wide
         ? [
             [cur.today, 0, 0, w / 2, h],
