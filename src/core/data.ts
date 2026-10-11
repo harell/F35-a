@@ -308,14 +308,19 @@ export const LOADOUTS: Record<LoadoutId, LoadoutDef> = {
     chaff: 24,
     role: 'sead',
   },
-  // t07's loadout: the full internal StormBreaker load and nothing else. A rat has no radar for an
-  // AARGM-ER to home on, and no campaign mission carries a JDAM, so neither rides along unused.
-  strike_sdb: {
-    id: 'strike_sdb',
-    name: 'Precision Strike (Stealth)',
-    description: '8× GBU-53/B StormBreaker internal, nothing else. Datalinked glide bombs for targets with no radar to home on.',
-    rcsMultiplier: 1,
-    stores: [{ weapon: 'gbu53', count: 8, internal: true }],
+  // t07's loadout: StormBreakers for the rats at the drains, JDAMs for one that gets into the water.
+  // No AARGM-ER: a rat has no radar to home on.
+  strike_mixed: {
+    id: 'strike_mixed',
+    name: 'Mixed Strike',
+    description: '4× GBU-53/B StormBreaker + 1× GBU-31 JDAM internal, 2× GBU-31 JDAM on the wing pylons, no air-to-air missiles. The small bomb for a small target, the big one where its blast can do the work.',
+    rcsMultiplier: 20,
+    stores: [
+      // the JDAM first: it takes a main bay station, and the StormBreakers pair up on the rest
+      { weapon: 'gbu31', count: 1, internal: true },
+      { weapon: 'gbu53', count: 4, internal: true },
+      { weapon: 'gbu31', count: 2, internal: false },
+    ],
     gunAmmo: 180,
     flares: 24,
     chaff: 24,

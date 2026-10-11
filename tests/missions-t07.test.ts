@@ -100,14 +100,13 @@ describe('t07 Small Targets: content', () => {
     expect(T07_SMALL.timeOfDay).toBe('day');
   });
 
-  it("flies StormBreakers only, g03's bomb: no AARGM-ER (a rat has no radar) and no JDAM", () => {
-    expect(T07_SMALL.recommendedLoadout).toBe('strike_sdb');
-    expect(T07_SMALL.allowedLoadouts).toEqual(['strike_sdb']);
-    expect(LOADOUTS.strike_sdb.stores).toEqual([{ weapon: 'gbu53', count: 8, internal: true }]);
+  it("flies g03's StormBreakers and JDAMs for a swimmer: no AARGM-ER (a rat has no radar)", () => {
+    expect(T07_SMALL.recommendedLoadout).toBe('strike_mixed');
+    expect(T07_SMALL.allowedLoadouts).toEqual(['strike_mixed']);
+    const n = (w: string) => LOADOUTS.strike_mixed.stores.filter((st) => st.weapon === w).reduce((a, st) => a + st.count, 0);
+    expect([n('gbu53'), n('gbu31'), n('aargm')]).toEqual([4, 3, 0]);
     expect(LOADOUTS.sead_precision.stores.some((st) => st.weapon === 'gbu53')).toBe(true);
     expect(missionById('g03')?.allowedLoadouts).toContain('sead_precision');
-    // the old mixed load existed only for this lesson's JDAM waves
-    expect(Object.keys(LOADOUTS)).not.toContain('strike_mixed');
   });
 
   it('one wave of two rats down the streets, every route ending at Watchman Island; a short briefing', () => {
@@ -120,7 +119,6 @@ describe('t07 Small Targets: content', () => {
       expect(r.drains.length).toBeGreaterThan(0);
     }
     expect(T07_SMALL.briefing.length).toBeLessThanOrEqual(3);
-    expect(T07_SMALL.briefing.join(' ')).not.toMatch(/JDAM|GBU-31/);
   });
 });
 
@@ -202,12 +200,12 @@ describe('the rat: runs, stops at the drains, swims', () => {
 
 describe('bombs against a swimming rat', { timeout: 120_000 }, () => {
   /** One `weapon` at a rat 300 m out to sea, released `range` m short of it, 1,200 m up; who died and where it went off. */
-  function drop(weapon: 'gbu53', seed: number, still = false, range = 3_000) {
+  function drop(weapon: 'gbu53' | 'gbu31', seed: number, still = false, range = 3_000) {
     const w = shoreWorld(seed);
     const from = new Vector3(800, 0, 0);
     const spec: RunnerSpawn = still ? { route: [from, from.clone()], stations: [] } : { route: [from, new Vector3(3_000, 0, 0)], stations: [], swimSpeed: T07_RAT.swimSpeed };
     const r = rat(w, spec);
-    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_sdb' });
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(from.x - range, 1_200, 0), heading: Math.PI / 2, speed: 230, loadout: 'strike_mixed' });
     w.combat.selectWeapon(p, weapon, w);
     const bursts: string[] = [];
     w.events.on('explosion', (e) => bursts.push(e.surface));
@@ -235,6 +233,17 @@ describe('bombs against a swimming rat', { timeout: 120_000 }, () => {
     expect(kills).toBe(0);
   });
 
+  it('a JDAM released low and close kills it, and goes off in the water', () => {
+    let kills = 0;
+    for (const seed of [1, 2, 3]) {
+      // a JDAM from 1,200 m reaches about 1.6 km (dlz.ts gpsMaxRange)
+      const r = drop('gbu31', seed, false, 1_400);
+      if (r.killed) kills++;
+      expect(r.bursts).toContain('water');
+    }
+    expect(kills).toBe(3);
+  });
+
   it('a StormBreaker that hits a small target in the water goes off as a water burst, not a fireball', () => {
     const r = drop('gbu53', 1, true);
     expect(r.killed).toBe(true);
@@ -249,7 +258,7 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     const events = new EventBus();
     const world = createSimWorld({ terrain: realTerrain(), difficulty: DIFFICULTIES.pilot, events, combat: createCombatSystemSeeded(5) });
     const runner = createMissionRunner(T07_SMALL, { createAi: createAiBrain, difficulty: DIFFICULTIES.pilot, events });
-    runner.setup(world, 'strike_sdb');
+    runner.setup(world, 'strike_mixed');
     const p = world.player!;
     const radio: string[] = [];
     events.on('radio', (e) => radio.push(e.text));
