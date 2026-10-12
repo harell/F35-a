@@ -16,9 +16,13 @@ import { CircleGeometry, Mesh, MeshBasicMaterial, type PerspectiveCamera } from 
 /** The window this frame, in CSS px of the viewport (`active` false = closed). */
 export const dasWindow = { active: false, id: -1, x: 0, y: 0, r: 0 };
 
-/** Window radius (CSS px) for a viewport `h` px tall: 58 px at 390, scaled like the HMD's unit. */
+/**
+ * Window radius (CSS px) for a viewport `h` px tall: 36 px at 390, scaled like the HMD's unit. It frames
+ * the target box (13 u) and its lock ring (1.5 × the box) with a margin; the box's labels print over the
+ * panel outside it. At 58 px it hid most of the TSD in g02, where the boat sits behind the PCD (#282, F11).
+ */
 export function dasRadius(h: number): number {
-  return 58 * Math.max(0.85, Math.min(1.6, h / 390));
+  return 36 * Math.max(0.85, Math.min(1.6, h / 390));
 }
 
 /** Does the open window cover the point (CSS px)? `inset` shrinks it (keep a symbol fully inside). */
