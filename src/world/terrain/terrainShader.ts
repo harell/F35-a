@@ -36,10 +36,26 @@ export const MAX_TERRAIN_LODS = 16;
 /** Volcanic cones the fragment shader can shade (crater bowls, flank terraces). */
 export const MAX_CONES = 14;
 
-/** Shared by terrain + water: signed coast distance (m, + land) from the 15 m mask. */
+/** Sheltered-water circles (CalmWater) the terrain and water shaders take. */
+export const CALM_MAX = 4;
+
+/**
+ * Shared by terrain + water: signed coast distance (m, + land) from the 15 m mask, and calmAt():
+ * sheltered water (a crater lake) with no surf and no sand band (#276 F8).
+ */
 export const COAST_GLSL = /* glsl */ `
 uniform sampler2D uCoastMask;
 uniform vec4 uCoastRect; // x0, z0, 1/size, enabled
+uniform vec4 uCalm[${CALM_MAX}]; // calm water: centre x, z, radius, rim (m); radius 0 = unused
+// 1 inside calm water and across the first part of its rim, fading to 0 at the rim's outer edge.
+float calmAt(vec2 wp) {
+  float c = 0.0;
+  for (int i = 0; i < ${CALM_MAX}; i++) {
+    vec4 k = uCalm[i];
+    if (k.z > 0.0) c = max(c, 1.0 - smoothstep(k.z + k.w * 0.6, k.z + k.w, distance(wp, k.xy)));
+  }
+  return c;
+}
 // Signed distance to the coast (m, + land) and the mask weight (0 outside the mask area).
 float coastMaskSD(vec2 wp, out float w) {
   vec2 uv = (wp - uCoastRect.xy) * uCoastRect.z;
@@ -1070,8 +1086,9 @@ void main() {
     float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
     float beachy = smoothstep(0.42, 0.62, texture2D(uDetail, wp * (1.0 / 4100.0)).g) * smoothstep(0.05, 0.1, lum) * (1.0 - 0.8 * urban);
     float bw = mix(5.0, 30.0, beachy) * (1.0 - 0.5 * urban);
-    // (the photo already shows the real beaches and seawalls: only a trace of the band on it)
-    float band = (1.0 - smoothstep(bw * 0.55, bw, sd + (dB.r - 0.5) * 7.0)) * (1.0 - 0.8 * photo.a);
+    // (the photo already shows the real beaches and seawalls: only a trace of the band on it;
+    // none round a crater lake: its gardens run down to the water)
+    float band = (1.0 - smoothstep(bw * 0.55, bw, sd + (dB.r - 0.5) * 7.0)) * (1.0 - 0.8 * photo.a) * (1.0 - calmAt(wp));
     vec3 sand = wp.x < uBlackSandX ? uBlackSand : uSand;
     vec3 shore = mix(uShoreRock * (0.7 + 0.5 * dC.g), sand * (0.92 + 0.16 * dC.r), beachy);
     // seawalls / reclaimed edges: grey basalt riprap and concrete (not black: at range the band is

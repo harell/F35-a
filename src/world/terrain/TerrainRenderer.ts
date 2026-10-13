@@ -35,7 +35,7 @@ import {
 } from 'three';
 import type { Heightfield } from './Heightfield';
 import type { AtmosphereUniforms } from '../sky/atmosphere';
-import { MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
+import { CALM_MAX, MAX_CONES, MAX_TERRAIN_LODS, terrainFragmentShader, terrainVertexShader } from './terrainShader';
 import { BARE_MIX, LEAFY_MIX, OPEN_MIX, suburbFarAlbedo } from './urbanColor';
 import { CANOPY_GPU_LEVELS, canopyPyramid, type Canopy } from './theaters/aucklandCanopy';
 import { districtAngles, type CbdGrid } from '../scenery/urbanGrid';
@@ -95,6 +95,12 @@ export interface CoastMaskInfo {
   size: number;
 }
 
+/** Sheltered water with no surf and no sand band (Auckland's crater lakes): circles [x, z, r] (m), and the rim (m) past them it covers. */
+export interface CalmWater {
+  circles: readonly (readonly [number, number, number])[];
+  rim: number;
+}
+
 export interface TerrainRendererOptions {
   hf: Heightfield;
   surface: Texture;
@@ -113,6 +119,8 @@ export interface TerrainRendererOptions {
   coast: CoastMaskInfo | null;
   /** 1×1 fallback texture when there is no coast mask. */
   dummy: Texture;
+  /** Calm water (shared with the water): no sand band round it. */
+  calm?: CalmWater | null;
   /** Airfield rectangles (≤ 6) where the paddock pattern is suppressed. */
   noFields?: { x: number; z: number; heading: number; halfW: number; halfL: number }[];
   /** The water's shallow colour (terrain seaward of the coast mask is painted as water). */
@@ -359,7 +367,7 @@ export class TerrainRenderer {
         // the circle grid is the fallback for the real CBD streets
         uCbd: { value: o.style.cbd && !o.style.cbd.streets ? new Vector4(o.style.cbd.x, o.style.cbd.z, o.style.cbd.radius, o.style.cbd.hash) : new Vector4(0, 0, 0, 0) },
         ...streetUniforms(o.style.cbd?.streets ?? null, this.streetTexture, o.dummy),
-        ...coastUniforms(o.coast, o.dummy),
+        ...coastUniforms(o.coast, o.dummy, o.calm),
         ...noFieldUniforms(o.noFields ?? []),
         ...coneUniforms(o.style.cones ?? []),
         ...aerialUniforms(o.aerial ?? null, o.dummy),
@@ -800,10 +808,17 @@ export function aerialOuterUniforms(
 }
 
 /** Uniforms of COAST_GLSL (shared by terrain and water). */
-export function coastUniforms(coast: CoastMaskInfo | null, dummy: Texture): { uCoastMask: { value: Texture }; uCoastRect: { value: Vector4 } } {
+export function coastUniforms(
+  coast: CoastMaskInfo | null,
+  dummy: Texture,
+  calm: CalmWater | null = null,
+): { uCoastMask: { value: Texture }; uCoastRect: { value: Vector4 }; uCalm: { value: Vector4[] } } {
+  const circles = calm?.circles ?? [];
+  if (circles.length > CALM_MAX) throw new Error(`at most ${CALM_MAX} calm-water circles`);
   return {
     uCoastMask: { value: coast ? coast.texture : dummy },
     uCoastRect: { value: coast ? new Vector4(coast.x0, coast.z0, 1 / coast.size, 1) : new Vector4(0, 0, 1, 0) },
+    uCalm: { value: Array.from({ length: CALM_MAX }, (_, i) => (circles[i] ? new Vector4(circles[i][0], circles[i][1], circles[i][2], calm!.rim) : new Vector4())) },
   };
 }
 
