@@ -1,10 +1,11 @@
 /**
  * #276 item 2 (R11-8): a cruise liner at its berth was dark at dusk while the CBD around it was lit,
  * because ship lights read EnvironmentApi.isNight. They now come on with the city's lamps
- * (EnvironmentApi.lights): dusk and night, not day or dawn.
+ * (EnvironmentApi.lights): dusk and night, not day or dawn. The liner's cabins also light up as window
+ * strips along its decks, like the ferries' window bands.
  */
 import { describe, expect, it } from 'vitest';
-import { Mesh, PerspectiveCamera, Scene, Vector3, type InstancedBufferGeometry } from 'three';
+import { Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3, type InstancedBufferGeometry } from 'three';
 import { QUALITY_PRESETS } from '../src/core/data';
 import type { EnvironmentApi, FrameContext, MissionRunnerApi } from '../src/core/contracts';
 import type { TimeOfDay } from '../src/core/types';
@@ -25,8 +26,8 @@ function liner(): GroundTargetEntity {
   return e;
 }
 
-/** Light sprites drawn in one frame over Auckland at `tod` (the harbour ferries' included). */
-function spritesAt(tod: TimeOfDay, ships: GroundTargetEntity[]): number {
+/** One frame over Auckland at `tod`, looking at the liner's berth. */
+function frameAt(tod: TimeOfDay, ships: GroundTargetEntity[]): Scene {
   const q = QUALITY_PRESETS.medium;
   const preset = skyPreset('auckland', tod, 'clear', q.drawDistance);
   const scene = new Scene();
@@ -51,8 +52,20 @@ function spritesAt(tod: TimeOfDay, ships: GroundTargetEntity[]): number {
     paused: false,
     screen: { width: 844, height: 390, dpr: 2, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
   } as unknown as FrameContext);
-  const sprites = scene.getObjectByName('sprites') as Mesh;
+  return scene;
+}
+
+/** Light sprites drawn in one frame over Auckland at `tod` (the harbour ferries' included). */
+function spritesAt(tod: TimeOfDay, ships: GroundTargetEntity[]): number {
+  const sprites = frameAt(tod, ships).getObjectByName('sprites') as Mesh;
   return (sprites.geometry as InstancedBufferGeometry).instanceCount;
+}
+
+/** Whether the liner's lit window strips are drawn at `tod`. */
+function windowsLit(tod: TimeOfDay, ship = liner()): boolean {
+  const w = frameAt(tod, [ship]).getObjectByName('windows');
+  expect(w).toBeTruthy();
+  return w!.visible;
 }
 
 describe('ship and ferry lights come on with the city lamps (#276 R11-8)', () => {
@@ -71,5 +84,22 @@ describe('ship and ferry lights come on with the city lamps (#276 R11-8)', () =>
     // the liner's deck lights: rows of cabins on both sides and the lido floodlights (over 60, see render-ships)
     expect(lit('dusk')).toBeGreaterThan(60);
     expect(lit('dusk')).toBe(lit('night'));
+  });
+
+  it('the liner\'s cabin windows light up as strips along every deck at dusk and night, not by day, at dawn or once sunk', () => {
+    expect(windowsLit('day')).toBe(false);
+    expect(windowsLit('dawn')).toBe(false);
+    expect(windowsLit('dusk')).toBe(true);
+    expect(windowsLit('night')).toBe(true);
+    const sunk = liner();
+    sunk.alive = false;
+    expect(windowsLit('night', sunk)).toBe(false);
+    // strips on all seven decks, unlit like the ferries' window bands, so they glow whatever the sun
+    const w = frameAt('night', [liner()]).getObjectByName('windows') as Mesh;
+    expect((w.material as MeshBasicMaterial).isMeshBasicMaterial).toBe(true);
+    w.geometry.computeBoundingBox();
+    const bb = w.geometry.boundingBox!;
+    expect(bb.max.y - bb.min.y).toBeGreaterThan(6 * 3.4);
+    expect(bb.max.x - bb.min.x).toBeGreaterThan(SHIP_DIMS.cruise.beam * 0.8);
   });
 });

@@ -2,7 +2,8 @@
  * Ocean / harbour water: a camera-centred polar disc at y = 0 out to the far plane, shaded with
  * three scrolling normal-map octaves, Fresnel sky reflection (same atmosphere as the sky dome, so
  * the sea melts into the horizon), sun/moon glint, depth-based shallows (exact bilinear depth
- * from the terrain height texture) with animated shore foam, optional sea ice, and fog.
+ * from the terrain height texture) with animated shore foam (none on calm water: a crater lake), optional
+ * sea ice, and fog.
  */
 import {
   BufferAttribute,
@@ -20,7 +21,7 @@ import {
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from '../sky/atmosphere';
 import { createWaterNormalFallback } from '../textures/procedural';
 import { COAST_GLSL } from '../terrain/terrainShader';
-import { coastUniforms, type CoastMaskInfo } from '../terrain/TerrainRenderer';
+import { coastUniforms, type CalmWater, type CoastMaskInfo } from '../terrain/TerrainRenderer';
 
 const vertex = /* glsl */ `
 varying vec3 vWorld;
@@ -86,7 +87,7 @@ void main() {
   // Surf: along the mask shoreline (beaches and rocks), or where the sea floor shelves quickly.
   float grad = length(vec2(dFdx(depth), dFdy(depth))) / max(1e-3, length(vec2(length(dFdx(wp)), length(dFdy(wp)))));
   float shoreH = (1.0 - smoothstep(0.0, 0.9, depth)) * smoothstep(0.004, 0.03, grad);
-  float shore = mix(shoreH, 1.0 - smoothstep(0.0, 16.0, -sd), mw);
+  float shore = mix(shoreH, 1.0 - smoothstep(0.0, 16.0, -sd), mw) * (1.0 - calmAt(wp));
 
   float ndv = max(dot(N, V), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
@@ -135,6 +136,8 @@ export interface WaterOptions {
   radius: number;
   coast: CoastMaskInfo | null;
   dummy: Texture;
+  /** Calm water (shared with the terrain): no shore foam on it. */
+  calm?: CalmWater | null;
 }
 
 export class Water {
@@ -159,7 +162,7 @@ export class Water {
         uShallow: { value: o.shallow },
         uGlint: { value: 1 },
         uShallowDepth: { value: o.shallowDepth },
-        ...coastUniforms(o.coast, o.dummy),
+        ...coastUniforms(o.coast, o.dummy, o.calm),
       },
     });
     new TextureLoader().load(

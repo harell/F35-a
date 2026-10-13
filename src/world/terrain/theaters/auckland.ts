@@ -42,6 +42,7 @@ import {
   type SampleOut,
   type TheaterGenerator,
 } from '../types';
+import type { CalmWater } from '../TerrainRenderer';
 import {
   AKL_CBD,
   AKL_CONES,
@@ -97,6 +98,19 @@ let cached: AucklandMapData | null = null;
 let cachedVersion = -1;
 
 /** Water / island / lake polygons (m) in painting order over a land base. */
+/** Lake margin (m) past a crater lake's shore that is still its rim: no sand beach there, and no surf on the water inside (#276 F8). */
+export const LAKE_RIM = 90;
+
+/** The crater lakes as world circles [x, z, r] (m). */
+export function aucklandLakeCircles(): [number, number, number][] {
+  return AKL_LAKES.map(([cx, cz, r]) => [cx * KM, cz * KM, r * KM]);
+}
+
+/** The crater lakes as calm water for the terrain and water shaders: no sand band, no surf. */
+export function aucklandCalmWater(): CalmWater {
+  return { circles: aucklandLakeCircles(), rim: LAKE_RIM };
+}
+
 export function aucklandPolygons(): CoastPolygon[] {
   const km = (pts: number[]) => pts.map((v) => v * KM);
   const out: CoastPolygon[] = [];
@@ -331,6 +345,8 @@ export function createAuckland(seed: number): TheaterGenerator {
   const parks = AKL_PARKS.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const rural = AKL_RURAL.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const cbd = { x: AKL_CBD.x * KM, z: AKL_CBD.z * KM, r: AKL_CBD.r * KM };
+  const lakes = aucklandLakeCircles();
+  const byLake = (x: number, z: number): boolean => lakes.some(([lx, lz, r]) => Math.hypot(x - lx, z - lz) < r + LAKE_RIM);
   const linz = map.linz;
   const realCover = !!linz?.cover;
   const lc: CoverSample = { cls: 0, cover: 0 };
@@ -425,8 +441,9 @@ export function createAuckland(seed: number): TheaterGenerator {
       }
       const rocky = nB.noise(x / 1800 + 2.2, z / 1800) <= 0.05 && x > -18_000;
 
-      // Beaches (patchy): black sand on the Tasman coast, golden elsewhere; the rest is rocky/cliffy
-      if (d < 70 && h < 5 && (x < -18_000 || !rocky)) {
+      // Beaches (patchy): black sand on the Tasman coast, golden elsewhere; the rest is rocky/cliffy.
+      // The crater lakes have none: their gardens and houses run down to the water.
+      if (d < 70 && h < 5 && (x < -18_000 || !rocky) && !byLake(x, z)) {
         out.mat = MAT_BEACH;
         out.aux = x < -18_000 ? 255 : 0;
       }

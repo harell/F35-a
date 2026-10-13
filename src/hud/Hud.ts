@@ -528,6 +528,8 @@ export const createHud: CreateHud = (canvas, events) => {
       // centre cues dodge them
       const zoomed = cockpit && pcdZoom.open;
       if (!zoomed) reserveSymbols(f);
+      // the DAS window's tag, left of its ring: a LOCK / NOSE ON label on that side makes way for it
+      if (hmd && dasWindow.active) f.occ.addBox(dasTagX(f), dasWindow.y, DAS_TAG_HW * L.u, DAS_TAG_HH * L.u);
       drawDesignated(f);
       drawGunCues(f);
       drawSeekerLabel(f);
@@ -755,19 +757,30 @@ export const createHud: CreateHud = (canvas, events) => {
   return hud;
 };
 
-/** The DAS window's frame: a thin ring round the hole in the panel and its 'DAS' tag on top (#116). */
 /** A life-critical warning (PULL UP, MISSILE, STALL) holds the centre message back (priority 4+ shows through). */
 function holdsMessage(p: FrameContext['player']): boolean {
   return !!p && (p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled);
 }
 
+/**
+ * The DAS tag's half width and height (u), and its centre: left of the window's ring, level with the
+ * box. On top of the ring it printed into the box's type label once the ring framed only the box (#282).
+ */
+const DAS_TAG_HW = 16;
+const DAS_TAG_HH = 7.5;
+function dasTagX(f: HudFrame): number {
+  return dasWindow.x - dasWindow.r - (DAS_TAG_HW + 3) * f.L.u;
+}
+
+/** The DAS window's frame: a thin ring round the hole in the panel and its 'DAS' tag on its left (#116, #282). */
 function drawDasFrame(f: HudFrame): void {
   const { pen, pal, L } = f;
   const d = dasWindow;
+  const tx = dasTagX(f);
   pen.setDash('solid');
   pen.begin();
   pen.circle(d.x, d.y, d.r);
   pen.strokeGlow(pal.dim, 1.4);
-  pen.box(d.x - 16 * L.u, d.y - d.r - 8 * L.u, 32 * L.u, 15 * L.u, pal.dim, 1.2, pal.back);
-  pen.text('DAS', d.x, d.y - d.r - 0.5 * L.u, pal.main, 11, 'center');
+  pen.box(tx - DAS_TAG_HW * L.u, d.y - DAS_TAG_HH * L.u, 2 * DAS_TAG_HW * L.u, 2 * DAS_TAG_HH * L.u, pal.dim, 1.2, pal.back);
+  pen.text('DAS', tx, d.y, pal.main, 11, 'center');
 }

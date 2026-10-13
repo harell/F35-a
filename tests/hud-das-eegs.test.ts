@@ -15,8 +15,9 @@ import { createHud, type HudTestHooks } from '../src/hud/Hud';
 import { dasRadius, dasWindow } from '../src/hud/cockpit/das';
 import { pcdScreenRect } from '../src/hud/cockpit/geometry';
 import { buildMock, type Scenario } from '../src/hud/dev/mockWorld';
-import { installPath2D, makeFakeCanvas } from '../src/hud/dev/fakeCanvas';
+import { installPath2D, makeFakeCanvas, overlaps, textBox } from '../src/hud/dev/fakeCanvas';
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
+import { trackLabel } from '../src/hud/hmd/format';
 import { funnelIndexAt } from '../src/hud/hmd/weapons';
 import { restHead } from '../src/render/camera/cameraMath';
 
@@ -156,6 +157,44 @@ describe('DAS see-through window (#116, 1.2-i)', () => {
     expect(rect![0] + rect![2] / 2).toBeCloseTo(x, 0);
     expect(rect![1] + rect![3] / 2).toBeCloseTo(y, 0);
     expect(read().das).toEqual({ id: r.target().id, x, y, r: dasRadius(H) });
+    dasWindow.active = false;
+    hud.dispose();
+  });
+
+  it('frames the target box and its lock ring, and leaves most of the PCD showing (#282, F11)', () => {
+    const u = H / 390;
+    // the smallest box is 13 u, its lock-progress ring 1.5 × that
+    expect(dasRadius(H)).toBeGreaterThan(13 * 1.5 * u + 8 * u);
+    // the window used to be 58 px: a 116 px hole over a 390 px screen, most of the TSD in g02
+    const pr = pcdScreenRect(60, W, H);
+    const pcdArea = (pr.right - pr.left) * (Math.min(H, pr.bottom) - pr.top);
+    expect(Math.PI * dasRadius(H) ** 2).toBeLessThan(0.1 * pcdArea);
+  });
+
+  it("the DAS tag sits clear of the box's labels, and the type label still shows (#282)", () => {
+    const r = rig('ag');
+    const { canvas, ctx } = makeFakeCanvas(W, H, 1);
+    const hud = createHud(canvas, r.mock.events);
+    hud.resize(W, H, 1);
+    hud.setVisible(true);
+    const x = W / 2 + 30;
+    const y = H - 90;
+    r.target().position.copy(r.at(x, y, 6000));
+    Object.assign(dasWindow, { active: true, id: r.target().id, x, y, r: dasRadius(H) });
+    ctx.reset();
+    hud.update(r.ctx);
+    const tag = ctx.texts.find((t) => t.text === 'DAS');
+    expect(tag).toBeDefined();
+    // left of the ring, level with the box (on top of it, it pushed the type label out)
+    expect(tag!.x).toBeLessThan(x - dasRadius(H));
+    expect(tag!.y).toBeCloseTo(y, 0);
+    const label = ctx.texts.find((t) => t.text === trackLabel(r.target()));
+    expect(label, `type label "${trackLabel(r.target())}"`).toBeDefined();
+    expect(label!.y).toBeLessThan(y);
+    // every text near the window (the target's type, range and time labels) clears the tag
+    const near = ctx.texts.filter((t) => t !== tag && Math.abs(t.x - x) < 60 && Math.abs(t.y - y) < 70);
+    expect(near.length).toBeGreaterThan(0);
+    for (const t of near) expect(overlaps(textBox(t), textBox(tag!)), `"${t.text}" at ${t.x},${t.y} over the DAS tag`).toBe(false);
     dasWindow.active = false;
     hud.dispose();
   });

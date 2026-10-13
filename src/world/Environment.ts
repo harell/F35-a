@@ -35,7 +35,7 @@ import { HF_EXTENT } from './terrain/types';
 import { TerrainQueryImpl } from './terrain/TerrainQueryImpl';
 import { coastUniforms, TerrainRenderer, type AerialPhotoInfo, type CoastMaskInfo } from './terrain/TerrainRenderer';
 import { LightReflections } from './scenery/nightLights';
-import { bakeAucklandCoastMask } from './terrain/theaters/auckland';
+import { aucklandCalmWater, bakeAucklandCoastMask } from './terrain/theaters/auckland';
 import { aucklandLinzBytes, loadAucklandLinz } from './terrain/theaters/aucklandLinz';
 import { loadAucklandLinzHd } from './terrain/theaters/aucklandLinzHd';
 import { aucklandCanopy, loadAucklandCanopy } from './terrain/theaters/aucklandCanopy';
@@ -304,6 +304,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   const sky = new SkySystem({ scene, preset, atmo, quality: q, cloudLayer, cloudCover });
 
   const style = terrainStyle(opts.theater);
+  const calm = opts.theater === 'auckland' ? aucklandCalmWater() : null;
   const terrain = new TerrainRenderer({
     hf,
     surface: surfaceTex,
@@ -318,6 +319,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     lodRange: cfg.lodRange,
     coast,
     dummy: dummyTex,
+    calm,
     noFields: airfieldRects(features),
     seaShallow: preset.waterShallow,
     aerial,
@@ -335,6 +337,7 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
     radius: q.drawDistance * 1.2,
     coast,
     dummy: dummyTex,
+    calm,
   });
   scene.add(water.mesh);
 
