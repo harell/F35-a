@@ -4,15 +4,16 @@
  * (a 'ship' always has a VesselClass), and the named superyachts (superyachts.ts, #145).
  * Front = -Z, origin at ground level (ship: waterline). Named nodes:
  *  'spin:i'   continuously rotating antenna
+ *  'windows'  a cruise liner's lit cabin windows, unlit material, shown by GroundVisual.setLit() at dusk and night
  * Ship wakes are not part of the models: the EntityRenderer draws them all in one WakeBatch.
  * Civil ships also carry their night lights (ShipLight, drawn as sprites by the EntityRenderer).
  */
-import { BufferGeometry, Group, Object3D, Vector3 } from 'three';
+import { BufferGeometry, Group, Mesh, MeshBasicMaterial, Object3D, Vector3 } from 'three';
 import type { GroundTargetType, MerchantClass, VesselClass } from '../../core/types';
 import { isSuperyachtId } from '../../core/superyachts';
 import { buildSuperyacht } from './superyachts';
 import { mulberry32 } from '../../core/math';
-import { box, cylinder, place } from './geom/core';
+import { box, cylinder, merge, place } from './geom/core';
 import { loftRings, prismZ } from './geom/loft';
 import { getAircraftPrototype } from './aircraft';
 import { SHIP_DIMS } from '../visuals/shipMotion';
@@ -50,6 +51,12 @@ export interface GroundPrototype {
 }
 
 const cache = new Map<string, GroundPrototype>();
+
+/** A cruise liner's cabin windows at dusk and night: the ferries' warm glow, some cabins dimmer. */
+const WINDOW_GLOW = 0xffc98a;
+const WINDOW_DIM = 0xb88a58;
+/** Length (m) of one lit window run along a deck, a gap between runs. */
+const WINDOW_RUN = 9;
 
 function build(type: GroundTargetType, pal: Palette, vessel: VesselClass | null = null): GroundPrototype {
   if (type === 'ship') {
@@ -187,6 +194,8 @@ function buildMerchant(vessel: MerchantClass): GroundPrototype {
   const spin = new Object3D();
   spin.name = 'spin:0';
   const lights: ShipLight[] = [];
+  /** The cruise liner's lit window strips (empty for the other classes). */
+  const windows: BufferGeometry[] = [];
   const light = (x: number, y: number, z: number, color: number, kind: ShipLight['kind'], size = kind === 'deck' ? 2.4 : 4.5) =>
     lights.push({ pos: new Vector3(x, y, z), color, kind, size });
   const RED = 0xff2a1a;
@@ -249,6 +258,16 @@ function buildMerchant(vessel: MerchantClass): GroundPrototype {
       // recessed window / balcony band, then the white deck above it (white deck tops)
       statics.push(place(box(w * 0.97, 1.1, len * 0.97, t < 2 ? 0x30404e : 0x41566a), [0, y + 0.55, zc]));
       statics.push(place(box(w, 2.3, len, 0xf6f6f2), [0, y + 2.25, zc]));
+      // lit at dusk and night: the band's cabins as warm strips just proud of it, a few dark
+      // (nobody in), so the decks read as rows of windows like the CBD towers around the berth
+      const n = Math.round(len / WINDOW_RUN);
+      const run = len * 0.97 / n;
+      const rnd = mulberry32(2760 + t);
+      for (let i = 0; i < n; i++) {
+        if (rnd() < 0.18) continue;
+        const z = zc - (len * 0.97) / 2 + (i + 0.5) * run;
+        windows.push(place(box(w * 0.97 + 0.2, 0.75, run - 1.6, rnd() < 0.3 ? WINDOW_DIM : WINDOW_GLOW), [0, y + 0.55, z]));
+      }
     }
     const top = F + 7 * 3.4;
     // bridge at the front of the top deck, lifeboats along both sides of deck 2
@@ -291,6 +310,13 @@ function buildMerchant(vessel: MerchantClass): GroundPrototype {
   const body = meshFrom(statics, 'building');
   body.name = 'static';
   root.add(body);
+  if (windows.length) {
+    const lit = new Mesh(merge(windows)!, new MeshBasicMaterial({ vertexColors: true }));
+    lit.geometry.computeBoundingSphere();
+    lit.name = 'windows';
+    lit.visible = false;
+    root.add(lit);
+  }
   return { type: 'ship', root, spinners, wreck: 'ship', radius: L / 2, farScale: 3.5, lights };
 }
 

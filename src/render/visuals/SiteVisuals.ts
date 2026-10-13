@@ -163,6 +163,8 @@ export class GroundVisual {
   private readonly ship: boolean;
   /** Which ship lights are lit (afloat and in range): 0 = none, 1 under way, 2 at anchor, 4 moored (deck lights only). */
   lightMode = 0;
+  /** A cruise liner's lit windows (the prototype's 'windows' node); null for every other target. */
+  private readonly windows: Object3D | null;
   /** g03's stoat: its posable parts (render/visuals/stoatPose.ts); null for every other target. */
   private readonly stoat: StoatNodes | null;
   /** t07's rats: posable parts (render/visuals/ratPose.ts); null for every other target. */
@@ -177,6 +179,12 @@ export class GroundVisual {
       if (n) this.spinners.push({ node: n, rate: s.rate });
     }
     this.ship = proto.wreck === 'ship';
+    this.windows = this.root.getObjectByName('windows') ?? null;
+  }
+
+  /** Lights a liner's windows while the city's lamps are on (dusk and night), afloat and in range (after update()). */
+  setLit(on: boolean): void {
+    if (this.windows) this.windows.visible = on && this.lightMode !== 0;
   }
 
   update(g: GroundTargetEntity, time: number, dt: number, camPos: Vector3, far: number): boolean {

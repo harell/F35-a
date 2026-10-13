@@ -281,6 +281,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
         }
         tr.seen = frame;
         const vis = tr.v.update(g, t, dt, cam, groundFar);
+        tr.v.setLit(env.lights > LIT);
         if (wakes && vis && g.alive && g.boat) boatWake(wakes, g.type === 'missile_boat' ? 'missile_boat' : 'suicide_boat', g.position, g.velocity);
         else if (wakes && vis && g.alive && g.type === 'ship') {
           const speed = Math.max(g.velocity.length(), g.path ? g.speed : 0);
