@@ -221,7 +221,18 @@ export const CBD_TOWER_SKINS: readonly TowerSkin[] = [
     n: 206,
     box: { x: 493.68, z: -479.15, face: 17 },
     dy: 0,
-    zones: [{ h: ALL, colour: 0xbac6cc, finish: 'glass' }],
+    // (#279: its glass was as pale as the CPO's stone, so the two read as one cream box from 200 m). The fins stand
+    // every 2 m on the three faces that show (the west one is the CPO's wall), broken round the sign
+    zones: [{ h: ALL, colour: 0x6f8291, finish: 'glass' }],
+    lines: [107, 17, 197].flatMap((face) => {
+      const half = face === 107 ? 14 : 9;
+      const fins: SkinLine[] = [];
+      for (let t = -half; t <= half; t += 2) {
+        const pts = face === 107 && Math.abs(t) <= 4 ? [[0, 5], [7, 16]] : [[0, 16]];
+        for (const [h0, h1] of pts) fins.push({ face, pts: [t, h0, t, h1], colour: 0xd5d9dc, width: 0.4 });
+      }
+      return fins;
+    }),
     signs: [{ face: 107, t: 0, h: 6, w: 8, logo: 'waitemata' }],
   },
   // ── #213 Tier A, group 1: the Britomart east end ──
