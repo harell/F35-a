@@ -18,6 +18,12 @@ import { FACADE_BASE_Q, FACADE_STOREY_Q, ROOF_PHOTO, ROOF_Q, ROOF_TOP_Q, ROOF_WA
 export const PARAPET_BAND = 0.9;
 /** How far in from the wall (m) the parapet band samples the photo: on the roof's border, not the street. */
 export const PARAPET_INSET = 1.0;
+/**
+ * How much of a CBD photo roof (and its parapet band) gives way to the building's own roof colour where the photo
+ * is magnified past its texel (#279 item 1): from none at one photo texel per pixel to all at two pixels per texel.
+ * Flying low, the photo (2.5 m/px on medium) smeared the low roofs into the same blotches as the streets below.
+ */
+export const PHOTO_ROOF_YIELD = 0.85;
 
 /**
  * Building lighting (#141). Sky light: a wall sees half the sky, so it takes the sky's radiance half way up in the
@@ -209,6 +215,10 @@ void main() {
       if (e > 0.0) {
         vec4 p = texture2D(uAerial, uv);
         photoW = p.a * smoothstep(0.0, 1.0, e / (uAerialRect.z * uAerialRect.w)) * band;
+        #ifdef ROOFS
+          float texel = 1.0 / (uAerialRect.z * float(textureSize(uAerial, 0).x));
+          photoW *= 1.0 - ${PHOTO_ROOF_YIELD.toFixed(2)} * (1.0 - smoothstep(0.5 * texel, texel, mpp));
+        #endif
         // (a parapet faces sideways: a little darker than the roof it edges)
         vec3 photoCol = p.rgb * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a) * (N.y > 0.7 ? 1.0 : 0.85);
         // at night half the photo's colour gives way to the top's own, as on the terrain photo (#61 item 5)
