@@ -10,8 +10,12 @@ import { GeometryBuilder, IDENT_FRAME, WIN_FLOOD, WIN_GLOW, WIN_NONE } from './G
 
 type HeightFn = (x: number, z: number) => number;
 
-/** Lead-grey domes and their stone drums (the aerial reads them pale: #dbd5ce in the sun). */
-const DOME = 0xc6c2b8;
+/**
+ * The domes' weathered lead, a dark grey. The aerial reads them pale (#dbd5ce) only where the sun glints on the lead;
+ * painted that pale, they vanished into the Oamaru stone round them from 200 m (#279). Their drums are that stone.
+ */
+const DOME = 0x5f656a;
+const DRUM = 0xd6d0c2;
 const POLE = 0xe8e8e4;
 const CANOPY = 0x4a4f55;
 const CONE = 0x3f4a52;
@@ -26,7 +30,7 @@ export function buildCpoCrowns(B: GeometryBuilder, g: number, detail: number): v
   for (const d of CPO_DOMES) {
     // a stone drum up to the springing, then the dome as stacked frustums and a small lantern on its crown
     const rise = d.top - d.base;
-    B.cylinder(IDENT_FRAME, d.x, g + d.base - 1.2, d.z, d.r * 1.08, d.r * 1.08, 1.2, segs, DOME, WIN_FLOOD, false);
+    B.cylinder(IDENT_FRAME, d.x, g + d.base - 1.2, d.z, d.r * 1.08, d.r * 1.08, 1.2, segs, DRUM, WIN_FLOOD, false);
     for (let i = 0; i < DOME_STEPS; i++) {
       const a0 = (i / DOME_STEPS) * (Math.PI / 2);
       const a1 = ((i + 1) / DOME_STEPS) * (Math.PI / 2);

@@ -63,4 +63,18 @@ describe('Britomart station (hero)', () => {
     expect(B.triangleCount).toBeGreaterThan(200);
     expect(B.triangleCount).toBeLessThan(2000);
   });
+
+  it('the Glasshouse has fins on the three faces that show, broken round its sign (#279)', () => {
+    const skin = towerSkin(GLASSHOUSE_ROW)!;
+    const fins = skin.lines!;
+    expect(new Set(fins.map((l) => l.face))).toEqual(new Set([17, 107, 197]));
+    const sign = skin.signs![0];
+    const sh = sign.w / 5; // the 'waitemata' logo's aspect
+    for (const l of fins.filter((f) => f.face === sign.face)) {
+      const [t, h0, , h1] = l.pts;
+      const acrossSign = Math.abs(t - sign.t) < sign.w / 2 + l.width;
+      const overlapsSign = h0 < sign.h + sh / 2 && h1 > sign.h - sh / 2;
+      expect(acrossSign && overlapsSign, `fin at t ${t}, h ${h0}–${h1}`).toBe(false);
+    }
+  });
 });
