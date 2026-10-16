@@ -134,7 +134,7 @@ export const T07_SMALL: MissionDef = mission({
       {
         id: 't_trappers',
         when: { kind: 'time', t: 10 },
-        actions: [{ kind: 'radio', from: TR, text: 'Viper, Marine Parade Trappers. Two rats running round the blocks off Wallace Street and Hamilton Road, stopping at every drain. And one on the roof of the Shangri-La.' }],
+        actions: [{ kind: 'radio', from: TR, text: 'Viper, Marine Parade Trappers. Two rats round the blocks off Wallace Street and Hamilton Road, and one on the Shangri-La\'s roof.' }],
       },
       {
         id: 't_alert',
