@@ -300,6 +300,11 @@ export interface GroundSpawn {
   boat?: BoatSpawn;
   /** The stoat ('stoat') and t07's rats ('rat'): route, stations, clock and swimming (sim/runner.ts). */
   runner?: import('./runner').RunnerSpawn;
+  /**
+   * On the roof of the building at its position (the world's BuildingIndex.roofAt; on the ground if there is
+   * none): killing it brings the building down (t07's rat on the Shangri-La).
+   */
+  onRoof?: boolean;
 }
 
 /* ───────────────────────── Sim world (implemented by SIM-CORE agent) ───────────────────────── */

@@ -219,7 +219,7 @@ export function autoReselect(ac: AircraftEntity, world: SimWorld | null): void {
   if (gunFor(ac)) setSelected(ac, 'gun', world);
 }
 
-/** The weapon a loadout starts on: a mixed strike load (t07) starts on the StormBreaker, its main bomb. */
+/** The weapon a loadout starts on: an A/G load on its StormBreakers if it has any, a SEAD load on its AARGM-ERs. */
 function initialWeapon(ac: AircraftEntity, role: 'aa' | 'ag' | 'sead' | 'none'): WeaponId {
   const order: WeaponId[] =
     role === 'ag'

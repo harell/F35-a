@@ -237,6 +237,6 @@ export const G03: MissionDef = mission({
     opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Waiheke air defences are up. Your target is on the Onetangi dunes, under the cloud.', priority: 2 }],
     successText: 'Stoat down, nest intact. Good shooting, Viper. RTB.',
     // the debrief's cost summary (#201, runtime/costs.ts): the sortie against one volunteer's trap
-    costSummary: { comparison: { label: "Volunteer's trap, for comparison", nzd: 40 }, removed: { label: 'Stoats removed', group: G.target } },
+    costSummary: { comparison: { label: "Volunteer's trap, for comparison", nzd: 40 }, removed: { label: 'Stoats removed', groups: [G.target] } },
   },
 });

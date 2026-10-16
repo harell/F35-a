@@ -83,18 +83,14 @@ function heightCell(m: number | null): string {
  * instead of accuracy, damage and kills.
  */
 /**
- * The cost summary rows (#201: MissionResultExt.costSummary): flight time, each weapon fired, the
- * homes the bombs hit and the legal costs (t07), the total, then the mission's comparison and what was removed. Empty when the mission has none.
+ * The cost summary rows (#201: MissionResultExt.costSummary): flight time, each weapon fired, the total,
+ * then the mission's comparison and what was removed. Empty when the mission has none.
  */
 export function costRows(r: MissionResultExt): [string, string, string][] {
   const c = r.costSummary;
   if (!c) return [];
   const rows: [string, string, string][] = [['clock', `F-35A, ${c.hours.toFixed(2)} flight hours`, formatNzd(c.flightNzd)]];
   for (const w of c.weapons) rows.push(['target', `${w.count} × ${WEAPON_INFO[w.weapon].name}`, formatNzd(w.nzd)]);
-  if (c.homes) {
-    rows.push(['bomb', `${c.homes.count} × ${escapeHtml(c.homes.label)}`, formatNzd(c.homes.nzd)]);
-    rows.push(['book', escapeHtml(c.homes.legal.label), formatNzd(c.homes.legal.nzd)]);
-  }
   rows.push(['star', 'Total', formatNzd(c.totalNzd)]);
   rows.push(['shield', escapeHtml(c.comparison.label), formatNzd(c.comparison.nzd)]);
   rows.push(['check', escapeHtml(c.removed.label), String(c.removed.count)]);

@@ -1,11 +1,14 @@
 /**
- * F35-A — small pests that run a route to a goal (SIM-CORE): g03's stoat (#200), a 0.3 kg target on the
- * Onetangi dunes running to a nest of dotterel chicks, and t07's sewer rats, running down a Herne Bay
- * street with a stop at each drain, across the beach and out to Watchman Island.
+ * F35-A — small pests that run a route (SIM-CORE): g03's stoat (#200), a 0.3 kg target on the Onetangi
+ * dunes running to a nest of dotterel chicks, and t07's sewer rats, looping round a Herne Bay block with
+ * a stop at each drain, and one sitting on a roof.
  *
  *  - It runs its route (start → stations → goal) in short dashes and stops at each station (a bait
  *    station, a drain) for `stopTime` s: those stops are the drop windows. Reaching the last point is
  *    reaching its goal (RunnerState.arrived; the mission fails the sortie on it).
+ *  - A looping runner (`loop`) has no goal: after its last point it runs back to its start and round
+ *    again, stopping at every station each lap. One with no route after its start sits where it is for
+ *    good (a stop that never ends: it never bolts, and still sits up when targeted).
  *  - Its clock starts at mission start (`clockStart`), not when it is spawned: g03 spawns it only
  *    once the player is under the cloud near the nest, and on its first step it catches up with
  *    where it would be by then (so the undisturbed arrival time doesn't depend on the reveal).
@@ -51,6 +54,8 @@ export interface RunnerSpawn {
   clockStart?: number;
   /** Swimming speed over water (m/s, default SWIM_SPEED). */
   swimSpeed?: number;
+  /** Round and round: after the last point it heads back to the start (no goal, never arrives). */
+  loop?: boolean;
 }
 
 export interface RunnerState {
@@ -60,6 +65,8 @@ export interface RunnerState {
   stopTime: number;
   clockStart: number;
   swimSpeed: number;
+  /** Runs its route round and round (RunnerSpawn.loop). */
+  loop: boolean;
   /** In the water (swimming), this step. For the renderer and the HUD. */
   swimming: boolean;
   /** Index of the route point it is heading for (or stopped at). */
@@ -86,16 +93,19 @@ export interface RunnerState {
 /** Make `e` a runner (World.spawnGround does it for the 'stoat' and 'rat' types). */
 export function makeRunner(e: GroundTargetEntity, spec: RunnerSpawn): void {
   const route = spec.route.map((p) => p.clone());
+  // nothing after its start: it sits there, a stop that never ends
+  const sits = route.length === 1;
   e.runner = {
     route,
     stations: [...spec.stations].sort((a, b) => a - b),
     speed: spec.speed ?? RUNNER_SPEED,
-    stopTime: spec.stopTime ?? RUNNER_STOP,
+    stopTime: sits ? Infinity : (spec.stopTime ?? RUNNER_STOP),
     clockStart: spec.clockStart ?? 0,
     swimSpeed: spec.swimSpeed ?? SWIM_SPEED,
+    loop: !!spec.loop,
     swimming: false,
-    leg: 1,
-    phase: 'run',
+    leg: sits ? 0 : 1,
+    phase: sits ? 'stop' : 'run',
     phaseT: 0,
     bolting: false,
     targeted: false,
@@ -110,6 +120,11 @@ export function makeRunner(e: GroundTargetEntity, spec: RunnerSpawn): void {
 }
 
 const _v = new Vector3();
+
+/** The route point after the current one: back to the start after the last on a loop, else the goal stays the last. */
+function nextLeg(s: RunnerState): number {
+  return s.loop ? (s.leg + 1) % s.route.length : Math.min(s.leg + 1, s.route.length - 1);
+}
 
 /** Step every live runner: catch up with its clock, run, stop, alert and bolt. */
 export function stepRunners(world: SimWorld, dt: number): void {
@@ -151,19 +166,20 @@ function nearMisses(world: SimWorld, g: GroundTargetEntity, s: RunnerState): voi
       continue;
     }
     s.incoming.delete(id);
-    if (Math.hypot(last.x - g.position.x, last.z - g.position.z) <= NEAR_MISS && !s.arrived) {
+    // (a sitter has nowhere to bolt to)
+    if (Math.hypot(last.x - g.position.x, last.z - g.position.z) <= NEAR_MISS && !s.arrived && s.route.length > 1) {
       s.bolting = true;
       if (s.phase === 'stop') {
         s.phase = 'run';
         s.phaseT = 0;
-        s.leg = Math.min(s.leg + 1, s.route.length - 1);
+        s.leg = nextLeg(s);
       }
     }
   }
   for (const m of world.missiles) if (m.alive && m.targetId === g.id && !s.incoming.has(m.id)) s.incoming.set(m.id, m.position.clone());
 }
 
-/** One step of the route: dash to the next point, stop at a station, end at the nest. */
+/** One step of the route: dash to the next point, stop at a station, end at the nest (or go round again on a loop). */
 function advance(world: SimWorld, g: GroundTargetEntity, s: RunnerState, dt: number): void {
   s.phaseT += dt;
   s.swimming = world.terrain.isWater(g.position.x, g.position.z);
@@ -176,7 +192,7 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: RunnerState, dt: num
     if (s.phaseT >= s.stopTime) {
       s.phase = 'run';
       s.phaseT = 0;
-      s.leg = Math.min(s.leg + 1, s.route.length - 1);
+      s.leg = nextLeg(s);
     }
     return;
   }
@@ -192,7 +208,7 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: RunnerState, dt: num
   if (dist <= step + 1e-3) {
     g.position.x = target.x;
     g.position.z = target.z;
-    if (s.leg >= s.route.length - 1) {
+    if (!s.loop && s.leg >= s.route.length - 1) {
       s.phase = 'nest';
       s.arrived = true;
       s.phaseT = 0;
@@ -200,7 +216,7 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: RunnerState, dt: num
       s.phase = 'stop';
       s.phaseT = 0;
       s.bolting = false;
-    } else s.leg++;
+    } else s.leg = nextLeg(s);
   } else {
     g.position.x += (_v.x / dist) * step;
     g.position.z += (_v.z / dist) * step;
@@ -213,7 +229,7 @@ function advance(world: SimWorld, g: GroundTargetEntity, s: RunnerState, dt: num
 
 /**
  * Seconds an undisturbed runner takes from its start to its goal (route at `speed`, a stop at each station).
- * All on land: a route that swims (t07's rats) takes longer by its water legs at the slower swimSpeed.
+ * All on land: a route that swims takes longer by its water legs at the slower swimSpeed. Not for a loop (no goal).
  */
 export function runnerArrival(spec: Pick<RunnerSpawn, 'route' | 'stations' | 'speed' | 'stopTime'>): number {
   let len = 0;

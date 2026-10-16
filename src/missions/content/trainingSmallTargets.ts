@@ -4,21 +4,19 @@
  *
  * Herne Bay's old sewers carry wastewater and stormwater in the same pipes, and after heavy rain they
  * overflow (true of the real suburb: the overflow points spill dozens of times a year). In the game,
- * last night's overflow has flushed sewer rats out onto the streets. They run down to the beach and
- * swim for Watchman Island / Te Kākāwhakaara, about 600 m offshore. No rat may reach the island.
+ * last night's overflow has flushed sewer rats out, and they have made themselves at home: two run
+ * round the blocks off Wallace Street and Hamilton Road, and one sits on the roof of the Shangri-La, the
+ * 57 m apartment tower just off Jervois Road and Herne Bay's only tall building.
  *
- * The lesson is g03's release, with the same bomb: the GBU-53/B StormBreaker can't track a target this
- * small on the move (sim/weapons/small.ts), so release while a rat stops at a drain. Two rats, one wave
- * (playtest 2026-10-10, 1.4-b: the JDAM waves are gone). A rat that gets past its drains swims, and a
- * StormBreaker can't find a swimmer either: the jet carries JDAMs for that (the owner's call, 2026-10-11),
- * whose 60 m blast reaches the rat wherever it has paddled to since the release. On the street the same
- * blast reaches the houses either side (runtime/collateral.ts): the target camera holds on the crater, the
- * sortie goes on and its grade is F. Herne Bay is New Zealand's most expensive suburb and its residents
- * have lawyers: the debrief's bill prices each home at T07_HOME_NZD and adds T07_LEGAL_NZD of legal costs.
+ * The lesson is g03's release, with the same bomb and no other (the owner's call, 2026-10-16): the GBU-53/B
+ * StormBreaker can't track a target this small on the move (sim/weapons/small.ts), so release while a
+ * street rat stops at a drain. The street rats loop round their blocks for as long as it takes; there is
+ * no fail condition. The roof rat sits still, the easy one, and the StormBreaker that kills it brings the
+ * tower down (sim/World.ts roofCollapse): the target camera opens out to WIDE on the fall.
  *
- * Rat routes run down real Herne Bay streets (LINZ road centrelines, world/scenery/aucklandRoads.ts);
- * tests/missions-t07.test.ts checks them against the coast. The local trap group is fictional; no real
- * organisation is named.
+ * Rat routes run along real Herne Bay streets (LINZ road centrelines, world/scenery/aucklandRoads.ts);
+ * tests/missions-t07.test.ts checks them against the roads and the coast. The local trap group is
+ * fictional; no real organisation is named.
  */
 import type { MissionDef } from '../../core/contracts';
 import type { XZ } from '../schema';
@@ -29,18 +27,13 @@ const DS = 'DARKSTAR';
 export const T07_TRAPPERS = 'TRAPPERS';
 const TR = T07_TRAPPERS;
 
-/** Watchman Island / Te Kākāwhakaara, the rats' goal (m; the map label in ui/art/aucklandPlaces.ts). */
-export const T07_ISLAND: XZ = { x: -2_696, z: -1_500 };
-/** A rat this close to the island's centre has reached it (m). */
-export const T07_ISLAND_RADIUS = 25;
-
-/** Rats on land: average dash speed (m/s), stop at each drain (s); in the water a steady swim (m/s). */
-export const T07_RAT = { speed: 2.5, stopTime: 40, swimSpeed: 1.5 } as const;
+/** Street rats: average dash speed (m/s) and the stop at each drain (s). */
+export const T07_RAT = { speed: 2.5, stopTime: 40 } as const;
 
 /**
- * A rat's route: its start (the overflow manhole), the points after it in order (the drains first),
- * which of those are drains (a stop at each; indices into `route`), and the street it runs down.
- * The last point is the island.
+ * A street rat's circuit: its start (the overflow manhole), the points after it in order, which of those
+ * are drains (a stop at each; indices into `route`), and the street it starts on. After the last point
+ * it runs back to the start and round again.
  */
 export interface T07Route {
   street: string;
@@ -49,35 +42,54 @@ export interface T07Route {
   drains: number[];
 }
 
-/** The routes, by rat: down the streets to the beach, then the swim. */
+/** The circuits, by rat: round a block each, on the road centrelines. */
 export const T07_ROUTES = {
   wallace: {
     street: 'Wallace Street',
-    start: { x: -2_509, z: -315 },
-    route: [{ x: -2_554, z: -495 }, { x: -2_590, z: -633 }, { x: -2_684, z: -672 }, { x: -2_703, z: -747 }, T07_ISLAND],
-    drains: [0, 1, 2],
+    start: { x: -2_509, z: -316 },
+    // down Wallace St, along Sarsfield St, up Lawrence St, back along Jervois Rd
+    route: [
+      { x: -2_554, z: -495 },
+      { x: -2_590, z: -634 },
+      { x: -2_612, z: -711 },
+      { x: -2_522, z: -731 },
+      { x: -2_465, z: -518 },
+      { x: -2_419, z: -338 },
+      { x: -2_449, z: -334 },
+      { x: -2_498, z: -329 },
+    ],
+    drains: [0, 1, 3, 4],
   },
   hamilton: {
     street: 'Hamilton Road',
     start: { x: -2_148, z: -368 },
-    route: [{ x: -2_190, z: -580 }, { x: -2_234, z: -796 }, { x: -2_249, z: -876 }, T07_ISLAND],
-    drains: [0, 1, 2],
+    // down Hamilton Rd, along Sarsfield St, up Curran St, back along Jervois Rd past the Shangri-La
+    route: [
+      { x: -2_190, z: -580 },
+      { x: -2_235, z: -797 },
+      { x: -2_143, z: -818 },
+      { x: -2_019, z: -847 },
+      { x: -2_001, z: -722 },
+      { x: -1_984, z: -608 },
+      { x: -1_954, z: -404 },
+      { x: -1_948, z: -390 },
+      { x: -1_983, z: -386 },
+      { x: -2_055, z: -378 },
+      { x: -2_124, z: -371 },
+    ],
+    drains: [0, 1, 3, 5, 9],
   },
 } as const satisfies Record<string, T07Route>;
 
-/**
- * A Herne Bay home on the bill (NZ$): about the suburb's average value, between CoreLogic's 2024 median
- * (NZ$3.36 million) and OneRoof's average (NZ$3.78 million). Look it up again before changing it.
- */
-export const T07_HOME_NZD = 3_500_000;
-/** The legal costs per home hit (NZ$): made up, for the joke. */
-export const T07_LEGAL_NZD = 750_000;
+/** The Shangri-La: its footprint centre (m), where the roof rat sits (core/cbdBuildingNames.ts names it). */
+export const T07_TOWER: XZ = { x: -2_018, z: -421 };
 
-/** The rats' mission group. */
+/** The street rats' mission group, and the roof rat's. */
 export const T07_GROUP = 'rats';
+export const T07_ROOF_GROUP = 'roof_rat';
 
 /** The middle of the streets, for the target waypoint. */
-const STREETS: XZ = { x: -2_450, z: -620 };
+const STREETS: XZ = { x: -2_300, z: -560 };
 
 /** The player: over the upper harbour off Point Chevalier, heading east for Herne Bay, about 9 km out. */
 const t07Start = { x: -11_500, z: -1_500, altitude: 1_500, heading: 90, speed: 220 };
@@ -86,7 +98,7 @@ function rat(name: keyof typeof T07_ROUTES) {
   const r: T07Route = T07_ROUTES[name];
   return target(`rat_${name}`, T07_GROUP, 'rat', r.start, {
     name: 'Rat',
-    runner: { route: [...r.route], stations: [...r.drains], speed: T07_RAT.speed, stopTime: T07_RAT.stopTime, swimSpeed: T07_RAT.swimSpeed, clock: 'spawn' },
+    runner: { route: [...r.route], stations: [...r.drains], speed: T07_RAT.speed, stopTime: T07_RAT.stopTime, clock: 'spawn', loop: true },
   });
 }
 
@@ -99,26 +111,30 @@ export const T07_SMALL: MissionDef = mission({
   timeOfDay: 'day',
   weather: 'scattered',
   briefing: [
-    "Training, with live rats. Last night's rain overloaded Herne Bay's old sewers and flushed the rats out. Two are running down Wallace Street and Hamilton Road to the beach, to swim for Watchman Island, 600 metres offshore, which the local trappers keep pest-free. No rat reaches the island.",
-    'A rat is too small for the StormBreaker to track while it runs, so release while it stops at a drain to sniff. A rat that gets past its drains swims, and the bomb can\'t find a swimmer either: that is what the JDAMs are for. A JDAM tracks nothing but its blast is big: release it on IN RANGE (closer and it flies long), and only over the water. On the street it takes out the houses either side, and the people of Herne Bay have very good lawyers. The stoat on Waiheke needs the StormBreaker release, and there are no JDAMs on Waiheke.',
-    'Check the FIRE button reads GBU-53, the StormBreaker (WPN changes weapon). TGT picks a rat, and the target camera zooms the pod onto it. Release on a stop, the moment IN RANGE shows.',
+    "Training, with live rats. Last night's rain overloaded Herne Bay's old sewers, and the rats that came out have made themselves at home. Two run round the blocks off Wallace Street and Hamilton Road. One is on the roof of the Shangri-La, the tower just off Jervois Road.",
+    'A rat is too small for the StormBreaker to track while it runs, so release while it stops at a drain to sniff. The roof rat sits still: that is the easy one.',
+    'Check the FIRE button reads GBU-53, the StormBreaker. TGT picks a rat, and the target camera zooms the pod onto it. Release on a stop, the moment IN RANGE shows.',
   ],
-  // g03's bomb for the drains, and JDAMs for a swimmer. No AARGM-ER: a rat has no radar to home on.
-  recommendedLoadout: 'strike_mixed',
-  allowedLoadouts: ['strike_mixed'],
+  // g03's bomb and nothing else. No AARGM-ER: a rat has no radar to home on.
+  recommendedLoadout: 'strike_precision',
+  allowedLoadouts: ['strike_precision'],
   player: t07Start,
   script: {
     autoHints: true,
-    parTime: 180,
+    parTime: 240,
     awacs: { initialPictureAt: -1, pictureInterval: 0 },
-    ground: Object.keys(T07_ROUTES).map((n) => rat(n as keyof typeof T07_ROUTES)),
-    objectives: [{ id: 'o_rats', kind: 'destroy', groups: [T07_GROUP], label: 'StormBreakers on the rats, while they stop at the drains', primary: true }],
+    ground: [
+      ...Object.keys(T07_ROUTES).map((n) => rat(n as keyof typeof T07_ROUTES)),
+      // on the Shangri-La's roof, sitting still: the StormBreaker that kills it brings the tower down
+      target('rat_roof', T07_ROOF_GROUP, 'rat', T07_TOWER, { name: 'Rat', onRoof: true, runner: { route: [], stations: [] } }),
+    ],
+    objectives: [{ id: 'o_rats', kind: 'destroy', groups: [T07_GROUP, T07_ROOF_GROUP], label: 'StormBreakers on the rats, while they stop', primary: true }],
     waypoints: [{ id: 'wp_streets', label: 'Herne Bay', kind: 'target', x: STREETS.x, z: STREETS.z, altitude: 600, radius: 1500, objective: 'o_rats' }],
     triggers: [
       {
         id: 't_trappers',
         when: { kind: 'time', t: 10 },
-        actions: [{ kind: 'radio', from: TR, text: 'Viper, Marine Parade Trappers. Two rats out of the manholes, top of Wallace Street and Hamilton Road. They stop at every drain on the way down.' }],
+        actions: [{ kind: 'radio', from: TR, text: 'Viper, Marine Parade Trappers. Two rats running round the blocks off Wallace Street and Hamilton Road, stopping at every drain. And one on the roof of the Shangri-La.' }],
       },
       {
         id: 't_alert',
@@ -126,36 +142,22 @@ export const T07_SMALL: MissionDef = mission({
         actions: [{ kind: 'radio', from: TR, text: 'That one has sat up. It is looking at you.' }],
       },
       {
-        id: 't_swimming',
-        when: { kind: 'area', who: { group: T07_GROUP }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: 700 },
-        actions: [{ kind: 'radio', from: TR, text: 'One is in the water and swimming. A StormBreaker won\'t find it now: JDAM, released on IN RANGE.', priority: 2 }],
-      },
-      {
-        // a rat on the island: the sortie is lost
-        id: 't_island',
-        when: { kind: 'area', who: { group: T07_GROUP }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: T07_ISLAND_RADIUS },
-        actions: [{ kind: 'end', success: false, reason: 'A rat reached Watchman Island' }],
+        id: 't_tower',
+        when: { kind: 'group_destroyed', group: T07_ROOF_GROUP },
+        actions: [{ kind: 'radio', from: TR, text: 'Well. That rat is off the roof.' }],
       },
       {
         id: 't_done',
-        when: { kind: 'group_destroyed', group: T07_GROUP },
-        actions: [{ kind: 'radio', from: TR, text: 'That is both of them. The island is clean. Cheers, Viper.' }],
+        when: { kind: 'all', of: [{ kind: 'group_destroyed', group: T07_GROUP }, { kind: 'group_destroyed', group: T07_ROOF_GROUP }] },
+        actions: [{ kind: 'radio', from: TR, text: 'That is all three. Herne Bay is rat-free.' }],
       },
     ],
     hints: [
       { id: 'h_pod', text: 'TGT designates a rat: the target camera ZOOMs the pod onto it. It is 20 cm long', when: { kind: 'time', t: 5 }, duration: 9 },
       { id: 'h_stops', text: 'StormBreaker: release while the rat STOPS at a drain. Running, the bomb can\'t track it', when: { kind: 'area', x: STREETS.x, z: STREETS.z, radius: 7000 }, duration: 9 },
-      { id: 'h_swim', text: 'Swimmers never stop: a StormBreaker can\'t track them. JDAM (WPN), released on IN RANGE', when: { kind: 'area', who: { group: T07_GROUP }, x: T07_ISLAND.x, z: T07_ISLAND.z, radius: 700 }, duration: 9 },
     ],
-    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Herne Bay is all yours. Two rats on the streets: catch them at the drains.', priority: 2 }],
-    successText: 'Two rats, none on the island. That is the release the stoat needs, Viper.',
-    collateral: {
-      homeNzd: T07_HOME_NZD,
-      legalNzd: T07_LEGAL_NZD,
-      homesLabel: 'Herne Bay homes',
-      legalLabel: "Legal costs (half the street are barristers)",
-      call: { from: TR, text: 'Viper, Trappers. Those were our neighbours\' houses. Half this street are barristers: you will be hearing from them.' },
-    },
-    costSummary: { comparison: { label: 'A rat trap, for comparison', nzd: 40 }, removed: { label: 'Rats removed', group: T07_GROUP } },
+    opening: [{ kind: 'radio', from: DS, text: 'Viper 1, Darkstar. Herne Bay is all yours. Three rats: catch them standing still.', priority: 2 }],
+    successText: 'Three rats. That is the release the stoat needs, Viper.',
+    costSummary: { comparison: { label: 'A rat trap, for comparison', nzd: 40 }, removed: { label: 'Rats removed', groups: [T07_GROUP, T07_ROOF_GROUP] } },
   },
 });

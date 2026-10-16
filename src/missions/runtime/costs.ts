@@ -13,9 +13,6 @@
  *    "Joint Direct Attack Munition", after the USAF fact sheets), and the Mk-84 bomb body is extra
  *    (no current unit cost found; rounded up to cover it).
  * Converted to New Zealand dollars at NZD_PER_USD (about the 2025–26 rate).
- *
- * A mission that counts the homes the player's bombs hit (MissionScript.collateral) adds them to the
- * bill at its own price per home, with the legal costs after them.
  */
 import type { WeaponId } from '../../core/types';
 
@@ -36,8 +33,6 @@ export interface CostSummary {
   flightNzd: number;
   /** Weapons fired that have a unit cost: count and cost. */
   weapons: { weapon: WeaponId; count: number; nzd: number }[];
-  /** Homes the player's bombs hit (MissionScript.collateral): how many, their value, and the legal costs. */
-  homes?: CollateralBill;
   totalNzd: number;
   /** "Volunteer's trap, for comparison", NZ$. */
   comparison: { label: string; nzd: number };
@@ -45,19 +40,11 @@ export interface CostSummary {
   removed: { label: string; count: number };
 }
 
-/** The homes on the bill: "Herne Bay homes", how many, what they cost, and the legal costs line. */
-export interface CollateralBill {
-  label: string;
-  count: number;
-  nzd: number;
-  legal: { label: string; nzd: number };
-}
-
 /**
  * The cost summary of a sortie: `seconds` in the air, `fired` weapons by id, and the mission's
- * comparison and removed-count lines, and the homes the bombs hit, if any.
+ * comparison and removed-count lines.
  */
-export function costSummary(seconds: number, fired: Partial<Record<WeaponId, number>>, comparison: { label: string; nzd: number }, removed: { label: string; count: number }, homes?: CollateralBill): CostSummary {
+export function costSummary(seconds: number, fired: Partial<Record<WeaponId, number>>, comparison: { label: string; nzd: number }, removed: { label: string; count: number }): CostSummary {
   const hours = Math.max(0, seconds) / 3600;
   const flightNzd = hours * UNIT_COST_USD.flightHour * NZD_PER_USD;
   const weapons: CostSummary['weapons'] = [];
@@ -65,8 +52,8 @@ export function costSummary(seconds: number, fired: Partial<Record<WeaponId, num
     const count = fired[weapon] ?? 0;
     if (count > 0) weapons.push({ weapon, count, nzd: count * UNIT_COST_USD[weapon] * NZD_PER_USD });
   }
-  const totalNzd = flightNzd + weapons.reduce((n, w) => n + w.nzd, 0) + (homes ? homes.nzd + homes.legal.nzd : 0);
-  return { hours, flightNzd, weapons, ...(homes ? { homes } : {}), totalNzd, comparison, removed };
+  const totalNzd = flightNzd + weapons.reduce((n, w) => n + w.nzd, 0);
+  return { hours, flightNzd, weapons, totalNzd, comparison, removed };
 }
 
 /** "NZ$1,234" / "NZ$10.5 million": whole dollars under a million, a million and up in millions. */

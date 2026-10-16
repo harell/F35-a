@@ -152,6 +152,7 @@ class SimWorldImpl implements SimWorld {
       onEntityDestroyed: (e) => {
         this.hostileDirty = true;
         if (e.kind === 'aircraft' && AIRCRAFT_WARHEAD[e.type]) this.warheadBlast(e);
+        if (e.kind === 'ground' && e.roofOf >= 0) this.roofCollapse(e);
       },
     });
     this.collisions = new CollisionSystem(o.terrain, this.damage, this);
@@ -325,6 +326,12 @@ class SimWorldImpl implements SimWorld {
     }
     // the stoat and the rats: sim/runner.ts runs them (route, stops, alert), not the ground-mover path
     if ((spec.type === 'stoat' || spec.type === 'rat') && spec.runner) makeRunner(e, spec.runner);
+    // on a roof: up there, and killing it brings the building down (roofCollapse)
+    const roof = spec.onRoof ? this.buildings?.roofAt(e.position.x, e.position.z) : null;
+    if (roof) {
+      e.position.y = roof.y;
+      e.roofOf = roof.index;
+    }
     this.ground.push(e);
     this.byId.set(e.id, e);
     this.hostileDirty = true;
@@ -441,6 +448,20 @@ class SimWorldImpl implements SimWorld {
     ac.crashed = true;
     ensureSimState(ac).crashTime = this.time;
     ac.velocity.set(0, 0, 0);
+  }
+
+  /**
+   * A target on a roof was killed (t07's rat on the Shangri-La): the building comes down under it, with
+   * the same collapse and 'building:collapsed' as an aircraft flying into it (no aircraft: `aircraftId` null).
+   * A fixed building stands.
+   */
+  private roofCollapse(e: GroundTargetEntity): void {
+    const k = e.roofOf;
+    e.roofOf = -1;
+    const b = this.buildings;
+    if (!b || b.collapsed.has(k) || b.geo.buildings[k].fixed) return;
+    b.collapse(k, this.time);
+    this.events.emit('building:collapsed', b.collapsedEvent(k, e.position, null));
   }
 
   /**

@@ -1341,8 +1341,8 @@ export const createEffects: CreateEffects = (scene, world, events, env, quality)
       startFire(b.x, b.y + COLLAPSE.breakHeight - 6, b.z, 1.4, 90);
     }),
     events.on('landmark:impact', ({ position: p, heading }) => collapseDust(p.x, p.y, p.z, heading)),
-    // a CBD skyscraper an aircraft flew into (#128): the fireball at the impact, then the dust wall
-    // where it comes down, and the stump burning
+    // a CBD skyscraper an aircraft flew into (#128), or one a weapon brought down by killing the target on its roof
+    // (t07's rat on the Shangri-La): the fireball at the impact, then the dust wall where it comes down, and the stump burning
     // A hero landmark (the player's jet into Spark Arena or the Museum) goes the same way, louder: charges
     // go off round it while it still stands, then it drops (world/scenery/cbdCollapse.ts) onto ground blasts.
     events.on('building:collapsed', ({ position: p, x, z, ground, top, radius, hero }) => {

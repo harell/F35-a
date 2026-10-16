@@ -479,8 +479,10 @@ export function spawnGroundTarget(s: MissionState, def: GroundTargetDef): void {
           stopTime: def.runner.stopTime,
           swimSpeed: def.runner.swimSpeed,
           clockStart: def.runner.clock === 'spawn' ? s.world.time : 0,
+          loop: def.runner.loop,
         }
       : undefined,
+    onRoof: def.onRoof,
   });
   if (g) {
     if (g.spawnedAt < 0) g.spawnedAt = s.world.time;
