@@ -582,6 +582,8 @@ export class GroundTargetEntity implements Entity {
   boat?: import('./boats').BoatState;
   /** g03's stoat (#200) and t07's rats: sim/runner.ts runs them (route, stops, alert, bolting, swimming), not the ground-mover path. */
   runner?: import('./runner').RunnerState;
+  /** The building it sits on the roof of (an index into the world's BuildingIndex, -1 = none): killing it brings that down. */
+  roofOf = -1;
   /**
    * A civil train ('train', #146): its unit in the sortie's timetable and its cars, posed every step by
    * the mission's TrainTraffic (missions/runtime/trains.ts); hit tests run along the cars (sim/civil/vessels.ts).

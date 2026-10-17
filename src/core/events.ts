@@ -60,8 +60,6 @@ export interface GameEventMap {
   transonic: { aircraft: AircraftEntity; supersonic: boolean };
   /** Mission objective state changed. */
   objective: { id: string; label: string; state: 'active' | 'complete' | 'failed' };
-  /** The player's bomb went off among homes (MissionScript.collateral, t07): the target camera holds on it. */
-  'mission:collateral': { position: Vector3; homes: number };
   /** Mission finished. */
   'mission:end': { success: boolean; reason: string };
   /** Player took a hit (screen flash, shake, haptics). */
@@ -83,12 +81,12 @@ export interface GameEventMap {
   /** 'structure': flew into the Sky Tower (#113); 'building': flew into a CBD skyscraper (#128). */
   'player:down': { reason: 'crash' | 'shot' | 'collision' | 'fuel' | 'structure' | 'building' };
   /**
-   * An aircraft flew into a CBD skyscraper (sim/buildings.ts, #128): the aircraft is destroyed and
-   * the building collapses. `building` = index into aucklandBuildings(); `position` = the impact;
-   * (x, z) its footprint centre, `ground` and `top` its base and roof (world Y).
+   * A building comes down (sim/buildings.ts): a CBD skyscraper an aircraft flew into (#128), a hero landmark
+   * under the player's jet (`hero` names it), or a building whose roof target a weapon killed (t07's rat on the
+   * Shangri-La: `aircraftId` null). `building` = its id (an index into aucklandBuildings() for a LINZ one);
+   * `position` = the impact; (x, z) its footprint centre, `ground` and `top` its base and roof (world Y).
    */
-  /** A building comes down (a CBD skyscraper, or a hero landmark under the player's jet; `hero` names it). */
-  'building:collapsed': { building: number; aircraftId: number; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number; radius: number; hero: HeroBuilding | null; name: string | null; label: string | null };
+  'building:collapsed': { building: number; aircraftId: number | null; isPlayer: boolean; position: Vector3; x: number; z: number; ground: number; top: number; radius: number; hero: HeroBuilding | null; name: string | null; label: string | null };
 }
 
 export type GameEventName = keyof GameEventMap;

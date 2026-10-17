@@ -4,7 +4,9 @@
  * The CBD skyline is drawn from the LINZ building outlines with LiDAR heights
  * (world/scenery/aucklandBuildings.ts). This module gives the sim the tall ones as solid prisms: a
  * footprint ring from the ground up to the roof. An aircraft that flies into one is destroyed and
- * the building collapses (Collisions.buildingImpacts). Like the Sky Tower, a collapsed building is
+ * the building collapses (Collisions.buildingImpacts). A weapon brings one down by killing a target on its
+ * roof (t07's rat on the Shangri-La: World.roofCollapse, with BuildingIndex.roofAt placing the target). Like
+ * the Sky Tower, a collapsed building is
  * standing again at the next mission start (a fresh SimWorld starts with none collapsed).
  *
  * The prisms sit in a coarse XZ grid, and a segment is tested only below the tallest roof and inside
@@ -28,6 +30,7 @@
  * the OpenStreetMap name or address of the rest (core/cbdBuildingNames.ts); the port's cranes have none.
  */
 import type { Vector3 } from 'three';
+import type { GameEventMap } from '../core/events';
 import { SPARK_ARENA, sparkArenaSolids } from '../core/sparkArena';
 import { PORT_CRANES } from '../core/portOfAuckland';
 import { MUSEUM, museumSolids } from '../core/museum';
@@ -354,6 +357,43 @@ export class BuildingIndex {
     this.collapsed.add(k);
     this.collapsedAt.set(k, time);
     this.version++;
+  }
+
+  /**
+   * The standing building whose footprint holds (x, z), and its highest roof there (world Y), or null:
+   * where a target placed on a roof stands (GroundSpawn.onRoof).
+   */
+  roofAt(x: number, z: number): { index: number; y: number } | null {
+    const g = this.geo;
+    const c = g.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));
+    let best: { index: number; y: number } | null = null;
+    for (const k of c ?? []) {
+      if (this.collapsed.has(k)) continue;
+      for (const p of g.buildings[k].prisms) {
+        if (x < p.minX || x > p.maxX || z < p.minZ || z > p.maxZ || !pointInRing(p.ring, x, z)) continue;
+        if (!best || p.y1 > best.y) best = { index: k, y: p.y1 };
+      }
+    }
+    return best;
+  }
+
+  /** The 'building:collapsed' payload for building `k` coming down at `position`, under `aircraft` (null: a weapon brought it down). */
+  collapsedEvent(k: number, position: Vector3, aircraft: { id: number; isPlayer: boolean } | null): GameEventMap['building:collapsed'] {
+    const b = this.geo.buildings[k];
+    return {
+      building: b.id,
+      aircraftId: aircraft?.id ?? null,
+      isPlayer: aircraft?.isPlayer ?? false,
+      position: position.clone(),
+      x: b.x,
+      z: b.z,
+      ground: b.ground,
+      top: b.top,
+      radius: b.radius,
+      hero: b.hero ?? null,
+      name: b.name ?? null,
+      label: b.label ?? null,
+    };
   }
 
   /** Index (into geo.buildings) of a hero building, or -1. */

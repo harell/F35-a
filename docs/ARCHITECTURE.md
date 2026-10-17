@@ -446,14 +446,16 @@ the mission) calls the bait stations and the moment the stoat stands up (the `ru
 prices the sortie against one volunteer's trap (`MissionScript.costSummary`, unit costs and their sources in
 `src/missions/runtime/costs.ts`).
 
-T07's sewer rats (`'rat'`, `src/missions/content/trainingSmallTargets.ts`) run on the same runner: down a Herne Bay
-street with a stop at each drain, then swimming (`RunnerState.swimming`: a steady speed, no stops, so a StormBreaker
-can't track them) for Watchman Island. The lesson is g03's release on two of them: a StormBreaker while the rat stops.
-The jet also carries JDAMs for a rat that gets into the water. On land a JDAM's blast reaches the houses either side:
-`MissionScript.collateral` (`src/missions/runtime/collateral.ts`) counts every building within half a weapon's blast
-radius of a land impact and calls it on the radio; the target camera opens out to WIDE on the crater (`pipCollateral`), the
-sortie goes on with its grade dropped to F, and the debrief's bill prices the homes and the
-legal costs.
+T07's sewer rats (`'rat'`, `src/missions/content/trainingSmallTargets.ts`) run on the same runner, and the lesson is
+g03's release with g03's bomb alone (the `strike_precision` load: eight StormBreakers). Two street rats loop round a
+Herne Bay block on the LINZ road centrelines (`RunnerSpawn.loop`: after the last point back to the start, with a stop at
+every drain each lap and no goal, so there is no fail condition). The third sits on the roof of the Shangri-La: a
+runner with no route after its start sits for good (a stop that never ends: it never bolts, and still sits up when
+targeted), and `GroundSpawn.onRoof` puts it on the roof the world's `BuildingIndex.roofAt` finds there
+(`GroundTargetEntity.roofOf`). Killing it brings the building down (`World.roofCollapse`): the same collapse as an
+aircraft flying into it, and a `'building:collapsed'` with `aircraftId: null`, on which the target camera opens out to
+WIDE for the fall (`pipCollapse`). A runner over water still swims (`RunnerState.swimming`: a steady speed, no stops,
+so a StormBreaker can't track it).
 
 Every munition that goes off on land digs a crater sized by its warhead (`craterRadius` in
 `src/render/effects/Effects.ts`), and a bomb going off in the water throws up a splash column, hit or miss.

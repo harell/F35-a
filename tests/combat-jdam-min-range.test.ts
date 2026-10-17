@@ -21,7 +21,7 @@ const DT = 1 / 60;
 function drop(alt: number, speed: number, range: number): { inRange: boolean; tooClose: boolean; miss: number } {
   const w = createSimWorld({ terrain: new FlatTerrain(), difficulty: DIFFICULTIES.pilot, events: new EventBus(), combat: createCombatSystemSeeded(1) });
   const t = w.spawnGround({ type: 'hangar', team: 'red', position: new Vector3(0, 0, 0), name: 'T' });
-  const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(-range, alt, 0), heading: Math.PI / 2, speed, loadout: 'strike_mixed' });
+  const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(-range, alt, 0), heading: Math.PI / 2, speed, loadout: 'strike_stealth' });
   w.combat.selectWeapon(p, 'gbu31', w);
   const hold = (n: number) => {
     for (let i = 0; i < n; i++) {

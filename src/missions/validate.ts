@@ -190,8 +190,10 @@ export function validateMission(def: MissionDef): string[] {
     if (g.chase !== undefined && g.type !== 'suicide_boat') err(`ground ${g.id}: only a suicide boat chases`);
     if (g.strike !== undefined && g.type !== 'missile_boat') err(`ground ${g.id}: only a missile boat has a strike`);
     if (g.runner !== undefined && g.type !== 'stoat' && g.type !== 'rat') err(`ground ${g.id}: only a stoat or a rat has a runner route`);
-    if ((g.type === 'stoat' || g.type === 'rat') && (!g.runner || g.runner.route.length === 0)) err(`ground ${g.id}: a ${g.type} needs its route (stations, then the goal)`);
-    if (g.runner) for (const k of g.runner.stations) if (!(k >= 0 && k < g.runner.route.length - 1)) err(`ground ${g.id}: bait station ${k} is not a point before the goal`);
+    if ((g.type === 'stoat' || g.type === 'rat') && !g.runner) err(`ground ${g.id}: a ${g.type} needs a runner (its route, or an empty one to sit still)`);
+    if (g.runner?.loop && g.runner.route.length === 0) err(`ground ${g.id}: a looping route needs at least one point`);
+    // on a loop every point is a station candidate (there is no goal); otherwise the goal, last, is not
+    if (g.runner) for (const k of g.runner.stations) if (!(k >= 0 && k < g.runner.route.length - (g.runner.loop ? 0 : 1))) err(`ground ${g.id}: bait station ${k} is not a point ${g.runner.loop ? 'of the route' : 'before the goal'}`);
     if (g.chase) checkGroup(g.chase, `ground ${g.id} chase`);
     if (g.strike) checkGroup(g.strike.group, `ground ${g.id} strike`);
   }

@@ -7,7 +7,7 @@ import type { SimWorld, TerrainQuery } from '../src/sim/api';
 import { cloudBetween } from '../src/sim/sensors/los';
 import { AircraftEntity, GroundTargetEntity, SamSiteEntity } from '../src/sim/entities';
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
-import { PIP_COLLATERAL_HOLD, PIP_DESTROYED_HOLD, fitReadout, pipCollateral, pipHold, pipView, podMask, podReadout, resetPip, resetPodZoom, stepPip, stepPod, tapPip } from '../src/hud/hmd/pip';
+import { PIP_COLLAPSE_HOLD, PIP_DESTROYED_HOLD, fitReadout, pipCollapse, pipHold, pipView, podMask, podReadout, resetPip, resetPodZoom, stepPip, stepPod, tapPip } from '../src/hud/hmd/pip';
 import { TargetCam } from '../src/render/TargetCam';
 import { POD_CLEAR_K, POD_RANGE, POD_STANDOFF, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
 
@@ -255,7 +255,7 @@ describe('pod line of sight', () => {
     resetPodZoom();
   });
 
-  it('homes hit (t07): the window opens out to WIDE on the crater and holds the dead rat, then goes back', () => {
+  it('a weapon brings a building down (t07\'s roof rat): the window opens out to WIDE on the fall and holds the dead rat, then goes back', () => {
     const L = computeLayout(makeLayout(), 844, 390, noSafe, tan30, true, { pip: true });
     resetPip();
     resetPodZoom();
@@ -268,21 +268,21 @@ describe('pod line of sight', () => {
     }
     expect(POD_ZOOM[pipView.zoom].name).toBe('ZOOM');
     expect(pipHold(rat)).toBe(PIP_DESTROYED_HOLD);
-    // the JDAM goes off among the houses and kills the rat
+    // the StormBreaker kills the rat on the roof, and the tower comes down under it
     rat.alive = false;
-    pipCollateral();
-    expect(pipHold(rat)).toBe(PIP_COLLATERAL_HOLD);
+    pipCollapse();
+    expect(pipHold(rat)).toBe(PIP_COLLAPSE_HOLD);
     let wide = 0;
     let shown = 0;
-    for (let i = 0; i < 30 * (PIP_COLLATERAL_HOLD + 2); i++) {
+    for (let i = 0; i < 30 * (PIP_COLLAPSE_HOLD + 2); i++) {
       const t = stepPip(L, null, lookup, true, 1 / 30);
       if (t) stepPod(t, eye, flat(), null, 1 / 30);
       if (pipView.open && t === rat) shown++;
       if (POD_ZOOM[pipView.zoom].name === 'WIDE') wide++;
     }
-    expect(shown / 30).toBeGreaterThan(PIP_COLLATERAL_HOLD - 0.2);
-    expect(wide / 30).toBeGreaterThan(PIP_COLLATERAL_HOLD - 0.2);
-    expect(wide / 30).toBeLessThan(PIP_COLLATERAL_HOLD + 0.2);
+    expect(shown / 30).toBeGreaterThan(PIP_COLLAPSE_HOLD - 0.2);
+    expect(wide / 30).toBeGreaterThan(PIP_COLLAPSE_HOLD - 0.2);
+    expect(wide / 30).toBeLessThan(PIP_COLLAPSE_HOLD + 0.2);
     // after it, the step from before (ZOOM)
     expect(POD_ZOOM[pipView.zoom].name).toBe('ZOOM');
     resetPip();

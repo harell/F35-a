@@ -29,7 +29,7 @@ import { computeLayout, makeLayout } from './hmd/layout';
 import { Vignettes, drawHint, hintHeight, drawHitMarkers, drawKillFeed, killFeedAt, drawMessages, drawObjectives, drawRadio, reserveMessage, reserveRadio, clearMessagePlan, radioColumnBottom, noteThreatCounts } from './hmd/overlays';
 import { paletteFor } from './hmd/palette';
 import { drawPcdZoom } from './hmd/pcdOverlay';
-import { drawPip, pipCollateral, pipCollateralActive, pipLandmarkFocus, pipView, resetPip, resetPodZoom, stepPip, stepPod, tapPip } from './hmd/pip';
+import { drawPip, pipCollapse, pipCollapseActive, pipLandmarkFocus, pipView, resetPip, resetPodZoom, stepPip, stepPod, tapPip } from './hmd/pip';
 import { ASSET_LOSS_HOLD, ASSET_LOSS_WINDOW } from './hmd/assetLoss';
 import { drawWpn, reserveWpn, resetWpn, stepWpn, tapWpn, wpnState, wpnView } from './hmd/wpnCam';
 import { Pen } from './hmd/pen';
@@ -230,7 +230,10 @@ export const createHud: CreateHud = (canvas, events) => {
         if (o) st.messages.push(o.text, o.tone, 3);
       }
     }),
-    events.on('mission:collateral', () => pipCollateral()),
+    // a weapon brought a building down (t07's roof rat): open the pod out on the fall
+    events.on('building:collapsed', ({ aircraftId }) => {
+      if (aircraftId === null) pipCollapse();
+    }),
     events.on('player:hit', ({ amount }) => hitFlash(st.g, amount)),
     events.on('warning', ({ id, active }) => {
       if (active && id !== 'missile' && id !== 'spike') st.warnAge = 0;
@@ -446,7 +449,7 @@ export const createHud: CreateHud = (canvas, events) => {
       const redCue = p.warnings.has('pull_up') || p.incoming.length > 0 || p.warnings.has('stall') || p.flight.stalled;
       const wpnPlan = stepWpn(
         L,
-        { now: ctx.world.time, setting: wpnSetting, suppressed: redCue || (pipShown && (!!pipView.landmark || pipCollateralActive())) },
+        { now: ctx.world.time, setting: wpnSetting, suppressed: redCue || (pipShown && (!!pipView.landmark || pipCollapseActive())) },
         wpnAllowed && mode !== 'tactical' && L.pipW > 0,
         pipShown,
         pipTgt,

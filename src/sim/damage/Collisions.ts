@@ -81,20 +81,7 @@ export class CollisionSystem {
       this.damage.destroyAircraft(ac, null, 'collision', ac.isPlayer ? 'building' : 'crash');
       ac.velocity.multiplyScalar(-0.08);
       if (!collapses) continue;
-      this.host?.events.emit('building:collapsed', {
-        building: b.id,
-        aircraftId: ac.id,
-        isPlayer: ac.isPlayer,
-        position: ac.position.clone(),
-        x: b.x,
-        z: b.z,
-        ground: b.ground,
-        top: b.top,
-        radius: b.radius,
-        hero: b.hero ?? null,
-        name: b.name ?? null,
-        label: b.label ?? null,
-      });
+      this.host?.events.emit('building:collapsed', buildings.collapsedEvent(hit.index, ac.position, ac));
     }
   }
 

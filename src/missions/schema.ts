@@ -342,14 +342,15 @@ export interface GroundTargetDef {
   strike?: BoatStrikeDef;
   /**
    * 'stoat' (g03) and 'rat' (t07), run by sim/runner.ts: the route after its start point (the
-   * stations, then the goal last),
-   * which of those points are bait stations (indices into `route`, 0 = the first point after the
-   * start), its dash speed (m/s) and the stop at each station (s). Its clock starts at mission
-   * start, whenever it spawns, unless `clock` is 'spawn'.
-   * Over water it swims at `swimSpeed` (m/s); `clock: 'spawn'` starts its clock when it spawns (t07: a
-   * wave the mission sends in later starts at its own start point).
+   * stations, then the goal last), which of those points are bait stations (indices into `route`, 0 = the
+   * first point after the start), its dash speed (m/s) and the stop at each station (s). Its clock starts
+   * at mission start, whenever it spawns, unless `clock` is 'spawn'. Over water it swims at `swimSpeed` (m/s).
+   * `loop`: no goal, it runs back to its start after the last point and round again (t07's street rats; a
+   * station may then be the last point). An empty route: it sits at its start for good (t07's roof rat).
    */
-  runner?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number; swimSpeed?: number; clock?: 'mission' | 'spawn' };
+  runner?: { route: XZ[]; stations: number[]; speed?: number; stopTime?: number; swimSpeed?: number; clock?: 'mission' | 'spawn'; loop?: boolean };
+  /** On the roof of the building at (x, z) (sim GroundSpawn.onRoof): killing it brings the building down (t07's roof rat). */
+  onRoof?: boolean;
 }
 
 /* ───────────────────────────── Objectives ───────────────────────────── */
@@ -551,23 +552,10 @@ export interface MissionScript {
   campaignFinale?: boolean;
   /**
    * The debrief's cost summary (#201, runtime/costs.ts): what the sortie cost (flight time, weapons
-   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.group` the
+   * fired) next to `comparison` (a label and its cost, NZ$), and how many of `removed.groups` the
    * player killed, under `removed.label`.
    */
-  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; group: string } };
-  /**
-   * Count the homes the player's bombs hit (runtime/collateral.ts, t07): every building within half a
-   * weapon's blast radius of where it went off on land. A hit calls "check fire", then `call`, and the
-   * sortie's grade drops to F. The debrief's bill (with costSummary) prices each home at `homeNzd`
-   * and adds `legalNzd` of legal costs per home, under `homesLabel` and `legalLabel`.
-   */
-  collateral?: {
-    homeNzd: number;
-    legalNzd: number;
-    homesLabel: string;
-    legalLabel: string;
-    call: { from: string; text: string };
-  };
+  costSummary?: { comparison: { label: string; nzd: number }; removed: { label: string; groups: string[] } };
   /**
    * Free flight (Instant Action's A Stroll in the Park): no objectives, so the sortie only ends when
    * the player quits or goes down. Hitting civil traffic costs nothing and bringing the Sky Tower
