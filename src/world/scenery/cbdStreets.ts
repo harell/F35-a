@@ -28,6 +28,30 @@ export const MOTORWAY_VERGE = 18;
 /** Street-map B value of a hero neighbourhood's gardens: lawn (park() ≥ 0.6) with few painted tree crowns (< 0.8). */
 export const GARDEN_B = 160;
 
+/**
+ * How much of the aerial photo gives way to the street paint (cbdPattern) on the CBD's carriageways and
+ * footpaths when flying low (#279 item 1). The photo (2.5 m/px on medium, 1.25 on high) magnified past its
+ * texel smeared the streets into grey-green mud between the towers; the paint's asphalt, kerb and footpath
+ * stay sharp at any range. A trace of the photo stays, for its real tone (shade, crossings, traffic).
+ */
+export const CBD_PAINT_STRENGTH = 0.85;
+
+/**
+ * Share of the street paint over the photo at a pixel `kerb` m from the nearest kerb (+ off the street) and
+ * `region` m inside the CBD region (streetMap()'s x and y), with a pixel footprint of `mpp` m and a photo
+ * texel of `photoTexel` m. It covers the carriageway and the footpath (fading over the metre past it), only
+ * inside the region, and only where the photo is magnified: from none at one photo texel per pixel to all at
+ * two pixels per texel. Same as the terrain shader's cbdStreetPaint().
+ */
+export function cbdStreetPaint(kerb: number, region: number, mpp: number, photoTexel: number): number {
+  const s = (a: number, b: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  if (region <= 0 || photoTexel <= 0) return 0;
+  return CBD_PAINT_STRENGTH * (1 - s(FOOTPATH, FOOTPATH + 1, kerb)) * s(0, 8, region) * (1 - s(0.5 * photoTexel, photoTexel, mpp));
+}
+
 /** CBD parks (game XZ, traced along the streets that bound them in the LINZ data). */
 export const CBD_PARKS: { name: string; pts: [number, number][] }[] = [
   // Kitchener St, Wellesley St East, Princes St, Bowen Ave

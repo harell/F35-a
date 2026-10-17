@@ -36,6 +36,8 @@ const VIEWS = {
   // the harbour at night: ferry lights and faint wakes
   harbour_night: { mission: 'ia_stroll_auckland', tod: 'night', t: 620, cam: [1000, 700, -300], look: [1300, 0, -1500] },
   // the cruise liner at Princes Wharf at dusk, from over the harbour (#276: its cabin lights come on with the city's)
+  // a low pass over the CBD's streets, the playtest's camera (#279 item 1: the street paint and plain roofs over the magnified photo)
+  cbd_low: { mission: 'ia_stroll_auckland', t: 60, cam: [600, 95, -620], look: [500, 12, -470] },
   cruise_dusk: { mission: 'ia_stroll_auckland', tod: 'dusk', t: 620, cam: [620, 70, -1060], look: [361, 15, -923] },
 };
 

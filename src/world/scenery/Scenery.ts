@@ -123,6 +123,12 @@ export class Scenery {
   cbdStats: CbdStats | null = null;
   /** The landmark meshes (#124), one per LANDMARK_TILE square: hidden beyond LANDMARK_FAR of the camera. */
   private readonly landmarkTiles: { mesh: Object3D; x0: number; z0: number }[] = [];
+  /**
+   * The hero neighbourhoods' own meshes (Mission Bay, the flight corridor's suburbs), on the low tier only: hidden beyond
+   * LANDMARK_FAR of their bounding circle (#275). A house there is under a pixel on a phone, and Mission Bay alone is
+   * ~46k triangles; the higher tiers' larger, denser screens still show it.
+   */
+  private readonly farNeighbourhoods: { mesh: Object3D; x: number; z: number; r: number }[] = [];
   /** The Tāmaki Drive waterfront's measured trees (tamakiDrive.ts), grown by the tree scatter. */
   private tamakiTrees: MeasuredTrees | null = null;
   /** Bright lights near the water (for the harbour reflection streaks). */
@@ -282,7 +288,14 @@ export class Scenery {
       };
       const houseBuilder = (b: Building) => (b.area !== undefined ? apart.get(b.area) ?? null : b.landmark ? tileOf(b.prisms[0].cx, b.prisms[0].cz) : null);
       this.cbdStats = buildCBD(city, lights, height, detail, cbd, roads, buildings, houseBuilder);
-      for (const [name, b] of apart) addMesh(b, `akl-nb-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      for (const [name, b] of apart) {
+        const g = addMesh(b, `akl-nb-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+        if (g && o.quality.level === 'low') {
+          g.computeBoundingSphere();
+          const c = g.boundingSphere!;
+          this.farNeighbourhoods.push({ mesh: this.group.children[this.group.children.length - 1], x: c.center.x, z: c.center.z, r: c.radius });
+        }
+      }
       const landmarks = buildings ? aucklandLandmarks() : null;
       if (landmarks) {
         if (rails.length) buildPlatforms(landmarks, height, tileOf);
@@ -372,11 +385,13 @@ export class Scenery {
         this.tamakiTrees = { trees: tamakiTrees(td, tdGround), covers: tdCovers! };
       }
       // motorway ribbons (+ bridge decks / piers into the centres mesh, lamp posts)
-      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail' && p.kind !== 'local', { ground: tdGround, noLamp: tdCovers });
+      // (the low tier builds them two vertices across, with no crown: half the triangles, #275)
+      const flat = o.quality.level === 'low';
+      const roadGeo = roads.buildRibbons(height, centres, lights, o.lights > 0.01, (p) => p.kind !== 'rail' && p.kind !== 'local', { ground: tdGround, noLamp: tdCovers, flat });
       // the local roads of the islands and Devonport (#127): unlit, their own texture (sealed / gravel), one draw call
       const localGeo = roads.paths.some((p) => p.kind === 'local') ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'local') : null;
       // railway ribbons (+ bridges over the water): one more draw call
-      const railGeo = rails.length ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'rail') : null;
+      const railGeo = rails.length ? roads.buildRibbons(height, centres, lights, false, (p) => p.kind === 'rail', { flat }) : null;
       const centresGeo = addMesh(centres, 'akl-centres');
       if (centresGeo && blocks && this.corridor) {
         const [bx0, bz0, bx1, bz1] = this.corridor.manifest.bounds;
@@ -754,6 +769,7 @@ export class Scenery {
       const dz = Math.max(t.z0 - camPos.z, 0, camPos.z - t.z0 - LANDMARK_TILE);
       t.mesh.visible = dx * dx + dz * dz < LANDMARK_FAR * LANDMARK_FAR;
     }
+    for (const n of this.farNeighbourhoods) n.mesh.visible = Math.hypot(n.x - camPos.x, n.z - camPos.z) - n.r < LANDMARK_FAR;
     if (this.trees) {
       this.trees.visible = agl < this.treeRadius;
       if (this.trees.visible) this.trees.update(camPos, agl);

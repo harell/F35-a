@@ -12,7 +12,7 @@
  */
 import { ATMOSPHERE_GLSL } from '../sky/atmosphere';
 import { COAST_MASK_RANGE } from './coastline';
-import { FOOTPATH } from '../scenery/cbdStreets';
+import { CBD_PAINT_STRENGTH, FOOTPATH } from '../scenery/cbdStreets';
 import { FRONT_BAND, FRONT_DEPTH, FRONT_FOOTPATH, FRONT_MAX, FRONT_TEX_W, SIDE_STREET_COS, SIDE_STREET_GAP } from '../scenery/frontage';
 import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
 import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, MAX_AERIAL_BOXES } from './theaters/aucklandAerial';
@@ -331,6 +331,16 @@ vec4 aerialPhoto(vec2 wp) {
   }
   if (acc.a <= 0.0) return vec4(0.0);
   return vec4(acc.rgb / acc.a * mix(vec3(1.0), uAerialGrade.rgb, uAerialGrade.a), min(acc.a, 1.0));
+}
+
+// Share of the CBD street paint over the photo (#279 item 1; cbdStreets.ts cbdStreetPaint() is the same on
+// the CPU): on the carriageways and footpaths inside the CBD region, where the square's photo is magnified
+// past its texel and would smear the streets.
+float cbdStreetPaint(vec4 sm, float mpp) {
+  if (sm.y <= 0.0 || uAerialRect.z <= 0.0) return 0.0;
+  float texel = 1.0 / (uAerialRect.z * float(textureSize(uAerial, 0).x));
+  return ${CBD_PAINT_STRENGTH.toFixed(2)} * (1.0 - smoothstep(${FOOTPATH.toFixed(1)}, ${(FOOTPATH + 1).toFixed(1)}, sm.x)) * smoothstep(0.0, 8.0, sm.y)
+    * (1.0 - smoothstep(0.5 * texel, texel, mpp));
 }
 
 // The bit of a cell mask (lotMask.ts LotMask.masked()) at wp: 1 bit per cell, 8 × 4 cells per RGBA8 texel; the mask's
@@ -1016,8 +1026,10 @@ void main() {
   // is the costly part). At night urbanPattern still runs for its lamps and lit windows (the emissive;
   // the photo is only the dim albedo under them): its area-average glow alone, brought near the
   // camera, lit the ground like a carpet.
+  // Flying low over the CBD its streets are painted over the photo (cbdStreetPaint()), so the street pattern runs there.
   vec4 photo = aerialPhoto(wp);
-  bool photoFull = photo.a > 0.99 && uNight <= 0.0;
+  float paint = photo.a > 0.0 ? cbdStreetPaint(sm, mpp) : 0.0;
+  bool photoFull = photo.a > 0.99 && uNight <= 0.0 && paint <= 0.0;
   // the real tree canopy (#123): the suburbs' far-field mix and the forest tone follow its share where it covers
   gCanopy = photoFull ? vec2(0.0) : canopyShare(wp, mpp);
   if (sm.y <= 0.0) forest = mix(forest, gCanopy.x, gCanopy.y * (1.0 - urban));
@@ -1065,12 +1077,13 @@ void main() {
   vec3 coneN = coneDetail(wp, mpp, albedo);
 
   // The aerial photo replaces the procedural colours (streets, roofs, lots, canopy, rock, cone tints),
-  // with a faint fine grain below its texel size so it isn't smeared when flying low. At night it keeps
+  // with a faint fine grain below its texel size so it isn't smeared when flying low (and, then, mostly giving
+  // way to the street paint on the CBD's carriageways and footpaths: 'paint'). At night it keeps
   // only part of its own colour: the rest is the procedural ground's (warmer than the moonlit photo),
   // which the night lamps and lit windows drawn over it belong to (#61 item 5).
   vec3 photoCol = photo.rgb * mix(1.0, 0.92 + 0.16 * dC.r, nearC);
   if (uNight > 0.0) photoCol = mix(photoCol, albedo, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));
-  albedo = mix(albedo, photoCol, photo.a);
+  albedo = mix(albedo, photoCol, photo.a * (1.0 - paint));
 
   // ── Shoreline from the coast mask (15 m) or, outside it, from the true height (the band is at
   //    most ~12 m above sea level even on cliffs, so higher ground skips the lookups) ──

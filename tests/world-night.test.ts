@@ -181,7 +181,7 @@ describe('at night the photo takes the procedural ground’s colour (#61 item 5,
     expect(mat.fragmentShader).toContain(`if (uNight > 0.0) photoCol = mix(photoCol, base, ${AERIAL_NIGHT_MIX.toFixed(2)} * smoothstep(0.5, 1.0, uNight));`);
     expect(mat.fragmentShader).toContain('base = mix(base, photoCol, photoW);');
     // the procedural ground (urbanPattern) still runs under the photo at night, so 'albedo' is its colour
-    expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0;');
+    expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0 && paint <= 0.0;');
     // dusk's lamps are on at 0.2: below the mix's 0.5 threshold
     expect(skyPreset('auckland', 'dusk', 'clear', 20_000).lights).toBeLessThan(0.5);
     expect(skyPreset('auckland', 'night', 'clear', 20_000).lights).toBe(1);

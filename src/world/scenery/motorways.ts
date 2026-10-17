@@ -385,9 +385,11 @@ export class RoadNetwork {
    * raised onto causeways / bridges over water; bridge decks, piers and barriers go into `B`,
    * lamp posts into `lights`. `only` picks the paths (one mesh per texture: roads, railways). `opts.ground` replaces
    * `height` as the ground the ribbons stand on (and test for water), `opts.noLamp` keeps the generic lamp posts off a
-   * place that has its own (the Tāmaki Drive waterfront, tamakiDrive.ts).
+   * place that has its own (the Tāmaki Drive waterfront, tamakiDrive.ts). `opts.flat` builds every ribbon two vertices
+   * across, with no crown vertex down the middle: half the triangles, for the low tier (#275), where a 15 m road's
+   * crown is under a pixel.
    */
-  buildRibbons(height: HeightFn, B: GeometryBuilder, lights: LightList, lamps: boolean, only: (p: RoadPath) => boolean = () => true, opts: { ground?: HeightFn; noLamp?: (x: number, z: number) => boolean } = {}): BufferGeometry {
+  buildRibbons(height: HeightFn, B: GeometryBuilder, lights: LightList, lamps: boolean, only: (p: RoadPath) => boolean = () => true, opts: { ground?: HeightFn; noLamp?: (x: number, z: number) => boolean; flat?: boolean } = {}): BufferGeometry {
     if (opts.ground) height = opts.ground;
     const pos: number[] = [];
     const uv: number[] = [];
@@ -401,7 +403,7 @@ export class RoadNetwork {
       // a local road (#127) is two vertices across (narrow: no crown), stays low over a causeway like a railway (no
       // deck) and takes the sealed (u 0 … ½) or the gravel (u ½ … 1) half of its texture
       const local = p.kind === 'local';
-      const across = local ? 2 : 3;
+      const across = local || opts.flat ? 2 : 3;
       const u0 = local && p.unsealed ? 0.5 : 0;
       const raised = (k: number) => height(p.x[k], p.z[k]) + 0.45 < RAIL_CAUSEWAY_Y;
       // Water under the centre line → deck height profile (smoothed ramps). Railways stay low: on the

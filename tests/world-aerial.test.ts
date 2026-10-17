@@ -30,7 +30,11 @@ import {
   loadAucklandAerialOuter,
   type AerialOuterCover,
 } from '../src/world/terrain/theaters/aucklandAerial';
-import { aerialOuterUniforms } from '../src/world/terrain/TerrainRenderer';
+import { aerialOuterUniforms, aerialUniforms } from '../src/world/terrain/TerrainRenderer';
+import { createBuildingMaterial, PHOTO_ROOF_YIELD } from '../src/world/scenery/materials';
+import { createAtmosphereUniforms } from '../src/world/sky/atmosphere';
+import { skyPreset } from '../src/world/sky/presets';
+import { aucklandStreets, CBD_PAINT_STRENGTH, cbdStreetPaint, FOOTPATH, type CbdStreets } from '../src/world/scenery/cbdStreets';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
 import { geoToWorld } from '../src/core/auckland';
 import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
@@ -293,8 +297,8 @@ describe('photo square', () => {
   it('the terrain shader replaces the procedural ground with it and skips the hidden patterns', () => {
     expect(terrainFragmentShader).toContain('vec4 photo = aerialPhoto(wp);');
     expect(terrainFragmentShader).toContain('vec3 photoCol = photo.rgb');
-    expect(terrainFragmentShader).toContain('albedo = mix(albedo, photoCol, photo.a);');
-    expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0;');
+    expect(terrainFragmentShader).toContain('albedo = mix(albedo, photoCol, photo.a * (1.0 - paint));');
+    expect(terrainFragmentShader).toContain('bool photoFull = photo.a > 0.99 && uNight <= 0.0 && paint <= 0.0;');
     expect(terrainFragmentShader).toContain('if (urban > 0.01 && !photoFull) albedo = urbanPattern(');
   });
 });
@@ -413,5 +417,85 @@ describe('aerial photo download scope', () => {
     const code =
       'a=new URL(`auckland-aerial-2048-Bx_9-k2Q.webp`,import.meta.url).href;b=new URL("auckland-aerial-4096-a1B2c3D4.webp",import.meta.url);c=new URL(`auckland-roads-C8f2.bin`,import.meta.url);d=new URL(`auckland-aerial-outer-2048-Zz9_x.webp`,import.meta.url);e=new URL(`auckland-aerial-outer-4096-Qq1.ktx2`,import.meta.url);f=new URL(`auckland-aerial-outer-cover-Xy7.png`,import.meta.url);g=new URL("basis_transcoder-Ab3_c.wasm",import.meta.url);h=new URL(`basis_transcoder-Dd4.js`,import.meta.url)';
     expect(helpers.referencedAssets(code, 'https://example.com/game/assets/index-abc.js')).toEqual(['https://example.com/game/assets/auckland-roads-C8f2.bin']);
+  });
+});
+
+describe('the CBD’s streets are painted over the photo when flying low (#279 item 1)', () => {
+  const st = aucklandStreets() as CbdStreets;
+  const MEDIUM = AERIAL_RECT.size / 2048;
+  const HIGH = AERIAL_RECT.size / 4096;
+  // Queen St's carriageway, the street the playtest couldn't read
+  const queen = () => {
+    const b = st.bounds;
+    for (let z = b.minZ; z < b.maxZ; z += 4)
+      for (let x = b.minX; x < b.maxX; x += 4) {
+        const n = st.nearest(x, z);
+        if (n && n.line.name === 'Queen Street' && n.kerb < -3 && st.regionSD(x, z) > 8 && st.streetSD(x, z) < -2) return [x, z];
+      }
+    return null;
+  };
+
+  it('paints Queen St over a magnified photo, on both tiers, and leaves the photo alone from higher up', () => {
+    const q = queen();
+    expect(q).not.toBeNull();
+    const [x, z] = q as number[];
+    const kerb = st.streetSD(x, z);
+    const region = st.regionSD(x, z);
+    for (const texel of [MEDIUM, HIGH]) {
+      // two pixels per photo texel and closer: the paint, with a trace of the photo
+      expect(cbdStreetPaint(kerb, region, texel / 2, texel)).toBeCloseTo(CBD_PAINT_STRENGTH, 6);
+      expect(cbdStreetPaint(kerb, region, 0.1, texel)).toBeCloseTo(CBD_PAINT_STRENGTH, 6);
+      // one texel per pixel or coarser: the photo is sharp, so it stays
+      expect(cbdStreetPaint(kerb, region, texel, texel)).toBe(0);
+      expect(cbdStreetPaint(kerb, region, 10, texel)).toBe(0);
+    }
+    expect(CBD_PAINT_STRENGTH).toBeGreaterThan(0.5);
+    expect(CBD_PAINT_STRENGTH).toBeLessThan(1);
+  });
+
+  it('covers carriageways and footpaths only, inside the CBD region, and only with a photo', () => {
+    // block interiors (plazas, low roofs) keep the photo
+    expect(cbdStreetPaint(FOOTPATH + 1, 20, 0.5, MEDIUM)).toBe(0);
+    expect(cbdStreetPaint(12, 20, 0.5, MEDIUM)).toBe(0);
+    expect(cbdStreetPaint(FOOTPATH - 0.5, 20, 0.5, MEDIUM)).toBeCloseTo(CBD_PAINT_STRENGTH, 6);
+    // outside the region (the suburbs' streets are ribbons, not this paint), faded in over its first 8 m
+    expect(cbdStreetPaint(-4, -1, 0.5, MEDIUM)).toBe(0);
+    expect(cbdStreetPaint(-4, 4, 0.5, MEDIUM)).toBeCloseTo(CBD_PAINT_STRENGTH / 2, 6);
+    // no photo (low tier, or the setting off): nothing to paint over
+    expect(cbdStreetPaint(-4, 20, 0.5, 0)).toBe(0);
+    // over the real street map, from 100 m up: streets painted, most of the region's ground still the photo
+    let painted = 0;
+    let n = 0;
+    const b = st.bounds;
+    for (let z = b.minZ; z < b.maxZ; z += 5)
+      for (let x = b.minX; x < b.maxX; x += 5) {
+        const region = st.regionSD(x, z);
+        if (region <= 8) continue;
+        n++;
+        if (cbdStreetPaint(st.streetSD(x, z), region, 0.3, MEDIUM) > 0) painted++;
+      }
+    expect(n).toBeGreaterThan(10_000);
+    expect(painted / n).toBeGreaterThan(0.15);
+    expect(painted / n).toBeLessThan(0.6);
+  });
+
+  it('the shader paints the same', () => {
+    const f = terrainFragmentShader.slice(terrainFragmentShader.indexOf('float cbdStreetPaint('));
+    expect(f).toContain('if (sm.y <= 0.0 || uAerialRect.z <= 0.0) return 0.0;');
+    expect(f).toContain('float texel = 1.0 / (uAerialRect.z * float(textureSize(uAerial, 0).x));');
+    expect(f).toContain(`return ${CBD_PAINT_STRENGTH.toFixed(2)} * (1.0 - smoothstep(${FOOTPATH.toFixed(1)}, ${(FOOTPATH + 1).toFixed(1)}, sm.x)) * smoothstep(0.0, 8.0, sm.y)`);
+    expect(f).toContain('* (1.0 - smoothstep(0.5 * texel, texel, mpp));');
+    expect(terrainFragmentShader).toContain('float paint = photo.a > 0.0 ? cbdStreetPaint(sm, mpp) : 0.0;');
+  });
+
+  it('the photo roofs give way to their own roof colour over the same magnification', () => {
+    const tex = new Texture();
+    const mat = createBuildingMaterial(createAtmosphereUniforms(skyPreset('auckland', 'day', 'clear', 20_000), 20_000), {
+      aerial: aerialUniforms({ texture: tex, x0: 0, z0: 0, size: 1, feather: 1 }, tex),
+      roofs: true,
+    });
+    const f = mat.fragmentShader.slice(mat.fragmentShader.indexOf('photoW = p.a *'));
+    expect(f).toContain(`photoW *= 1.0 - ${PHOTO_ROOF_YIELD.toFixed(2)} * (1.0 - smoothstep(0.5 * texel, texel, mpp));`);
+    expect(mat.defines?.ROOFS).toBeDefined();
   });
 });
