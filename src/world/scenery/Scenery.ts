@@ -28,6 +28,7 @@ import { buildSparkArena, buildSparkArenaSignGeometry, createSparkArenaSignTextu
 import { sparkArenaCovers } from '../../core/sparkArena';
 import { buildWestfieldNewmarket, westfieldCovers } from './westfieldNewmarket';
 import { CbdCollapseVisual, type HeroCollapseRange } from './cbdCollapse';
+import { CITY_TILE, splitByTile } from './tileSplit';
 import { BridgeCollapseVisual } from './bridgeCollapse';
 import { MUSEUM } from '../../core/museum';
 import { MUSEUM_ID, SPARK_ARENA_ID } from '../../sim/buildings';
@@ -121,8 +122,11 @@ export class Scenery {
   /** The Harbour Bridge's spans falling into the harbour (Auckland). */
   bridgeCollapse: BridgeCollapseVisual | null = null;
   cbdStats: CbdStats | null = null;
-  /** The landmark meshes (#124), one per LANDMARK_TILE square: hidden beyond LANDMARK_FAR of the camera. */
-  private readonly landmarkTiles: { mesh: Object3D; x0: number; z0: number }[] = [];
+  /**
+   * Meshes cut into squares, each hidden beyond LANDMARK_FAR of the camera: the landmarks (#124), one per LANDMARK_TILE
+   * square, and on the low tier the motorway ribbons and the waterfront, one per CITY_TILE square (#275).
+   */
+  private readonly farTiles: { mesh: Object3D; x0: number; z0: number; size: number }[] = [];
   /**
    * The hero neighbourhoods' own meshes (Mission Bay, the flight corridor's suburbs), on the low tier only: hidden beyond
    * LANDMARK_FAR of their bounding circle (#275). A house there is under a pixel on a phone, and Mission Bay alone is
@@ -184,6 +188,19 @@ export class Scenery {
       this.stats.meshes++;
       return g;
     };
+    // the low tier's city-wide meshes (#275): one mesh per CITY_TILE square, frustum-culled and hidden beyond
+    // LANDMARK_FAR like the landmark tiles, instead of one mesh drawn in full whenever any of it is on screen
+    const addTiles = (g: BufferGeometry, name: string, mat: ShaderMaterial) =>
+      splitByTile(g, CITY_TILE).map((t) => {
+        this.geometries.push(t.geo);
+        const m = new Mesh(t.geo, mat);
+        m.name = `${name}-${t.x0 / CITY_TILE}_${t.z0 / CITY_TILE}`;
+        m.matrixAutoUpdate = false;
+        this.group.add(m);
+        this.stats.meshes++;
+        this.farTiles.push({ mesh: m, x0: t.x0, z0: t.z0, size: CITY_TILE });
+        return m;
+      });
 
     // ── Ground decals ──
     const concreteTex = createConcreteTexture();
@@ -306,7 +323,7 @@ export class Scenery {
           const g = addMesh(b, `akl-landmarks-${k}`, lmMat);
           const [i, j] = k.split('_').map(Number);
           const mesh = this.group.children[this.group.children.length - 1];
-          if (g) this.landmarkTiles.push({ mesh, x0: i * LANDMARK_TILE, z0: j * LANDMARK_TILE });
+          if (g) this.farTiles.push({ mesh, x0: i * LANDMARK_TILE, z0: j * LANDMARK_TILE, size: LANDMARK_TILE });
         }
       }
       // the hero landmarks in the CBD mesh collapse when the player's jet flies into one (sim/buildings.ts):
@@ -408,12 +425,15 @@ export class Scenery {
       // the roads glow with their street lights at night (when the tier draws night lights at all)
       const roadMat = createRoadMaterial(o.atmo, roadTex, o.lights > 0.01);
       this.materials.push(roadMat);
-      this.geometries.push(roadGeo);
-      const roadMesh = new Mesh(roadGeo, roadMat);
-      roadMesh.name = 'akl-motorways';
-      roadMesh.renderOrder = -4;
-      roadMesh.matrixAutoUpdate = false;
-      this.group.add(roadMesh);
+      if (flat) for (const m of addTiles(roadGeo, 'akl-motorways', roadMat)) m.renderOrder = -4;
+      else {
+        this.geometries.push(roadGeo);
+        const roadMesh = new Mesh(roadGeo, roadMat);
+        roadMesh.name = 'akl-motorways';
+        roadMesh.renderOrder = -4;
+        roadMesh.matrixAutoUpdate = false;
+        this.group.add(roadMesh);
+      }
       let localMat: ShaderMaterial | null = null;
       if (localGeo || this.corridor) {
         const localTex = createLocalRoadTexture();
@@ -462,7 +482,10 @@ export class Scenery {
       const port = new GeometryBuilder();
       buildPort(port, lights, height, detail);
       buildMarinas(port, lights, height, detail);
-      addMesh(port, 'akl-waterfront', aerialMat ?? buildingMat);
+      if (flat) {
+        const portGeo = port.build();
+        if (portGeo) addTiles(portGeo, 'akl-waterfront', aerialMat ?? buildingMat);
+      } else addMesh(port, 'akl-waterfront', aerialMat ?? buildingMat);
       // strategic sites: Devonport Naval Base, the Wiri oil terminal, Eden Park (aucklandSites.ts)
       const sites = new GeometryBuilder();
       const layout = siteLayout();
@@ -763,10 +786,10 @@ export class Scenery {
    * once the camera is higher than their radius.
    */
   update(camPos: Vector3, agl: number): void {
-    // the landmark tiles past LANDMARK_FAR (horizontally, to the square's nearest point) are a pixel or two: not drawn
-    for (const t of this.landmarkTiles) {
-      const dx = Math.max(t.x0 - camPos.x, 0, camPos.x - t.x0 - LANDMARK_TILE);
-      const dz = Math.max(t.z0 - camPos.z, 0, camPos.z - t.z0 - LANDMARK_TILE);
+    // the tiles past LANDMARK_FAR (horizontally, to the square's nearest point) are a pixel or two: not drawn
+    for (const t of this.farTiles) {
+      const dx = Math.max(t.x0 - camPos.x, 0, camPos.x - t.x0 - t.size);
+      const dz = Math.max(t.z0 - camPos.z, 0, camPos.z - t.z0 - t.size);
       t.mesh.visible = dx * dx + dz * dz < LANDMARK_FAR * LANDMARK_FAR;
     }
     for (const n of this.farNeighbourhoods) n.mesh.visible = Math.hypot(n.x - camPos.x, n.z - camPos.z) - n.r < LANDMARK_FAR;
