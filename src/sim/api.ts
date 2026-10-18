@@ -135,6 +135,11 @@ export interface BombCue {
   bombAway: boolean;
   /** A GPS bomb (JDAM) inside its minimum range: released now it flies long (dlz.ts gpsMinRange). */
   tooClose: boolean;
+  /**
+   * The designated target is too small for the StormBreaker to track on the move and is moving
+   * (sim/weapons/small.ts): released now it lands where the target was. `inRange` still says the reach.
+   */
+  moving: boolean;
 }
 
 export interface CombatSystemApi {

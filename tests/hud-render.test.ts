@@ -1010,6 +1010,26 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     expect(cueTexts({ inRange: true, timeToRelease: 0 })).toContain('IN RANGE');
   });
 
+  it('a small target on the move reads TGT MOVING in place of IN RANGE, on the 844x390 screen; IN RANGE again once it stops', () => {
+    for (const v of ['hud', 'chase'] as const) {
+      const moving = cueTexts({ inRange: true, timeToRelease: 0, moving: true }, v);
+      expect(moving, v).toContain('TGT MOVING');
+      expect(moving, v).not.toContain('IN RANGE');
+      const r = rig('ag', v);
+      const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+      const bi = { point: ship.position.clone(), inRange: true, timeToRelease: 0, offAxis: false, steer: 0, bombAway: false, moving: true };
+      (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => bi;
+      const box = textBox(find(textsOver(r, 0.5), 'TGT MOVING')[0]);
+      expect(box.x0, v).toBeGreaterThan(0);
+      expect(box.x1, v).toBeLessThan(r.W);
+      const still = cueTexts({ inRange: true, timeToRelease: 0, moving: false }, v);
+      expect(still, v).toContain('IN RANGE');
+      expect(still, v).not.toContain('TGT MOVING');
+    }
+    // out of reach it still counts down: the range is the range, moving or not
+    expect(cueTexts({ timeToRelease: 12, moving: true })).toContain('REL 12');
+  });
+
   it('names the bomb guiding onto the designated target: GBU-53 AWAY (playtest r2 2.2 F7)', () => {
     const r = rig('ag', 'hud');
     const p = r.mock.player;

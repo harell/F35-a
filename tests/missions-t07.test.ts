@@ -290,6 +290,25 @@ describe('the rat: runs, stops at the drains, swims', () => {
     expect(podClass(r)?.[0]).toBe('HOSTILE · RATTUS NORVEGICUS · 0.3 KG');
   });
 
+  it("the StormBreaker's release cue says the rat is moving while it runs, and not at a drain (the HUD's TGT MOVING)", () => {
+    const w = shoreWorld();
+    const r = rat(w, SHORE_ROUTE());
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(-3_000, 1_500, 0), heading: Math.PI / 2, speed: 220, loadout: 'strike_precision' });
+    w.combat.selectWeapon(p, 'gbu53', w);
+    const cue = () => {
+      p.position.set(r.position.x - 3_000, 1_500, 0);
+      p.velocity.set(220, 0, 0);
+      w.combat.designate(p, r.id, w);
+      return w.combat.bombImpactPoint(p, w)!;
+    };
+    run(w, 5, () => void cue());
+    expect(r.runner!.phase).toBe('run');
+    expect(cue()).toMatchObject({ inRange: true, moving: true });
+    run(w, 120, () => (cue(), r.runner!.phase === 'stop'));
+    expect(r.runner!.phase).toBe('stop');
+    expect(cue()).toMatchObject({ inRange: true, moving: false });
+  });
+
   it('stops at each drain on land; over the water it swims at its steady speed without stopping, to the island', { timeout: 30_000 }, () => {
     const w = shoreWorld();
     const r = rat(w, SHORE_ROUTE());

@@ -49,19 +49,22 @@ function drop(alt: number, speed: number, range: number): { inRange: boolean; to
 }
 
 describe('JDAM minimum range', { timeout: 120_000 }, () => {
-  it('is GPS_MIN_FRACTION of the reach for the JDAM, none for the StormBreaker', () => {
-    expect(gpsMinRange(MUNITIONS.gbu31 as never, 2_000)).toBe(GPS_MIN_FRACTION * 2_000);
-    expect(gpsMinRange(MUNITIONS.gbu53 as never, 2_000)).toBe(0);
+  it('is GPS_MIN_FRACTION of the reach for the JDAM, more low down (all of it from 400 m), none for the StormBreaker', () => {
+    expect(gpsMinRange(MUNITIONS.gbu31 as never, 2_000, 2_500)).toBe(GPS_MIN_FRACTION * 2_000);
+    expect(gpsMinRange(MUNITIONS.gbu31 as never, 2_000, 1_000)).toBeCloseTo(0.77 * 2_000);
+    expect(gpsMinRange(MUNITIONS.gbu31 as never, 2_000, 400)).toBe(2_000);
+    expect(gpsMinRange(MUNITIONS.gbu53 as never, 2_000, 1_000)).toBe(0);
   });
 
-  for (const [alt, speed] of [[1_000, 200], [1_500, 220], [2_500, 220]] as const) {
+  for (const [alt, speed] of [[600, 200], [1_000, 200], [1_500, 220], [2_500, 220]] as const) {
     it(`from ${alt} m at ${speed} m/s: TOO CLOSE flies long, every IN RANGE release hits`, () => {
       const rMax = gpsMaxRange(MUNITIONS.gbu31 as never, alt, speed, 0);
+      const min = gpsMinRange(MUNITIONS.gbu31 as never, rMax, alt) / rMax;
       const close = drop(alt, speed, 0.45 * rMax);
       expect(close.tooClose).toBe(true);
       expect(close.inRange).toBe(false);
       expect(close.miss).toBeGreaterThan(300);
-      for (const f of [0.72, 0.85, 0.97]) {
+      for (const f of [min + 0.01, (min + 1) / 2, 0.97]) {
         const r = drop(alt, speed, f * rMax);
         expect(r.inRange, `${f} of the reach`).toBe(true);
         expect(r.miss, `${f} of the reach`).toBeLessThan(15);

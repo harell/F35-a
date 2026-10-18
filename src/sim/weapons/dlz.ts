@@ -209,35 +209,60 @@ const MUN_INDEX: Record<string, number> = { gbu31: 1, gbu53: 3, kab500: 4 };
 /**
  * Share of gpsMaxRange inside which a GPS bomb (the JDAM: `guidance` 'gps') released level flies long: it
  * can't push over steeply enough to come down on the point, and lands a kilometre or two past it.
- * Measured on a still target (playtest 2026-10-11): from 1,000 m at 200 m/s it hits from 1.0 to 1.44 km
- * (rMax), from 1,500 m at 220 m/s from 1.3 to 1.98 km, from 2,500 m at 220 m/s from 2.0 to 3.16 km;
- * 0.6–0.7 of rMax, so 0.7. The glide bombs (StormBreaker, 'tri_mode') turn hard enough to have none.
+ * Measured on a still target, against the reach interpolated in height (gpsMaxRange): from 1,500 m at
+ * 220 m/s it hits from 0.68 of the reach, from 2,500 m from 0.64, from 3,500 m from 0.61, higher up from
+ * under 0.3; so 0.7. Lower down the share grows (gpsMinRange): 0.75 at 1,000 m, 0.92 at 600 m, and from
+ * 400 m only a release at the full reach hits. The glide bombs (StormBreaker, 'tri_mode') turn hard
+ * enough to have none.
  */
 export const GPS_MIN_FRACTION = 0.7;
 
-/** Min horizontal range (m) of a GPS bomb released level (0 for the glide bombs): GPS_MIN_FRACTION × gpsMaxRange. */
-export function gpsMinRange(def: CombatMunitionDef, rMax: number): number {
-  return def.guidance === 'gps' ? GPS_MIN_FRACTION * rMax : 0;
+/**
+ * Min horizontal range (m) of a GPS bomb released level `height` m above the target (0 for the glide
+ * bombs): GPS_MIN_FRACTION × gpsMaxRange, more below ~1,200 m (the measured shares above, with 0.02 to spare).
+ */
+export function gpsMinRange(def: CombatMunitionDef, rMax: number, height: number): number {
+  return def.guidance === 'gps' ? clamp(1.19 - 0.00042 * height, GPS_MIN_FRACTION, 1) * rMax : 0;
 }
+
+/** Height step (m) of gpsMaxRange's cache: it interpolates between the two steps either side. */
+const GPS_HEIGHT_STEP = 50;
 
 /**
  * Max horizontal reach (m) of a GPS glide weapon released level at `speed` from `height` above
  * the target (target elevation `targetAlt`). Same best-glide law as the in-flight guidance.
+ * Interpolated linearly in height between cached GPS_HEIGHT_STEP steps (speed and target elevation
+ * are rounded): rounding the height read 700 m at 225 m above the target, where the bomb reaches ~1 km.
  */
 export function gpsMaxRange(def: CombatMunitionDef, height: number, speed: number, targetAlt: number): number {
   if (height <= 10) return 0;
-  const hq = Math.round(height / 150);
+  const hs = height / GPS_HEIGHT_STEP;
+  const h0 = Math.floor(hs);
   const vq = Math.round(speed / 10);
   const aq = Math.round(Math.max(0, targetAlt) / 500);
+  const r0 = gpsReachStep(def, h0, vq, aq);
+  const f = hs - h0;
+  return f > 1e-9 ? r0 + (gpsReachStep(def, h0 + 1, vq, aq) - r0) * f : r0;
+}
+
+/** gpsMaxRange at height step `hq`, speed step `vq` (10 m/s) and target elevation step `aq` (500 m), cached. */
+function gpsReachStep(def: CombatMunitionDef, hq: number, vq: number, aq: number): number {
   const key = ((MUN_INDEX[def.id] ?? 9) * 1000 + hq) * 100_000 + vq * 100 + aq;
   const hit = gpsCache.get(key);
   if (hit !== undefined) return hit;
+  const r = glideReach(def, hq * GPS_HEIGHT_STEP, vq * 10, aq * 500);
+  gpsCache.set(key, r);
+  return r;
+}
+
+/** Reach (m) of a level glide release from `height` above the target at `speed`, simulated (uncached: gpsMaxRange's reference). */
+export function glideReach(def: CombatMunitionDef, height: number, speed: number, targetAlt: number): number {
   const glide = Math.atan(1 / Math.max(0.5, def.glideRatio * 0.75));
   const dx = Math.cos(glide);
   const dy = -Math.sin(glide);
   let x = 0;
-  let y = hq * 150;
-  let vx = vq * 10;
+  let y = height;
+  let vx = speed;
   let vy = 0;
   const dt = 0.25;
   let aLx = 0;
@@ -270,9 +295,7 @@ export function gpsMaxRange(def: CombatMunitionDef, height: number, speed: numbe
     x += vx * dt;
     y += vy * dt;
   }
-  const r = Math.max(0, x * 0.93);
-  gpsCache.set(key, r);
-  return r;
+  return Math.max(0, x * 0.93);
 }
 
 /**
