@@ -13,6 +13,7 @@ import type { CombatSystemApi, SimWorld, TerrainQuery } from '../../sim/api';
 import {
   AircraftEntity,
   DecoyEntity,
+  GroundTargetEntity,
   MissileEntity,
   SamSiteEntity,
   type AnyEntity,
@@ -201,6 +202,15 @@ export class LabWorld {
     const dir = new Vector3(0.55, surface === 'air' ? 0.1 : -0.45, -0.7).normalize();
     const pos = this.camera.position.clone().addScaledVector(dir, dist);
     this.events.emit('explosion', { position: pos, size, surface });
+  }
+
+  /** A StormBreaker kills a rat `dist` m away (t07): the blast, then its squeal. */
+  killRat(dist: number): void {
+    this.explode('small', dist, 'ground');
+    const rat = new GroundTargetEntity(this.id++, 'rat', 'red', { radius: 0.12 });
+    rat.position.copy(this.camera.position).addScaledVector(new Vector3(0.55, -0.45, -0.7).normalize(), dist);
+    rat.alive = false;
+    this.events.emit('destroyed', { entity: rat, attackerId: this.player.id, weapon: 'gbu53' });
   }
 
   countermeasure(type: 'flare' | 'chaff'): void {

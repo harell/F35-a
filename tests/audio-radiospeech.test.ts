@@ -36,7 +36,7 @@ const say = (t: SpeechToken[] | null) => (t ? spokenText(t, (id) => SEG_TEXT[id]
 /** Are `spoken` words a subsequence (in order) of the subtitle words? */
 function saysOnlySubtitle(spoken: string, subtitle: string): boolean {
   const sub = speechWords(subtitle).map((w) => NUMBER_WORDS[w] ?? [w]).flat();
-  const sp = speechWords(spoken).map((w) => (w === 'niner' ? 'nine' : w === 'bra' ? 'braa' : w));
+  const sp = speechWords(spoken).map((w) => (w === 'niner' ? 'nine' : w === 'bra' ? 'braa' : w === 'kilometers' ? 'km' : w));
   let j = 0;
   for (const w of sp) {
     while (j < sub.length && sub[j] !== w) j++;
@@ -66,11 +66,11 @@ const NUMBER_WORDS: Record<string, string[]> = new Proxy(
 
 describe('radio speech matches the subtitle (i2 reviewer: BRAA calls voiced as "Bandits, bandits")', () => {
   const cases: [string, VoiceId, string][] = [
-    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, single group, two bandits, BRAA 045, 40 miles, angels 25, hot.'],
-    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, pop-up group, single bandit, BRAA 310, 18 miles, angels 3, flanking.'],
-    ['DARKSTAR', 'a_bandits', 'Viper 1, threat, two bandits, BRAA 040, 25 miles, angels 12, hot!'],
-    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, last bandit: single bandit, BRAA 270, 12 miles, angels 8, cold.'],
-    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, single group, four bandits, bullseye 090, 22 miles, angels 25, track southwest.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, single group, two bandits, BRAA 045, 70 km, angels 25, hot.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, pop-up group, single bandit, BRAA 310, 33 km, angels 3, flanking.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, threat, two bandits, BRAA 040, 46 km, angels 12, hot!'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, last bandit: single bandit, BRAA 270, 22 km, angels 8, cold.'],
+    ['DARKSTAR', 'a_bandits', 'Viper 1, Darkstar, single group, four bandits, bullseye 090, 41 km, angels 25, track southwest.'],
     ['DARKSTAR', 'a_new_picture', 'Viper 1, Darkstar, new picture, two groups.'],
     ['DARKSTAR', 'a_good_kill', 'Viper 1, Darkstar. The raid is turning back! Good work.'],
   ];
@@ -90,9 +90,9 @@ describe('radio speech matches the subtitle (i2 reviewer: BRAA calls voiced as "
   }
 
   it('speaks BRAA bearings digit by digit and ranges / angels as numbers', () => {
-    const t = resolveRadioSpeech('Viper 1, threat, two bandits, BRAA 045, 40 miles, angels 25, hot!', 'a_bandits')!;
+    const t = resolveRadioSpeech('Viper 1, threat, two bandits, BRAA 045, 70 km, angels 25, hot!', 'a_bandits')!;
     const ids = t.filter((x) => x !== PAUSE);
-    expect(ids).toEqual(['s_viper', 's_1', 's_threat', 's_2', 's_bandits', 's_braa', 's_0', 's_4', 's_5', 's_40', 's_miles', 's_angels', 's_20', 's_5', 's_hot']);
+    expect(ids).toEqual(['s_viper', 's_1', 's_threat', 's_2', 's_bandits', 's_braa', 's_0', 's_4', 's_5', 's_70', 's_km', 's_angels', 's_20', 's_5', 's_hot']);
     expect(t.filter((x) => x === PAUSE).length).toBe(6); // one pause per comma
   });
 
@@ -115,8 +115,8 @@ describe('radio speech matches the subtitle (i2 reviewer: BRAA calls voiced as "
       [/\$\{s\.callsign\}/g, 'Viper 1'],
       [/\$\{s\.awacsSpoken\}/g, 'Darkstar'],
       [/\$\{who\}/g, 'Viper 1, Darkstar'],
-      [/\$\{this\.describe\(pic\)\}/g, 'two bandits, BRAA 045, 40 miles, angels 25, hot'],
-      [/\$\{braaText\([^}]*\)\}/g, 'single bandit, BRAA 270, 12 miles, angels 8, cold'],
+      [/\$\{this\.describe\(pic\)\}/g, 'two bandits, BRAA 045, 70 km, angels 25, hot'],
+      [/\$\{braaText\([^}]*\)\}/g, 'single bandit, BRAA 270, 22 km, angels 8, cold'],
       [/\$\{countWord\([^}]*\)\}/g, 'three'],
       [/\$\{this\.wave\}/g, '2'],
       [/\$\{[^}]*\}/g, 'Alpha'],

@@ -354,9 +354,11 @@ export function podLookY(t: CamTarget): number {
  * horizon; straight down, north is up.
  * @param eye  the player's jet
  * @param span the zoom step's field (m top to bottom, core/pod.ts POD_ZOOM)
+ * @param lift how far its visual stands above its sim position (render/visuals/seat.ts seatLift: a small
+ *             animal on the drawn ground), so the pod aims at what is drawn
  */
-export function podCamPose(t: CamTarget, eye: { x: number; y: number; z: number }, span: number, out: CamPose, surfaceAt?: (x: number, z: number) => number): CamPose {
-  out.look.set(t.position.x, t.position.y + podLookY(t), t.position.z);
+export function podCamPose(t: CamTarget, eye: { x: number; y: number; z: number }, span: number, out: CamPose, surfaceAt?: (x: number, z: number) => number, lift = 0): CamPose {
+  out.look.set(t.position.x, t.position.y + lift + podLookY(t), t.position.z);
   _fwd.set(eye.x - out.look.x, eye.y - out.look.y, eye.z - out.look.z);
   const slant = _fwd.length();
   if (slant < 1e-3) _fwd.set(0, 1, 0);

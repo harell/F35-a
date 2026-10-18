@@ -6,7 +6,7 @@
  * for pick(); the TD box and its labels are registered as protected (text never covers them) and
  * secondary labels (contact types, waypoint name) are skipped or moved when they would collide.
  */
-import { RAD, forwardOf, toNm, upOf } from '../../core/math';
+import { RAD, forwardOf, toKm, upOf } from '../../core/math';
 import type { AircraftEntity, AnyEntity, MissileEntity, SamSiteEntity } from '../../sim/entities';
 import { civilHidden } from '../../sim/entities';
 import { PLAYER_LOCK_CONE } from '../../sim/sensors/Sensors';
@@ -33,25 +33,24 @@ const FRIEND_RANGE = 35_000;
 
 const rangeTxt = new NumText(1);
 const rangeTxtInt = new NumText(0);
-const wpDist = new NumText(1, '', ' NM');
 // missile time to impact: 'T', not 'M' (Mach in the speed column; playtest 1.2-n)
 const mTxt = new NumText(0, 'T ');
 const ttiTxt = new NumText(0, 'TTI ');
 const offTxt = new NumText(0, '', '°');
 const edge = { x: 0, y: 0 };
 
-/** Range label in nm: one decimal below 10 nm. */
+/** Range label in km: one decimal below 10 km. */
 export function rangeLabel(m: number): string {
-  const nm = toNm(m);
-  return nm < 10 ? rangeTxt.get(nm) : rangeTxtInt.get(nm);
+  const km = toKm(m);
+  return km < 10 ? rangeTxt.get(km) : rangeTxtInt.get(km);
 }
 
-const rangeNmTxt = new NumText(1, '', ' NM');
-const rangeNmTxtInt = new NumText(0, '', ' NM');
-/** "12.4 NM" / "18 NM" (cached strings). */
-export function rangeLabelNm(m: number): string {
-  const nm = toNm(m);
-  return nm < 10 ? rangeNmTxt.get(nm) : rangeNmTxtInt.get(nm);
+const rangeKmTxt = new NumText(1, '', ' KM');
+const rangeKmTxtInt = new NumText(0, '', ' KM');
+/** "12.4 KM" / "18 KM" (cached strings). */
+export function rangeLabelKm(m: number): string {
+  const km = toKm(m);
+  return km < 10 ? rangeKmTxt.get(km) : rangeKmTxtInt.get(km);
 }
 
 /** Screen position of an entity (uses the live entity position when the track is fresh). */
@@ -901,7 +900,7 @@ const bombTti = new Map<number, { at: number; tti: number }>();
 
 /**
  * A bomb's predicted time of flight to `target` (its own glide law flown from its present state:
- * glideTimeToGo), not range ÷ closing speed, which read 99 s on a StormBreaker from 12 NM that took
+ * glideTimeToGo), not range ÷ closing speed, which read 99 s on a StormBreaker from 22 km that took
  * 113 s (1.2-j). Re-flown at 4 Hz per bomb and counted down in between.
  */
 export function bombTimeToGo(m: MissileEntity, target: { x: number; y: number; z: number }, now: number): number {
@@ -1016,7 +1015,7 @@ export function drawWaypoint(f: HudFrame): void {
   if (TEST_HOOKS) noteSteer(wp.label || wp.id);
   const { p, pen, pal, L, occ } = f;
   const u = L.u;
-  // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 3.0 NM")
+  // a target waypoint with the bandits in reach: the contact boxes take over, its labels ("SWARM 5.6 KM")
   // would only print into them (playtest: over the drone boxes through the g01 gun pass), and the NEXT
   // slot stays empty too
   const engaged = wp.kind === 'target' && airContactWithin(f, WP_ENGAGED_RANGE);
@@ -1045,7 +1044,7 @@ export function drawWaypoint(f: HudFrame): void {
   const nw = pen.textWidth(name, 11) / 2 + 2;
   // labels never run under the button column / off the left edge
   const lx = Math.max(L.left + nw, Math.min(L.right - nw, x));
-  const dist = wpDist.get(toNm(d));
+  const dist = rangeLabelKm(d);
   const dw = pen.textWidth(dist, 10.5) / 2 + 2;
   const aboveY = y - r - 14 * u;
   let belowY = y + r + 9 * u;
@@ -1105,12 +1104,12 @@ export function waypointBearing(f: HudFrame): number | null {
 }
 
 /**
- * The fixed NEXT line: the steering waypoint's name and distance ("NEXT HARBOUR BRIDGE 2.4 NM"), for
+ * The fixed NEXT line: the steering waypoint's name and distance ("NEXT HARBOUR BRIDGE 4.4 KM"), for
  * when its diamond has no room for them (waypointNamed). Text only; the caller places it.
  */
 export function nextWaypointText(f: HudFrame): { name: string; dist: string } | null {
   const wp = f.ctx.mission?.currentWaypoint;
   if (!wp || waypointNamed(f)) return null;
   const d = Math.hypot(wp.position.x - f.p.position.x, wp.position.z - f.p.position.z);
-  return { name: (wp.label || wp.id).toUpperCase(), dist: wpDist.get(toNm(d)) };
+  return { name: (wp.label || wp.id).toUpperCase(), dist: rangeLabelKm(d) };
 }

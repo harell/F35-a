@@ -5,7 +5,7 @@
  * sensor-fused air tracks with velocity leaders (hostile red, friendly blue), designated / locked
  * highlight, missiles in flight.
  */
-import { NM } from '../../core/math';
+import { KM } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import type { AircraftEntity } from '../../sim/entities';
 import { civilHidden } from '../../sim/entities';
@@ -159,8 +159,8 @@ export function drawTsd(pen: Pen, ctx: FrameContext, p: AircraftEntity, st: TsdS
   pen.strokePlain(c.ring, 1 * lw);
   pen.setDash('solid');
   if (key && st.rings > 0) {
-    const nm = Math.round(st.range / NM);
-    pen.text(String(nm), st.cx + st.radius * 0.72, st.cy - st.radius * 0.72, c.ring, st.font * 0.9);
+    const km = Math.round(st.range / KM);
+    pen.text(String(km), st.cx + st.radius * 0.72, st.cy - st.radius * 0.72, c.ring, st.font * 0.9);
   }
 
   // compass: north marker on the outer ring
@@ -402,18 +402,18 @@ function ringHighlight(pen: Pen, x: number, y: number, s: number, c: TsdColors, 
   pen.strokePlain(c.highlight, 1.6);
 }
 
-/** Pick a nice TSD range (nm steps) with hysteresis. */
-export function autoTsdRange(prev: number, need: number, steps: readonly number[] = [10, 20, 40]): number {
-  const needNm = need / NM;
+/** Pick a nice TSD range (km steps) with hysteresis. */
+export function autoTsdRange(prev: number, need: number, steps: readonly number[] = [20, 40, 80]): number {
+  const needKm = need / KM;
   let r = steps[steps.length - 1];
   for (const s of steps) {
-    if (s >= needNm) {
+    if (s >= needKm) {
       r = s;
       break;
     }
   }
-  const prevNm = prev / NM;
+  const prevKm = prev / KM;
   // keep the previous range unless the content no longer fits or fits in < 45 % of it
-  if (prevNm > 0 && prevNm >= needNm && needNm > prevNm * 0.45) r = prevNm;
-  return r * NM;
+  if (prevKm > 0 && prevKm >= needKm && needKm > prevKm * 0.45) r = prevKm;
+  return r * KM;
 }

@@ -2,7 +2,7 @@
  * F35-A audio — what a radio call actually says (pure logic, unit-tested).
  *
  * A 'radio' event carries the subtitle text and a VoiceId hint. The fixed clips are generic
- * ("Bandits, bandits."), so playing the hint for a dynamic call ("two bandits, BRAA 045, 40 miles,
+ * ("Bandits, bandits."), so playing the hint for a dynamic call ("two bandits, BRAA 045, 70 km,
  * angels 25, hot") makes the voice disagree with the subtitle. resolveRadioSpeech() decides:
  *
  *  1. the hint clip, if its spoken words appear verbatim (in order) in the subtitle;
@@ -23,7 +23,7 @@ export const SEGMENT_IDS = [
   's_single', 's_heavy', 's_group', 's_groups', 's_single_group',
   's_new_picture', 's_pop_up_group', 's_threat', 's_last_bandit',
   's_bandit', 's_bandits',
-  's_braa', 's_bullseye', 's_miles', 's_angels', 's_track',
+  's_braa', 's_bullseye', 's_km', 's_angels', 's_track',
   's_hot', 's_cold', 's_flanking', 's_beaming',
   's_north', 's_northeast', 's_east', 's_southeast', 's_south', 's_southwest', 's_west', 's_northwest',
   's_wave', 's_destroyed', 's_raid_turning', 's_tail',
@@ -115,7 +115,7 @@ const WORDS: Record<string, SegmentId> = {
   darkstar: 's_darkstar', viper: 's_viper',
   single: 's_single', heavy: 's_heavy', group: 's_group', groups: 's_groups', threat: 's_threat',
   bandit: 's_bandit', bandits: 's_bandits',
-  braa: 's_braa', bullseye: 's_bullseye', miles: 's_miles', angels: 's_angels', track: 's_track',
+  braa: 's_braa', bullseye: 's_bullseye', km: 's_km', angels: 's_angels', track: 's_track',
   hot: 's_hot', cold: 's_cold', flanking: 's_flanking', beaming: 's_beaming',
   north: 's_north', northeast: 's_northeast', east: 's_east', southeast: 's_southeast',
   south: 's_south', southwest: 's_southwest', west: 's_west', northwest: 's_northwest',

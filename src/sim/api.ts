@@ -56,6 +56,12 @@ export interface TerrainQuery {
   surfaceHeightAt(x: number, z: number): number;
   /** True if (x,z) is water. */
   isWater(x: number, z: number): boolean;
+  /**
+   * Height of the ground as drawn (the finest terrain LOD's triangles, Heightfield.meshHeightAt): on the
+   * coarse heightfield's slopes up to about a metre off heightAt's bilinear surface. For render code that
+   * seats something small on the visible ground (render/visuals/seat.ts); the sim itself uses heightAt.
+   */
+  meshHeightAt?(x: number, z: number): number;
   /** Line of sight between two world points is not blocked by terrain. */
   lineOfSight(a: Vector3, b: Vector3): boolean;
   /**
@@ -135,6 +141,11 @@ export interface BombCue {
   bombAway: boolean;
   /** A GPS bomb (JDAM) inside its minimum range: released now it flies long (dlz.ts gpsMinRange). */
   tooClose: boolean;
+  /**
+   * The designated target is too small for the StormBreaker to track on the move and is moving
+   * (sim/weapons/small.ts): released now it lands where the target was. `inRange` still says the reach.
+   */
+  moving: boolean;
 }
 
 export interface CombatSystemApi {

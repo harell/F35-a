@@ -6,9 +6,9 @@
  * number of simultaneous transients stays bounded.
  */
 import type { ExplosionSize, WeaponId } from '../../core/types';
-import type { SpatialShot } from '../core/OneShots';
+import type { OneShot, SpatialShot } from '../core/OneShots';
 import type { BusId } from '../core/Mixer';
-import { beep, burst, tone, type SynthEnv } from './build';
+import { beep, biquad, burst, gainNode, tone, type SynthEnv } from './build';
 
 const bus = (env: SynthEnv, id: BusId) => env.mixer.bus[id];
 
@@ -128,6 +128,56 @@ export function hitConfirm(env: SynthEnv, when: number): void {
   const shot = env.pool.begin(bus(env, 'warn'), when, 0.12, 0);
   burst(env, shot, when, { buf: 'white', type: 'bandpass', f: 3200, q: 6, gain: 0.35, attack: 0.0005, tau: 0.02 });
   tone(env, shot, when, { type: 'triangle', f: 2400, gain: 0.08, attack: 0.001, tau: 0.02 });
+}
+
+/* ───────────────────────── Pests ───────────────────────── */
+
+/**
+ * One rat squeak: a buzzy sawtooth whose pitch jumps up to `peak` and falls to `f1` over `dur`, with a
+ * fast flutter (`vib` Hz, ±7 %) on it, low-passed so it shrieks without whistling.
+ */
+function squeak(env: SynthEnv, shot: OneShot, t: number, f0: number, peak: number, f1: number, dur: number, gain: number, vib: number): void {
+  const ctx = env.ctx;
+  const o = ctx.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.linearRampToValueAtTime(peak, t + dur * 0.25);
+  o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = vib;
+  const depth = gainNode(ctx, peak * 0.07);
+  lfo.connect(depth);
+  depth.connect(o.frequency);
+  const lp = biquad(ctx, 'lowpass', 6500, 1.4);
+  const g = gainNode(ctx, 0);
+  o.connect(lp);
+  lp.connect(g);
+  g.connect(shot.out);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.008);
+  g.gain.setValueAtTime(gain, t + dur * 0.6);
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  env.pool.track(shot, o);
+  env.pool.track(shot, lfo);
+  o.start(t);
+  lfo.start(t);
+  o.stop(t + dur + 0.01);
+  lfo.stop(t + dur + 0.01);
+  if (t + dur + 0.01 > shot.end) shot.end = t + dur + 0.01;
+}
+
+/**
+ * A rat's death squeal (t07): three quick "eek"s, then a long falling shriek, ~0.7 s; a breathy rasp
+ * under the shriek. Every call varies a little, as the explosions do.
+ */
+export function ratSqueal(env: SynthEnv, when: number, sp?: SpatialShot): void {
+  const shot = env.pool.begin(bus(env, 'sfx'), when, 0.75, 2, sp);
+  const k = 0.92 + Math.random() * 0.16;
+  squeak(env, shot, when, 2400 * k, 3300 * k, 2700 * k, 0.07, 0.3, 34);
+  squeak(env, shot, when + 0.1, 2600 * k, 3600 * k, 2900 * k, 0.06, 0.32, 38);
+  squeak(env, shot, when + 0.19, 2500 * k, 3500 * k, 2600 * k, 0.08, 0.34, 34);
+  squeak(env, shot, when + 0.3, 3000 * k, 3900 * k, 1700 * k, 0.4, 0.36, 26);
+  burst(env, shot, when, { buf: 'white', type: 'bandpass', f: 4800 * k, fEnd: 2600 * k, q: 3, gain: 0.08, attack: 0.02, tau: 0.08, delay: 0.3 });
 }
 
 /* ───────────────────────── Countermeasures ───────────────────────── */

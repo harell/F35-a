@@ -132,6 +132,8 @@ for (const [size, d] of [
   button(boom, `${size} @ ${d} m`, () => lab.explode(size, d, 'ground'));
 }
 button(boom, 'large @ 300 m water', () => lab.explode('large', 300, 'water'));
+button(boom, 'Rat killed @ 150 m', () => lab.killRat(150));
+button(boom, 'Rat killed @ 3 km', () => lab.killRat(3000));
 button(boom, 'SA-6 launch 4 km', () => lab.launchSam(4000, 'm_3m9'));
 button(boom, 'R-77 launch 3 km', () => lab.launchEnemy(3000));
 button(boom, 'Hit (light)', () => lab.hit(12));

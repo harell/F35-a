@@ -706,7 +706,7 @@ describe('bomb release cue in every view (playtest 1.3-a: none in the default ch
 });
 
 describe('the radio pill is reserved before the target box labels and the centre message (playtest 3.3-a / 3.3-b)', () => {
-  const call = 'Viper 1, Darkstar, single group, bullseye zero four five, 13 miles, hot, closing on the ship.';
+  const call = 'Viper 1, Darkstar, single group, bullseye zero four five, 24 km, hot, closing on the ship.';
 
   /** The radio pill's text rows (head + body lines), as one box; null without a call up. */
   function pillBox(texts: TextRec[]): Box | null {
@@ -1010,6 +1010,26 @@ describe('bomb release cue: STEER gives a direction, BOMB AWAY while our bomb gu
     expect(cueTexts({ inRange: true, timeToRelease: 0 })).toContain('IN RANGE');
   });
 
+  it('a small target on the move reads TGT MOVING in place of IN RANGE, on the 844x390 screen; IN RANGE again once it stops', () => {
+    for (const v of ['hud', 'chase'] as const) {
+      const moving = cueTexts({ inRange: true, timeToRelease: 0, moving: true }, v);
+      expect(moving, v).toContain('TGT MOVING');
+      expect(moving, v).not.toContain('IN RANGE');
+      const r = rig('ag', v);
+      const ship = r.mock.world.ground.find((g) => g.type === 'ship')!;
+      const bi = { point: ship.position.clone(), inRange: true, timeToRelease: 0, offAxis: false, steer: 0, bombAway: false, moving: true };
+      (r.mock.world.combat as { bombImpactPoint: unknown }).bombImpactPoint = () => bi;
+      const box = textBox(find(textsOver(r, 0.5), 'TGT MOVING')[0]);
+      expect(box.x0, v).toBeGreaterThan(0);
+      expect(box.x1, v).toBeLessThan(r.W);
+      const still = cueTexts({ inRange: true, timeToRelease: 0, moving: false }, v);
+      expect(still, v).toContain('IN RANGE');
+      expect(still, v).not.toContain('TGT MOVING');
+    }
+    // out of reach it still counts down: the range is the range, moving or not
+    expect(cueTexts({ timeToRelease: 12, moving: true })).toContain('REL 12');
+  });
+
   it('names the bomb guiding onto the designated target: GBU-53 AWAY (playtest r2 2.2 F7)', () => {
     const r = rig('ag', 'hud');
     const p = r.mock.player;
@@ -1301,7 +1321,7 @@ describe('the steering waypoint always has its name on screen', () => {
       (r.mock.mission as { currentWaypoint: unknown }).currentWaypoint = wp;
       const texts = r.run(0.1);
       const name = one(texts, 'HARBOUR BRIDGE');
-      const dist = one(texts, /^2\.\d NM$/);
+      const dist = one(texts, /^4\.\d KM$/);
       for (const t of [name, dist]) for (const o of texts) if (o !== t) expect(overlaps(textBox(t), textBox(o)), `"${t.text}" over "${o.text}"`).toBe(false);
       // in sight with room by the diamond: named there, once
       wp.position.copy(p.position).add(new Vector3(-600, -300, -4400).applyQuaternion(p.quaternion));

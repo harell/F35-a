@@ -212,7 +212,7 @@ export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): vo
   pen.g.fillRect(x - 5 * u, g.yNe - 1, 5 * u + 2, g.yMin - g.yNe + 2);
   pen.setFill(col);
   pen.g.fillRect(x - 4 * u, g.yNe, 3.5 * u, g.yMin - g.yNe);
-  pen.text(INT_STR[g.scaleNm] ?? String(g.scaleNm), x, top - 9 * u, pal.dim, 10.5);
+  pen.text(INT_STR[g.scaleKm] ?? String(g.scaleKm), x, top - 9 * u, pal.dim, 10.5);
   // target caret with closure
   const cy = g.yRange;
   pen.begin();
@@ -371,6 +371,8 @@ export function planCues(f: HudFrame): number {
         // our bomb is still guiding onto it: GBU-53 AWAY, as the missiles do, not IN RANGE inviting a
         // second bomb on the same boat (r2 2.2 F7), nor STEER read as "turn back for the bomb"
         if (bi.bombAway) addCue(bombAwayText(f), 15, pal.main, 0);
+        // a rat or stoat on the run: a StormBreaker can't track it, so no IN RANGE until it stops
+        else if (bi.inRange && bi.moving) addCue('TGT MOVING', 17, pal.warn, 0);
         else if (bi.inRange) addCue('IN RANGE', 19, pal.bright, 3.5);
         // a JDAM inside its minimum range flies long: open the range, then release
         else if (bi.tooClose) addCue('TOO CLOSE', 17, pal.warn, 0);
@@ -887,7 +889,7 @@ export function drawAirToGround(f: HudFrame): void {
       pen.setDash('solid');
       pen.begin();
       lineAroundCues(f, a.x, a.y, b.x, b.y);
-      pen.strokeGlow(bi.inRange ? pal.bright : pal.main, 1.8);
+      pen.strokeGlow(bi.inRange && !bi.moving ? pal.bright : pal.main, 1.8);
     }
     // target point marker (for designations without an entity box)
     if (proj.point(gp, a) && a.onScreen && !f.target) {

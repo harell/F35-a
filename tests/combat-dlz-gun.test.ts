@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { FakeWorld, v3 } from './combat-helpers';
 import { GUNS, MUNITIONS } from '../src/sim/weapons/defs';
-import { gpsMaxRange, type CombatLaunchZone } from '../src/sim/weapons/dlz';
+import { glideReach, gpsMaxRange, type CombatLaunchZone } from '../src/sim/weapons/dlz';
 import { DEFAULT_PIPPER_RANGE } from '../src/sim/weapons/gun';
 import type { AircraftEntity } from '../src/sim/entities';
 
@@ -129,6 +129,23 @@ describe('combat: dynamic launch zone', () => {
     expect(jdam).toBeGreaterThan(5_000);
     expect(gpsMaxRange(MUNITIONS.gbu53, 4000, 250, 0)).toBeLessThan(sdb);
     expect(gpsMaxRange(MUNITIONS.gbu31, 9000, 320, 0)).toBeGreaterThan(jdam);
+  });
+
+  it('GPS envelopes between the cached height steps follow the glide simulation (low releases: 225 m read 700 m when rounded)', () => {
+    for (const [h, v] of [[225, 220], [75, 200], [130, 230], [380, 250], [1_120, 230], [4_070, 250]]) {
+      for (const id of ['gbu53', 'gbu31'] as const) {
+        const exact = glideReach(MUNITIONS[id], h, v, 0);
+        expect(gpsMaxRange(MUNITIONS[id], h, v, 0), `${id} ${h} m`).toBeGreaterThan(exact * 0.95);
+        expect(gpsMaxRange(MUNITIONS[id], h, v, 0), `${id} ${h} m`).toBeLessThan(exact * 1.05);
+      }
+    }
+    // and rising with height all the way up, no steps
+    let last = 0;
+    for (let h = 20; h <= 1_500; h += 10) {
+      const r = gpsMaxRange(MUNITIONS.gbu53, h, 220, 0);
+      expect(r, `${h} m`).toBeGreaterThan(last);
+      last = r;
+    }
   });
 
   it('CCIP predicts a ground impact ahead of the jet', () => {

@@ -290,6 +290,25 @@ describe('the rat: runs, stops at the drains, swims', () => {
     expect(podClass(r)?.[0]).toBe('HOSTILE · RATTUS NORVEGICUS · 0.3 KG');
   });
 
+  it("the StormBreaker's release cue says the rat is moving while it runs, and not at a drain (the HUD's TGT MOVING)", () => {
+    const w = shoreWorld();
+    const r = rat(w, SHORE_ROUTE());
+    const p = w.spawnAircraft({ type: 'f35a', team: 'blue', isPlayer: true, position: new Vector3(-3_000, 1_500, 0), heading: Math.PI / 2, speed: 220, loadout: 'strike_precision' });
+    w.combat.selectWeapon(p, 'gbu53', w);
+    const cue = () => {
+      p.position.set(r.position.x - 3_000, 1_500, 0);
+      p.velocity.set(220, 0, 0);
+      w.combat.designate(p, r.id, w);
+      return w.combat.bombImpactPoint(p, w)!;
+    };
+    run(w, 5, () => void cue());
+    expect(r.runner!.phase).toBe('run');
+    expect(cue()).toMatchObject({ inRange: true, moving: true });
+    run(w, 120, () => (cue(), r.runner!.phase === 'stop'));
+    expect(r.runner!.phase).toBe('stop');
+    expect(cue()).toMatchObject({ inRange: true, moving: false });
+  });
+
   it('stops at each drain on land; over the water it swims at its steady speed without stopping, to the island', { timeout: 30_000 }, () => {
     const w = shoreWorld();
     const r = rat(w, SHORE_ROUTE());
@@ -481,6 +500,40 @@ describe('t07 in the mission runner (real terrain)', { timeout: 240_000 }, () =>
     expect(res.costSummary?.removed.count).toBe(3);
     expect(res.costSummary?.weapons.map((x) => x.weapon)).toEqual(['gbu53']);
     expect(res.grade).not.toBe('F');
+  });
+
+  it('flown straight in from the start, each street rat stops as the jet comes into range: a StormBreaker on the first pass kills it from far out', () => {
+    for (const k of [0, 1]) {
+      const ctx = setup();
+      const { world, p, step, street } = ctx;
+      const r = street()[k];
+      const { altitude, speed } = T07_SMALL.player;
+      world.combat.selectWeapon(p, 'gbu53', world);
+      // level at the start's height and speed, heading at the rat; TGT on it from the first hint (t = 5 s)
+      let fired: MissileEntity | null = null;
+      let firedAt = { t: 0, horiz: 0 };
+      step(120, () => {
+        const dx = r.position.x - p.position.x;
+        const dz = r.position.z - p.position.z;
+        const horiz = Math.hypot(dx, dz);
+        p.position.y = altitude;
+        p.velocity.set((speed * dx) / horiz, 0, (speed * dz) / horiz);
+        p.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(-dx, -dz));
+        if (world.time >= 5 && p.radar.designatedId !== r.id) world.combat.designate(p, r.id, world);
+        if (fired || p.radar.designatedId !== r.id) return;
+        const cue = world.combat.bombImpactPoint(p, world);
+        if (cue?.inRange && r.runner!.phase === 'stop') {
+          fired = world.combat.fire(p, world, 'gbu53', r.id);
+          firedAt = { t: world.time, horiz };
+        }
+        return fired !== null && !fired.alive;
+      });
+      expect(fired, `rat ${k}`).not.toBeNull();
+      // the cue's first IN RANGE (~5.8 km at the start's height), not a last-second drop
+      expect(firedAt.horiz, `rat ${k}`).toBeGreaterThan(5_000);
+      expect(firedAt.t, `rat ${k}`).toBeLessThan(25);
+      expect(r.alive, `rat ${k}`).toBe(false);
+    }
   });
 
   it('left alone, the rats keep going round: after 900 s the sortie is still running', () => {

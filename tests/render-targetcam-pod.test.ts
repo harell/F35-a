@@ -9,6 +9,7 @@ import { AircraftEntity, GroundTargetEntity, SamSiteEntity } from '../src/sim/en
 import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { PIP_COLLAPSE_HOLD, PIP_DESTROYED_HOLD, fitReadout, pipCollapse, pipHold, pipView, podMask, podReadout, resetPip, resetPodZoom, stepPip, stepPod, tapPip } from '../src/hud/hmd/pip';
 import { TargetCam } from '../src/render/TargetCam';
+import { seatLift } from '../src/render/visuals/seat';
 import { POD_CLEAR_K, POD_RANGE, POD_STANDOFF, TARGET_CAM_FOV, framingDistance, groundLookY, groundMinFraming, makePose, podCamPose, podDistance, podFov, podLookY, targetCamPose } from '../src/render/targetCam/pose';
 
 const noSafe = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -151,15 +152,15 @@ describe('pod camera pose', () => {
   });
 });
 
-describe('ZOOM on an animal (playtest r2 F6)', () => {
-  it('closes to half a metre on a target under a metre across; every other step and target as before', () => {
-    expect(POD_ZOOM_SMALL).toBe(0.5);
+describe('ZOOM on an animal (playtest r2 F6; wider since 2026-10-18)', () => {
+  it('closes to 1.25 m on a target under a metre across; every other step and target as before', () => {
+    expect(POD_ZOOM_SMALL).toBe(1.25);
     expect(podSpan(ZOOM, tiny().radius)).toBe(POD_ZOOM_SMALL);
     expect(podSpan(ZOOM, 9)).toBe(POD_ZOOM[ZOOM].span);
     for (let i = 0; i < POD_ZOOM.length; i++) if (i !== ZOOM) expect(podSpan(i, tiny().radius)).toBe(POD_ZOOM[i].span);
   });
 
-  it("g03's stoat ~4 km out fills about half the 82 px window at ZOOM (it was a 10 x 20 px blob)", () => {
+  it("g03's stoat ~4 km out spans about a third of the 82 px window at ZOOM: the animal and the ground round it", () => {
     const t = tiny();
     t.position.set(27867, 34, -6744);
     const eye = new Vector3(27867 - 4200, 450, -6744 + 600);
@@ -168,8 +169,36 @@ describe('ZOOM on an animal (playtest r2 F6)', () => {
     const fov = podFov(span, pose.position.distanceTo(pose.look));
     // the 0.38 m animal against the window's height (its length lies across the wider window)
     const px = spanPx(pose, pose.look, 0.38, 82, fov);
-    expect(px).toBeGreaterThan(82 * 0.6);
-    expect(px).toBeLessThan(82);
+    expect(px).toBeGreaterThan(82 * 0.25);
+    expect(px).toBeLessThan(82 * 0.4);
+  });
+});
+
+describe('a small animal stands on the drawn ground (t07: the Wallace Street rat was 0.73 m under it)', () => {
+  /** Bilinear ground at 0 (the sim's), drawn 0.7 m higher (a crest between the heightfield's posts). */
+  const crest = { heightAt: () => 0.001, surfaceHeightAt: () => 0.001, meshHeightAt: () => 0.701, isWater: () => false } as unknown as TerrainQuery;
+
+  it('lifts a stoat or rat on the terrain to the drawn mesh; nothing else, nor one on a roof or swimming', () => {
+    const t = tiny();
+    t.position.y = 0.001;
+    expect(seatLift(crest, t)).toBeCloseTo(0.7, 6);
+    const roof = tiny();
+    roof.position.y = 57;
+    roof.roofOf = 3;
+    expect(seatLift(crest, roof)).toBe(0);
+    const truck = new GroundTargetEntity(6, 'fuel', 'red', { radius: 4 });
+    truck.position.y = 0.001;
+    expect(seatLift(crest, truck)).toBe(0);
+    const sea = { ...crest, heightAt: () => -2, surfaceHeightAt: () => 0 } as unknown as TerrainQuery;
+    expect(seatLift(sea, tiny())).toBe(0);
+    expect(seatLift({ ...crest, meshHeightAt: undefined } as unknown as TerrainQuery, t)).toBe(0);
+  });
+
+  it('the pod aims at the seated animal, not into the ground under it', () => {
+    const t = tiny();
+    const eye = new Vector3(4000, 1500, 0);
+    const pose = podCamPose(t, eye, podSpan(ZOOM, t.radius), makePose(), () => 0, 0.7);
+    expect(pose.look.y).toBeCloseTo(0.7 + podLookY(t), 6);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NM } from '../src/core/math';
+import { KM } from '../src/core/math';
 import { BUTTON_COLUMN, GLARE_LIP_ANGLE, THUMB_H, THUMB_W, computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { autoTsdRange } from '../src/hud/hmd/tsd';
 import { NumText, groupThousands, hmm, mmss, entityLabel, killText, WARNING_INFO } from '../src/hud/hmd/format';
@@ -56,14 +56,14 @@ describe('hud layout (844x390 phone landscape)', () => {
 });
 
 describe('hud TSD auto range', () => {
-  it('fits the content with nm steps and hysteresis', () => {
-    expect(autoTsdRange(0, 15 * NM) / NM).toBe(20);
-    expect(autoTsdRange(0, 5 * NM) / NM).toBe(10);
-    expect(autoTsdRange(0, 500 * NM) / NM).toBe(40);
-    // stays at 40 while content still uses > 45 % of it
-    expect(autoTsdRange(40 * NM, 19 * NM) / NM).toBe(40);
+  it('fits the content with km steps and hysteresis', () => {
+    expect(autoTsdRange(0, 28 * KM) / KM).toBe(40);
+    expect(autoTsdRange(0, 9 * KM) / KM).toBe(20);
+    expect(autoTsdRange(0, 900 * KM) / KM).toBe(80);
+    // stays at 80 while content still uses > 45 % of it
+    expect(autoTsdRange(80 * KM, 37 * KM) / KM).toBe(80);
     // shrinks when content is small
-    expect(autoTsdRange(40 * NM, 8 * NM) / NM).toBe(10);
+    expect(autoTsdRange(80 * KM, 15 * KM) / KM).toBe(20);
   });
 });
 

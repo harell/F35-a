@@ -4,6 +4,7 @@
  * World one-shots travel at the speed of sound: they wait in a DelayQueue until the sound
  * front reaches the listener, then play with distance gain, air-absorption low-pass and pan
  * computed at arrival (close = sharp crack + boom; far = late, dark rolling thunder).
+ * A rat's death squeal (t07) is a game cue instead: heard however far the jet is, just after the blast.
  */
 import type { FrameContext } from '../../core/contracts';
 import type { GameEventMap } from '../../core/events';
@@ -17,7 +18,7 @@ import {
 } from '../acoustics';
 import { CANOPY_GAIN, makeLocated, type Listener, type Located } from '../core/Listener';
 import type { SynthEnv } from '../synth/build';
-import { airframeHit, bulletImpact, explosion, hitConfirm, motorIgnition, samLaunch, transonicThump } from '../synth/recipes';
+import { airframeHit, bulletImpact, explosion, hitConfirm, motorIgnition, ratSqueal, samLaunch, transonicThump } from '../synth/recipes';
 import { DelayQueue } from './DelayQueue';
 
 type PendingKind = 'explosion' | 'sam' | 'launch';
@@ -33,6 +34,19 @@ interface Pending {
 }
 
 const HEAVY_SAM = new Set(['m_3m9']);
+
+/** Within this (m) of a dying rat the blast is heard almost at once, so its squeal waits for the boom to pass. */
+const SQUEAL_NEAR = 300;
+
+/** Seconds from a rat's death to its squeal: just after the boom reaches the listener close in, else at once. */
+export function ratSquealDelay(distance: number): number {
+  return 0.25 + (distance < SQUEAL_NEAR ? distance / SPEED_OF_SOUND : 0);
+}
+
+/** Gain of the squeal: full near the rat, never under half however far the jet is (it's a kill cue). */
+export function ratSquealGain(distance: number): number {
+  return 0.5 + 0.5 * distanceGain(distance, 150, 6000);
+}
 
 export class ImpactSounds {
   private readonly queue = new DelayQueue<Pending>(24, () => ({ kind: 'explosion', size: 'small', surface: 'air', heavy: false, x: 0, y: 0, z: 0 }));
@@ -112,6 +126,14 @@ export class ImpactSounds {
     this.lastImpact = now;
     const g = distanceGain(this.loc.distance, 15, 300) * (L.interior ? CANOPY_GAIN : 1);
     if (g > 0.03) bulletImpact(this.env, now + 0.005, e.surface, { gain: g, pan: this.loc.pan, cutoff: L.cutoffFor(this.loc) });
+  }
+
+  onDestroyed(e: GameEventMap['destroyed'], ctx: FrameContext, L: Listener): void {
+    const t = e.entity;
+    if (t.kind !== 'ground' || t.type !== 'rat') return;
+    L.locate(t.position, this.loc);
+    // a cue, not physics: no air absorption or canopy, only the pan says where it was
+    ratSqueal(this.env, this.env.ctx.currentTime + ratSquealDelay(this.loc.distance), { gain: ratSquealGain(this.loc.distance), pan: this.loc.pan * 0.6, cutoff: 20000 });
   }
 
   onTransonic(e: GameEventMap['transonic'], ctx: FrameContext, L: Listener): void {

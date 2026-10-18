@@ -168,8 +168,9 @@ describe('weapon window planner', () => {
 });
 
 describe('weapon window texts', () => {
-  it('range in NM, metres inside 1 NM; seconds with one decimal under 10', () => {
-    expect(rangeText(5926)).toBe('3.2 NM');
+  it('range in km, metres inside 1 km; seconds with one decimal under 10', () => {
+    expect(rangeText(5926)).toBe('5.9 KM');
+    expect(rangeText(123_400)).toBe('123 KM');
     expect(rangeText(844)).toBe('840 M');
     expect(secText(6.06, 'T-')).toBe('T-6.1');
     expect(secText(12.2)).toBe('13');

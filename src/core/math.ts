@@ -10,7 +10,7 @@ export const RAD = 180 / Math.PI;
 export const KNOTS_PER_MS = 1.943844;
 export const FEET_PER_M = 3.280839;
 export const FPM_PER_MS = 196.8504;
-export const NM = 1852; // metres per nautical mile
+export const KM = 1000; // metres per kilometre
 
 export const clamp = MathUtils.clamp;
 export const lerp = MathUtils.lerp;
@@ -148,4 +148,4 @@ export function mulberry32(seed: number): () => number {
 export const toKnots = (ms: number) => ms * KNOTS_PER_MS;
 export const toFeet = (m: number) => m * FEET_PER_M;
 export const toFpm = (ms: number) => ms * FPM_PER_MS;
-export const toNm = (m: number) => m / NM;
+export const toKm = (m: number) => m / KM;

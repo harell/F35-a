@@ -132,7 +132,7 @@ describe('cockpit PCD corner readouts at 844×390', () => {
     // the PCD texture is PCD_W texels across the panel's on-screen width
     const pxPerTexel = (rect.right - rect.left) / PCD_W;
     const texts = created.flatMap((c) => c.texts);
-    for (const re of [/^\d+ NM$/, /^BULL \d{3}\/\d+$/, /^\d+ EMIT$/]) {
+    for (const re of [/^\d+ KM$/, /^BULL \d{3}\/\d+$/, /^\d+ EMIT$/]) {
       const t = texts.find((x) => re.test(x.text));
       expect(t, String(re)).toBeTruthy();
       expect(t!.size * pxPerTexel, `${t!.text}: ${(t!.size * pxPerTexel).toFixed(1)} px`).toBeGreaterThanOrEqual(12);
@@ -177,7 +177,7 @@ describe('cockpit PCD corner readouts at 844×390', () => {
         const bull = c.texts.find((x) => /^BULL \d{3}\/\d+$/.test(x.text));
         if (!bull) continue;
         checked++;
-        const corner = c.texts.filter((x) => /^(BULL |HDG |\d+ NM$)/.test(x.text));
+        const corner = c.texts.filter((x) => /^(BULL |HDG |\d+ KM$)/.test(x.text));
         for (const r of corner) {
           for (const o of c.texts) {
             if (corner.includes(o) || !o.text.trim()) continue;

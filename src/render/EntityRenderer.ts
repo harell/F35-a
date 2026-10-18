@@ -25,6 +25,7 @@ import { WakeBatch } from './effects/Wakes';
 import { HarbourFerries } from './traffic/HarbourFerries';
 import { TrainRenderer } from './traffic/Trains';
 import { shipDims } from './visuals/shipMotion';
+import { seatLift } from './visuals/seat';
 import { BOAT_DIMS, type BoatKind } from './models/boats';
 
 const _p = new Vector3();
@@ -280,7 +281,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
           grounds.set(g.id, tr);
         }
         tr.seen = frame;
-        const vis = tr.v.update(g, t, dt, cam, groundFar);
+        const vis = tr.v.update(g, t, dt, cam, groundFar, seatLift(world.terrain, g));
         tr.v.setLit(env.lights > LIT);
         if (wakes && vis && g.alive && g.boat) boatWake(wakes, g.type === 'missile_boat' ? 'missile_boat' : 'suicide_boat', g.position, g.velocity);
         else if (wakes && vis && g.alive && g.type === 'ship') {
@@ -350,7 +351,7 @@ export const createEntityRenderer: CreateEntityRenderer = (scene, world, env, qu
       helis.end();
       for (const m of world.missiles) missiles.get(m.id)?.v.update(m, t, camPos);
       for (const s of world.sams) sams.get(s.id)?.v.update(s, t, 0, camPos, groundFar);
-      for (const g of world.ground) grounds.get(g.id)?.v.update(g, t, 0, camPos, groundFar);
+      for (const g of world.ground) grounds.get(g.id)?.v.update(g, t, 0, camPos, groundFar, seatLift(world.terrain, g));
     },
 
     dispose() {

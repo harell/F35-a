@@ -59,7 +59,7 @@ describe('hud radio subtitle queue', () => {
 
   it('shortens subtitles when a backlog builds and cuts for urgent calls', () => {
     const q = new RadioQueue();
-    const text = 'Picture, two groups, azimuth ten miles.';
+    const text = 'Picture, two groups, azimuth eighteen kilometres.';
     expect(q.durationFor(text, 3)).toBeLessThan(q.durationFor(text, 0));
     q.push('A', text);
     tick(q, 0.5);

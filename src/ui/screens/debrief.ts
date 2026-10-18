@@ -68,7 +68,6 @@ export function civilLossRows(r: MissionResultExt): [string, string, string][] {
 }
 
 const FT_PER_M = 3.28084;
-const M_PER_NM = 1852;
 
 /** A height for the debrief: feet like the HMD, metres alongside ("850 ft <small>260 m</small>"). */
 function heightCell(m: number | null): string {
@@ -103,9 +102,9 @@ export function sightseeingRows(r: MissionResultExt): [string, string, string][]
   if (t) rows.push(['flag', 'Tour stops', `${t.stops}/${t.totalStops}`]);
   rows.push(['clock', 'Flight time', formatTime(r.time)]);
   if (t) {
-    const nm = t.distance / M_PER_NM;
+    const km = t.distance / 1000;
     rows.push(
-      ['jet', 'Distance flown', `${nm < 10 ? nm.toFixed(1) : Math.round(nm)} nm <small>${Math.round(t.distance / 1000)} km</small>`],
+      ['jet', 'Distance flown', `${km < 10 ? km.toFixed(1) : Math.round(km)} km`],
       ['pin', 'Highest pass', heightCell(t.highestAgl)],
       ['pin', 'Lowest pass', heightCell(t.lowestAgl)],
     );

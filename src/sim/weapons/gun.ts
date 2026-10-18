@@ -22,7 +22,7 @@ import { gunFor } from './loadouts';
 export const BULLET_DRAG = 1.9e-4;
 /** Default LCOS range with no target: 1,000 ft. */
 export const DEFAULT_PIPPER_RANGE = 304.8;
-/** Max range for a target-computed pipper (2 nm). */
+/** Max range for a target-computed pipper (3.7 km). */
 export const LCOS_MAX_RANGE = 3_700;
 /** Gun cue ranges (m): minimum, lethal (4–8 hits kill), effective (SHOOT), funnel / max cue. */
 export const GUN_MIN_RANGE = 150;
@@ -368,7 +368,7 @@ const _lead = new Vector3();
 
 /**
  * LCOS pipper (world point): where the target must be NOW for rounds fired now to hit it —
- * bullet time of flight + gravity drop + target motion. With no target within 2 nm, the pipper
+ * bullet time of flight + gravity drop + target motion. With no target within 3.7 km, the pipper
  * sits on the 1,000 ft range line. Returns a shared vector (copy it if you keep it).
  */
 export function gunLeadPoint(ctx: CombatCtx, ac: AircraftEntity): Vector3 | null {

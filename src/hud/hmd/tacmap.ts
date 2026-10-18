@@ -9,7 +9,7 @@
  * Coastline geometry is cached as Path2D objects in km (built once), drawn with a canvas transform, so
  * a frame costs a handful of fills and no allocation.
  */
-import { toFeet, toNm } from '../../core/math';
+import { toFeet, toKm } from '../../core/math';
 import { AKL } from '../../core/auckland';
 import { aucklandLinz, aucklandLinzVersion } from '../../world/terrain/theaters/aucklandLinz';
 import * as aklMap from '../../world/terrain/theaters/aucklandMap';
@@ -253,7 +253,7 @@ function airLabel(label: string, altM: number): string {
   }
   return s;
 }
-const edgeRange = new NumText(0, '', ' NM');
+const edgeRange = new NumText(0, '', ' KM');
 const launchTxt: string[] = [];
 /** "LAUNCH 12": a missile boat's countdown on the tac map (cached, no per-frame strings). */
 function launchLabel(timer: number): string {
@@ -590,7 +590,7 @@ export function drawTacticalMap(f: HudFrame, tm: TacMapState): number {
       const tx = ex - ux * 22 * u;
       const ty = ey - uy * 18 * u;
       pen.text(lbl, tx, ty, col, 9.5);
-      pen.text(edgeRange.get(toNm(Math.hypot(pos.x - p.position.x, pos.z - p.position.z))), tx, ty + 11 * u, withAlpha(col, 0.8), 9);
+      pen.text(edgeRange.get(toKm(Math.hypot(pos.x - p.position.x, pos.z - p.position.z))), tx, ty + 11 * u, withAlpha(col, 0.8), 9);
       occ.add(tx - 24 * u, ty - 7 * u, tx + 24 * u, ty + 17 * u);
       picks.add(e.id, ex, ey, 10 * u);
       continue;

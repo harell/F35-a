@@ -2,12 +2,12 @@
  * External-view HUD (chase / orbit / flyby / target / missile): compact flight + weapon + target block,
  * mini DLZ, radar/TSD inset (top-right), missile-cam label. (The tactical MAP view lives in tacmap.ts.)
  */
-import { RAD, toFeet, toKnots, toNm } from '../../core/math';
+import { RAD, toFeet, toKnots, toKm } from '../../core/math';
 import { dlzLayout, makeDlzGeometry } from './dlz';
 import { HDG3_STR, INT_STR, NumText, WEAPON_IS_BOMB, entityLabel, trackLabel } from './format';
 import { blink, type HudFrame } from './frame';
 import { withAlpha } from './palette';
-import { bombTimeToGo, nextWaypointText, rangeLabel, rangeLabelNm } from './targets';
+import { bombTimeToGo, nextWaypointText, rangeLabel, rangeLabelKm } from './targets';
 import { autoTsdRange, drawTsd, makeTsdStyle, type TsdColors } from './tsd';
 import { drawWeaponBlock, shootNow } from './weapons';
 
@@ -100,7 +100,7 @@ export function drawExternalBlock(f: HudFrame): number {
     const d = t.position.distanceTo(p.position);
     const lbl = trackLabel(t);
     pen.text(lbl, x, y, f.locked ? pal.bright : pal.main, 12, 'left');
-    const rl = rangeLabelNm(d);
+    const rl = rangeLabelKm(d);
     pen.text(rl, x + pen.textWidth(lbl, 12) + 8 * u, y, pal.main, 12, 'left');
     // lock state: LOCK / LOCKING (builds inside the ±30° nose cone) / NOSE ON (commanded, outside it)
     const lx = x + pen.textWidth(lbl, 12) + pen.textWidth(rl, 12) + 16 * u;
@@ -146,7 +146,7 @@ export function drawInset(f: HudFrame): void {
   // range: fit the designated target / current waypoint
   let need = 18_000;
   if (f.target) need = Math.max(need, f.target.position.distanceTo(p.position) * 1.15);
-  insetRange = autoTsdRange(insetRange, need, [10, 20, 40]);
+  insetRange = autoTsdRange(insetRange, need, [20, 40, 80]);
   pen.begin();
   pen.circle(cx, cy, r);
   pen.fillPlain('rgba(0,12,8,0.5)');
@@ -167,7 +167,7 @@ export function drawInset(f: HudFrame): void {
   s.bullseye = false;
   s.lw = 1;
   drawTsd(pen, ctx, p, s, tsdColors(f), blink(f, 3));
-  pen.text(INT_STR[Math.min(399, Math.round(toNm(insetRange)))], cx + r * 0.72, cy + r * 0.8, pal.dim, 9.5);
+  pen.text(INT_STR[Math.min(399, Math.round(toKm(insetRange)))], cx + r * 0.72, cy + r * 0.8, pal.dim, 9.5);
 }
 
 /* ───────────────────────── Missile cam ───────────────────────── */
@@ -188,7 +188,7 @@ export function drawMissileCam(f: HudFrame): void {
     const d = t.position.distanceTo(m.position);
     const closing = Math.max(80, m.velocity.length() - 0);
     // (a bomb: its predicted time of flight, 1.2-j)
-    info += '  ' + ttiTxt.get(m.def.category === 'bomb' ? bombTimeToGo(m, t.position, world.time) : d / closing) + '  ' + rangeLabel(d) + ' NM';
+    info += '  ' + ttiTxt.get(m.def.category === 'bomb' ? bombTimeToGo(m, t.position, world.time) : d / closing) + '  ' + rangeLabel(d) + ' KM';
     if (f.proj.point(t.position, f.sp) && f.sp.onScreen) {
       const h = 16 * u;
       pen.begin();
