@@ -91,6 +91,15 @@ describe('stick shaping (expo + deadzone)', () => {
     expect(stickShapeFor(10).radius).toBeCloseTo(stickShapeFor(2).radius);
   });
 
+  it('the default centre is soft enough for a drifting thumb (2026-10-18: "a bit sensitive" on a phone)', () => {
+    // 12 px ≈ 2 mm on a phone: a thumb resting on the stick while the pilot watches the target camera
+    expect(shapeStick(12, 0, shape, false, axes()).roll).toBeLessThan(0.05);
+    // 20 px ≈ a gentle turn's deflection: about 20°/s of roll at 220 m/s, not 28°/s
+    expect(shapeStick(20, 0, shape, false, axes()).roll).toBeLessThan(0.12);
+    // and the full throw still reaches full stick
+    expect(shapeStick(shape.radius, 0, shape, false, axes()).roll).toBeCloseTo(1);
+  });
+
   it('clampToCircle keeps the knob on the travel circle', () => {
     const o = clampToCircle(300, 400, 50, { x: 0, y: 0 });
     expect(Math.hypot(o.x, o.y)).toBeCloseTo(50);

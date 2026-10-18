@@ -39,13 +39,16 @@ export const STICK_RADIUS = 65;
 /**
  * Higher sensitivity → shorter throw and a more linear centre; lower sensitivity → longer throw
  * and more expo (finer control around the centre). Full deflection is always reachable.
+ * At the default (1) the centre is soft: the throw is only ~11 mm on a phone, and a thumb that drifts
+ * 2 mm (12 px) while the pilot watches the target camera commands under 5 % stick, under 10°/s of roll at
+ * T07's 220 m/s (it was 7.4 %, ~14°/s, with 0.06 deadzone and 0.45 expo: "a bit sensitive", 2026-10-18).
  */
 export function stickShapeFor(sensitivity: number, scale = 1): StickShape {
   const s = clamp(sensitivity, 0.25, 2);
   return {
     radius: (STICK_RADIUS * scale) / (0.75 + 0.25 * s),
-    deadzone: 0.06,
-    expo: clamp(0.45 - 0.3 * (s - 1), 0.08, 0.7),
+    deadzone: 0.08,
+    expo: clamp(0.6 - 0.3 * (s - 1), 0.15, 0.8),
   };
 }
 
