@@ -1,20 +1,20 @@
 /**
  * Dynamic launch zone (DLZ) scale mapping — pure, unit tested.
  *
- * The HMD draws a vertical range scale: bottom = 0, top = `scaleMax` (a "nice" value in nautical
- * miles chosen so Rmax and the target both fit). Rmin/Rne/Rmax and the target caret are mapped to
+ * The HMD draws a vertical range scale: bottom = 0, top = `scaleMax` (a "nice" value in kilometres
+ * chosen so Rmax and the target both fit). Rmin/Rne/Rmax and the target caret are mapped to
  * screen y between `bottom` and `top`.
  */
-import { NM } from '../../core/math';
+import { KM } from '../../core/math';
 
-/** Nice DLZ scale tops (nm). */
-export const DLZ_SCALES_NM = [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 60, 80] as const;
+/** Nice DLZ scale tops (km). */
+export const DLZ_SCALES_KM = [2, 3, 5, 8, 10, 15, 20, 30, 40, 50, 60, 80, 100, 150] as const;
 
 export interface DlzGeometry {
   /** Scale top (m). */
   scaleMax: number;
-  /** Scale top (nm) — label. */
-  scaleNm: number;
+  /** Scale top (km) — label. */
+  scaleKm: number;
   yMin: number;
   yNe: number;
   yMax: number;
@@ -29,14 +29,14 @@ export interface DlzGeometry {
 }
 
 export function makeDlzGeometry(): DlzGeometry {
-  return { scaleMax: 1, scaleNm: 1, yMin: 0, yNe: 0, yMax: 0, yRange: 0, clamped: false, inRange: false, inNez: false };
+  return { scaleMax: 1, scaleKm: 1, yMin: 0, yNe: 0, yMax: 0, yRange: 0, clamped: false, inRange: false, inNez: false };
 }
 
 /** Smallest nice scale (m) ≥ both 1.15·Rmax and 1.05·range (capped at the largest scale). */
 export function dlzScaleMax(rMax: number, range: number): number {
-  const need = Math.max(rMax * 1.15, range * 1.05, 0) / NM;
-  for (const s of DLZ_SCALES_NM) if (s >= need) return s * NM;
-  return DLZ_SCALES_NM[DLZ_SCALES_NM.length - 1] * NM;
+  const need = Math.max(rMax * 1.15, range * 1.05, 0) / KM;
+  for (const s of DLZ_SCALES_KM) if (s >= need) return s * KM;
+  return DLZ_SCALES_KM[DLZ_SCALES_KM.length - 1] * KM;
 }
 
 /** Map a range (m) to y on a scale spanning bottom (0) → top (scaleMax). */
@@ -63,7 +63,7 @@ export function dlzLayout(
     if (prevScale >= need && need > prevScale * 0.55) scale = prevScale;
   }
   out.scaleMax = scale;
-  out.scaleNm = Math.round(scale / NM);
+  out.scaleKm = Math.round(scale / KM);
   out.yMin = dlzY(zone.rMin, scale, top, bottom);
   out.yNe = dlzY(Math.max(zone.rMin, zone.rNe), scale, top, bottom);
   out.yMax = dlzY(zone.rMax, scale, top, bottom);

@@ -212,7 +212,7 @@ export function drawDlz(f: HudFrame, x: number, top: number, bottom: number): vo
   pen.g.fillRect(x - 5 * u, g.yNe - 1, 5 * u + 2, g.yMin - g.yNe + 2);
   pen.setFill(col);
   pen.g.fillRect(x - 4 * u, g.yNe, 3.5 * u, g.yMin - g.yNe);
-  pen.text(INT_STR[g.scaleNm] ?? String(g.scaleNm), x, top - 9 * u, pal.dim, 10.5);
+  pen.text(INT_STR[g.scaleKm] ?? String(g.scaleKm), x, top - 9 * u, pal.dim, 10.5);
   // target caret with closure
   const cy = g.yRange;
   pen.begin();

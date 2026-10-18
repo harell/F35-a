@@ -2,10 +2,10 @@
  * F35-A — "DARKSTAR" AWACS controller: initial picture, pop-up groups, threat calls,
  * periodic picture updates and "picture clean", in BRAA or bullseye format.
  *
- *   "Viper 1, Darkstar, single group, two bandits, BRAA 045, 40 miles, angels 25, hot."
- *   "Viper 1, Darkstar, pop-up group, four bandits, bullseye 030, 22 miles, angels 30, track southwest."
+ *   "Viper 1, Darkstar, single group, two bandits, BRAA 045, 70 km, angels 25, hot."
+ *   "Viper 1, Darkstar, pop-up group, four bandits, bullseye 030, 40 km, angels 30, track southwest."
  */
-import { FEET_PER_M, NM, RAD, wrapPi } from '../../core/math';
+import { FEET_PER_M, KM, RAD, wrapPi } from '../../core/math';
 import type { AircraftEntity } from '../../sim/entities';
 import { aircraftNoun, countWord, groupNoun } from './names';
 import { aliveCount, type GroupRt, type MissionState } from './state';
@@ -84,22 +84,22 @@ export function groupPicture(g: GroupRt, out?: GroupPicture): GroupPicture | nul
 /** Scratch picture for the per-evaluation threat checks. */
 const _pic: GroupPicture = { count: 0, x: 0, z: 0, altitude: 0, heading: 0, noun: '' };
 
-/** "two bandits, BRAA 045, 40 miles, angels 25, hot" relative to the player. */
+/** "two bandits, BRAA 045, 70 km, angels 25, hot" relative to the player. */
 export function braaText(pic: GroupPicture, player: AircraftEntity): string {
   const px = player.position.x;
   const pz = player.position.z;
-  const range = Math.max(1, Math.round(Math.hypot(pic.x - px, pic.z - pz) / NM));
+  const range = Math.max(1, Math.round(Math.hypot(pic.x - px, pic.z - pz) / KM));
   const asp = aspectOf(pic.x, pic.z, pic.heading, px, pz);
-  return `${countWord(pic.count)} ${pic.noun}, BRAA ${bearingText(px, pz, pic.x, pic.z)}, ${range} miles, ${angels(pic.altitude)}, ${asp}`;
+  return `${countWord(pic.count)} ${pic.noun}, BRAA ${bearingText(px, pz, pic.x, pic.z)}, ${range} km, ${angels(pic.altitude)}, ${asp}`;
 }
 
-/** "two bandits, bullseye 045, 22 miles, angels 25, track southwest". */
+/** "two bandits, bullseye 045, 40 km, angels 25, track southwest". */
 export function bullseyeText(pic: GroupPicture, bull: { x: number; z: number }): string {
-  const range = Math.max(1, Math.round(Math.hypot(pic.x - bull.x, pic.z - bull.z) / NM));
-  return `${countWord(pic.count)} ${pic.noun}, bullseye ${bearingText(bull.x, bull.z, pic.x, pic.z)}, ${range} miles, ${angels(pic.altitude)}, track ${compassWord(pic.heading)}`;
+  const range = Math.max(1, Math.round(Math.hypot(pic.x - bull.x, pic.z - bull.z) / KM));
+  return `${countWord(pic.count)} ${pic.noun}, bullseye ${bearingText(bull.x, bull.z, pic.x, pic.z)}, ${range} km, ${angels(pic.altitude)}, track ${compassWord(pic.heading)}`;
 }
 
-const THREAT_RANGE = 10 * NM;
+const THREAT_RANGE = 18.5 * KM;
 const DEFAULT_BULLSEYE = { x: 0, z: 0, name: 'Tower' };
 
 export class AwacsController {
@@ -194,7 +194,7 @@ export class AwacsController {
         if (pic) s.radio.push({ from: s.awacsCallsign, text: `${s.callsign}, ${s.awacsSpoken}, pop-up group, ${this.describe(pic)}.`, voice: 'a_bandits', priority: 2 });
         this.lastPicture = t;
       }
-      // threat call: hot group inside 10 nm
+      // threat call: hot group inside 18.5 km
       if (!g.threatCalled && p && p.alive) {
         const pic = groupPicture(g, _pic);
         if (pic && Math.hypot(pic.x - p.position.x, pic.z - p.position.z) < THREAT_RANGE && aspectOf(pic.x, pic.z, pic.heading, p.position.x, p.position.z) === 'hot') {

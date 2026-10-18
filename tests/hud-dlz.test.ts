@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { NM } from '../src/core/math';
-import { DLZ_SCALES_NM, dlzLayout, dlzScaleMax, dlzY, makeDlzGeometry } from '../src/hud/hmd/dlz';
+import { KM } from '../src/core/math';
+import { DLZ_SCALES_KM, dlzLayout, dlzScaleMax, dlzY, makeDlzGeometry } from '../src/hud/hmd/dlz';
 
 describe('hud DLZ scale', () => {
   it('chooses the smallest nice scale that fits Rmax and the target', () => {
-    expect(dlzScaleMax(30_000, 20_000) / NM).toBe(20); // 30 km * 1.15 = 18.6 nm
-    expect(dlzScaleMax(6_000, 3_000) / NM).toBe(5); // AIM-9X
-    expect(dlzScaleMax(30_000, 60_000) / NM).toBe(40); // far target drives the scale
-    expect(dlzScaleMax(1e9, 0) / NM).toBe(DLZ_SCALES_NM[DLZ_SCALES_NM.length - 1]);
+    expect(dlzScaleMax(30_000, 20_000) / KM).toBe(40); // 30 km * 1.15 = 34.5 km
+    expect(dlzScaleMax(6_000, 3_000) / KM).toBe(8); // AIM-9X
+    expect(dlzScaleMax(30_000, 60_000) / KM).toBe(80); // far target drives the scale
+    expect(dlzScaleMax(1e9, 0) / KM).toBe(DLZ_SCALES_KM[DLZ_SCALES_KM.length - 1]);
   });
 
   it('maps ranges linearly bottom → top and clamps', () => {

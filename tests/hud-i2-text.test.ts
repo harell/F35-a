@@ -20,8 +20,8 @@ import { computeLayout, makeLayout } from '../src/hud/hmd/layout';
 import { Occupancy } from '../src/hud/hmd/occupancy';
 import { TacMapState, LEGEND_SHOW } from '../src/hud/hmd/tacmap';
 import { autoTsdRange } from '../src/hud/hmd/tsd';
-import { TSD_STEPS_NM, rwrDeclutter } from '../src/hud/cockpit/pages';
-import { NM } from '../src/core/math';
+import { TSD_STEPS_KM, rwrDeclutter } from '../src/hud/cockpit/pages';
+import { KM } from '../src/core/math';
 
 installPath2D();
 
@@ -132,7 +132,7 @@ describe('i2: no text-on-text overlaps in the combat lab scenes', () => {
     for (const t of texts) {
       if (!overlaps(textBox(t), band)) continue;
       // only the tape's own numerals / heading box live there
-      expect(tapeTexts.test(t.text) || t.text === next || /^\d+(\.\d)? NM$/.test(t.text), `"${t.text}" in the tape band`).toBe(true);
+      expect(tapeTexts.test(t.text) || t.text === next || /^\d+(\.\d)? KM$/.test(t.text), `"${t.text}" in the tape band`).toBe(true);
     }
   });
 });
@@ -162,11 +162,11 @@ describe('i2: fixed-zone occupancy + text placement units', () => {
 });
 
 describe('i2: TSD range, RWR declutter, tactical legend', () => {
-  it('TSD steps include 5 and 10 NM: a close fight is not squeezed into 20 NM', () => {
-    expect(TSD_STEPS_NM[0]).toBe(5);
-    expect(autoTsdRange(0, 7_000, TSD_STEPS_NM) / NM).toBe(5);
-    expect(autoTsdRange(0, 15_000, TSD_STEPS_NM) / NM).toBe(10);
-    expect(autoTsdRange(0, 60_000, TSD_STEPS_NM) / NM).toBe(40);
+  it('TSD steps include 10 and 20 km: a close fight is not squeezed into 40 km', () => {
+    expect(TSD_STEPS_KM[0]).toBe(10);
+    expect(autoTsdRange(0, 7_000, TSD_STEPS_KM) / KM).toBe(10);
+    expect(autoTsdRange(0, 15_000, TSD_STEPS_KM) / KM).toBe(20);
+    expect(autoTsdRange(0, 60_000, TSD_STEPS_KM) / KM).toBe(80);
   });
 
   it('RWR: co-bearing emitters ("29" and "10" at 2° apart) are offset radially instead of merging', () => {

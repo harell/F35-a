@@ -8,7 +8,7 @@
  * Content is ordered top-first: at the default head position the upper ~60 % of the PCD is in view
  * (the rest shows when the pilot looks down or zooms the page).
  */
-import { NM, RAD, toFeet, toNm } from '../../core/math';
+import { KM, RAD, toFeet, toKm } from '../../core/math';
 import type { FrameContext } from '../../core/contracts';
 import { BINGO_FRACTION } from '../../core/data';
 import { AB_DETENT } from '../../core/types';
@@ -69,12 +69,12 @@ const TSD_COLORS: TsdColors = {
   highlight: PC.green,
 };
 
-/** TSD range steps (NM): 5 / 10 NM when the fight is close, up to 80 NM for a far waypoint. */
-export const TSD_STEPS_NM = [5, 10, 20, 40, 80] as const;
+/** TSD range steps (km): 10 / 20 km when the fight is close, up to 150 km for a far waypoint. */
+export const TSD_STEPS_KM = [10, 20, 40, 80, 150] as const;
 
 /**
  * Distance (m) the TSD must show: the designated / locked target, else the nearest hostile air
- * contact, else the steering waypoint (capped at 75 km) — never less than ~4 NM. The 20 NM floor of
+ * contact, else the steering waypoint (capped at 75 km) — never less than 8 km. The 37 km floor of
  * iteration 1 packed WP, contacts, ground squares and SAM rings within ~40 px of ownship.
  */
 export function tsdNeed(p: AircraftEntity, ctx: FrameContext): number {
@@ -95,7 +95,7 @@ export function tsdNeed(p: AircraftEntity, ctx: FrameContext): number {
 }
 
 /**
- * Font size (texels) of the TSD and RWR corner readouts ("10 NM", "HDG 045", "BULL 005/6", "2 EMIT",
+ * Font size (texels) of the TSD and RWR corner readouts ("20 KM", "HDG 045", "BULL 005/11", "2 EMIT",
  * EMCON / LAUNCH). The PCD is drawn small in the cockpit view (about 0.43 px per texel on an 844×390
  * phone): at 22–24 texels they were 9–10 px tall, and read like 8 px on the tilted panel (#62). At 30
  * texels they are about 13 px and still fit a 256-texel side portal.
@@ -105,7 +105,7 @@ export const PCD_CORNER = 30;
 export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   const { p, ctx } = d;
   const t = ctx.world.getEntity(p.radar.lockedId ?? p.radar.designatedId);
-  tsdRange = autoTsdRange(tsdRange, tsdNeed(p, ctx), TSD_STEPS_NM);
+  tsdRange = autoTsdRange(tsdRange, tsdNeed(p, ctx), TSD_STEPS_KM);
   const s = tsdStyle;
   s.cx = x + w / 2;
   // ownship high in the portal: at the default head pose only the upper part of the PCD is in view
@@ -125,7 +125,7 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   s.lw = 2;
   // overlay readouts, measured first: the TSD's labels and N marker keep off them (#62 review: "N",
   // "SA-6" and "WP2 CAP" under "BULL 214/2")
-  const rng = String(Math.round(tsdRange / NM)) + ' NM';
+  const rng = String(Math.round(tsdRange / KM)) + ' KM';
   const hdg = Math.round((((p.flight.heading * RAD) % 360) + 360) % 360) % 360;
   const hdgTxt = 'HDG ' + String(hdg).padStart(3, '0');
   // bullseye call (Sky Tower = origin): bearing/range from bullseye to ownship
@@ -133,7 +133,7 @@ export const drawTsdPage: PageFn = (pen, x, y, w, h, d) => {
   const bz = p.position.z;
   let brg = Math.atan2(bx, -bz) * RAD;
   if (brg < 0) brg += 360;
-  const bull = 'BULL ' + String(Math.round(brg) % 360).padStart(3, '0') + '/' + Math.round(toNm(Math.hypot(bx, bz)));
+  const bull = 'BULL ' + String(Math.round(brg) % 360).padStart(3, '0') + '/' + Math.round(toKm(Math.hypot(bx, bz)));
   const tgt = !!t && t.alive;
   const lbl = tgt ? (p.radar.lockedId === t.id ? 'LOCK ' : 'TGT ') + entityLabel(t) : '';
   const hc = PCD_CORNER * 0.6;
@@ -169,8 +169,8 @@ function reserveRect(i: number, x0: number, yc: number, tw: number, half: number
 
 /* ───────────────────────── Radar (B-scope) ───────────────────────── */
 
-const RDR_RANGES = [10, 20, 40, 80];
-let rdrRange = 40 * NM;
+const RDR_RANGES = [20, 40, 80, 150];
+let rdrRange = 80 * KM;
 
 export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   const { p, ctx } = d;
@@ -198,8 +198,8 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
   pen.strokePlain(PC.frame, 2);
   const mode = p.radar.mode === 'acm' ? 'ACM' : p.radar.mode === 'ground' ? 'GMT' : 'RWS';
   pen.text(p.radar.emitting ? mode : 'SILENT', x + 10, y + 18, p.radar.emitting ? PC.green : PC.amber, 24, 'left');
-  pen.text(String(Math.round(rdrRange / NM)), px + pw + 4, top + 12, PC.label, 22, 'left');
-  pen.text(String(Math.round(rdrRange / NM / 2)), px + pw + 4, top + ph / 2, PC.label, 22, 'left');
+  pen.text(String(Math.round(rdrRange / KM)), px + pw + 4, top + 12, PC.label, 22, 'left');
+  pen.text(String(Math.round(rdrRange / KM / 2)), px + pw + 4, top + ph / 2, PC.label, 22, 'left');
   // scan line
   if (p.radar.emitting) {
     const tt = ctx.time * 0.9;
@@ -237,7 +237,7 @@ export const drawRadarPage: PageFn = (pen, x, y, w, h, d) => {
       pen.begin();
       pen.rect(cx - 16, cy - 16, 32, 32);
       pen.strokePlain(PC.green, 3);
-      lockLabel = (e.id === lock ? 'LOCK ' : 'TGT ') + (e.kind === 'aircraft' ? AIRCRAFT_LABEL[e.type] : '') + ' ' + toNm(r).toFixed(1);
+      lockLabel = (e.id === lock ? 'LOCK ' : 'TGT ') + (e.kind === 'aircraft' ? AIRCRAFT_LABEL[e.type] : '') + ' ' + toKm(r).toFixed(1);
     }
   }
   if (lockLabel) pen.text(lockLabel, x + w - 10, y + 18, PC.green, 24, 'right');

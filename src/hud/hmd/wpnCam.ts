@@ -571,12 +571,12 @@ export function secText(s: number, prefix = ''): string {
   return cached(prefix + '|' + k, () => prefix + (s >= 10 ? String(k) : k.toFixed(1)));
 }
 
-/** Range: NM with one decimal, metres inside 1 NM ("850 M"). */
+/** Range: km with one decimal (whole km from 100 km), metres inside 1 km ("850 M"). */
 export function rangeText(m: number): string {
   if (!Number.isFinite(m)) return '';
-  if (m >= 1852) {
-    const k = Math.round(m / 185.2);
-    return cached('nm|' + k, () => (k >= 1000 ? Math.round(k / 10) : (k / 10).toFixed(1)) + ' NM');
+  if (m >= 1000) {
+    const k = Math.round(m / 100);
+    return cached('km|' + k, () => (k >= 1000 ? Math.round(k / 10) : (k / 10).toFixed(1)) + ' KM');
   }
   const k = Math.max(0, Math.round(m / 10) * 10);
   return cached('m|' + k, () => k + ' M');

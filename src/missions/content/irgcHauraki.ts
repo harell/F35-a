@@ -174,7 +174,7 @@ export const G02: MissionDef = mission({
       {
         id: 't_suicide_close',
         when: { kind: 'all', of: [{ kind: 'time', t: 75 }, { kind: 'not', of: { kind: 'group_destroyed', group: S.suicide } }] },
-        actions: [{ kind: 'radio', from: G02_TANKER.name, text: 'Boats one mile off the bow and closing! Get them off us!', priority: 2 }],
+        actions: [{ kind: 'radio', from: G02_TANKER.name, text: 'Boats two kilometres off the bow and closing! Get them off us!', priority: 2 }],
       },
       {
         id: 't_missile_wave',
@@ -185,7 +185,7 @@ export const G02: MissionDef = mission({
         // the long StormBreaker glide on the missile boats is quiet: her master calls them closing
         id: 't_missile_close',
         when: { kind: 'all', of: [{ kind: 'time', t: 155 }, { kind: 'group_spawned', group: S.missile }, { kind: 'not', of: { kind: 'group_destroyed', group: S.missile } }] },
-        actions: [{ kind: 'radio', from: G02_TANKER.name, text: 'Viper, Kōtuku Star. We have the missile boats on radar, about five miles and closing. They will stop and fire soon.', priority: 2 }],
+        actions: [{ kind: 'radio', from: G02_TANKER.name, text: 'Viper, Kōtuku Star. We have the missile boats on radar, about nine kilometres and closing. They will stop and fire soon.', priority: 2 }],
       },
       {
         id: 't_suicide_dead',

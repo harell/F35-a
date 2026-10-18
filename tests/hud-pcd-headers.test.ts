@@ -62,11 +62,11 @@ describe('PCD header rows', () => {
         const depot = m.world.ground.find((g) => g.type === 'fuel')!;
         m.player.radar.lockedId = null;
         m.player.radar.designatedId = depot.id;
-        // far from bullseye: a long "BULL 214/22"
+        // far from bullseye: a long "BULL 315/42"
         m.player.position.set(-30_000, 3_000, 30_000);
       });
       expect(texts.some((t) => /^TGT FUEL DEPOT/.test(t.text))).toBe(true);
-      const bad = headerClash(texts, x, w, /^(BULL|TGT|LOCK|HDG) |\d NM$/);
+      const bad = headerClash(texts, x, w, /^(BULL|TGT|LOCK|HDG) |\d KM$/);
       expect(bad, bad.join('\n')).toEqual([]);
     }
   });

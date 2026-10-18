@@ -133,7 +133,7 @@ SEGMENTS=(
   "s_single|Single." "s_heavy|Heavy." "s_group|group." "s_groups|groups." "s_single_group|Single group."
   "s_new_picture|New picture." "s_pop_up_group|Pop-up group." "s_threat|Threat!" "s_last_bandit|Last bandit."
   "s_bandit|bandit." "s_bandits|bandits."
-  "s_braa|Bra." "s_bullseye|Bullseye." "s_miles|miles." "s_angels|angels." "s_track|track."
+  "s_braa|Bra." "s_bullseye|Bullseye." "s_km|kilometers." "s_angels|angels." "s_track|track."
   "s_hot|hot." "s_cold|cold." "s_flanking|flanking." "s_beaming|beaming."
   "s_north|north." "s_northeast|northeast." "s_east|east." "s_southeast|southeast."
   "s_south|south." "s_southwest|southwest." "s_west|west." "s_northwest|northwest."

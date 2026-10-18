@@ -452,7 +452,7 @@ describe('MissionRunner: presentation', () => {
   it('AWACS calls the initial picture in BRAA format', () => {
     const h = harness(CAP_FIXTURE);
     h.run(8, () => shieldPlayer(h));
-    const call = h.of('radio').find((r) => r.from === 'DARKSTAR' && /BRAA \d{3}, \d+ miles, angels \d+, (hot|flanking|beaming|cold)/.test(r.text));
+    const call = h.of('radio').find((r) => r.from === 'DARKSTAR' && /BRAA \d{3}, \d+ km, angels \d+, (hot|flanking|beaming|cold)/.test(r.text));
     expect(call).toBeTruthy();
     expect(call!.voice).toBe('a_bandits');
   });
@@ -460,7 +460,7 @@ describe('MissionRunner: presentation', () => {
   it('AWACS uses bullseye when the mission asks for it', () => {
     const h = harness(raiderFixture());
     h.run(10, () => shieldPlayer(h));
-    expect(h.of('radio').some((r) => /bullseye \d{3}, \d+ miles, angels \d+, track [a-z]+/.test(r.text))).toBe(true);
+    expect(h.of('radio').some((r) => /bullseye \d{3}, \d+ km, angels \d+, track [a-z]+/.test(r.text))).toBe(true);
   });
 
   it('shows contextual hints (training)', () => {

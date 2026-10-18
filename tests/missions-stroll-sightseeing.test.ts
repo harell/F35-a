@@ -93,7 +93,7 @@ describe('A Stroll in the Park: the free-flight debrief (2.2-5)', () => {
     const v = Object.fromEntries(rows.map((x) => [x[1], x[2]]));
     expect(v['Tour stops']).toBe('7/11');
     expect(v['Flight time']).toBe('12:34');
-    expect(v['Distance flown']).toBe('50 nm <small>93 km</small>');
+    expect(v['Distance flown']).toBe('93 km');
     expect(v['Highest pass']).toBe('3,970 ft <small>1,210 m</small>');
     expect(v['Lowest pass']).toBe('200 ft <small>61 m</small>');
   });

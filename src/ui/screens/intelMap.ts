@@ -430,7 +430,7 @@ export function drawIntelMap(canvas: HTMLCanvasElement, m: MissionDef, w: number
     // the scale bar and its label (drawn below): the bar's length and the label's width
     const barPx = niceScaleLength(1 / v.scale, Math.min(120, w * 0.25)) * v.scale;
     g.font = `700 ${Math.round(9 * u)}px ui-monospace, 'SF Mono', Menlo, Consolas, monospace`;
-    const barLabel = g.measureText('00.0 km · 00.0 nm').width;
+    const barLabel = g.measureText('000 km').width;
     g.font = `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
     const blocked = [
       ...placer.taken,
@@ -489,7 +489,6 @@ export function drawIntelMap(canvas: HTMLCanvasElement, m: MissionDef, w: number
     g.lineTo(x + px, y);
     g.lineTo(x + px, y - 5);
     g.stroke();
-    const nm = len / 1852;
-    label(g, `${len >= 1000 ? `${len / 1000} km` : `${len} m`} · ${nm.toFixed(nm < 10 ? 1 : 0)} nm`, x + px + 6, y - 2, '#e8fbff', Math.round(9 * u));
+    label(g, len >= 1000 ? `${len / 1000} km` : `${len} m`, x + px + 6, y - 2, '#e8fbff', Math.round(9 * u));
   }
 }

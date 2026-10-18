@@ -428,10 +428,10 @@ function startCountdown(world: SimWorld, boat: GroundTargetEntity, st: BoatStrik
   const p = world.player;
   if (!p || p.team === boat.team) return;
   const brg = Math.round(((headingTo(p.position, boat.position.x, boat.position.z) / DEG + 360) % 360)) || 360;
-  const nm = Math.max(1, Math.round(p.position.distanceTo(boat.position) / 1852));
+  const km = Math.max(1, Math.round(p.position.distanceTo(boat.position) / 1000));
   world.events.emit('radio', {
     from: 'DARKSTAR',
-    text: `Missile boat, launch imminent, bearing ${String(brg).padStart(3, '0')}, ${nm} miles. Kill it!`,
+    text: `Missile boat, launch imminent, bearing ${String(brg).padStart(3, '0')}, ${km} km. Kill it!`,
     priority: 3,
     team: p.team,
   });
