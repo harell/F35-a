@@ -774,7 +774,7 @@ export class Game {
     // after a view change the 3D image moves with the frame instead of a frame late (#62)
     // (low quality: a short far plane and no scenery detail, so the PiP doesn't draw the whole scene again)
     const q = this.quality;
-    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit), s.env.targetCamLandmarks);
+    s.targetCam.render(this.renderer, s.scene, pipView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit, s.world.getEntity(pipView.targetId)), s.env.targetCamLandmarks);
     // the weapon window's video owns the same slot when it shows (pipView.vh is 0 then): one pass at most
     if (wpnView.vh > 0) s.targetCam.renderWeapon(this.renderer, s.scene, wpnView, s.rig.camera.far, q.targetCamRange, targetCamOmitFor(q, s.env.targetCamOmit));
     this.audio.update(ctx2);

@@ -25,7 +25,9 @@ import type { EntityRendererApi } from '../core/contracts';
 import { POD_ZOOM, POD_ZOOM_DEFAULT, isPodTarget, podSpan } from '../core/pod';
 import type { QualitySettings } from '../core/types';
 import type { SimWorld } from '../sim/api';
+import type { AnyEntity } from '../sim/entities';
 import { glowGain } from './effects/GpuParticles';
+import { seatLift } from './visuals/seat';
 import { POD_RANGE, TARGET_CAM_FOV, WEAPON_CAM_FOV, landmarkCamPose, makePose, podCamPose, podFov, targetCamFar, targetCamGroundDepth, targetCamPose, weaponCamPose, weaponHoldPose, type CamLandmark, type CamPose, type CamTarget } from './targetCam/pose';
 
 /** The animated window rect (CSS px) the HUD publishes. */
@@ -86,10 +88,13 @@ const NONE: readonly Object3D[] = [];
 
 /**
  * What the PiP pass leaves out for a quality preset: the environment's targetCamOmit list when the
- * preset drops the scenery detail from the PiP (low), nothing otherwise.
+ * preset drops the scenery detail from the PiP (low), nothing otherwise. A target on a roof (t07's rat on
+ * the Shangri-La) keeps the scenery: without the building it sat in mid-air over the street, and the
+ * ground 60 m below it swung through the zoomed window as the jet flew on.
+ * @param target the PiP's target (sim/entities.ts GroundTargetEntity.roofOf ≥ 0: on a roof)
  */
-export function targetCamOmitFor(q: Pick<QualitySettings, 'targetCamScenery'>, envOmit: readonly Object3D[] | undefined): readonly Object3D[] {
-  return q.targetCamScenery ? NONE : (envOmit ?? NONE);
+export function targetCamOmitFor(q: Pick<QualitySettings, 'targetCamScenery'>, envOmit: readonly Object3D[] | undefined, target?: AnyEntity | null): readonly Object3D[] {
+  return q.targetCamScenery || (target?.kind === 'ground' && target.roofOf >= 0) ? NONE : (envOmit ?? NONE);
 }
 
 export class TargetCam {
@@ -156,7 +161,7 @@ export class TargetCam {
       const zoom = rect.zoom ?? POD_ZOOM_DEFAULT;
       const step = POD_ZOOM[zoom] ?? POD_ZOOM[POD_ZOOM_DEFAULT];
       const span = podSpan(zoom, (t as CamTarget).radius);
-      podCamPose(t as CamTarget, eye, span, this.pose, this.surfaceAt);
+      podCamPose(t as CamTarget, eye, span, this.pose, this.surfaceAt, seatLift(this.world.terrain, t!));
       fov = podFov(span, this.pose.position.distanceTo(this.pose.look));
       range = range > 0 ? Math.min(range, POD_RANGE) : POD_RANGE;
       this.lastPod = step.name;

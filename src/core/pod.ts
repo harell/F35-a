@@ -15,8 +15,8 @@ export interface PodZoomStep {
 
 /**
  * Zoom steps, widest first (a tap on the window cycles them). WIDE: a site and its surroundings; NARROW:
- * one vehicle or building; ZOOM: about 1 m of ground, half that on an animal (podSpan), so g03's 0.38 m
- * stoat fills about half the window at any slant range.
+ * one vehicle or building; ZOOM: about 1 m of ground, 1.25 m on an animal (podSpan), so g03's 0.38 m
+ * stoat fills about a third of the window at any slant range, with the ground round it in view.
  */
 export const POD_ZOOM: readonly PodZoomStep[] = [
   { name: 'WIDE', span: 150 },
@@ -25,10 +25,13 @@ export const POD_ZOOM: readonly PodZoomStep[] = [
 ];
 
 /**
- * ZOOM's span (m) on an animal under a metre across (g03's stoat, t07's rats): at 1 m the 0.38 m stoat
- * was a 10 × 20 px dark blob in the window (playtest r2 F6); at 0.5 m it fills about half of it.
+ * ZOOM's span (m) on an animal under a metre across (g03's stoat, t07's rats). At 0.5 m (playtest r2 F6:
+ * at 1 m the stoat was a 10 × 20 px blob in a window that was smaller then) the animal filled the window
+ * and a running rat dragged the ground through it several frames a second, with nothing round it to say
+ * whether it was on a roof or in the street (owner, 2026-10-18). At 1.25 m a rat is a dark shape across
+ * the crosshair's gap on its patch of road or roof, the kerb or the roof's edge in view.
  */
-export const POD_ZOOM_SMALL = 0.5;
+export const POD_ZOOM_SMALL = 1.25;
 
 /** An animal under a metre across (g03's stoat, t07's rats): ZOOM closes in on it, and its pod shot opens at ZOOM. */
 export function isPodAnimal(radius: number): boolean {

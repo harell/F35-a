@@ -187,7 +187,8 @@ export class GroundVisual {
     if (this.windows) this.windows.visible = on && this.lightMode !== 0;
   }
 
-  update(g: GroundTargetEntity, time: number, dt: number, camPos: Vector3, far: number): boolean {
+  /** `lift`: metres up from the sim's ground to the drawn ground (visuals/seat.ts seatLift; a small animal's). */
+  update(g: GroundTargetEntity, time: number, dt: number, camPos: Vector3, far: number, lift = 0): boolean {
     this.lightMode = 0;
     if (this.ship) {
       const sink = shipMatrix(g, time, _m);
@@ -199,6 +200,7 @@ export class GroundVisual {
       }
     } else {
       this.root.position.copy(g.position);
+      this.root.position.y += lift;
       this.root.quaternion.copy(g.quaternion);
     }
     const dist = _v.copy(g.position).sub(camPos).length();

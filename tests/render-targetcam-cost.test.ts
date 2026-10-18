@@ -13,7 +13,7 @@ import { PIP_GLOW_GAIN, TargetCam, targetCamOmitFor } from '../src/render/Target
 import { glowGain } from '../src/render/effects/GpuParticles';
 import { createEntityRenderer } from '../src/render/EntityRenderer';
 import { TARGET_CAM_GROUND_K, TARGET_CAM_MIN_FAR, WEAPON_HOLD_DIST, framingDistance, targetCamFar, targetCamGroundDepth } from '../src/render/targetCam/pose';
-import { AircraftEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
+import { AircraftEntity, GroundTargetEntity, SamSiteEntity, type AnyEntity } from '../src/sim/entities';
 import type { SimWorld } from '../src/sim/api';
 import { autopilotBrainOpts, frameAccumulator, frameTakesControls, testSeed } from '../src/game/testParams';
 
@@ -118,6 +118,16 @@ describe('which objects the PiP leaves out', () => {
     expect(targetCamOmitFor(QUALITY_PRESETS.low, undefined)).toEqual([]);
     expect(targetCamOmitFor(QUALITY_PRESETS.medium, omit)).toEqual([]);
     expect(targetCamOmitFor(QUALITY_PRESETS.high, omit)).toEqual([]);
+  });
+
+  it("…but keeps the scenery for a target on a roof (t07's Shangri-La rat), so it isn't shown in mid-air", () => {
+    const omit = [new Group()];
+    const roofRat = new GroundTargetEntity(1, 'rat', 'red', { radius: 0.2 });
+    roofRat.roofOf = 12;
+    const streetRat = new GroundTargetEntity(2, 'rat', 'red', { radius: 0.2 });
+    expect(targetCamOmitFor(QUALITY_PRESETS.low, omit, roofRat)).toEqual([]);
+    expect(targetCamOmitFor(QUALITY_PRESETS.low, omit, streetRat)).toBe(omit);
+    expect(targetCamOmitFor(QUALITY_PRESETS.low, omit, null)).toBe(omit);
   });
 });
 

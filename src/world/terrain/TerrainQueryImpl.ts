@@ -115,6 +115,10 @@ export class TerrainQueryImpl implements TerrainQuery {
     return this.hf.heightAt(x, z) < 0;
   }
 
+  meshHeightAt(x: number, z: number): number {
+    return this.hf.meshHeightAt(x, z);
+  }
+
   lineOfSight(a: Vector3, b: Vector3): boolean {
     const top = Math.min(a.y, b.y);
     if (top > this.maxSurface + LOS_TOLERANCE) return true;

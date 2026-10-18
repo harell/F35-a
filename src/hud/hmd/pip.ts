@@ -463,10 +463,10 @@ const STATUS_SHORT: Record<string, string> = {
 let rangeKey = -1;
 let rangeText = '';
 function rangeLabel(m: number): string {
-  const k = Math.round(m / 185.2); // 0.1 NM steps
+  const k = Math.round(m / 100); // 0.1 km steps
   if (k !== rangeKey) {
     rangeKey = k;
-    rangeText = k >= 1000 ? `${Math.round(k / 10)} NM` : `${(k / 10).toFixed(1)} NM`;
+    rangeText = k >= 1000 ? `${Math.round(k / 10)} KM` : `${(k / 10).toFixed(1)} KM`;
   }
   return rangeText;
 }
@@ -743,7 +743,7 @@ function drawPodPip(f: HudFrame, t: AnyEntity, locked: boolean): void {
     if (line) pen.text(line, x + 6 * u, y + 20 * u, pal.danger, 8, 'left');
   }
   if (v.mask) return;
-  // bottom strip: slant range (NM, as the rest of the HUD) and the status pill
+  // bottom strip: slant range (km, as the rest of the HUD) and the status pill
   const sh = 16 * u;
   const sy = y + h - sh;
   pen.setFill('rgba(4,9,7,0.72)');
