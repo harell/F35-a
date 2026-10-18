@@ -383,6 +383,7 @@ export class AudioSystem implements AudioApi {
     this.on('destroyed', (e) => {
       const l = this.live();
       if (!l || !this.core) return;
+      l.s.impacts.onDestroyed(e, l.ctx, L);
       const p = l.ctx.player;
       if (!p || e.attackerId !== p.id || e.entity.team === p.team || e.entity.team === 'neutral') return;
       if (this.musicVolume > 0) this.core.music.stinger('kill', 0.35);
