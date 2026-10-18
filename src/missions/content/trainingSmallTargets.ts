@@ -31,9 +31,14 @@ const TR = T07_TRAPPERS;
 export const T07_RAT = { speed: 2.5, stopTime: 40 } as const;
 
 /**
- * A street rat's circuit: its start (the overflow manhole), the points after it in order, which of those
- * are drains (a stop at each; indices into `route`), and the street it starts on. After the last point
- * it runs back to the start and round again.
+ * A street rat's circuit: its start, the points after it in order, which of those are drains (a stop at
+ * each; indices into `route`), and the street it starts on. After the last point it runs back to the
+ * start and round again.
+ *
+ * Each starts a few seconds short of its first drain, on the leg from the overflow manhole it came out of
+ * (the last point, on Jervois Road's corner): flown straight in from the start, the jet comes into release
+ * range just as the rats stop, so the first pass has a drop window (#309 playtest: from the manholes they ran
+ * for the first 73 and 86 s, and a pilot who flew straight in had passed them by the first stop).
  */
 export interface T07Route {
   street: string;
@@ -46,8 +51,8 @@ export interface T07Route {
 export const T07_ROUTES = {
   wallace: {
     street: 'Wallace Street',
-    start: { x: -2_509, z: -316 },
-    // down Wallace St, along Sarsfield St, up Lawrence St, back along Jervois Rd
+    start: { x: -2_547, z: -466 },
+    // down Wallace St, along Sarsfield St, up Lawrence St, back along Jervois Rd to the manhole
     route: [
       { x: -2_554, z: -495 },
       { x: -2_590, z: -634 },
@@ -57,13 +62,14 @@ export const T07_ROUTES = {
       { x: -2_419, z: -338 },
       { x: -2_449, z: -334 },
       { x: -2_498, z: -329 },
+      { x: -2_509, z: -316 },
     ],
     drains: [0, 1, 3, 4],
   },
   hamilton: {
     street: 'Hamilton Road',
-    start: { x: -2_148, z: -368 },
-    // down Hamilton Rd, along Sarsfield St, up Curran St, back along Jervois Rd past the Shangri-La
+    start: { x: -2_182, z: -541 },
+    // down Hamilton Rd, along Sarsfield St, up Curran St, back along Jervois Rd past the Shangri-La to the manhole
     route: [
       { x: -2_190, z: -580 },
       { x: -2_235, z: -797 },
@@ -76,6 +82,7 @@ export const T07_ROUTES = {
       { x: -1_983, z: -386 },
       { x: -2_055, z: -378 },
       { x: -2_124, z: -371 },
+      { x: -2_148, z: -368 },
     ],
     drains: [0, 1, 3, 5, 9],
   },
