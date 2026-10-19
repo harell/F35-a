@@ -497,8 +497,8 @@ houses alone 7.32 B).
 # Real suburbs 7/9: the corridor's real houses and streets, streamed (#126)
 
 `corridor-houses.py` and `corridor-houses.ts` bake every house and local street from Whenuapai to Auckland Airport (and,
-since #274, East Auckland: below) into 167 tiles of 2,048 m, `src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin`
-(gzip; ≈ 2.9 MB in all, the same on
+since #274, East Auckland and the East Coast Bays: below) into 195 tiles of 2,048 m,
+`src/world/terrain/data/corridor/akl-corridor-<i>_<j>.bin` (gzip; ≈ 3.2 MB in all, the same on
 every tier), and their manifest `corridor.json` (bundled: tiles, bytes, the shared roof palette). The game fetches a tile
 as the house scatter's radius reaches it (`src/world/scenery/corridorHouses.ts`); the service worker caches it on first
 use and never precaches it (`public/sw.js` `ON_DEMAND`). Same licence and attribution as above.
@@ -563,8 +563,8 @@ LINZ_API_KEY=… npx vite-node tools/linz/corridor-houses.ts /home/user/work/eas
   value re-encodes to its byte), keeps its houses, streets and coverage, and gains the area's. The other tiles are not
   rewritten. Its spot checks (20) join the fixture's. The manifest lists the added areas (`areas`); adding one twice is
   refused, and the corridor's own bake starts the tiles over, so the added areas are baked again after it, in order.
-- **Next areas** (#274's list: the East Coast Bays and Albany, Manukau, Manurewa and Papakura) are another `AREAS` row
-  each, baked the same way, one stack layer each. Their boxes must not overlap the corridor's or an earlier area's.
+- **Next areas** (#274's list: Manukau, Manurewa and Papakura; the East Coast Bays came next, below) are another
+  `AREAS` row each, baked the same way, one stack layer each. Their boxes must not overlap the corridor's or an earlier area's.
 
 2026-10-10: 152,004 outlines in the 9 sheets (78,600 outside the box, 5,115 under 20 m², 13 over 20,000 m²); 67,256
 houses fitted (2,223 outlines gone since 2017, 1,203 LiDAR-only buildings since); dropped: sites 818, water 6, landmark
@@ -572,6 +572,20 @@ footprints 3; 530 big outlines cut into 1,217 pieces. Streets: 8,036 sections �
 written (31 new, 8 shared with the corridor along x ≈ 8.2–10.2 km): 622,892 B gzip with the shared tiles' corridor
 houses. The manifest: **167 tiles, 353,134 houses, 2,929,187 B gzip** in all. Fit 7 min on 4 processes (4 of them the
 first run's aerial STAC index, 17,739 items), tiles 1 min.
+
+## The East Coast Bays and Albany, added to the corridor's tiles (#274)
+
+The second added area (`AREAS['bays']`): the box lon 174.66 … 174.80, lat −36.76 … −36.66 (Albany, Greenhithe's north,
+Rosedale, Sunnynook, Mairangi Bay, Murrays Bay, Rothesay Bay, Browns Bay, Torbay, Long Bay and Okura), north
+of the corridor's box, inside 10 Part 1 sheets (no Part 2 sheet meets the box). Same two commands with `AREA=bays` and
+`/home/user/work/bays`. Its sheets aren't in `canopy.py`'s list: fetch their DSM and DEM and their outlines first, as
+`canopy.py fetch` does (the STAC index of Part 1, `tools/hero/site.py` `stac_tiles`, names the sheets that meet a box).
+
+2026-10-20: 103,996 outlines in the 10 sheets (67,293 outside the box, 2,048 under 20 m², 2 over 20,000 m²); 34,284 houses
+fitted (957 outlines gone since 2017, 588 LiDAR-only buildings since). Streets: 4,540 sections → 2,180 ribbon pieces,
+366 km. 34 tiles written (28 new, 6 shared with the corridor along z ≈ −10.2 … −8.2 km): 408,763 B gzip with the shared
+tiles' corridor houses. The manifest: **195 tiles, 387,351 houses, 3,231,130 B gzip** in all, under the test's 3.3 MB
+cap. Fit 6 min on 4 processes (5 of them the aerial STAC index and the photo mosaics), tiles 1 min.
 
 ## Real tree canopy (#123)
 
