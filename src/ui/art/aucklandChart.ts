@@ -5,7 +5,8 @@
  * The coastline is the real LINZ one (the same rings the terrain and the in-flight TSD use) once
  * `aucklandLinz.bin` has loaded — `prefetchChartData` starts that download at app start, and callers
  * redraw when `chartVersion()` changes. Until then, or when it can't load, the chart falls back to the
- * WORLD module's hand-traced map. Relief, urban areas and lakes always come from the hand-traced map.
+ * WORLD module's hand-traced map. Relief and urban areas always come from the hand-traced map, and the
+ * crater lakes from its OSM shorelines.
  *
  * The geometry is read (never modified) from the WORLD module. It is accessed defensively so a renamed
  * export there can never break the menus — the chart simply falls back to a plain grid.
@@ -16,7 +17,7 @@ import { aucklandLinz, aucklandLinzVersion, loadAucklandLinz } from '../../world
 interface ChartData {
   water: { label: number; pts: number[] }[];
   islands: ({ pts: number[] } | { ellipse: [number, number, number, number, number] })[];
-  lakes: [number, number, number][];
+  lakes: { pts: number[] }[];
   relief: { e: [number, number, number, number, number]; h: number; rough: number }[];
   urban: number[][];
   /** LINZ coastline rings in km (flat x, z; even–odd: land inside), or null → hand-traced water/islands. */
@@ -206,10 +207,7 @@ export function drawAucklandChart(g: CanvasRenderingContext2D, w: number, h: num
   }
 
   g.beginPath();
-  for (const [x, z, r] of d.lakes) {
-    g.moveTo((x - v.x0 + r) * v.scale, (z - v.z0) * v.scale);
-    g.arc((x - v.x0) * v.scale, (z - v.z0) * v.scale, r * v.scale, 0, Math.PI * 2);
-  }
+  for (const l of d.lakes) if (l && Array.isArray(l.pts)) polyPath(g, l.pts, v);
   g.stroke();
   g.fillStyle = st.water;
   g.fill();
