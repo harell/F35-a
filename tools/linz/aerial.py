@@ -143,6 +143,7 @@ def stac_all(work):
     with cf.ThreadPoolExecutor(64) as ex:
         res = list(ex.map(get, hrefs))
     print(f'STAC: {len(res)} items', flush=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     json.dump(res, open(path, 'w'))
     return res
 

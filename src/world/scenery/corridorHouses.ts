@@ -1,7 +1,7 @@
 /**
  * Real suburbs 7/9 (#126): the real houses and local streets of the whole Whenuapai → Airport corridor, and of the
- * areas added next to it since (#274: East Auckland), streamed in TILE m squares as the house scatter's radius reaches
- * them.
+ * areas added next to it since (#274: East Auckland, the East Coast Bays and Albany), streamed in TILE m squares as
+ * the house scatter's radius reaches them.
  *
  * The bake (tools/linz/corridor-houses.py + corridor-houses.ts) fits every LINZ building outline of the corridor (the
  * box of epic #119's count inside the Auckland 2024 LiDAR Part 1 sheets; an added area's box inside its own sheets,

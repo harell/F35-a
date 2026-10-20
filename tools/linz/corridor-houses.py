@@ -86,6 +86,12 @@ AREAS = {
         'BA32_10000_0402', 'BA32_10000_0403', 'BA32_10000_0404', 'BA32_10000_0502', 'BA32_10000_0503', 'BA32_10000_0504',
         'BB32_10000_0102', 'BB32_10000_0103', 'BB32_10000_0104',
     ]),
+    # the East Coast Bays and Albany (#274): Albany, Greenhithe's north, Rosedale, Sunnynook, Mairangi Bay,
+    # Murrays Bay, Rothesay Bay, Browns Bay, Torbay, Long Bay and Okura, north of the corridor's box; no Part 2 here
+    'bays': dict(box=(174.66, -36.76, 174.80, -36.66), parts=(1,), sheets=[
+        'BA31_10000_0104', 'BA31_10000_0105', 'BA31_10000_0204', 'BA31_10000_0205', 'BA31_10000_0304', 'BA31_10000_0305',
+        'BA32_10000_0101', 'BA32_10000_0102', 'BA32_10000_0201', 'BA32_10000_0301',
+    ]),
 }
 AREA = os.environ.get('AREA', 'corridor')
 BOX = AREAS[AREA]['box']  # lon0, lat0, lon1, lat1

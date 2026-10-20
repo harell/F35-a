@@ -1,7 +1,7 @@
 /**
- * Real suburbs 7/9 (#126): the real houses and local streets of the Whenuapai → Airport corridor and East Auckland
- * (#274), streamed in 2 km tiles (src/world/terrain/data/corridor/, tools/linz/corridor-houses.py + corridor-houses.ts;
- * corridorHouses.ts).
+ * Real suburbs 7/9 (#126): the real houses and local streets of the Whenuapai → Airport corridor, East Auckland and the
+ * East Coast Bays and Albany (#274), streamed in 2 km tiles (src/world/terrain/data/corridor/,
+ * tools/linz/corridor-houses.py + corridor-houses.ts; corridorHouses.ts).
  */
 import { describe, expect, it } from 'vitest';
 import SPOT from './fixtures/corridor-house-spotchecks.json';
@@ -57,6 +57,10 @@ const AIRPORT = [2139, 18147] as const;
 /** East Auckland (#274), east of the corridor's box (its edge, lon 174.86, at x ≈ 8712). */
 const EAST_EDGE_X = 8712;
 const EAST = { Howick: [15040, 5050], Pakuranga: [9799, 7123], Botany: [13318, 9309], 'Bucklands Beach': [13100, 2800], 'Half Moon Bay': [12142, 3917] } as const;
+/** The East Coast Bays and Albany (#274), north of the corridor's box (its edge, lat −36.76, at z ≈ −9819); Albany: the
+ * houses west of its village (the village itself is shops and car parks). */
+const BAYS_EDGE_Z = -9819;
+const BAYS = { 'Browns Bay': [-1354, -14701], 'Mairangi Bay': [-597, -12204], Torbay: [-953, -16753], Sunnynook: [-2334, -10152], Albany: [-6486, -13564] } as const;
 
 /** A stream over the shipped tiles that reads them from disk at once (the browser fetches them). */
 function diskStream(houseRadius: number, log: [number, number][] = []): CorridorHouses {
@@ -230,6 +234,36 @@ describe('East Auckland (#274)', () => {
 
   it('has its own spot checks among the fixture’s', () => {
     expect(SPOT.filter((s) => s.x > EAST_EDGE_X && s.z < 15000).length).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe('the East Coast Bays and Albany (#274)', () => {
+  it('draws Browns Bay, Mairangi Bay, Torbay, Sunnynook and Albany from their real houses and streets', () => {
+    expect(M.areas).toContain('bays');
+    for (const [name, [x, z]] of Object.entries(BAYS)) {
+      const [i, j] = tileAt(x, z);
+      expect(M.tiles.some((t) => t[0] === i && t[1] === j), name).toBe(true);
+      const t = tile(i, j);
+      expect(housesIn(t.houses, x - 300, z - 300, x + 300, z + 300).length, name).toBeGreaterThan(80);
+      expect(t.roads.length, name).toBeGreaterThan(20);
+      expect(housesCover(t.houses, x, z), name).toBe(true);
+    }
+  });
+
+  it("keeps the corridor's houses in the tiles it shares with it, and adds its own", () => {
+    // Sunnynook's tile straddles the corridor's north edge: Forrest Hill south of it, Sunnynook north of it
+    const t = tile(...tileAt(BAYS.Sunnynook[0], BAYS.Sunnynook[1]));
+    let south = 0, north = 0;
+    for (let k = 0; k < t.houses.count; k++) {
+      if (t.houses.z[k] > BAYS_EDGE_Z + 20) south++;
+      else if (t.houses.z[k] < BAYS_EDGE_Z - 20) north++;
+    }
+    expect(south).toBeGreaterThan(1000);
+    expect(north).toBeGreaterThan(200);
+  });
+
+  it('has its own spot checks among the fixture’s', () => {
+    expect(SPOT.filter((s) => s.z < BAYS_EDGE_Z).length).toBeGreaterThanOrEqual(15);
   });
 });
 
