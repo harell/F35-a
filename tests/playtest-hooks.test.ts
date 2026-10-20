@@ -74,6 +74,16 @@ describe('bot-sweep --park / --gunonly (tests/missions-probes.ts)', () => {
     }
   });
 
+  it('gun-only in T04: a strafing pass sinks the moving boats (#283 item 2: was 0 rounds, the bot could not aim its gun at a boat)', { timeout: 120_000 }, async () => {
+    await new Promise((r) => setTimeout(r, 0));
+    const r = runPlaythrough('t04', 'pilot', 0, flat(0), { maxT: 240, probe: { kind: 'gunonly' } });
+    const row = `${r.state} t=${r.t} rounds=${r.probe?.gunRounds} kills=${r.playerKills} modes=${JSON.stringify(r.modes)} objectives=${JSON.stringify(r.objectives)}`;
+    expect(r.launches, row).toEqual([]);
+    expect(r.probe!.gunRounds, row).toBeGreaterThan(0);
+    expect(r.playerKills, row).toBeGreaterThanOrEqual(2);
+    expect(Object.keys(r.modes).some((m) => m === 'GUNONLY:STRAFE'), row).toBe(true);
+  });
+
   it('no probe: the plain bot, no probe field', { timeout: 60_000 }, () => {
     const r = runPlaythrough('g01', 'recruit', 0, flat(0), { maxT: 5 });
     expect(r.probe).toBeUndefined();
