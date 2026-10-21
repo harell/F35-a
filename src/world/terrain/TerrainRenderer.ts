@@ -44,6 +44,7 @@ import { SHED_ROOFS } from '../scenery/landUseLots';
 import { FRONT_TEX_W, type FrontageMap } from '../scenery/frontage';
 import type { CbdStreets } from '../scenery/cbdStreets';
 import type { LotMask } from '../scenery/lotMask';
+import type { RoofGrid } from '../scenery/corridorHouses';
 import { MAX_AERIAL_BOXES, type AerialBox, type AerialOuterCover } from './theaters/aucklandAerial';
 
 export interface TerrainStyle {
@@ -164,10 +165,12 @@ export class TerrainRenderer {
   private siteMaskTexture: DataTexture | null = null;
   private siteMask: LotMask | null = null;
   private houseMask: LotMask | null = null;
-  /** The site mask's texture data: its rows, then the house mask's (houseRow0 on). */
+  private roofGrid: RoofGrid | null = null;
+  /** The site mask's texture data: its rows, then the house mask's (houseRow0 on), then the roof grid's (roofRow0 on). */
   private siteData: Uint8Array | null = null;
   private siteW = 1;
   private houseRow0 = 0;
+  private roofRow0 = 0;
   private landUseTexture: DataTexture | null = null;
   private angleTexture: DataTexture | null = null;
   private frontTextures: DataTexture[] = [];
@@ -384,6 +387,9 @@ export class TerrainRenderer {
         // set by setHouseMask() with the scenery (#126: the corridor's loaded real houses), rows below the site mask's
         uHouseMaskRect: { value: new Vector4(0, 0, 1, 0) },
         uHouseMaskRows: { value: new Vector2(1, 0) },
+        // the corridor's loaded roofs (#278), rows below the house mask's
+        uRoofRect: { value: new Vector4(0, 0, 1, 0) },
+        uRoofRows: { value: new Vector2(0, 0) },
         uRealHouseR: { value: 0 },
         uRealHouseCut: { value: 1e9 },
         // the districts an arterial runs through turn their grid to it (urbanGrid.ts districtAngles)
@@ -549,11 +555,12 @@ export class TerrainRenderer {
   /**
    * Stop the procedural streets and lots where the corridor's loaded real houses stand (#126, Scenery.corridor.cover,
    * changed as tiles stream in: updateHouseMask), the ground fading to the suburbs' far average beyond `radius` (the
-   * house scatter's: where the 3D houses thin out); null = none. Its rows ride below the site mask's in one texture
-   * (the fragment shader has no sampler unit to spare).
+   * house scatter's: where the 3D houses thin out), where the lots come back as the real `roofs` (#278); null = none.
+   * Its rows and the roofs' ride below the site mask's in one texture (the fragment shader has no sampler unit to spare).
    */
-  setHouseMask(mask: LotMask | null, radius = 0): void {
+  setHouseMask(mask: LotMask | null, radius = 0, roofs: RoofGrid | null = null): void {
     this.houseMask = mask;
+    this.roofGrid = mask ? roofs : null;
     this.material.uniforms.uRealHouseR.value = mask ? radius : 0;
     this.installSiteMasks();
   }
@@ -566,8 +573,8 @@ export class TerrainRenderer {
     this.material.uniforms.uRealHouseCut.value = Math.min(range, 1e9);
   }
 
-  /** Upload the house mask's texel rows [r0, r1) again (a corridor tile came or went). */
-  updateHouseMask(r0: number, r1: number): void {
+  /** Upload the house mask's texel rows [r0, r1) and the roof grid's cells [c0, c1) again (a corridor tile came or went). */
+  updateHouseMask(r0: number, r1: number, c0 = 0, c1 = 0): void {
     const m = this.houseMask;
     const d = this.siteData;
     const t = this.siteMaskTexture;
@@ -580,7 +587,18 @@ export class TerrainRenderer {
       d.set(m.data.subarray(r * m.texW * 4, (r + 1) * m.texW * 4), at);
       t.addUpdateRange(at, m.texW * 4);
     }
-    if (r1 > r0) t.needsUpdate = true;
+    // (the roof grid's cells run on across the texture's rows: roofRow0 · W on)
+    const g = this.roofGrid;
+    if (g) {
+      c0 = Math.max(0, c0);
+      c1 = Math.min(g.cols * g.rows, c1);
+      if (c1 > c0) {
+        const at = (this.roofRow0 * W + c0) * 4;
+        d.set(g.data.subarray(c0 * 4, c1 * 4), at);
+        t.addUpdateRange(at, (c1 - c0) * 4);
+      }
+    }
+    if (r1 > r0 || (g && c1 > c0)) t.needsUpdate = true;
   }
 
   private installSiteMasks(): void {
@@ -590,15 +608,23 @@ export class TerrainRenderer {
     const u = this.material.uniforms;
     const site = this.siteMask;
     const house = this.houseMask;
+    const roofs = this.roofGrid;
     u.uSiteMaskRect.value.set(0, 0, 1, 0);
     u.uHouseMaskRect.value.set(0, 0, 1, 0);
+    u.uRoofRect.value.set(0, 0, 1, 0);
     if (!site && !house) return;
-    const W = Math.max(site?.texW ?? 1, house?.texW ?? 1);
     const siteRows = site?.texH ?? 0;
-    const H = siteRows + (house?.texH ?? 0);
+    const houseRows = house?.texH ?? 0;
+    // the roof grid's cells run on across rows of the texture's width, chosen to keep it within 2048 texels down (WebGL 2's least
+    // MAX_TEXTURE_SIZE)
+    const roofCells = roofs ? roofs.cols * roofs.rows : 0;
+    const W = Math.max(site?.texW ?? 1, house?.texW ?? 1, Math.ceil(roofCells / Math.max(1, 2048 - siteRows - houseRows)));
+    const roofRows = Math.ceil(roofCells / W);
+    const H = siteRows + houseRows + roofRows;
     const data = new Uint8Array(W * H * 4);
     if (site) for (let r = 0; r < site.texH; r++) data.set(site.data.subarray(r * site.texW * 4, (r + 1) * site.texW * 4), r * W * 4);
     if (house) for (let r = 0; r < house.texH; r++) data.set(house.data.subarray(r * house.texW * 4, (r + 1) * house.texW * 4), (siteRows + r) * W * 4);
+    if (roofs) data.set(roofs.data, (siteRows + houseRows) * W * 4);
     const t = new DataTexture(data, W, H, RGBAFormat, UnsignedByteType);
     t.wrapS = t.wrapT = ClampToEdgeWrapping;
     t.magFilter = NearestFilter;
@@ -609,6 +635,7 @@ export class TerrainRenderer {
     this.siteData = data;
     this.siteW = W;
     this.houseRow0 = siteRows;
+    this.roofRow0 = siteRows + houseRows;
     u.uSiteMask.value = t;
     u.uSiteMaskSize.value.set(W, H);
     if (site) {
@@ -618,6 +645,10 @@ export class TerrainRenderer {
     if (house) {
       u.uHouseMaskRect.value.set(house.x0, house.z0, house.cell, house.texW);
       u.uHouseMaskRows.value.set(house.texH, siteRows);
+    }
+    if (roofs) {
+      u.uRoofRect.value.set(roofs.x0, roofs.z0, roofs.cell, roofs.cols);
+      u.uRoofRows.value.set(roofs.rows, this.roofRow0);
     }
   }
 

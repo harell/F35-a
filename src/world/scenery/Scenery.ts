@@ -139,8 +139,8 @@ export class Scenery {
   reflectionSources: ReflectionSource[] = [];
   /** The corridor's streamed real houses (#126); null without. */
   readonly corridor: CorridorHouses | null;
-  /** Told the house mask's texel rows a corridor tile changed (Environment: TerrainRenderer.updateHouseMask). */
-  onCorridorCover: ((r0: number, r1: number) => void) | null = null;
+  /** Told the house mask's texel rows and the roof grid's cells a corridor tile changed (Environment: TerrainRenderer.updateHouseMask). */
+  onCorridorCover: ((r0: number, r1: number, c0: number, c1: number) => void) | null = null;
   /** The loaded corridor tiles' street ribbons (one mesh, rebuilt as tiles come and go). */
   private corridorRoads: Mesh | null = null;
   private readonly corridorRibbons = new Map<string, BufferGeometry>();
@@ -724,7 +724,7 @@ export class Scenery {
       }
       if (changed) pos.needsUpdate = true;
     }
-    this.onCorridorCover?.(...this.corridor!.coverRows(t));
+    this.onCorridorCover?.(...this.corridor!.coverRows(t), ...this.corridor!.roofCells(t));
   }
 
   /** The loaded corridor tiles near enough the camera for their street ribbons to be drawn (keys). */

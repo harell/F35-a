@@ -17,9 +17,10 @@
  * (aucklandRoads.ts format: the tile's local road ribbons, no region, no names).
  *
  * Where a loaded tile's coverage is set, the real houses are the truth: the scatter's procedural houses, the frontage
- * lots and the town centres' blocks step aside, and the terrain shader paints no procedural lots or streets there (its
- * ground fades from gardens near the camera, where the 3D houses stand, to the suburbs' far average where they thin
- * out). Until a tile has loaded, and offline, the procedural suburbs stay. Node-safe (no DOM).
+ * lots and the town centres' blocks step aside, and the terrain shader paints no procedural streets there. Its ground
+ * is gardens near the camera, where the 3D houses stand; where they thin out and past the scatter's reach it paints
+ * lots again, as many built as the real roof share and in the real roofs' colour (RoofGrid, #278). Until a tile has
+ * loaded, and offline, the procedural suburbs stay. Node-safe (no DOM).
  */
 import { decodeHouses, type RealHouses } from './aucklandHouses';
 import { decodeRoads, type RoadLine } from './aucklandRoads';
@@ -31,6 +32,10 @@ export const CORRIDOR_VERSION = 1;
 /** Tile size (m) and coverage cell (m). */
 export const CORRIDOR_TILE = 2048;
 export const CORRIDOR_CELL = 32;
+/** Cell (m) of the loaded tiles' roof grid (RoofGrid: the terrain's real roofs past the house scatter's reach, #278). */
+export const ROOF_CELL = 64;
+/** The share of a built lot the terrain shader's roof covers on average (urbanPattern lotRoof: 0.32 … 0.48). */
+export const LOT_ROOF_SHARE = 0.4;
 
 export interface CorridorManifest {
   version: number;
@@ -113,6 +118,90 @@ export interface CorridorStats {
   houses: number;
 }
 
+/**
+ * The loaded tiles' roofs per ROOF_CELL m cell (#278): the share of the cell under a roof and the roofs' average colour,
+ * from the real outlines and their 2024 photo colours. Past the house scatter's reach the terrain shader paints the
+ * suburbs' lots from it (urbanPattern: as many built lots as the real roof share, in the real roofs' colour), so the
+ * far field shows where the houses really are, with no extra instances. One RGBA8 texel per cell, row-major from
+ * (x0, z0): sRGB colour and the share (0 … 255); a cell with no roofs, or of an unloaded tile, is all 0.
+ */
+export class RoofGrid {
+  readonly cols: number;
+  readonly rows: number;
+  readonly data: Uint8Array;
+
+  constructor(
+    readonly x0: number,
+    readonly z0: number,
+    x1: number,
+    z1: number,
+    readonly cell = ROOF_CELL,
+  ) {
+    this.cols = Math.ceil((x1 - x0) / cell);
+    this.rows = Math.ceil((z1 - z0) / cell);
+    this.data = new Uint8Array(this.cols * this.rows * 4);
+  }
+
+  /** Fill the cells of the square [x0, x0 + size) × [z0, z0 + size) from its houses (each in the cell of its centre). */
+  fill(houses: RealHouses, x0: number, z0: number, size: number): void {
+    const c = this.cell;
+    const n = Math.ceil(size / c);
+    const i0 = Math.round((x0 - this.x0) / c);
+    const j0 = Math.round((z0 - this.z0) / c);
+    const area = new Float64Array(n * n);
+    const rgb = new Float64Array(n * n * 3);
+    for (let k = 0; k < houses.count; k++) {
+      const i = Math.floor((houses.x[k] - x0) / c);
+      const j = Math.floor((houses.z[k] - z0) / c);
+      if (i < 0 || j < 0 || i >= n || j >= n) continue;
+      const a = houses.w[k] * houses.d[k];
+      const o = j * n + i;
+      const col = houses.color[k];
+      area[o] += a;
+      rgb[o * 3] += ((col >> 16) & 255) * a;
+      rgb[o * 3 + 1] += ((col >> 8) & 255) * a;
+      rgb[o * 3 + 2] += (col & 255) * a;
+    }
+    for (let j = 0; j < n; j++)
+      for (let i = 0; i < n; i++) {
+        const gi = i0 + i;
+        const gj = j0 + j;
+        if (gi < 0 || gj < 0 || gi >= this.cols || gj >= this.rows) continue;
+        const o = j * n + i;
+        const at = (gj * this.cols + gi) * 4;
+        const a = area[o];
+        if (a <= 0) {
+          this.data.fill(0, at, at + 4);
+          continue;
+        }
+        this.data[at] = Math.round(rgb[o * 3] / a);
+        this.data[at + 1] = Math.round(rgb[o * 3 + 1] / a);
+        this.data[at + 2] = Math.round(rgb[o * 3 + 2] / a);
+        // (at least 1: a cell with any roof stays told apart from an unloaded one)
+        this.data[at + 3] = Math.max(1, Math.min(255, Math.round((a / (c * c)) * 255)));
+      }
+  }
+
+  /** Clear the cells of the square [x0, x0 + size) × [z0, z0 + size) (its tile unloaded). */
+  clear(x0: number, z0: number, size: number): void {
+    const c = this.cell;
+    const n = Math.ceil(size / c);
+    const i0 = Math.max(0, Math.round((x0 - this.x0) / c));
+    const i1 = Math.min(this.cols, Math.round((x0 - this.x0) / c) + n);
+    const j0 = Math.round((z0 - this.z0) / c);
+    for (let j = Math.max(0, j0); j < Math.min(this.rows, j0 + n); j++) if (i1 > i0) this.data.fill(0, (j * this.cols + i0) * 4, (j * this.cols + i1) * 4);
+  }
+
+  /** The roof share (0 … 1) and sRGB colour (0xRRGGBB) of the cell at (x, z); share 0 where it has none. */
+  at(x: number, z: number): { share: number; color: number } {
+    const i = Math.floor((x - this.x0) / this.cell);
+    const j = Math.floor((z - this.z0) / this.cell);
+    if (i < 0 || j < 0 || i >= this.cols || j >= this.rows) return { share: 0, color: 0 };
+    const o = (j * this.cols + i) * 4;
+    return { share: this.data[o + 3] / 255, color: (this.data[o] << 16) | (this.data[o + 1] << 8) | this.data[o + 2] };
+  }
+}
+
 const key = (i: number, j: number) => `${i}_${j}`;
 /** The longest a failed tile waits before it is asked for again (ms). */
 const RETRY_MAX = 300_000;
@@ -125,6 +214,8 @@ const RETRY_MAX = 300_000;
  */
 export class CorridorHouses {
   readonly cover: LotMask;
+  /** The loaded tiles' roof share and colour (#278), over the manifest's box. */
+  readonly roofs: RoofGrid;
   readonly tiles = new Map<string, CorridorTile>();
   readonly stats: CorridorStats;
   readonly listeners: ((t: CorridorTile, loaded: boolean) => void)[] = [];
@@ -147,6 +238,7 @@ export class CorridorHouses {
     const [x0, z0, x1, z1] = manifest.bounds;
     const c = manifest.cell;
     this.cover = new LotMask(x0, z0, Math.round((x1 - x0) / c), Math.round((z1 - z0) / c), c);
+    this.roofs = new RoofGrid(x0, z0, x1, z1);
     for (const t of manifest.tiles) this.entries.set(key(t[0], t[1]), t);
     this.stats = { tiles: manifest.tiles.length, loaded: 0, pending: 0, failed: 0, requests: 0, installs: 0, evictions: 0, bytes: 0, houses: 0 };
   }
@@ -249,8 +341,10 @@ export class CorridorHouses {
     s.houses = n;
   }
 
-  /** Set (or clear) the tile's coverage cells in `cover`. */
+  /** Set (or clear) the tile's coverage cells in `cover`, and its cells of `roofs`. */
   private setCover(t: CorridorTile, on: boolean): void {
+    if (on) this.roofs.fill(t.houses, t.x0, t.z0, this.manifest.tile);
+    else this.roofs.clear(t.x0, t.z0, this.manifest.tile);
     const g = t.houses.cover;
     const m = this.cover;
     for (let j = 0; j < g.rows; j++)
@@ -270,6 +364,14 @@ export class CorridorHouses {
     const j0 = Math.floor((t.z0 - m.z0) / m.cell);
     const j1 = Math.ceil((t.z0 + this.manifest.tile - m.z0) / m.cell);
     return [Math.max(0, j0 >> 2), Math.min(m.texH, (j1 + 3) >> 2)];
+  }
+
+  /** The cells (first, end; row-major indices) of `roofs` a tile touches (TerrainRenderer.updateHouseMask). */
+  roofCells(t: CorridorTile): [number, number] {
+    const g = this.roofs;
+    const j0 = Math.max(0, Math.floor((t.z0 - g.z0) / g.cell));
+    const j1 = Math.min(g.rows, Math.ceil((t.z0 + this.manifest.tile - g.z0) / g.cell));
+    return [j0 * g.cols, Math.max(j0, j1) * g.cols];
   }
 
   /** Tiles still to fetch in range, or in flight. */
