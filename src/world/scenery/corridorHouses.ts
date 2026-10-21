@@ -34,8 +34,12 @@ export const CORRIDOR_TILE = 2048;
 export const CORRIDOR_CELL = 32;
 /** Cell (m) of the loaded tiles' roof grid (RoofGrid: the terrain's real roofs past the house scatter's reach, #278). */
 export const ROOF_CELL = 64;
-/** The share of a built lot the terrain shader's roof covers on average (urbanPattern lotRoof: 0.32 … 0.48). */
-export const LOT_ROOF_SHARE = 0.4;
+/**
+ * The roof share of a fully built-up suburb's 64 m cell, streets and all (the densest corridor tile, Mt Eden and Epsom,
+ * averages 0.25 over its built cells): the terrain shader builds every lot of a cell with this share or more, and
+ * proportionally fewer below it.
+ */
+export const FULL_ROOF_SHARE = 0.25;
 
 export interface CorridorManifest {
   version: number;

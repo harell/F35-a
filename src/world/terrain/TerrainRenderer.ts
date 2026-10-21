@@ -156,6 +156,20 @@ export interface AerialOuterInfo {
 
 const MORPH_START = 0.68;
 
+/**
+ * The texels [start, start + count) of a texture `width` texels across as one [start, count] range per row: three
+ * uploads each update range as a single row (WebGLTextures), so a range running on across rows would not upload.
+ */
+export function rowRanges(start: number, count: number, width: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let c = start, end = start + count; c < end; ) {
+    const e = Math.min(end, (Math.floor(c / width) + 1) * width);
+    out.push([c, e - c]);
+    c = e;
+  }
+  return out;
+}
+
 export class TerrainRenderer {
   readonly mesh: Mesh;
   readonly heightTexture: DataTexture;
@@ -593,9 +607,8 @@ export class TerrainRenderer {
       c0 = Math.max(0, c0);
       c1 = Math.min(g.cols * g.rows, c1);
       if (c1 > c0) {
-        const at = (this.roofRow0 * W + c0) * 4;
-        d.set(g.data.subarray(c0 * 4, c1 * 4), at);
-        t.addUpdateRange(at, (c1 - c0) * 4);
+        d.set(g.data.subarray(c0 * 4, c1 * 4), (this.roofRow0 * W + c0) * 4);
+        for (const [at, n] of rowRanges(this.roofRow0 * W + c0, c1 - c0, W)) t.addUpdateRange(at * 4, n * 4);
       }
     }
     if (r1 > r0 || (g && c1 > c0)) t.needsUpdate = true;

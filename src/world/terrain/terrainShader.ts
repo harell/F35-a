@@ -18,7 +18,7 @@ import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
 import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, MAX_AERIAL_BOXES } from './theaters/aucklandAerial';
 import { LU_CEMETERY, LU_COMMERCIAL, LU_FARMLAND, LU_GOLF, LU_HOSPITAL, LU_INDUSTRIAL, LU_PARK, LU_PITCH, LU_SCHOOL, LU_VINEYARD } from '../scenery/aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint } from '../scenery/landUseLots';
-import { LOT_ROOF_SHARE } from '../scenery/corridorHouses';
+import { FULL_ROOF_SHARE } from '../scenery/corridorHouses';
 import { CANOPY_GPU_LEVELS, CANOPY_GPU_NONE } from './theaters/aucklandCanopy';
 
 const f1 = (v: number) => v.toFixed(1);
@@ -696,12 +696,12 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   vec2 lf = fract(p / LOT);
   float lh = hash12(lid + 17.0 + dist.z * 13.0);
   float built = step(lh, 0.8 + 0.2 * dens) * (1.0 - park);
-  // Past the 3D houses (#278): the real roofs' cell at the lot centre decides it, as many lots built as its roof share
-  // (a lot's roof covers ${LOT_ROOF_SHARE.toFixed(2)} of it on average) and in its roofs' colour, so the far field shows where the houses are
+  // Past the 3D houses (#278): the real roofs' cell at the lot centre decides it, every lot built at a full suburb's roof
+  // share (${FULL_ROOF_SHARE.toFixed(2)}) and fewer below it, in its roofs' colour, so the far field shows where the houses are
   vec4 rr = vec4(0.0);
   if (realFar > 0.0) {
     rr = realRoofs(dist.xy + (lid + 0.5) * LOT * R);
-    built = step(lh, rr.a * ${(1 / LOT_ROOF_SHARE).toFixed(3)}) * (1.0 - park);
+    built = step(lh, rr.a * ${(1 / FULL_ROOF_SHARE).toFixed(3)}) * (1.0 - park);
   }
   vec3 lotRoofC = realFar > 0.0 ? rr.rgb * (0.85 + 0.3 * fract(lh * 7.3)) : roofColor(lh);
   // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
@@ -807,10 +807,12 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   far = mix(far, uCanopy * 1.25, (bh - 0.5) * 0.45 * (1.0 - smoothstep(40.0, 160.0, mpp)));
   vec3 cbdFar = flatAvg * 0.6 + uCanopy * treeFrac + mix(asphalt, paving, 0.5) * 0.25;
   far = mix(far, cbdFar, aptFar);
-  // (the real roofs' share and colour over gardens, trees and a little street, faded out with the house mask by 120 m/px)
+  // (the suburbs' average tinted by the real roofs' colour where they stand, a park's green where a cell has none; faded
+  // out with the house mask by 120 m/px)
   if (realFar > 0.0) {
-    vec3 ground = mix(mix(uGarden * 0.84, uCanopy, treeFrac), mix(asphalt, paving, 0.5), 0.15);
-    far = mix(far, mix(ground, rr.rgb, rr.a), realFar * (1.0 - smoothstep(80.0, 120.0, mpp)));
+    float fill = smoothstep(0.0, ${FULL_ROOF_SHARE.toFixed(2)}, rr.a);
+    vec3 realFarC = mix(uGarden * 0.75 + uCanopy * 0.35, mix(far, rr.rgb, 0.3 * fill), smoothstep(0.0, 0.4, fill));
+    far = mix(far, realFarC, realFar * (1.0 - smoothstep(80.0, 120.0, mpp)));
   }
   far = mix(far, uGarden * 0.75 + uCanopy * 0.35, park);
   // land use: open ground's own colours, sheds and car parks (faded out with the grid lookup by 60 m/px)

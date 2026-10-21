@@ -5,8 +5,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import MANIFEST from '../src/world/terrain/data/corridor/corridor.json';
-import { CORRIDOR_TILE, CorridorHouses, decodeCorridorTile, LOT_ROOF_SHARE, ROOF_CELL, RoofGrid, tileName, type CorridorManifest } from '../src/world/scenery/corridorHouses';
+import { CORRIDOR_TILE, CorridorHouses, decodeCorridorTile, FULL_ROOF_SHARE, ROOF_CELL, RoofGrid, tileName, type CorridorManifest } from '../src/world/scenery/corridorHouses';
 import { terrainFragmentShader } from '../src/world/terrain/terrainShader';
+import { rowRanges } from '../src/world/terrain/TerrainRenderer';
 
 interface Fs {
   readFileSync(p: URL): Uint8Array;
@@ -111,10 +112,35 @@ describe('the far field paints the real roofs (#278)', () => {
     expect(terrainFragmentShader).toContain('vec4 realRoofs(vec2 wp)');
   });
 
-  it("builds lots in proportion to the real roof share, at the shader's average roof per lot", () => {
-    // urbanPattern's lot roof is 0.32 … 0.48 of a built lot, uniformly: LOT_ROOF_SHARE on average
-    expect(LOT_ROOF_SHARE).toBeCloseTo(0.32 + 0.16 * 0.5, 6);
-    expect(terrainFragmentShader).toContain('float lotRoof = built * mix(0.32 + 0.16 * fract(lh * 2.9), 0.62, apt);');
-    expect(terrainFragmentShader).toContain(`built = step(lh, rr.a * ${(1 / LOT_ROOF_SHARE).toFixed(3)})`);
+  it("re-uploads a tile's roof cells as one range per texture row (three uploads each range as a single row)", () => {
+    const W = 210;
+    const r = rowRanges(5 * W + 100, 3 * W, W);
+    expect(r).toEqual([
+      [5 * W + 100, W - 100],
+      [6 * W, W],
+      [7 * W, W],
+      [8 * W, 100],
+    ]);
+    for (const [at, n] of r) expect(Math.floor(at / W)).toBe(Math.floor((at + n - 1) / W));
+    expect(rowRanges(0, 0, W)).toEqual([]);
+  });
+
+  it('builds every lot at a full suburb\'s roof share, and fewer below it', () => {
+    // the densest tiles average about FULL_ROOF_SHARE over their built cells, streets and all
+    const { houses } = decodeCorridorTile(rawOf(TI, TJ), M.palette);
+    const x0 = TI * CORRIDOR_TILE;
+    const z0 = TJ * CORRIDOR_TILE;
+    const g = new RoofGrid(x0, z0, x0 + CORRIDOR_TILE, z0 + CORRIDOR_TILE);
+    g.fill(houses, x0, z0, CORRIDOR_TILE);
+    let s = 0;
+    let n = 0;
+    for (let c = 0; c < g.cols * g.rows; c++)
+      if (g.data[c * 4 + 3]) {
+        s += g.data[c * 4 + 3] / 255;
+        n++;
+      }
+    expect(s / n).toBeGreaterThan(FULL_ROOF_SHARE * 0.9);
+    expect(s / n).toBeLessThan(FULL_ROOF_SHARE * 1.1);
+    expect(terrainFragmentShader).toContain(`built = step(lh, rr.a * ${(1 / FULL_ROOF_SHARE).toFixed(3)})`);
   });
 });
