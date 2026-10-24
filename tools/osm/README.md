@@ -80,6 +80,13 @@ counts (OSM objects, pads, heliports, roof pads, per area and per kind) and each
 helipads, 2 heliports), 14 on Waiheke Island itself, 4 on roofs (Auckland City Hospital's at 63.6 m, 16 m above the
 ground; Middlemore's pad is on the lawn in the 2024 photo and LiDAR).
 
+## Crater lakes (`crater-lakes.ts`, #276)
+
+Lake Pupuke and Panmure Basin aren't in the LINZ coastline, so their shores come from OSM: way 4847408 and relation
+14732359, two OSM API requests (not Overpass). `npx vite-node tools/osm/crater-lakes.ts` prints the `AKL_LAKES` block of
+`src/world/terrain/theaters/aucklandMap.ts`: each shore simplified to 4 m, with its calm-water circles (no surf, no sand
+band) sized to keep clear of the sea. `tests/world-crater-lakes.test.ts` checks them. Inputs: OSM API download of 2026-10-21.
+
 ## Rebuild
 
 ```sh

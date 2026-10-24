@@ -36,19 +36,24 @@ import { dirWithElevation } from '../src/ai/geom';
 import { createMissionRunner, missionById, missionDifficulty } from '../src/missions';
 import { DEFAULT_AO } from '../src/missions/MissionRunner';
 import { AIRCRAFT_PERF } from '../src/sim/flight/aircraftData';
-import { mulberry32 } from '../src/core/math';
+import { forwardOf, mulberry32 } from '../src/core/math';
 import { Probe, type ProbeSpec } from './missions-probes';
 import { PlayerBot } from './ai-playerbot';
 import { SDB_PRESS_RANGE } from '../src/missions/runtime/hints';
 import { spawnFloor } from '../src/missions/runtime/spawner';
 import { cloudBase } from '../src/core/weather';
 import { isSmallGround } from '../src/sim/weapons/small';
+import { bulletDisplacement, GUN_EFFECTIVE_RANGE } from '../src/sim/weapons/gun';
+import { GUNS } from '../src/sim/weapons/defs';
+import { atmosphere } from '../src/core/atmosphere';
 import { SAM_DATA } from '../src/sim/sam/samData';
 
 const DEG = Math.PI / 180;
 const _h = new Vector3();
 const _q = new Vector3();
 const _pt = new Vector3();
+const _imp = new Vector3();
+const _err = new Vector3();
 
 /** Gun pass on a one-way drone (gunPass): the set-up point on its track, this far behind it (m)... */
 const PASS_SETUP = 2_500;
@@ -58,6 +63,16 @@ const PASS_BELOW = 120;
 const PASS_IN = 1_300;
 /** Lowest the gun pass flies (m above the surface; the air-to-air bot's own floor on a slow target). */
 const GUN_PASS_MIN_AGL = 80;
+/**
+ * Strafing pass on a boat (strafe, #283 item 2): the run starts STRAFE_START out at STRAFE_ALT above the
+ * water, fires inside GUN_EFFECTIVE_RANGE, and breaks off inside STRAFE_BREAK or below STRAFE_FLOOR (m).
+ */
+const STRAFE_START = 5_000;
+const STRAFE_ALT = 600;
+const STRAFE_BREAK = 450;
+const STRAFE_FLOOR = 60;
+/** Largest aim correction (rad) the strafing pass walks its aim by. */
+const STRAFE_AIM_MAX = 0.15;
 
 type AgWeapon = 'aargm' | 'gbu53' | 'gbu31';
 /** In order of preference (as the game's hints: AARGM for emitters, then SDB II, JDAM). */
@@ -170,6 +185,34 @@ export function shouldEgress(p: AircraftEntity): boolean {
   return p.health < CRIPPLED_FRACTION * p.maxHealth;
 }
 
+/**
+ * Where rounds fired now would meet the height `surface` (m): the GAU-22's muzzle velocity on the jet's
+ * velocity, with the same drag and drop as the rounds (bulletDisplacement). Writes the point into
+ * `out` and returns the time of flight (s; 0 when they never get down to it within 4 s).
+ */
+function gunImpact(p: AircraftEntity, surface: number, out: Vector3): number {
+  forwardOf(p.quaternion, _fwd);
+  _muz.set(-0.9, 0.3, -5).applyQuaternion(p.quaternion).add(p.position);
+  _v0.copy(p.velocity).addScaledVector(_fwd, GUNS.gau22.muzzle);
+  const sigma = atmosphere(p.position.y).sigma;
+  let lo = 0;
+  let hi = 4;
+  if (_muz.y + bulletDisplacement(_v0, hi, sigma, out).y > surface) {
+    out.add(_muz);
+    return 0;
+  }
+  for (let i = 0; i < 24; i++) {
+    const m = (lo + hi) / 2;
+    if (_muz.y + bulletDisplacement(_v0, m, sigma, out).y > surface) lo = m;
+    else hi = m;
+  }
+  bulletDisplacement(_v0, hi, sigma, out).add(_muz);
+  return hi;
+}
+const _fwd = new Vector3();
+const _muz = new Vector3();
+const _v0 = new Vector3();
+
 export interface MissionBotOptions {
   /** MAWS reaction time (s). */
   reaction?: number;
@@ -194,6 +237,9 @@ export class MissionBot {
   private orbitSign = 1;
   private readonly ips = new Map<number, Vector3>();
   private readonly runIn = new Set<number>();
+  /** Strafing pass (strafe): out (opening), in (turning in at STRAFE_ALT) or on the run; the aim correction (rad, added to the line of sight) that walks the rounds onto the boat. */
+  private strafeLeg: 'out' | 'in' | 'run' = 'in';
+  private readonly strafeAim = new Vector3();
   /** Targets whose run-in starts at the IP, however close the jet is (insideSamRing at the start). */
   private readonly viaIp = new Set<number>();
   private readonly opts: Required<MissionBotOptions>;
@@ -809,13 +855,86 @@ export class MissionBot {
    */
   gunOnly(dt: number): void {
     this.air.opts.rtbWhenWinchester = false;
+    // a SAM round: the mission bot's own defence (g02's air-defence boat); an air-to-air one: the air-to-air bot's
+    if (this.p.incoming.length > 0 && this.samShot() && !this.samUnseen()) return this.samDefence(dt);
     if (this.p.incoming.length > 0 || this.nearestBandit(true)) return this.fight('GUNONLY', dt);
     // a one-way drone the mission wants: the briefed gun pass from behind (g01)
     const drone = this.nearestDrone();
     if (drone) return this.gunPass(drone, dt, 'GUNONLY');
+    // a boat the mission wants and no air target: a strafing pass (g02, T04's gun drill)
+    const boat = this.objectiveTargets('air').length === 0 ? this.nearestBoat() : null;
+    if (boat && !this.nearestBandit()) return this.strafe(boat, dt, 'GUNONLY');
     if (this.nearestBandit() || this.objectiveTargets('air').length === 0) return this.fight('GUNONLY', dt);
     this.huntDrone(dt);
     this.mode = 'GUNONLY:HUNT';
+  }
+
+  /** The nearest boat among the mission's surface targets. */
+  private nearestBoat(): AnyEntity | null {
+    let best: AnyEntity | null = null;
+    let bd = Infinity;
+    for (const t of this.objectiveTargets('surface')) {
+      if (!isBoat(t)) continue;
+      const d = Math.hypot(t.position.x - this.p.position.x, t.position.z - this.p.position.z);
+      if (d < bd) [bd, best] = [d, t];
+    }
+    return best;
+  }
+
+  /**
+   * A strafing pass on a boat (#283 item 2): out to STRAFE_START at STRAFE_ALT, turn in, and dive at it.
+   * On the run the bot predicts where rounds fired now would meet the water (the gun's own ballistics,
+   * gunImpact) and walks its aim by the angle of the miss until the rounds land on the boat, which takes out
+   * the nose's angle of attack and the drop (steering the flight path straight at the boat missed by
+   * ~0.01 rad, where a boat needs ~0.004). Fires inside GUN_EFFECTIVE_RANGE with the predicted miss
+   * inside the hull, and breaks off inside STRAFE_BREAK or below STRAFE_FLOOR.
+   */
+  private strafe(t: AnyEntity, dt: number, mode: string): void {
+    const p = this.p;
+    _q.set(t.position.x - p.position.x, 0, t.position.z - p.position.z);
+    const R = _q.length();
+    const surface = t.position.y;
+    const vh = Math.hypot(p.velocity.x, p.velocity.z);
+    const facing = (p.velocity.x * _q.x + p.velocity.z * _q.z) / Math.max(1, vh * R);
+    if (this.strafeLeg === 'run' && (R < STRAFE_BREAK || p.flight.agl < STRAFE_FLOOR || facing <= 0)) this.strafeLeg = 'out';
+    if (this.strafeLeg === 'out' && R > STRAFE_START) this.strafeLeg = 'in';
+    if (this.strafeLeg === 'in' && facing > 0.97 && R > STRAFE_START * 0.5 && Math.abs(p.position.y - surface - STRAFE_ALT) < STRAFE_ALT * 0.5) this.strafeLeg = 'run';
+    if (this.strafeLeg === 'in' && R < STRAFE_START * 0.5) this.strafeLeg = 'out';
+    if (this.strafeLeg !== 'run') {
+      this.strafeAim.set(0, 0, 0);
+      // out: open away from the boat; in: turn back towards it. Level turns at STRAFE_ALT (a 180° turn
+      // left to the autopilot was a half loop up to 2.8 km)
+      this.mode = `${mode}:STRAFE-${this.strafeLeg.toUpperCase()}`;
+      this.clearTriggers();
+      if (this.strafeLeg === 'out') _h.copy(_q).negate();
+      else _h.copy(_q);
+      turnLimited(p, _h, 60);
+      const it = this.pilot.begin(p, 150);
+      dirWithElevation(_h, gammaForAltitude(p, surface + STRAFE_ALT, 0.2, 6), it.dir);
+      it.speed = 250;
+      it.gMax = 4;
+      it.gain = 1;
+      this.pilot.fly(p, this.world, dt);
+      return;
+    }
+    this.mode = `${mode}:STRAFE`;
+    this.clearTriggers();
+    const tof = gunImpact(p, surface, _imp);
+    // the miss as an angle seen from the muzzle: towards where the boat will be when the rounds arrive,
+    // less towards where they land (on the water a shallow dive stretches a small angle into a long miss)
+    _err.copy(t.position).addScaledVector(t.velocity, tof).sub(_muz).normalize();
+    const miss = _imp.sub(_muz).normalize().angleTo(_err);
+    _err.sub(_imp);
+    if (tof > 0) this.strafeAim.addScaledVector(_err, Math.min(1, dt * 2)).clampLength(0, STRAFE_AIM_MAX);
+    const it = this.pilot.begin(p, -STRAFE_ALT);
+    it.dir.copy(t.position).sub(p.position).normalize().add(this.strafeAim).normalize();
+    it.speed = 230;
+    it.gMax = 4;
+    it.gain = 2;
+    it.track = true;
+    this.pilot.fly(p, this.world, dt);
+    const slant = t.position.distanceTo(p.position);
+    if (tof > 0 && slant < GUN_EFFECTIVE_RANGE && miss < Math.max(0.004, (0.5 * t.radius) / slant)) p.input.fireGun = true;
   }
 
   /**

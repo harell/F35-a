@@ -98,15 +98,32 @@ export const AKL_ISLANDS: ({ pts: number[] } | { ellipse: [number, number, numbe
   { ellipse: [37.2, 2.4, 1.5, 0.9, 0.6] }, // Ponui Island
 ];
 
+/** A crater lake (km): its shoreline (flat x, z pairs) and the calm-water circles [x, z, r] that cover its shore. */
+export interface AklLake {
+  name: string;
+  pts: number[];
+  calm: [number, number, number][];
+}
+
 /**
- * Inland water painted last (crater lakes): centre (km), radius (km). The LINZ coastline has neither, so with the real
- * terrain each one drowns the LiDAR ground under it: it must sit on the lake's own flat bed there, clear of the real
- * houses and streets round it, or it cuts a hole in the suburb next to it.
+ * Inland water painted last (crater lakes, #276): the real shorelines from OpenStreetMap (© OpenStreetMap contributors,
+ * ODbL), baked by tools/osm/crater-lakes.ts. The LINZ coastline has neither, so with the real terrain each one drowns
+ * the LiDAR ground under it; the OSM shore is that bed's own edge (tests/world-linz.test.ts), and the corridor's real
+ * houses and streets stand on the land round it. Panmure Basin is closed across its channel to the Tāmaki River.
+ * `calm`: no surf and no sand band inside them (calmAt() in the shaders, CALM_MAX in all), sized so they keep clear of
+ * the sea (Takapuna Beach, the Tāmaki River).
  */
-export const AKL_LAKES: [number, number, number][] = [
-  // Each one the largest circle on its LiDAR bed that keeps off the corridor's real houses and streets:
-  [0.27, -7.55, 0.49], // Lake Pupuke (its surface at 5 m)
-  [7.8, 6.26, 0.34], // Panmure Basin (flat ground under 1.5 m, west of the Tāmaki River)
+export const AKL_LAKES: AklLake[] = [
+  {
+    name: 'Lake Pupuke',
+    pts: [1.0626, -7.9012, 1.0439, -7.8316, 1.0211, -7.8017, 1.0219, -7.78, 0.9806, -7.7525, 0.9829, -7.7136, 0.9765, -7.7013, 0.9523, -7.6838, 0.9158, -7.5918, 0.9156, -7.5745, 0.9346, -7.5683, 0.9436, -7.5319, 0.9343, -7.4698, 0.9381, -7.4213, 0.9164, -7.3608, 0.9058, -7.3616, 0.8649, -7.3293, 0.8304, -7.3158, 0.7657, -7.2724, 0.7476, -7.2671, 0.7279, -7.2519, 0.721, -7.2374, 0.603, -7.203, 0.5606, -7.1209, 0.5457, -7.1137, 0.5357, -7.1208, 0.5189, -7.1157, 0.499, -7.0992, 0.4935, -7.0609, 0.4555, -6.9994, 0.396, -6.9565, 0.3709, -6.9479, 0.3322, -6.9524, 0.2983, -6.9724, 0.2332, -6.9472, 0.1878, -6.9577, 0.1087, -7.0024, 0.1102, -7.0149, 0.0781, -7.0304, 0.0609, -7.0505, 0.0474, -7.0577, 0.0226, -7.047, 0.0143, -7.0558, 0.0221, -7.0719, 0.0141, -7.0843, -0.129, -7.1985, -0.1571, -7.2636, -0.1387, -7.2988, -0.1561, -7.3223, -0.1487, -7.3429, -0.1602, -7.3833, -0.1992, -7.4329, -0.2359, -7.4474, -0.2542, -7.5046, -0.2688, -7.6662, -0.2583, -7.6986, -0.2563, -7.7656, -0.2636, -7.7942, -0.2463, -7.8669, -0.219, -7.9295, -0.1043, -8.0042, -0.0065, -8.024, 0.0639, -8.0507, 0.0809, -8.0821, 0.0988, -8.0957, 0.17, -8.113, 0.2902, -8.1011, 0.4179, -8.0347, 0.5275, -7.9122, 0.5585, -7.8866, 0.5861, -7.8692, 0.6234, -7.8619, 0.6428, -7.8495, 0.6847, -7.8966, 0.7074, -7.9639, 0.7512, -8.0339, 0.8424, -8.0748, 0.8804, -8.0664, 0.89, -8.0547, 0.9187, -8.054, 1.0046, -7.9905, 1.0535, -7.9326],
+    calm: [[0.411, -7.633, 0.711]],
+  },
+  {
+    name: 'Panmure Basin',
+    pts: [8.2853, 6.3563, 8.2731, 6.3497, 8.2465, 6.3485, 8.2245, 6.3708, 8.1562, 6.3858, 8.1098, 6.4125, 8.0796, 6.4315, 8.0302, 6.5089, 7.9437, 6.5459, 7.9313, 6.5602, 7.873, 6.575, 7.8357, 6.5773, 7.7962, 6.5924, 7.7356, 6.6308, 7.7249, 6.6324, 7.7264, 6.6192, 7.7207, 6.6317, 7.6998, 6.6321, 7.6767, 6.6196, 7.5853, 6.6498, 7.5365, 6.6352, 7.4183, 6.5406, 7.3329, 6.5233, 7.3181, 6.5104, 7.2715, 6.4237, 7.2997, 6.4018, 7.3225, 6.3254, 7.3564, 6.3161, 7.3904, 6.2661, 7.4027, 6.237, 7.413, 6.2299, 7.4098, 6.1966, 7.4211, 6.1524, 7.43, 6.1387, 7.4396, 6.1433, 7.4619, 6.1188, 7.4647, 6.11, 7.4749, 6.1218, 7.5079, 6.085, 7.5218, 6.0742, 7.5267, 6.0768, 7.5233, 6.0734, 7.5305, 6.0635, 7.5381, 6.0591, 7.5427, 6.065, 7.537, 6.0561, 7.5545, 6.0445, 7.5922, 6.0385, 7.635, 5.9841, 7.7026, 5.9695, 7.7384, 5.9472, 7.7595, 5.9468, 7.7988, 5.9255, 7.8372, 5.9186, 7.86, 5.9272, 7.8683, 5.9188, 7.8963, 5.9142, 8.0158, 5.9292, 8.1228, 5.9152, 8.2062, 6.0178, 8.2442, 6.2072, 8.3018, 6.3046],
+    calm: [[7.651, 6.034, 0.631], [8.231, 6.214, 0.063]],
+  },
 ];
 
 /** Relief regions: ellipse (cx, cz, rx, rz, rot) km, base height (m), roughness 0..1. */

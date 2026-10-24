@@ -17,6 +17,7 @@
 import { Noise2D, sstep, mixf } from '../noise';
 import { CoarseField } from '../coarse';
 import { GridSampler, labelAt, signedDistance, type GridSpec } from '../raster';
+import { ringDistance } from '../features';
 import {
   COAST_MASK_RANGE,
   LAND_LABEL,
@@ -25,6 +26,7 @@ import {
   ellipsePolygon,
   extractCoastSegments,
   fillPolygonGrid,
+  insidePolygon,
   makePolygon,
   splatDistance,
   type CoastPolygon,
@@ -101,14 +103,14 @@ let cachedVersion = -1;
 /** Lake margin (m) past a crater lake's shore that is still its rim: no sand beach there, and no surf on the water inside (#276 F8). */
 export const LAKE_RIM = 90;
 
-/** The crater lakes as world circles [x, z, r] (m). */
-export function aucklandLakeCircles(): [number, number, number][] {
-  return AKL_LAKES.map(([cx, cz, r]) => [cx * KM, cz * KM, r * KM]);
+/** The crater lakes' shorelines as world polygons (m). */
+export function aucklandLakes(): CoastPolygon[] {
+  return AKL_LAKES.map((l) => makePolygon(l.pts.map((v) => v * KM), AKL_LABEL.lake));
 }
 
 /** The crater lakes as calm water for the terrain and water shaders: no sand band, no surf. */
 export function aucklandCalmWater(): CalmWater {
-  return { circles: aucklandLakeCircles(), rim: LAKE_RIM };
+  return { circles: AKL_LAKES.flatMap((l) => l.calm.map(([x, z, r]) => [x * KM, z * KM, r * KM] as const)), rim: LAKE_RIM };
 }
 
 export function aucklandPolygons(): CoastPolygon[] {
@@ -122,7 +124,7 @@ export function aucklandPolygons(): CoastPolygon[] {
       out.push(ellipsePolygon(cx * KM, cz * KM, rx * KM, rz * KM, rot, AKL_LABEL.land));
     }
   }
-  for (const [cx, cz, r] of AKL_LAKES) out.push(ellipsePolygon(cx * KM, cz * KM, r * KM, r * KM, 0, AKL_LABEL.lake, 64));
+  out.push(...aucklandLakes());
   return out;
 }
 
@@ -141,7 +143,7 @@ export function aucklandMapData(): AucklandMapData {
   let isLand: AucklandMapData['isLand'];
   let fillLand: AucklandMapData['fillLand'];
   if (linz) {
-    // Real coastline; lakes (not in the coastline data) stay as the hand-placed crater lakes.
+    // Real coastline; lakes (not in the coastline data) stay as the crater lakes of the hand map.
     polys = handPolys.filter((p) => p.label === AKL_LABEL.lake);
     relabelWithLinz(labels, linz, sg);
     const lakeSegs = extractCoastSegments(polys, 30, LAND_LABEL);
@@ -190,7 +192,7 @@ export function aucklandMapData(): AucklandMapData {
 /**
  * Replace the hand-traced land/water split of `labels` (painted from the hand polygons) with the
  * LINZ coastline, keeping the hand map's water-body names (they drive the bathymetry): water that
- * was land on the hand map takes the nearest hand-map water body; hand-placed lakes are kept.
+ * was land on the hand map takes the nearest hand-map water body; the crater lakes are kept.
  */
 function relabelWithLinz(labels: Uint8Array, linz: LinzData, sg: SampleGrid): void {
   const n = sg.n;
@@ -345,8 +347,9 @@ export function createAuckland(seed: number): TheaterGenerator {
   const parks = AKL_PARKS.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const rural = AKL_RURAL.map(([x, z, r]) => ({ x: x * KM, z: z * KM, r: r * KM }));
   const cbd = { x: AKL_CBD.x * KM, z: AKL_CBD.z * KM, r: AKL_CBD.r * KM };
-  const lakes = aucklandLakeCircles();
-  const byLake = (x: number, z: number): boolean => lakes.some(([lx, lz, r]) => Math.hypot(x - lx, z - lz) < r + LAKE_RIM);
+  const lakes = aucklandLakes();
+  const byLake = (x: number, z: number): boolean =>
+    lakes.some((l) => x > l.minX - LAKE_RIM && x < l.maxX + LAKE_RIM && z > l.minZ - LAKE_RIM && z < l.maxZ + LAKE_RIM && (insidePolygon(l, x, z) || ringDistance(l.pts, x, z).dist < LAKE_RIM));
   const linz = map.linz;
   const realCover = !!linz?.cover;
   const lc: CoverSample = { cls: 0, cover: 0 };
@@ -355,7 +358,7 @@ export function createAuckland(seed: number): TheaterGenerator {
   const waterHeight = (x: number, z: number, d: number): number => {
     const label = labelAt(map.labels, map.n, HF_EXTENT, x, z);
     const off = -d; // metres offshore
-    // Real bathymetry (chart depth areas); the hand-placed crater lakes keep their bowl profile.
+    // Real bathymetry (chart depth areas); the crater lakes keep their bowl profile.
     const real = label === AKL_LABEL.lake || !linz ? null : linzDepth(linz, x, z);
     if (real !== null) return -Math.max(0.3, real);
     let h: number;

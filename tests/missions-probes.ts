@@ -10,7 +10,7 @@
  *   gunonly     the player's stores are emptied every step (nothing can add missiles or bombs back)
  *               and the jet presses on with the gun instead of going home: it heads for the air
  *               targets the mission wants, and the air-to-air bot fights what is on the scope with the
- *               gun (MissionBot.gunOnly). Counts the rounds fired.
+ *               gun; with no air target it strafes the mission's boats (MissionBot.gunOnly). Counts the rounds fired.
  *   route:<r>   (#198) the jet flies a fixed route a player could try (ROUTE_PROBES: the straight line,
  *               a detour, high above everything, or the intended way through with its AARGM shots),
  *               then the mission bot takes over for the attack at the end. A missile inbound is the

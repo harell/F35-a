@@ -18,6 +18,7 @@ import { CBD_PLAZA_LIT, CBD_SHOP_LIT, NIGHT_GLOW } from './nightGlow';
 import { AERIAL_LOW_SUN_SHARE, AERIAL_NIGHT_MIX, MAX_AERIAL_BOXES } from './theaters/aucklandAerial';
 import { LU_CEMETERY, LU_COMMERCIAL, LU_FARMLAND, LU_GOLF, LU_HOSPITAL, LU_INDUSTRIAL, LU_PARK, LU_PITCH, LU_SCHOOL, LU_VINEYARD } from '../scenery/aucklandLandUse';
 import { SCHOOL_BUILT, SHED_ROOFS, UNIT_LOTS, shedFootprint } from '../scenery/landUseLots';
+import { FULL_ROOF_SHARE } from '../scenery/corridorHouses';
 import { CANOPY_GPU_LEVELS, CANOPY_GPU_NONE } from './theaters/aucklandCanopy';
 
 const f1 = (v: number) => v.toFixed(1);
@@ -211,6 +212,8 @@ uniform float uSiteMaskRows;
 uniform vec2 uSiteMaskSize; // the texture's texels across, down: the site rows, then the house mask's (no sampler to spare)
 uniform vec4 uHouseMaskRect; // the corridor's loaded real houses (#126, corridorHouses.ts): x0, z0, cell, texels across
 uniform vec2 uHouseMaskRows; // its texels down, its first row in uSiteMask
+uniform vec4 uRoofRect; // the corridor's loaded roofs (#278, corridorHouses.ts RoofGrid): x0, z0, cell, cells across; 0 across = none
+uniform vec2 uRoofRows; // its cells down, its first row in uSiteMask (its cells run on across the texture's rows)
 uniform float uRealHouseR; // the house scatter's radius (m): how far the real houses are drawn; 0 = none
 uniform float uRealHouseCut; // slant range (m) past which its capacity ran out this frame (TileScatter.reach)
 uniform sampler2D uDistAngles; // street grid angle of the districts an arterial runs through (urbanGrid.ts DistrictAngles)
@@ -370,6 +373,19 @@ float realHouseShare(float ds) {
   float keep = ds < 0.35 * R ? 1.0 : max(0.22, 1.0 - (ds - 0.35 * R) / (0.65 * R) * 0.78);
   // (and none past where the scatter's capacity ran out: a dense real suburb fills it within ≈ 1.4 km)
   return keep * (1.0 - smoothstep(0.9 * R, 1.02 * R, ds)) * (1.0 - smoothstep(uRealHouseCut - 150.0, uRealHouseCut + 50.0, ds));
+}
+
+// The loaded corridor tiles' roofs at wp (#278, RoofGrid.at() is the same lookup): their average colour (linear) and the
+// share of the cell under a roof; 0 where none.
+vec4 realRoofs(vec2 wp) {
+  if (uRoofRect.w <= 0.0) return vec4(0.0);
+  vec2 g = floor((wp - uRoofRect.xy) / uRoofRect.z);
+  if (g.x < 0.0 || g.y < 0.0 || g.x >= uRoofRect.w || g.y >= uRoofRows.x) return vec4(0.0);
+  float idx = g.y * uRoofRect.w + g.x;
+  float W = uSiteMaskSize.x;
+  float r = floor((idx + 0.5) / W);
+  vec4 v = texture2D(uSiteMask, (vec2(idx - r * W, r + uRoofRows.y) + 0.5) / uSiteMaskSize);
+  return vec4(pow(v.rgb, vec3(2.2)), v.a);
 }
 
 // Real land-use class at wp (aucklandLandUse.ts landUseAt() is the same lookup); -1 without the grid, 0 = none.
@@ -671,7 +687,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   float site = mpp < 120.0 ? siteMasked(wp) : 0.0;
   // the corridor's real houses (#126): where a loaded tile covers, no procedural streets (its streets are ribbons), and
   // no procedural lots or sheds where its 3D houses are drawn (gardens round them); where they thin out and past the
-  // scatter's reach the lots' roofs come back as the mid-range mosaic and the far average, so the suburb still reads
+  // scatter's reach the lots come back from the real roofs (#278) as the mid-range mosaic and the far average
   float real = mpp < 120.0 ? houseMasked(wp) : 0.0;
   float realFar = real * (1.0 - realHouseShare(ds));
   // (the grid's random park blocks too: the real land use has the parks there)
@@ -680,6 +696,14 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   vec2 lf = fract(p / LOT);
   float lh = hash12(lid + 17.0 + dist.z * 13.0);
   float built = step(lh, 0.8 + 0.2 * dens) * (1.0 - park);
+  // Past the 3D houses (#278): the real roofs' cell at the lot centre decides it, every lot built at a full suburb's roof
+  // share (${FULL_ROOF_SHARE.toFixed(2)}) and fewer below it, in its roofs' colour, so the far field shows where the houses are
+  vec4 rr = vec4(0.0);
+  if (realFar > 0.0) {
+    rr = realRoofs(dist.xy + (lid + 0.5) * LOT * R);
+    built = step(lh, rr.a * ${(1 / FULL_ROOF_SHARE).toFixed(3)}) * (1.0 - park);
+  }
+  vec3 lotRoofC = realFar > 0.0 ? rr.rgb * (0.85 + 0.3 * fract(lh * 7.3)) : roofColor(lh);
   // no houses in the corridor along a road or railway ribbon (tested at the lot centre, as HouseSource does);
   // past 40 m/px the lot no longer shows (the colour is the far average), so skip the texture fetch there
   if (built > 0.0 && mpp < 40.0) built *= 1.0 - lotMasked(dist.xy + (lid + 0.5) * LOT * R);
@@ -783,6 +807,13 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   far = mix(far, uCanopy * 1.25, (bh - 0.5) * 0.45 * (1.0 - smoothstep(40.0, 160.0, mpp)));
   vec3 cbdFar = flatAvg * 0.6 + uCanopy * treeFrac + mix(asphalt, paving, 0.5) * 0.25;
   far = mix(far, cbdFar, aptFar);
+  // (the suburbs' average tinted by the real roofs' colour where they stand, a park's green where a cell has none; faded
+  // out with the house mask by 120 m/px)
+  if (realFar > 0.0) {
+    float fill = smoothstep(0.0, ${FULL_ROOF_SHARE.toFixed(2)}, rr.a);
+    vec3 realFarC = mix(uGarden * 0.75 + uCanopy * 0.35, mix(far, rr.rgb, 0.3 * fill), smoothstep(0.0, 0.4, fill));
+    far = mix(far, realFarC, realFar * (1.0 - smoothstep(80.0, 120.0, mpp)));
+  }
   far = mix(far, uGarden * 0.75 + uCanopy * 0.35, park);
   // land use: open ground's own colours, sheds and car parks (faded out with the grid lookup by 60 m/px)
   float luFar = 1.0 - smoothstep(40.0, 60.0, mpp);
@@ -801,7 +832,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
   float lotTree = clamp(treeFrac * (0.6 + 0.8 * fract(lh * 5.3)), 0.0, 0.8);
   float lotRoof = built * mix(0.32 + 0.16 * fract(lh * 2.9), 0.62, apt);
   vec3 lotCol = mix(grass, uCanopy, lotTree);
-  lotCol = mix(lotCol, mix(roofColor(lh), flatAvg * (0.75 + 0.5 * fract(lh * 3.7)), apt), lotRoof);
+  lotCol = mix(lotCol, mix(lotRoofC, flatAvg * (0.75 + 0.5 * fract(lh * 3.7)), apt), lotRoof);
   lotCol = mix(lotCol, uGarden * 0.8 + uCanopy * 0.3, park);
   lotCol = mix(lotCol, openCol, max(open, field));
   lotCol = mix(lotCol, shedAvg, shed);
@@ -831,7 +862,7 @@ vec3 urbanPattern(vec3 base, vec2 wp, float dens, float mpp, vec4 sm, float ds, 
     vec3 rn = normalize(vec3(nl.x * 0.47, 0.88, nl.y * 0.47));
     float shade = clamp(0.5 + 0.55 * max(dot(rn, vec3(sunL.x, uSunDir.y, sunL.y)), 0.0) / max(uSunDir.y, 0.25), 0.45, 1.35);
     shade = mix(shade, 1.0, smoothstep(2.0, 6.0, mpp));
-    vec3 roofCol = roofColor(lh) * shade;
+    vec3 roofCol = lotRoofC * shade;
     vec3 flatRoof = flatAvg * (0.75 + 0.5 * fract(lh * 3.7));
     vec2 box = abs(q - hh * vec2(0.3, -0.25)) - vec2(1.6, 1.3);
     float plant = 1.0 - smoothstep(-aa * 0.5, aa * 0.5, max(box.x, box.y));

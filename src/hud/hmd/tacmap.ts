@@ -122,7 +122,7 @@ export function chartPaths(): Chart | null {
     const m = aklMap as unknown as {
       AKL_WATER?: { pts: number[] }[];
       AKL_ISLANDS?: ({ pts: number[] } | { ellipse: [number, number, number, number, number] })[];
-      AKL_LAKES?: [number, number, number][];
+      AKL_LAKES?: { pts: number[] }[];
       AKL_URBAN?: number[][];
     };
     if (!Array.isArray(m.AKL_WATER)) return null;
@@ -139,10 +139,7 @@ export function chartPaths(): Chart | null {
       }
     }
     const lakes = new Path2D();
-    for (const [x, z, r] of m.AKL_LAKES ?? []) {
-      lakes.moveTo(x + r, z);
-      lakes.arc(x, z, r, 0, Math.PI * 2);
-    }
+    for (const l of m.AKL_LAKES ?? []) if (l && Array.isArray(l.pts)) polyInto(lakes, l.pts);
     const urban = new Path2D();
     for (const u of m.AKL_URBAN ?? []) if (Array.isArray(u)) polyInto(urban, u);
     const linz = aucklandLinz();

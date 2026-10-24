@@ -38,6 +38,9 @@ const VIEWS = {
   // the cruise liner at Princes Wharf at dusk, from over the harbour (#276: its cabin lights come on with the city's)
   // a low pass over the CBD's streets, the playtest's camera (#279 item 1: the street paint and plain roofs over the magnified photo)
   cbd_low: { mission: 'ia_stroll_auckland', t: 60, cam: [600, 95, -620], look: [500, 12, -470] },
+  // the crater lakes from 400 m (#276: their real OSM shores, no beach and no surf)
+  pupuke_400m: { mission: 'ia_stroll_auckland', t: 60, cam: [400, 400, -6500], look: [400, 0, -7650] },
+  panmure_400m: { mission: 'ia_stroll_auckland', t: 60, cam: [7800, 400, 7300], look: [7800, 0, 6250] },
   cruise_dusk: { mission: 'ia_stroll_auckland', tod: 'dusk', t: 620, cam: [620, 70, -1060], look: [361, 15, -923] },
 };
 

@@ -10,13 +10,13 @@ import { generateTerrain, runSync } from '../src/world/terrain/generate';
 import { TerrainQueryImpl } from '../src/world/terrain/TerrainQueryImpl';
 import { geoToWorld, AKL } from '../src/core/auckland';
 import { allFeatures } from '../src/world/scenery/Scenery';
-import { airfieldOf, footprintOf, runwayLengthFor } from '../src/world/terrain/features';
+import { airfieldOf, footprintOf, ringDistance, runwayLengthFor } from '../src/world/terrain/features';
 import { runwaysOf } from '../src/core/airfields';
 import { airfieldLayout } from '../src/world/scenery/aucklandOsm';
 import { segmentDistance } from '../src/world/terrain/coastline';
-import { aucklandMapData } from '../src/world/terrain/theaters/auckland';
+import { aucklandLakes, aucklandMapData } from '../src/world/terrain/theaters/auckland';
 import { aucklandLinz, decodeLinz, linzHeight, linzIsLand, setAucklandLinz } from '../src/world/terrain/theaters/aucklandLinz';
-import { AKL_CONES, AKL_LAKES, AKL_RANGITOTO } from '../src/world/terrain/theaters/aucklandMap';
+import { AKL_CONES, AKL_RANGITOTO } from '../src/world/terrain/theaters/aucklandMap';
 import { CAMPAIGNS, TRAINING, missionById, terrainPadsFor } from '../src/missions';
 import { BASE_FEATURES, FEATURES } from '../src/missions/content/common';
 
@@ -104,17 +104,23 @@ describe('real terrain heights (LiDAR) on the 86 m heightfield', () => {
   });
 });
 
-describe('inland water (the hand-placed lakes) on the real terrain', () => {
+describe('inland water (the crater lakes, #276) on the real terrain', () => {
   const linz = aucklandLinz()!;
-  const lakes = AKL_LAKES.map(([x, z, r]) => ({ x: x * 1000, z: z * 1000, r: r * 1000 }));
+  const lakes = aucklandLakes();
 
   it('each lake lies on its own flat LiDAR bed, not over the suburb next to it', () => {
     for (const k of lakes) {
+      // inside the OSM shore, clear of the DEM's 86 m-blurred rim
       const hs: number[] = [];
-      for (let a = 0; a < 48; a++) for (const f of [0, 0.25, 0.5, 0.75]) hs.push(linzHeight(linz, k.x + Math.cos(a) * f * k.r, k.z + Math.sin(a) * f * k.r));
+      for (let x = k.minX; x <= k.maxX; x += 25)
+        for (let z = k.minZ; z <= k.maxZ; z += 25) {
+          const r = ringDistance(k.pts, x, z);
+          if (r.inside && r.dist > 90) hs.push(linzHeight(linz, x, z));
+        }
+      expect(hs.length).toBeGreaterThan(200);
       const bed = Math.min(...hs);
       const flat = hs.filter((h) => h < bed + 2).length / hs.length;
-      expect(flat, `lake at ${k.x},${k.z}`).toBeGreaterThan(0.9);
+      expect(flat, `lake at ${k.minX},${k.minZ}`).toBeGreaterThan(0.9);
     }
   });
 
@@ -124,7 +130,7 @@ describe('inland water (the hand-placed lakes) on the real terrain', () => {
       for (let x = -8000; x <= 12_000; x += 250) {
         // dry ground (not a lake bed or a mudflat), clear of a lake's 86 m-blurred rim
         if (!linzIsLand(linz, x, z) || linzHeight(linz, x, z) < 8) continue;
-        if (lakes.some((k) => Math.abs(Math.hypot(x - k.x, z - k.z) - k.r) < 100)) continue;
+        if (lakes.some((k) => ringDistance(k.pts, x, z).dist < 100)) continue;
         if (q.heightAt(x, z) <= 0) holes.push(`${x},${z}`);
       }
     expect(holes).toEqual([]);

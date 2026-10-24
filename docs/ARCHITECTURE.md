@@ -255,7 +255,11 @@ in the same texture (`setHouseMask` / `updateHouseMask`: no sampler unit to spar
 streets there, nor lots where the 3D houses are drawn (gardens round them); as they thin out (`realHouseShare`, the
 scatter's curve) and past where the scatter's capacity runs out (`TileScatter.reach`: a dense real suburb fills the
 medium tier's 6,000 houses within about 1.4 km, about as far as the high tier's 7,500 over its wider radius) the lots' roofs come back as the mid-range mosaic and the far
-average, without the grid's streets. Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
+average, without the grid's streets, painted from the real roofs (#278): `RoofGrid` keeps each 64 m cell's roof share and
+area-weighted roof colour from the loaded tiles' houses (rows below the house mask's, its cells running on across the
+texture's rows, kept within 2048 texels down): every lot is built at a full suburb's share (`FULL_ROOF_SHARE`) and fewer
+below it, in the cell's roofs' colour, and the far average takes their tint (a park's green where a cell has none), so the
+far field shows where the houses really are with no extra instances. Its streets join one unlit mesh (`akl-corridor-roads`, rebuilt as
 tiles come and go: +1 draw call) and the trees keep off them. The scatter tiles under a changed tile regenerate
 (`TileScatter.invalidate`), drawn as they were until then. The service worker never precaches the tiles and keeps them
 in a cache of their own (`f35a-tiles-<VERSION>`). Until a tile has loaded, offline, and without the files, the

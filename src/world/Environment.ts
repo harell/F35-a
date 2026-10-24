@@ -370,10 +370,11 @@ export const createEnvironment: CreateEnvironment = async (scene, renderer, opts
   // the terrain leaves the lots along the road and railway ribbons unbuilt, as the scenery's houses do
   terrain.setLotMask(scenery.lotMask);
   terrain.setSiteMask(scenery.siteMask);
-  // the corridor's loaded tiles (#126): no procedural lots or streets under them, re-read as they come and go
+  // the corridor's loaded tiles (#126): no procedural streets under them, and past the house scatter's reach lots from their
+  // real roofs (#278), re-read as they come and go
   if (scenery.corridor) {
-    terrain.setHouseMask(scenery.corridor.cover, cfg.houseRadius);
-    scenery.onCorridorCover = (r0, r1) => terrain.updateHouseMask(r0, r1);
+    terrain.setHouseMask(scenery.corridor.cover, cfg.houseRadius, scenery.corridor.roofs);
+    scenery.onCorridorCover = (r0, r1, c0, c1) => terrain.updateHouseMask(r0, r1, c0, c1);
   }
   terrain.setFrontage(scenery.frontage);
   terrain.setLandUse(landUse, canopy);
